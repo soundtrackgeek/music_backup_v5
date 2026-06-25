@@ -60,6 +60,7 @@ export type TextFilter = {
 
 export type BrowseFilters = {
   albumIds: string[];
+  artistKeys: string[];
   albumTitle: TextFilter;
   trackTitle: TextFilter;
   albumArtist: TextFilter;
@@ -98,6 +99,39 @@ export type BrowseRequest = {
   searchText: string;
   filters: BrowseFilters;
   sort: BrowseSort;
+  limit: number;
+  offset: number;
+};
+
+export type ArtistListRequest = {
+  searchText: string;
+  sort: BrowseSort;
+  limit: number;
+  offset: number;
+};
+
+export type ArtistSummary = {
+  id: string;
+  name: string;
+  albumCount: number;
+  ratedAlbumCount: number;
+  partialAlbumCount: number;
+  unratedAlbumCount: number;
+  trackCount: number;
+  totalSeconds: number;
+  lovedTracks: number;
+  tmoeSeconds: number;
+  averageRatingCompleteness: number | null;
+  averageAlbumRating: number | null;
+  averageAlbumScore: number | null;
+  firstYear: number | null;
+  lastYear: number | null;
+  topGenre: string | null;
+};
+
+export type ArtistListResponse = {
+  rows: ArtistSummary[];
+  total: number;
   limit: number;
   offset: number;
 };

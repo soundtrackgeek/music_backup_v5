@@ -1,7 +1,7 @@
 # Music Library App Specification
 
 Date: 2026-06-25
-Status: Draft, current implementation through Phase 5
+Status: Draft, current implementation through Phase 6
 
 ## 1. Product Goal
 
@@ -581,7 +581,7 @@ Recommended main navigation:
 | Charts | Implemented | Phase 3 | Built-in and custom ranked album views. |
 | Statistics | Implemented | Phase 4 | Library overview, rating progress, year/genre progress, and import/rating history. |
 | Albums | Implemented | Phase 5 | Dedicated album index and album detail drill-down. |
-| Artists | Planned | Phase 6 | Dedicated album-artist index with artist-level album lists and stats. |
+| Artists | Implemented | Phase 6 | Dedicated album-artist index with artist-level album lists and stats. |
 | Genres | Planned | Phase 7 | Dedicated canonical-genre index with genre-level album lists and stats. |
 | Tools | Planned | Phase 8 | Music Tools validation and cleanup issue lists. |
 | Imports | Implemented | Phase 1 | TSV import, progress, import history, and backup visibility. |
@@ -648,9 +648,12 @@ These are targets, not hard guarantees. They should be measured once implementat
 - Reuse the current album filtering, sorting, pagination, and export behavior from Search where it fits.
 - Keep cover placeholders in album layouts until real cover art support is added in Phase 9.
 
-### Phase 6: Artists Workspace (future)
+### Phase 6: Artists Workspace (implemented)
 
 - Enable the Artists navigation item with album-artist index pages, artist album lists, and artist-level summary stats.
+- Add searchable, sortable, paginated artist index pages.
+- Add selected artist album lists filtered by normalized album-artist identity.
+- Add artist-level exports for selected artist album lists.
 
 ### Phase 7: Genres Workspace (future)
 

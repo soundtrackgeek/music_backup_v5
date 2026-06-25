@@ -2,9 +2,9 @@
 
 A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-The current Phase 5 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse album and track tables, save searches, build ranked album charts, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, and drill into dedicated album detail pages with ordered track lists.
+The current Phase 6 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse album and track tables, save searches, build ranked album charts, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, and browse album artists with artist-level summary stats and album lists.
 
-The sidebar currently enables Search, Charts, Statistics, Albums, Imports, and Settings. Artists, Genres, and Tools are planned workspaces. Cover placeholders and cover-grid-ready layouts exist today, but real cover image discovery, caching, and rendering are planned for Phase 9.
+The sidebar currently enables Search, Charts, Statistics, Albums, Artists, Imports, and Settings. Genres and Tools are planned workspaces. Cover placeholders and cover-grid-ready layouts exist today, but real cover image discovery, caching, and rendering are planned for Phase 9.
 
 ## Requirements
 
@@ -45,11 +45,18 @@ npm run tauri:build
 
 ## Roadmap
 
-- Phase 6: Artists workspace with album-artist index pages, artist album lists, and artist-level summary stats.
 - Phase 7: Genres workspace with canonical-genre index pages, genre album lists, and genre-level summary stats.
 - Phase 8: Music Tools workspace with validation and cleanup issue lists.
 - Phase 9: Real cover art support. Current cover UI is placeholder-only.
 - Phase 10: External enrichment and AI features.
+
+## Phase 6 Artists Features
+
+- Artists workspace with a searchable, sortable, paginated album-artist index.
+- Artist-level summary stats for album counts, rating progress, year span, top genre, track totals, loved tracks, TMOE, average completeness, average album rating, and average Album Score.
+- Selected artist album lists backed by normalized artist-key filtering so casing differences do not split album lists.
+- Artist album-list export to CSV, TSV, XLSX, JSON, and TXT with optional calculated columns.
+- Web-only preview mock data covers Artists alongside Search, Charts, Statistics, Albums, and Imports.
 
 ## Phase 5 Albums Features
 

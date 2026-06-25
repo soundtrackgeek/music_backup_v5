@@ -88,6 +88,8 @@ pub struct BrowseFilters {
     #[serde(default)]
     pub album_ids: Vec<String>,
     #[serde(default)]
+    pub artist_keys: Vec<String>,
+    #[serde(default)]
     pub album_title: TextFilter,
     #[serde(default)]
     pub track_title: TextFilter,
@@ -157,6 +159,63 @@ impl Default for BrowseSort {
             direction: default_sort_direction(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistListRequest {
+    #[serde(default)]
+    pub search_text: String,
+    #[serde(default)]
+    pub sort: BrowseSort,
+    #[serde(default = "default_limit")]
+    pub limit: u32,
+    #[serde(default)]
+    pub offset: u32,
+}
+
+impl Default for ArtistListRequest {
+    fn default() -> Self {
+        Self {
+            search_text: String::new(),
+            sort: BrowseSort {
+                field: "name".to_string(),
+                direction: default_sort_direction(),
+            },
+            limit: default_limit(),
+            offset: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistSummary {
+    pub id: String,
+    pub name: String,
+    pub album_count: i64,
+    pub rated_album_count: i64,
+    pub partial_album_count: i64,
+    pub unrated_album_count: i64,
+    pub track_count: i64,
+    pub total_seconds: i64,
+    pub loved_tracks: i64,
+    pub tmoe_seconds: i64,
+    pub average_rating_completeness: Option<f64>,
+    pub average_album_rating: Option<f64>,
+    pub average_album_score: Option<f64>,
+    pub first_year: Option<i32>,
+    pub last_year: Option<i32>,
+    pub top_genre: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistListResponse {
+    pub rows: Vec<ArtistSummary>,
+    pub total: i64,
+    pub limit: u32,
+    pub offset: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -40,6 +40,7 @@ import {
   getLibraryStatus,
   importMusicBeeTsv,
   isTauriRuntime,
+  listArtists,
   listImportRuns,
   listSavedCharts,
   listSavedSearches,
@@ -52,6 +53,9 @@ import {
 } from "./backend";
 import type {
   AppSettings,
+  ArtistListRequest,
+  ArtistListResponse,
+  ArtistSummary,
   BrowseFilters,
   BrowseRequest,
   BrowseResponse,
@@ -80,7 +84,7 @@ const navigation = [
   { label: "Charts", icon: BarChart3, enabled: true },
   { label: "Statistics", icon: Activity, enabled: true },
   { label: "Albums", icon: Album, enabled: true },
-  { label: "Artists", icon: UsersRound, enabled: false },
+  { label: "Artists", icon: UsersRound, enabled: true },
   { label: "Genres", icon: Tags, enabled: false },
   { label: "Tools", icon: Wrench, enabled: false },
   { label: "Imports", icon: FolderInput, enabled: true },
@@ -146,6 +150,7 @@ function createTextFilter(): TextFilter {
 function createFilters(): BrowseFilters {
   return {
     albumIds: [],
+    artistKeys: [],
     albumTitle: createTextFilter(),
     trackTitle: createTextFilter(),
     albumArtist: createTextFilter(),
@@ -195,6 +200,23 @@ function createAlbumTracksRequest(albumId: string): BrowseRequest {
   request.filters.albumIds = [albumId];
   request.sort = { field: "trackNumber", direction: "asc" };
   request.limit = 500;
+  return request;
+}
+
+function createArtistListRequest(): ArtistListRequest {
+  return {
+    searchText: "",
+    sort: { field: "name", direction: "asc" },
+    limit: 50,
+    offset: 0,
+  };
+}
+
+function createArtistAlbumsRequest(artist: ArtistSummary): BrowseRequest {
+  const request = createRequest("albums");
+  request.filters.artistKeys = [artist.id];
+  request.sort = { field: "year", direction: "asc" };
+  request.limit = 100;
   return request;
 }
 
@@ -915,6 +937,269 @@ function AlbumDetailPanel({
   );
 }
 
+function artistInitial(artist: ArtistSummary | null) {
+  return artist?.name.trim().slice(0, 1).toUpperCase() || "A";
+}
+
+function formatYearSpan(firstYear: number | null | undefined, lastYear: number | null | undefined) {
+  if (firstYear == null && lastYear == null) return "";
+  if (firstYear != null && lastYear != null && firstYear !== lastYear) {
+    return `${firstYear}-${lastYear}`;
+  }
+  return `${firstYear ?? lastYear}`;
+}
+
+function ArtistIndexTable({
+  response,
+  selectedArtistId,
+  onSelect,
+}: {
+  response: ArtistListResponse | null;
+  selectedArtistId: string | null;
+  onSelect: (artistId: string) => void;
+}) {
+  if (!response) {
+    return (
+      <div className="empty-state large">
+        <UsersRound size={20} />
+        <span>No artists loaded.</span>
+      </div>
+    );
+  }
+
+  if (response.rows.length === 0) {
+    return (
+      <div className="empty-state large">
+        <FileSearch size={20} />
+        <span>No artists match.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="result-table artist-index-results" role="table">
+      <div className="result-table-head" role="row">
+        <span role="columnheader">Artist</span>
+        <span role="columnheader">Albums</span>
+        <span role="columnheader">Years</span>
+        <span role="columnheader">Top genre</span>
+        <span role="columnheader">Complete</span>
+        <span role="columnheader">Avg score</span>
+        <span role="columnheader">Loved</span>
+      </div>
+      {response.rows.map((artist) => {
+        const isSelected = artist.id === selectedArtistId;
+        return (
+          <div
+            className={`result-table-row selectable${isSelected ? " selected" : ""}`}
+            role="row"
+            aria-selected={isSelected}
+            tabIndex={0}
+            key={artist.id}
+            onClick={() => onSelect(artist.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect(artist.id);
+              }
+            }}
+          >
+            <span className="album-index-title" role="cell">
+              <span className="cover-placeholder cover-mini artist-mini" aria-hidden="true">
+                <span>{artistInitial(artist)}</span>
+              </span>
+              <span>
+                <strong>{artist.name}</strong>
+                <small>{formatNumber(artist.trackCount)} tracks</small>
+              </span>
+            </span>
+            <span role="cell">{formatNumber(artist.albumCount)}</span>
+            <span role="cell">{formatYearSpan(artist.firstYear, artist.lastYear)}</span>
+            <span role="cell">{artist.topGenre ?? ""}</span>
+            <span role="cell">{formatPercent(artist.averageRatingCompleteness)}</span>
+            <span role="cell">{formatAverage(artist.averageAlbumScore, 2)}</span>
+            <span role="cell">{formatNumber(artist.lovedTracks)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ArtistAlbumTable({ response }: { response: BrowseResponse | null }) {
+  if (!response) {
+    return (
+      <div className="empty-state large">
+        <Album size={20} />
+        <span>Select an artist.</span>
+      </div>
+    );
+  }
+
+  if (response.rows.length === 0) {
+    return (
+      <div className="empty-state large">
+        <FileSearch size={20} />
+        <span>No albums found.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="result-table artist-album-results" role="table">
+      <div className="result-table-head" role="row">
+        <span role="columnheader">Album</span>
+        <span role="columnheader">Year</span>
+        <span role="columnheader">Genre</span>
+        <span role="columnheader">Tracks</span>
+        <span role="columnheader">Complete</span>
+        <span role="columnheader">Rating</span>
+        <span role="columnheader">Score</span>
+      </div>
+      {response.rows.map((row) => (
+        <div className="result-table-row" role="row" key={row.id}>
+          <span className="album-index-title" role="cell">
+            <span className="cover-placeholder cover-mini" aria-hidden="true">
+              <span>{albumInitial(row)}</span>
+            </span>
+            <span>
+              <strong>{row.album ?? "Untitled"}</strong>
+              <small>{formatMinutes(row.totalSeconds)}</small>
+            </span>
+          </span>
+          <span role="cell">{row.year ?? ""}</span>
+          <span role="cell">{row.canonicalGenre ?? ""}</span>
+          <span role="cell">{formatNumber(row.totalTracks)}</span>
+          <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
+          <span role="cell">{row.effectiveAlbumRating ?? ""}</span>
+          <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ArtistDetailPanel({
+  artist,
+  includeCalculated,
+  onIncludeCalculatedChange,
+  exportResult,
+  onExport,
+}: {
+  artist: ArtistSummary | null;
+  includeCalculated: boolean;
+  onIncludeCalculatedChange: (value: boolean) => void;
+  exportResult: ExportResult | null;
+  onExport: (format: string) => Promise<void>;
+}) {
+  if (!artist) {
+    return (
+      <aside className="detail-panel artist-detail" aria-label="Artist details">
+        <div className="detail-header">
+          <UsersRound size={20} />
+          <div>
+            <h2>Artist Detail</h2>
+            <p>Select an album artist from the index</p>
+          </div>
+        </div>
+        <div className="empty-state">
+          <FileSearch size={20} />
+          <span>No artist selected.</span>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="detail-panel artist-detail" aria-label="Artist details">
+      <div className="detail-header">
+        <UsersRound size={20} />
+        <div>
+          <h2>{artist.name}</h2>
+          <p>{[formatYearSpan(artist.firstYear, artist.lastYear), artist.topGenre].filter(Boolean).join(" / ")}</p>
+        </div>
+      </div>
+
+      <div className="cover-placeholder album-cover-large artist-cover-large" aria-hidden="true">
+        <span>{artistInitial(artist)}</span>
+      </div>
+
+      <dl className="run-details artist-detail-stats">
+        <div>
+          <dt>Albums</dt>
+          <dd>
+            {formatNumber(artist.albumCount)}
+            {artist.ratedAlbumCount ? ` / ${formatNumber(artist.ratedAlbumCount)} fully rated` : ""}
+          </dd>
+        </div>
+        <div>
+          <dt>Partial albums</dt>
+          <dd>{formatNumber(artist.partialAlbumCount)}</dd>
+        </div>
+        <div>
+          <dt>Unrated albums</dt>
+          <dd>{formatNumber(artist.unratedAlbumCount)}</dd>
+        </div>
+        <div>
+          <dt>Tracks</dt>
+          <dd>{formatNumber(artist.trackCount)}</dd>
+        </div>
+        <div>
+          <dt>Total time</dt>
+          <dd>{formatHours(artist.totalSeconds)}</dd>
+        </div>
+        <div>
+          <dt>Average complete</dt>
+          <dd>{formatPercent(artist.averageRatingCompleteness)}</dd>
+        </div>
+        <div>
+          <dt>Average rating</dt>
+          <dd>{formatAverage(artist.averageAlbumRating, 1)}</dd>
+        </div>
+        <div>
+          <dt>Average score</dt>
+          <dd>{formatAverage(artist.averageAlbumScore, 2)}</dd>
+        </div>
+        <div>
+          <dt>Loved tracks</dt>
+          <dd>{formatNumber(artist.lovedTracks)}</dd>
+        </div>
+        <div>
+          <dt>TMOE</dt>
+          <dd>{formatMinutes(artist.tmoeSeconds)}</dd>
+        </div>
+      </dl>
+
+      <section className="export-box">
+        <label className="toggle-row">
+          <input
+            type="checkbox"
+            checked={includeCalculated}
+            onChange={(event) => onIncludeCalculatedChange(event.target.checked)}
+          />
+          <span>Calculated columns</span>
+        </label>
+        <div className="export-grid">
+          {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
+            <button type="button" key={format} onClick={() => void onExport(format)}>
+              <Download size={16} />
+              <span>{format.toUpperCase()}</span>
+            </button>
+          ))}
+        </div>
+        {exportResult ? (
+          <div className="export-result">
+            <Check size={17} />
+            <span>
+              {formatNumber(exportResult.rowCount)} albums to {exportResult.path}
+            </span>
+          </div>
+        ) : null}
+      </section>
+    </aside>
+  );
+}
+
 function ChartResults({ response, config }: { response: BrowseResponse | null; config: ChartConfig }) {
   if (!response) {
     return (
@@ -1196,6 +1481,16 @@ export default function App() {
   const [isAlbumTracksLoading, setIsAlbumTracksLoading] = useState(false);
   const [albumIncludeCalculated, setAlbumIncludeCalculated] = useState(false);
   const [albumExportResult, setAlbumExportResult] = useState<ExportResult | null>(null);
+  const [artistRequest, setArtistRequest] = useState<ArtistListRequest>(() => createArtistListRequest());
+  const [artistResponse, setArtistResponse] = useState<ArtistListResponse | null>(null);
+  const [artistError, setArtistError] = useState<string | null>(null);
+  const [isArtistLoading, setIsArtistLoading] = useState(false);
+  const [selectedArtistId, setSelectedArtistId] = useState<string | null>(null);
+  const [artistAlbumsResponse, setArtistAlbumsResponse] = useState<BrowseResponse | null>(null);
+  const [artistAlbumsError, setArtistAlbumsError] = useState<string | null>(null);
+  const [isArtistAlbumsLoading, setIsArtistAlbumsLoading] = useState(false);
+  const [artistIncludeCalculated, setArtistIncludeCalculated] = useState(false);
+  const [artistExportResult, setArtistExportResult] = useState<ExportResult | null>(null);
   const [chartConfig, setChartConfig] = useState<ChartConfig>(() => createChartConfig());
   const [chartResponse, setChartResponse] = useState<BrowseResponse | null>(null);
   const [chartName, setChartName] = useState("");
@@ -1255,6 +1550,12 @@ export default function App() {
   const albumTracksRequest = useMemo(
     () => (selectedAlbumId ? createAlbumTracksRequest(selectedAlbumId) : null),
     [selectedAlbumId],
+  );
+  const selectedArtist =
+    artistResponse?.rows.find((artist) => artist.id === selectedArtistId) ?? null;
+  const artistAlbumsRequest = useMemo(
+    () => (selectedArtist ? createArtistAlbumsRequest(selectedArtist) : null),
+    [selectedArtist],
   );
 
   useEffect(() => {
@@ -1372,6 +1673,88 @@ export default function App() {
       cancelled = true;
     };
   }, [activeSection, albumTracksRequest]);
+
+  useEffect(() => {
+    if (activeSection !== "Artists") {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setIsArtistLoading(true);
+      setArtistError(null);
+      void listArtists(artistRequest)
+        .then((nextResponse) => {
+          if (!cancelled) {
+            setArtistResponse(nextResponse);
+          }
+        })
+        .catch((searchError) => {
+          if (!cancelled) {
+            setArtistError(searchError instanceof Error ? searchError.message : String(searchError));
+            setArtistResponse(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsArtistLoading(false);
+          }
+        });
+    }, 160);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeSection, artistRequest]);
+
+  useEffect(() => {
+    if (activeSection !== "Artists") {
+      return;
+    }
+
+    const rows = artistResponse?.rows ?? [];
+    if (rows.length === 0) {
+      setSelectedArtistId(null);
+      return;
+    }
+
+    setSelectedArtistId((previous) =>
+      previous && rows.some((artist) => artist.id === previous) ? previous : rows[0].id,
+    );
+  }, [activeSection, artistResponse]);
+
+  useEffect(() => {
+    if (activeSection !== "Artists" || !artistAlbumsRequest) {
+      setArtistAlbumsResponse(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsArtistAlbumsLoading(true);
+    setArtistAlbumsError(null);
+    void searchLibrary(artistAlbumsRequest)
+      .then((nextResponse) => {
+        if (!cancelled) {
+          setArtistAlbumsResponse(nextResponse);
+        }
+      })
+      .catch((searchError) => {
+        if (!cancelled) {
+          setArtistAlbumsError(searchError instanceof Error ? searchError.message : String(searchError));
+          setArtistAlbumsResponse(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsArtistAlbumsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, artistAlbumsRequest]);
 
   useEffect(() => {
     if (activeSection !== "Charts") {
@@ -1682,6 +2065,19 @@ export default function App() {
     setAlbumExportResult(null);
   }
 
+  function clearArtistQuery() {
+    setArtistRequest((previous) => ({
+      ...createArtistListRequest(),
+      limit: previous.limit,
+    }));
+    setArtistExportResult(null);
+  }
+
+  function selectArtist(artistId: string) {
+    setSelectedArtistId(artistId);
+    setArtistExportResult(null);
+  }
+
   async function startImport() {
     setIsImporting(true);
     setImportError(null);
@@ -1743,6 +2139,14 @@ export default function App() {
       albumIncludeCalculated,
     );
     setAlbumExportResult(result);
+  }
+
+  async function runArtistExport(format: string) {
+    if (!artistAlbumsRequest) {
+      return;
+    }
+    const result = await exportSearch(artistAlbumsRequest, format, artistIncludeCalculated);
+    setArtistExportResult(result);
   }
 
   function updateChartConfig(values: Partial<ChartConfig>) {
@@ -1848,6 +2252,10 @@ export default function App() {
   const selectedAlbum =
     albumResponse?.rows.find((row) => row.albumId === selectedAlbumId) ?? null;
   const selectedAlbumTrackCount = selectedAlbum?.totalTracks ?? albumTracksResponse?.total ?? 0;
+  const artistTotal = artistResponse?.total ?? 0;
+  const artistPageStart = artistTotal === 0 ? 0 : artistRequest.offset + 1;
+  const artistPageEnd = Math.min(artistTotal, artistRequest.offset + artistRequest.limit);
+  const selectedArtistAlbumCount = selectedArtist?.albumCount ?? artistAlbumsResponse?.total ?? 0;
   const chartTotal = chartResponse?.total ?? 0;
   const chartRows = chartResponse?.rows.length ?? 0;
   const ratingAlbumTotal =
@@ -2197,6 +2605,188 @@ export default function App() {
 
             {chartError ? <p className="error-message">{chartError}</p> : null}
             <ChartResults response={chartResponse} config={chartConfig} />
+          </section>
+        </section>
+      ) : activeSection === "Artists" ? (
+        <section className="workspace artists-workspace">
+          <header className="topbar">
+            <div>
+              <h1>Artists</h1>
+              <p>Album-artist index, selected artist album lists, and artist-level summary stats.</p>
+            </div>
+            <div className="topbar-actions">
+              <button className="icon-button" type="button" aria-label="Clear artist filters" onClick={clearArtistQuery}>
+                <RotateCcw size={18} />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Refresh artists"
+                onClick={() => {
+                  void loadData();
+                  setArtistRequest((previous) => ({ ...previous }));
+                }}
+              >
+                <Database size={18} />
+              </button>
+            </div>
+          </header>
+
+          <section className="metric-grid" aria-label="Artist summary">
+            <Metric
+              label="Album artists"
+              value={formatNumber(statistics?.overview.albumArtistCount)}
+              tone="teal"
+              icon={UsersRound}
+            />
+            <Metric label="Matches" value={formatNumber(artistTotal)} tone="amber" icon={Search} />
+            <Metric label="Artist albums" value={formatNumber(selectedArtistAlbumCount)} icon={Album} />
+            <Metric label="Loved tracks" value={formatNumber(selectedArtist?.lovedTracks)} icon={Heart} />
+          </section>
+
+          <section className="query-panel artist-query-panel">
+            <div className="search-row artist-search-row">
+              <div className="search-input">
+                <Search size={18} />
+                <input
+                  value={artistRequest.searchText}
+                  onChange={(event) =>
+                    setArtistRequest((previous) => ({ ...previous, searchText: event.target.value, offset: 0 }))
+                  }
+                  placeholder="Search album artists"
+                />
+              </div>
+              <SelectField
+                label="Sort"
+                value={artistRequest.sort.field}
+                onChange={(field) =>
+                  setArtistRequest((previous) => ({
+                    ...previous,
+                    sort: { ...previous.sort, field },
+                    offset: 0,
+                  }))
+                }
+                options={[
+                  { value: "name", label: "Artist" },
+                  { value: "albumCount", label: "Albums" },
+                  { value: "trackCount", label: "Tracks" },
+                  { value: "lovedTracks", label: "Loved tracks" },
+                  { value: "averageCompleteness", label: "Completeness" },
+                  { value: "averageRating", label: "Average rating" },
+                  { value: "averageScore", label: "Average score" },
+                  { value: "firstYear", label: "First year" },
+                  { value: "lastYear", label: "Last year" },
+                  { value: "topGenre", label: "Top genre" },
+                ]}
+              />
+            </div>
+
+            <div className="query-footer">
+              <div className="chip-row inline" aria-label="Active artist filters">
+                {artistRequest.searchText.trim() ? (
+                  <button
+                    className="filter-chip"
+                    type="button"
+                    onClick={() => setArtistRequest((previous) => ({ ...previous, searchText: "", offset: 0 }))}
+                  >
+                    <span>Search "{artistRequest.searchText.trim()}"</span>
+                    <X size={14} />
+                  </button>
+                ) : (
+                  <span className="chip-empty">No active filters</span>
+                )}
+              </div>
+
+              <div className="sort-controls">
+                <SelectField
+                  label="Direction"
+                  value={artistRequest.sort.direction}
+                  onChange={(direction) =>
+                    setArtistRequest((previous) => ({
+                      ...previous,
+                      sort: { ...previous.sort, direction: direction as "asc" | "desc" },
+                      offset: 0,
+                    }))
+                  }
+                  options={[
+                    { value: "asc", label: "Ascending" },
+                    { value: "desc", label: "Descending" },
+                  ]}
+                />
+                <NumberField
+                  label="Rows"
+                  value={artistRequest.limit}
+                  min={10}
+                  max={500}
+                  onChange={(value) =>
+                    setArtistRequest((previous) => ({ ...previous, limit: value ?? 50, offset: 0 }))
+                  }
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="table-panel" aria-label="Artist index">
+            <div className="panel-heading compact">
+              <div>
+                <h2>Artist index</h2>
+                <p>
+                  {isArtistLoading
+                    ? "Loading artists"
+                    : `${formatNumber(artistPageStart)}-${formatNumber(artistPageEnd)} of ${formatNumber(artistTotal)}`}
+                </p>
+              </div>
+              <div className="pager">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Previous artist page"
+                  disabled={artistRequest.offset === 0}
+                  onClick={() =>
+                    setArtistRequest((previous) => ({
+                      ...previous,
+                      offset: Math.max(0, previous.offset - previous.limit),
+                    }))
+                  }
+                >
+                  <ChevronLeft size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Next artist page"
+                  disabled={artistRequest.offset + artistRequest.limit >= artistTotal}
+                  onClick={() =>
+                    setArtistRequest((previous) => ({
+                      ...previous,
+                      offset: previous.offset + previous.limit,
+                    }))
+                  }
+                >
+                  <ChevronRight size={17} />
+                </button>
+              </div>
+            </div>
+
+            {artistError ? <p className="error-message">{artistError}</p> : null}
+            <ArtistIndexTable response={artistResponse} selectedArtistId={selectedArtistId} onSelect={selectArtist} />
+          </section>
+
+          <section className="table-panel" aria-label="Selected artist albums">
+            <div className="panel-heading compact">
+              <div>
+                <h2>{selectedArtist?.name ?? "Artist albums"}</h2>
+                <p>
+                  {isArtistAlbumsLoading
+                    ? "Loading albums"
+                    : `${formatNumber(artistAlbumsResponse?.rows.length ?? 0)} of ${formatNumber(selectedArtistAlbumCount)} albums`}
+                </p>
+              </div>
+              <span className="run-status">{selectedArtist?.topGenre ?? "Artist"}</span>
+            </div>
+
+            {artistAlbumsError ? <p className="error-message">{artistAlbumsError}</p> : null}
+            <ArtistAlbumTable response={artistAlbumsResponse} />
           </section>
         </section>
       ) : activeSection === "Albums" ? (
@@ -3206,6 +3796,14 @@ export default function App() {
             ) : null}
           </section>
         </aside>
+      ) : activeSection === "Artists" ? (
+        <ArtistDetailPanel
+          artist={selectedArtist}
+          includeCalculated={artistIncludeCalculated}
+          onIncludeCalculatedChange={(value) => setArtistIncludeCalculated(value)}
+          exportResult={artistExportResult}
+          onExport={runArtistExport}
+        />
       ) : activeSection === "Albums" ? (
         <AlbumDetailPanel
           album={selectedAlbum}

@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppSettings,
+  ArtistListRequest,
+  ArtistListResponse,
+  ArtistSummary,
   BrowseRequest,
   BrowseResponse,
   BrowseRow,
@@ -114,6 +117,45 @@ const mockRows: BrowseRow[] = [
     love: "L",
     filePath: "D:\\Music\\Pet Shop Boys\\Actually",
     filename: "02 What Have I Done to Deserve This.mp3",
+  },
+];
+
+const mockArtists: ArtistSummary[] = [
+  {
+    id: "pet shop boys",
+    name: "Pet Shop Boys",
+    albumCount: 1,
+    ratedAlbumCount: 1,
+    partialAlbumCount: 0,
+    unratedAlbumCount: 0,
+    trackCount: 10,
+    totalSeconds: 2880,
+    lovedTracks: 2,
+    tmoeSeconds: 840,
+    averageRatingCompleteness: 1,
+    averageAlbumRating: 86,
+    averageAlbumScore: 207.62,
+    firstYear: 1987,
+    lastYear: 1987,
+    topGenre: "Synthpop",
+  },
+  {
+    id: "the smiths",
+    name: "The Smiths",
+    albumCount: 1,
+    ratedAlbumCount: 1,
+    partialAlbumCount: 0,
+    unratedAlbumCount: 0,
+    trackCount: 10,
+    totalSeconds: 2220,
+    lovedTracks: 1,
+    tmoeSeconds: 600,
+    averageRatingCompleteness: 1,
+    averageAlbumRating: 88,
+    averageAlbumScore: 108.4,
+    firstYear: 1986,
+    lastYear: 1986,
+    topGenre: "Post-Punk",
   },
 ];
 
@@ -374,9 +416,15 @@ export async function importMusicBeeTsv(sourcePath: string) {
 export async function searchLibrary(request: BrowseRequest) {
   if (!isTauriRuntime()) {
     const albumIds = new Set(request.filters.albumIds);
+    const artistKeys = new Set(request.filters.artistKeys);
     const rows = mockRows.filter((row) => {
       const matchesView = request.view === "tracks" ? row.trackId !== null : row.trackId === null;
-      return matchesView && (albumIds.size === 0 || albumIds.has(row.albumId));
+      const artistKey = normalizeArtistKey(row.albumArtistDisplay);
+      return (
+        matchesView &&
+        (albumIds.size === 0 || albumIds.has(row.albumId)) &&
+        (artistKeys.size === 0 || artistKeys.has(artistKey))
+      );
     });
     return {
       view: request.view,
@@ -388,6 +436,25 @@ export async function searchLibrary(request: BrowseRequest) {
   }
 
   return invoke<BrowseResponse>("search_library", { request });
+}
+
+export async function listArtists(request: ArtistListRequest) {
+  if (!isTauriRuntime()) {
+    const searchText = request.searchText.trim().toLowerCase();
+    const filtered = mockArtists.filter((artist) => artist.name.toLowerCase().includes(searchText));
+    const sorted = [...filtered].sort((left, right) => compareArtists(left, right, request.sort.field));
+    if (request.sort.direction === "desc") {
+      sorted.reverse();
+    }
+    return {
+      rows: sorted.slice(request.offset, request.offset + request.limit),
+      total: sorted.length,
+      limit: request.limit,
+      offset: request.offset,
+    } satisfies ArtistListResponse;
+  }
+
+  return invoke<ArtistListResponse>("list_artists", { request });
 }
 
 export async function listSavedSearches() {
@@ -524,4 +591,45 @@ function defaultSettings(): AppSettings {
     darkMode: false,
     updatedAt: null,
   };
+}
+
+function normalizeArtistKey(value: string | null) {
+  const normalized = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return normalized || "unknown";
+}
+
+function compareArtists(left: ArtistSummary, right: ArtistSummary, field: string) {
+  const leftValue = artistSortValue(left, field);
+  const rightValue = artistSortValue(right, field);
+  if (typeof leftValue === "string" || typeof rightValue === "string") {
+    return String(leftValue).localeCompare(String(rightValue));
+  }
+  return (leftValue ?? 0) - (rightValue ?? 0);
+}
+
+function artistSortValue(artist: ArtistSummary, field: string) {
+  switch (field) {
+    case "albumCount":
+      return artist.albumCount;
+    case "trackCount":
+      return artist.trackCount;
+    case "lovedTracks":
+      return artist.lovedTracks;
+    case "totalMinutes":
+      return artist.totalSeconds;
+    case "averageCompleteness":
+      return artist.averageRatingCompleteness;
+    case "averageRating":
+      return artist.averageAlbumRating;
+    case "averageScore":
+      return artist.averageAlbumScore;
+    case "firstYear":
+      return artist.firstYear;
+    case "lastYear":
+      return artist.lastYear;
+    case "topGenre":
+      return artist.topGenre ?? "";
+    default:
+      return artist.name.toLowerCase();
+  }
 }

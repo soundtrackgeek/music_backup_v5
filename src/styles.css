@@ -1119,6 +1119,20 @@ button {
   min-width: 860px;
 }
 
+.artist-index-results .result-table-head,
+.artist-index-results .result-table-row {
+  grid-template-columns:
+    minmax(240px, 2.2fr) 72px 88px minmax(112px, 1fr) 88px 88px 72px;
+  min-width: 850px;
+}
+
+.artist-album-results .result-table-head,
+.artist-album-results .result-table-row {
+  grid-template-columns:
+    minmax(260px, 2.2fr) 72px minmax(116px, 1fr) 72px 88px 72px 80px;
+  min-width: 860px;
+}
+
 .album-track-results .result-table-head,
 .album-track-results .result-table-row {
   grid-template-columns: 58px minmax(220px, 2fr) minmax(150px, 1.25fr) 72px 72px minmax(170px, 1.2fr);
@@ -1677,6 +1691,10 @@ button {
   .album-results .result-table-row,
   .album-index-results .result-table-head,
   .album-index-results .result-table-row,
+  .artist-index-results .result-table-head,
+  .artist-index-results .result-table-row,
+  .artist-album-results .result-table-head,
+  .artist-album-results .result-table-row,
   .album-track-results .result-table-head,
   .album-track-results .result-table-row,
   .chart-results .result-table-head,

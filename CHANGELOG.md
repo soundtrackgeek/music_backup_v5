@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.0] - 2026-06-25
+### Added
+- Added the Phase 6 Artists workspace with a searchable album-artist index, selected artist album lists, artist-level summary stats, and artist album-list exports.
+- Added normalized artist-key filtering for album searches so artist album lists are not split by display casing differences.
+- Added web-preview mock data for the Artists workspace.
+
 ## [0.6.0] - 2026-06-25
 ### Added
 - Added the Phase 5 Albums workspace with a dedicated album index, album detail drill-down, ordered track lists, cover placeholders, and album-level track-list export.
