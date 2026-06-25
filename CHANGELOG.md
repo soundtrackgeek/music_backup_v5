@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.1] - 2026-06-25
+### Fixed
+- Moved search, saved-search, export, and library status database work off the Tauri UI thread so the desktop app stays responsive while large FTS indexes are prepared.
+- Stopped background search refreshes when the user switches away from the Search workspace.
+
 ## [0.2.0] - 2026-06-25
 ### Added
 - Added a Search workspace with album and track table browsing.

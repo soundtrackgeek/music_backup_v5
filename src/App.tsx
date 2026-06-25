@@ -450,6 +450,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (activeSection !== "Search") {
+      return;
+    }
+
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setIsSearching(true);
@@ -477,7 +481,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [request]);
+  }, [activeSection, request]);
 
   const lastRun = runs[0] ?? status?.lastImport ?? null;
   const currentFilters = request.filters;
