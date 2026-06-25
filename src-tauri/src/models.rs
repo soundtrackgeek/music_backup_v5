@@ -228,6 +228,36 @@ pub struct SaveSearchRequest {
     pub request: BrowseRequest,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChartConfig {
+    pub request: BrowseRequest,
+    pub ranking_metric: String,
+    pub rating_completeness_threshold: f64,
+    pub sort_direction: String,
+    pub result_limit: u32,
+    pub visible_columns: Vec<String>,
+    pub export_columns: Vec<String>,
+    pub view_mode: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedChart {
+    pub id: i64,
+    pub name: String,
+    pub config: ChartConfig,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveChartRequest {
+    pub name: String,
+    pub config: ChartConfig,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportSearchRequest {

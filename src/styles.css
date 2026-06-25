@@ -475,6 +475,188 @@ button {
   white-space: nowrap;
 }
 
+.chart-template-panel {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.chart-template-panel button {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 66px;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  padding: 10px;
+  color: #2f3d39;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chart-template-panel svg {
+  color: #0d756d;
+}
+
+.chart-template-panel strong,
+.chart-template-panel small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-template-panel strong {
+  font-size: 13px;
+  line-height: 17px;
+}
+
+.chart-template-panel small {
+  margin-top: 2px;
+  color: #697671;
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.chart-builder .segmented-control {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.chart-builder .search-row {
+  grid-template-columns: minmax(320px, 1fr) 300px;
+}
+
+.chart-options {
+  align-items: flex-start;
+}
+
+.chart-results .result-table-head,
+.chart-results .result-table-row {
+  grid-template-columns:
+    48px minmax(180px, 2fr) minmax(140px, 1.35fr) 64px minmax(104px, 1fr)
+    repeat(7, minmax(72px, 0.8fr));
+  min-width: 980px;
+}
+
+.chart-results .result-table-row span:first-child {
+  color: #0b625c;
+  font-weight: 760;
+}
+
+.chart-list {
+  display: grid;
+  gap: 8px;
+}
+
+.chart-list-row {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 112px;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  border: 1px solid #e1e8e5;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.rank-number {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: #0a5f59;
+  background: #e6f3f0;
+  font-size: 14px;
+}
+
+.chart-list-row h3,
+.chart-grid-item h3 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #182320;
+  font-size: 14px;
+  line-height: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-list-row p,
+.chart-grid-item p {
+  min-width: 0;
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: #697671;
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-metric {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+}
+
+.rank-metric span {
+  color: #697671;
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.rank-metric strong {
+  color: #17211f;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 12px;
+}
+
+.chart-grid-item {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #e1e8e5;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.cover-placeholder {
+  display: grid;
+  aspect-ratio: 1;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 6px;
+  color: #0b625c;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.14), rgba(143, 100, 23, 0.18)),
+    #f3f6f5;
+}
+
+.cover-placeholder span {
+  font-size: 38px;
+  line-height: 1;
+  font-weight: 760;
+}
+
+.chart-grid-item strong,
+.chart-grid-item span {
+  color: #0b625c;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 720;
+}
+
 .run-status {
   display: inline-flex;
   align-items: center;
@@ -866,6 +1048,10 @@ button {
   .filter-grid {
     grid-template-columns: repeat(2, minmax(150px, 1fr));
   }
+
+  .chart-template-panel {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
@@ -879,6 +1065,7 @@ button {
   }
 
   .search-row,
+  .chart-builder .search-row,
   .query-footer {
     grid-template-columns: 1fr;
   }
@@ -910,9 +1097,15 @@ button {
 
   .album-results .result-table-head,
   .album-results .result-table-row,
+  .chart-results .result-table-head,
+  .chart-results .result-table-row,
   .track-results .result-table-head,
   .track-results .result-table-row {
     min-width: 820px;
+  }
+
+  .chart-template-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .db-path {
@@ -941,5 +1134,19 @@ button {
 
   .search-row {
     grid-template-columns: 1fr;
+  }
+
+  .chart-template-panel,
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-list-row {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .rank-metric {
+    justify-items: start;
+    grid-column: 2;
   }
 }

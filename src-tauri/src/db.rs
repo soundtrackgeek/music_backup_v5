@@ -1,10 +1,12 @@
 use crate::models::{
-    BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ExportResult,
-    ExportSearchRequest, ImportRun, LibraryStatus, SaveSearchRequest, SavedSearch, TextFilter,
+    BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ChartConfig, ExportResult,
+    ExportSearchRequest, ImportRun, LibraryStatus, SaveChartRequest, SaveSearchRequest, SavedChart,
+    SavedSearch, TextFilter,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
 use rusqlite::{params, params_from_iter, types::Value, Connection};
+use rust_xlsxwriter::{Format, Workbook};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
@@ -12,7 +14,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 2;
+const LATEST_SCHEMA_VERSION: i32 = 3;
 static MIGRATION_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn database_path(app: &AppHandle) -> Result<PathBuf> {
@@ -55,7 +57,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_two_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_three_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -203,6 +205,14 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             updated_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS saved_charts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            config_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS exports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             created_at TEXT NOT NULL,
@@ -213,18 +223,19 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             request_json TEXT NOT NULL
         );
 
-        PRAGMA user_version = 2;
+        PRAGMA user_version = 3;
         ",
     )
     .map_err(|error| anyhow!("Could not run SQLite migrations: {error}"))?;
     Ok(())
 }
 
-fn phase_two_schema_exists(conn: &Connection) -> Result<bool> {
+fn phase_three_schema_exists(conn: &Connection) -> Result<bool> {
     [
         "album_search_fts",
         "track_search_fts",
         "saved_queries",
+        "saved_charts",
         "exports",
     ]
     .into_iter()
@@ -416,9 +427,76 @@ pub fn delete_saved_search_for_app(app: &AppHandle, id: i64) -> Result<()> {
     Ok(())
 }
 
+pub fn list_saved_charts_for_app(app: &AppHandle) -> Result<Vec<SavedChart>> {
+    let (conn, _) = open(app)?;
+    let mut stmt = conn.prepare(
+        "
+        SELECT id, name, config_json, created_at, updated_at
+        FROM saved_charts
+        ORDER BY updated_at DESC, id DESC
+        ",
+    )?;
+
+    let charts = stmt
+        .query_map([], |row| {
+            let config_json: String = row.get(2)?;
+            let config = serde_json::from_str::<ChartConfig>(&config_json).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    2,
+                    rusqlite::types::Type::Text,
+                    Box::new(error),
+                )
+            })?;
+
+            Ok(SavedChart {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                config,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(charts)
+}
+
+pub fn save_chart_for_app(app: &AppHandle, input: SaveChartRequest) -> Result<SavedChart> {
+    let (conn, _) = open(app)?;
+    let name = input.name.trim();
+    if name.is_empty() {
+        bail!("Name the chart before saving it");
+    }
+
+    let config = normalize_chart_config(input.config);
+    let now = Utc::now().to_rfc3339();
+    let config_json = serde_json::to_string(&config).context("Could not serialize chart")?;
+    conn.execute(
+        "
+        INSERT INTO saved_charts (name, config_json, created_at, updated_at)
+        VALUES (?1, ?2, ?3, ?3)
+        ",
+        params![name, config_json, now],
+    )
+    .context("Could not save chart")?;
+
+    let id = conn.last_insert_rowid();
+    let saved = list_saved_charts_for_app(app)?
+        .into_iter()
+        .find(|chart| chart.id == id)
+        .context("Could not reload saved chart")?;
+    Ok(saved)
+}
+
+pub fn delete_saved_chart_for_app(app: &AppHandle, id: i64) -> Result<()> {
+    let (conn, _) = open(app)?;
+    conn.execute("DELETE FROM saved_charts WHERE id = ?1", params![id])
+        .with_context(|| format!("Could not delete saved chart {id}"))?;
+    Ok(())
+}
+
 pub fn export_search_for_app(app: &AppHandle, input: ExportSearchRequest) -> Result<ExportResult> {
     let format = input.format.trim().to_lowercase();
-    if !matches!(format.as_str(), "csv" | "tsv" | "json" | "txt") {
+    if !matches!(format.as_str(), "csv" | "tsv" | "json" | "txt" | "xlsx") {
         bail!("Unsupported export format: {}", input.format);
     }
 
@@ -1139,6 +1217,8 @@ fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "albumRating" => "a.effective_album_rating",
             "ratingCompleteness" => "a.rating_completeness",
             "lovedTracks" => "a.loved_tracks",
+            "ae" => "a.ae_ratio",
+            "tmoe" => "a.tmoe_seconds",
             "albumScore" => "a.album_score",
             _ => "LOWER(COALESCE(a.album, ''))",
         }
@@ -1162,6 +1242,45 @@ fn normalize_view(view: &str) -> String {
         "tracks".to_string()
     } else {
         "albums".to_string()
+    }
+}
+
+fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
+    let ranking_metric = normalize_ranking_metric(&config.ranking_metric);
+    let sort_direction = if config.sort_direction.eq_ignore_ascii_case("asc") {
+        "asc".to_string()
+    } else {
+        "desc".to_string()
+    };
+    let result_limit = config.result_limit.clamp(10, 500);
+    let threshold = normalize_percentage(config.rating_completeness_threshold) * 100.0;
+    let view_mode = match config.view_mode.as_str() {
+        "compact" | "grid" => config.view_mode.clone(),
+        _ => "table".to_string(),
+    };
+
+    config.request.view = "albums".to_string();
+    config.request.offset = 0;
+    config.request.limit = result_limit;
+    config.request.sort = BrowseSort {
+        field: ranking_metric.clone(),
+        direction: sort_direction.clone(),
+    };
+    config.request.filters.rating_completeness_min = Some(threshold);
+    config.ranking_metric = ranking_metric;
+    config.sort_direction = sort_direction;
+    config.result_limit = result_limit;
+    config.rating_completeness_threshold = threshold;
+    config.view_mode = view_mode;
+    config
+}
+
+fn normalize_ranking_metric(metric: &str) -> String {
+    match metric {
+        "albumRating" | "ratingCompleteness" | "lovedTracks" | "ae" | "tmoe" | "totalMinutes" => {
+            metric.to_string()
+        }
+        _ => "albumScore".to_string(),
     }
 }
 
@@ -1220,6 +1339,12 @@ fn write_export_file(
     include_calculated: bool,
 ) -> Result<()> {
     let (headers, values) = export_table(view, rows, include_calculated);
+
+    if format == "xlsx" {
+        write_xlsx_file(path, &headers, &values)?;
+        return Ok(());
+    }
+
     let mut file = fs::File::create(path)?;
 
     match format {
@@ -1246,6 +1371,25 @@ fn write_export_file(
         _ => write_delimited(&mut file, ',', &headers, &values)?,
     }
 
+    Ok(())
+}
+
+fn write_xlsx_file(path: &PathBuf, headers: &[&'static str], rows: &[Vec<String>]) -> Result<()> {
+    let mut workbook = Workbook::new();
+    let worksheet = workbook.add_worksheet();
+    let header_format = Format::new().set_bold();
+
+    for (column, header) in headers.iter().enumerate() {
+        worksheet.write_string_with_format(0, column as u16, *header, &header_format)?;
+    }
+
+    for (row_index, row) in rows.iter().enumerate() {
+        for (column_index, value) in row.iter().enumerate() {
+            worksheet.write_string((row_index + 1) as u32, column_index as u16, value)?;
+        }
+    }
+
+    workbook.save(path)?;
     Ok(())
 }
 
@@ -1497,7 +1641,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_noop_migration_for_current_phase_two_schema() {
+    fn skips_noop_migration_for_current_phase_three_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -1508,6 +1652,42 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_two_schema_exists(&conn).expect("phase two schema exists"));
+        assert!(phase_three_schema_exists(&conn).expect("phase three schema exists"));
+    }
+
+    #[test]
+    fn sorts_charts_by_ae_and_tmoe() {
+        let ae_sort = BrowseSort {
+            field: "ae".to_string(),
+            direction: "desc".to_string(),
+        };
+        let tmoe_sort = BrowseSort {
+            field: "tmoe".to_string(),
+            direction: "desc".to_string(),
+        };
+
+        assert!(order_clause(false, &ae_sort).contains("a.ae_ratio DESC"));
+        assert!(order_clause(false, &tmoe_sort).contains("a.tmoe_seconds DESC"));
+    }
+
+    #[test]
+    fn writes_xlsx_exports() {
+        let conn = seeded_connection();
+        let mut request = BrowseRequest::default();
+        request.sort = BrowseSort {
+            field: "albumScore".to_string(),
+            direction: "desc".to_string(),
+        };
+        let response = search_library(&conn, request, 50).expect("search albums");
+        let path = std::env::temp_dir().join(format!(
+            "music-library-export-test-{}.xlsx",
+            Utc::now().timestamp_millis()
+        ));
+
+        write_export_file(&path, "xlsx", "albums", &response.rows, true).expect("write xlsx");
+
+        let metadata = fs::metadata(&path).expect("xlsx metadata");
+        assert!(metadata.len() > 0);
+        fs::remove_file(path).expect("remove xlsx");
     }
 }

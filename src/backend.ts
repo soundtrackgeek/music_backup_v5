@@ -9,7 +9,9 @@ import type {
   ImportRun,
   ImportSummary,
   LibraryStatus,
+  SavedChart,
   SavedSearch,
+  ChartConfig,
 } from "./types";
 
 const mockStatus: LibraryStatus = {
@@ -109,6 +111,7 @@ const mockRows: BrowseRow[] = [
 ];
 
 let mockSavedSearches: SavedSearch[] = [];
+let mockSavedCharts: SavedChart[] = [];
 
 export function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -186,6 +189,40 @@ export async function deleteSavedSearch(id: number) {
   }
 
   return invoke<void>("delete_saved_search", { id });
+}
+
+export async function listSavedCharts() {
+  if (!isTauriRuntime()) {
+    return mockSavedCharts;
+  }
+
+  return invoke<SavedChart[]>("list_saved_charts");
+}
+
+export async function saveChart(name: string, config: ChartConfig) {
+  if (!isTauriRuntime()) {
+    const now = new Date().toISOString();
+    const saved = {
+      id: Date.now(),
+      name,
+      config,
+      createdAt: now,
+      updatedAt: now,
+    } satisfies SavedChart;
+    mockSavedCharts = [saved, ...mockSavedCharts];
+    return saved;
+  }
+
+  return invoke<SavedChart>("save_chart", { input: { name, config } });
+}
+
+export async function deleteSavedChart(id: number) {
+  if (!isTauriRuntime()) {
+    mockSavedCharts = mockSavedCharts.filter((chart) => chart.id !== id);
+    return;
+  }
+
+  return invoke<void>("delete_saved_chart", { id });
 }
 
 export async function exportSearch(request: BrowseRequest, format: string, includeCalculated: boolean) {

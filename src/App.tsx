@@ -29,14 +29,17 @@ import {
   X,
 } from "lucide-react";
 import {
+  deleteSavedChart,
   deleteSavedSearch,
   exportSearch,
   getLibraryStatus,
   importMusicBeeTsv,
   isTauriRuntime,
   listImportRuns,
+  listSavedCharts,
   listSavedSearches,
   listenToImportProgress,
+  saveChart,
   saveSearch,
   searchLibrary,
 } from "./backend";
@@ -46,11 +49,14 @@ import type {
   BrowseResponse,
   BrowseRow,
   BrowseView,
+  ChartConfig,
+  ChartViewMode,
   ExportResult,
   ImportProgress,
   ImportRun,
   ImportSummary,
   LibraryStatus,
+  SavedChart,
   SavedSearch,
   TextFilter,
   TextFilterOperator,
@@ -58,7 +64,7 @@ import type {
 
 const navigation = [
   { label: "Search", icon: Search, enabled: true },
-  { label: "Charts", icon: BarChart3, enabled: false },
+  { label: "Charts", icon: BarChart3, enabled: true },
   { label: "Statistics", icon: Activity, enabled: false },
   { label: "Albums", icon: Album, enabled: false },
   { label: "Artists", icon: UsersRound, enabled: false },
@@ -81,6 +87,32 @@ const missingFieldOptions = [
   { value: "year", label: "Year" },
   { value: "rating", label: "Rating" },
   { value: "time", label: "Time" },
+];
+
+const rankingOptions = [
+  { value: "albumScore", label: "Album Score" },
+  { value: "albumRating", label: "Album rating" },
+  { value: "lovedTracks", label: "Loved tracks" },
+  { value: "ae", label: "AE" },
+  { value: "tmoe", label: "TMOE" },
+  { value: "ratingCompleteness", label: "Completeness" },
+  { value: "totalMinutes", label: "Minutes" },
+];
+
+const chartColumnOptions = [
+  { value: "rating", label: "Rating" },
+  { value: "complete", label: "Complete" },
+  { value: "score", label: "Score" },
+  { value: "loved", label: "Loved" },
+  { value: "ae", label: "AE" },
+  { value: "tmoe", label: "TMOE" },
+  { value: "minutes", label: "Minutes" },
+];
+
+const chartViewModes: { value: ChartViewMode; label: string; icon: typeof BarChart3 }[] = [
+  { value: "table", label: "Table", icon: BarChart3 },
+  { value: "compact", label: "List", icon: ListMusic },
+  { value: "grid", label: "Grid", icon: Album },
 ];
 
 const defaultProgress: ImportProgress = {
@@ -140,6 +172,149 @@ function createRequest(view: BrowseView = "albums"): BrowseRequest {
   };
 }
 
+function createChartConfig(): ChartConfig {
+  const request = createRequest("albums");
+  request.sort = { field: "albumScore", direction: "desc" };
+  request.limit = 50;
+  request.filters.ratingCompletenessMin = 100;
+
+  return {
+    request,
+    rankingMetric: "albumScore",
+    ratingCompletenessThreshold: 100,
+    sortDirection: "desc",
+    resultLimit: 50,
+    visibleColumns: ["rating", "complete", "score", "loved"],
+    exportColumns: ["calculated"],
+    viewMode: "table",
+  };
+}
+
+function chartRequestFromConfig(config: ChartConfig): BrowseRequest {
+  return {
+    ...config.request,
+    view: "albums",
+    offset: 0,
+    limit: config.resultLimit,
+    sort: {
+      field: config.rankingMetric,
+      direction: config.sortDirection,
+    },
+    filters: {
+      ...config.request.filters,
+      ratingCompletenessMin: config.ratingCompletenessThreshold,
+    },
+  };
+}
+
+type ChartTemplateConfigOverrides = Omit<Partial<ChartConfig>, "request"> & {
+  request?: Partial<Omit<BrowseRequest, "filters">> & { filters?: Partial<BrowseFilters> };
+};
+
+function createChartTemplateConfig(values: ChartTemplateConfigOverrides) {
+  const base = createChartConfig();
+  const filters = {
+    ...base.request.filters,
+    ...(values.request?.filters ?? {}),
+  };
+
+  return {
+    ...base,
+    ...values,
+    request: {
+      ...base.request,
+      ...(values.request ?? {}),
+      view: "albums",
+      filters,
+      offset: 0,
+    },
+  } satisfies ChartConfig;
+}
+
+type ChartTemplate = {
+  id: string;
+  label: string;
+  description: string;
+  icon: typeof BarChart3;
+  createConfig: () => ChartConfig;
+};
+
+const chartTemplates: ChartTemplate[] = [
+  {
+    id: "year",
+    label: "Year",
+    description: "Top albums from a selected year.",
+    icon: BarChart3,
+    createConfig: () =>
+      createChartTemplateConfig({
+        request: { filters: { yearFrom: 1987, yearTo: 1987 } },
+      }),
+  },
+  {
+    id: "decade",
+    label: "Decade",
+    description: "Top albums from a selected decade.",
+    icon: Gauge,
+    createConfig: () =>
+      createChartTemplateConfig({
+        request: { filters: { yearFrom: 1980, yearTo: 1989 } },
+      }),
+  },
+  {
+    id: "genre",
+    label: "Genre",
+    description: "Top albums in a canonical genre.",
+    icon: Tags,
+    createConfig: () =>
+      createChartTemplateConfig({
+        request: { filters: { genres: ["Synthpop"] } },
+      }),
+  },
+  {
+    id: "artist",
+    label: "Artist",
+    description: "Top albums by album artist.",
+    icon: UsersRound,
+    createConfig: () =>
+      createChartTemplateConfig({
+        request: { filters: { albumArtist: { operator: "contains", value: "Pet Shop Boys" } } },
+      }),
+  },
+  {
+    id: "loved",
+    label: "Loved",
+    description: "Albums with the most loved tracks.",
+    icon: Heart,
+    createConfig: () =>
+      createChartTemplateConfig({
+        rankingMetric: "lovedTracks",
+        request: { sort: { field: "lovedTracks", direction: "desc" }, filters: { lovedTracksMin: 1 } },
+      }),
+  },
+  {
+    id: "ae",
+    label: "AE",
+    description: "Albums with the highest Album Excellence.",
+    icon: Sparkles,
+    createConfig: () =>
+      createChartTemplateConfig({
+        rankingMetric: "ae",
+        request: { sort: { field: "ae", direction: "desc" } },
+      }),
+  },
+  {
+    id: "tmoe",
+    label: "TMOE",
+    description: "Albums with the highest Total Minutes Of Excellence.",
+    icon: Clock3,
+    createConfig: () =>
+      createChartTemplateConfig({
+        rankingMetric: "tmoe",
+        request: { sort: { field: "tmoe", direction: "desc" } },
+      }),
+  },
+];
+
 function formatNumber(value: number | null | undefined) {
   return new Intl.NumberFormat().format(value ?? 0);
 }
@@ -186,6 +361,29 @@ function formatPercent(value: number | null | undefined, digits = 1) {
 function formatTrackRating(value: number | null | undefined) {
   if (value == null) return "";
   return `${value / 20}`;
+}
+
+function rankingLabel(value: string) {
+  return rankingOptions.find((option) => option.value === value)?.label ?? "Album Score";
+}
+
+function formatChartMetric(row: BrowseRow, metric: string) {
+  switch (metric) {
+    case "albumRating":
+      return row.effectiveAlbumRating?.toString() ?? "";
+    case "lovedTracks":
+      return row.lovedTracks?.toString() ?? "0";
+    case "ae":
+      return formatPercent(row.aeRatio, 2);
+    case "tmoe":
+      return formatMinutes(row.tmoeSeconds);
+    case "ratingCompleteness":
+      return formatPercent(row.ratingCompleteness);
+    case "totalMinutes":
+      return formatMinutes(row.totalSeconds);
+    default:
+      return row.albumScore?.toFixed(3) ?? "";
+  }
 }
 
 function parseList(value: string) {
@@ -403,6 +601,105 @@ function ResultTable({ response }: { response: BrowseResponse | null }) {
   );
 }
 
+function ChartResults({ response, config }: { response: BrowseResponse | null; config: ChartConfig }) {
+  if (!response) {
+    return (
+      <div className="empty-state large">
+        <BarChart3 size={20} />
+        <span>No chart loaded.</span>
+      </div>
+    );
+  }
+
+  if (response.rows.length === 0) {
+    return (
+      <div className="empty-state large">
+        <FileSearch size={20} />
+        <span>No ranked albums.</span>
+      </div>
+    );
+  }
+
+  if (config.viewMode === "compact") {
+    return (
+      <div className="chart-list" role="list">
+        {response.rows.map((row, index) => (
+          <article className="chart-list-row" role="listitem" key={row.id}>
+            <strong className="rank-number">{index + 1}</strong>
+            <div>
+              <h3>{row.album ?? "Untitled"}</h3>
+              <p>
+                {[row.albumArtistDisplay, row.year, row.canonicalGenre].filter(Boolean).join(" / ")}
+              </p>
+            </div>
+            <div className="rank-metric">
+              <span>{rankingLabel(config.rankingMetric)}</span>
+              <strong>{formatChartMetric(row, config.rankingMetric)}</strong>
+            </div>
+          </article>
+        ))}
+      </div>
+    );
+  }
+
+  if (config.viewMode === "grid") {
+    return (
+      <div className="chart-grid" role="list">
+        {response.rows.map((row, index) => (
+          <article className="chart-grid-item" role="listitem" key={row.id}>
+            <div className="cover-placeholder" aria-hidden="true">
+              <span>{row.album?.slice(0, 1).toUpperCase() ?? "A"}</span>
+            </div>
+            <div>
+              <strong>#{index + 1}</strong>
+              <h3>{row.album ?? "Untitled"}</h3>
+              <p>{row.albumArtistDisplay ?? ""}</p>
+              <span>{formatChartMetric(row, config.rankingMetric)}</span>
+            </div>
+          </article>
+        ))}
+      </div>
+    );
+  }
+
+  const visibleColumns = new Set(config.visibleColumns);
+  const columns = [
+    { key: "rank", label: "#", value: (_row: BrowseRow, index: number) => `${index + 1}` },
+    { key: "album", label: "Album", value: (row: BrowseRow) => row.album ?? "Untitled" },
+    { key: "artist", label: "Artist", value: (row: BrowseRow) => row.albumArtistDisplay ?? "" },
+    { key: "year", label: "Year", value: (row: BrowseRow) => row.year?.toString() ?? "" },
+    { key: "genre", label: "Genre", value: (row: BrowseRow) => row.canonicalGenre ?? "" },
+    { key: "rating", label: "Rating", value: (row: BrowseRow) => row.effectiveAlbumRating?.toString() ?? "" },
+    { key: "complete", label: "Complete", value: (row: BrowseRow) => formatPercent(row.ratingCompleteness) },
+    { key: "score", label: "Score", value: (row: BrowseRow) => row.albumScore?.toFixed(3) ?? "" },
+    { key: "loved", label: "Loved", value: (row: BrowseRow) => row.lovedTracks?.toString() ?? "0" },
+    { key: "ae", label: "AE", value: (row: BrowseRow) => formatPercent(row.aeRatio, 2) },
+    { key: "tmoe", label: "TMOE", value: (row: BrowseRow) => formatMinutes(row.tmoeSeconds) },
+    { key: "minutes", label: "Minutes", value: (row: BrowseRow) => formatMinutes(row.totalSeconds) },
+  ].filter((column) => ["rank", "album", "artist", "year", "genre"].includes(column.key) || visibleColumns.has(column.key));
+
+  return (
+    <div className="result-table chart-results" role="table">
+      <div className="result-table-head" role="row">
+        {columns.map((column) => (
+          <span role="columnheader" key={column.key}>
+            {column.label}
+          </span>
+        ))}
+      </div>
+      {response.rows.map((row, index) => (
+        <div className="result-table-row" role="row" key={row.id}>
+          {columns.map((column) => (
+            <span role="cell" key={column.key}>
+              {column.value(row, index)}
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
   const [sourcePath, setSourcePath] = useState("musicbee-library.tsv");
@@ -414,22 +711,31 @@ export default function App() {
   const [request, setRequest] = useState<BrowseRequest>(() => createRequest("albums"));
   const [response, setResponse] = useState<BrowseResponse | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [savedCharts, setSavedCharts] = useState<SavedChart[]>([]);
   const [saveName, setSaveName] = useState("");
   const [browseError, setBrowseError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [includeCalculated, setIncludeCalculated] = useState(false);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  const [chartConfig, setChartConfig] = useState<ChartConfig>(() => createChartConfig());
+  const [chartResponse, setChartResponse] = useState<BrowseResponse | null>(null);
+  const [chartName, setChartName] = useState("");
+  const [chartError, setChartError] = useState<string | null>(null);
+  const [isChartLoading, setIsChartLoading] = useState(false);
+  const [chartExportResult, setChartExportResult] = useState<ExportResult | null>(null);
   const canImport = isTauriRuntime();
 
   const loadData = useCallback(async () => {
-    const [nextStatus, nextRuns, nextSavedSearches] = await Promise.all([
+    const [nextStatus, nextRuns, nextSavedSearches, nextSavedCharts] = await Promise.all([
       getLibraryStatus(),
       listImportRuns(8),
       listSavedSearches(),
+      listSavedCharts(),
     ]);
     setStatus(nextStatus);
     setRuns(nextRuns);
     setSavedSearches(nextSavedSearches);
+    setSavedCharts(nextSavedCharts);
   }, []);
 
   useEffect(() => {
@@ -485,6 +791,41 @@ export default function App() {
 
   const lastRun = runs[0] ?? status?.lastImport ?? null;
   const currentFilters = request.filters;
+  const chartRequest = useMemo(() => chartRequestFromConfig(chartConfig), [chartConfig]);
+
+  useEffect(() => {
+    if (activeSection !== "Charts") {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setIsChartLoading(true);
+      setChartError(null);
+      void searchLibrary(chartRequest)
+        .then((nextResponse) => {
+          if (!cancelled) {
+            setChartResponse(nextResponse);
+          }
+        })
+        .catch((searchError) => {
+          if (!cancelled) {
+            setChartError(searchError instanceof Error ? searchError.message : String(searchError));
+            setChartResponse(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsChartLoading(false);
+          }
+        });
+    }, 160);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeSection, chartRequest]);
 
   const progressPercent = useMemo(() => {
     if (progress.status === "completed") return 100;
@@ -691,9 +1032,72 @@ export default function App() {
     setExportResult(result);
   }
 
+  function updateChartConfig(values: Partial<ChartConfig>) {
+    setChartConfig((previous) => ({
+      ...previous,
+      ...values,
+      request: values.request ?? previous.request,
+    }));
+    setChartExportResult(null);
+  }
+
+  function updateChartFilters(values: Partial<BrowseFilters>) {
+    setChartConfig((previous) => ({
+      ...previous,
+      request: {
+        ...previous.request,
+        filters: {
+          ...previous.request.filters,
+          ...values,
+        },
+        offset: 0,
+      },
+    }));
+    setChartExportResult(null);
+  }
+
+  function toggleChartColumn(value: string, key: "visibleColumns" | "exportColumns") {
+    setChartConfig((previous) => {
+      const current = previous[key];
+      const nextValues = current.includes(value)
+        ? current.filter((column) => column !== value)
+        : [...current, value];
+      return { ...previous, [key]: nextValues };
+    });
+    setChartExportResult(null);
+  }
+
+  function applyChartTemplate(template: ChartTemplate) {
+    setChartConfig(template.createConfig());
+    setChartExportResult(null);
+  }
+
+  async function saveCurrentChart() {
+    const nextConfig = {
+      ...chartConfig,
+      request: chartRequest,
+    };
+    const fallbackName = `${rankingLabel(nextConfig.rankingMetric)} chart`;
+    const saved = await saveChart(chartName.trim() || fallbackName, nextConfig);
+    setSavedCharts((previous) => [saved, ...previous.filter((chart) => chart.id !== saved.id)]);
+    setChartName("");
+  }
+
+  async function removeSavedChart(id: number) {
+    await deleteSavedChart(id);
+    setSavedCharts((previous) => previous.filter((chart) => chart.id !== id));
+  }
+
+  async function runChartExport(format: string) {
+    const result = await exportSearch(chartRequest, format, chartConfig.exportColumns.length > 0);
+    setChartExportResult(result);
+  }
+
   const total = response?.total ?? 0;
   const pageStart = total === 0 ? 0 : request.offset + 1;
   const pageEnd = Math.min(total, request.offset + request.limit);
+  const chartTotal = chartResponse?.total ?? 0;
+  const chartRows = chartResponse?.rows.length ?? 0;
 
   return (
     <main className="app-shell">
@@ -833,6 +1237,208 @@ export default function App() {
                 ))
               )}
             </div>
+          </section>
+        </section>
+      ) : activeSection === "Charts" ? (
+        <section className="workspace charts-workspace">
+          <header className="topbar">
+            <div>
+              <h1>Charts</h1>
+              <p>Rank album lists from saved filters, Album Score, loved tracks, AE, and TMOE.</p>
+            </div>
+            <div className="topbar-actions">
+              <button className="icon-button" type="button" aria-label="Reset chart" onClick={() => setChartConfig(createChartConfig())}>
+                <RotateCcw size={18} />
+              </button>
+              <button className="icon-button" type="button" aria-label="Refresh" onClick={() => void loadData()}>
+                <Database size={18} />
+              </button>
+            </div>
+          </header>
+
+          <section className="metric-grid" aria-label="Chart summary">
+            <Metric label="Albums" value={formatNumber(status?.albumCount)} tone="teal" icon={Album} />
+            <Metric label="Ranked" value={formatNumber(chartTotal)} tone="amber" icon={BarChart3} />
+            <Metric label="Showing" value={formatNumber(chartRows)} icon={ListMusic} />
+            <Metric label="Saved" value={formatNumber(savedCharts.length)} icon={Save} />
+          </section>
+
+          <section className="chart-template-panel" aria-label="Built-in charts">
+            {chartTemplates.map((template) => {
+              const Icon = template.icon;
+              return (
+                <button type="button" key={template.id} onClick={() => applyChartTemplate(template)}>
+                  <Icon size={17} />
+                  <span>
+                    <strong>{template.label}</strong>
+                    <small>{template.description}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </section>
+
+          <section className="query-panel chart-builder">
+            <div className="search-row">
+              <div className="search-input">
+                <Search size={18} />
+                <input
+                  value={chartConfig.request.searchText}
+                  onChange={(event) =>
+                    updateChartConfig({
+                      request: { ...chartConfig.request, searchText: event.target.value, offset: 0 },
+                    })
+                  }
+                  placeholder="Search within chart albums, artists, genres, publishers"
+                />
+              </div>
+
+              <div className="segmented-control" aria-label="Chart view mode">
+                {chartViewModes.map((mode) => {
+                  const Icon = mode.icon;
+                  return (
+                    <button
+                      className={chartConfig.viewMode === mode.value ? "active" : ""}
+                      type="button"
+                      key={mode.value}
+                      onClick={() => updateChartConfig({ viewMode: mode.value })}
+                    >
+                      <Icon size={16} />
+                      <span>{mode.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="filter-grid">
+              <NumberField
+                label="Year from"
+                value={chartConfig.request.filters.yearFrom}
+                onChange={(value) => updateChartFilters({ yearFrom: value })}
+              />
+              <NumberField
+                label="Year to"
+                value={chartConfig.request.filters.yearTo}
+                onChange={(value) => updateChartFilters({ yearTo: value })}
+              />
+              <label className="criterion">
+                <span>Genres</span>
+                <input
+                  value={chartConfig.request.filters.genres.join(", ")}
+                  onChange={(event) => updateChartFilters({ genres: parseList(event.target.value) })}
+                  placeholder="Synthpop, AOR"
+                />
+              </label>
+              <TextCriterion
+                label="Album artist"
+                filter={chartConfig.request.filters.albumArtist}
+                onChange={(filter) => updateChartFilters({ albumArtist: filter })}
+              />
+              <TextCriterion
+                label="Album title"
+                filter={chartConfig.request.filters.albumTitle}
+                onChange={(filter) => updateChartFilters({ albumTitle: filter })}
+              />
+              <TextCriterion
+                label="Publisher"
+                filter={chartConfig.request.filters.publisher}
+                onChange={(filter) => updateChartFilters({ publisher: filter })}
+              />
+              <NumberField
+                label="Minutes min"
+                value={chartConfig.request.filters.totalMinutesMin}
+                step={0.5}
+                onChange={(value) => updateChartFilters({ totalMinutesMin: value })}
+              />
+              <NumberField
+                label="Minutes max"
+                value={chartConfig.request.filters.totalMinutesMax}
+                step={0.5}
+                onChange={(value) => updateChartFilters({ totalMinutesMax: value })}
+              />
+              <NumberField
+                label="Loved min"
+                value={chartConfig.request.filters.lovedTracksMin}
+                min={0}
+                onChange={(value) => updateChartFilters({ lovedTracksMin: value })}
+              />
+              <SelectField
+                label="Ranking"
+                value={chartConfig.rankingMetric}
+                onChange={(rankingMetric) => updateChartConfig({ rankingMetric })}
+                options={rankingOptions}
+              />
+              <SelectField
+                label="Direction"
+                value={chartConfig.sortDirection}
+                onChange={(sortDirection) => updateChartConfig({ sortDirection: sortDirection as "asc" | "desc" })}
+                options={[
+                  { value: "desc", label: "Descending" },
+                  { value: "asc", label: "Ascending" },
+                ]}
+              />
+              <NumberField
+                label="Limit"
+                value={chartConfig.resultLimit}
+                min={10}
+                max={500}
+                onChange={(value) => updateChartConfig({ resultLimit: value ?? 50 })}
+              />
+              <label className="criterion slider-criterion chart-slider">
+                <span>Completeness</span>
+                <div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={chartConfig.ratingCompletenessThreshold}
+                    onChange={(event) => updateChartConfig({ ratingCompletenessThreshold: Number(event.target.value) })}
+                  />
+                  <strong>{chartConfig.ratingCompletenessThreshold}%</strong>
+                </div>
+              </label>
+            </div>
+
+            <div className="query-footer chart-options">
+              <div className="missing-flags" aria-label="Visible chart columns">
+                {chartColumnOptions.map((option) => (
+                  <label key={option.value}>
+                    <input
+                      type="checkbox"
+                      checked={chartConfig.visibleColumns.includes(option.value)}
+                      onChange={() => toggleChartColumn(option.value, "visibleColumns")}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={chartConfig.exportColumns.includes("calculated")}
+                  onChange={() => toggleChartColumn("calculated", "exportColumns")}
+                />
+                <span>Calculated export columns</span>
+              </label>
+            </div>
+          </section>
+
+          <section className="table-panel" aria-label="Chart results">
+            <div className="panel-heading compact">
+              <div>
+                <h2>{rankingLabel(chartConfig.rankingMetric)} chart</h2>
+                <p>
+                  {isChartLoading
+                    ? "Ranking"
+                    : `${formatNumber(chartRows)} shown from ${formatNumber(chartTotal)} matches`}
+                </p>
+              </div>
+              <span className="run-status">{chartConfig.ratingCompletenessThreshold}% complete</span>
+            </div>
+
+            {chartError ? <p className="error-message">{chartError}</p> : null}
+            <ChartResults response={chartResponse} config={chartConfig} />
           </section>
         </section>
       ) : (
@@ -1226,6 +1832,80 @@ export default function App() {
             </div>
           </dl>
         </aside>
+      ) : activeSection === "Charts" ? (
+        <aside className="detail-panel chart-detail" aria-label="Chart actions">
+          <div className="detail-header">
+            <BarChart3 size={20} />
+            <div>
+              <h2>Chart Library</h2>
+              <p>Saved chart configs and exports</p>
+            </div>
+          </div>
+
+          <section className="save-search-box">
+            <label className="source-input">
+              <span>Name</span>
+              <input value={chartName} onChange={(event) => setChartName(event.target.value)} />
+            </label>
+            <button className="primary-button" type="button" onClick={() => void saveCurrentChart()}>
+              <Save size={17} />
+              <span>Save chart</span>
+            </button>
+          </section>
+
+          <section className="saved-list" aria-label="Saved charts">
+            {savedCharts.length === 0 ? (
+              <div className="empty-state">
+                <BarChart3 size={20} />
+                <span>No saved charts.</span>
+              </div>
+            ) : (
+              savedCharts.map((chart) => (
+                <div className="saved-search" key={chart.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChartConfig(chart.config);
+                      setActiveSection("Charts");
+                    }}
+                  >
+                    <strong>{chart.name}</strong>
+                    <span>
+                      {rankingLabel(chart.config.rankingMetric)} / {chart.config.viewMode}
+                    </span>
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label={`Delete ${chart.name}`}
+                    onClick={() => void removeSavedChart(chart.id)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))
+            )}
+          </section>
+
+          <section className="export-box">
+            <div className="export-grid">
+              {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
+                <button type="button" key={format} onClick={() => void runChartExport(format)}>
+                  <Download size={16} />
+                  <span>{format.toUpperCase()}</span>
+                </button>
+              ))}
+            </div>
+            {chartExportResult ? (
+              <div className="export-result">
+                <Check size={17} />
+                <span>
+                  {formatNumber(chartExportResult.rowCount)} rows to {chartExportResult.path}
+                </span>
+              </div>
+            ) : null}
+          </section>
+        </aside>
       ) : (
         <aside className="detail-panel search-detail" aria-label="Search actions">
           <div className="detail-header">
@@ -1289,7 +1969,7 @@ export default function App() {
               <span>Calculated columns</span>
             </label>
             <div className="export-grid">
-              {["csv", "tsv", "json", "txt"].map((format) => (
+              {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
                 <button type="button" key={format} onClick={() => void runExport(format)}>
                   <Download size={16} />
                   <span>{format.toUpperCase()}</span>

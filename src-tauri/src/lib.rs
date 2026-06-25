@@ -3,8 +3,8 @@ mod importer;
 mod models;
 
 use models::{
-    BrowseRequest, BrowseResponse, ExportResult, ExportSearchRequest, SaveSearchRequest,
-    SavedSearch,
+    BrowseRequest, BrowseResponse, ExportResult, ExportSearchRequest, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch,
 };
 use models::{ImportRun, ImportSummary, LibraryStatus};
 use tauri::AppHandle;
@@ -68,6 +68,30 @@ async fn delete_saved_search(app: AppHandle, id: i64) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn list_saved_charts(app: AppHandle) -> Result<Vec<SavedChart>, String> {
+    tauri::async_runtime::spawn_blocking(move || db::list_saved_charts_for_app(&app))
+        .await
+        .map_err(|error| format!("Saved chart list task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn save_chart(app: AppHandle, input: SaveChartRequest) -> Result<SavedChart, String> {
+    tauri::async_runtime::spawn_blocking(move || db::save_chart_for_app(&app, input))
+        .await
+        .map_err(|error| format!("Save chart task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn delete_saved_chart(app: AppHandle, id: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || db::delete_saved_chart_for_app(&app, id))
+        .await
+        .map_err(|error| format!("Delete saved chart task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn export_search(app: AppHandle, input: ExportSearchRequest) -> Result<ExportResult, String> {
     tauri::async_runtime::spawn_blocking(move || db::export_search_for_app(&app, input))
         .await
@@ -85,6 +109,9 @@ pub fn run() {
             list_saved_searches,
             save_search,
             delete_saved_search,
+            list_saved_charts,
+            save_chart,
+            delete_saved_chart,
             export_search
         ])
         .run(tauri::generate_context!())

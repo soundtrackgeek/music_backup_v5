@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0] - 2026-06-25
+### Added
+- Added the Phase 3 Charts workspace with built-in chart templates, a custom chart builder, rating completeness thresholding, and Album Score, loved-track, AE, and TMOE rankings.
+- Added saved chart configurations backed by SQLite schema version 3.
+- Added ranked table, compact list, and cover-grid-ready chart view modes.
+- Added XLSX export support for Search and Charts.
+
 ## [0.2.2] - 2026-06-25
 ### Fixed
 - Avoided rerunning no-op SQLite schema migrations on every search when the Phase 2 database schema is already current.

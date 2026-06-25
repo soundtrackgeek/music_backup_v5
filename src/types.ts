@@ -134,6 +134,27 @@ export type SavedSearch = {
   updatedAt: string;
 };
 
+export type ChartViewMode = "table" | "compact" | "grid";
+
+export type ChartConfig = {
+  request: BrowseRequest;
+  rankingMetric: string;
+  ratingCompletenessThreshold: number;
+  sortDirection: "asc" | "desc";
+  resultLimit: number;
+  visibleColumns: string[];
+  exportColumns: string[];
+  viewMode: ChartViewMode;
+};
+
+export type SavedChart = {
+  id: number;
+  name: string;
+  config: ChartConfig;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ExportResult = {
   path: string;
   format: string;
