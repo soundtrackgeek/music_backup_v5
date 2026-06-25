@@ -1,0 +1,11 @@
+node_modules/
+dist/
+tmp/
+target/
+src-tauri/target/
+src-tauri/gen/
+.DS_Store
+*.log
+*.sqlite3
+*.sqlite3-*
+musicbee-library.tsv

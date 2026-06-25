@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Music Library</title>
+  <rect width="512" height="512" rx="96" fill="#0d766d" />
+  <rect x="82" y="94" width="348" height="324" rx="44" fill="#f8faf9" />
+  <path d="M166 159h180" stroke="#182024" stroke-width="28" stroke-linecap="round" />
+  <path d="M166 231h180" stroke="#182024" stroke-width="28" stroke-linecap="round" />
+  <path d="M166 303h106" stroke="#182024" stroke-width="28" stroke-linecap="round" />
+  <path
+    d="M337 292v58c0 26-22 47-51 47-25 0-45-15-45-35 0-22 22-37 49-37 9 0 17 1 24 4V213l94-22v77l-71 16z"
+    fill="#d8941f"
+  />
+</svg>
