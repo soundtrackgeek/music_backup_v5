@@ -2,7 +2,9 @@
 
 A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-Phase 5 adds a Settings workspace on top of the Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse album and track tables, save searches, build ranked album charts, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, and switch between light and dark mode.
+The current Phase 4 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse album and track tables, save searches, build ranked album charts, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, and switch between light and dark mode.
+
+The sidebar currently enables Search, Charts, Statistics, Imports, and Settings. Albums, Artists, Genres, and Tools are planned Phase 5 workspaces; album and track browsing currently live in Search.
 
 ## Requirements
 
@@ -41,7 +43,7 @@ npm run build
 npm run tauri:build
 ```
 
-## Phase 5 Features
+## Phase 4 Settings Features
 
 - Settings workspace for app preferences.
 - Configurable rolling database backup retention, defaulting to 3 backups.

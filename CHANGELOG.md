@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.2] - 2026-06-25
+### Changed
+- Updated the spec and README roadmap to document current sidebar workspace status and move dedicated Albums, Artists, Genres, and Tools work into future Phase 5.
+
 ## [0.5.1] - 2026-06-25
 ### Fixed
 - Applied the cached dark mode preference before React starts so the app no longer flashes light mode on startup.

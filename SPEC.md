@@ -1,7 +1,7 @@
 # Music Library App Specification
 
 Date: 2026-06-25
-Status: Draft
+Status: Draft, current implementation through Phase 4
 
 ## 1. Product Goal
 
@@ -472,7 +472,7 @@ Before any database-changing operation:
 - Create a timestamped SQLite backup.
 - Store backup metadata: date, operation, source TSV path, source TSV size, row count, album count.
 - Keep the last 3 backups by default.
-- Allow the backup retention policy to be changed later from Settings.
+- Allow the backup retention policy to be changed from Settings.
 
 Required operations that trigger backup:
 
@@ -514,7 +514,9 @@ Important indexes:
 - `albums(rating_completeness)`
 - `albums(album_score)`
 
-## 11. Future Music Tools
+## 11. Music Tools Workspace
+
+The Tools navigation item represents a future validation and cleanup workspace. It should remain disabled until the validation suite has usable issue lists and exports.
 
 Planned validation and cleanup tools:
 
@@ -569,15 +571,17 @@ The UI should optimize for repeated use:
 
 Recommended main navigation:
 
-- Search
-- Charts
-- Statistics
-- Albums
-- Artists
-- Genres
-- Tools
-- Imports
-- Settings
+| Navigation item | Status | Phase | Purpose |
+| --- | --- | --- | --- |
+| Search | Implemented | Phase 2 | Primary album and track browsing, filters, saved searches, and exports. |
+| Charts | Implemented | Phase 3 | Built-in and custom ranked album views. |
+| Statistics | Implemented | Phase 4 | Library overview, rating progress, year/genre progress, and import/rating history. |
+| Albums | Planned | Phase 5 | Dedicated album index and album detail drill-down. Current album table browsing lives in Search. |
+| Artists | Planned | Phase 5 | Dedicated album-artist index with artist-level album lists and stats. |
+| Genres | Planned | Phase 5 | Dedicated canonical-genre index with genre-level album lists and stats. |
+| Tools | Planned | Phase 5 | Music Tools validation and cleanup issue lists. |
+| Imports | Implemented | Phase 1 | TSV import, progress, import history, and backup visibility. |
+| Settings | Implemented | Phase 4 | App preferences such as backup retention and theme. |
 
 ## 14. Performance Targets
 
@@ -594,7 +598,7 @@ These are targets, not hard guarantees. They should be measured once implementat
 
 ## 15. Development Phases
 
-### Phase 1: Data Foundation
+### Phase 1: Data Foundation (implemented)
 
 - Create Tauri + React + TypeScript app.
 - Add SQLite database and migrations.
@@ -603,7 +607,7 @@ These are targets, not hard guarantees. They should be measured once implementat
 - Implement backup before import.
 - Implement album calculations: total time, rated count, rating completeness, loved tracks, TMOE, AE, Album Score.
 
-### Phase 2: Search and Browse
+### Phase 2: Search and Browse (implemented)
 
 - Album table.
 - Track table.
@@ -613,7 +617,7 @@ These are targets, not hard guarantees. They should be measured once implementat
 - Saved searches.
 - CSV/TSV/JSON/TXT export.
 
-### Phase 3: Charts
+### Phase 3: Charts (implemented)
 
 - Built-in charts.
 - Custom chart builder.
@@ -622,18 +626,29 @@ These are targets, not hard guarantees. They should be measured once implementat
 - XLSX export.
 - Chart/list/table view modes.
 
-### Phase 4: Statistics
+### Phase 4: Statistics and Settings (implemented)
 
 - Library overview dashboard.
 - Rating progress dashboard.
 - Year and genre progress.
 - Import history.
 - Rating history.
+- Settings workspace.
+- Configurable backup retention.
+- Persisted light/dark theme preference.
 
-### Phase 5: Tools and Enrichment
+### Phase 5: Dedicated Library Workspaces and Tools (future)
 
+- Enable the Albums navigation item with a dedicated album index.
+- Add album detail pages with track lists, calculations, and album-level export.
+- Enable the Artists navigation item with album-artist index pages, artist album lists, and artist-level summary stats.
+- Enable the Genres navigation item with canonical-genre index pages, genre album lists, and genre-level summary stats.
+- Enable the Tools navigation item.
 - Music Tools validation suite.
 - Cover art support.
+
+### Phase 6: External Enrichment and AI (future)
+
 - MusicBrainz integration.
 - AI playlist/recommendation features.
 
