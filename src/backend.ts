@@ -16,7 +16,7 @@ import type {
   StatisticsResponse,
 } from "./types";
 
-const settingsStorageKey = "musicLibrarySettings:v1";
+export const settingsStorageKey = "musicLibrarySettings:v1";
 
 const mockStatus: LibraryStatus = {
   dbPath: "Tauri desktop runtime required for SQLite access",
@@ -116,7 +116,7 @@ const mockRows: BrowseRow[] = [
 
 let mockSavedSearches: SavedSearch[] = [];
 let mockSavedCharts: SavedChart[] = [];
-let mockSettings: AppSettings = loadMockSettings();
+let mockSettings: AppSettings = loadCachedSettings();
 
 const mockImportRun = {
   id: 1,
@@ -340,7 +340,9 @@ export async function getSettings() {
     return mockSettings;
   }
 
-  return invoke<AppSettings>("get_settings");
+  const settings = await invoke<AppSettings>("get_settings");
+  cacheSettings(settings);
+  return settings;
 }
 
 export async function saveSettings(settings: AppSettings) {
@@ -349,11 +351,13 @@ export async function saveSettings(settings: AppSettings) {
       ...normalizeSettings(settings),
       updatedAt: new Date().toISOString(),
     };
-    saveMockSettings(mockSettings);
+    cacheSettings(mockSettings);
     return mockSettings;
   }
 
-  return invoke<AppSettings>("save_settings", { settings });
+  const saved = await invoke<AppSettings>("save_settings", { settings });
+  cacheSettings(saved);
+  return saved;
 }
 
 export async function importMusicBeeTsv(sourcePath: string) {
@@ -470,7 +474,7 @@ export async function listenToImportProgress(handler: (progress: ImportProgress)
   });
 }
 
-function loadMockSettings() {
+export function loadCachedSettings() {
   if (typeof window === "undefined") {
     return defaultSettings();
   }
@@ -486,7 +490,7 @@ function loadMockSettings() {
   }
 }
 
-function saveMockSettings(settings: AppSettings) {
+export function cacheSettings(settings: AppSettings) {
   if (typeof window === "undefined") {
     return;
   }

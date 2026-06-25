@@ -34,6 +34,7 @@ import {
   deleteSavedChart,
   deleteSavedSearch,
   exportSearch,
+  cacheSettings,
   getSettings,
   getStatistics,
   getLibraryStatus,
@@ -42,6 +43,7 @@ import {
   listImportRuns,
   listSavedCharts,
   listSavedSearches,
+  loadCachedSettings,
   listenToImportProgress,
   saveChart,
   saveSearch,
@@ -134,11 +136,7 @@ const defaultProgress: ImportProgress = {
 };
 
 function createDefaultSettings(): AppSettings {
-  return {
-    backupRetention: 3,
-    darkMode: false,
-    updatedAt: null,
-  };
+  return loadCachedSettings();
 }
 
 function createTextFilter(): TextFilter {
@@ -1316,6 +1314,7 @@ export default function App() {
       backupRetention: clampBackupRetention(values.backupRetention ?? settings.backupRetention),
     };
     setSettings(nextSettings);
+    cacheSettings(nextSettings);
     setIsSavingSettings(true);
     setSettingsError(null);
 
