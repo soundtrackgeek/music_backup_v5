@@ -15,11 +15,13 @@ import {
   Heart,
   Library,
   ListMusic,
+  Moon,
   Play,
   RotateCcw,
   Save,
   Search,
   Settings,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Tags,
@@ -32,6 +34,7 @@ import {
   deleteSavedChart,
   deleteSavedSearch,
   exportSearch,
+  getSettings,
   getStatistics,
   getLibraryStatus,
   importMusicBeeTsv,
@@ -42,9 +45,11 @@ import {
   listenToImportProgress,
   saveChart,
   saveSearch,
+  saveSettings,
   searchLibrary,
 } from "./backend";
 import type {
+  AppSettings,
   BrowseFilters,
   BrowseRequest,
   BrowseResponse,
@@ -77,7 +82,7 @@ const navigation = [
   { label: "Genres", icon: Tags, enabled: false },
   { label: "Tools", icon: Wrench, enabled: false },
   { label: "Imports", icon: FolderInput, enabled: true },
-  { label: "Settings", icon: Settings, enabled: false },
+  { label: "Settings", icon: Settings, enabled: true },
 ];
 
 const operatorLabels: Record<TextFilterOperator, string> = {
@@ -127,6 +132,14 @@ const defaultProgress: ImportProgress = {
   albumCount: 0,
   message: "Ready to import a MusicBee TSV export.",
 };
+
+function createDefaultSettings(): AppSettings {
+  return {
+    backupRetention: 3,
+    darkMode: false,
+    updatedAt: null,
+  };
+}
 
 function createTextFilter(): TextFilter {
   return { operator: "contains", value: "" };
@@ -418,6 +431,11 @@ function numberValue(value: string) {
   if (value.trim() === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function clampBackupRetention(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return 3;
+  return Math.min(50, Math.max(1, Math.round(value)));
 }
 
 function textFilterLabel(label: string, filter: TextFilter) {
@@ -898,21 +916,26 @@ export default function App() {
   const [statistics, setStatistics] = useState<StatisticsResponse | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [isStatsLoading, setIsStatsLoading] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>(() => createDefaultSettings());
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const canImport = isTauriRuntime();
 
   const loadData = useCallback(async () => {
-    const [nextStatus, nextRuns, nextSavedSearches, nextSavedCharts, nextStatistics] = await Promise.all([
+    const [nextStatus, nextRuns, nextSavedSearches, nextSavedCharts, nextStatistics, nextSettings] = await Promise.all([
       getLibraryStatus(),
       listImportRuns(8),
       listSavedSearches(),
       listSavedCharts(),
       getStatistics(),
+      getSettings(),
     ]);
     setStatus(nextStatus);
     setRuns(nextRuns);
     setSavedSearches(nextSavedSearches);
     setSavedCharts(nextSavedCharts);
     setStatistics(nextStatistics);
+    setSettings(nextSettings);
   }, []);
 
   useEffect(() => {
@@ -931,6 +954,10 @@ export default function App() {
       unlisten?.();
     };
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = settings.darkMode ? "dark" : "light";
+  }, [settings.darkMode]);
 
   useEffect(() => {
     if (activeSection !== "Search") {
@@ -1279,6 +1306,26 @@ export default function App() {
       setStatsError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsStatsLoading(false);
+    }
+  }
+
+  async function saveAppSettings(values: Partial<AppSettings>) {
+    const nextSettings = {
+      ...settings,
+      ...values,
+      backupRetention: clampBackupRetention(values.backupRetention ?? settings.backupRetention),
+    };
+    setSettings(nextSettings);
+    setIsSavingSettings(true);
+    setSettingsError(null);
+
+    try {
+      const saved = await saveSettings(nextSettings);
+      setSettings(saved);
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSavingSettings(false);
     }
   }
 
@@ -1851,6 +1898,82 @@ export default function App() {
             </section>
           </section>
         </section>
+      ) : activeSection === "Settings" ? (
+        <section className="workspace settings-workspace">
+          <header className="topbar">
+            <div>
+              <h1>Settings</h1>
+              <p>Backup retention and app appearance.</p>
+            </div>
+            <button className="icon-button" type="button" aria-label="Reload settings" onClick={() => void loadData()}>
+              <RotateCcw size={18} />
+            </button>
+          </header>
+
+          <section className="metric-grid" aria-label="Settings summary">
+            <Metric
+              label="Rolling backups"
+              value={formatNumber(settings.backupRetention)}
+              tone="teal"
+              icon={Database}
+            />
+            <Metric label="Theme" value={settings.darkMode ? "Dark" : "Light"} tone="amber" icon={Moon} />
+            <Metric label="Settings" value={isSavingSettings ? "Saving" : "Saved"} icon={Save} />
+            <Metric label="Runtime" value={canImport ? "Desktop" : "Preview"} icon={Settings} />
+          </section>
+
+          {settingsError ? <p className="error-message">{settingsError}</p> : null}
+
+          <section className="settings-grid" aria-label="Application settings">
+            <section className="settings-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Backups</h2>
+                  <p>{settings.backupRetention} retained after each import</p>
+                </div>
+                <Database size={18} />
+              </div>
+
+              <label className="criterion setting-number">
+                <span>Rolling backups</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={settings.backupRetention}
+                  onChange={(event) =>
+                    void saveAppSettings({
+                      backupRetention: clampBackupRetention(numberValue(event.target.value)),
+                    })
+                  }
+                />
+              </label>
+            </section>
+
+            <section className="settings-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Appearance</h2>
+                  <p>{settings.darkMode ? "Dark mode" : "Light mode"}</p>
+                </div>
+                <Moon size={18} />
+              </div>
+
+              <label className="setting-toggle">
+                <input
+                  type="checkbox"
+                  aria-label="Dark mode"
+                  checked={settings.darkMode}
+                  onChange={(event) => void saveAppSettings({ darkMode: event.target.checked })}
+                />
+                <span>
+                  <strong>Dark mode</strong>
+                  <small>{settings.darkMode ? "On" : "Off"}</small>
+                </span>
+              </label>
+            </section>
+          </section>
+        </section>
       ) : (
         <section className="workspace search-workspace">
           <header className="topbar">
@@ -2373,6 +2496,42 @@ export default function App() {
               </div>
             </div>
             <RatingEventList events={statistics?.recentRatingEvents ?? []} />
+          </section>
+        </aside>
+      ) : activeSection === "Settings" ? (
+        <aside className="detail-panel settings-detail" aria-label="Settings details">
+          <div className="detail-header">
+            <Settings size={20} />
+            <div>
+              <h2>Preferences</h2>
+              <p>{settings.updatedAt ? formatDate(settings.updatedAt) : "Default settings"}</p>
+            </div>
+          </div>
+
+          <dl className="run-details">
+            <div>
+              <dt>Rolling backups</dt>
+              <dd>{formatNumber(settings.backupRetention)}</dd>
+            </div>
+            <div>
+              <dt>Theme</dt>
+              <dd>{settings.darkMode ? "Dark" : "Light"}</dd>
+            </div>
+            <div>
+              <dt>Runtime</dt>
+              <dd>{canImport ? "Tauri desktop" : "Web preview"}</dd>
+            </div>
+          </dl>
+
+          <section className="calculation-list settings-signals">
+            <div>
+              <ShieldCheck size={17} />
+              <span>Backups pruned after import</span>
+            </div>
+            <div>
+              <Moon size={17} />
+              <span>{settings.darkMode ? "Dark mode active" : "Light mode active"}</span>
+            </div>
           </section>
         </aside>
       ) : (

@@ -1255,6 +1255,267 @@ button {
   overflow-wrap: anywhere;
 }
 
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-panel {
+  min-width: 0;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.setting-number {
+  max-width: 220px;
+}
+
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  max-width: 260px;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background: #fbfcfc;
+  padding: 10px 12px;
+  color: #26322f;
+  cursor: pointer;
+}
+
+.setting-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #0e766e;
+}
+
+.setting-toggle span,
+.setting-toggle strong,
+.setting-toggle small {
+  display: block;
+  min-width: 0;
+}
+
+.setting-toggle strong {
+  color: #17211f;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.setting-toggle small {
+  margin-top: 2px;
+  color: #697671;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+:root[data-theme="dark"] {
+  color: #e8f0ed;
+  background: #101614;
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] body {
+  background: #101614;
+}
+
+:root[data-theme="dark"] .app-shell {
+  color: #e8f0ed;
+  background: #101614;
+}
+
+:root[data-theme="dark"] .sidebar,
+:root[data-theme="dark"] .detail-panel,
+:root[data-theme="dark"] .metric,
+:root[data-theme="dark"] .query-panel,
+:root[data-theme="dark"] .import-panel,
+:root[data-theme="dark"] .table-panel,
+:root[data-theme="dark"] .stats-panel,
+:root[data-theme="dark"] .settings-panel,
+:root[data-theme="dark"] .chart-template-panel button,
+:root[data-theme="dark"] .chart-list-row,
+:root[data-theme="dark"] .chart-grid-item,
+:root[data-theme="dark"] .run-table-row,
+:root[data-theme="dark"] .result-table-row,
+:root[data-theme="dark"] .stats-table-row,
+:root[data-theme="dark"] .empty-state,
+:root[data-theme="dark"] .saved-search > button:first-child,
+:root[data-theme="dark"] .export-grid button {
+  border-color: #2f3d38;
+  color: #dce7e3;
+  background: #171f1c;
+}
+
+:root[data-theme="dark"] .sidebar,
+:root[data-theme="dark"] .detail-panel {
+  background: #141b18;
+}
+
+:root[data-theme="dark"] .brand-mark,
+:root[data-theme="dark"] .metric-icon,
+:root[data-theme="dark"] .rank-number {
+  border-color: #315a53;
+  color: #7dd3c7;
+  background: #19352f;
+}
+
+:root[data-theme="dark"] .nav-list button {
+  color: #aebbb6;
+}
+
+:root[data-theme="dark"] .nav-list button.active {
+  color: #8ee4d8;
+  background: #173c36;
+}
+
+:root[data-theme="dark"] .nav-list button:disabled {
+  color: #65716d;
+}
+
+:root[data-theme="dark"] .topbar h1,
+:root[data-theme="dark"] .import-panel h2,
+:root[data-theme="dark"] .table-panel h2,
+:root[data-theme="dark"] .detail-header h2,
+:root[data-theme="dark"] .chart-list-row h3,
+:root[data-theme="dark"] .chart-grid-item h3,
+:root[data-theme="dark"] .metric strong,
+:root[data-theme="dark"] .meter-row strong,
+:root[data-theme="dark"] .stat-pairs strong,
+:root[data-theme="dark"] .history-point strong,
+:root[data-theme="dark"] .rank-metric strong,
+:root[data-theme="dark"] .setting-toggle strong {
+  color: #f3f8f6;
+}
+
+:root[data-theme="dark"] .brand span,
+:root[data-theme="dark"] .topbar p,
+:root[data-theme="dark"] .panel-heading p,
+:root[data-theme="dark"] .detail-header p,
+:root[data-theme="dark"] .metric p,
+:root[data-theme="dark"] .criterion span,
+:root[data-theme="dark"] .source-input span,
+:root[data-theme="dark"] .chart-template-panel small,
+:root[data-theme="dark"] .chart-list-row p,
+:root[data-theme="dark"] .chart-grid-item p,
+:root[data-theme="dark"] .meter-row span,
+:root[data-theme="dark"] .stat-pairs span,
+:root[data-theme="dark"] .history-point span,
+:root[data-theme="dark"] .rating-event small,
+:root[data-theme="dark"] .run-details dt,
+:root[data-theme="dark"] .setting-toggle small,
+:root[data-theme="dark"] .saved-search span,
+:root[data-theme="dark"] .chip-empty,
+:root[data-theme="dark"] .db-path {
+  color: #a9b7b2;
+}
+
+:root[data-theme="dark"] .icon-button,
+:root[data-theme="dark"] .search-input,
+:root[data-theme="dark"] .criterion input,
+:root[data-theme="dark"] .criterion select,
+:root[data-theme="dark"] .source-input input,
+:root[data-theme="dark"] .slider-criterion div,
+:root[data-theme="dark"] .segmented-control,
+:root[data-theme="dark"] .progress-block,
+:root[data-theme="dark"] .stat-pairs div,
+:root[data-theme="dark"] .history-point,
+:root[data-theme="dark"] .rating-event,
+:root[data-theme="dark"] .calculation-list div,
+:root[data-theme="dark"] .setting-toggle {
+  border-color: #35433e;
+  color: #dce7e3;
+  background: #111815;
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select {
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] .search-input input,
+:root[data-theme="dark"] .criterion input,
+:root[data-theme="dark"] .criterion select,
+:root[data-theme="dark"] .source-input input {
+  color: #f0f6f4;
+}
+
+:root[data-theme="dark"] .segmented-control button,
+:root[data-theme="dark"] .export-grid button {
+  color: #c8d6d1;
+}
+
+:root[data-theme="dark"] .segmented-control button.active {
+  color: #8ee4d8;
+  background: #20352f;
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .metric-teal .metric-icon,
+:root[data-theme="dark"] .filter-chip,
+:root[data-theme="dark"] .run-status-completed,
+:root[data-theme="dark"] .export-result {
+  color: #85e2d6;
+  background: #173a34;
+}
+
+:root[data-theme="dark"] .metric-amber .metric-icon,
+:root[data-theme="dark"] .run-status-running,
+:root[data-theme="dark"] .run-status-starting {
+  color: #f2cf84;
+  background: #3a2f16;
+}
+
+:root[data-theme="dark"] .run-status {
+  color: #bac8c3;
+  background: #24302c;
+}
+
+:root[data-theme="dark"] .run-status-failed,
+:root[data-theme="dark"] .error-message {
+  color: #ffb5ad;
+  background: #3a1d1b;
+  border-color: #713b37;
+}
+
+:root[data-theme="dark"] .run-table,
+:root[data-theme="dark"] .result-table,
+:root[data-theme="dark"] .stats-table {
+  border-color: #35433e;
+  background: #35433e;
+}
+
+:root[data-theme="dark"] .run-table-head,
+:root[data-theme="dark"] .result-table-head,
+:root[data-theme="dark"] .stats-table-head {
+  color: #a9b7b2;
+  background: #1f2925;
+}
+
+:root[data-theme="dark"] .meter-track,
+:root[data-theme="dark"] .progress-track {
+  background: #293632;
+}
+
+:root[data-theme="dark"] .meter-fill,
+:root[data-theme="dark"] .progress-fill {
+  background: #24a397;
+}
+
+:root[data-theme="dark"] .cover-placeholder {
+  color: #8ee4d8;
+  background:
+    linear-gradient(135deg, rgba(36, 163, 151, 0.26), rgba(242, 207, 132, 0.18)),
+    #13231f;
+}
+
+:root[data-theme="dark"] .chip-row {
+  border-color: #2f3d38;
+}
+
 @media (max-width: 1280px) {
   .app-shell {
     grid-template-columns: 76px minmax(0, 1fr);
@@ -1297,7 +1558,8 @@ button {
 
   .metric-grid,
   .filter-grid,
-  .stats-dashboard-grid {
+  .stats-dashboard-grid,
+  .settings-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1358,6 +1620,7 @@ button {
   .metric-grid,
   .filter-grid,
   .stats-dashboard-grid,
+  .settings-grid,
   .stat-pairs {
     grid-template-columns: 1fr;
   }

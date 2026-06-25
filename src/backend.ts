@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  AppSettings,
   BrowseRequest,
   BrowseResponse,
   BrowseRow,
@@ -14,6 +15,8 @@ import type {
   ChartConfig,
   StatisticsResponse,
 } from "./types";
+
+const settingsStorageKey = "musicLibrarySettings:v1";
 
 const mockStatus: LibraryStatus = {
   dbPath: "Tauri desktop runtime required for SQLite access",
@@ -113,6 +116,7 @@ const mockRows: BrowseRow[] = [
 
 let mockSavedSearches: SavedSearch[] = [];
 let mockSavedCharts: SavedChart[] = [];
+let mockSettings: AppSettings = loadMockSettings();
 
 const mockImportRun = {
   id: 1,
@@ -331,6 +335,27 @@ export async function getStatistics() {
   return invoke<StatisticsResponse>("get_statistics");
 }
 
+export async function getSettings() {
+  if (!isTauriRuntime()) {
+    return mockSettings;
+  }
+
+  return invoke<AppSettings>("get_settings");
+}
+
+export async function saveSettings(settings: AppSettings) {
+  if (!isTauriRuntime()) {
+    mockSettings = {
+      ...normalizeSettings(settings),
+      updatedAt: new Date().toISOString(),
+    };
+    saveMockSettings(mockSettings);
+    return mockSettings;
+  }
+
+  return invoke<AppSettings>("save_settings", { settings });
+}
+
 export async function importMusicBeeTsv(sourcePath: string) {
   if (!isTauriRuntime()) {
     throw new Error("Start import from the Tauri desktop app to access local files and SQLite.");
@@ -443,4 +468,49 @@ export async function listenToImportProgress(handler: (progress: ImportProgress)
   return listen<ImportProgress>("import-progress", (event) => {
     handler(event.payload);
   });
+}
+
+function loadMockSettings() {
+  if (typeof window === "undefined") {
+    return defaultSettings();
+  }
+
+  try {
+    const stored = window.localStorage.getItem(settingsStorageKey);
+    if (!stored) {
+      return defaultSettings();
+    }
+    return normalizeSettings(JSON.parse(stored));
+  } catch {
+    return defaultSettings();
+  }
+}
+
+function saveMockSettings(settings: AppSettings) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+  } catch {
+    // Preview settings are best-effort when browser storage is unavailable.
+  }
+}
+
+function normalizeSettings(settings: Partial<AppSettings>): AppSettings {
+  const backupRetention = Math.round(Number(settings.backupRetention ?? 3));
+  return {
+    backupRetention: Math.min(50, Math.max(1, Number.isFinite(backupRetention) ? backupRetention : 3)),
+    darkMode: Boolean(settings.darkMode),
+    updatedAt: settings.updatedAt ?? null,
+  };
+}
+
+function defaultSettings(): AppSettings {
+  return {
+    backupRetention: 3,
+    darkMode: false,
+    updatedAt: null,
+  };
 }

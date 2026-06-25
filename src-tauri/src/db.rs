@@ -1,9 +1,9 @@
 use crate::models::{
-    BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ChartConfig, ExportResult,
-    ExportSearchRequest, GenreProgressStats, ImportRun, LibraryOverviewStats, LibraryStatus,
-    LovedTrackStats, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
-    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
-    YearProgressStats,
+    AppSettings, BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ChartConfig,
+    ExportResult, ExportSearchRequest, GenreProgressStats, ImportRun, LibraryOverviewStats,
+    LibraryStatus, LovedTrackStats, RatingBucket, RatingEvent, RatingHistoryPoint,
+    RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch,
+    StatisticsResponse, TextFilter, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
@@ -16,7 +16,10 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 4;
+const LATEST_SCHEMA_VERSION: i32 = 5;
+const DEFAULT_BACKUP_RETENTION: u32 = 3;
+const MIN_BACKUP_RETENTION: u32 = 1;
+const MAX_BACKUP_RETENTION: u32 = 50;
 static MIGRATION_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn database_path(app: &AppHandle) -> Result<PathBuf> {
@@ -59,7 +62,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_four_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_five_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -272,13 +275,34 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             ON rating_events(import_run_id);
         CREATE INDEX IF NOT EXISTS idx_rating_events_created_at
             ON rating_events(created_at);
+
+        CREATE TABLE IF NOT EXISTS app_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            backup_retention INTEGER NOT NULL DEFAULT 3,
+            dark_mode INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL
+        );
+
+        INSERT OR IGNORE INTO app_settings (
+            id, backup_retention, dark_mode, updated_at
+        ) VALUES (
+            1, 3, 0, datetime('now')
+        );
         ",
     )
     .map_err(|error| anyhow!("Could not run SQLite migrations: {error}"))?;
     ensure_import_run_change_columns(conn)?;
-    conn.execute_batch("PRAGMA user_version = 4;")
+    conn.execute_batch("PRAGMA user_version = 5;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_five_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_four_schema_exists(conn)?
+        && schema_table_exists(conn, "app_settings")?
+        && schema_column_exists(conn, "app_settings", "backup_retention")?
+        && schema_column_exists(conn, "app_settings", "dark_mode")?
+        && schema_column_exists(conn, "app_settings", "updated_at")?)
 }
 
 fn phase_four_schema_exists(conn: &Connection) -> Result<bool> {
@@ -375,6 +399,83 @@ pub fn library_status(app: &AppHandle) -> Result<LibraryStatus> {
 pub fn list_import_runs_for_app(app: &AppHandle, limit: u32) -> Result<Vec<ImportRun>> {
     let (conn, _) = open(app)?;
     list_import_runs(&conn, limit)
+}
+
+pub fn settings_for_app(app: &AppHandle) -> Result<AppSettings> {
+    let (conn, _) = open(app)?;
+    settings_for_connection(&conn)
+}
+
+pub fn save_settings_for_app(app: &AppHandle, settings: AppSettings) -> Result<AppSettings> {
+    let (conn, _) = open(app)?;
+    save_settings_for_connection(&conn, settings)
+}
+
+pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
+    let settings = conn
+        .query_row(
+            "
+            SELECT backup_retention, dark_mode, updated_at
+            FROM app_settings
+            WHERE id = 1
+            ",
+            [],
+            settings_from_row,
+        )
+        .optional()
+        .context("Could not load settings")?;
+
+    match settings {
+        Some(settings) => Ok(normalize_settings(settings)),
+        None => save_settings_for_connection(
+            conn,
+            AppSettings {
+                backup_retention: DEFAULT_BACKUP_RETENTION,
+                dark_mode: false,
+                updated_at: None,
+            },
+        ),
+    }
+}
+
+fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Result<AppSettings> {
+    let settings = normalize_settings(settings);
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "
+        INSERT INTO app_settings (id, backup_retention, dark_mode, updated_at)
+        VALUES (1, ?1, ?2, ?3)
+        ON CONFLICT(id) DO UPDATE SET
+            backup_retention = excluded.backup_retention,
+            dark_mode = excluded.dark_mode,
+            updated_at = excluded.updated_at
+        ",
+        params![
+            i64::from(settings.backup_retention),
+            if settings.dark_mode { 1 } else { 0 },
+            now
+        ],
+    )
+    .context("Could not save settings")?;
+
+    settings_for_connection(conn)
+}
+
+fn settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppSettings> {
+    let backup_retention: i64 = row.get(0)?;
+    let dark_mode: i64 = row.get(1)?;
+    Ok(AppSettings {
+        backup_retention: backup_retention.max(0) as u32,
+        dark_mode: dark_mode != 0,
+        updated_at: row.get(2)?,
+    })
+}
+
+fn normalize_settings(mut settings: AppSettings) -> AppSettings {
+    settings.backup_retention = settings
+        .backup_retention
+        .clamp(MIN_BACKUP_RETENTION, MAX_BACKUP_RETENTION);
+    settings
 }
 
 pub fn statistics_for_app(app: &AppHandle) -> Result<StatisticsResponse> {
@@ -2157,7 +2258,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_noop_migration_for_current_phase_four_schema() {
+    fn skips_noop_migration_for_current_phase_five_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -2168,7 +2269,32 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_four_schema_exists(&conn).expect("phase four schema exists"));
+        assert!(phase_five_schema_exists(&conn).expect("phase five schema exists"));
+    }
+
+    #[test]
+    fn saves_and_clamps_app_settings() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("migrate database");
+
+        let saved = save_settings_for_connection(
+            &conn,
+            AppSettings {
+                backup_retention: 500,
+                dark_mode: true,
+                updated_at: None,
+            },
+        )
+        .expect("save settings");
+
+        assert_eq!(saved.backup_retention, MAX_BACKUP_RETENTION);
+        assert!(saved.dark_mode);
+
+        let loaded = settings_for_connection(&conn).expect("load settings");
+        assert_eq!(loaded.backup_retention, MAX_BACKUP_RETENTION);
+        assert!(loaded.dark_mode);
+        assert!(loaded.updated_at.is_some());
     }
 
     #[test]

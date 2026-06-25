@@ -2,7 +2,7 @@
 
 A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-Phase 4 adds a Statistics workspace on top of the Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep a SQLite backup before replacing imported data, browse album and track tables, save searches, build ranked album charts, save chart configurations, export filtered result sets, and analyze library/rating/import progress dashboards.
+Phase 5 adds a Settings workspace on top of the Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse album and track tables, save searches, build ranked album charts, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, and switch between light and dark mode.
 
 ## Requirements
 
@@ -24,7 +24,7 @@ Run the web UI only:
 npm run dev
 ```
 
-The web-only Vite view uses a mock runtime state for layout work. Start the Tauri desktop app to import local TSV files, access SQLite, save searches, and write exports.
+The web-only Vite view uses a mock runtime state for layout work. Start the Tauri desktop app to import local TSV files, access SQLite, save searches and settings, and write exports.
 
 Run the full desktop app:
 
@@ -40,6 +40,13 @@ The import screen defaults to `musicbee-library.tsv`. Relative paths are resolve
 npm run build
 npm run tauri:build
 ```
+
+## Phase 5 Features
+
+- Settings workspace for app preferences.
+- Configurable rolling database backup retention, defaulting to 3 backups.
+- Persisted dark mode for the desktop app and web-only preview.
+- SQLite schema version 5 with persisted app settings.
 
 ## Phase 4 Features
 
@@ -72,7 +79,7 @@ npm run tauri:build
 - SQLite database in the app data directory with WAL mode enabled.
 - Initial migrations for import runs, backups, raw tracks, normalized tracks, and album aggregates.
 - Streaming TSV import with required MusicBee header validation.
-- Database backup before each import, retaining the last 3 backups.
+- Database backup before each import, retaining the configured rolling backup count.
 - Album calculations for total time, rated-track count, rating completeness, loved tracks, TMOE, AE, effective album rating, and Album Score.
 - Import progress events surfaced in the UI.
 

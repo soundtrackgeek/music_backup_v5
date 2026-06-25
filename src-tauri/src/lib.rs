@@ -3,8 +3,8 @@ mod importer;
 mod models;
 
 use models::{
-    BrowseRequest, BrowseResponse, ExportResult, ExportSearchRequest, SaveChartRequest,
-    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
+    AppSettings, BrowseRequest, BrowseResponse, ExportResult, ExportSearchRequest,
+    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
 };
 use models::{ImportRun, ImportSummary, LibraryStatus};
 use tauri::AppHandle;
@@ -25,6 +25,22 @@ async fn list_import_runs(app: AppHandle, limit: Option<u32>) -> Result<Vec<Impo
     .await
     .map_err(|error| format!("Import run list task failed: {error}"))?
     .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
+    tauri::async_runtime::spawn_blocking(move || db::settings_for_app(&app))
+        .await
+        .map_err(|error| format!("Settings task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
+    tauri::async_runtime::spawn_blocking(move || db::save_settings_for_app(&app, settings))
+        .await
+        .map_err(|error| format!("Save settings task failed: {error}"))?
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -112,6 +128,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_library_status,
             list_import_runs,
+            get_settings,
+            save_settings,
             get_statistics,
             import_musicbee_tsv,
             search_library,

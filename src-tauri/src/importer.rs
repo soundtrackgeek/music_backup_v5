@@ -11,8 +11,6 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tauri::{AppHandle, Emitter};
 
-const BACKUP_RETENTION: usize = 3;
-
 const REQUIRED_COLUMNS: [&str; 17] = [
     "Display Artist",
     "Album Rating",
@@ -177,6 +175,7 @@ struct RatingEventRecord {
 pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<ImportSummary> {
     let started = Instant::now();
     let (mut conn, db_path) = db::open(&app)?;
+    let settings = db::settings_for_connection(&conn)?;
     let source_path = resolve_source_path(&source_path)?;
     let source_metadata = fs::metadata(&source_path)
         .with_context(|| format!("Could not read metadata for {}", source_path.display()))?;
@@ -189,7 +188,13 @@ pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<Import
         0,
         "Creating a database backup before import.",
     );
-    let backup_path = create_backup(&conn, &db_path, &source_path, source_size_bytes)?;
+    let backup_path = create_backup(
+        &conn,
+        &db_path,
+        &source_path,
+        source_size_bytes,
+        settings.backup_retention as usize,
+    )?;
     let backup_path_text = backup_path.as_ref().map(|path| path.display().to_string());
 
     let now = Utc::now().to_rfc3339();
@@ -1077,6 +1082,7 @@ fn create_backup(
     db_path: &Path,
     source_path: &Path,
     source_size_bytes: i64,
+    backup_retention: usize,
 ) -> Result<Option<PathBuf>> {
     conn.execute_batch("PRAGMA wal_checkpoint(FULL);")
         .context("Could not checkpoint SQLite WAL before backup")?;
@@ -1118,11 +1124,11 @@ fn create_backup(
     )
     .context("Could not record database backup metadata")?;
 
-    enforce_backup_retention(&backup_dir)?;
+    enforce_backup_retention(&backup_dir, backup_retention)?;
     Ok(Some(backup_path))
 }
 
-fn enforce_backup_retention(backup_dir: &Path) -> Result<()> {
+fn enforce_backup_retention(backup_dir: &Path, backup_retention: usize) -> Result<()> {
     let mut backups = fs::read_dir(backup_dir)
         .with_context(|| format!("Could not read backup directory {}", backup_dir.display()))?
         .filter_map(|entry| entry.ok())
@@ -1143,7 +1149,7 @@ fn enforce_backup_retention(backup_dir: &Path) -> Result<()> {
     });
     backups.reverse();
 
-    for stale in backups.into_iter().skip(BACKUP_RETENTION) {
+    for stale in backups.into_iter().skip(backup_retention) {
         fs::remove_file(stale.path())
             .with_context(|| format!("Could not remove stale backup {}", stale.path().display()))?;
     }

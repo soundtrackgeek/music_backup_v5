@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0] - 2026-06-25
+### Added
+- Added a Settings workspace for app preferences.
+- Added configurable rolling database backup retention with a default of 3 backups.
+- Added persisted dark mode support for the desktop app and web preview.
+- Added SQLite schema version 5 with persisted app settings.
+
 ## [0.4.0] - 2026-06-25
 ### Added
 - Added the Phase 4 Statistics workspace with library overview, rating progress, year progress, genre progress, rating distribution, loved-track, import history, and rating history dashboards.

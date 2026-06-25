@@ -55,6 +55,17 @@ pub struct ImportSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AppSettings {
+    #[serde(default = "default_backup_retention")]
+    pub backup_retention: u32,
+    #[serde(default)]
+    pub dark_mode: bool,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TextFilter {
     #[serde(default = "default_text_operator")]
     pub operator: String,
@@ -423,4 +434,8 @@ fn default_sort_direction() -> String {
 
 fn default_limit() -> u32 {
     50
+}
+
+fn default_backup_retention() -> u32 {
+    3
 }

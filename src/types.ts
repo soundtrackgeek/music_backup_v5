@@ -43,6 +43,12 @@ export type ImportSummary = {
   backupPath: string | null;
 };
 
+export type AppSettings = {
+  backupRetention: number;
+  darkMode: boolean;
+  updatedAt: string | null;
+};
+
 export type BrowseView = "albums" | "tracks";
 
 export type TextFilterOperator = "contains" | "equals" | "startsWith";
