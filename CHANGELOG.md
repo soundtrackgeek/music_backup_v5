@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0] - 2026-06-25
+### Added
+- Added a Search workspace with album and track table browsing.
+- Added SQLite FTS5 indexes for album and track search fields.
+- Added a composable query builder with text, genre, year, duration, rating, completeness, loved-track, file, publisher, and missing metadata filters.
+- Added active filter chips and saved searches backed by SQLite.
+- Added CSV, TSV, JSON, and TXT export for filtered result sets with optional calculated columns.
+
 ## [0.1.0] - 2026-06-25
 ### Added
 - Scaffolded the Tauri 2, React, TypeScript, Rust, and SQLite music library app.

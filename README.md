@@ -1,8 +1,8 @@
 # Music Library
 
-A local-first desktop app for importing and analyzing a MusicBee TSV library export.
+A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-Phase 1 creates the Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep a SQLite backup before replacing imported data, and show import history in the desktop shell.
+Phase 2 adds a Search workspace on top of the Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep a SQLite backup before replacing imported data, browse album and track tables, save searches, and export filtered result sets.
 
 ## Requirements
 
@@ -24,7 +24,7 @@ Run the web UI only:
 npm run dev
 ```
 
-The web-only Vite view uses a mock runtime state for layout work. Start the Tauri desktop app to import local TSV files and access SQLite.
+The web-only Vite view uses a mock runtime state for layout work. Start the Tauri desktop app to import local TSV files, access SQLite, save searches, and write exports.
 
 Run the full desktop app:
 
@@ -40,6 +40,15 @@ The import screen defaults to `musicbee-library.tsv`. Relative paths are resolve
 npm run build
 npm run tauri:build
 ```
+
+## Phase 2 Features
+
+- Search workspace with album and track table views.
+- SQLite FTS5 indexes over album, artist, title, genre, publisher, path, and filename fields.
+- Composable query builder for text filters, genres, years, release years, album duration, track count, album rating, track rating, rating completeness, loved-track count, publisher, file path, filename, and missing metadata flags.
+- Active filter chips with one-click removal.
+- Saved searches stored in SQLite.
+- CSV, TSV, JSON, and TXT exports for the current filtered result set, with optional calculated columns.
 
 ## Phase 1 Features
 

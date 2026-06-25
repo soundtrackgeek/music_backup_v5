@@ -406,6 +406,7 @@ fn run_import(
         }
     }
 
+    db::rebuild_search_indexes(&tx)?;
     tx.commit().context("Could not commit import transaction")?;
     Ok((processed_rows, albums.len() as u64))
 }
