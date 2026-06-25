@@ -2,15 +2,18 @@ use crate::models::{
     BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ExportResult,
     ExportSearchRequest, ImportRun, LibraryStatus, SaveSearchRequest, SavedSearch, TextFilter,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
 use rusqlite::{params, params_from_iter, types::Value, Connection};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
+const LATEST_SCHEMA_VERSION: i32 = 2;
+static MIGRATION_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn database_path(app: &AppHandle) -> Result<PathBuf> {
     let app_data_dir = app
@@ -33,6 +36,7 @@ pub fn open(app: &AppHandle) -> Result<(Connection, PathBuf)> {
 pub fn configure(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
+        PRAGMA busy_timeout = 15000;
         PRAGMA foreign_keys = ON;
         PRAGMA journal_mode = WAL;
         PRAGMA synchronous = NORMAL;
@@ -44,6 +48,17 @@ pub fn configure(conn: &Connection) -> Result<()> {
 }
 
 pub fn migrate(conn: &Connection) -> Result<()> {
+    let _migration_guard = MIGRATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let user_version = conn
+        .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+        .context("Could not read SQLite schema version")?;
+
+    if user_version >= LATEST_SCHEMA_VERSION && phase_two_schema_exists(conn)? {
+        return Ok(());
+    }
+
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS import_runs (
@@ -201,8 +216,37 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         PRAGMA user_version = 2;
         ",
     )
-    .context("Could not run SQLite migrations")?;
+    .map_err(|error| anyhow!("Could not run SQLite migrations: {error}"))?;
     Ok(())
+}
+
+fn phase_two_schema_exists(conn: &Connection) -> Result<bool> {
+    [
+        "album_search_fts",
+        "track_search_fts",
+        "saved_queries",
+        "exports",
+    ]
+    .into_iter()
+    .map(|name| schema_table_exists(conn, name))
+    .try_fold(true, |all_exist, exists| {
+        exists.map(|exists| all_exist && exists)
+    })
+}
+
+fn schema_table_exists(conn: &Connection, name: &str) -> Result<bool> {
+    conn.query_row(
+        "
+        SELECT EXISTS(
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table' AND name = ?1
+        )
+        ",
+        params![name],
+        |row| row.get::<_, bool>(0),
+    )
+    .with_context(|| format!("Could not inspect SQLite schema object {name}"))
 }
 
 pub fn library_status(app: &AppHandle) -> Result<LibraryStatus> {
@@ -1450,5 +1494,20 @@ mod tests {
             response.rows[0].title.as_deref(),
             Some("What Have I Done to Deserve This?")
         );
+    }
+
+    #[test]
+    fn skips_noop_migration_for_current_phase_two_schema() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        migrate(&conn).expect("noop migration");
+
+        let user_version = conn
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+            .expect("read user version");
+
+        assert_eq!(user_version, LATEST_SCHEMA_VERSION);
+        assert!(phase_two_schema_exists(&conn).expect("phase two schema exists"));
     }
 }

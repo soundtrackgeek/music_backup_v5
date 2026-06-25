@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.2] - 2026-06-25
+### Fixed
+- Avoided rerunning no-op SQLite schema migrations on every search when the Phase 2 database schema is already current.
+- Serialized real migration work and added a SQLite busy timeout so overlapping startup/search commands do not surface transient migration errors.
+- Included the underlying SQLite error detail in migration failures.
+
 ## [0.2.1] - 2026-06-25
 ### Fixed
 - Moved search, saved-search, export, and library status database work off the Tauri UI thread so the desktop app stays responsive while large FTS indexes are prepared.
