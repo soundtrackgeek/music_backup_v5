@@ -3,7 +3,7 @@ use crate::models::{ImportProgress, ImportSummary};
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
 use csv::StringRecord;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, Transaction};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -131,6 +131,49 @@ struct FinalAlbum {
     album_score: Option<f64>,
 }
 
+#[derive(Debug, Clone)]
+struct PreviousAlbum {
+    album_id: String,
+    album: Option<String>,
+    album_artist_display: Option<String>,
+    year: Option<i32>,
+    total_tracks: u32,
+    rated_tracks: u32,
+    rating_completeness: f64,
+    total_seconds: i64,
+    loved_tracks: u32,
+    tmoe_seconds: i64,
+    ae_ratio: f64,
+    effective_album_rating: Option<i32>,
+    album_score: Option<f64>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ImportChanges {
+    added_tracks: i64,
+    changed_tracks: i64,
+    removed_tracks: i64,
+    added_albums: i64,
+    changed_albums: i64,
+    removed_albums: i64,
+    rating_events_count: i64,
+}
+
+#[derive(Debug, Clone)]
+struct RatingEventRecord {
+    event_type: String,
+    album_id: String,
+    album: Option<String>,
+    album_artist_display: Option<String>,
+    year: Option<i32>,
+    previous_rated_tracks: Option<i64>,
+    current_rated_tracks: Option<i64>,
+    previous_rating_completeness: Option<f64>,
+    current_rating_completeness: Option<f64>,
+    previous_effective_album_rating: Option<i32>,
+    current_effective_album_rating: Option<i32>,
+}
+
 pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<ImportSummary> {
     let started = Instant::now();
     let (mut conn, db_path) = db::open(&app)?;
@@ -169,7 +212,7 @@ pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<Import
     let import_result = run_import(&app, &mut conn, import_run_id, &source_path);
 
     match import_result {
-        Ok((track_rows, album_count)) => {
+        Ok((track_rows, album_count, changes)) => {
             let duration_ms = started.elapsed().as_millis();
             let completed_at = Utc::now().to_rfc3339();
             conn.execute(
@@ -179,14 +222,28 @@ pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<Import
                     status = 'completed',
                     track_rows = ?2,
                     album_count = ?3,
-                    duration_ms = ?4
-                WHERE id = ?5
+                    duration_ms = ?4,
+                    added_tracks = ?5,
+                    changed_tracks = ?6,
+                    removed_tracks = ?7,
+                    added_albums = ?8,
+                    changed_albums = ?9,
+                    removed_albums = ?10,
+                    rating_events_count = ?11
+                WHERE id = ?12
                 ",
                 params![
                     completed_at,
                     track_rows as i64,
                     album_count as i64,
                     duration_ms as i64,
+                    changes.added_tracks,
+                    changes.changed_tracks,
+                    changes.removed_tracks,
+                    changes.added_albums,
+                    changes.changed_albums,
+                    changes.removed_albums,
+                    changes.rating_events_count,
                     import_run_id
                 ],
             )
@@ -233,7 +290,11 @@ fn run_import(
     conn: &mut Connection,
     import_run_id: i64,
     source_path: &Path,
-) -> Result<(u64, u64)> {
+) -> Result<(u64, u64, ImportChanges)> {
+    let mut previous_tracks = load_previous_track_hashes(conn)?;
+    let mut previous_albums = load_previous_albums(conn)?;
+    let mut changes = ImportChanges::default();
+
     let mut reader = csv::ReaderBuilder::new()
         .delimiter(b'\t')
         .flexible(true)
@@ -294,6 +355,16 @@ fn run_import(
             let record = result.context("Could not read TSV record")?;
             processed_rows += 1;
             let track = TrackRow::from_record(&record, &header_map)?;
+            let track_key = track_identity(&track.file_path, &track.filename);
+            match previous_tracks.remove(&track_key) {
+                Some(previous_hash) if previous_hash != track.row_hash => {
+                    changes.changed_tracks += 1;
+                }
+                Some(_) => {}
+                None => {
+                    changes.added_tracks += 1;
+                }
+            }
 
             insert_raw.execute(params![
                 import_run_id,
@@ -362,6 +433,13 @@ fn run_import(
         }
     }
 
+    changes.removed_tracks = previous_tracks.len() as i64;
+    let final_albums = albums
+        .values()
+        .map(AlbumAggregate::finalize)
+        .collect::<Vec<_>>();
+    let mut rating_events = Vec::new();
+
     {
         let mut insert_album = tx.prepare(
             "
@@ -378,17 +456,35 @@ fn run_import(
             ",
         )?;
 
-        for album in albums.values() {
-            let final_album = album.finalize();
+        for final_album in &final_albums {
+            match previous_albums.remove(&final_album.album_id) {
+                Some(previous_album) => {
+                    if album_changed(&previous_album, final_album) {
+                        changes.changed_albums += 1;
+                    }
+                    if let Some(event) =
+                        rating_event_for_changed_album(&previous_album, final_album)
+                    {
+                        rating_events.push(event);
+                    }
+                }
+                None => {
+                    changes.added_albums += 1;
+                    if let Some(event) = rating_event_for_added_album(final_album) {
+                        rating_events.push(event);
+                    }
+                }
+            }
+
             insert_album.execute(params![
-                final_album.album_id,
+                &final_album.album_id,
                 import_run_id,
-                final_album.album_unique_id,
-                final_album.album,
-                final_album.album_artist_display,
-                final_album.canonical_genre,
-                final_album.genre_normalized,
-                final_album.publisher,
+                &final_album.album_unique_id,
+                &final_album.album,
+                &final_album.album_artist_display,
+                &final_album.canonical_genre,
+                &final_album.genre_normalized,
+                &final_album.publisher,
                 final_album.year,
                 final_album.release_year,
                 final_album.total_tracks,
@@ -406,9 +502,333 @@ fn run_import(
         }
     }
 
+    for previous_album in previous_albums.values() {
+        if let Some(event) = rating_event_for_removed_album(previous_album) {
+            rating_events.push(event);
+        }
+    }
+    changes.removed_albums = previous_albums.len() as i64;
+    changes.rating_events_count = rating_events.len() as i64;
+    insert_rating_events(&tx, import_run_id, &rating_events)?;
+    insert_rating_snapshot(&tx, import_run_id, &final_albums)?;
+
     db::rebuild_search_indexes(&tx)?;
     tx.commit().context("Could not commit import transaction")?;
-    Ok((processed_rows, albums.len() as u64))
+    Ok((processed_rows, albums.len() as u64, changes))
+}
+
+fn load_previous_track_hashes(conn: &Connection) -> Result<HashMap<String, String>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT COALESCE(file_path, ''), COALESCE(filename, ''), row_hash
+        FROM tracks
+        ",
+    )?;
+    let rows = stmt
+        .query_map([], |row| {
+            let file_path: String = row.get(0)?;
+            let filename: String = row.get(1)?;
+            let row_hash: String = row.get(2)?;
+            Ok((track_identity(&file_path, &filename), row_hash))
+        })?
+        .collect::<rusqlite::Result<HashMap<_, _>>>()?;
+    Ok(rows)
+}
+
+fn load_previous_albums(conn: &Connection) -> Result<HashMap<String, PreviousAlbum>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            id,
+            album,
+            album_artist_display,
+            year,
+            total_tracks,
+            rated_tracks,
+            rating_completeness,
+            total_seconds,
+            loved_tracks,
+            tmoe_seconds,
+            ae_ratio,
+            effective_album_rating,
+            album_score
+        FROM albums
+        ",
+    )?;
+    let rows = stmt
+        .query_map([], |row| {
+            let album_id: String = row.get(0)?;
+            Ok((
+                album_id.clone(),
+                PreviousAlbum {
+                    album_id,
+                    album: row.get(1)?,
+                    album_artist_display: row.get(2)?,
+                    year: row.get(3)?,
+                    total_tracks: row.get::<_, i64>(4)? as u32,
+                    rated_tracks: row.get::<_, i64>(5)? as u32,
+                    rating_completeness: row.get(6)?,
+                    total_seconds: row.get(7)?,
+                    loved_tracks: row.get::<_, i64>(8)? as u32,
+                    tmoe_seconds: row.get(9)?,
+                    ae_ratio: row.get(10)?,
+                    effective_album_rating: row.get(11)?,
+                    album_score: row.get(12)?,
+                },
+            ))
+        })?
+        .collect::<rusqlite::Result<HashMap<_, _>>>()?;
+    Ok(rows)
+}
+
+fn track_identity(file_path: &str, filename: &str) -> String {
+    format!("{file_path}\u{1f}{filename}")
+}
+
+fn album_changed(previous: &PreviousAlbum, current: &FinalAlbum) -> bool {
+    previous.album != current.album
+        || previous.album_artist_display != current.album_artist_display
+        || previous.year != current.year
+        || previous.total_tracks != current.total_tracks
+        || previous.rated_tracks != current.rated_tracks
+        || float_changed(previous.rating_completeness, current.rating_completeness)
+        || previous.total_seconds != current.total_seconds
+        || previous.loved_tracks != current.loved_tracks
+        || previous.tmoe_seconds != current.tmoe_seconds
+        || float_changed(previous.ae_ratio, current.ae_ratio)
+        || previous.effective_album_rating != current.effective_album_rating
+        || optional_float_changed(previous.album_score, current.album_score)
+}
+
+fn rating_event_for_changed_album(
+    previous: &PreviousAlbum,
+    current: &FinalAlbum,
+) -> Option<RatingEventRecord> {
+    let progress_changed = previous.rated_tracks != current.rated_tracks
+        || float_changed(previous.rating_completeness, current.rating_completeness);
+    let rating_changed = previous.effective_album_rating != current.effective_album_rating;
+
+    if !progress_changed && !rating_changed {
+        return None;
+    }
+
+    let event_type = if previous.rating_completeness < 1.0 && current.rating_completeness >= 1.0 {
+        "completed"
+    } else if previous.rated_tracks < current.rated_tracks {
+        "ratedMore"
+    } else if previous.rated_tracks > current.rated_tracks {
+        "ratedLess"
+    } else if rating_changed {
+        "ratingChanged"
+    } else {
+        "ratingUpdated"
+    };
+
+    Some(RatingEventRecord {
+        event_type: event_type.to_string(),
+        album_id: current.album_id.clone(),
+        album: current.album.clone(),
+        album_artist_display: current.album_artist_display.clone(),
+        year: current.year,
+        previous_rated_tracks: Some(i64::from(previous.rated_tracks)),
+        current_rated_tracks: Some(i64::from(current.rated_tracks)),
+        previous_rating_completeness: Some(previous.rating_completeness),
+        current_rating_completeness: Some(current.rating_completeness),
+        previous_effective_album_rating: previous.effective_album_rating,
+        current_effective_album_rating: current.effective_album_rating,
+    })
+}
+
+fn rating_event_for_added_album(current: &FinalAlbum) -> Option<RatingEventRecord> {
+    if current.rated_tracks == 0 && current.effective_album_rating.is_none() {
+        return None;
+    }
+
+    Some(RatingEventRecord {
+        event_type: if current.rating_completeness >= 1.0 {
+            "addedRated".to_string()
+        } else {
+            "addedPartial".to_string()
+        },
+        album_id: current.album_id.clone(),
+        album: current.album.clone(),
+        album_artist_display: current.album_artist_display.clone(),
+        year: current.year,
+        previous_rated_tracks: None,
+        current_rated_tracks: Some(i64::from(current.rated_tracks)),
+        previous_rating_completeness: None,
+        current_rating_completeness: Some(current.rating_completeness),
+        previous_effective_album_rating: None,
+        current_effective_album_rating: current.effective_album_rating,
+    })
+}
+
+fn rating_event_for_removed_album(previous: &PreviousAlbum) -> Option<RatingEventRecord> {
+    if previous.rated_tracks == 0 && previous.effective_album_rating.is_none() {
+        return None;
+    }
+
+    Some(RatingEventRecord {
+        event_type: "removedRated".to_string(),
+        album_id: previous.album_id.clone(),
+        album: previous.album.clone(),
+        album_artist_display: previous.album_artist_display.clone(),
+        year: previous.year,
+        previous_rated_tracks: Some(i64::from(previous.rated_tracks)),
+        current_rated_tracks: None,
+        previous_rating_completeness: Some(previous.rating_completeness),
+        current_rating_completeness: None,
+        previous_effective_album_rating: previous.effective_album_rating,
+        current_effective_album_rating: None,
+    })
+}
+
+fn insert_rating_events(
+    tx: &Transaction<'_>,
+    import_run_id: i64,
+    events: &[RatingEventRecord],
+) -> Result<()> {
+    let created_at = Utc::now().to_rfc3339();
+    let mut insert_event = tx.prepare(
+        "
+        INSERT INTO rating_events (
+            import_run_id, created_at, event_type, album_id, album,
+            album_artist_display, year, previous_rated_tracks, current_rated_tracks,
+            previous_rating_completeness, current_rating_completeness,
+            previous_effective_album_rating, current_effective_album_rating
+        ) VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13
+        )
+        ",
+    )?;
+
+    for event in events {
+        insert_event.execute(params![
+            import_run_id,
+            &created_at,
+            &event.event_type,
+            &event.album_id,
+            &event.album,
+            &event.album_artist_display,
+            event.year,
+            event.previous_rated_tracks,
+            event.current_rated_tracks,
+            event.previous_rating_completeness,
+            event.current_rating_completeness,
+            event.previous_effective_album_rating,
+            event.current_effective_album_rating,
+        ])?;
+    }
+
+    Ok(())
+}
+
+fn insert_rating_snapshot(
+    tx: &Transaction<'_>,
+    import_run_id: i64,
+    albums: &[FinalAlbum],
+) -> Result<()> {
+    let track_count = albums
+        .iter()
+        .map(|album| i64::from(album.total_tracks))
+        .sum::<i64>();
+    let rated_tracks = albums
+        .iter()
+        .map(|album| i64::from(album.rated_tracks))
+        .sum::<i64>();
+    let unrated_tracks = track_count - rated_tracks;
+    let fully_rated_albums = albums
+        .iter()
+        .filter(|album| album.rating_completeness >= 1.0)
+        .count() as i64;
+    let partially_rated_albums = albums
+        .iter()
+        .filter(|album| album.rating_completeness > 0.0 && album.rating_completeness < 1.0)
+        .count() as i64;
+    let unrated_albums = albums
+        .iter()
+        .filter(|album| album.rating_completeness == 0.0)
+        .count() as i64;
+    let albums_with_effective_rating = albums
+        .iter()
+        .filter(|album| album.effective_album_rating.is_some())
+        .count() as i64;
+    let average_album_rating = average_i32(
+        albums
+            .iter()
+            .filter_map(|album| album.effective_album_rating),
+    );
+    let average_album_score = average_f64(albums.iter().filter_map(|album| album.album_score));
+
+    tx.execute(
+        "
+        INSERT INTO rating_snapshots (
+            import_run_id, created_at, track_count, album_count, rated_tracks,
+            unrated_tracks, fully_rated_albums, partially_rated_albums,
+            unrated_albums, albums_with_effective_rating, average_album_rating,
+            average_album_score
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+        ",
+        params![
+            import_run_id,
+            Utc::now().to_rfc3339(),
+            track_count,
+            albums.len() as i64,
+            rated_tracks,
+            unrated_tracks,
+            fully_rated_albums,
+            partially_rated_albums,
+            unrated_albums,
+            albums_with_effective_rating,
+            average_album_rating,
+            average_album_score,
+        ],
+    )
+    .context("Could not record rating snapshot")?;
+
+    Ok(())
+}
+
+fn float_changed(previous: f64, current: f64) -> bool {
+    (previous - current).abs() > 0.000_001
+}
+
+fn optional_float_changed(previous: Option<f64>, current: Option<f64>) -> bool {
+    match (previous, current) {
+        (Some(previous), Some(current)) => float_changed(previous, current),
+        (None, None) => false,
+        _ => true,
+    }
+}
+
+fn average_i32(values: impl Iterator<Item = i32>) -> Option<f64> {
+    let mut count = 0_u64;
+    let mut total = 0_i64;
+    for value in values {
+        count += 1;
+        total += i64::from(value);
+    }
+
+    if count == 0 {
+        None
+    } else {
+        Some(total as f64 / count as f64)
+    }
+}
+
+fn average_f64(values: impl Iterator<Item = f64>) -> Option<f64> {
+    let mut count = 0_u64;
+    let mut total = 0.0;
+    for value in values {
+        count += 1;
+        total += value;
+    }
+
+    if count == 0 {
+        None
+    } else {
+        Some(total / count as f64)
+    }
 }
 
 impl HeaderMap {

@@ -14,6 +14,13 @@ pub struct ImportRun {
     pub duration_ms: i64,
     pub backup_path: Option<String>,
     pub error_message: Option<String>,
+    pub added_tracks: i64,
+    pub changed_tracks: i64,
+    pub removed_tracks: i64,
+    pub added_albums: i64,
+    pub changed_albums: i64,
+    pub removed_albums: i64,
+    pub rating_events_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -273,6 +280,129 @@ pub struct ExportResult {
     pub path: String,
     pub format: String,
     pub row_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatisticsResponse {
+    pub overview: LibraryOverviewStats,
+    pub rating_progress: RatingProgressStats,
+    pub year_progress: Vec<YearProgressStats>,
+    pub genre_progress: Vec<GenreProgressStats>,
+    pub track_rating_distribution: Vec<RatingBucket>,
+    pub album_rating_distribution: Vec<RatingBucket>,
+    pub loved_tracks: LovedTrackStats,
+    pub import_history: Vec<ImportRun>,
+    pub rating_history: Vec<RatingHistoryPoint>,
+    pub recent_rating_events: Vec<RatingEvent>,
+    pub last_updated: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryOverviewStats {
+    pub track_count: i64,
+    pub album_count: i64,
+    pub album_artist_count: i64,
+    pub genre_count: i64,
+    pub year_count: i64,
+    pub total_seconds: i64,
+    pub average_album_score: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RatingProgressStats {
+    pub fully_rated_albums: i64,
+    pub partially_rated_albums: i64,
+    pub unrated_albums: i64,
+    pub albums_with_effective_rating: i64,
+    pub rated_tracks: i64,
+    pub unrated_tracks: i64,
+    pub average_rating_completeness: Option<f64>,
+    pub average_album_rating: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct YearProgressStats {
+    pub year: i32,
+    pub album_count: i64,
+    pub rated_album_count: i64,
+    pub partial_album_count: i64,
+    pub unrated_album_count: i64,
+    pub track_count: i64,
+    pub total_seconds: i64,
+    pub loved_tracks: i64,
+    pub average_album_score: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenreProgressStats {
+    pub genre: String,
+    pub album_count: i64,
+    pub rated_album_count: i64,
+    pub partial_album_count: i64,
+    pub unrated_album_count: i64,
+    pub track_count: i64,
+    pub total_seconds: i64,
+    pub loved_tracks: i64,
+    pub average_album_score: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RatingBucket {
+    pub label: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LovedTrackStats {
+    pub loved_tracks: i64,
+    pub albums_with_loved_tracks: i64,
+    pub average_loved_tracks_per_album: Option<f64>,
+    pub top_loved_genre: Option<String>,
+    pub top_loved_year: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RatingHistoryPoint {
+    pub import_run_id: i64,
+    pub created_at: String,
+    pub track_count: i64,
+    pub album_count: i64,
+    pub rated_tracks: i64,
+    pub unrated_tracks: i64,
+    pub fully_rated_albums: i64,
+    pub partially_rated_albums: i64,
+    pub unrated_albums: i64,
+    pub albums_with_effective_rating: i64,
+    pub average_album_rating: Option<f64>,
+    pub average_album_score: Option<f64>,
+    pub rating_events_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RatingEvent {
+    pub id: i64,
+    pub import_run_id: i64,
+    pub created_at: String,
+    pub event_type: String,
+    pub album_id: String,
+    pub album: Option<String>,
+    pub album_artist_display: Option<String>,
+    pub year: Option<i32>,
+    pub previous_rated_tracks: Option<i64>,
+    pub current_rated_tracks: Option<i64>,
+    pub previous_rating_completeness: Option<f64>,
+    pub current_rating_completeness: Option<f64>,
+    pub previous_effective_album_rating: Option<i32>,
+    pub current_effective_album_rating: Option<i32>,
 }
 
 fn default_text_operator() -> String {

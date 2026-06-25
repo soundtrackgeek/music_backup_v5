@@ -10,6 +10,13 @@ export type ImportRun = {
   durationMs: number;
   backupPath: string | null;
   errorMessage: string | null;
+  addedTracks: number;
+  changedTracks: number;
+  removedTracks: number;
+  addedAlbums: number;
+  changedAlbums: number;
+  removedAlbums: number;
+  ratingEventsCount: number;
 };
 
 export type LibraryStatus = {
@@ -159,4 +166,109 @@ export type ExportResult = {
   path: string;
   format: string;
   rowCount: number;
+};
+
+export type StatisticsResponse = {
+  overview: LibraryOverviewStats;
+  ratingProgress: RatingProgressStats;
+  yearProgress: YearProgressStats[];
+  genreProgress: GenreProgressStats[];
+  trackRatingDistribution: RatingBucket[];
+  albumRatingDistribution: RatingBucket[];
+  lovedTracks: LovedTrackStats;
+  importHistory: ImportRun[];
+  ratingHistory: RatingHistoryPoint[];
+  recentRatingEvents: RatingEvent[];
+  lastUpdated: string | null;
+};
+
+export type LibraryOverviewStats = {
+  trackCount: number;
+  albumCount: number;
+  albumArtistCount: number;
+  genreCount: number;
+  yearCount: number;
+  totalSeconds: number;
+  averageAlbumScore: number | null;
+};
+
+export type RatingProgressStats = {
+  fullyRatedAlbums: number;
+  partiallyRatedAlbums: number;
+  unratedAlbums: number;
+  albumsWithEffectiveRating: number;
+  ratedTracks: number;
+  unratedTracks: number;
+  averageRatingCompleteness: number | null;
+  averageAlbumRating: number | null;
+};
+
+export type YearProgressStats = {
+  year: number;
+  albumCount: number;
+  ratedAlbumCount: number;
+  partialAlbumCount: number;
+  unratedAlbumCount: number;
+  trackCount: number;
+  totalSeconds: number;
+  lovedTracks: number;
+  averageAlbumScore: number | null;
+};
+
+export type GenreProgressStats = {
+  genre: string;
+  albumCount: number;
+  ratedAlbumCount: number;
+  partialAlbumCount: number;
+  unratedAlbumCount: number;
+  trackCount: number;
+  totalSeconds: number;
+  lovedTracks: number;
+  averageAlbumScore: number | null;
+};
+
+export type RatingBucket = {
+  label: string;
+  count: number;
+};
+
+export type LovedTrackStats = {
+  lovedTracks: number;
+  albumsWithLovedTracks: number;
+  averageLovedTracksPerAlbum: number | null;
+  topLovedGenre: string | null;
+  topLovedYear: number | null;
+};
+
+export type RatingHistoryPoint = {
+  importRunId: number;
+  createdAt: string;
+  trackCount: number;
+  albumCount: number;
+  ratedTracks: number;
+  unratedTracks: number;
+  fullyRatedAlbums: number;
+  partiallyRatedAlbums: number;
+  unratedAlbums: number;
+  albumsWithEffectiveRating: number;
+  averageAlbumRating: number | null;
+  averageAlbumScore: number | null;
+  ratingEventsCount: number;
+};
+
+export type RatingEvent = {
+  id: number;
+  importRunId: number;
+  createdAt: string;
+  eventType: string;
+  albumId: string;
+  album: string | null;
+  albumArtistDisplay: string | null;
+  year: number | null;
+  previousRatedTracks: number | null;
+  currentRatedTracks: number | null;
+  previousRatingCompleteness: number | null;
+  currentRatingCompleteness: number | null;
+  previousEffectiveAlbumRating: number | null;
+  currentEffectiveAlbumRating: number | null;
 };

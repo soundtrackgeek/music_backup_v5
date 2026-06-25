@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0] - 2026-06-25
+### Added
+- Added the Phase 4 Statistics workspace with library overview, rating progress, year progress, genre progress, rating distribution, loved-track, import history, and rating history dashboards.
+- Added SQLite schema version 4 with import delta counters, rating snapshots, and rating events.
+- Added import-time tracking for added, changed, and removed tracks and albums.
+- Added rating event tracking for newly rated, completed, changed, and removed rated albums.
+
 ## [0.3.0] - 2026-06-25
 ### Added
 - Added the Phase 3 Charts workspace with built-in chart templates, a custom chart builder, rating completeness thresholding, and Album Score, loved-track, AE, and TMOE rankings.

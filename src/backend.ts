@@ -12,6 +12,7 @@ import type {
   SavedChart,
   SavedSearch,
   ChartConfig,
+  StatisticsResponse,
 } from "./types";
 
 const mockStatus: LibraryStatus = {
@@ -113,6 +114,195 @@ const mockRows: BrowseRow[] = [
 let mockSavedSearches: SavedSearch[] = [];
 let mockSavedCharts: SavedChart[] = [];
 
+const mockImportRun = {
+  id: 1,
+  sourcePath: "musicbee-library.tsv",
+  sourceSizeBytes: 240_000_000,
+  startedAt: "2026-06-25T09:00:00Z",
+  completedAt: "2026-06-25T09:03:20Z",
+  status: "completed",
+  trackRows: 1_130_882,
+  albumCount: 76_789,
+  durationMs: 200_000,
+  backupPath: "Preview runtime backup.sqlite3",
+  errorMessage: null,
+  addedTracks: 1_130_882,
+  changedTracks: 0,
+  removedTracks: 0,
+  addedAlbums: 76_789,
+  changedAlbums: 0,
+  removedAlbums: 0,
+  ratingEventsCount: 2,
+};
+
+const mockStatistics: StatisticsResponse = {
+  overview: {
+    trackCount: 1_130_882,
+    albumCount: 76_789,
+    albumArtistCount: 24_812,
+    genreCount: 318,
+    yearCount: 86,
+    totalSeconds: 226_176_400,
+    averageAlbumScore: 104.72,
+  },
+  ratingProgress: {
+    fullyRatedAlbums: 18_420,
+    partiallyRatedAlbums: 9_380,
+    unratedAlbums: 48_989,
+    albumsWithEffectiveRating: 27_800,
+    ratedTracks: 412_580,
+    unratedTracks: 718_302,
+    averageRatingCompleteness: 0.37,
+    averageAlbumRating: 74.4,
+  },
+  yearProgress: [
+    {
+      year: 1987,
+      albumCount: 1250,
+      ratedAlbumCount: 420,
+      partialAlbumCount: 180,
+      unratedAlbumCount: 650,
+      trackCount: 14_620,
+      totalSeconds: 2_915_600,
+      lovedTracks: 332,
+      averageAlbumScore: 113.42,
+    },
+    {
+      year: 1986,
+      albumCount: 1184,
+      ratedAlbumCount: 388,
+      partialAlbumCount: 162,
+      unratedAlbumCount: 634,
+      trackCount: 13_940,
+      totalSeconds: 2_760_000,
+      lovedTracks: 301,
+      averageAlbumScore: 109.18,
+    },
+    {
+      year: 1985,
+      albumCount: 1168,
+      ratedAlbumCount: 364,
+      partialAlbumCount: 170,
+      unratedAlbumCount: 634,
+      trackCount: 13_804,
+      totalSeconds: 2_714_000,
+      lovedTracks: 286,
+      averageAlbumScore: 108.31,
+    },
+  ],
+  genreProgress: [
+    {
+      genre: "Synthpop",
+      albumCount: 1840,
+      ratedAlbumCount: 682,
+      partialAlbumCount: 230,
+      unratedAlbumCount: 928,
+      trackCount: 21_440,
+      totalSeconds: 4_102_000,
+      lovedTracks: 720,
+      averageAlbumScore: 128.42,
+    },
+    {
+      genre: "Post-Punk",
+      albumCount: 1390,
+      ratedAlbumCount: 508,
+      partialAlbumCount: 211,
+      unratedAlbumCount: 671,
+      trackCount: 15_890,
+      totalSeconds: 3_006_000,
+      lovedTracks: 488,
+      averageAlbumScore: 119.08,
+    },
+    {
+      genre: "Hard Rock",
+      albumCount: 1320,
+      ratedAlbumCount: 412,
+      partialAlbumCount: 196,
+      unratedAlbumCount: 712,
+      trackCount: 14_820,
+      totalSeconds: 3_230_000,
+      lovedTracks: 350,
+      averageAlbumScore: 101.68,
+    },
+  ],
+  trackRatingDistribution: [
+    { label: "5", count: 74_620 },
+    { label: "4", count: 146_300 },
+    { label: "3", count: 112_400 },
+    { label: "2", count: 42_180 },
+    { label: "1", count: 18_720 },
+    { label: "0", count: 18_360 },
+  ],
+  albumRatingDistribution: [
+    { label: "90-99", count: 2600 },
+    { label: "80-89", count: 6400 },
+    { label: "70-79", count: 8700 },
+    { label: "60-69", count: 5200 },
+    { label: "50-59", count: 3100 },
+    { label: "40-49", count: 1800 },
+  ],
+  lovedTracks: {
+    lovedTracks: 14_280,
+    albumsWithLovedTracks: 8_640,
+    averageLovedTracksPerAlbum: 1.65,
+    topLovedGenre: "Synthpop",
+    topLovedYear: 1987,
+  },
+  importHistory: [mockImportRun],
+  ratingHistory: [
+    {
+      importRunId: 1,
+      createdAt: "2026-06-25T09:03:20Z",
+      trackCount: 1_130_882,
+      albumCount: 76_789,
+      ratedTracks: 412_580,
+      unratedTracks: 718_302,
+      fullyRatedAlbums: 18_420,
+      partiallyRatedAlbums: 9_380,
+      unratedAlbums: 48_989,
+      albumsWithEffectiveRating: 27_800,
+      averageAlbumRating: 74.4,
+      averageAlbumScore: 104.72,
+      ratingEventsCount: 2,
+    },
+  ],
+  recentRatingEvents: [
+    {
+      id: 1,
+      importRunId: 1,
+      createdAt: "2026-06-25T09:03:20Z",
+      eventType: "addedRated",
+      albumId: "mb:mock-1",
+      album: "Actually",
+      albumArtistDisplay: "Pet Shop Boys",
+      year: 1987,
+      previousRatedTracks: null,
+      currentRatedTracks: 10,
+      previousRatingCompleteness: null,
+      currentRatingCompleteness: 1,
+      previousEffectiveAlbumRating: null,
+      currentEffectiveAlbumRating: 86,
+    },
+    {
+      id: 2,
+      importRunId: 1,
+      createdAt: "2026-06-25T09:03:20Z",
+      eventType: "addedRated",
+      albumId: "mb:mock-2",
+      album: "The Queen Is Dead",
+      albumArtistDisplay: "The Smiths",
+      year: 1986,
+      previousRatedTracks: null,
+      currentRatedTracks: 10,
+      previousRatingCompleteness: null,
+      currentRatingCompleteness: 1,
+      previousEffectiveAlbumRating: null,
+      currentEffectiveAlbumRating: 88,
+    },
+  ],
+  lastUpdated: "2026-06-25T09:03:20Z",
+};
+
 export function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -127,10 +317,18 @@ export async function getLibraryStatus() {
 
 export async function listImportRuns(limit: number) {
   if (!isTauriRuntime()) {
-    return [] satisfies ImportRun[];
+    return [mockImportRun].slice(0, limit) satisfies ImportRun[];
   }
 
   return invoke<ImportRun[]>("list_import_runs", { limit });
+}
+
+export async function getStatistics() {
+  if (!isTauriRuntime()) {
+    return mockStatistics;
+  }
+
+  return invoke<StatisticsResponse>("get_statistics");
 }
 
 export async function importMusicBeeTsv(sourcePath: string) {

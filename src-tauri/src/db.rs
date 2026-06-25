@@ -1,11 +1,13 @@
 use crate::models::{
     BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ChartConfig, ExportResult,
-    ExportSearchRequest, ImportRun, LibraryStatus, SaveChartRequest, SaveSearchRequest, SavedChart,
-    SavedSearch, TextFilter,
+    ExportSearchRequest, GenreProgressStats, ImportRun, LibraryOverviewStats, LibraryStatus,
+    LovedTrackStats, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
+    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
+    YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
-use rusqlite::{params, params_from_iter, types::Value, Connection};
+use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExtension};
 use rust_xlsxwriter::{Format, Workbook};
 use std::fs;
 use std::io::Write;
@@ -14,7 +16,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 3;
+const LATEST_SCHEMA_VERSION: i32 = 4;
 static MIGRATION_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn database_path(app: &AppHandle) -> Result<PathBuf> {
@@ -57,7 +59,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_three_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_four_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -74,7 +76,14 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             album_count INTEGER NOT NULL DEFAULT 0,
             duration_ms INTEGER NOT NULL DEFAULT 0,
             backup_path TEXT,
-            error_message TEXT
+            error_message TEXT,
+            added_tracks INTEGER NOT NULL DEFAULT 0,
+            changed_tracks INTEGER NOT NULL DEFAULT 0,
+            removed_tracks INTEGER NOT NULL DEFAULT 0,
+            added_albums INTEGER NOT NULL DEFAULT 0,
+            changed_albums INTEGER NOT NULL DEFAULT 0,
+            removed_albums INTEGER NOT NULL DEFAULT 0,
+            rating_events_count INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS database_backups (
@@ -223,11 +232,60 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             request_json TEXT NOT NULL
         );
 
-        PRAGMA user_version = 3;
+        CREATE TABLE IF NOT EXISTS rating_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_run_id INTEGER NOT NULL REFERENCES import_runs(id),
+            created_at TEXT NOT NULL,
+            track_count INTEGER NOT NULL DEFAULT 0,
+            album_count INTEGER NOT NULL DEFAULT 0,
+            rated_tracks INTEGER NOT NULL DEFAULT 0,
+            unrated_tracks INTEGER NOT NULL DEFAULT 0,
+            fully_rated_albums INTEGER NOT NULL DEFAULT 0,
+            partially_rated_albums INTEGER NOT NULL DEFAULT 0,
+            unrated_albums INTEGER NOT NULL DEFAULT 0,
+            albums_with_effective_rating INTEGER NOT NULL DEFAULT 0,
+            average_album_rating REAL,
+            average_album_score REAL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_rating_snapshots_import_run
+            ON rating_snapshots(import_run_id);
+
+        CREATE TABLE IF NOT EXISTS rating_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_run_id INTEGER NOT NULL REFERENCES import_runs(id),
+            created_at TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            album_id TEXT NOT NULL,
+            album TEXT,
+            album_artist_display TEXT,
+            year INTEGER,
+            previous_rated_tracks INTEGER,
+            current_rated_tracks INTEGER,
+            previous_rating_completeness REAL,
+            current_rating_completeness REAL,
+            previous_effective_album_rating INTEGER,
+            current_effective_album_rating INTEGER
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_rating_events_import_run
+            ON rating_events(import_run_id);
+        CREATE INDEX IF NOT EXISTS idx_rating_events_created_at
+            ON rating_events(created_at);
         ",
     )
     .map_err(|error| anyhow!("Could not run SQLite migrations: {error}"))?;
+    ensure_import_run_change_columns(conn)?;
+    conn.execute_batch("PRAGMA user_version = 4;")
+        .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_four_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_three_schema_exists(conn)?
+        && schema_table_exists(conn, "rating_snapshots")?
+        && schema_table_exists(conn, "rating_events")?
+        && schema_column_exists(conn, "import_runs", "rating_events_count")?)
 }
 
 fn phase_three_schema_exists(conn: &Connection) -> Result<bool> {
@@ -260,6 +318,43 @@ fn schema_table_exists(conn: &Connection, name: &str) -> Result<bool> {
     .with_context(|| format!("Could not inspect SQLite schema object {name}"))
 }
 
+fn ensure_import_run_change_columns(conn: &Connection) -> Result<()> {
+    for (name, definition) in [
+        ("added_tracks", "INTEGER NOT NULL DEFAULT 0"),
+        ("changed_tracks", "INTEGER NOT NULL DEFAULT 0"),
+        ("removed_tracks", "INTEGER NOT NULL DEFAULT 0"),
+        ("added_albums", "INTEGER NOT NULL DEFAULT 0"),
+        ("changed_albums", "INTEGER NOT NULL DEFAULT 0"),
+        ("removed_albums", "INTEGER NOT NULL DEFAULT 0"),
+        ("rating_events_count", "INTEGER NOT NULL DEFAULT 0"),
+    ] {
+        if !schema_column_exists(conn, "import_runs", name)? {
+            let sql = format!("ALTER TABLE import_runs ADD COLUMN {name} {definition}");
+            conn.execute_batch(&sql)
+                .with_context(|| format!("Could not add import_runs.{name}"))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn schema_column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let sql = format!("PRAGMA table_info({table})");
+    let mut stmt = conn
+        .prepare(&sql)
+        .with_context(|| format!("Could not inspect SQLite table {table}"))?;
+    let mut rows = stmt.query([])?;
+
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == column {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
 pub fn library_status(app: &AppHandle) -> Result<LibraryStatus> {
     let (conn, db_path) = open(app)?;
     let track_count = count_rows(&conn, "tracks")?;
@@ -282,11 +377,18 @@ pub fn list_import_runs_for_app(app: &AppHandle, limit: u32) -> Result<Vec<Impor
     list_import_runs(&conn, limit)
 }
 
+pub fn statistics_for_app(app: &AppHandle) -> Result<StatisticsResponse> {
+    let (conn, _) = open(app)?;
+    statistics(&conn)
+}
+
 pub fn list_import_runs(conn: &Connection, limit: u32) -> Result<Vec<ImportRun>> {
     let mut stmt = conn.prepare(
         "
         SELECT id, source_path, source_size_bytes, started_at, completed_at, status,
-               track_rows, album_count, duration_ms, backup_path, error_message
+               track_rows, album_count, duration_ms, backup_path, error_message,
+               added_tracks, changed_tracks, removed_tracks, added_albums,
+               changed_albums, removed_albums, rating_events_count
         FROM import_runs
         ORDER BY id DESC
         LIMIT ?1
@@ -299,11 +401,418 @@ pub fn list_import_runs(conn: &Connection, limit: u32) -> Result<Vec<ImportRun>>
     Ok(runs)
 }
 
+fn statistics(conn: &Connection) -> Result<StatisticsResponse> {
+    let overview = library_overview_stats(conn)?;
+    let rating_progress = rating_progress_stats(conn)?;
+    let year_progress = year_progress_stats(conn)?;
+    let genre_progress = genre_progress_stats(conn)?;
+    let track_rating_distribution = track_rating_distribution(conn)?;
+    let album_rating_distribution = album_rating_distribution(conn)?;
+    let loved_tracks = loved_track_stats(conn)?;
+    let import_history = list_import_runs(conn, 8)?;
+    let rating_history = rating_history(conn, &rating_progress, &overview)?;
+    let recent_rating_events = recent_rating_events(conn, 10)?;
+    let last_updated = import_history.first().and_then(|run| {
+        run.completed_at
+            .clone()
+            .or_else(|| Some(run.started_at.clone()))
+    });
+
+    Ok(StatisticsResponse {
+        overview,
+        rating_progress,
+        year_progress,
+        genre_progress,
+        track_rating_distribution,
+        album_rating_distribution,
+        loved_tracks,
+        import_history,
+        rating_history,
+        recent_rating_events,
+        last_updated,
+    })
+}
+
+fn library_overview_stats(conn: &Connection) -> Result<LibraryOverviewStats> {
+    conn.query_row(
+        "
+        SELECT
+            (SELECT COUNT(*) FROM tracks),
+            (SELECT COUNT(*) FROM albums),
+            (SELECT COUNT(DISTINCT album_artist_display)
+                FROM albums
+                WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL),
+            (SELECT COUNT(DISTINCT genre_normalized)
+                FROM albums
+                WHERE NULLIF(TRIM(COALESCE(genre_normalized, '')), '') IS NOT NULL),
+            (SELECT COUNT(DISTINCT year)
+                FROM albums
+                WHERE year IS NOT NULL),
+            COALESCE((SELECT SUM(total_seconds) FROM albums), 0),
+            (SELECT AVG(album_score) FROM albums WHERE album_score IS NOT NULL)
+        ",
+        [],
+        |row| {
+            Ok(LibraryOverviewStats {
+                track_count: row.get(0)?,
+                album_count: row.get(1)?,
+                album_artist_count: row.get(2)?,
+                genre_count: row.get(3)?,
+                year_count: row.get(4)?,
+                total_seconds: row.get(5)?,
+                average_album_score: row.get(6)?,
+            })
+        },
+    )
+    .context("Could not load library overview statistics")
+}
+
+fn rating_progress_stats(conn: &Connection) -> Result<RatingProgressStats> {
+    conn.query_row(
+        "
+        SELECT
+            COALESCE(SUM(CASE WHEN rating_completeness >= 1.0 THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN rating_completeness > 0.0 AND rating_completeness < 1.0 THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN rating_completeness = 0.0 THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN effective_album_rating IS NOT NULL THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(rated_tracks), 0),
+            COALESCE(SUM(total_tracks - rated_tracks), 0),
+            AVG(rating_completeness),
+            AVG(effective_album_rating)
+        FROM albums
+        ",
+        [],
+        |row| {
+            Ok(RatingProgressStats {
+                fully_rated_albums: row.get(0)?,
+                partially_rated_albums: row.get(1)?,
+                unrated_albums: row.get(2)?,
+                albums_with_effective_rating: row.get(3)?,
+                rated_tracks: row.get(4)?,
+                unrated_tracks: row.get(5)?,
+                average_rating_completeness: row.get(6)?,
+                average_album_rating: row.get(7)?,
+            })
+        },
+    )
+    .context("Could not load rating progress statistics")
+}
+
+fn year_progress_stats(conn: &Connection) -> Result<Vec<YearProgressStats>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            year,
+            COUNT(*),
+            SUM(CASE WHEN rating_completeness >= 1.0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN rating_completeness > 0.0 AND rating_completeness < 1.0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN rating_completeness = 0.0 THEN 1 ELSE 0 END),
+            COALESCE(SUM(total_tracks), 0),
+            COALESCE(SUM(total_seconds), 0),
+            COALESCE(SUM(loved_tracks), 0),
+            AVG(album_score)
+        FROM albums
+        WHERE year IS NOT NULL
+        GROUP BY year
+        ORDER BY year DESC
+        ",
+    )?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(YearProgressStats {
+                year: row.get(0)?,
+                album_count: row.get(1)?,
+                rated_album_count: row.get(2)?,
+                partial_album_count: row.get(3)?,
+                unrated_album_count: row.get(4)?,
+                track_count: row.get(5)?,
+                total_seconds: row.get(6)?,
+                loved_tracks: row.get(7)?,
+                average_album_score: row.get(8)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+fn genre_progress_stats(conn: &Connection) -> Result<Vec<GenreProgressStats>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            COALESCE(NULLIF(TRIM(canonical_genre), ''), 'Unknown'),
+            COUNT(*),
+            SUM(CASE WHEN rating_completeness >= 1.0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN rating_completeness > 0.0 AND rating_completeness < 1.0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN rating_completeness = 0.0 THEN 1 ELSE 0 END),
+            COALESCE(SUM(total_tracks), 0),
+            COALESCE(SUM(total_seconds), 0),
+            COALESCE(SUM(loved_tracks), 0),
+            AVG(album_score)
+        FROM albums
+        GROUP BY COALESCE(NULLIF(TRIM(genre_normalized), ''), 'unknown')
+        ORDER BY COUNT(*) DESC, LOWER(COALESCE(canonical_genre, '')) ASC
+        LIMIT 24
+        ",
+    )?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(GenreProgressStats {
+                genre: row.get(0)?,
+                album_count: row.get(1)?,
+                rated_album_count: row.get(2)?,
+                partial_album_count: row.get(3)?,
+                unrated_album_count: row.get(4)?,
+                track_count: row.get(5)?,
+                total_seconds: row.get(6)?,
+                loved_tracks: row.get(7)?,
+                average_album_score: row.get(8)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+fn track_rating_distribution(conn: &Connection) -> Result<Vec<RatingBucket>> {
+    let mut counts = [0_i64; 6];
+    let mut stmt = conn.prepare(
+        "
+        SELECT normalized_rating / 20, COUNT(*)
+        FROM tracks
+        WHERE normalized_rating IS NOT NULL
+        GROUP BY normalized_rating / 20
+        ",
+    )?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let rating: i64 = row.get(0)?;
+        if (0..=5).contains(&rating) {
+            counts[rating as usize] = row.get(1)?;
+        }
+    }
+
+    Ok((0..=5)
+        .rev()
+        .map(|rating| RatingBucket {
+            label: rating.to_string(),
+            count: counts[rating as usize],
+        })
+        .collect())
+}
+
+fn album_rating_distribution(conn: &Connection) -> Result<Vec<RatingBucket>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            CASE
+                WHEN effective_album_rating = 100 THEN '100'
+                ELSE printf('%d-%d', (effective_album_rating / 10) * 10, ((effective_album_rating / 10) * 10) + 9)
+            END,
+            COUNT(*),
+            CASE
+                WHEN effective_album_rating = 100 THEN 100
+                ELSE (effective_album_rating / 10) * 10
+            END AS bucket
+        FROM albums
+        WHERE effective_album_rating IS NOT NULL
+        GROUP BY bucket
+        ORDER BY bucket DESC
+        ",
+    )?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(RatingBucket {
+                label: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+fn loved_track_stats(conn: &Connection) -> Result<LovedTrackStats> {
+    let (loved_tracks, albums_with_loved_tracks, average_loved_tracks_per_album) = conn
+        .query_row(
+            "
+            SELECT
+                COALESCE(SUM(loved_tracks), 0),
+                COALESCE(SUM(CASE WHEN loved_tracks > 0 THEN 1 ELSE 0 END), 0),
+                AVG(CASE WHEN loved_tracks > 0 THEN loved_tracks END)
+            FROM albums
+            ",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .context("Could not load loved-track totals")?;
+
+    let top_loved_genre = conn
+        .query_row(
+            "
+            SELECT canonical_genre
+            FROM albums
+            WHERE loved_tracks > 0
+              AND NULLIF(TRIM(COALESCE(canonical_genre, '')), '') IS NOT NULL
+            GROUP BY genre_normalized, canonical_genre
+            ORDER BY SUM(loved_tracks) DESC, COUNT(*) DESC
+            LIMIT 1
+            ",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .context("Could not load top loved genre")?;
+
+    let top_loved_year = conn
+        .query_row(
+            "
+            SELECT year
+            FROM albums
+            WHERE loved_tracks > 0 AND year IS NOT NULL
+            GROUP BY year
+            ORDER BY SUM(loved_tracks) DESC, COUNT(*) DESC
+            LIMIT 1
+            ",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .optional()
+        .context("Could not load top loved year")?;
+
+    Ok(LovedTrackStats {
+        loved_tracks,
+        albums_with_loved_tracks,
+        average_loved_tracks_per_album,
+        top_loved_genre,
+        top_loved_year,
+    })
+}
+
+fn rating_history(
+    conn: &Connection,
+    current_progress: &RatingProgressStats,
+    overview: &LibraryOverviewStats,
+) -> Result<Vec<RatingHistoryPoint>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            s.import_run_id,
+            s.created_at,
+            s.track_count,
+            s.album_count,
+            s.rated_tracks,
+            s.unrated_tracks,
+            s.fully_rated_albums,
+            s.partially_rated_albums,
+            s.unrated_albums,
+            s.albums_with_effective_rating,
+            s.average_album_rating,
+            s.average_album_score,
+            COALESCE(r.rating_events_count, 0)
+        FROM rating_snapshots s
+        LEFT JOIN import_runs r ON r.id = s.import_run_id
+        ORDER BY s.created_at ASC, s.id ASC
+        ",
+    )?;
+
+    let mut points = stmt
+        .query_map([], |row| {
+            Ok(RatingHistoryPoint {
+                import_run_id: row.get(0)?,
+                created_at: row.get(1)?,
+                track_count: row.get(2)?,
+                album_count: row.get(3)?,
+                rated_tracks: row.get(4)?,
+                unrated_tracks: row.get(5)?,
+                fully_rated_albums: row.get(6)?,
+                partially_rated_albums: row.get(7)?,
+                unrated_albums: row.get(8)?,
+                albums_with_effective_rating: row.get(9)?,
+                average_album_rating: row.get(10)?,
+                average_album_score: row.get(11)?,
+                rating_events_count: row.get(12)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    if points.is_empty() {
+        if let Some(run) = list_import_runs(conn, 1)?.into_iter().next() {
+            points.push(RatingHistoryPoint {
+                import_run_id: run.id,
+                created_at: run.completed_at.unwrap_or(run.started_at),
+                track_count: overview.track_count,
+                album_count: overview.album_count,
+                rated_tracks: current_progress.rated_tracks,
+                unrated_tracks: current_progress.unrated_tracks,
+                fully_rated_albums: current_progress.fully_rated_albums,
+                partially_rated_albums: current_progress.partially_rated_albums,
+                unrated_albums: current_progress.unrated_albums,
+                albums_with_effective_rating: current_progress.albums_with_effective_rating,
+                average_album_rating: current_progress.average_album_rating,
+                average_album_score: overview.average_album_score,
+                rating_events_count: run.rating_events_count,
+            });
+        }
+    }
+
+    Ok(points)
+}
+
+fn recent_rating_events(conn: &Connection, limit: u32) -> Result<Vec<RatingEvent>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            id,
+            import_run_id,
+            created_at,
+            event_type,
+            album_id,
+            album,
+            album_artist_display,
+            year,
+            previous_rated_tracks,
+            current_rated_tracks,
+            previous_rating_completeness,
+            current_rating_completeness,
+            previous_effective_album_rating,
+            current_effective_album_rating
+        FROM rating_events
+        ORDER BY id DESC
+        LIMIT ?1
+        ",
+    )?;
+
+    let rows = stmt
+        .query_map(params![limit], |row| {
+            Ok(RatingEvent {
+                id: row.get(0)?,
+                import_run_id: row.get(1)?,
+                created_at: row.get(2)?,
+                event_type: row.get(3)?,
+                album_id: row.get(4)?,
+                album: row.get(5)?,
+                album_artist_display: row.get(6)?,
+                year: row.get(7)?,
+                previous_rated_tracks: row.get(8)?,
+                current_rated_tracks: row.get(9)?,
+                previous_rating_completeness: row.get(10)?,
+                current_rating_completeness: row.get(11)?,
+                previous_effective_album_rating: row.get(12)?,
+                current_effective_album_rating: row.get(13)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 pub fn get_import_run(conn: &Connection, id: i64) -> Result<ImportRun> {
     conn.query_row(
         "
         SELECT id, source_path, source_size_bytes, started_at, completed_at, status,
-               track_rows, album_count, duration_ms, backup_path, error_message
+               track_rows, album_count, duration_ms, backup_path, error_message,
+               added_tracks, changed_tracks, removed_tracks, added_albums,
+               changed_albums, removed_albums, rating_events_count
         FROM import_runs
         WHERE id = ?1
         ",
@@ -569,6 +1078,13 @@ fn import_run_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ImportRun> {
         duration_ms: row.get(8)?,
         backup_path: row.get(9)?,
         error_message: row.get(10)?,
+        added_tracks: row.get(11)?,
+        changed_tracks: row.get(12)?,
+        removed_tracks: row.get(13)?,
+        added_albums: row.get(14)?,
+        changed_albums: row.get(15)?,
+        removed_albums: row.get(16)?,
+        rating_events_count: row.get(17)?,
     })
 }
 
@@ -1641,7 +2157,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_noop_migration_for_current_phase_three_schema() {
+    fn skips_noop_migration_for_current_phase_four_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -1652,7 +2168,19 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_three_schema_exists(&conn).expect("phase three schema exists"));
+        assert!(phase_four_schema_exists(&conn).expect("phase four schema exists"));
+    }
+
+    #[test]
+    fn loads_statistics_dashboard_payload() {
+        let conn = seeded_connection();
+
+        let stats = statistics(&conn).expect("load statistics");
+
+        assert_eq!(stats.overview.album_count, 1);
+        assert_eq!(stats.rating_progress.fully_rated_albums, 1);
+        assert_eq!(stats.year_progress[0].year, 1987);
+        assert_eq!(stats.track_rating_distribution[0].label, "5");
     }
 
     #[test]

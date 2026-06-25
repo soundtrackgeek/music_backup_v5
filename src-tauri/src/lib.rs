@@ -4,7 +4,7 @@ mod models;
 
 use models::{
     BrowseRequest, BrowseResponse, ExportResult, ExportSearchRequest, SaveChartRequest,
-    SaveSearchRequest, SavedChart, SavedSearch,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
 };
 use models::{ImportRun, ImportSummary, LibraryStatus};
 use tauri::AppHandle;
@@ -25,6 +25,14 @@ async fn list_import_runs(app: AppHandle, limit: Option<u32>) -> Result<Vec<Impo
     .await
     .map_err(|error| format!("Import run list task failed: {error}"))?
     .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn get_statistics(app: AppHandle) -> Result<StatisticsResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || db::statistics_for_app(&app))
+        .await
+        .map_err(|error| format!("Statistics task failed: {error}"))?
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -104,6 +112,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_library_status,
             list_import_runs,
+            get_statistics,
             import_musicbee_tsv,
             search_library,
             list_saved_searches,

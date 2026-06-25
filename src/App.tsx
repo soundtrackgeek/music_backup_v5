@@ -32,6 +32,7 @@ import {
   deleteSavedChart,
   deleteSavedSearch,
   exportSearch,
+  getStatistics,
   getLibraryStatus,
   importMusicBeeTsv,
   isTauriRuntime,
@@ -56,16 +57,21 @@ import type {
   ImportRun,
   ImportSummary,
   LibraryStatus,
+  GenreProgressStats,
+  RatingBucket,
+  RatingEvent,
   SavedChart,
   SavedSearch,
+  StatisticsResponse,
   TextFilter,
   TextFilterOperator,
+  YearProgressStats,
 } from "./types";
 
 const navigation = [
   { label: "Search", icon: Search, enabled: true },
   { label: "Charts", icon: BarChart3, enabled: true },
-  { label: "Statistics", icon: Activity, enabled: false },
+  { label: "Statistics", icon: Activity, enabled: true },
   { label: "Albums", icon: Album, enabled: false },
   { label: "Artists", icon: UsersRound, enabled: false },
   { label: "Genres", icon: Tags, enabled: false },
@@ -353,9 +359,24 @@ function formatMinutes(seconds: number | null | undefined) {
   return `${(seconds / 60).toFixed(1)}m`;
 }
 
+function formatHours(seconds: number | null | undefined) {
+  if (!seconds) return "0h";
+  return `${(seconds / 3600).toFixed(1)}h`;
+}
+
 function formatPercent(value: number | null | undefined, digits = 1) {
   if (value == null) return "";
   return `${(value * 100).toFixed(digits)}%`;
+}
+
+function percentOf(value: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(100, (value / total) * 100));
+}
+
+function formatAverage(value: number | null | undefined, digits = 1) {
+  if (value == null) return "";
+  return value.toFixed(digits);
 }
 
 function formatTrackRating(value: number | null | undefined) {
@@ -700,6 +721,157 @@ function ChartResults({ response, config }: { response: BrowseResponse | null; c
   );
 }
 
+function Meter({
+  label,
+  value,
+  total,
+  detail,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  detail: string;
+}) {
+  return (
+    <div className="meter-row">
+      <div>
+        <span>{label}</span>
+        <strong>{formatNumber(value)}</strong>
+      </div>
+      <div className="meter-track" aria-hidden="true">
+        <div className="meter-fill" style={{ width: `${percentOf(value, total)}%` }} />
+      </div>
+      <small>{detail}</small>
+    </div>
+  );
+}
+
+function DistributionBars({ buckets }: { buckets: RatingBucket[] }) {
+  const maxCount = Math.max(1, ...buckets.map((bucket) => bucket.count));
+  return (
+    <div className="distribution-bars">
+      {buckets.map((bucket) => (
+        <div className="distribution-row" key={bucket.label}>
+          <span>{bucket.label}</span>
+          <div className="meter-track" aria-hidden="true">
+            <div className="meter-fill" style={{ width: `${percentOf(bucket.count, maxCount)}` + "%" }} />
+          </div>
+          <strong>{formatNumber(bucket.count)}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function YearProgressTable({ rows }: { rows: YearProgressStats[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <Activity size={20} />
+        <span>No year statistics yet.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="stats-table year-stats-table" role="table">
+      <div className="stats-table-head" role="row">
+        <span role="columnheader">Year</span>
+        <span role="columnheader">Albums</span>
+        <span role="columnheader">Rated</span>
+        <span role="columnheader">Partial</span>
+        <span role="columnheader">Hours</span>
+        <span role="columnheader">Score</span>
+      </div>
+      {rows.slice(0, 14).map((row) => (
+        <div className="stats-table-row" role="row" key={row.year}>
+          <span role="cell">{row.year}</span>
+          <span role="cell">{formatNumber(row.albumCount)}</span>
+          <span role="cell">{formatNumber(row.ratedAlbumCount)}</span>
+          <span role="cell">{formatNumber(row.partialAlbumCount)}</span>
+          <span role="cell">{formatHours(row.totalSeconds)}</span>
+          <span role="cell">{formatAverage(row.averageAlbumScore, 1)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GenreProgressTable({ rows }: { rows: GenreProgressStats[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <Tags size={20} />
+        <span>No genre statistics yet.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="stats-table genre-stats-table" role="table">
+      <div className="stats-table-head" role="row">
+        <span role="columnheader">Genre</span>
+        <span role="columnheader">Albums</span>
+        <span role="columnheader">Rated</span>
+        <span role="columnheader">Partial</span>
+        <span role="columnheader">Loved</span>
+        <span role="columnheader">Score</span>
+      </div>
+      {rows.slice(0, 12).map((row) => (
+        <div className="stats-table-row" role="row" key={row.genre}>
+          <span role="cell">{row.genre}</span>
+          <span role="cell">{formatNumber(row.albumCount)}</span>
+          <span role="cell">{formatNumber(row.ratedAlbumCount)}</span>
+          <span role="cell">{formatNumber(row.partialAlbumCount)}</span>
+          <span role="cell">{formatNumber(row.lovedTracks)}</span>
+          <span role="cell">{formatAverage(row.averageAlbumScore, 1)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function eventLabel(eventType: string) {
+  const labels: Record<string, string> = {
+    addedPartial: "Added partial",
+    addedRated: "Added rated",
+    completed: "Completed",
+    ratedLess: "Rated less",
+    ratedMore: "Rated more",
+    ratingChanged: "Rating changed",
+    ratingUpdated: "Rating updated",
+    removedRated: "Removed rated",
+  };
+  return labels[eventType] ?? eventType;
+}
+
+function RatingEventList({ events }: { events: RatingEvent[] }) {
+  if (events.length === 0) {
+    return (
+      <div className="empty-state">
+        <Activity size={20} />
+        <span>No rating events yet.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rating-event-list">
+      {events.slice(0, 8).map((event) => (
+        <article className="rating-event" key={event.id}>
+          <strong>{eventLabel(event.eventType)}</strong>
+          <span>{[event.albumArtistDisplay, event.album, event.year].filter(Boolean).join(" / ")}</span>
+          <small>
+            {formatPercent(event.previousRatingCompleteness, 0) || "New"}
+            {" -> "}
+            {formatPercent(event.currentRatingCompleteness, 0) || "Removed"}
+          </small>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
   const [sourcePath, setSourcePath] = useState("musicbee-library.tsv");
@@ -723,19 +895,24 @@ export default function App() {
   const [chartError, setChartError] = useState<string | null>(null);
   const [isChartLoading, setIsChartLoading] = useState(false);
   const [chartExportResult, setChartExportResult] = useState<ExportResult | null>(null);
+  const [statistics, setStatistics] = useState<StatisticsResponse | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
   const canImport = isTauriRuntime();
 
   const loadData = useCallback(async () => {
-    const [nextStatus, nextRuns, nextSavedSearches, nextSavedCharts] = await Promise.all([
+    const [nextStatus, nextRuns, nextSavedSearches, nextSavedCharts, nextStatistics] = await Promise.all([
       getLibraryStatus(),
       listImportRuns(8),
       listSavedSearches(),
       listSavedCharts(),
+      getStatistics(),
     ]);
     setStatus(nextStatus);
     setRuns(nextRuns);
     setSavedSearches(nextSavedSearches);
     setSavedCharts(nextSavedCharts);
+    setStatistics(nextStatistics);
   }, []);
 
   useEffect(() => {
@@ -1093,11 +1270,29 @@ export default function App() {
     setChartExportResult(result);
   }
 
+  async function refreshStatistics() {
+    setIsStatsLoading(true);
+    setStatsError(null);
+    try {
+      await loadData();
+    } catch (error) {
+      setStatsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsStatsLoading(false);
+    }
+  }
+
   const total = response?.total ?? 0;
   const pageStart = total === 0 ? 0 : request.offset + 1;
   const pageEnd = Math.min(total, request.offset + request.limit);
   const chartTotal = chartResponse?.total ?? 0;
   const chartRows = chartResponse?.rows.length ?? 0;
+  const ratingAlbumTotal =
+    (statistics?.ratingProgress.fullyRatedAlbums ?? 0) +
+    (statistics?.ratingProgress.partiallyRatedAlbums ?? 0) +
+    (statistics?.ratingProgress.unratedAlbums ?? 0);
+  const ratingTrackTotal =
+    (statistics?.ratingProgress.ratedTracks ?? 0) + (statistics?.ratingProgress.unratedTracks ?? 0);
 
   return (
     <main className="app-shell">
@@ -1439,6 +1634,221 @@ export default function App() {
 
             {chartError ? <p className="error-message">{chartError}</p> : null}
             <ChartResults response={chartResponse} config={chartConfig} />
+          </section>
+        </section>
+      ) : activeSection === "Statistics" ? (
+        <section className="workspace statistics-workspace">
+          <header className="topbar">
+            <div>
+              <h1>Statistics</h1>
+              <p>Library totals, rating progress, import deltas, and rating history.</p>
+            </div>
+            <div className="topbar-actions">
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Refresh statistics"
+                onClick={() => void refreshStatistics()}
+              >
+                <RotateCcw size={18} />
+              </button>
+            </div>
+          </header>
+
+          <section className="metric-grid" aria-label="Statistics summary">
+            <Metric
+              label="Tracks"
+              value={formatNumber(statistics?.overview.trackCount ?? status?.trackCount)}
+              tone="teal"
+              icon={ListMusic}
+            />
+            <Metric
+              label="Albums"
+              value={formatNumber(statistics?.overview.albumCount ?? status?.albumCount)}
+              tone="amber"
+              icon={Album}
+            />
+            <Metric label="Artists" value={formatNumber(statistics?.overview.albumArtistCount)} icon={UsersRound} />
+            <Metric label="Duration" value={formatHours(statistics?.overview.totalSeconds)} icon={Clock3} />
+          </section>
+
+          {statsError ? <p className="error-message">{statsError}</p> : null}
+
+          <section className="stats-dashboard-grid" aria-label="Statistics dashboards">
+            <section className="stats-panel rating-progress-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Rating progress</h2>
+                  <p>{isStatsLoading ? "Refreshing" : formatPercent(statistics?.ratingProgress.averageRatingCompleteness)}</p>
+                </div>
+                <Gauge size={18} />
+              </div>
+
+              {statistics ? (
+                <div className="meter-stack">
+                  <Meter
+                    label="Fully rated albums"
+                    value={statistics.ratingProgress.fullyRatedAlbums}
+                    total={ratingAlbumTotal}
+                    detail={`${percentOf(statistics.ratingProgress.fullyRatedAlbums, ratingAlbumTotal).toFixed(1)}%`}
+                  />
+                  <Meter
+                    label="Partially rated albums"
+                    value={statistics.ratingProgress.partiallyRatedAlbums}
+                    total={ratingAlbumTotal}
+                    detail={`${percentOf(statistics.ratingProgress.partiallyRatedAlbums, ratingAlbumTotal).toFixed(1)}%`}
+                  />
+                  <Meter
+                    label="Rated tracks"
+                    value={statistics.ratingProgress.ratedTracks}
+                    total={ratingTrackTotal}
+                    detail={`${percentOf(statistics.ratingProgress.ratedTracks, ratingTrackTotal).toFixed(1)}%`}
+                  />
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <Activity size={20} />
+                  <span>No statistics loaded.</span>
+                </div>
+              )}
+            </section>
+
+            <section className="stats-panel loved-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Loved tracks</h2>
+                  <p>{statistics?.lovedTracks.topLovedGenre ?? "Waiting for library data"}</p>
+                </div>
+                <Heart size={18} />
+              </div>
+              <div className="stat-pairs">
+                <div>
+                  <span>Loved tracks</span>
+                  <strong>{formatNumber(statistics?.lovedTracks.lovedTracks)}</strong>
+                </div>
+                <div>
+                  <span>Albums with love</span>
+                  <strong>{formatNumber(statistics?.lovedTracks.albumsWithLovedTracks)}</strong>
+                </div>
+                <div>
+                  <span>Average per album</span>
+                  <strong>{formatAverage(statistics?.lovedTracks.averageLovedTracksPerAlbum, 2)}</strong>
+                </div>
+                <div>
+                  <span>Top year</span>
+                  <strong>{statistics?.lovedTracks.topLovedYear ?? ""}</strong>
+                </div>
+              </div>
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Year progress</h2>
+                  <p>{formatNumber(statistics?.overview.yearCount)} years with albums</p>
+                </div>
+                <Clock3 size={18} />
+              </div>
+              <YearProgressTable rows={statistics?.yearProgress ?? []} />
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Genre progress</h2>
+                  <p>{formatNumber(statistics?.overview.genreCount)} canonical genres</p>
+                </div>
+                <Tags size={18} />
+              </div>
+              <GenreProgressTable rows={statistics?.genreProgress ?? []} />
+            </section>
+
+            <section className="stats-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Track ratings</h2>
+                  <p>{formatNumber(statistics?.ratingProgress.ratedTracks)} rated tracks</p>
+                </div>
+                <ListMusic size={18} />
+              </div>
+              <DistributionBars buckets={statistics?.trackRatingDistribution ?? []} />
+            </section>
+
+            <section className="stats-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Album ratings</h2>
+                  <p>{formatNumber(statistics?.ratingProgress.albumsWithEffectiveRating)} scored albums</p>
+                </div>
+                <Album size={18} />
+              </div>
+              <DistributionBars buckets={statistics?.albumRatingDistribution ?? []} />
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Import history</h2>
+                  <p>Track and album deltas recorded during imports.</p>
+                </div>
+                <FolderInput size={18} />
+              </div>
+              <div className="stats-table import-stats-table" role="table">
+                <div className="stats-table-head" role="row">
+                  <span role="columnheader">Status</span>
+                  <span role="columnheader">Completed</span>
+                  <span role="columnheader">Tracks</span>
+                  <span role="columnheader">Track delta</span>
+                  <span role="columnheader">Albums</span>
+                  <span role="columnheader">Album delta</span>
+                </div>
+                {(statistics?.importHistory ?? []).length === 0 ? (
+                  <div className="empty-state">
+                    <FileSearch size={20} />
+                    <span>No imports yet.</span>
+                  </div>
+                ) : (
+                  statistics?.importHistory.map((run) => (
+                    <div className="stats-table-row" role="row" key={run.id}>
+                      <span role="cell">
+                        <RunStatus status={run.status} />
+                      </span>
+                      <span role="cell">{formatDate(run.completedAt)}</span>
+                      <span role="cell">{formatNumber(run.trackRows)}</span>
+                      <span role="cell">
+                        +{formatNumber(run.addedTracks)} / ~{formatNumber(run.changedTracks)} / -
+                        {formatNumber(run.removedTracks)}
+                      </span>
+                      <span role="cell">{formatNumber(run.albumCount)}</span>
+                      <span role="cell">
+                        +{formatNumber(run.addedAlbums)} / ~{formatNumber(run.changedAlbums)} / -
+                        {formatNumber(run.removedAlbums)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Rating history</h2>
+                  <p>{formatNumber(statistics?.recentRatingEvents.length)} recent rating events</p>
+                </div>
+                <Activity size={18} />
+              </div>
+              <div className="rating-history-strip">
+                {(statistics?.ratingHistory ?? []).slice(-8).map((point) => (
+                  <article className="history-point" key={point.importRunId}>
+                    <span>{formatDate(point.createdAt)}</span>
+                    <strong>{formatPercent(point.ratedTracks / Math.max(1, point.trackCount))}</strong>
+                    <small>{formatNumber(point.ratingEventsCount)} events</small>
+                  </article>
+                ))}
+              </div>
+              <RatingEventList events={statistics?.recentRatingEvents ?? []} />
+            </section>
           </section>
         </section>
       ) : (
@@ -1904,6 +2314,65 @@ export default function App() {
                 </span>
               </div>
             ) : null}
+          </section>
+        </aside>
+      ) : activeSection === "Statistics" ? (
+        <aside className="detail-panel statistics-detail" aria-label="Statistics details">
+          <div className="detail-header">
+            <Activity size={20} />
+            <div>
+              <h2>Library Signals</h2>
+              <p>{statistics?.lastUpdated ? formatDate(statistics.lastUpdated) : "No import yet"}</p>
+            </div>
+          </div>
+
+          <dl className="run-details">
+            <div>
+              <dt>Average album rating</dt>
+              <dd>{formatAverage(statistics?.ratingProgress.averageAlbumRating, 1)}</dd>
+            </div>
+            <div>
+              <dt>Average album score</dt>
+              <dd>{formatAverage(statistics?.overview.averageAlbumScore, 2)}</dd>
+            </div>
+            <div>
+              <dt>Unrated albums</dt>
+              <dd>{formatNumber(statistics?.ratingProgress.unratedAlbums)}</dd>
+            </div>
+            <div>
+              <dt>Top loved genre</dt>
+              <dd>{statistics?.lovedTracks.topLovedGenre ?? "Not yet"}</dd>
+            </div>
+          </dl>
+
+          <section className="calculation-list statistics-signals">
+            <div>
+              <Album size={17} />
+              <span>{formatNumber(statistics?.ratingProgress.fullyRatedAlbums)} fully rated albums</span>
+            </div>
+            <div>
+              <Gauge size={17} />
+              <span>{formatNumber(statistics?.ratingProgress.partiallyRatedAlbums)} partial albums</span>
+            </div>
+            <div>
+              <Heart size={17} />
+              <span>{formatNumber(statistics?.lovedTracks.lovedTracks)} loved tracks</span>
+            </div>
+            <div>
+              <FolderInput size={17} />
+              <span>{formatNumber(statistics?.importHistory.length)} import runs</span>
+            </div>
+          </section>
+
+          <section className="saved-list" aria-label="Recent rating events">
+            <div className="detail-header small">
+              <Sparkles size={18} />
+              <div>
+                <h2>Recent Events</h2>
+                <p>Rating changes from imports</p>
+              </div>
+            </div>
+            <RatingEventList events={statistics?.recentRatingEvents ?? []} />
           </section>
         </aside>
       ) : (
