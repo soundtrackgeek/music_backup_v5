@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.0] - 2026-06-25
+### Added
+- Added the Phase 7 Genres workspace with a searchable canonical-genre index, selected genre album lists, genre-level summary stats, and genre album-list exports.
+- Added a Tauri `list_genres` command backed by normalized canonical-genre grouping.
+- Added web-preview mock data for the Genres workspace.
+
 ## [0.7.0] - 2026-06-25
 ### Added
 - Added the Phase 6 Artists workspace with a searchable album-artist index, selected artist album lists, artist-level summary stats, and artist album-list exports.

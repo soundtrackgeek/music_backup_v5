@@ -1,7 +1,7 @@
 # Music Library App Specification
 
 Date: 2026-06-25
-Status: Draft, current implementation through Phase 6
+Status: Draft, current implementation through Phase 7
 
 ## 1. Product Goal
 
@@ -582,7 +582,7 @@ Recommended main navigation:
 | Statistics | Implemented | Phase 4 | Library overview, rating progress, year/genre progress, and import/rating history. |
 | Albums | Implemented | Phase 5 | Dedicated album index and album detail drill-down. |
 | Artists | Implemented | Phase 6 | Dedicated album-artist index with artist-level album lists and stats. |
-| Genres | Planned | Phase 7 | Dedicated canonical-genre index with genre-level album lists and stats. |
+| Genres | Implemented | Phase 7 | Dedicated canonical-genre index with genre-level album lists and stats. |
 | Tools | Planned | Phase 8 | Music Tools validation and cleanup issue lists. |
 | Imports | Implemented | Phase 1 | TSV import, progress, import history, and backup visibility. |
 | Settings | Implemented | Phase 4 | App preferences such as backup retention and theme. |
@@ -655,7 +655,7 @@ These are targets, not hard guarantees. They should be measured once implementat
 - Add selected artist album lists filtered by normalized album-artist identity.
 - Add artist-level exports for selected artist album lists.
 
-### Phase 7: Genres Workspace (future)
+### Phase 7: Genres Workspace (implemented)
 
 - Enable the Genres navigation item with canonical-genre index pages, genre album lists, and genre-level summary stats.
 

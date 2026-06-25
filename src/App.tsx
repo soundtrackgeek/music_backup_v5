@@ -41,6 +41,7 @@ import {
   importMusicBeeTsv,
   isTauriRuntime,
   listArtists,
+  listGenres,
   listImportRuns,
   listSavedCharts,
   listSavedSearches,
@@ -64,6 +65,9 @@ import type {
   ChartConfig,
   ChartViewMode,
   ExportResult,
+  GenreListRequest,
+  GenreListResponse,
+  GenreSummary,
   ImportProgress,
   ImportRun,
   ImportSummary,
@@ -85,7 +89,7 @@ const navigation = [
   { label: "Statistics", icon: Activity, enabled: true },
   { label: "Albums", icon: Album, enabled: true },
   { label: "Artists", icon: UsersRound, enabled: true },
-  { label: "Genres", icon: Tags, enabled: false },
+  { label: "Genres", icon: Tags, enabled: true },
   { label: "Tools", icon: Wrench, enabled: false },
   { label: "Imports", icon: FolderInput, enabled: true },
   { label: "Settings", icon: Settings, enabled: true },
@@ -215,6 +219,23 @@ function createArtistListRequest(): ArtistListRequest {
 function createArtistAlbumsRequest(artist: ArtistSummary): BrowseRequest {
   const request = createRequest("albums");
   request.filters.artistKeys = [artist.id];
+  request.sort = { field: "year", direction: "asc" };
+  request.limit = 100;
+  return request;
+}
+
+function createGenreListRequest(): GenreListRequest {
+  return {
+    searchText: "",
+    sort: { field: "name", direction: "asc" },
+    limit: 50,
+    offset: 0,
+  };
+}
+
+function createGenreAlbumsRequest(genre: GenreSummary): BrowseRequest {
+  const request = createRequest("albums");
+  request.filters.genres = [genre.id];
   request.sort = { field: "year", direction: "asc" };
   request.limit = 100;
   return request;
@@ -1200,6 +1221,265 @@ function ArtistDetailPanel({
   );
 }
 
+function genreInitial(genre: GenreSummary | null) {
+  return genre?.name.trim().slice(0, 1).toUpperCase() || "G";
+}
+
+function GenreIndexTable({
+  response,
+  selectedGenreId,
+  onSelect,
+}: {
+  response: GenreListResponse | null;
+  selectedGenreId: string | null;
+  onSelect: (genreId: string) => void;
+}) {
+  if (!response) {
+    return (
+      <div className="empty-state large">
+        <Tags size={20} />
+        <span>No genres loaded.</span>
+      </div>
+    );
+  }
+
+  if (response.rows.length === 0) {
+    return (
+      <div className="empty-state large">
+        <FileSearch size={20} />
+        <span>No genres match.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="result-table genre-index-results" role="table">
+      <div className="result-table-head" role="row">
+        <span role="columnheader">Genre</span>
+        <span role="columnheader">Albums</span>
+        <span role="columnheader">Years</span>
+        <span role="columnheader">Top artist</span>
+        <span role="columnheader">Complete</span>
+        <span role="columnheader">Avg score</span>
+        <span role="columnheader">Loved</span>
+      </div>
+      {response.rows.map((genre) => {
+        const isSelected = genre.id === selectedGenreId;
+        return (
+          <div
+            className={`result-table-row selectable${isSelected ? " selected" : ""}`}
+            role="row"
+            aria-selected={isSelected}
+            tabIndex={0}
+            key={genre.id}
+            onClick={() => onSelect(genre.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect(genre.id);
+              }
+            }}
+          >
+            <span className="album-index-title" role="cell">
+              <span className="cover-placeholder cover-mini genre-mini" aria-hidden="true">
+                <span>{genreInitial(genre)}</span>
+              </span>
+              <span>
+                <strong>{genre.name}</strong>
+                <small>{formatNumber(genre.trackCount)} tracks</small>
+              </span>
+            </span>
+            <span role="cell">{formatNumber(genre.albumCount)}</span>
+            <span role="cell">{formatYearSpan(genre.firstYear, genre.lastYear)}</span>
+            <span role="cell">{genre.topArtist ?? ""}</span>
+            <span role="cell">{formatPercent(genre.averageRatingCompleteness)}</span>
+            <span role="cell">{formatAverage(genre.averageAlbumScore, 2)}</span>
+            <span role="cell">{formatNumber(genre.lovedTracks)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function GenreAlbumTable({ response }: { response: BrowseResponse | null }) {
+  if (!response) {
+    return (
+      <div className="empty-state large">
+        <Album size={20} />
+        <span>Select a genre.</span>
+      </div>
+    );
+  }
+
+  if (response.rows.length === 0) {
+    return (
+      <div className="empty-state large">
+        <FileSearch size={20} />
+        <span>No albums found.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="result-table genre-album-results" role="table">
+      <div className="result-table-head" role="row">
+        <span role="columnheader">Album</span>
+        <span role="columnheader">Artist</span>
+        <span role="columnheader">Year</span>
+        <span role="columnheader">Tracks</span>
+        <span role="columnheader">Complete</span>
+        <span role="columnheader">Rating</span>
+        <span role="columnheader">Score</span>
+      </div>
+      {response.rows.map((row) => (
+        <div className="result-table-row" role="row" key={row.id}>
+          <span className="album-index-title" role="cell">
+            <span className="cover-placeholder cover-mini" aria-hidden="true">
+              <span>{albumInitial(row)}</span>
+            </span>
+            <span>
+              <strong>{row.album ?? "Untitled"}</strong>
+              <small>{formatMinutes(row.totalSeconds)}</small>
+            </span>
+          </span>
+          <span role="cell">{row.albumArtistDisplay ?? ""}</span>
+          <span role="cell">{row.year ?? ""}</span>
+          <span role="cell">{formatNumber(row.totalTracks)}</span>
+          <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
+          <span role="cell">{row.effectiveAlbumRating ?? ""}</span>
+          <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GenreDetailPanel({
+  genre,
+  includeCalculated,
+  onIncludeCalculatedChange,
+  exportResult,
+  onExport,
+}: {
+  genre: GenreSummary | null;
+  includeCalculated: boolean;
+  onIncludeCalculatedChange: (value: boolean) => void;
+  exportResult: ExportResult | null;
+  onExport: (format: string) => Promise<void>;
+}) {
+  if (!genre) {
+    return (
+      <aside className="detail-panel genre-detail" aria-label="Genre details">
+        <div className="detail-header">
+          <Tags size={20} />
+          <div>
+            <h2>Genre Detail</h2>
+            <p>Select a canonical genre from the index</p>
+          </div>
+        </div>
+        <div className="empty-state">
+          <FileSearch size={20} />
+          <span>No genre selected.</span>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="detail-panel genre-detail" aria-label="Genre details">
+      <div className="detail-header">
+        <Tags size={20} />
+        <div>
+          <h2>{genre.name}</h2>
+          <p>{[formatYearSpan(genre.firstYear, genre.lastYear), genre.topArtist].filter(Boolean).join(" / ")}</p>
+        </div>
+      </div>
+
+      <div className="cover-placeholder album-cover-large genre-cover-large" aria-hidden="true">
+        <span>{genreInitial(genre)}</span>
+      </div>
+
+      <dl className="run-details genre-detail-stats">
+        <div>
+          <dt>Albums</dt>
+          <dd>
+            {formatNumber(genre.albumCount)}
+            {genre.ratedAlbumCount ? ` / ${formatNumber(genre.ratedAlbumCount)} fully rated` : ""}
+          </dd>
+        </div>
+        <div>
+          <dt>Partial albums</dt>
+          <dd>{formatNumber(genre.partialAlbumCount)}</dd>
+        </div>
+        <div>
+          <dt>Unrated albums</dt>
+          <dd>{formatNumber(genre.unratedAlbumCount)}</dd>
+        </div>
+        <div>
+          <dt>Tracks</dt>
+          <dd>{formatNumber(genre.trackCount)}</dd>
+        </div>
+        <div>
+          <dt>Total time</dt>
+          <dd>{formatHours(genre.totalSeconds)}</dd>
+        </div>
+        <div>
+          <dt>Top artist</dt>
+          <dd>{genre.topArtist ?? ""}</dd>
+        </div>
+        <div>
+          <dt>Average complete</dt>
+          <dd>{formatPercent(genre.averageRatingCompleteness)}</dd>
+        </div>
+        <div>
+          <dt>Average rating</dt>
+          <dd>{formatAverage(genre.averageAlbumRating, 1)}</dd>
+        </div>
+        <div>
+          <dt>Average score</dt>
+          <dd>{formatAverage(genre.averageAlbumScore, 2)}</dd>
+        </div>
+        <div>
+          <dt>Loved tracks</dt>
+          <dd>{formatNumber(genre.lovedTracks)}</dd>
+        </div>
+        <div>
+          <dt>TMOE</dt>
+          <dd>{formatMinutes(genre.tmoeSeconds)}</dd>
+        </div>
+      </dl>
+
+      <section className="export-box">
+        <label className="toggle-row">
+          <input
+            type="checkbox"
+            checked={includeCalculated}
+            onChange={(event) => onIncludeCalculatedChange(event.target.checked)}
+          />
+          <span>Calculated columns</span>
+        </label>
+        <div className="export-grid">
+          {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
+            <button type="button" key={format} onClick={() => void onExport(format)}>
+              <Download size={16} />
+              <span>{format.toUpperCase()}</span>
+            </button>
+          ))}
+        </div>
+        {exportResult ? (
+          <div className="export-result">
+            <Check size={17} />
+            <span>
+              {formatNumber(exportResult.rowCount)} albums to {exportResult.path}
+            </span>
+          </div>
+        ) : null}
+      </section>
+    </aside>
+  );
+}
+
 function ChartResults({ response, config }: { response: BrowseResponse | null; config: ChartConfig }) {
   if (!response) {
     return (
@@ -1491,6 +1771,16 @@ export default function App() {
   const [isArtistAlbumsLoading, setIsArtistAlbumsLoading] = useState(false);
   const [artistIncludeCalculated, setArtistIncludeCalculated] = useState(false);
   const [artistExportResult, setArtistExportResult] = useState<ExportResult | null>(null);
+  const [genreRequest, setGenreRequest] = useState<GenreListRequest>(() => createGenreListRequest());
+  const [genreResponse, setGenreResponse] = useState<GenreListResponse | null>(null);
+  const [genreError, setGenreError] = useState<string | null>(null);
+  const [isGenreLoading, setIsGenreLoading] = useState(false);
+  const [selectedGenreId, setSelectedGenreId] = useState<string | null>(null);
+  const [genreAlbumsResponse, setGenreAlbumsResponse] = useState<BrowseResponse | null>(null);
+  const [genreAlbumsError, setGenreAlbumsError] = useState<string | null>(null);
+  const [isGenreAlbumsLoading, setIsGenreAlbumsLoading] = useState(false);
+  const [genreIncludeCalculated, setGenreIncludeCalculated] = useState(false);
+  const [genreExportResult, setGenreExportResult] = useState<ExportResult | null>(null);
   const [chartConfig, setChartConfig] = useState<ChartConfig>(() => createChartConfig());
   const [chartResponse, setChartResponse] = useState<BrowseResponse | null>(null);
   const [chartName, setChartName] = useState("");
@@ -1556,6 +1846,12 @@ export default function App() {
   const artistAlbumsRequest = useMemo(
     () => (selectedArtist ? createArtistAlbumsRequest(selectedArtist) : null),
     [selectedArtist],
+  );
+  const selectedGenre =
+    genreResponse?.rows.find((genre) => genre.id === selectedGenreId) ?? null;
+  const genreAlbumsRequest = useMemo(
+    () => (selectedGenre ? createGenreAlbumsRequest(selectedGenre) : null),
+    [selectedGenre],
   );
 
   useEffect(() => {
@@ -1755,6 +2051,88 @@ export default function App() {
       cancelled = true;
     };
   }, [activeSection, artistAlbumsRequest]);
+
+  useEffect(() => {
+    if (activeSection !== "Genres") {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setIsGenreLoading(true);
+      setGenreError(null);
+      void listGenres(genreRequest)
+        .then((nextResponse) => {
+          if (!cancelled) {
+            setGenreResponse(nextResponse);
+          }
+        })
+        .catch((searchError) => {
+          if (!cancelled) {
+            setGenreError(searchError instanceof Error ? searchError.message : String(searchError));
+            setGenreResponse(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsGenreLoading(false);
+          }
+        });
+    }, 160);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeSection, genreRequest]);
+
+  useEffect(() => {
+    if (activeSection !== "Genres") {
+      return;
+    }
+
+    const rows = genreResponse?.rows ?? [];
+    if (rows.length === 0) {
+      setSelectedGenreId(null);
+      return;
+    }
+
+    setSelectedGenreId((previous) =>
+      previous && rows.some((genre) => genre.id === previous) ? previous : rows[0].id,
+    );
+  }, [activeSection, genreResponse]);
+
+  useEffect(() => {
+    if (activeSection !== "Genres" || !genreAlbumsRequest) {
+      setGenreAlbumsResponse(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsGenreAlbumsLoading(true);
+    setGenreAlbumsError(null);
+    void searchLibrary(genreAlbumsRequest)
+      .then((nextResponse) => {
+        if (!cancelled) {
+          setGenreAlbumsResponse(nextResponse);
+        }
+      })
+      .catch((searchError) => {
+        if (!cancelled) {
+          setGenreAlbumsError(searchError instanceof Error ? searchError.message : String(searchError));
+          setGenreAlbumsResponse(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsGenreAlbumsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, genreAlbumsRequest]);
 
   useEffect(() => {
     if (activeSection !== "Charts") {
@@ -2078,6 +2456,19 @@ export default function App() {
     setArtistExportResult(null);
   }
 
+  function clearGenreQuery() {
+    setGenreRequest((previous) => ({
+      ...createGenreListRequest(),
+      limit: previous.limit,
+    }));
+    setGenreExportResult(null);
+  }
+
+  function selectGenre(genreId: string) {
+    setSelectedGenreId(genreId);
+    setGenreExportResult(null);
+  }
+
   async function startImport() {
     setIsImporting(true);
     setImportError(null);
@@ -2147,6 +2538,14 @@ export default function App() {
     }
     const result = await exportSearch(artistAlbumsRequest, format, artistIncludeCalculated);
     setArtistExportResult(result);
+  }
+
+  async function runGenreExport(format: string) {
+    if (!genreAlbumsRequest) {
+      return;
+    }
+    const result = await exportSearch(genreAlbumsRequest, format, genreIncludeCalculated);
+    setGenreExportResult(result);
   }
 
   function updateChartConfig(values: Partial<ChartConfig>) {
@@ -2256,6 +2655,10 @@ export default function App() {
   const artistPageStart = artistTotal === 0 ? 0 : artistRequest.offset + 1;
   const artistPageEnd = Math.min(artistTotal, artistRequest.offset + artistRequest.limit);
   const selectedArtistAlbumCount = selectedArtist?.albumCount ?? artistAlbumsResponse?.total ?? 0;
+  const genreTotal = genreResponse?.total ?? 0;
+  const genrePageStart = genreTotal === 0 ? 0 : genreRequest.offset + 1;
+  const genrePageEnd = Math.min(genreTotal, genreRequest.offset + genreRequest.limit);
+  const selectedGenreAlbumCount = selectedGenre?.albumCount ?? genreAlbumsResponse?.total ?? 0;
   const chartTotal = chartResponse?.total ?? 0;
   const chartRows = chartResponse?.rows.length ?? 0;
   const ratingAlbumTotal =
@@ -2787,6 +3190,183 @@ export default function App() {
 
             {artistAlbumsError ? <p className="error-message">{artistAlbumsError}</p> : null}
             <ArtistAlbumTable response={artistAlbumsResponse} />
+          </section>
+        </section>
+      ) : activeSection === "Genres" ? (
+        <section className="workspace genres-workspace">
+          <header className="topbar">
+            <div>
+              <h1>Genres</h1>
+              <p>Canonical-genre index, selected genre album lists, and genre-level summary stats.</p>
+            </div>
+            <div className="topbar-actions">
+              <button className="icon-button" type="button" aria-label="Clear genre filters" onClick={clearGenreQuery}>
+                <RotateCcw size={18} />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Refresh genres"
+                onClick={() => {
+                  void loadData();
+                  setGenreRequest((previous) => ({ ...previous }));
+                }}
+              >
+                <Database size={18} />
+              </button>
+            </div>
+          </header>
+
+          <section className="metric-grid" aria-label="Genre summary">
+            <Metric label="Canonical genres" value={formatNumber(statistics?.overview.genreCount)} tone="teal" icon={Tags} />
+            <Metric label="Matches" value={formatNumber(genreTotal)} tone="amber" icon={Search} />
+            <Metric label="Genre albums" value={formatNumber(selectedGenreAlbumCount)} icon={Album} />
+            <Metric label="Loved tracks" value={formatNumber(selectedGenre?.lovedTracks)} icon={Heart} />
+          </section>
+
+          <section className="query-panel genre-query-panel">
+            <div className="search-row genre-search-row">
+              <div className="search-input">
+                <Search size={18} />
+                <input
+                  value={genreRequest.searchText}
+                  onChange={(event) =>
+                    setGenreRequest((previous) => ({ ...previous, searchText: event.target.value, offset: 0 }))
+                  }
+                  placeholder="Search canonical genres"
+                />
+              </div>
+              <SelectField
+                label="Sort"
+                value={genreRequest.sort.field}
+                onChange={(field) =>
+                  setGenreRequest((previous) => ({
+                    ...previous,
+                    sort: { ...previous.sort, field },
+                    offset: 0,
+                  }))
+                }
+                options={[
+                  { value: "name", label: "Genre" },
+                  { value: "albumCount", label: "Albums" },
+                  { value: "trackCount", label: "Tracks" },
+                  { value: "lovedTracks", label: "Loved tracks" },
+                  { value: "averageCompleteness", label: "Completeness" },
+                  { value: "averageRating", label: "Average rating" },
+                  { value: "averageScore", label: "Average score" },
+                  { value: "firstYear", label: "First year" },
+                  { value: "lastYear", label: "Last year" },
+                  { value: "topArtist", label: "Top artist" },
+                ]}
+              />
+            </div>
+
+            <div className="query-footer">
+              <div className="chip-row inline" aria-label="Active genre filters">
+                {genreRequest.searchText.trim() ? (
+                  <button
+                    className="filter-chip"
+                    type="button"
+                    onClick={() => setGenreRequest((previous) => ({ ...previous, searchText: "", offset: 0 }))}
+                  >
+                    <span>Search "{genreRequest.searchText.trim()}"</span>
+                    <X size={14} />
+                  </button>
+                ) : (
+                  <span className="chip-empty">No active filters</span>
+                )}
+              </div>
+
+              <div className="sort-controls">
+                <SelectField
+                  label="Direction"
+                  value={genreRequest.sort.direction}
+                  onChange={(direction) =>
+                    setGenreRequest((previous) => ({
+                      ...previous,
+                      sort: { ...previous.sort, direction: direction as "asc" | "desc" },
+                      offset: 0,
+                    }))
+                  }
+                  options={[
+                    { value: "asc", label: "Ascending" },
+                    { value: "desc", label: "Descending" },
+                  ]}
+                />
+                <NumberField
+                  label="Rows"
+                  value={genreRequest.limit}
+                  min={10}
+                  max={500}
+                  onChange={(value) =>
+                    setGenreRequest((previous) => ({ ...previous, limit: value ?? 50, offset: 0 }))
+                  }
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="table-panel" aria-label="Genre index">
+            <div className="panel-heading compact">
+              <div>
+                <h2>Genre index</h2>
+                <p>
+                  {isGenreLoading
+                    ? "Loading genres"
+                    : `${formatNumber(genrePageStart)}-${formatNumber(genrePageEnd)} of ${formatNumber(genreTotal)}`}
+                </p>
+              </div>
+              <div className="pager">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Previous genre page"
+                  disabled={genreRequest.offset === 0}
+                  onClick={() =>
+                    setGenreRequest((previous) => ({
+                      ...previous,
+                      offset: Math.max(0, previous.offset - previous.limit),
+                    }))
+                  }
+                >
+                  <ChevronLeft size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Next genre page"
+                  disabled={genreRequest.offset + genreRequest.limit >= genreTotal}
+                  onClick={() =>
+                    setGenreRequest((previous) => ({
+                      ...previous,
+                      offset: previous.offset + previous.limit,
+                    }))
+                  }
+                >
+                  <ChevronRight size={17} />
+                </button>
+              </div>
+            </div>
+
+            {genreError ? <p className="error-message">{genreError}</p> : null}
+            <GenreIndexTable response={genreResponse} selectedGenreId={selectedGenreId} onSelect={selectGenre} />
+          </section>
+
+          <section className="table-panel" aria-label="Selected genre albums">
+            <div className="panel-heading compact">
+              <div>
+                <h2>{selectedGenre?.name ?? "Genre albums"}</h2>
+                <p>
+                  {isGenreAlbumsLoading
+                    ? "Loading albums"
+                    : `${formatNumber(genreAlbumsResponse?.rows.length ?? 0)} of ${formatNumber(selectedGenreAlbumCount)} albums`}
+                </p>
+              </div>
+              <span className="run-status">{selectedGenre?.topArtist ?? "Genre"}</span>
+            </div>
+
+            {genreAlbumsError ? <p className="error-message">{genreAlbumsError}</p> : null}
+            <GenreAlbumTable response={genreAlbumsResponse} />
           </section>
         </section>
       ) : activeSection === "Albums" ? (
@@ -3803,6 +4383,14 @@ export default function App() {
           onIncludeCalculatedChange={(value) => setArtistIncludeCalculated(value)}
           exportResult={artistExportResult}
           onExport={runArtistExport}
+        />
+      ) : activeSection === "Genres" ? (
+        <GenreDetailPanel
+          genre={selectedGenre}
+          includeCalculated={genreIncludeCalculated}
+          onIncludeCalculatedChange={(value) => setGenreIncludeCalculated(value)}
+          exportResult={genreExportResult}
+          onExport={runGenreExport}
         />
       ) : activeSection === "Albums" ? (
         <AlbumDetailPanel

@@ -1,10 +1,10 @@
 use crate::models::{
     AppSettings, ArtistListRequest, ArtistListResponse, ArtistSummary, BrowseFilters,
     BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ChartConfig, ExportResult,
-    ExportSearchRequest, GenreProgressStats, ImportRun, LibraryOverviewStats, LibraryStatus,
-    LovedTrackStats, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
-    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
-    YearProgressStats,
+    ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressStats, GenreSummary,
+    ImportRun, LibraryOverviewStats, LibraryStatus, LovedTrackStats, RatingBucket, RatingEvent,
+    RatingHistoryPoint, RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart,
+    SavedSearch, StatisticsResponse, TextFilter, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
@@ -977,6 +977,14 @@ pub fn list_artists_for_app(
     list_artists(&conn, request, 500)
 }
 
+pub fn list_genres_for_app(
+    app: &AppHandle,
+    request: GenreListRequest,
+) -> Result<GenreListResponse> {
+    let (conn, _) = open(app)?;
+    list_genres(&conn, request, 500)
+}
+
 pub fn list_saved_searches_for_app(app: &AppHandle) -> Result<Vec<SavedSearch>> {
     let (conn, _) = open(app)?;
     let mut stmt = conn.prepare(
@@ -1370,6 +1378,162 @@ fn artist_order_clause(sort: &BrowseSort) -> String {
     };
 
     format!("ORDER BY {field} {direction}, LOWER(artist_name) ASC")
+}
+
+fn list_genres(
+    conn: &Connection,
+    request: GenreListRequest,
+    max_limit: u32,
+) -> Result<GenreListResponse> {
+    let limit = request.limit.clamp(1, max_limit);
+    let offset = request.offset;
+    let (where_sql, values) = genre_search_where(&request.search_text);
+
+    let count_sql = format!(
+        "
+        SELECT COUNT(*)
+        FROM (
+            SELECT COALESCE(NULLIF(TRIM(LOWER(genre_normalized)), ''), 'unknown') AS genre_key
+            FROM albums
+            {where_sql}
+            GROUP BY genre_key
+        )
+        "
+    );
+    let total = conn
+        .query_row(&count_sql, params_from_iter(values.iter()), |row| {
+            row.get(0)
+        })
+        .context("Could not count genre results")?;
+
+    let order_sql = genre_order_clause(&request.sort);
+    let sql = format!(
+        "
+        WITH grouped AS (
+            SELECT
+                COALESCE(NULLIF(TRIM(LOWER(genre_normalized)), ''), 'unknown') AS genre_key,
+                COALESCE(MIN(NULLIF(TRIM(canonical_genre), '')), 'Unknown') AS genre_name,
+                COUNT(*) AS album_count,
+                SUM(CASE WHEN rating_completeness >= 1.0 THEN 1 ELSE 0 END) AS rated_album_count,
+                SUM(CASE WHEN rating_completeness > 0.0 AND rating_completeness < 1.0 THEN 1 ELSE 0 END) AS partial_album_count,
+                SUM(CASE WHEN rating_completeness = 0.0 THEN 1 ELSE 0 END) AS unrated_album_count,
+                COALESCE(SUM(total_tracks), 0) AS track_count,
+                COALESCE(SUM(total_seconds), 0) AS total_seconds,
+                COALESCE(SUM(loved_tracks), 0) AS loved_tracks,
+                COALESCE(SUM(tmoe_seconds), 0) AS tmoe_seconds,
+                AVG(rating_completeness) AS average_rating_completeness,
+                AVG(effective_album_rating) AS average_album_rating,
+                AVG(album_score) AS average_album_score,
+                MIN(year) AS first_year,
+                MAX(year) AS last_year
+            FROM albums
+            {where_sql}
+            GROUP BY genre_key
+        )
+        SELECT
+            genre_key,
+            genre_name,
+            album_count,
+            rated_album_count,
+            partial_album_count,
+            unrated_album_count,
+            track_count,
+            total_seconds,
+            loved_tracks,
+            tmoe_seconds,
+            average_rating_completeness,
+            average_album_rating,
+            average_album_score,
+            first_year,
+            last_year,
+            (
+                SELECT COALESCE(MIN(NULLIF(TRIM(a2.album_artist_display), '')), 'Unknown Artist')
+                FROM albums a2
+                WHERE COALESCE(NULLIF(TRIM(LOWER(a2.genre_normalized)), ''), 'unknown') = grouped.genre_key
+                GROUP BY COALESCE(NULLIF(TRIM(LOWER(a2.album_artist_display)), ''), 'unknown')
+                ORDER BY COUNT(*) DESC, LOWER(COALESCE(MIN(NULLIF(TRIM(a2.album_artist_display), '')), 'Unknown Artist')) ASC
+                LIMIT 1
+            ) AS top_artist
+        FROM grouped
+        {order_sql}
+        LIMIT ? OFFSET ?
+        "
+    );
+    let mut row_values = values;
+    row_values.push(Value::Integer(i64::from(limit)));
+    row_values.push(Value::Integer(i64::from(offset)));
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(params_from_iter(row_values.iter()), genre_summary_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load genre results")?;
+
+    Ok(GenreListResponse {
+        rows,
+        total,
+        limit,
+        offset,
+    })
+}
+
+fn genre_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenreSummary> {
+    Ok(GenreSummary {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        album_count: row.get(2)?,
+        rated_album_count: row.get(3)?,
+        partial_album_count: row.get(4)?,
+        unrated_album_count: row.get(5)?,
+        track_count: row.get(6)?,
+        total_seconds: row.get(7)?,
+        loved_tracks: row.get(8)?,
+        tmoe_seconds: row.get(9)?,
+        average_rating_completeness: row.get(10)?,
+        average_album_rating: row.get(11)?,
+        average_album_score: row.get(12)?,
+        first_year: row.get(13)?,
+        last_year: row.get(14)?,
+        top_artist: row.get(15)?,
+    })
+}
+
+fn genre_search_where(search_text: &str) -> (String, Vec<Value>) {
+    let search_text = search_text.trim();
+    if search_text.is_empty() {
+        return (String::new(), Vec::new());
+    }
+
+    let normalized = search_text.to_lowercase();
+    (
+        "WHERE LOWER(COALESCE(NULLIF(TRIM(canonical_genre), ''), 'Unknown')) LIKE ? ESCAPE '\\'"
+            .to_string(),
+        vec![Value::Text(format!("%{}%", escape_like(&normalized)))],
+    )
+}
+
+fn genre_order_clause(sort: &BrowseSort) -> String {
+    let direction = if sort.direction.eq_ignore_ascii_case("desc") {
+        "DESC"
+    } else {
+        "ASC"
+    };
+
+    let field = match sort.field.as_str() {
+        "albumCount" => "album_count",
+        "trackCount" => "track_count",
+        "lovedTracks" => "loved_tracks",
+        "totalMinutes" => "total_seconds",
+        "averageCompleteness" => "average_rating_completeness",
+        "averageRating" => "average_album_rating",
+        "averageScore" => "average_album_score",
+        "firstYear" => "first_year",
+        "lastYear" => "last_year",
+        "topArtist" => "top_artist",
+        _ => "LOWER(genre_name)",
+    };
+
+    format!("ORDER BY {field} {direction}, LOWER(genre_name) ASC")
 }
 
 fn search_library(
@@ -2549,6 +2713,29 @@ mod tests {
         assert_eq!(
             response.rows[0].album_artist_display.as_deref(),
             Some("Pet Shop Boys")
+        );
+    }
+
+    #[test]
+    fn lists_genre_summaries_and_filters_albums_by_genre_key() {
+        let conn = seeded_connection();
+        let genres = list_genres(&conn, GenreListRequest::default(), 50).expect("list genres");
+
+        assert_eq!(genres.total, 1);
+        assert_eq!(genres.rows[0].id, "synthpop");
+        assert_eq!(genres.rows[0].name, "Synthpop");
+        assert_eq!(genres.rows[0].album_count, 1);
+        assert_eq!(genres.rows[0].track_count, 10);
+        assert_eq!(genres.rows[0].top_artist.as_deref(), Some("Pet Shop Boys"));
+
+        let mut request = BrowseRequest::default();
+        request.filters.genres = vec![genres.rows[0].id.clone()];
+        let response = search_library(&conn, request, 50).expect("search genre albums");
+
+        assert_eq!(response.total, 1);
+        assert_eq!(
+            response.rows[0].canonical_genre.as_deref(),
+            Some("Synthpop")
         );
     }
 

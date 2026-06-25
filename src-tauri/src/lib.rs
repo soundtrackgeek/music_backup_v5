@@ -4,8 +4,8 @@ mod models;
 
 use models::{
     AppSettings, ArtistListRequest, ArtistListResponse, BrowseRequest, BrowseResponse,
-    ExportResult, ExportSearchRequest, SaveChartRequest, SaveSearchRequest, SavedChart,
-    SavedSearch, StatisticsResponse,
+    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
 };
 use models::{ImportRun, ImportSummary, LibraryStatus};
 use tauri::AppHandle;
@@ -80,6 +80,17 @@ async fn list_artists(
 }
 
 #[tauri::command]
+async fn list_genres(
+    app: AppHandle,
+    request: GenreListRequest,
+) -> Result<GenreListResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || db::list_genres_for_app(&app, request))
+        .await
+        .map_err(|error| format!("Genre list task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn list_saved_searches(app: AppHandle) -> Result<Vec<SavedSearch>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_saved_searches_for_app(&app))
         .await
@@ -146,6 +157,7 @@ pub fn run() {
             import_musicbee_tsv,
             search_library,
             list_artists,
+            list_genres,
             list_saved_searches,
             save_search,
             delete_saved_search,

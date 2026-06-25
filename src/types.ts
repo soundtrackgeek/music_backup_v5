@@ -136,6 +136,39 @@ export type ArtistListResponse = {
   offset: number;
 };
 
+export type GenreListRequest = {
+  searchText: string;
+  sort: BrowseSort;
+  limit: number;
+  offset: number;
+};
+
+export type GenreSummary = {
+  id: string;
+  name: string;
+  albumCount: number;
+  ratedAlbumCount: number;
+  partialAlbumCount: number;
+  unratedAlbumCount: number;
+  trackCount: number;
+  totalSeconds: number;
+  lovedTracks: number;
+  tmoeSeconds: number;
+  averageRatingCompleteness: number | null;
+  averageAlbumRating: number | null;
+  averageAlbumScore: number | null;
+  firstYear: number | null;
+  lastYear: number | null;
+  topArtist: string | null;
+};
+
+export type GenreListResponse = {
+  rows: GenreSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type BrowseRow = {
   id: string;
   trackId: number | null;

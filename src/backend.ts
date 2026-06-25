@@ -17,6 +17,9 @@ import type {
   SavedSearch,
   ChartConfig,
   StatisticsResponse,
+  GenreListRequest,
+  GenreListResponse,
+  GenreSummary,
 } from "./types";
 
 export const settingsStorageKey = "musicLibrarySettings:v1";
@@ -156,6 +159,45 @@ const mockArtists: ArtistSummary[] = [
     firstYear: 1986,
     lastYear: 1986,
     topGenre: "Post-Punk",
+  },
+];
+
+const mockGenres: GenreSummary[] = [
+  {
+    id: "synthpop",
+    name: "Synthpop",
+    albumCount: 1,
+    ratedAlbumCount: 1,
+    partialAlbumCount: 0,
+    unratedAlbumCount: 0,
+    trackCount: 10,
+    totalSeconds: 2880,
+    lovedTracks: 2,
+    tmoeSeconds: 840,
+    averageRatingCompleteness: 1,
+    averageAlbumRating: 86,
+    averageAlbumScore: 207.62,
+    firstYear: 1987,
+    lastYear: 1987,
+    topArtist: "Pet Shop Boys",
+  },
+  {
+    id: "post-punk",
+    name: "Post-Punk",
+    albumCount: 1,
+    ratedAlbumCount: 1,
+    partialAlbumCount: 0,
+    unratedAlbumCount: 0,
+    trackCount: 10,
+    totalSeconds: 2220,
+    lovedTracks: 1,
+    tmoeSeconds: 600,
+    averageRatingCompleteness: 1,
+    averageAlbumRating: 88,
+    averageAlbumScore: 108.4,
+    firstYear: 1986,
+    lastYear: 1986,
+    topArtist: "The Smiths",
   },
 ];
 
@@ -417,13 +459,18 @@ export async function searchLibrary(request: BrowseRequest) {
   if (!isTauriRuntime()) {
     const albumIds = new Set(request.filters.albumIds);
     const artistKeys = new Set(request.filters.artistKeys);
+    const genreKeys = new Set(request.filters.genres.map(normalizeGenreKey));
+    const excludedGenreKeys = new Set(request.filters.excludedGenres.map(normalizeGenreKey));
     const rows = mockRows.filter((row) => {
       const matchesView = request.view === "tracks" ? row.trackId !== null : row.trackId === null;
       const artistKey = normalizeArtistKey(row.albumArtistDisplay);
+      const genreKey = normalizeGenreKey(row.canonicalGenre);
       return (
         matchesView &&
         (albumIds.size === 0 || albumIds.has(row.albumId)) &&
-        (artistKeys.size === 0 || artistKeys.has(artistKey))
+        (artistKeys.size === 0 || artistKeys.has(artistKey)) &&
+        (genreKeys.size === 0 || genreKeys.has(genreKey)) &&
+        !excludedGenreKeys.has(genreKey)
       );
     });
     return {
@@ -455,6 +502,25 @@ export async function listArtists(request: ArtistListRequest) {
   }
 
   return invoke<ArtistListResponse>("list_artists", { request });
+}
+
+export async function listGenres(request: GenreListRequest) {
+  if (!isTauriRuntime()) {
+    const searchText = request.searchText.trim().toLowerCase();
+    const filtered = mockGenres.filter((genre) => genre.name.toLowerCase().includes(searchText));
+    const sorted = [...filtered].sort((left, right) => compareGenres(left, right, request.sort.field));
+    if (request.sort.direction === "desc") {
+      sorted.reverse();
+    }
+    return {
+      rows: sorted.slice(request.offset, request.offset + request.limit),
+      total: sorted.length,
+      limit: request.limit,
+      offset: request.offset,
+    } satisfies GenreListResponse;
+  }
+
+  return invoke<GenreListResponse>("list_genres", { request });
 }
 
 export async function listSavedSearches() {
@@ -598,6 +664,11 @@ function normalizeArtistKey(value: string | null) {
   return normalized || "unknown";
 }
 
+function normalizeGenreKey(value: string | null) {
+  const normalized = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return normalized || "unknown";
+}
+
 function compareArtists(left: ArtistSummary, right: ArtistSummary, field: string) {
   const leftValue = artistSortValue(left, field);
   const rightValue = artistSortValue(right, field);
@@ -631,5 +702,41 @@ function artistSortValue(artist: ArtistSummary, field: string) {
       return artist.topGenre ?? "";
     default:
       return artist.name.toLowerCase();
+  }
+}
+
+function compareGenres(left: GenreSummary, right: GenreSummary, field: string) {
+  const leftValue = genreSortValue(left, field);
+  const rightValue = genreSortValue(right, field);
+  if (typeof leftValue === "string" || typeof rightValue === "string") {
+    return String(leftValue).localeCompare(String(rightValue));
+  }
+  return (leftValue ?? 0) - (rightValue ?? 0);
+}
+
+function genreSortValue(genre: GenreSummary, field: string) {
+  switch (field) {
+    case "albumCount":
+      return genre.albumCount;
+    case "trackCount":
+      return genre.trackCount;
+    case "lovedTracks":
+      return genre.lovedTracks;
+    case "totalMinutes":
+      return genre.totalSeconds;
+    case "averageCompleteness":
+      return genre.averageRatingCompleteness;
+    case "averageRating":
+      return genre.averageAlbumRating;
+    case "averageScore":
+      return genre.averageAlbumScore;
+    case "firstYear":
+      return genre.firstYear;
+    case "lastYear":
+      return genre.lastYear;
+    case "topArtist":
+      return genre.topArtist ?? "";
+    default:
+      return genre.name.toLowerCase();
   }
 }
