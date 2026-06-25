@@ -4,7 +4,7 @@ A local-first desktop app for importing, searching, browsing, and analyzing a Mu
 
 The current Phase 4 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse album and track tables, save searches, build ranked album charts, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, and switch between light and dark mode.
 
-The sidebar currently enables Search, Charts, Statistics, Imports, and Settings. Albums, Artists, Genres, and Tools are planned Phase 5 workspaces; album and track browsing currently live in Search.
+The sidebar currently enables Search, Charts, Statistics, Imports, and Settings. Albums, Artists, Genres, and Tools are planned workspaces; album and track browsing currently live in Search. Cover placeholders and cover-grid-ready layouts exist today, but real cover image discovery, caching, and rendering are planned for Phase 9.
 
 ## Requirements
 
@@ -42,6 +42,15 @@ The import screen defaults to `musicbee-library.tsv`. Relative paths are resolve
 npm run build
 npm run tauri:build
 ```
+
+## Roadmap
+
+- Phase 5: Albums workspace with a dedicated album index, album detail pages, track lists, calculations, and album-level export.
+- Phase 6: Artists workspace with album-artist index pages, artist album lists, and artist-level summary stats.
+- Phase 7: Genres workspace with canonical-genre index pages, genre album lists, and genre-level summary stats.
+- Phase 8: Music Tools workspace with validation and cleanup issue lists.
+- Phase 9: Real cover art support. Current cover UI is placeholder-only.
+- Phase 10: External enrichment and AI features.
 
 ## Phase 4 Settings Features
 

@@ -16,7 +16,7 @@ The app should make it easy to answer questions such as:
 - How many albums from 1987 have I fully rated?
 - Which albums were newly rated since the last import?
 
-Speed is the highest priority. The UI should also be polished and functional, with room for cover art views and richer album detail pages later.
+Speed is the highest priority. The UI should also be polished and functional, with room for real cover art views later.
 
 ## 2. Source Data
 
@@ -388,7 +388,7 @@ View modes:
 
 - Table
 - Compact list
-- Cover grid, once cover support exists
+- Cover grid with placeholders now; real artwork after Phase 9 cover support
 - Album detail drill-down
 
 ### Statistics Dashboards
@@ -424,6 +424,10 @@ Album detail pages should show:
 - Track list with disc/track order, title, time, rating, love marker, filename, and path
 - Cover placeholder area for future cover art
 - Export action for the album track list
+
+Current note:
+
+- Cover placeholders exist in chart and future album layouts, but real cover art discovery, caching, and image rendering are not implemented yet.
 
 ## 9. Import, Sync, and Backups
 
@@ -567,7 +571,7 @@ The UI should optimize for repeated use:
 - No blocking UI during import.
 - Visible import progress.
 - Export actions available from searches, charts, dashboards, and album details.
-- Cover placeholders built into album and chart layouts from the start.
+- Cover placeholders built into album and chart layouts from the start; real cover images arrive in Phase 9.
 
 Recommended main navigation:
 
@@ -577,9 +581,9 @@ Recommended main navigation:
 | Charts | Implemented | Phase 3 | Built-in and custom ranked album views. |
 | Statistics | Implemented | Phase 4 | Library overview, rating progress, year/genre progress, and import/rating history. |
 | Albums | Planned | Phase 5 | Dedicated album index and album detail drill-down. Current album table browsing lives in Search. |
-| Artists | Planned | Phase 5 | Dedicated album-artist index with artist-level album lists and stats. |
-| Genres | Planned | Phase 5 | Dedicated canonical-genre index with genre-level album lists and stats. |
-| Tools | Planned | Phase 5 | Music Tools validation and cleanup issue lists. |
+| Artists | Planned | Phase 6 | Dedicated album-artist index with artist-level album lists and stats. |
+| Genres | Planned | Phase 7 | Dedicated canonical-genre index with genre-level album lists and stats. |
+| Tools | Planned | Phase 8 | Music Tools validation and cleanup issue lists. |
 | Imports | Implemented | Phase 1 | TSV import, progress, import history, and backup visibility. |
 | Settings | Implemented | Phase 4 | App preferences such as backup retention and theme. |
 
@@ -637,17 +641,36 @@ These are targets, not hard guarantees. They should be measured once implementat
 - Configurable backup retention.
 - Persisted light/dark theme preference.
 
-### Phase 5: Dedicated Library Workspaces and Tools (future)
+### Phase 5: Albums Workspace (future)
 
 - Enable the Albums navigation item with a dedicated album index.
 - Add album detail pages with track lists, calculations, and album-level export.
+- Reuse the current album filtering, sorting, pagination, and export behavior from Search where it fits.
+- Keep cover placeholders in album layouts until real cover art support is added in Phase 9.
+
+### Phase 6: Artists Workspace (future)
+
 - Enable the Artists navigation item with album-artist index pages, artist album lists, and artist-level summary stats.
+
+### Phase 7: Genres Workspace (future)
+
 - Enable the Genres navigation item with canonical-genre index pages, genre album lists, and genre-level summary stats.
+
+### Phase 8: Music Tools Workspace (future)
+
 - Enable the Tools navigation item.
 - Music Tools validation suite.
-- Cover art support.
+- Issue counts, filterable affected rows/albums, severity, and exports.
+- Later safe fix actions for selected issue types.
 
-### Phase 6: External Enrichment and AI (future)
+### Phase 9: Cover Art Support (future)
+
+- Discover real album cover images from library folders or embedded metadata.
+- Cache and serve cover images safely through the local app runtime.
+- Replace chart and album placeholder covers with real artwork when available.
+- Preserve useful placeholders for albums without available artwork.
+
+### Phase 10: External Enrichment and AI (future)
 
 - MusicBrainz integration.
 - AI playlist/recommendation features.
@@ -668,6 +691,6 @@ The following decisions are part of the first implementation unless changed late
 - If `Album Rating` is missing or `-1`, calculate album rating from tracks when every track is rated.
 - Keep albums separate by `<Album Unique Id>`, but later flag likely duplicate versions/remasters through Music Tools.
 - Keep the last 3 database backups by default.
-- Let backup retention be configurable later.
+- Keep backup retention configurable from Settings.
 - Export only visible/default columns by default.
 - Let users opt into calculated export columns such as Album Score.

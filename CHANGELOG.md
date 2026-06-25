@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.3] - 2026-06-25
+### Changed
+- Split the future sidebar roadmap into separate Albums, Artists, Genres, Tools, cover art, and enrichment phases.
+- Clarified that current cover UI is placeholder-only and real cover art support remains future Phase 9 work.
+
 ## [0.5.2] - 2026-06-25
 ### Changed
 - Updated the spec and README roadmap to document current sidebar workspace status and move dedicated Albums, Artists, Genres, and Tools work into future Phase 5.
