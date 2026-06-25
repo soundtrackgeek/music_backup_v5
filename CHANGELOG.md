@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0] - 2026-06-25
+### Added
+- Added the Phase 5 Albums workspace with a dedicated album index, album detail drill-down, ordered track lists, cover placeholders, and album-level track-list export.
+- Added exact album-id filtering for album detail and export flows so alternate versions remain distinct.
+
+### Fixed
+- Exported track rows now use per-track duration instead of album total duration for the Time column.
+
 ## [0.5.3] - 2026-06-25
 ### Changed
 - Split the future sidebar roadmap into separate Albums, Artists, Genres, Tools, cover art, and enrichment phases.

@@ -49,6 +49,7 @@ const mockRows: BrowseRow[] = [
     aeRatio: 0.2916,
     effectiveAlbumRating: 86,
     albumScore: 207.62,
+    trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
     trackNumber: null,
@@ -77,6 +78,7 @@ const mockRows: BrowseRow[] = [
     aeRatio: 0.2702,
     effectiveAlbumRating: 88,
     albumScore: 108.4,
+    trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
     trackNumber: null,
@@ -105,6 +107,7 @@ const mockRows: BrowseRow[] = [
     aeRatio: 0.2916,
     effectiveAlbumRating: 86,
     albumScore: 207.62,
+    trackSeconds: 260,
     normalizedRating: 100,
     discNumber: 1,
     trackNumber: 2,
@@ -370,7 +373,11 @@ export async function importMusicBeeTsv(sourcePath: string) {
 
 export async function searchLibrary(request: BrowseRequest) {
   if (!isTauriRuntime()) {
-    const rows = mockRows.filter((row) => (request.view === "tracks" ? row.trackId !== null : row.trackId === null));
+    const albumIds = new Set(request.filters.albumIds);
+    const rows = mockRows.filter((row) => {
+      const matchesView = request.view === "tracks" ? row.trackId !== null : row.trackId === null;
+      return matchesView && (albumIds.size === 0 || albumIds.has(row.albumId));
+    });
     return {
       view: request.view,
       rows,

@@ -79,7 +79,7 @@ const navigation = [
   { label: "Search", icon: Search, enabled: true },
   { label: "Charts", icon: BarChart3, enabled: true },
   { label: "Statistics", icon: Activity, enabled: true },
-  { label: "Albums", icon: Album, enabled: false },
+  { label: "Albums", icon: Album, enabled: true },
   { label: "Artists", icon: UsersRound, enabled: false },
   { label: "Genres", icon: Tags, enabled: false },
   { label: "Tools", icon: Wrench, enabled: false },
@@ -145,6 +145,7 @@ function createTextFilter(): TextFilter {
 
 function createFilters(): BrowseFilters {
   return {
+    albumIds: [],
     albumTitle: createTextFilter(),
     trackTitle: createTextFilter(),
     albumArtist: createTextFilter(),
@@ -187,6 +188,14 @@ function createRequest(view: BrowseView = "albums"): BrowseRequest {
     limit: 50,
     offset: 0,
   };
+}
+
+function createAlbumTracksRequest(albumId: string): BrowseRequest {
+  const request = createRequest("tracks");
+  request.filters.albumIds = [albumId];
+  request.sort = { field: "trackNumber", direction: "asc" };
+  request.limit = 500;
+  return request;
 }
 
 function createChartConfig(): ChartConfig {
@@ -638,6 +647,274 @@ function ResultTable({ response }: { response: BrowseResponse | null }) {
   );
 }
 
+function albumInitial(row: BrowseRow | null) {
+  return row?.album?.trim().slice(0, 1).toUpperCase() || "A";
+}
+
+function formatTrackPosition(row: BrowseRow) {
+  const disc = row.discNumber?.toString() ?? "";
+  const track = row.trackNumber?.toString() ?? "";
+  if (disc && track) return `${disc}.${track}`;
+  return disc || track;
+}
+
+function AlbumIndexTable({
+  response,
+  selectedAlbumId,
+  onSelect,
+}: {
+  response: BrowseResponse | null;
+  selectedAlbumId: string | null;
+  onSelect: (albumId: string) => void;
+}) {
+  if (!response) {
+    return (
+      <div className="empty-state large">
+        <Album size={20} />
+        <span>No albums loaded.</span>
+      </div>
+    );
+  }
+
+  if (response.rows.length === 0) {
+    return (
+      <div className="empty-state large">
+        <FileSearch size={20} />
+        <span>No albums match.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="result-table album-index-results" role="table">
+      <div className="result-table-head" role="row">
+        <span role="columnheader">Album</span>
+        <span role="columnheader">Artist</span>
+        <span role="columnheader">Year</span>
+        <span role="columnheader">Genre</span>
+        <span role="columnheader">Tracks</span>
+        <span role="columnheader">Complete</span>
+        <span role="columnheader">Score</span>
+      </div>
+      {response.rows.map((row) => {
+        const isSelected = row.albumId === selectedAlbumId;
+        return (
+          <div
+            className={`result-table-row selectable${isSelected ? " selected" : ""}`}
+            role="row"
+            aria-selected={isSelected}
+            tabIndex={0}
+            key={row.id}
+            onClick={() => onSelect(row.albumId)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect(row.albumId);
+              }
+            }}
+          >
+            <span className="album-index-title" role="cell">
+              <span className="cover-placeholder cover-mini" aria-hidden="true">
+                <span>{albumInitial(row)}</span>
+              </span>
+              <span>
+                <strong>{row.album ?? "Untitled"}</strong>
+                <small>{formatMinutes(row.totalSeconds)}</small>
+              </span>
+            </span>
+            <span role="cell">{row.albumArtistDisplay ?? ""}</span>
+            <span role="cell">{row.year ?? ""}</span>
+            <span role="cell">{row.canonicalGenre ?? ""}</span>
+            <span role="cell">{row.totalTracks ?? ""}</span>
+            <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
+            <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AlbumTrackTable({
+  response,
+  isLoading,
+}: {
+  response: BrowseResponse | null;
+  isLoading: boolean;
+}) {
+  if (!response) {
+    return (
+      <div className="empty-state large">
+        <ListMusic size={20} />
+        <span>{isLoading ? "Loading track list." : "Select an album."}</span>
+      </div>
+    );
+  }
+
+  if (response.rows.length === 0) {
+    return (
+      <div className="empty-state large">
+        <FileSearch size={20} />
+        <span>No tracks found.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="result-table album-track-results" role="table">
+      <div className="result-table-head" role="row">
+        <span role="columnheader">#</span>
+        <span role="columnheader">Track</span>
+        <span role="columnheader">Artist</span>
+        <span role="columnheader">Time</span>
+        <span role="columnheader">Rating</span>
+        <span role="columnheader">File</span>
+      </div>
+      {response.rows.map((row) => (
+        <div className="result-table-row" role="row" key={row.id}>
+          <span role="cell">{formatTrackPosition(row)}</span>
+          <span role="cell">
+            <strong>{row.title ?? "Untitled"}</strong>
+            <small>{row.love === "L" ? "Loved" : row.canonicalGenre ?? ""}</small>
+          </span>
+          <span role="cell">{row.displayArtist ?? row.albumArtistDisplay ?? ""}</span>
+          <span role="cell">{formatMinutes(row.trackSeconds)}</span>
+          <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
+          <span role="cell" title={row.filePath ?? ""}>
+            {row.filename ?? ""}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AlbumDetailPanel({
+  album,
+  tracks,
+  isLoading,
+  includeCalculated,
+  onIncludeCalculatedChange,
+  exportResult,
+  onExport,
+}: {
+  album: BrowseRow | null;
+  tracks: BrowseResponse | null;
+  isLoading: boolean;
+  includeCalculated: boolean;
+  onIncludeCalculatedChange: (value: boolean) => void;
+  exportResult: ExportResult | null;
+  onExport: (format: string) => Promise<void>;
+}) {
+  if (!album) {
+    return (
+      <aside className="detail-panel album-detail" aria-label="Album details">
+        <div className="detail-header">
+          <Album size={20} />
+          <div>
+            <h2>Album Detail</h2>
+            <p>Select an album from the index</p>
+          </div>
+        </div>
+        <div className="empty-state">
+          <FileSearch size={20} />
+          <span>No album selected.</span>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="detail-panel album-detail" aria-label="Album details">
+      <div className="detail-header">
+        <Album size={20} />
+        <div>
+          <h2>{album.album ?? "Untitled"}</h2>
+          <p>{[album.albumArtistDisplay, album.year, album.canonicalGenre].filter(Boolean).join(" / ")}</p>
+        </div>
+      </div>
+
+      <div className="cover-placeholder album-cover-large" aria-hidden="true">
+        <span>{albumInitial(album)}</span>
+      </div>
+
+      <dl className="run-details album-detail-stats">
+        <div>
+          <dt>Tracks</dt>
+          <dd>
+            {formatNumber(album.totalTracks)}
+            {album.ratedTracks != null ? ` / ${formatNumber(album.ratedTracks)} rated` : ""}
+            {isLoading ? " / loading" : ""}
+          </dd>
+        </div>
+        <div>
+          <dt>Total time</dt>
+          <dd>{formatMinutes(album.totalSeconds)}</dd>
+        </div>
+        <div>
+          <dt>Rating completeness</dt>
+          <dd>{formatPercent(album.ratingCompleteness)}</dd>
+        </div>
+        <div>
+          <dt>Album rating</dt>
+          <dd>{album.effectiveAlbumRating ?? ""}</dd>
+        </div>
+        <div>
+          <dt>TMOE</dt>
+          <dd>{formatMinutes(album.tmoeSeconds)}</dd>
+        </div>
+        <div>
+          <dt>AE</dt>
+          <dd>{formatPercent(album.aeRatio, 2)}</dd>
+        </div>
+        <div>
+          <dt>Loved tracks</dt>
+          <dd>{formatNumber(album.lovedTracks)}</dd>
+        </div>
+        <div>
+          <dt>Album Score</dt>
+          <dd>{album.albumScore?.toFixed(3) ?? ""}</dd>
+        </div>
+        <div>
+          <dt>Publisher</dt>
+          <dd>{album.publisher ?? ""}</dd>
+        </div>
+        <div>
+          <dt>Release year</dt>
+          <dd>{album.releaseYear ?? ""}</dd>
+        </div>
+      </dl>
+
+      <section className="export-box">
+        <label className="toggle-row">
+          <input
+            type="checkbox"
+            checked={includeCalculated}
+            onChange={(event) => onIncludeCalculatedChange(event.target.checked)}
+          />
+          <span>Calculated columns</span>
+        </label>
+        <div className="export-grid">
+          {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
+            <button type="button" key={format} onClick={() => void onExport(format)}>
+              <Download size={16} />
+              <span>{format.toUpperCase()}</span>
+            </button>
+          ))}
+        </div>
+        {exportResult ? (
+          <div className="export-result">
+            <Check size={17} />
+            <span>
+              {formatNumber(exportResult.rowCount)} tracks to {exportResult.path}
+            </span>
+          </div>
+        ) : null}
+      </section>
+    </aside>
+  );
+}
+
 function ChartResults({ response, config }: { response: BrowseResponse | null; config: ChartConfig }) {
   if (!response) {
     return (
@@ -905,6 +1182,20 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [includeCalculated, setIncludeCalculated] = useState(false);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  const [albumRequest, setAlbumRequest] = useState<BrowseRequest>(() => {
+    const request = createRequest("albums");
+    request.limit = 25;
+    return request;
+  });
+  const [albumResponse, setAlbumResponse] = useState<BrowseResponse | null>(null);
+  const [albumError, setAlbumError] = useState<string | null>(null);
+  const [isAlbumLoading, setIsAlbumLoading] = useState(false);
+  const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
+  const [albumTracksResponse, setAlbumTracksResponse] = useState<BrowseResponse | null>(null);
+  const [albumTracksError, setAlbumTracksError] = useState<string | null>(null);
+  const [isAlbumTracksLoading, setIsAlbumTracksLoading] = useState(false);
+  const [albumIncludeCalculated, setAlbumIncludeCalculated] = useState(false);
+  const [albumExportResult, setAlbumExportResult] = useState<ExportResult | null>(null);
   const [chartConfig, setChartConfig] = useState<ChartConfig>(() => createChartConfig());
   const [chartResponse, setChartResponse] = useState<BrowseResponse | null>(null);
   const [chartName, setChartName] = useState("");
@@ -957,6 +1248,15 @@ export default function App() {
     document.documentElement.dataset.theme = settings.darkMode ? "dark" : "light";
   }, [settings.darkMode]);
 
+  const lastRun = runs[0] ?? status?.lastImport ?? null;
+  const currentFilters = request.filters;
+  const albumFilters = albumRequest.filters;
+  const chartRequest = useMemo(() => chartRequestFromConfig(chartConfig), [chartConfig]);
+  const albumTracksRequest = useMemo(
+    () => (selectedAlbumId ? createAlbumTracksRequest(selectedAlbumId) : null),
+    [selectedAlbumId],
+  );
+
   useEffect(() => {
     if (activeSection !== "Search") {
       return;
@@ -991,9 +1291,87 @@ export default function App() {
     };
   }, [activeSection, request]);
 
-  const lastRun = runs[0] ?? status?.lastImport ?? null;
-  const currentFilters = request.filters;
-  const chartRequest = useMemo(() => chartRequestFromConfig(chartConfig), [chartConfig]);
+  useEffect(() => {
+    if (activeSection !== "Albums") {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setIsAlbumLoading(true);
+      setAlbumError(null);
+      void searchLibrary(albumRequest)
+        .then((nextResponse) => {
+          if (!cancelled) {
+            setAlbumResponse(nextResponse);
+          }
+        })
+        .catch((searchError) => {
+          if (!cancelled) {
+            setAlbumError(searchError instanceof Error ? searchError.message : String(searchError));
+            setAlbumResponse(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsAlbumLoading(false);
+          }
+        });
+    }, 160);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeSection, albumRequest]);
+
+  useEffect(() => {
+    if (activeSection !== "Albums") {
+      return;
+    }
+
+    const rows = albumResponse?.rows ?? [];
+    if (rows.length === 0) {
+      setSelectedAlbumId(null);
+      return;
+    }
+
+    setSelectedAlbumId((previous) =>
+      previous && rows.some((row) => row.albumId === previous) ? previous : rows[0].albumId,
+    );
+  }, [activeSection, albumResponse]);
+
+  useEffect(() => {
+    if (activeSection !== "Albums" || !albumTracksRequest) {
+      setAlbumTracksResponse(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsAlbumTracksLoading(true);
+    setAlbumTracksError(null);
+    void searchLibrary(albumTracksRequest)
+      .then((nextResponse) => {
+        if (!cancelled) {
+          setAlbumTracksResponse(nextResponse);
+        }
+      })
+      .catch((searchError) => {
+        if (!cancelled) {
+          setAlbumTracksError(searchError instanceof Error ? searchError.message : String(searchError));
+          setAlbumTracksResponse(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsAlbumTracksLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, albumTracksRequest]);
 
   useEffect(() => {
     if (activeSection !== "Charts") {
@@ -1150,6 +1528,95 @@ export default function App() {
     return nextChips;
   }, [currentFilters, request.searchText]);
 
+  const albumChips = useMemo(() => {
+    const nextChips: { key: string; label: string; remove: () => void }[] = [];
+    const addTextChip = (key: keyof BrowseFilters, label: string, filter: TextFilter) => {
+      const chipLabel = textFilterLabel(label, filter);
+      if (chipLabel) {
+        nextChips.push({
+          key,
+          label: chipLabel,
+          remove: () => updateAlbumFilter(key, createTextFilter()),
+        });
+      }
+    };
+
+    if (albumRequest.searchText.trim()) {
+      nextChips.push({
+        key: "searchText",
+        label: `Search "${albumRequest.searchText.trim()}"`,
+        remove: () => setAlbumRequest((previous) => ({ ...previous, searchText: "", offset: 0 })),
+      });
+    }
+
+    addTextChip("albumTitle", "Album", albumFilters.albumTitle);
+    addTextChip("albumArtist", "Album artist", albumFilters.albumArtist);
+    addTextChip("publisher", "Publisher", albumFilters.publisher);
+
+    if (albumFilters.genres.length) {
+      nextChips.push({
+        key: "genres",
+        label: `Genres: ${albumFilters.genres.join(", ")}`,
+        remove: () => updateAlbumFilter("genres", []),
+      });
+    }
+    if (albumFilters.excludedGenres.length) {
+      nextChips.push({
+        key: "excludedGenres",
+        label: `Excluding: ${albumFilters.excludedGenres.join(", ")}`,
+        remove: () => updateAlbumFilter("excludedGenres", []),
+      });
+    }
+
+    addRangeChip(nextChips, "year", "Year", albumFilters.yearFrom, albumFilters.yearTo, () => {
+      updateAlbumFilters({ yearFrom: null, yearTo: null });
+    });
+    addRangeChip(
+      nextChips,
+      "minutes",
+      "Minutes",
+      albumFilters.totalMinutesMin,
+      albumFilters.totalMinutesMax,
+      () => updateAlbumFilters({ totalMinutesMin: null, totalMinutesMax: null }),
+    );
+    addRangeChip(
+      nextChips,
+      "albumRating",
+      "Album rating",
+      albumFilters.albumRatingMin,
+      albumFilters.albumRatingMax,
+      () => updateAlbumFilters({ albumRatingMin: null, albumRatingMax: null }),
+    );
+    addRangeChip(
+      nextChips,
+      "trackCount",
+      "Tracks",
+      albumFilters.trackCountMin,
+      albumFilters.trackCountMax,
+      () => updateAlbumFilters({ trackCountMin: null, trackCountMax: null }),
+    );
+
+    if (albumFilters.ratingCompletenessMin != null) {
+      nextChips.push({
+        key: "ratingCompletenessMin",
+        label: `Complete >= ${albumFilters.ratingCompletenessMin}%`,
+        remove: () => updateAlbumFilter("ratingCompletenessMin", null),
+      });
+    }
+    if (albumFilters.lovedTracksMin != null || albumFilters.lovedTracksMax != null) {
+      addRangeChip(
+        nextChips,
+        "lovedTracks",
+        "Loved",
+        albumFilters.lovedTracksMin,
+        albumFilters.lovedTracksMax,
+        () => updateAlbumFilters({ lovedTracksMin: null, lovedTracksMax: null }),
+      );
+    }
+
+    return nextChips;
+  }, [albumFilters, albumRequest.searchText]);
+
   function updateFilter<K extends keyof BrowseFilters>(key: K, value: BrowseFilters[K]) {
     setRequest((previous) => ({
       ...previous,
@@ -1181,6 +1648,38 @@ export default function App() {
       limit: previous.limit,
     }));
     setExportResult(null);
+  }
+
+  function updateAlbumFilter<K extends keyof BrowseFilters>(key: K, value: BrowseFilters[K]) {
+    setAlbumRequest((previous) => ({
+      ...previous,
+      filters: { ...previous.filters, [key]: value },
+      offset: 0,
+    }));
+    setAlbumExportResult(null);
+  }
+
+  function updateAlbumFilters(values: Partial<BrowseFilters>) {
+    setAlbumRequest((previous) => ({
+      ...previous,
+      filters: { ...previous.filters, ...values },
+      offset: 0,
+    }));
+    setAlbumExportResult(null);
+  }
+
+  function clearAlbumQuery() {
+    setAlbumRequest((previous) => {
+      const nextRequest = createRequest("albums");
+      nextRequest.limit = previous.limit;
+      return nextRequest;
+    });
+    setAlbumExportResult(null);
+  }
+
+  function selectAlbum(albumId: string) {
+    setSelectedAlbumId(albumId);
+    setAlbumExportResult(null);
   }
 
   async function startImport() {
@@ -1232,6 +1731,18 @@ export default function App() {
   async function runExport(format: string) {
     const result = await exportSearch(request, format, includeCalculated);
     setExportResult(result);
+  }
+
+  async function runAlbumExport(format: string) {
+    if (!selectedAlbumId) {
+      return;
+    }
+    const result = await exportSearch(
+      createAlbumTracksRequest(selectedAlbumId),
+      format,
+      albumIncludeCalculated,
+    );
+    setAlbumExportResult(result);
   }
 
   function updateChartConfig(values: Partial<ChartConfig>) {
@@ -1331,6 +1842,12 @@ export default function App() {
   const total = response?.total ?? 0;
   const pageStart = total === 0 ? 0 : request.offset + 1;
   const pageEnd = Math.min(total, request.offset + request.limit);
+  const albumTotal = albumResponse?.total ?? 0;
+  const albumPageStart = albumTotal === 0 ? 0 : albumRequest.offset + 1;
+  const albumPageEnd = Math.min(albumTotal, albumRequest.offset + albumRequest.limit);
+  const selectedAlbum =
+    albumResponse?.rows.find((row) => row.albumId === selectedAlbumId) ?? null;
+  const selectedAlbumTrackCount = selectedAlbum?.totalTracks ?? albumTracksResponse?.total ?? 0;
   const chartTotal = chartResponse?.total ?? 0;
   const chartRows = chartResponse?.rows.length ?? 0;
   const ratingAlbumTotal =
@@ -1680,6 +2197,257 @@ export default function App() {
 
             {chartError ? <p className="error-message">{chartError}</p> : null}
             <ChartResults response={chartResponse} config={chartConfig} />
+          </section>
+        </section>
+      ) : activeSection === "Albums" ? (
+        <section className="workspace albums-workspace">
+          <header className="topbar">
+            <div>
+              <h1>Albums</h1>
+              <p>Dedicated album index, drill-down calculations, ordered tracks, and album export.</p>
+            </div>
+            <div className="topbar-actions">
+              <button className="icon-button" type="button" aria-label="Clear album filters" onClick={clearAlbumQuery}>
+                <RotateCcw size={18} />
+              </button>
+              <button className="icon-button" type="button" aria-label="Refresh albums" onClick={() => void loadData()}>
+                <Database size={18} />
+              </button>
+            </div>
+          </header>
+
+          <section className="metric-grid" aria-label="Album summary">
+            <Metric label="Library albums" value={formatNumber(status?.albumCount)} tone="teal" icon={Album} />
+            <Metric label="Matches" value={formatNumber(albumTotal)} tone="amber" icon={Search} />
+            <Metric label="Tracks" value={formatNumber(selectedAlbumTrackCount)} icon={ListMusic} />
+            <Metric
+              label="Complete"
+              value={selectedAlbum ? formatPercent(selectedAlbum.ratingCompleteness) : "Select"}
+              icon={Gauge}
+            />
+          </section>
+
+          <section className="query-panel album-query-panel">
+            <div className="search-row album-search-row">
+              <div className="search-input">
+                <Search size={18} />
+                <input
+                  value={albumRequest.searchText}
+                  onChange={(event) =>
+                    setAlbumRequest((previous) => ({ ...previous, searchText: event.target.value, offset: 0 }))
+                  }
+                  placeholder="Search albums, artists, genres, publishers"
+                />
+              </div>
+              <SelectField
+                label="Sort"
+                value={albumRequest.sort.field}
+                onChange={(field) =>
+                  setAlbumRequest((previous) => ({
+                    ...previous,
+                    sort: { ...previous.sort, field },
+                    offset: 0,
+                  }))
+                }
+                options={[
+                  { value: "album", label: "Album" },
+                  { value: "artist", label: "Artist" },
+                  { value: "year", label: "Year" },
+                  { value: "genre", label: "Genre" },
+                  { value: "totalMinutes", label: "Minutes" },
+                  { value: "trackCount", label: "Tracks" },
+                  { value: "albumRating", label: "Rating" },
+                  { value: "ratingCompleteness", label: "Completeness" },
+                  { value: "lovedTracks", label: "Loved" },
+                  { value: "albumScore", label: "Score" },
+                ]}
+              />
+            </div>
+
+            <div className="filter-grid">
+              <TextCriterion
+                label="Album title"
+                filter={albumFilters.albumTitle}
+                onChange={(filter) => updateAlbumFilter("albumTitle", filter)}
+              />
+              <TextCriterion
+                label="Album artist"
+                filter={albumFilters.albumArtist}
+                onChange={(filter) => updateAlbumFilter("albumArtist", filter)}
+              />
+              <TextCriterion
+                label="Publisher"
+                filter={albumFilters.publisher}
+                onChange={(filter) => updateAlbumFilter("publisher", filter)}
+              />
+              <label className="criterion">
+                <span>Genres</span>
+                <input
+                  value={albumFilters.genres.join(", ")}
+                  onChange={(event) => updateAlbumFilter("genres", parseList(event.target.value))}
+                  placeholder="Synthpop, AOR"
+                />
+              </label>
+              <label className="criterion">
+                <span>Exclude genres</span>
+                <input
+                  value={albumFilters.excludedGenres.join(", ")}
+                  onChange={(event) => updateAlbumFilter("excludedGenres", parseList(event.target.value))}
+                />
+              </label>
+              <NumberField
+                label="Year from"
+                value={albumFilters.yearFrom}
+                onChange={(value) => updateAlbumFilter("yearFrom", value)}
+              />
+              <NumberField
+                label="Year to"
+                value={albumFilters.yearTo}
+                onChange={(value) => updateAlbumFilter("yearTo", value)}
+              />
+              <NumberField
+                label="Minutes min"
+                value={albumFilters.totalMinutesMin}
+                step={0.5}
+                onChange={(value) => updateAlbumFilter("totalMinutesMin", value)}
+              />
+              <NumberField
+                label="Minutes max"
+                value={albumFilters.totalMinutesMax}
+                step={0.5}
+                onChange={(value) => updateAlbumFilter("totalMinutesMax", value)}
+              />
+              <NumberField
+                label="Tracks min"
+                value={albumFilters.trackCountMin}
+                onChange={(value) => updateAlbumFilter("trackCountMin", value)}
+              />
+              <NumberField
+                label="Album rating min"
+                value={albumFilters.albumRatingMin}
+                min={0}
+                max={100}
+                onChange={(value) => updateAlbumFilter("albumRatingMin", value)}
+              />
+              <label className="criterion slider-criterion">
+                <span>Completeness</span>
+                <div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={albumFilters.ratingCompletenessMin ?? 0}
+                    onChange={(event) => updateAlbumFilter("ratingCompletenessMin", Number(event.target.value))}
+                  />
+                  <strong>{albumFilters.ratingCompletenessMin ?? 0}%</strong>
+                </div>
+              </label>
+            </div>
+
+            <div className="query-footer">
+              <div className="chip-row inline" aria-label="Active album filters">
+                {albumChips.length === 0 ? (
+                  <span className="chip-empty">No active filters</span>
+                ) : (
+                  albumChips.map((chip) => (
+                    <button className="filter-chip" type="button" key={chip.key} onClick={chip.remove}>
+                      <span>{chip.label}</span>
+                      <X size={14} />
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div className="sort-controls">
+                <SelectField
+                  label="Direction"
+                  value={albumRequest.sort.direction}
+                  onChange={(direction) =>
+                    setAlbumRequest((previous) => ({
+                      ...previous,
+                      sort: { ...previous.sort, direction: direction as "asc" | "desc" },
+                      offset: 0,
+                    }))
+                  }
+                  options={[
+                    { value: "asc", label: "Ascending" },
+                    { value: "desc", label: "Descending" },
+                  ]}
+                />
+                <NumberField
+                  label="Rows"
+                  value={albumRequest.limit}
+                  min={10}
+                  max={500}
+                  onChange={(value) =>
+                    setAlbumRequest((previous) => ({ ...previous, limit: value ?? 25, offset: 0 }))
+                  }
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="table-panel" aria-label="Album index">
+            <div className="panel-heading compact">
+              <div>
+                <h2>Album index</h2>
+                <p>
+                  {isAlbumLoading
+                    ? "Loading albums"
+                    : `${formatNumber(albumPageStart)}-${formatNumber(albumPageEnd)} of ${formatNumber(albumTotal)}`}
+                </p>
+              </div>
+              <div className="pager">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Previous album page"
+                  disabled={albumRequest.offset === 0}
+                  onClick={() =>
+                    setAlbumRequest((previous) => ({
+                      ...previous,
+                      offset: Math.max(0, previous.offset - previous.limit),
+                    }))
+                  }
+                >
+                  <ChevronLeft size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Next album page"
+                  disabled={albumRequest.offset + albumRequest.limit >= albumTotal}
+                  onClick={() =>
+                    setAlbumRequest((previous) => ({
+                      ...previous,
+                      offset: previous.offset + previous.limit,
+                    }))
+                  }
+                >
+                  <ChevronRight size={17} />
+                </button>
+              </div>
+            </div>
+
+            {albumError ? <p className="error-message">{albumError}</p> : null}
+            <AlbumIndexTable response={albumResponse} selectedAlbumId={selectedAlbumId} onSelect={selectAlbum} />
+          </section>
+
+          <section className="table-panel" aria-label="Selected album tracks">
+            <div className="panel-heading compact">
+              <div>
+                <h2>{selectedAlbum?.album ?? "Track list"}</h2>
+                <p>
+                  {isAlbumTracksLoading
+                    ? "Loading tracks"
+                    : `${formatNumber(albumTracksResponse?.rows.length ?? 0)} of ${formatNumber(selectedAlbumTrackCount)} tracks`}
+                </p>
+              </div>
+              <span className="run-status">{selectedAlbum?.year ?? "Album"}</span>
+            </div>
+
+            {albumTracksError ? <p className="error-message">{albumTracksError}</p> : null}
+            <AlbumTrackTable response={albumTracksResponse} isLoading={isAlbumTracksLoading} />
           </section>
         </section>
       ) : activeSection === "Statistics" ? (
@@ -2438,6 +3206,16 @@ export default function App() {
             ) : null}
           </section>
         </aside>
+      ) : activeSection === "Albums" ? (
+        <AlbumDetailPanel
+          album={selectedAlbum}
+          tracks={albumTracksResponse}
+          isLoading={isAlbumTracksLoading}
+          includeCalculated={albumIncludeCalculated}
+          onIncludeCalculatedChange={(value) => setAlbumIncludeCalculated(value)}
+          exportResult={albumExportResult}
+          onExport={runAlbumExport}
+        />
       ) : activeSection === "Statistics" ? (
         <aside className="detail-panel statistics-detail" aria-label="Statistics details">
           <div className="detail-header">

@@ -59,6 +59,7 @@ export type TextFilter = {
 };
 
 export type BrowseFilters = {
+  albumIds: string[];
   albumTitle: TextFilter;
   trackTitle: TextFilter;
   albumArtist: TextFilter;
@@ -122,6 +123,7 @@ export type BrowseRow = {
   aeRatio: number | null;
   effectiveAlbumRating: number | null;
   albumScore: number | null;
+  trackSeconds: number | null;
   normalizedRating: number | null;
   discNumber: number | null;
   trackNumber: number | null;

@@ -1,7 +1,7 @@
 # Music Library App Specification
 
 Date: 2026-06-25
-Status: Draft, current implementation through Phase 4
+Status: Draft, current implementation through Phase 5
 
 ## 1. Product Goal
 
@@ -580,7 +580,7 @@ Recommended main navigation:
 | Search | Implemented | Phase 2 | Primary album and track browsing, filters, saved searches, and exports. |
 | Charts | Implemented | Phase 3 | Built-in and custom ranked album views. |
 | Statistics | Implemented | Phase 4 | Library overview, rating progress, year/genre progress, and import/rating history. |
-| Albums | Planned | Phase 5 | Dedicated album index and album detail drill-down. Current album table browsing lives in Search. |
+| Albums | Implemented | Phase 5 | Dedicated album index and album detail drill-down. |
 | Artists | Planned | Phase 6 | Dedicated album-artist index with artist-level album lists and stats. |
 | Genres | Planned | Phase 7 | Dedicated canonical-genre index with genre-level album lists and stats. |
 | Tools | Planned | Phase 8 | Music Tools validation and cleanup issue lists. |
@@ -641,7 +641,7 @@ These are targets, not hard guarantees. They should be measured once implementat
 - Configurable backup retention.
 - Persisted light/dark theme preference.
 
-### Phase 5: Albums Workspace (future)
+### Phase 5: Albums Workspace (implemented)
 
 - Enable the Albums navigation item with a dedicated album index.
 - Add album detail pages with track lists, calculations, and album-level export.

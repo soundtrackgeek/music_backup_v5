@@ -447,6 +447,14 @@ button {
   border-top: 1px solid #e4ebe8;
 }
 
+.chip-row.inline {
+  flex: 1 1 auto;
+  min-width: 220px;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .chip-empty {
   color: #7a8782;
   font-size: 12px;
@@ -527,6 +535,11 @@ button {
 
 .chart-builder .search-row {
   grid-template-columns: minmax(320px, 1fr) 300px;
+}
+
+.album-search-row {
+  grid-template-columns: minmax(320px, 1fr) 180px;
+  align-items: end;
 }
 
 .chart-options {
@@ -647,6 +660,24 @@ button {
   font-size: 38px;
   line-height: 1;
   font-weight: 760;
+}
+
+.cover-mini {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+}
+
+.cover-mini span {
+  font-size: 16px;
+}
+
+.album-cover-large {
+  margin-top: 24px;
+}
+
+.album-cover-large span {
+  font-size: 72px;
 }
 
 .chart-grid-item strong,
@@ -1078,6 +1109,44 @@ button {
   grid-template-columns:
     minmax(190px, 2fr) minmax(150px, 1.4fr) minmax(140px, 1.2fr) 64px 64px
     minmax(140px, 1.1fr);
+}
+
+.album-index-results .result-table-head,
+.album-index-results .result-table-row {
+  grid-template-columns:
+    minmax(240px, 2.2fr) minmax(150px, 1.35fr) 64px minmax(104px, 1fr) 64px 84px
+    72px;
+  min-width: 860px;
+}
+
+.album-track-results .result-table-head,
+.album-track-results .result-table-row {
+  grid-template-columns: 58px minmax(220px, 2fr) minmax(150px, 1.25fr) 72px 72px minmax(170px, 1.2fr);
+  min-width: 850px;
+}
+
+.result-table-row.selectable {
+  cursor: pointer;
+}
+
+.result-table-row.selectable:hover,
+.result-table-row.selectable:focus-visible {
+  background: #f4faf8;
+  outline: none;
+}
+
+.result-table-row.selected {
+  background: #eaf6f3;
+}
+
+.album-index-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.album-index-title > span:last-child {
+  min-width: 0;
 }
 
 .result-table-row span,
@@ -1512,6 +1581,15 @@ button {
     #13231f;
 }
 
+:root[data-theme="dark"] .result-table-row.selectable:hover,
+:root[data-theme="dark"] .result-table-row.selectable:focus-visible {
+  background: #182923;
+}
+
+:root[data-theme="dark"] .result-table-row.selected {
+  background: #173c36;
+}
+
 :root[data-theme="dark"] .chip-row {
   border-color: #2f3d38;
 }
@@ -1564,6 +1642,7 @@ button {
   }
 
   .search-row,
+  .album-search-row,
   .chart-builder .search-row,
   .query-footer {
     grid-template-columns: 1fr;
@@ -1596,6 +1675,10 @@ button {
 
   .album-results .result-table-head,
   .album-results .result-table-row,
+  .album-index-results .result-table-head,
+  .album-index-results .result-table-row,
+  .album-track-results .result-table-head,
+  .album-track-results .result-table-row,
   .chart-results .result-table-head,
   .chart-results .result-table-row,
   .track-results .result-table-head,

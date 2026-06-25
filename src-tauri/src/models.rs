@@ -86,6 +86,8 @@ impl Default for TextFilter {
 #[serde(rename_all = "camelCase")]
 pub struct BrowseFilters {
     #[serde(default)]
+    pub album_ids: Vec<String>,
+    #[serde(default)]
     pub album_title: TextFilter,
     #[serde(default)]
     pub track_title: TextFilter,
@@ -210,6 +212,7 @@ pub struct BrowseRow {
     pub ae_ratio: Option<f64>,
     pub effective_album_rating: Option<i32>,
     pub album_score: Option<f64>,
+    pub track_seconds: Option<i64>,
     pub normalized_rating: Option<i32>,
     pub disc_number: Option<i32>,
     pub track_number: Option<i32>,

@@ -1242,6 +1242,7 @@ fn search_library(
             a.ae_ratio,
             a.effective_album_rating,
             a.album_score,
+            t.time_seconds,
             t.normalized_rating,
             t.disc_number,
             t.track_number,
@@ -1272,6 +1273,7 @@ fn search_library(
             a.ae_ratio,
             a.effective_album_rating,
             a.album_score,
+            NULL,
             NULL,
             NULL,
             NULL,
@@ -1338,12 +1340,13 @@ fn browse_row_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BrowseRow> {
         ae_ratio: row.get(17)?,
         effective_album_rating: row.get(18)?,
         album_score: row.get(19)?,
-        normalized_rating: row.get(20)?,
-        disc_number: row.get(21)?,
-        track_number: row.get(22)?,
-        love: row.get(23)?,
-        file_path: row.get(24)?,
-        filename: row.get(25)?,
+        track_seconds: row.get(20)?,
+        normalized_rating: row.get(21)?,
+        disc_number: row.get(22)?,
+        track_number: row.get(23)?,
+        love: row.get(24)?,
+        file_path: row.get(25)?,
+        filename: row.get(26)?,
     })
 }
 
@@ -1377,6 +1380,13 @@ fn build_where_clause(
         }
         values.push(Value::Text(query));
     }
+
+    add_album_id_condition(
+        &mut conditions,
+        &mut values,
+        if is_tracks { "t.album_id" } else { "a.id" },
+        &filters.album_ids,
+    );
 
     if is_tracks {
         add_text_condition(
@@ -1589,6 +1599,31 @@ fn build_where_clause(
     };
 
     (where_sql, values)
+}
+
+fn add_album_id_condition(
+    conditions: &mut Vec<String>,
+    values: &mut Vec<Value>,
+    field: &str,
+    album_ids: &[String],
+) {
+    let normalized = album_ids
+        .iter()
+        .map(|album_id| album_id.trim())
+        .filter(|album_id| !album_id.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+
+    if normalized.is_empty() {
+        return;
+    }
+
+    let placeholders = std::iter::repeat("?")
+        .take(normalized.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+    conditions.push(format!("{field} IN ({placeholders})"));
+    values.extend(normalized.into_iter().map(Value::Text));
 }
 
 fn add_text_condition(
@@ -2110,7 +2145,7 @@ fn export_table(
                     row.normalized_rating
                         .map(|rating| format!("{:.0}", f64::from(rating) / 20.0))
                         .unwrap_or_default(),
-                    row.total_seconds
+                    row.track_seconds
                         .map(format_seconds_as_minutes)
                         .unwrap_or_default(),
                     optional_text(&row.love),
@@ -2255,6 +2290,36 @@ mod tests {
             response.rows[0].title.as_deref(),
             Some("What Have I Done to Deserve This?")
         );
+        assert_eq!(response.rows[0].track_seconds, Some(260));
+    }
+
+    #[test]
+    fn filters_by_exact_album_id_and_exports_track_time() {
+        let conn = seeded_connection();
+        let mut request = BrowseRequest::default();
+        request.view = "tracks".to_string();
+        request.filters.album_ids = vec!["mb:test".to_string()];
+        request.sort = BrowseSort {
+            field: "trackNumber".to_string(),
+            direction: "asc".to_string(),
+        };
+
+        let response = search_library(&conn, request, 50).expect("search album tracks");
+        let (headers, rows) = export_table("tracks", &response.rows, false);
+        let time_index = headers
+            .iter()
+            .position(|header| *header == "Time")
+            .expect("time column");
+
+        assert_eq!(response.total, 1);
+        assert_eq!(rows[0][time_index], "4.3");
+
+        let mut missing_request = BrowseRequest::default();
+        missing_request.filters.album_ids = vec!["mb:missing".to_string()];
+        let missing_response =
+            search_library(&conn, missing_request, 50).expect("search missing album");
+
+        assert_eq!(missing_response.total, 0);
     }
 
     #[test]
