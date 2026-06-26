@@ -1127,6 +1127,45 @@ button {
   text-transform: uppercase;
 }
 
+.table-sort-button {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 5px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.table-sort-button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-sort-button svg {
+  flex: 0 0 auto;
+  opacity: 0.55;
+}
+
+.table-sort-button.active {
+  color: #0b625c;
+}
+
+.table-sort-button:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #168279;
+  outline-offset: 2px;
+}
+
 .run-table-row,
 .result-table-row {
   color: #26322f;
@@ -1233,6 +1272,7 @@ button {
   min-width: 0;
 }
 
+.result-table-head > span,
 .result-table-row span,
 .run-table-row span {
   min-width: 0;
@@ -1653,6 +1693,10 @@ button {
 :root[data-theme="dark"] .stats-table-head {
   color: #a9b7b2;
   background: #1f2925;
+}
+
+:root[data-theme="dark"] .table-sort-button.active {
+  color: #8ee4d8;
 }
 
 :root[data-theme="dark"] .meter-track,

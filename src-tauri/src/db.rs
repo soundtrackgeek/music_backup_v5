@@ -3154,6 +3154,7 @@ fn normalize_view(view: &str) -> String {
 
 fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
     let ranking_metric = normalize_ranking_metric(&config.ranking_metric);
+    let sort_field = normalize_chart_sort_field(config.sort_field.as_deref(), &ranking_metric);
     let sort_direction = if config.sort_direction.eq_ignore_ascii_case("asc") {
         "asc".to_string()
     } else {
@@ -3170,11 +3171,12 @@ fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
     config.request.offset = 0;
     config.request.limit = result_limit;
     config.request.sort = BrowseSort {
-        field: ranking_metric.clone(),
+        field: sort_field.clone(),
         direction: sort_direction.clone(),
     };
     config.request.filters.rating_completeness_min = Some(threshold);
     config.ranking_metric = ranking_metric;
+    config.sort_field = Some(sort_field);
     config.sort_direction = sort_direction;
     config.result_limit = result_limit;
     config.rating_completeness_threshold = threshold;
@@ -3188,6 +3190,16 @@ fn normalize_ranking_metric(metric: &str) -> String {
             metric.to_string()
         }
         _ => "albumScore".to_string(),
+    }
+}
+
+fn normalize_chart_sort_field(field: Option<&str>, fallback_metric: &str) -> String {
+    match field.unwrap_or(fallback_metric) {
+        "album" | "artist" | "year" | "genre" | "albumRating" | "ratingCompleteness"
+        | "lovedTracks" | "ae" | "tmoe" | "totalMinutes" | "albumScore" => {
+            field.unwrap_or(fallback_metric).to_string()
+        }
+        _ => fallback_metric.to_string(),
     }
 }
 

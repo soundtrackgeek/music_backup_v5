@@ -279,6 +279,7 @@ export type ChartViewMode = "table" | "compact" | "grid";
 export type ChartConfig = {
   request: BrowseRequest;
   rankingMetric: string;
+  sortField?: string | null;
   ratingCompletenessThreshold: number;
   sortDirection: "asc" | "desc";
   resultLimit: number;

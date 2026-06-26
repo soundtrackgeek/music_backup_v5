@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.3] - 2026-06-26
+### Added
+- Added clickable sortable column headers to Search, Charts, and the dedicated Albums table.
+
+### Changed
+- Saved chart configurations now retain the selected chart table sort field separately from the displayed ranking metric.
+
 ## [0.9.2] - 2026-06-26
 ### Added
 - Added live percentage progress for selected Music Tools validation counts and issue row loading.

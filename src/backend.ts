@@ -582,10 +582,14 @@ export async function searchLibrary(request: BrowseRequest) {
         !excludedGenreKeys.has(genreKey)
       );
     });
+    const sorted = [...rows].sort((left, right) => compareBrowseRows(left, right, request.sort.field));
+    if (request.sort.direction === "desc") {
+      sorted.reverse();
+    }
     return {
       view: request.view,
-      rows,
-      total: rows.length,
+      rows: sorted.slice(request.offset, request.offset + request.limit),
+      total: sorted.length,
       limit: request.limit,
       offset: request.offset,
     } satisfies BrowseResponse;
@@ -871,6 +875,54 @@ function normalizeArtistKey(value: string | null) {
 function normalizeGenreKey(value: string | null) {
   const normalized = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   return normalized || "unknown";
+}
+
+function compareBrowseRows(left: BrowseRow, right: BrowseRow, field: string) {
+  const leftValue = browseSortValue(left, field);
+  const rightValue = browseSortValue(right, field);
+  if (typeof leftValue === "string" || typeof rightValue === "string") {
+    return String(leftValue).localeCompare(String(rightValue));
+  }
+  return (leftValue ?? 0) - (rightValue ?? 0);
+}
+
+function browseSortValue(row: BrowseRow, field: string) {
+  switch (field) {
+    case "title":
+      return row.title?.toLowerCase() ?? "";
+    case "displayArtist":
+      return row.displayArtist?.toLowerCase() ?? "";
+    case "artist":
+      return row.albumArtistDisplay?.toLowerCase() ?? "";
+    case "year":
+      return row.year;
+    case "genre":
+      return row.canonicalGenre?.toLowerCase() ?? "";
+    case "trackRating":
+      return row.normalizedRating;
+    case "time":
+      return row.trackSeconds;
+    case "trackNumber":
+      return (row.discNumber ?? 0) * 10000 + (row.trackNumber ?? 0);
+    case "totalMinutes":
+      return row.totalSeconds;
+    case "trackCount":
+      return row.totalTracks;
+    case "albumRating":
+      return row.effectiveAlbumRating;
+    case "ratingCompleteness":
+      return row.ratingCompleteness;
+    case "lovedTracks":
+      return row.lovedTracks;
+    case "ae":
+      return row.aeRatio;
+    case "tmoe":
+      return row.tmoeSeconds;
+    case "albumScore":
+      return row.albumScore;
+    default:
+      return row.album?.toLowerCase() ?? "";
+  }
 }
 
 function compareArtists(left: ArtistSummary, right: ArtistSummary, field: string) {

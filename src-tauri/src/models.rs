@@ -456,6 +456,8 @@ pub struct SaveSearchRequest {
 pub struct ChartConfig {
     pub request: BrowseRequest,
     pub ranking_metric: String,
+    #[serde(default)]
+    pub sort_field: Option<String>,
     pub rating_completeness_threshold: f64,
     pub sort_direction: String,
     pub result_limit: u32,

@@ -2,7 +2,7 @@
 
 A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-The current Phase 8 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse album and track tables, save searches, build ranked album charts, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
+The current Phase 8 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse sortable album and track tables, save searches, build ranked album charts with clickable table-header sorting, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
 
 The sidebar currently enables Search, Charts, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. Cover placeholders and cover-grid-ready layouts exist today, but real cover image discovery, caching, and rendering are planned for Phase 9.
 
@@ -98,14 +98,14 @@ npm run tauri:build
 ## Phase 3 Features
 
 - Charts workspace with built-in templates for year, decade, genre, album artist, loved albums, AE, and TMOE rankings.
-- Custom chart builder for album filters, ranking metric, sort direction, result limit, rating completeness threshold, visible metric columns, and chart view mode.
+- Custom chart builder for album filters, ranking metric, sortable table headers, sort direction, result limit, rating completeness threshold, visible metric columns, and chart view mode.
 - Ranked table, compact list, and cover-grid-ready chart result views.
 - Saved chart configurations stored in SQLite.
 - XLSX export for Search and Charts, alongside CSV, TSV, JSON, and TXT.
 
 ## Phase 2 Features
 
-- Search workspace with album and track table views.
+- Search workspace with album and track table views with clickable sortable column headers.
 - SQLite FTS5 indexes over album, artist, title, genre, publisher, path, and filename fields.
 - Composable query builder for text filters, genres, years, release years, album duration, track count, album rating, track rating, rating completeness, loved-track count, publisher, file path, filename, and missing metadata flags.
 - Active filter chips with one-click removal.

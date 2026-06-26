@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Album,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   BarChart3,
   Check,
   ChevronLeft,
@@ -65,6 +68,7 @@ import type {
   BrowseRequest,
   BrowseResponse,
   BrowseRow,
+  BrowseSort,
   BrowseView,
   ChartConfig,
   ChartViewMode,
@@ -287,6 +291,7 @@ function createChartConfig(): ChartConfig {
   return {
     request,
     rankingMetric: "albumScore",
+    sortField: "albumScore",
     ratingCompletenessThreshold: 100,
     sortDirection: "desc",
     resultLimit: 50,
@@ -297,13 +302,14 @@ function createChartConfig(): ChartConfig {
 }
 
 function chartRequestFromConfig(config: ChartConfig): BrowseRequest {
+  const sortField = config.sortField ?? config.rankingMetric;
   return {
     ...config.request,
     view: "albums",
     offset: 0,
     limit: config.resultLimit,
     sort: {
-      field: config.rankingMetric,
+      field: sortField,
       direction: config.sortDirection,
     },
     filters: {
@@ -319,6 +325,7 @@ type ChartTemplateConfigOverrides = Omit<Partial<ChartConfig>, "request"> & {
 
 function createChartTemplateConfig(values: ChartTemplateConfigOverrides) {
   const base = createChartConfig();
+  const rankingMetric = values.rankingMetric ?? base.rankingMetric;
   const filters = {
     ...base.request.filters,
     ...(values.request?.filters ?? {}),
@@ -327,6 +334,8 @@ function createChartTemplateConfig(values: ChartTemplateConfigOverrides) {
   return {
     ...base,
     ...values,
+    rankingMetric,
+    sortField: values.sortField ?? values.request?.sort?.field ?? rankingMetric,
     request: {
       ...base.request,
       ...(values.request ?? {}),
@@ -816,7 +825,52 @@ function SelectField({
   );
 }
 
-function ResultTable({ response }: { response: BrowseResponse | null }) {
+function nextSort(current: BrowseSort, field: string): BrowseSort {
+  return {
+    field,
+    direction: current.field === field && current.direction === "asc" ? "desc" : "asc",
+  };
+}
+
+function SortableColumnHeader({
+  label,
+  field,
+  sort,
+  onSort,
+}: {
+  label: string;
+  field: string;
+  sort: BrowseSort;
+  onSort: (field: string) => void;
+}) {
+  const isActive = sort.field === field;
+  const Icon = isActive ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  const nextDirection = isActive && sort.direction === "asc" ? "descending" : "ascending";
+
+  return (
+    <span role="columnheader" aria-sort={isActive ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+      <button
+        className={`table-sort-button${isActive ? " active" : ""}`}
+        type="button"
+        aria-label={`Sort by ${label} ${nextDirection}`}
+        onClick={() => onSort(field)}
+      >
+        <span>{label}</span>
+        <Icon size={13} strokeWidth={2.2} aria-hidden="true" />
+      </button>
+    </span>
+  );
+}
+
+function ResultTable({
+  response,
+  sort,
+  onSort,
+}: {
+  response: BrowseResponse | null;
+  sort: BrowseSort;
+  onSort: (field: string) => void;
+}) {
   if (!response) {
     return (
       <div className="empty-state large">
@@ -838,11 +892,11 @@ function ResultTable({ response }: { response: BrowseResponse | null }) {
   return response.view === "tracks" ? (
     <div className="result-table track-results" role="table">
       <div className="result-table-head" role="row">
-        <span role="columnheader">Track</span>
-        <span role="columnheader">Album</span>
-        <span role="columnheader">Artist</span>
-        <span role="columnheader">Year</span>
-        <span role="columnheader">Rating</span>
+        <SortableColumnHeader label="Track" field="title" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Artist" field="displayArtist" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Rating" field="trackRating" sort={sort} onSort={onSort} />
         <span role="columnheader">File</span>
       </div>
       {response.rows.map((row) => (
@@ -867,13 +921,13 @@ function ResultTable({ response }: { response: BrowseResponse | null }) {
   ) : (
     <div className="result-table album-results" role="table">
       <div className="result-table-head" role="row">
-        <span role="columnheader">Album</span>
-        <span role="columnheader">Artist</span>
-        <span role="columnheader">Year</span>
-        <span role="columnheader">Genre</span>
-        <span role="columnheader">Tracks</span>
-        <span role="columnheader">Complete</span>
-        <span role="columnheader">Score</span>
+        <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Artist" field="artist" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Genre" field="genre" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Tracks" field="trackCount" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Complete" field="ratingCompleteness" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Score" field="albumScore" sort={sort} onSort={onSort} />
       </div>
       {response.rows.map((row) => (
         <div className="result-table-row" role="row" key={row.id}>
@@ -908,10 +962,14 @@ function AlbumIndexTable({
   response,
   selectedAlbumId,
   onSelect,
+  sort,
+  onSort,
 }: {
   response: BrowseResponse | null;
   selectedAlbumId: string | null;
   onSelect: (albumId: string) => void;
+  sort: BrowseSort;
+  onSort: (field: string) => void;
 }) {
   if (!response) {
     return (
@@ -934,13 +992,13 @@ function AlbumIndexTable({
   return (
     <div className="result-table album-index-results" role="table">
       <div className="result-table-head" role="row">
-        <span role="columnheader">Album</span>
-        <span role="columnheader">Artist</span>
-        <span role="columnheader">Year</span>
-        <span role="columnheader">Genre</span>
-        <span role="columnheader">Tracks</span>
-        <span role="columnheader">Complete</span>
-        <span role="columnheader">Score</span>
+        <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Artist" field="artist" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Genre" field="genre" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Tracks" field="trackCount" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Complete" field="ratingCompleteness" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Score" field="albumScore" sort={sort} onSort={onSort} />
       </div>
       {response.rows.map((row) => {
         const isSelected = row.albumId === selectedAlbumId;
@@ -1936,7 +1994,15 @@ function MusicToolDetailPanel({
   );
 }
 
-function ChartResults({ response, config }: { response: BrowseResponse | null; config: ChartConfig }) {
+function ChartResults({
+  response,
+  config,
+  onSort,
+}: {
+  response: BrowseResponse | null;
+  config: ChartConfig;
+  onSort: (field: string) => void;
+}) {
   if (!response) {
     return (
       <div className="empty-state large">
@@ -1998,28 +2064,72 @@ function ChartResults({ response, config }: { response: BrowseResponse | null; c
   }
 
   const visibleColumns = new Set(config.visibleColumns);
-  const columns = [
+  const columns: {
+    key: string;
+    label: string;
+    sortField?: string;
+    value: (row: BrowseRow, index: number) => string;
+  }[] = [
     { key: "rank", label: "#", value: (_row: BrowseRow, index: number) => `${index + 1}` },
-    { key: "album", label: "Album", value: (row: BrowseRow) => row.album ?? "Untitled" },
-    { key: "artist", label: "Artist", value: (row: BrowseRow) => row.albumArtistDisplay ?? "" },
-    { key: "year", label: "Year", value: (row: BrowseRow) => row.year?.toString() ?? "" },
-    { key: "genre", label: "Genre", value: (row: BrowseRow) => row.canonicalGenre ?? "" },
-    { key: "rating", label: "Rating", value: (row: BrowseRow) => row.effectiveAlbumRating?.toString() ?? "" },
-    { key: "complete", label: "Complete", value: (row: BrowseRow) => formatPercent(row.ratingCompleteness) },
-    { key: "score", label: "Score", value: (row: BrowseRow) => row.albumScore?.toFixed(3) ?? "" },
-    { key: "loved", label: "Loved", value: (row: BrowseRow) => row.lovedTracks?.toString() ?? "0" },
-    { key: "ae", label: "AE", value: (row: BrowseRow) => formatPercent(row.aeRatio, 2) },
-    { key: "tmoe", label: "TMOE", value: (row: BrowseRow) => formatMinutes(row.tmoeSeconds) },
-    { key: "minutes", label: "Minutes", value: (row: BrowseRow) => formatMinutes(row.totalSeconds) },
+    { key: "album", label: "Album", sortField: "album", value: (row: BrowseRow) => row.album ?? "Untitled" },
+    { key: "artist", label: "Artist", sortField: "artist", value: (row: BrowseRow) => row.albumArtistDisplay ?? "" },
+    { key: "year", label: "Year", sortField: "year", value: (row: BrowseRow) => row.year?.toString() ?? "" },
+    { key: "genre", label: "Genre", sortField: "genre", value: (row: BrowseRow) => row.canonicalGenre ?? "" },
+    {
+      key: "rating",
+      label: "Rating",
+      sortField: "albumRating",
+      value: (row: BrowseRow) => row.effectiveAlbumRating?.toString() ?? "",
+    },
+    {
+      key: "complete",
+      label: "Complete",
+      sortField: "ratingCompleteness",
+      value: (row: BrowseRow) => formatPercent(row.ratingCompleteness),
+    },
+    {
+      key: "score",
+      label: "Score",
+      sortField: "albumScore",
+      value: (row: BrowseRow) => row.albumScore?.toFixed(3) ?? "",
+    },
+    {
+      key: "loved",
+      label: "Loved",
+      sortField: "lovedTracks",
+      value: (row: BrowseRow) => row.lovedTracks?.toString() ?? "0",
+    },
+    { key: "ae", label: "AE", sortField: "ae", value: (row: BrowseRow) => formatPercent(row.aeRatio, 2) },
+    { key: "tmoe", label: "TMOE", sortField: "tmoe", value: (row: BrowseRow) => formatMinutes(row.tmoeSeconds) },
+    {
+      key: "minutes",
+      label: "Minutes",
+      sortField: "totalMinutes",
+      value: (row: BrowseRow) => formatMinutes(row.totalSeconds),
+    },
   ].filter((column) => ["rank", "album", "artist", "year", "genre"].includes(column.key) || visibleColumns.has(column.key));
+  const chartSort: BrowseSort = {
+    field: config.sortField ?? config.rankingMetric,
+    direction: config.sortDirection,
+  };
 
   return (
     <div className="result-table chart-results" role="table">
       <div className="result-table-head" role="row">
         {columns.map((column) => (
-          <span role="columnheader" key={column.key}>
-            {column.label}
-          </span>
+          column.sortField ? (
+            <SortableColumnHeader
+              label={column.label}
+              field={column.sortField}
+              sort={chartSort}
+              onSort={onSort}
+              key={column.key}
+            />
+          ) : (
+            <span role="columnheader" key={column.key}>
+              {column.label}
+            </span>
+          )
         ))}
       </div>
       {response.rows.map((row, index) => (
@@ -3050,6 +3160,15 @@ export default function App() {
     setExportResult(null);
   }
 
+  function sortSearchBy(field: string) {
+    setRequest((previous) => ({
+      ...previous,
+      sort: nextSort(previous.sort, field),
+      offset: 0,
+    }));
+    setExportResult(null);
+  }
+
   function updateAlbumFilter<K extends keyof BrowseFilters>(key: K, value: BrowseFilters[K]) {
     setAlbumRequest((previous) => ({
       ...previous,
@@ -3063,6 +3182,15 @@ export default function App() {
     setAlbumRequest((previous) => ({
       ...previous,
       filters: { ...previous.filters, ...values },
+      offset: 0,
+    }));
+    setAlbumExportResult(null);
+  }
+
+  function sortAlbumsBy(field: string) {
+    setAlbumRequest((previous) => ({
+      ...previous,
+      sort: nextSort(previous.sort, field),
       offset: 0,
     }));
     setAlbumExportResult(null);
@@ -3229,6 +3357,7 @@ export default function App() {
     setChartConfig((previous) => ({
       ...previous,
       ...values,
+      sortField: values.sortField ?? (values.rankingMetric ? values.rankingMetric : previous.sortField),
       request: values.request ?? previous.request,
     }));
     setChartExportResult(null);
@@ -3246,6 +3375,27 @@ export default function App() {
         offset: 0,
       },
     }));
+    setChartExportResult(null);
+  }
+
+  function sortChartBy(field: string) {
+    setChartConfig((previous) => {
+      const currentSort: BrowseSort = {
+        field: previous.sortField ?? previous.rankingMetric,
+        direction: previous.sortDirection,
+      };
+      const sort = nextSort(currentSort, field);
+      return {
+        ...previous,
+        sortField: sort.field,
+        sortDirection: sort.direction,
+        request: {
+          ...previous.request,
+          sort,
+          offset: 0,
+        },
+      };
+    });
     setChartExportResult(null);
   }
 
@@ -3268,6 +3418,7 @@ export default function App() {
   async function saveCurrentChart() {
     const nextConfig = {
       ...chartConfig,
+      sortField: chartConfig.sortField ?? chartConfig.rankingMetric,
       request: chartRequest,
     };
     const fallbackName = `${rankingLabel(nextConfig.rankingMetric)} chart`;
@@ -3699,7 +3850,7 @@ export default function App() {
             </div>
 
             {chartError ? <p className="error-message">{chartError}</p> : null}
-            <ChartResults response={chartResponse} config={chartConfig} />
+            <ChartResults response={chartResponse} config={chartConfig} onSort={sortChartBy} />
           </section>
         </section>
       ) : activeSection === "Artists" ? (
@@ -4484,7 +4635,13 @@ export default function App() {
             </div>
 
             {albumError ? <p className="error-message">{albumError}</p> : null}
-            <AlbumIndexTable response={albumResponse} selectedAlbumId={selectedAlbumId} onSelect={selectAlbum} />
+            <AlbumIndexTable
+              response={albumResponse}
+              selectedAlbumId={selectedAlbumId}
+              sort={albumRequest.sort}
+              onSort={sortAlbumsBy}
+              onSelect={selectAlbum}
+            />
           </section>
 
           <section className="table-panel" aria-label="Selected album tracks">
@@ -5133,7 +5290,7 @@ export default function App() {
             </div>
 
             {browseError ? <p className="error-message">{browseError}</p> : null}
-            <ResultTable response={response} />
+            <ResultTable response={response} sort={request.sort} onSort={sortSearchBy} />
           </section>
         </section>
       )}
