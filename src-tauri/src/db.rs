@@ -1725,10 +1725,11 @@ fn genre_order_clause(sort: &BrowseSort) -> String {
 }
 
 fn list_music_tools(conn: &Connection) -> Result<Vec<MusicToolSummary>> {
-    MUSIC_TOOLS
+    let _ = count_rows(conn, "tracks")?;
+    Ok(MUSIC_TOOLS
         .iter()
-        .map(|definition| music_tool_summary(conn, *definition))
-        .collect()
+        .map(|definition| music_tool_catalog_summary(*definition))
+        .collect())
 }
 
 fn list_music_tool_issues(
@@ -1803,6 +1804,19 @@ fn music_tool_summary(
         album_count,
         track_count,
     })
+}
+
+fn music_tool_catalog_summary(definition: MusicToolDefinition) -> MusicToolSummary {
+    MusicToolSummary {
+        id: definition.id.to_string(),
+        label: definition.label.to_string(),
+        description: definition.description.to_string(),
+        severity: definition.severity.to_string(),
+        scope: definition.scope.to_string(),
+        issue_count: -1,
+        album_count: -1,
+        track_count: -1,
+    }
 }
 
 fn music_tool_definition(tool_id: &str) -> Result<MusicToolDefinition> {
@@ -3552,9 +3566,7 @@ mod tests {
             .find(|tool| tool.id == "non-mp3-files")
             .expect("non-mp3 tool");
 
-        assert_eq!(non_mp3.issue_count, 1);
-        assert_eq!(non_mp3.album_count, 1);
-        assert_eq!(non_mp3.track_count, 1);
+        assert_eq!(non_mp3.issue_count, -1);
 
         let mut request = MusicToolIssueRequest::default();
         request.tool_id = "non-mp3-files".to_string();
@@ -3563,6 +3575,9 @@ mod tests {
             list_music_tool_issues(&conn, request, 50).expect("list non-mp3 issues");
         let (headers, rows) = issue_export_table(&response.rows);
 
+        assert_eq!(response.tool.issue_count, 1);
+        assert_eq!(response.tool.album_count, 1);
+        assert_eq!(response.tool.track_count, 1);
         assert_eq!(response.total, 1);
         assert_eq!(response.rows[0].filename.as_deref(), Some("02 What Have I Done.flac"));
         assert!(headers.contains(&"Issue"));

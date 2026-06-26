@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.9.1] - 2026-06-26
+### Fixed
+- Made the Music Tools catalog render immediately instead of waiting for every validation count query to finish.
+- Updated the Tools workspace to load selected-tool counts and affected rows on demand.
+
 ## [0.9.0] - 2026-06-26
 ### Added
 - Added the Phase 8 Music Tools workspace with validation issue counts, affected album/track rows, severity, filtering, pagination, sorting, and exports.

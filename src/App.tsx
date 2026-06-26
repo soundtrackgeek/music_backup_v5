@@ -401,8 +401,158 @@ const chartTemplates: ChartTemplate[] = [
   },
 ];
 
+const musicToolCatalog: MusicToolSummary[] = [
+  {
+    id: "duplicate-albums",
+    label: "Duplicate albums",
+    description: "Potential duplicate album versions with the same artist, title, and year.",
+    severity: "medium",
+    scope: "albums",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "duplicates-within-album",
+    label: "Duplicates within album",
+    description: "Tracks that repeat a title or disc/track position inside one album.",
+    severity: "high",
+    scope: "tracks",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "invalid-time-values",
+    label: "Invalid time values",
+    description: "Tracks where duration could not be parsed into seconds.",
+    severity: "high",
+    scope: "tracks",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "non-numeric-ratings",
+    label: "Non-numeric ratings",
+    description: "Track ratings that contain non-numeric text.",
+    severity: "medium",
+    scope: "tracks",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "missing-tags",
+    label: "Missing tags",
+    description: "Tracks missing required album, artist, title, genre, year, or file tags.",
+    severity: "high",
+    scope: "tracks",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "non-mp3-files",
+    label: "Non-MP3 files",
+    description: "Tracks whose filenames do not end in .mp3.",
+    severity: "low",
+    scope: "tracks",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "year-anomalies",
+    label: "Year anomalies",
+    description: "Tracks with missing or implausible canonical year values.",
+    severity: "medium",
+    scope: "tracks",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "ratings-out-of-range",
+    label: "Ratings out of range",
+    description: "Numeric ratings that are not whole-number values from 0 to 5.",
+    severity: "high",
+    scope: "tracks",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "track-disc-number-issues",
+    label: "Track/disc number issues",
+    description: "Tracks with missing, zero, or negative disc and track numbers.",
+    severity: "medium",
+    scope: "tracks",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "inconsistent-album-metadata",
+    label: "Inconsistent album metadata",
+    description: "Albums whose tracks disagree on title, genre, or publisher.",
+    severity: "medium",
+    scope: "albums",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "whitespace-anomalies",
+    label: "Whitespace anomalies",
+    description: "Track metadata with repeated internal spaces.",
+    severity: "low",
+    scope: "tracks",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "genre-normalization-issues",
+    label: "Genre normalization issues",
+    description: "Tracks with multi-value genre strings that were collapsed to one canonical genre.",
+    severity: "low",
+    scope: "tracks",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "conflicting-album-artists",
+    label: "Conflicting album artists",
+    description: "Albums whose tracks disagree on album artist.",
+    severity: "high",
+    scope: "albums",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
+    id: "multiple-years-per-album",
+    label: "Multiple years per album",
+    description: "Albums containing tracks with more than one canonical year.",
+    severity: "medium",
+    scope: "albums",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+];
+
 function formatNumber(value: number | null | undefined) {
   return new Intl.NumberFormat().format(value ?? 0);
+}
+
+function formatToolCount(value: number | null | undefined) {
+  if (value == null || value < 0) {
+    return "On select";
+  }
+  return formatNumber(value);
 }
 
 function formatDuration(ms: number) {
@@ -1557,9 +1707,9 @@ function MusicToolIndexTable({
             <span role="cell">
               <SeverityBadge severity={tool.severity} />
             </span>
-            <span role="cell">{formatNumber(tool.issueCount)}</span>
-            <span role="cell">{formatNumber(tool.albumCount)}</span>
-            <span role="cell">{formatNumber(tool.trackCount)}</span>
+            <span role="cell">{formatToolCount(tool.issueCount)}</span>
+            <span role="cell">{formatToolCount(tool.albumCount)}</span>
+            <span role="cell">{formatToolCount(tool.trackCount)}</span>
           </div>
         );
       })}
@@ -1663,15 +1813,15 @@ function MusicToolDetailPanel({
       <dl className="run-details tool-detail-stats">
         <div>
           <dt>Issue rows</dt>
-          <dd>{formatNumber(tool.issueCount)}</dd>
+          <dd>{formatToolCount(tool.issueCount)}</dd>
         </div>
         <div>
           <dt>Affected albums</dt>
-          <dd>{formatNumber(tool.albumCount)}</dd>
+          <dd>{formatToolCount(tool.albumCount)}</dd>
         </div>
         <div>
           <dt>Affected tracks</dt>
-          <dd>{formatNumber(tool.trackCount)}</dd>
+          <dd>{formatToolCount(tool.trackCount)}</dd>
         </div>
         <div>
           <dt>Severity</dt>
@@ -2013,10 +2163,10 @@ export default function App() {
   const [isGenreAlbumsLoading, setIsGenreAlbumsLoading] = useState(false);
   const [genreIncludeCalculated, setGenreIncludeCalculated] = useState(false);
   const [genreExportResult, setGenreExportResult] = useState<ExportResult | null>(null);
-  const [musicTools, setMusicTools] = useState<MusicToolSummary[]>([]);
+  const [musicTools, setMusicTools] = useState<MusicToolSummary[]>(() => musicToolCatalog);
   const [toolsError, setToolsError] = useState<string | null>(null);
   const [isToolsLoading, setIsToolsLoading] = useState(false);
-  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(musicToolCatalog[0]?.id ?? null);
   const [toolIssueRequest, setToolIssueRequest] = useState<MusicToolIssueRequest>(() =>
     createMusicToolIssueRequest(),
   );
@@ -2096,7 +2246,9 @@ export default function App() {
     () => (selectedGenre ? createGenreAlbumsRequest(selectedGenre) : null),
     [selectedGenre],
   );
-  const selectedTool = musicTools.find((tool) => tool.id === selectedToolId) ?? null;
+  const selectedCatalogTool = musicTools.find((tool) => tool.id === selectedToolId) ?? null;
+  const selectedTool =
+    toolIssueResponse?.tool.id === selectedToolId ? toolIssueResponse.tool : selectedCatalogTool;
 
   useEffect(() => {
     if (activeSection !== "Search") {
@@ -2389,13 +2541,26 @@ export default function App() {
     void listMusicTools()
       .then((nextTools) => {
         if (!cancelled) {
-          setMusicTools(nextTools);
+          setMusicTools((previous) =>
+            nextTools.length === 0
+              ? previous
+              : nextTools.map((nextTool) => {
+                  const previousTool = previous.find((tool) => tool.id === nextTool.id);
+                  return previousTool && previousTool.issueCount >= 0
+                    ? {
+                        ...nextTool,
+                        issueCount: previousTool.issueCount,
+                        albumCount: previousTool.albumCount,
+                        trackCount: previousTool.trackCount,
+                      }
+                    : nextTool;
+                }),
+          );
         }
       })
       .catch((searchError) => {
         if (!cancelled) {
           setToolsError(searchError instanceof Error ? searchError.message : String(searchError));
-          setMusicTools([]);
         }
       })
       .finally(() => {
@@ -2473,6 +2638,16 @@ export default function App() {
       window.clearTimeout(timer);
     };
   }, [activeSection, selectedToolId, toolIssueRequest]);
+
+  useEffect(() => {
+    if (!toolIssueResponse) {
+      return;
+    }
+
+    setMusicTools((previous) =>
+      previous.map((tool) => (tool.id === toolIssueResponse.tool.id ? toolIssueResponse.tool : tool)),
+    );
+  }, [toolIssueResponse]);
 
   useEffect(() => {
     if (activeSection !== "Charts") {
@@ -3040,7 +3215,9 @@ export default function App() {
   const toolIssueTotal = toolIssueResponse?.total ?? 0;
   const toolIssuePageStart = toolIssueTotal === 0 ? 0 : toolIssueRequest.offset + 1;
   const toolIssuePageEnd = Math.min(toolIssueTotal, toolIssueRequest.offset + toolIssueRequest.limit);
-  const totalToolIssues = musicTools.reduce((sum, tool) => sum + tool.issueCount, 0);
+  const totalToolIssues = musicTools.every((tool) => tool.issueCount >= 0)
+    ? musicTools.reduce((sum, tool) => sum + tool.issueCount, 0)
+    : null;
   const selectedToolIssueCount = selectedTool?.issueCount ?? toolIssueTotal;
   const chartTotal = chartResponse?.total ?? 0;
   const chartRows = chartResponse?.rows.length ?? 0;
@@ -3776,8 +3953,8 @@ export default function App() {
 
           <section className="metric-grid" aria-label="Tools summary">
             <Metric label="Validators" value={formatNumber(musicTools.length)} tone="teal" icon={Wrench} />
-            <Metric label="Issue rows" value={formatNumber(totalToolIssues)} tone="amber" icon={FileSearch} />
-            <Metric label="Selected" value={formatNumber(selectedToolIssueCount)} icon={ListMusic} />
+            <Metric label="Issue rows" value={formatToolCount(totalToolIssues)} tone="amber" icon={FileSearch} />
+            <Metric label="Selected" value={formatToolCount(selectedToolIssueCount)} icon={ListMusic} />
             <Metric label="Severity" value={severityLabel(selectedTool?.severity) || "Select"} icon={ShieldCheck} />
           </section>
 
@@ -3877,7 +4054,9 @@ export default function App() {
                 <h2>Validation suite</h2>
                 <p>{isToolsLoading ? "Loading tools" : `${formatNumber(musicTools.length)} tools`}</p>
               </div>
-              <span className="run-status">{formatNumber(totalToolIssues)} issues</span>
+              <span className="run-status">
+                {totalToolIssues == null ? "Counts on select" : `${formatNumber(totalToolIssues)} issues`}
+              </span>
             </div>
 
             {toolsError ? <p className="error-message">{toolsError}</p> : null}
