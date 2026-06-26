@@ -3171,7 +3171,7 @@ fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
     config.request.offset = 0;
     config.request.limit = result_limit;
     config.request.sort = BrowseSort {
-        field: sort_field.clone(),
+        field: ranking_metric.clone(),
         direction: sort_direction.clone(),
     };
     config.request.filters.rating_completeness_min = Some(threshold);

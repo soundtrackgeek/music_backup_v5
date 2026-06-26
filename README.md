@@ -2,7 +2,7 @@
 
 A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-The current Phase 8 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse sortable album and track tables, save searches, build ranked album charts with clickable table-header sorting, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
+The current Phase 8 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse sortable album and track tables, save searches, build ranked album charts with display-only table-header sorting inside the current ranked set, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
 
 The sidebar currently enables Search, Charts, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. Cover placeholders and cover-grid-ready layouts exist today, but real cover image discovery, caching, and rendering are planned for Phase 9.
 
@@ -98,8 +98,8 @@ npm run tauri:build
 ## Phase 3 Features
 
 - Charts workspace with built-in templates for year, decade, genre, album artist, loved albums, AE, and TMOE rankings.
-- Custom chart builder for album filters, ranking metric, sortable table headers, sort direction, result limit, rating completeness threshold, visible metric columns, and chart view mode.
-- Ranked table, compact list, and cover-grid-ready chart result views.
+- Custom chart builder for album filters, ranking metric, display-only sortable table headers, sort direction, result limit, rating completeness threshold, visible metric columns, and chart view mode.
+- Ranked table, compact list, and cover-grid-ready chart result views, with table headers preserving the current ranked result set and original rank numbers.
 - Saved chart configurations stored in SQLite.
 - XLSX export for Search and Charts, alongside CSV, TSV, JSON, and TXT.
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.9.4] - 2026-06-26
+### Changed
+- Changed Charts table header sorting to reorder only the current ranked result set while preserving each album's original rank number.
+- Chart result queries now continue to use the selected ranking metric and limit even when the table is display-sorted by Album, Artist, Year, or another visible column.
+
 ## [0.9.3] - 2026-06-26
 ### Added
 - Added clickable sortable column headers to Search, Charts, and the dedicated Albums table.

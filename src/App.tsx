@@ -302,14 +302,13 @@ function createChartConfig(): ChartConfig {
 }
 
 function chartRequestFromConfig(config: ChartConfig): BrowseRequest {
-  const sortField = config.sortField ?? config.rankingMetric;
   return {
     ...config.request,
     view: "albums",
     offset: 0,
     limit: config.resultLimit,
     sort: {
-      field: sortField,
+      field: config.rankingMetric,
       direction: config.sortDirection,
     },
     filters: {
@@ -680,6 +679,54 @@ function formatChartMetric(row: BrowseRow, metric: string) {
     default:
       return row.albumScore?.toFixed(3) ?? "";
   }
+}
+
+function browseRowSortValue(row: BrowseRow, field: string) {
+  switch (field) {
+    case "title":
+      return row.title?.toLowerCase() ?? "";
+    case "displayArtist":
+      return row.displayArtist?.toLowerCase() ?? "";
+    case "artist":
+      return row.albumArtistDisplay?.toLowerCase() ?? "";
+    case "year":
+      return row.year;
+    case "genre":
+      return row.canonicalGenre?.toLowerCase() ?? "";
+    case "trackRating":
+      return row.normalizedRating;
+    case "time":
+      return row.trackSeconds;
+    case "trackNumber":
+      return (row.discNumber ?? 0) * 10000 + (row.trackNumber ?? 0);
+    case "totalMinutes":
+      return row.totalSeconds;
+    case "trackCount":
+      return row.totalTracks;
+    case "albumRating":
+      return row.effectiveAlbumRating;
+    case "ratingCompleteness":
+      return row.ratingCompleteness;
+    case "lovedTracks":
+      return row.lovedTracks;
+    case "ae":
+      return row.aeRatio;
+    case "tmoe":
+      return row.tmoeSeconds;
+    case "albumScore":
+      return row.albumScore;
+    default:
+      return row.album?.toLowerCase() ?? "";
+  }
+}
+
+function compareBrowseRows(left: BrowseRow, right: BrowseRow, field: string) {
+  const leftValue = browseRowSortValue(left, field);
+  const rightValue = browseRowSortValue(right, field);
+  if (typeof leftValue === "string" || typeof rightValue === "string") {
+    return String(leftValue).localeCompare(String(rightValue));
+  }
+  return (leftValue ?? 0) - (rightValue ?? 0);
 }
 
 function parseList(value: string) {
@@ -1997,10 +2044,12 @@ function MusicToolDetailPanel({
 function ChartResults({
   response,
   config,
+  displaySort,
   onSort,
 }: {
   response: BrowseResponse | null;
   config: ChartConfig;
+  displaySort: BrowseSort | null;
   onSort: (field: string) => void;
 }) {
   if (!response) {
@@ -2070,7 +2119,7 @@ function ChartResults({
     sortField?: string;
     value: (row: BrowseRow, index: number) => string;
   }[] = [
-    { key: "rank", label: "#", value: (_row: BrowseRow, index: number) => `${index + 1}` },
+    { key: "rank", label: "#", value: (_row: BrowseRow, rank: number) => `${rank}` },
     { key: "album", label: "Album", sortField: "album", value: (row: BrowseRow) => row.album ?? "Untitled" },
     { key: "artist", label: "Artist", sortField: "artist", value: (row: BrowseRow) => row.albumArtistDisplay ?? "" },
     { key: "year", label: "Year", sortField: "year", value: (row: BrowseRow) => row.year?.toString() ?? "" },
@@ -2108,10 +2157,17 @@ function ChartResults({
       value: (row: BrowseRow) => formatMinutes(row.totalSeconds),
     },
   ].filter((column) => ["rank", "album", "artist", "year", "genre"].includes(column.key) || visibleColumns.has(column.key));
-  const chartSort: BrowseSort = {
-    field: config.sortField ?? config.rankingMetric,
+  const activeSort: BrowseSort = displaySort ?? {
+    field: config.rankingMetric,
     direction: config.sortDirection,
   };
+  const displayRows = response.rows.map((row, index) => ({ row, rank: index + 1 }));
+  if (displaySort) {
+    displayRows.sort((left, right) => {
+      const comparison = compareBrowseRows(left.row, right.row, displaySort.field);
+      return displaySort.direction === "desc" ? -comparison : comparison;
+    });
+  }
 
   return (
     <div className="result-table chart-results" role="table">
@@ -2121,7 +2177,7 @@ function ChartResults({
             <SortableColumnHeader
               label={column.label}
               field={column.sortField}
-              sort={chartSort}
+              sort={activeSort}
               onSort={onSort}
               key={column.key}
             />
@@ -2132,11 +2188,11 @@ function ChartResults({
           )
         ))}
       </div>
-      {response.rows.map((row, index) => (
+      {displayRows.map(({ row, rank }) => (
         <div className="result-table-row" role="row" key={row.id}>
           {columns.map((column) => (
             <span role="cell" key={column.key}>
-              {column.value(row, index)}
+              {column.value(row, rank)}
             </span>
           ))}
         </div>
@@ -2360,6 +2416,7 @@ export default function App() {
   const [toolProgress, setToolProgress] = useState<MusicToolProgress | null>(null);
   const [toolExportResult, setToolExportResult] = useState<ExportResult | null>(null);
   const [chartConfig, setChartConfig] = useState<ChartConfig>(() => createChartConfig());
+  const [chartTableSort, setChartTableSort] = useState<BrowseSort | null>(null);
   const [chartResponse, setChartResponse] = useState<BrowseResponse | null>(null);
   const [chartName, setChartName] = useState("");
   const [chartError, setChartError] = useState<string | null>(null);
@@ -3379,24 +3436,11 @@ export default function App() {
   }
 
   function sortChartBy(field: string) {
-    setChartConfig((previous) => {
-      const currentSort: BrowseSort = {
-        field: previous.sortField ?? previous.rankingMetric,
-        direction: previous.sortDirection,
-      };
-      const sort = nextSort(currentSort, field);
-      return {
-        ...previous,
-        sortField: sort.field,
-        sortDirection: sort.direction,
-        request: {
-          ...previous.request,
-          sort,
-          offset: 0,
-        },
-      };
-    });
-    setChartExportResult(null);
+    const defaultSort: BrowseSort = {
+      field: chartConfig.rankingMetric,
+      direction: chartConfig.sortDirection,
+    };
+    setChartTableSort((previous) => nextSort(previous ?? defaultSort, field));
   }
 
   function toggleChartColumn(value: string, key: "visibleColumns" | "exportColumns") {
@@ -3412,6 +3456,7 @@ export default function App() {
 
   function applyChartTemplate(template: ChartTemplate) {
     setChartConfig(template.createConfig());
+    setChartTableSort(null);
     setChartExportResult(null);
   }
 
@@ -3659,7 +3704,15 @@ export default function App() {
               <p>Rank album lists from saved filters, Album Score, loved tracks, AE, and TMOE.</p>
             </div>
             <div className="topbar-actions">
-              <button className="icon-button" type="button" aria-label="Reset chart" onClick={() => setChartConfig(createChartConfig())}>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Reset chart"
+                onClick={() => {
+                  setChartConfig(createChartConfig());
+                  setChartTableSort(null);
+                }}
+              >
                 <RotateCcw size={18} />
               </button>
               <button className="icon-button" type="button" aria-label="Refresh" onClick={() => void loadData()}>
@@ -3850,7 +3903,12 @@ export default function App() {
             </div>
 
             {chartError ? <p className="error-message">{chartError}</p> : null}
-            <ChartResults response={chartResponse} config={chartConfig} onSort={sortChartBy} />
+            <ChartResults
+              response={chartResponse}
+              config={chartConfig}
+              displaySort={chartTableSort}
+              onSort={sortChartBy}
+            />
           </section>
         </section>
       ) : activeSection === "Artists" ? (
@@ -5377,6 +5435,7 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       setChartConfig(chart.config);
+                      setChartTableSort(null);
                       setActiveSection("Charts");
                     }}
                   >
