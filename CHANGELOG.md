@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.10.1] - 2026-06-26
+### Fixed
+- Matched the Tauri dev URL to Vite's `127.0.0.1:1420` loopback server so `npm run tauri:dev` no longer opens a blank desktop window when `localhost` resolves differently.
+
 ## [0.10.0] - 2026-06-26
 ### Added
 - Added Phase 9 cover art support with a cover import panel in the Imports workspace.
