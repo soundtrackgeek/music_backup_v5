@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.10.12] - 2026-06-26
+### Fixed
+- Fixed Search, Albums, and Charts genre filter fields so comma-separated genre lists can be typed without the comma being stripped mid-entry.
+
 ## [0.10.11] - 2026-06-26
 ### Changed
 - Clarified Search missing-field checkboxes and active-filter chips with album- or track-specific labels.

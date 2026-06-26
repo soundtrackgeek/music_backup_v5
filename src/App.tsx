@@ -789,6 +789,14 @@ function parseList(value: string) {
     .filter(Boolean);
 }
 
+function formatList(values: string[]) {
+  return values.join(", ");
+}
+
+function listsEqual(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 function numberValue(value: string) {
   if (value.trim() === "") return null;
   const parsed = Number(value);
@@ -866,6 +874,42 @@ function TextCriterion({
           placeholder={placeholder}
         />
       </div>
+    </label>
+  );
+}
+
+function GenreListCriterion({
+  label,
+  values,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+  placeholder?: string;
+}) {
+  const [draftValue, setDraftValue] = useState(() => formatList(values));
+
+  useEffect(() => {
+    if (!listsEqual(parseList(draftValue), values)) {
+      setDraftValue(formatList(values));
+    }
+  }, [draftValue, values]);
+
+  return (
+    <label className="criterion">
+      <span>{label}</span>
+      <input
+        value={draftValue}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          setDraftValue(nextValue);
+          onChange(parseList(nextValue));
+        }}
+        onBlur={(event) => setDraftValue(formatList(parseList(event.currentTarget.value)))}
+        placeholder={placeholder}
+      />
     </label>
   );
 }
@@ -4071,14 +4115,12 @@ export default function App() {
                 value={chartConfig.request.filters.yearTo}
                 onChange={(value) => updateChartFilters({ yearTo: value })}
               />
-              <label className="criterion">
-                <span>Genres</span>
-                <input
-                  value={chartConfig.request.filters.genres.join(", ")}
-                  onChange={(event) => updateChartFilters({ genres: parseList(event.target.value) })}
-                  placeholder="Synthpop, AOR"
-                />
-              </label>
+              <GenreListCriterion
+                label="Genres"
+                values={chartConfig.request.filters.genres}
+                onChange={(genres) => updateChartFilters({ genres })}
+                placeholder="Synthpop, AOR"
+              />
               <TextCriterion
                 label="Album artist"
                 filter={chartConfig.request.filters.albumArtist}
@@ -4843,21 +4885,17 @@ export default function App() {
                 filter={albumFilters.publisher}
                 onChange={(filter) => updateAlbumFilter("publisher", filter)}
               />
-              <label className="criterion">
-                <span>Genres</span>
-                <input
-                  value={albumFilters.genres.join(", ")}
-                  onChange={(event) => updateAlbumFilter("genres", parseList(event.target.value))}
-                  placeholder="Synthpop, AOR"
-                />
-              </label>
-              <label className="criterion">
-                <span>Exclude genres</span>
-                <input
-                  value={albumFilters.excludedGenres.join(", ")}
-                  onChange={(event) => updateAlbumFilter("excludedGenres", parseList(event.target.value))}
-                />
-              </label>
+              <GenreListCriterion
+                label="Genres"
+                values={albumFilters.genres}
+                onChange={(genres) => updateAlbumFilter("genres", genres)}
+                placeholder="Synthpop, AOR"
+              />
+              <GenreListCriterion
+                label="Exclude genres"
+                values={albumFilters.excludedGenres}
+                onChange={(excludedGenres) => updateAlbumFilter("excludedGenres", excludedGenres)}
+              />
               <NumberField
                 label="Year from"
                 value={albumFilters.yearFrom}
@@ -5389,21 +5427,17 @@ export default function App() {
                 onChange={(filter) => updateFilter("displayArtist", filter)}
               />
 
-              <label className="criterion">
-                <span>Genres</span>
-                <input
-                  value={currentFilters.genres.join(", ")}
-                  onChange={(event) => updateFilter("genres", parseList(event.target.value))}
-                  placeholder="Synthpop, AOR"
-                />
-              </label>
-              <label className="criterion">
-                <span>Exclude genres</span>
-                <input
-                  value={currentFilters.excludedGenres.join(", ")}
-                  onChange={(event) => updateFilter("excludedGenres", parseList(event.target.value))}
-                />
-              </label>
+              <GenreListCriterion
+                label="Genres"
+                values={currentFilters.genres}
+                onChange={(genres) => updateFilter("genres", genres)}
+                placeholder="Synthpop, AOR"
+              />
+              <GenreListCriterion
+                label="Exclude genres"
+                values={currentFilters.excludedGenres}
+                onChange={(excludedGenres) => updateFilter("excludedGenres", excludedGenres)}
+              />
               <TextCriterion
                 label="Publisher"
                 filter={currentFilters.publisher}
