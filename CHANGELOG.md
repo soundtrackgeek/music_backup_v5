@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.4] - 2026-06-26
+### Changed
+- Changed embedded MP3 cover fallback to save missing artwork into the configured `AlbumCovers` source folder instead of the app data cover cache.
+- The cover import panel now defaults embedded fallback on and clarifies that missing embedded art is extracted into `AlbumCovers`.
+
+### Fixed
+- Albums with embedded MP3 artwork but no standalone archive image can now populate `AlbumCovers/<folder name>.<ext>` during cover import.
+
 ## [0.10.3] - 2026-06-26
 ### Changed
 - Changed cover archive imports to link directly to `AlbumCovers` source files instead of copying every archive image into the app data folder.

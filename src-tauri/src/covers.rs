@@ -44,6 +44,7 @@ enum CoverPayload {
     },
     EmbeddedBytes {
         source_path: PathBuf,
+        destination_path: PathBuf,
         extension: String,
         mime_type: String,
         bytes: Vec<u8>,
@@ -162,7 +163,12 @@ fn run_cover_import(
     for album in albums {
         counters.scanned_albums += 1;
 
-        match find_cover_for_album(&album, &archive_index, request.extract_embedded_fallback)? {
+        match find_cover_for_album(
+            &album,
+            &archive_index,
+            &source_dir,
+            request.extract_embedded_fallback,
+        )? {
             Some(payload) => {
                 let existing_cover = existing_covers.get(&album.album_id);
                 if !request.replace_existing
@@ -391,13 +397,19 @@ fn existing_cover_matches_payload(
             existing_cover.source == "archive"
                 && paths_equal(Path::new(&existing_cover.cache_path), path)
         }
-        CoverPayload::EmbeddedBytes { .. } => existing_cover.source == "embedded",
+        CoverPayload::EmbeddedBytes {
+            destination_path, ..
+        } => {
+            existing_cover.source == "embedded"
+                && paths_equal(Path::new(&existing_cover.cache_path), destination_path)
+        }
     }
 }
 
 fn find_cover_for_album(
     album: &AlbumCoverCandidate,
     archive_index: &HashMap<String, ArchiveCover>,
+    source_dir: &Path,
     extract_embedded_fallback: bool,
 ) -> Result<Option<CoverPayload>> {
     if let Some(folder_name) = album.file_path.as_deref().and_then(folder_name_from_path) {
@@ -412,7 +424,7 @@ fn find_cover_for_album(
     }
 
     if extract_embedded_fallback {
-        return extract_embedded_cover(album);
+        return extract_embedded_cover(album, source_dir);
     }
 
     Ok(None)
@@ -439,7 +451,13 @@ fn folder_name_from_path(file_path: &str) -> Option<String> {
         })
 }
 
-fn extract_embedded_cover(album: &AlbumCoverCandidate) -> Result<Option<CoverPayload>> {
+fn extract_embedded_cover(
+    album: &AlbumCoverCandidate,
+    cover_source_dir: &Path,
+) -> Result<Option<CoverPayload>> {
+    let Some(folder_name) = album.file_path.as_deref().and_then(folder_name_from_path) else {
+        return Ok(None);
+    };
     let Some(track_path) = representative_track_path(album) else {
         return Ok(None);
     };
@@ -475,6 +493,7 @@ fn extract_embedded_cover(album: &AlbumCoverCandidate) -> Result<Option<CoverPay
 
     Ok(Some(CoverPayload::EmbeddedBytes {
         source_path: track_path,
+        destination_path: cover_source_dir.join(format!("{folder_name}.{extension}")),
         extension,
         mime_type,
         bytes: picture.data.clone(),
@@ -520,6 +539,7 @@ fn import_cover_payload(
         ),
         CoverPayload::EmbeddedBytes {
             source_path,
+            destination_path,
             extension,
             mime_type,
             ..
@@ -528,16 +548,14 @@ fn import_cover_payload(
             source_path.display().to_string(),
             extension.clone(),
             mime_type.clone(),
-            cache_dir.join(format!("{cache_stem}.{extension}")),
+            destination_path.clone(),
         ),
     };
 
     remove_stale_cache_files(cache_dir, &cache_stem, Some(&destination))?;
 
     match payload {
-        CoverPayload::ArchiveFile { .. } => {
-            remove_stale_cache_files(cache_dir, &cache_stem, None)?;
-        }
+        CoverPayload::ArchiveFile { .. } => {}
         CoverPayload::EmbeddedBytes { bytes, .. } => {
             fs::write(&destination, bytes)
                 .with_context(|| format!("Could not write cover {}", destination.display()))?;

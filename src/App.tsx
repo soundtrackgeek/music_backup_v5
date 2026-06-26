@@ -2418,7 +2418,7 @@ export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
   const [sourcePath, setSourcePath] = useState("musicbee-library.tsv");
   const [coverSourcePath, setCoverSourcePath] = useState("AlbumCovers");
-  const [coverExtractEmbeddedFallback, setCoverExtractEmbeddedFallback] = useState(false);
+  const [coverExtractEmbeddedFallback, setCoverExtractEmbeddedFallback] = useState(true);
   const [coverReplaceExisting, setCoverReplaceExisting] = useState(false);
   const [status, setStatus] = useState<LibraryStatus | null>(null);
   const [runs, setRuns] = useState<ImportRun[]>([]);
@@ -3799,7 +3799,7 @@ export default function App() {
             <div className="panel-heading">
               <div>
                 <h2>Cover art</h2>
-                <p>Scan folder-named image files, link archive matches, and optionally extract embedded MP3 artwork.</p>
+                <p>Scan folder-named image files, link archive matches, and optionally extract embedded MP3 artwork into the cover archive.</p>
               </div>
               <RunStatus status={coverProgress.status} />
             </div>
@@ -3822,7 +3822,7 @@ export default function App() {
                   onChange={(event) => setCoverExtractEmbeddedFallback(event.target.checked)}
                   disabled={isImportingCovers}
                 />
-                <span>Use embedded MP3 fallback</span>
+                <span>Extract missing embedded MP3 covers into AlbumCovers</span>
               </label>
               <label className="toggle-row">
                 <input
@@ -3847,7 +3847,7 @@ export default function App() {
                 <span>
                   {formatNumber(coverProgress.scannedAlbums)} of {formatNumber(coverProgress.totalAlbums)} albums scanned
                 </span>
-                <span>{formatNumber(coverProgress.newCoversFound)} new covers found</span>
+                <span>{formatNumber(coverProgress.newCoversFound)} new covers found or extracted</span>
               </div>
               <div className="progress-meta">
                 <span>{formatNumber(coverProgress.importedCovers)} imported</span>
@@ -3861,8 +3861,8 @@ export default function App() {
             {coverImportSummary ? (
               <p className="success-message">
                 Linked or imported {formatNumber(coverImportSummary.importedCovers)} covers from{" "}
-                {formatNumber(coverImportSummary.newCoversFound)} new matches and{" "}
-                {formatNumber(coverImportSummary.relinkedCovers)} existing cache entries.
+                {formatNumber(coverImportSummary.newCoversFound)} newly found or extracted covers and{" "}
+                {formatNumber(coverImportSummary.relinkedCovers)} existing cover entries.
               </p>
             ) : null}
 
@@ -3877,7 +3877,9 @@ export default function App() {
                 <Play size={17} fill="currentColor" />
                 <span>{isImportingCovers ? "Scanning" : "Import covers"}</span>
               </button>
-              <span className="db-path">Archive matches are linked directly; older cache copies are relinked on import.</span>
+              <span className="db-path">
+                Archive matches are linked directly; missing embedded art is saved into AlbumCovers.
+              </span>
             </div>
           </section>
 
