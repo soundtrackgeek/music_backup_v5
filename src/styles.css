@@ -988,6 +988,11 @@ button {
   background: #e5f4f0;
 }
 
+.tool-count-progress {
+  color: #0c6f67;
+  font-weight: 760;
+}
+
 .progress-block {
   display: grid;
   gap: 10px;
@@ -1031,6 +1036,10 @@ button {
   border-radius: inherit;
   background: #118278;
   transition: width 180ms ease;
+}
+
+.tool-progress-block {
+  margin-top: 0;
 }
 
 .error-message {
@@ -1605,6 +1614,10 @@ button {
 :root[data-theme="dark"] .export-result {
   color: #85e2d6;
   background: #173a34;
+}
+
+:root[data-theme="dark"] .tool-count-progress {
+  color: #85e2d6;
 }
 
 :root[data-theme="dark"] .metric-amber .metric-icon,

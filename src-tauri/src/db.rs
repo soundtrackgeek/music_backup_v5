@@ -1,9 +1,9 @@
 use crate::models::{
     AppSettings, ArtistListRequest, ArtistListResponse, ArtistSummary, BrowseFilters,
-    BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ChartConfig, ExportResult,
-    ExportMusicToolRequest, ExportSearchRequest, GenreListRequest, GenreListResponse,
-    GenreProgressStats, GenreSummary, ImportRun, LibraryOverviewStats, LibraryStatus,
-    LovedTrackStats, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
+    BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ChartConfig, ExportMusicToolRequest,
+    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressStats,
+    GenreSummary, ImportRun, LibraryOverviewStats, LibraryStatus, LovedTrackStats,
+    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress,
     MusicToolSummary, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
     SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
     YearProgressStats,
@@ -15,8 +15,13 @@ use rust_xlsxwriter::{Format, Workbook};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Mutex;
-use tauri::{AppHandle, Manager};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+use std::thread;
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, Manager};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
 const LATEST_SCHEMA_VERSION: i32 = 5;
@@ -115,7 +120,8 @@ const MUSIC_TOOLS: &[MusicToolDefinition] = &[
     MusicToolDefinition {
         id: "genre-normalization-issues",
         label: "Genre normalization issues",
-        description: "Tracks with multi-value genre strings that were collapsed to one canonical genre.",
+        description:
+            "Tracks with multi-value genre strings that were collapsed to one canonical genre.",
         severity: "low",
         scope: "tracks",
     },
@@ -1107,7 +1113,20 @@ pub fn list_music_tool_issues_for_app(
     request: MusicToolIssueRequest,
 ) -> Result<MusicToolIssueResponse> {
     let (conn, _) = open(app)?;
-    list_music_tool_issues(&conn, request, 500)
+    let tool_id = request.tool_id.clone();
+    let request_id = request.request_id.clone();
+    let result = list_music_tool_issues(&conn, request, 500, Some(app));
+    if result.is_err() {
+        emit_music_tool_progress(
+            Some(app),
+            &tool_id,
+            &request_id,
+            "failed",
+            100,
+            "Validation count failed.",
+        );
+    }
+    result
 }
 
 pub fn list_saved_searches_for_app(app: &AppHandle) -> Result<Vec<SavedSearch>> {
@@ -1320,6 +1339,7 @@ pub fn export_music_tool_issues_for_app(
     let (conn, _) = open(app)?;
     let request = MusicToolIssueRequest {
         tool_id: input.tool_id.clone(),
+        request_id: String::new(),
         search_text: input.search_text.clone(),
         sort: BrowseSort {
             field: "album".to_string(),
@@ -1328,7 +1348,7 @@ pub fn export_music_tool_issues_for_app(
         limit: 100_000,
         offset: 0,
     };
-    let response = list_music_tool_issues(&conn, request.clone(), 100_000)?;
+    let response = list_music_tool_issues(&conn, request.clone(), 100_000, None)?;
 
     let export_dir = app
         .path()
@@ -1736,30 +1756,106 @@ fn list_music_tool_issues(
     conn: &Connection,
     request: MusicToolIssueRequest,
     max_limit: u32,
+    progress_app: Option<&AppHandle>,
 ) -> Result<MusicToolIssueResponse> {
     let definition = music_tool_definition(&request.tool_id)?;
-    let tool = music_tool_summary(conn, definition)?;
+    emit_music_tool_progress(
+        progress_app,
+        definition.id,
+        &request.request_id,
+        "starting",
+        5,
+        "Starting validation count.",
+    );
+    let summary_pulse = start_music_tool_progress_pulse(
+        progress_app,
+        definition.id,
+        &request.request_id,
+        "counting",
+        5,
+        58,
+        "Counting selected validator issues.",
+    );
+    let tool_result = music_tool_summary(conn, definition);
+    drop(summary_pulse);
+    let tool = tool_result?;
+    emit_music_tool_progress(
+        progress_app,
+        definition.id,
+        &request.request_id,
+        "counting",
+        62,
+        "Applying filters to the selected tool.",
+    );
+
     let base_sql = music_tool_issue_sql(definition.id)?;
     let (where_sql, values) = music_tool_issue_search_where(&request.search_text);
     let limit = request.limit.clamp(1, max_limit);
     let offset = request.offset;
 
     let count_sql = format!("SELECT COUNT(*) FROM ({base_sql}) issue_rows {where_sql}");
-    let total = conn
-        .query_row(&count_sql, params_from_iter(values.iter()), |row| row.get(0))
-        .with_context(|| format!("Could not count {} issues", definition.label))?;
+    let count_pulse = start_music_tool_progress_pulse(
+        progress_app,
+        definition.id,
+        &request.request_id,
+        "counting",
+        62,
+        78,
+        "Counting filtered issue rows.",
+    );
+    let total_result = conn
+        .query_row(&count_sql, params_from_iter(values.iter()), |row| {
+            row.get(0)
+        })
+        .with_context(|| format!("Could not count {} issues", definition.label));
+    drop(count_pulse);
+    let total = total_result?;
+    emit_music_tool_progress(
+        progress_app,
+        definition.id,
+        &request.request_id,
+        "loading",
+        82,
+        "Loading issue rows.",
+    );
 
     let order_sql = music_tool_issue_order_clause(&request.sort);
-    let sql = format!("SELECT * FROM ({base_sql}) issue_rows {where_sql} {order_sql} LIMIT ? OFFSET ?");
+    let sql =
+        format!("SELECT * FROM ({base_sql}) issue_rows {where_sql} {order_sql} LIMIT ? OFFSET ?");
     let mut row_values = values;
     row_values.push(Value::Integer(i64::from(limit)));
     row_values.push(Value::Integer(i64::from(offset)));
 
-    let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt
-        .query_map(params_from_iter(row_values.iter()), music_tool_issue_from_row)?
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .with_context(|| format!("Could not load {} issues", definition.label))?;
+    let rows_pulse = start_music_tool_progress_pulse(
+        progress_app,
+        definition.id,
+        &request.request_id,
+        "loading",
+        82,
+        96,
+        "Loading issue rows.",
+    );
+    let rows_result = (|| -> Result<Vec<MusicToolIssueRow>> {
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt
+            .query_map(
+                params_from_iter(row_values.iter()),
+                music_tool_issue_from_row,
+            )?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .with_context(|| format!("Could not load {} issues", definition.label))?;
+        Ok(rows)
+    })();
+    drop(rows_pulse);
+    let rows = rows_result?;
+    emit_music_tool_progress(
+        progress_app,
+        definition.id,
+        &request.request_id,
+        "completed",
+        100,
+        "Validation count complete.",
+    );
 
     Ok(MusicToolIssueResponse {
         tool,
@@ -1784,8 +1880,8 @@ fn music_tool_summary(
         FROM ({base_sql}) issue_rows
         "
     );
-    let (issue_count, album_count, track_count) =
-        conn.query_row(&sql, [], |row| {
+    let (issue_count, album_count, track_count) = conn
+        .query_row(&sql, [], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, i64>(1)?,
@@ -1817,6 +1913,92 @@ fn music_tool_catalog_summary(definition: MusicToolDefinition) -> MusicToolSumma
         album_count: -1,
         track_count: -1,
     }
+}
+
+fn emit_music_tool_progress(
+    app: Option<&AppHandle>,
+    tool_id: &str,
+    request_id: &str,
+    status: &str,
+    percent: u8,
+    message: &str,
+) {
+    if let Some(app) = app {
+        let _ = app.emit(
+            "music-tool-progress",
+            MusicToolProgress {
+                tool_id: tool_id.to_string(),
+                request_id: request_id.to_string(),
+                status: status.to_string(),
+                percent: percent.min(100),
+                message: message.to_string(),
+            },
+        );
+    }
+}
+
+struct MusicToolProgressPulse {
+    stop: Arc<AtomicBool>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl Drop for MusicToolProgressPulse {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+fn start_music_tool_progress_pulse(
+    app: Option<&AppHandle>,
+    tool_id: &str,
+    request_id: &str,
+    status: &'static str,
+    start: u8,
+    cap: u8,
+    message: &'static str,
+) -> Option<MusicToolProgressPulse> {
+    if cap <= start {
+        return None;
+    }
+
+    let Some(app) = app else {
+        return None;
+    };
+
+    let app = app.clone();
+    let tool_id = tool_id.to_string();
+    let request_id = request_id.to_string();
+    let stop = Arc::new(AtomicBool::new(false));
+    let thread_stop = Arc::clone(&stop);
+
+    let handle = thread::spawn(move || {
+        let mut percent = start;
+        while !thread_stop.load(Ordering::Relaxed) && percent < cap {
+            thread::sleep(Duration::from_millis(180));
+            if thread_stop.load(Ordering::Relaxed) {
+                break;
+            }
+            percent = percent.saturating_add(1).min(cap);
+            let _ = app.emit(
+                "music-tool-progress",
+                MusicToolProgress {
+                    tool_id: tool_id.clone(),
+                    request_id: request_id.clone(),
+                    status: status.to_string(),
+                    percent,
+                    message: message.to_string(),
+                },
+            );
+        }
+    });
+
+    Some(MusicToolProgressPulse {
+        stop,
+        handle: Some(handle),
+    })
 }
 
 fn music_tool_definition(tool_id: &str) -> Result<MusicToolDefinition> {
@@ -3129,11 +3311,7 @@ fn write_export_file(
     Ok(())
 }
 
-fn write_issue_export_file(
-    path: &PathBuf,
-    format: &str,
-    rows: &[MusicToolIssueRow],
-) -> Result<()> {
+fn write_issue_export_file(path: &PathBuf, format: &str, rows: &[MusicToolIssueRow]) -> Result<()> {
     let (headers, values) = issue_export_table(rows);
 
     if format == "xlsx" {
@@ -3572,14 +3750,17 @@ mod tests {
         request.tool_id = "non-mp3-files".to_string();
         request.search_text = "flac".to_string();
         let response =
-            list_music_tool_issues(&conn, request, 50).expect("list non-mp3 issues");
+            list_music_tool_issues(&conn, request, 50, None).expect("list non-mp3 issues");
         let (headers, rows) = issue_export_table(&response.rows);
 
         assert_eq!(response.tool.issue_count, 1);
         assert_eq!(response.tool.album_count, 1);
         assert_eq!(response.tool.track_count, 1);
         assert_eq!(response.total, 1);
-        assert_eq!(response.rows[0].filename.as_deref(), Some("02 What Have I Done.flac"));
+        assert_eq!(
+            response.rows[0].filename.as_deref(),
+            Some("02 What Have I Done.flac")
+        );
         assert!(headers.contains(&"Issue"));
         assert_eq!(rows.len(), 1);
     }

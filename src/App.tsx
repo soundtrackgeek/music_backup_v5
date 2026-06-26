@@ -49,6 +49,7 @@ import {
   listSavedSearches,
   loadCachedSettings,
   listenToImportProgress,
+  listenToMusicToolProgress,
   saveChart,
   saveSearch,
   saveSettings,
@@ -81,6 +82,7 @@ import type {
   MusicToolIssueRequest,
   MusicToolIssueResponse,
   MusicToolIssueRow,
+  MusicToolProgress,
   MusicToolSummary,
   SavedChart,
   SavedSearch,
@@ -248,13 +250,31 @@ function createGenreAlbumsRequest(genre: GenreSummary): BrowseRequest {
   return request;
 }
 
+function createMusicToolIssueRequestId(toolId: string) {
+  return `${toolId}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 function createMusicToolIssueRequest(toolId = "duplicate-albums"): MusicToolIssueRequest {
   return {
     toolId,
+    requestId: createMusicToolIssueRequestId(toolId),
     searchText: "",
     sort: { field: "album", direction: "asc" },
     limit: 50,
     offset: 0,
+  };
+}
+
+function renewMusicToolIssueRequest(
+  previous: MusicToolIssueRequest,
+  values: Omit<Partial<MusicToolIssueRequest>, "requestId">,
+): MusicToolIssueRequest {
+  const toolId = values.toolId ?? previous.toolId;
+  return {
+    ...previous,
+    ...values,
+    toolId,
+    requestId: createMusicToolIssueRequestId(toolId),
   };
 }
 
@@ -553,6 +573,17 @@ function formatToolCount(value: number | null | undefined) {
     return "On select";
   }
   return formatNumber(value);
+}
+
+function formatToolProgress(progress: MusicToolProgress | null) {
+  if (!progress) {
+    return null;
+  }
+  return `${Math.round(progress.percent)}%`;
+}
+
+function isMusicToolProgressActive(progress: MusicToolProgress | null) {
+  return Boolean(progress && progress.status !== "completed" && progress.status !== "failed");
 }
 
 function formatDuration(ms: number) {
@@ -1659,10 +1690,12 @@ function SeverityBadge({ severity }: { severity: string }) {
 function MusicToolIndexTable({
   tools,
   selectedToolId,
+  progress,
   onSelect,
 }: {
   tools: MusicToolSummary[];
   selectedToolId: string | null;
+  progress: MusicToolProgress | null;
   onSelect: (toolId: string) => void;
 }) {
   if (tools.length === 0) {
@@ -1685,6 +1718,7 @@ function MusicToolIndexTable({
       </div>
       {tools.map((tool) => {
         const isSelected = tool.id === selectedToolId;
+        const selectedProgress = isSelected && isMusicToolProgressActive(progress) ? formatToolProgress(progress) : null;
         return (
           <div
             className={`result-table-row selectable${isSelected ? " selected" : ""}`}
@@ -1707,7 +1741,9 @@ function MusicToolIndexTable({
             <span role="cell">
               <SeverityBadge severity={tool.severity} />
             </span>
-            <span role="cell">{formatToolCount(tool.issueCount)}</span>
+            <span className={selectedProgress ? "tool-count-progress" : undefined} role="cell">
+              {selectedProgress ?? formatToolCount(tool.issueCount)}
+            </span>
             <span role="cell">{formatToolCount(tool.albumCount)}</span>
             <span role="cell">{formatToolCount(tool.trackCount)}</span>
           </div>
@@ -1717,8 +1753,25 @@ function MusicToolIndexTable({
   );
 }
 
-function MusicToolIssueTable({ response }: { response: MusicToolIssueResponse | null }) {
+function MusicToolIssueTable({
+  response,
+  progress,
+}: {
+  response: MusicToolIssueResponse | null;
+  progress: MusicToolProgress | null;
+}) {
   if (!response) {
+    if (isMusicToolProgressActive(progress)) {
+      return (
+        <div className="empty-state large">
+          <Wrench size={20} />
+          <span>
+            {progress?.message ?? "Counting selected tool."} {formatToolProgress(progress)}
+          </span>
+        </div>
+      );
+    }
+
     return (
       <div className="empty-state large">
         <FileSearch size={20} />
@@ -1773,10 +1826,12 @@ function MusicToolIssueTable({ response }: { response: MusicToolIssueResponse | 
 
 function MusicToolDetailPanel({
   tool,
+  progress,
   exportResult,
   onExport,
 }: {
   tool: MusicToolSummary | null;
+  progress: MusicToolProgress | null;
   exportResult: ExportResult | null;
   onExport: (format: string) => Promise<void>;
 }) {
@@ -1798,6 +1853,9 @@ function MusicToolDetailPanel({
     );
   }
 
+  const progressText = formatToolProgress(progress);
+  const isProgressActive = isMusicToolProgressActive(progress);
+
   return (
     <aside className="detail-panel tools-detail" aria-label="Music tools details">
       <div className="detail-header">
@@ -1813,7 +1871,7 @@ function MusicToolDetailPanel({
       <dl className="run-details tool-detail-stats">
         <div>
           <dt>Issue rows</dt>
-          <dd>{formatToolCount(tool.issueCount)}</dd>
+          <dd>{isProgressActive && progressText ? progressText : formatToolCount(tool.issueCount)}</dd>
         </div>
         <div>
           <dt>Affected albums</dt>
@@ -1828,6 +1886,22 @@ function MusicToolDetailPanel({
           <dd>{severityLabel(tool.severity)}</dd>
         </div>
       </dl>
+
+      {progress ? (
+        <section className="progress-block tool-progress-block" aria-live="polite">
+          <div className="progress-row">
+            <span>{progress.message}</span>
+            <strong>{progressText}</strong>
+          </div>
+          <div className="progress-track">
+            <div className="progress-fill" style={{ width: `${Math.min(100, Math.max(0, progress.percent))}%` }} />
+          </div>
+          <div className="progress-meta">
+            <span>{progress.status}</span>
+            <span>{tool.label}</span>
+          </div>
+        </section>
+      ) : null}
 
       <section className="calculation-list tools-signals">
         <div>
@@ -2173,6 +2247,7 @@ export default function App() {
   const [toolIssueResponse, setToolIssueResponse] = useState<MusicToolIssueResponse | null>(null);
   const [toolIssueError, setToolIssueError] = useState<string | null>(null);
   const [isToolIssuesLoading, setIsToolIssuesLoading] = useState(false);
+  const [toolProgress, setToolProgress] = useState<MusicToolProgress | null>(null);
   const [toolExportResult, setToolExportResult] = useState<ExportResult | null>(null);
   const [chartConfig, setChartConfig] = useState<ChartConfig>(() => createChartConfig());
   const [chartResponse, setChartResponse] = useState<BrowseResponse | null>(null);
@@ -2223,6 +2298,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (activeSection !== "Tools" || !selectedToolId) {
+      return;
+    }
+
+    let unlisten: (() => void) | null = null;
+    void listenToMusicToolProgress((nextProgress) => {
+      setToolProgress((previous) =>
+        nextProgress.toolId === selectedToolId && nextProgress.requestId === toolIssueRequest.requestId
+          ? nextProgress
+          : previous,
+      );
+    }).then((nextUnlisten) => {
+      unlisten = nextUnlisten;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, [activeSection, selectedToolId, toolIssueRequest.requestId]);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = settings.darkMode ? "dark" : "light";
   }, [settings.darkMode]);
 
@@ -2247,8 +2343,15 @@ export default function App() {
     [selectedGenre],
   );
   const selectedCatalogTool = musicTools.find((tool) => tool.id === selectedToolId) ?? null;
-  const selectedTool =
-    toolIssueResponse?.tool.id === selectedToolId ? toolIssueResponse.tool : selectedCatalogTool;
+  const currentToolIssueResponse = toolIssueResponse?.tool.id === selectedToolId ? toolIssueResponse : null;
+  const selectedTool = currentToolIssueResponse?.tool ?? selectedCatalogTool;
+  const activeToolProgress =
+    toolProgress?.toolId === selectedToolId && toolProgress.requestId === toolIssueRequest.requestId
+      ? toolProgress
+      : null;
+  const activeToolProgressText = formatToolProgress(activeToolProgress);
+  const isToolProgressActive = isMusicToolProgressActive(activeToolProgress);
+  const isToolRunPending = isToolIssuesLoading || isToolProgressActive;
 
   useEffect(() => {
     if (activeSection !== "Search") {
@@ -2611,6 +2714,13 @@ export default function App() {
     }
 
     let cancelled = false;
+    setToolProgress({
+      toolId: toolIssueRequest.toolId,
+      requestId: toolIssueRequest.requestId,
+      status: "starting",
+      percent: 5,
+      message: "Starting validation count.",
+    });
     const timer = window.setTimeout(() => {
       setIsToolIssuesLoading(true);
       setToolIssueError(null);
@@ -2618,12 +2728,26 @@ export default function App() {
         .then((nextResponse) => {
           if (!cancelled) {
             setToolIssueResponse(nextResponse);
+            setToolProgress({
+              toolId: toolIssueRequest.toolId,
+              requestId: toolIssueRequest.requestId,
+              status: "completed",
+              percent: 100,
+              message: "Validation count complete.",
+            });
           }
         })
         .catch((searchError) => {
           if (!cancelled) {
             setToolIssueError(searchError instanceof Error ? searchError.message : String(searchError));
             setToolIssueResponse(null);
+            setToolProgress({
+              toolId: toolIssueRequest.toolId,
+              requestId: toolIssueRequest.requestId,
+              status: "failed",
+              percent: 100,
+              message: "Validation count failed.",
+            });
           }
         })
         .finally(() => {
@@ -3212,13 +3336,21 @@ export default function App() {
   const genrePageStart = genreTotal === 0 ? 0 : genreRequest.offset + 1;
   const genrePageEnd = Math.min(genreTotal, genreRequest.offset + genreRequest.limit);
   const selectedGenreAlbumCount = selectedGenre?.albumCount ?? genreAlbumsResponse?.total ?? 0;
-  const toolIssueTotal = toolIssueResponse?.total ?? 0;
+  const toolIssueTotal = currentToolIssueResponse?.total ?? 0;
   const toolIssuePageStart = toolIssueTotal === 0 ? 0 : toolIssueRequest.offset + 1;
   const toolIssuePageEnd = Math.min(toolIssueTotal, toolIssueRequest.offset + toolIssueRequest.limit);
   const totalToolIssues = musicTools.every((tool) => tool.issueCount >= 0)
     ? musicTools.reduce((sum, tool) => sum + tool.issueCount, 0)
     : null;
   const selectedToolIssueCount = selectedTool?.issueCount ?? toolIssueTotal;
+  const selectedToolIssueValue =
+    isToolProgressActive && activeToolProgressText
+      ? activeToolProgressText
+      : formatToolCount(selectedToolIssueCount);
+  const toolIssuePanelCaption =
+    isToolRunPending && activeToolProgress && activeToolProgressText
+      ? `${activeToolProgress.message} ${activeToolProgressText}`
+      : `${formatNumber(toolIssuePageStart)}-${formatNumber(toolIssuePageEnd)} of ${formatNumber(toolIssueTotal)}`;
   const chartTotal = chartResponse?.total ?? 0;
   const chartRows = chartResponse?.rows.length ?? 0;
   const ratingAlbumTotal =
@@ -3954,7 +4086,7 @@ export default function App() {
           <section className="metric-grid" aria-label="Tools summary">
             <Metric label="Validators" value={formatNumber(musicTools.length)} tone="teal" icon={Wrench} />
             <Metric label="Issue rows" value={formatToolCount(totalToolIssues)} tone="amber" icon={FileSearch} />
-            <Metric label="Selected" value={formatToolCount(selectedToolIssueCount)} icon={ListMusic} />
+            <Metric label="Selected" value={selectedToolIssueValue} icon={ListMusic} />
             <Metric label="Severity" value={severityLabel(selectedTool?.severity) || "Select"} icon={ShieldCheck} />
           </section>
 
@@ -3965,11 +4097,12 @@ export default function App() {
                 <input
                   value={toolIssueRequest.searchText}
                   onChange={(event) =>
-                    setToolIssueRequest((previous) => ({
-                      ...previous,
-                      searchText: event.target.value,
-                      offset: 0,
-                    }))
+                    setToolIssueRequest((previous) =>
+                      renewMusicToolIssueRequest(previous, {
+                        searchText: event.target.value,
+                        offset: 0,
+                      }),
+                    )
                   }
                   placeholder="Filter affected albums, tracks, files, and issue values"
                 />
@@ -3978,11 +4111,12 @@ export default function App() {
                 label="Sort"
                 value={toolIssueRequest.sort.field}
                 onChange={(field) =>
-                  setToolIssueRequest((previous) => ({
-                    ...previous,
-                    sort: { ...previous.sort, field },
-                    offset: 0,
-                  }))
+                  setToolIssueRequest((previous) =>
+                    renewMusicToolIssueRequest(previous, {
+                      sort: { ...previous.sort, field },
+                      offset: 0,
+                    }),
+                  )
                 }
                 options={[
                   { value: "album", label: "Album" },
@@ -4004,11 +4138,12 @@ export default function App() {
                     className="filter-chip"
                     type="button"
                     onClick={() =>
-                      setToolIssueRequest((previous) => ({
-                        ...previous,
-                        searchText: "",
-                        offset: 0,
-                      }))
+                      setToolIssueRequest((previous) =>
+                        renewMusicToolIssueRequest(previous, {
+                          searchText: "",
+                          offset: 0,
+                        }),
+                      )
                     }
                   >
                     <span>Filter "{toolIssueRequest.searchText.trim()}"</span>
@@ -4024,11 +4159,12 @@ export default function App() {
                   label="Direction"
                   value={toolIssueRequest.sort.direction}
                   onChange={(direction) =>
-                    setToolIssueRequest((previous) => ({
-                      ...previous,
-                      sort: { ...previous.sort, direction: direction as "asc" | "desc" },
-                      offset: 0,
-                    }))
+                    setToolIssueRequest((previous) =>
+                      renewMusicToolIssueRequest(previous, {
+                        sort: { ...previous.sort, direction: direction as "asc" | "desc" },
+                        offset: 0,
+                      }),
+                    )
                   }
                   options={[
                     { value: "asc", label: "Ascending" },
@@ -4041,7 +4177,9 @@ export default function App() {
                   min={10}
                   max={500}
                   onChange={(value) =>
-                    setToolIssueRequest((previous) => ({ ...previous, limit: value ?? 50, offset: 0 }))
+                    setToolIssueRequest((previous) =>
+                      renewMusicToolIssueRequest(previous, { limit: value ?? 50, offset: 0 }),
+                    )
                   }
                 />
               </div>
@@ -4060,18 +4198,19 @@ export default function App() {
             </div>
 
             {toolsError ? <p className="error-message">{toolsError}</p> : null}
-            <MusicToolIndexTable tools={musicTools} selectedToolId={selectedToolId} onSelect={selectMusicTool} />
+            <MusicToolIndexTable
+              tools={musicTools}
+              selectedToolId={selectedToolId}
+              progress={activeToolProgress}
+              onSelect={selectMusicTool}
+            />
           </section>
 
           <section className="table-panel" aria-label="Validation issues">
             <div className="panel-heading compact">
               <div>
                 <h2>{selectedTool?.label ?? "Issue list"}</h2>
-                <p>
-                  {isToolIssuesLoading
-                    ? "Loading issues"
-                    : `${formatNumber(toolIssuePageStart)}-${formatNumber(toolIssuePageEnd)} of ${formatNumber(toolIssueTotal)}`}
-                </p>
+                <p>{toolIssuePanelCaption}</p>
               </div>
               <div className="pager">
                 <button
@@ -4080,10 +4219,11 @@ export default function App() {
                   aria-label="Previous issue page"
                   disabled={toolIssueRequest.offset === 0}
                   onClick={() =>
-                    setToolIssueRequest((previous) => ({
-                      ...previous,
-                      offset: Math.max(0, previous.offset - previous.limit),
-                    }))
+                    setToolIssueRequest((previous) =>
+                      renewMusicToolIssueRequest(previous, {
+                        offset: Math.max(0, previous.offset - previous.limit),
+                      }),
+                    )
                   }
                 >
                   <ChevronLeft size={17} />
@@ -4094,10 +4234,11 @@ export default function App() {
                   aria-label="Next issue page"
                   disabled={toolIssueRequest.offset + toolIssueRequest.limit >= toolIssueTotal}
                   onClick={() =>
-                    setToolIssueRequest((previous) => ({
-                      ...previous,
-                      offset: previous.offset + previous.limit,
-                    }))
+                    setToolIssueRequest((previous) =>
+                      renewMusicToolIssueRequest(previous, {
+                        offset: previous.offset + previous.limit,
+                      }),
+                    )
                   }
                 >
                   <ChevronRight size={17} />
@@ -4106,7 +4247,10 @@ export default function App() {
             </div>
 
             {toolIssueError ? <p className="error-message">{toolIssueError}</p> : null}
-            <MusicToolIssueTable response={toolIssueResponse} />
+            <MusicToolIssueTable
+              response={isToolProgressActive ? null : currentToolIssueResponse}
+              progress={activeToolProgress}
+            />
           </section>
         </section>
       ) : activeSection === "Albums" ? (
@@ -5133,7 +5277,12 @@ export default function App() {
           onExport={runGenreExport}
         />
       ) : activeSection === "Tools" ? (
-        <MusicToolDetailPanel tool={selectedTool} exportResult={toolExportResult} onExport={runToolExport} />
+        <MusicToolDetailPanel
+          tool={selectedTool}
+          progress={activeToolProgress}
+          exportResult={toolExportResult}
+          onExport={runToolExport}
+        />
       ) : activeSection === "Albums" ? (
         <AlbumDetailPanel
           album={selectedAlbum}

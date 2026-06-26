@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2] - 2026-06-26
+### Added
+- Added live percentage progress for selected Music Tools validation counts and issue row loading.
+
+### Changed
+- Updated the Tools workspace to show selected-tool progress in the summary metric, validator list, issue panel, and detail panel.
+
 ## [0.9.1] - 2026-06-26
 ### Fixed
 - Made the Music Tools catalog render immediately instead of waiting for every validation count query to finish.

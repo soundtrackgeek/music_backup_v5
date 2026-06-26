@@ -23,6 +23,7 @@ import type {
   MusicToolIssueRequest,
   MusicToolIssueResponse,
   MusicToolIssueRow,
+  MusicToolProgress,
   MusicToolSummary,
 } from "./types";
 
@@ -803,6 +804,16 @@ export async function listenToImportProgress(handler: (progress: ImportProgress)
   }
 
   return listen<ImportProgress>("import-progress", (event) => {
+    handler(event.payload);
+  });
+}
+
+export async function listenToMusicToolProgress(handler: (progress: MusicToolProgress) => void) {
+  if (!isTauriRuntime()) {
+    return (() => undefined) satisfies UnlistenFn;
+  }
+
+  return listen<MusicToolProgress>("music-tool-progress", (event) => {
     handler(event.payload);
   });
 }

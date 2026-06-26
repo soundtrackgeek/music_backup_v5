@@ -186,10 +186,19 @@ export type MusicToolSummary = {
 
 export type MusicToolIssueRequest = {
   toolId: string;
+  requestId: string;
   searchText: string;
   sort: BrowseSort;
   limit: number;
   offset: number;
+};
+
+export type MusicToolProgress = {
+  toolId: string;
+  requestId: string;
+  status: "starting" | "counting" | "loading" | "completed" | "failed";
+  percent: number;
+  message: string;
 };
 
 export type MusicToolIssueRow = {

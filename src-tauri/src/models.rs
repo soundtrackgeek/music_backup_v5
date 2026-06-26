@@ -293,6 +293,8 @@ pub struct MusicToolSummary {
 pub struct MusicToolIssueRequest {
     #[serde(default = "default_music_tool_id")]
     pub tool_id: String,
+    #[serde(default = "default_request_id")]
+    pub request_id: String,
     #[serde(default)]
     pub search_text: String,
     #[serde(default)]
@@ -307,6 +309,7 @@ impl Default for MusicToolIssueRequest {
     fn default() -> Self {
         Self {
             tool_id: default_music_tool_id(),
+            request_id: default_request_id(),
             search_text: String::new(),
             sort: BrowseSort {
                 field: "album".to_string(),
@@ -316,6 +319,16 @@ impl Default for MusicToolIssueRequest {
             offset: 0,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicToolProgress {
+    pub tool_id: String,
+    pub request_id: String,
+    pub status: String,
+    pub percent: u8,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -643,4 +656,8 @@ fn default_backup_retention() -> u32 {
 
 fn default_music_tool_id() -> String {
     "duplicate-albums".to_string()
+}
+
+fn default_request_id() -> String {
+    String::new()
 }
