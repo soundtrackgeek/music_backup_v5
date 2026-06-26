@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.10.2] - 2026-06-26
+### Fixed
+- Ignored the local MusicBee TSV export, cover archive, Tauri sources, and built assets in Vite's dev watcher so `npm run tauri:dev` can serve the UI instead of hanging on large local library data.
+
 ## [0.10.1] - 2026-06-26
 ### Fixed
 - Matched the Tauri dev URL to Vite's `127.0.0.1:1420` loopback server so `npm run tauri:dev` no longer opens a blank desktop window when `localhost` resolves differently.

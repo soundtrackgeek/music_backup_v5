@@ -34,7 +34,7 @@ Run the full desktop app:
 npm run tauri:dev
 ```
 
-The desktop dev shell loads Vite from `http://127.0.0.1:1420/`, matching the loopback host used by `npm run dev`. If the Tauri window opens but stays blank, make sure port `1420` is free and restart `npm run tauri:dev`.
+The desktop dev shell loads Vite from `http://127.0.0.1:1420/`, matching the loopback host used by `npm run dev`. Vite ignores the local `musicbee-library.tsv` export and `AlbumCovers/` archive during development so large library data cannot stall the dev server watcher. If the Tauri window opens but stays blank, make sure port `1420` is free and restart `npm run tauri:dev`.
 
 The import screen defaults to `musicbee-library.tsv`. Relative paths are resolved from the app process directory and its parent, so the repo-root TSV works during local development. The TSV and local `AlbumCovers/` archive are intentionally ignored by git.
 
