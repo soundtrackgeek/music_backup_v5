@@ -182,7 +182,7 @@ const chartGridCoverSize = {
   default: 144,
 } as const;
 
-const genreSuggestionLimit = 2000;
+const genreSuggestionPageSize = 500;
 const genreSuggestionAliases = ["scores"] as const;
 const maxGenreSuggestions = 5;
 
@@ -296,13 +296,33 @@ function createGenreListRequest(): GenreListRequest {
   };
 }
 
-function createGenreSuggestionRequest(): GenreListRequest {
+function createGenreSuggestionRequest(offset = 0): GenreListRequest {
   return {
     searchText: "",
     sort: { field: "name", direction: "asc" },
-    limit: genreSuggestionLimit,
-    offset: 0,
+    limit: genreSuggestionPageSize,
+    offset,
   };
+}
+
+async function loadGenreSuggestionNames() {
+  const names: string[] = [];
+  let offset = 0;
+  let total = 0;
+
+  do {
+    const nextGenres = await listGenres(createGenreSuggestionRequest(offset));
+    names.push(...nextGenres.rows.map((genre) => genre.name));
+    total = nextGenres.total;
+
+    if (nextGenres.rows.length === 0) {
+      break;
+    }
+
+    offset += nextGenres.rows.length;
+  } while (offset < total);
+
+  return uniqueGenreSuggestionOptions(names);
 }
 
 function createGenreAlbumsRequest(genre: GenreSummary): BrowseRequest {
@@ -1020,12 +1040,14 @@ function GenreListCriterion({
   onChange,
   placeholder,
   genreOptions = [],
+  onRequestOptions,
 }: {
   label: string;
   values: string[];
   onChange: (values: string[]) => void;
   placeholder?: string;
   genreOptions?: string[];
+  onRequestOptions?: () => void;
 }) {
   const inputId = useId();
   const listboxId = `${inputId}-genre-suggestions`;
@@ -1128,6 +1150,9 @@ function GenreListCriterion({
         onFocus={(event) => {
           syncCaret(event.currentTarget);
           setIsSuggestionOpen(true);
+          if (genreOptions.length <= genreSuggestionAliases.length) {
+            onRequestOptions?.();
+          }
         }}
         onKeyDown={handleKeyDown}
         onKeyUp={(event) => syncCaret(event.currentTarget)}
@@ -2846,8 +2871,8 @@ export default function App() {
   const canImport = isTauriRuntime();
 
   const refreshGenreSuggestions = useCallback(async () => {
-    const nextGenres = await listGenres(createGenreSuggestionRequest());
-    setGenreSuggestionNames(nextGenres.rows.map((genre) => genre.name));
+    const nextGenreNames = await loadGenreSuggestionNames();
+    setGenreSuggestionNames(nextGenreNames);
   }, []);
 
   const loadData = useCallback(async () => {
@@ -2866,7 +2891,7 @@ export default function App() {
     setStatistics(nextStatistics);
     setSettings(nextSettings);
     void refreshGenreSuggestions().catch(() => {
-      setGenreSuggestionNames([]);
+      // Keep any suggestions already loaded from focus retry or the Genres page.
     });
   }, [refreshGenreSuggestions]);
 
@@ -2875,6 +2900,24 @@ export default function App() {
       setImportError(loadError instanceof Error ? loadError.message : String(loadError));
     });
   }, [loadData]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void loadGenreSuggestionNames()
+      .then((nextGenreNames) => {
+        if (!cancelled) {
+          setGenreSuggestionNames(nextGenreNames);
+        }
+      })
+      .catch(() => {
+        // The genre fields can retry on focus, and the Genres page can still seed suggestions.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -2930,6 +2973,11 @@ export default function App() {
     () => uniqueGenreSuggestionOptions([...genreSuggestionAliases, ...genreSuggestionNames]),
     [genreSuggestionNames],
   );
+  const requestGenreSuggestionRefresh = useCallback(() => {
+    void refreshGenreSuggestions().catch(() => {
+      // Field focus can retry again; keep the existing option list.
+    });
+  }, [refreshGenreSuggestions]);
   const chartRequest = useMemo(() => chartRequestFromConfig(chartConfig), [chartConfig]);
   const albumTracksRequest = useMemo(
     () => (selectedAlbumId ? createAlbumTracksRequest(selectedAlbumId) : null),
@@ -3189,6 +3237,17 @@ export default function App() {
       window.clearTimeout(timer);
     };
   }, [activeSection, genreRequest]);
+
+  useEffect(() => {
+    const visibleGenreNames = genreResponse?.rows.map((genre) => genre.name) ?? [];
+    if (visibleGenreNames.length === 0) {
+      return;
+    }
+
+    setGenreSuggestionNames((previous) =>
+      uniqueGenreSuggestionOptions([...previous, ...visibleGenreNames]),
+    );
+  }, [genreResponse]);
 
   useEffect(() => {
     if (activeSection !== "Genres") {
@@ -4382,6 +4441,7 @@ export default function App() {
                 values={chartConfig.request.filters.genres}
                 onChange={(genres) => updateChartFilters({ genres })}
                 genreOptions={genreSuggestionOptions}
+                onRequestOptions={requestGenreSuggestionRefresh}
                 placeholder="Synthpop, AOR"
               />
               <GenreListCriterion
@@ -4389,6 +4449,7 @@ export default function App() {
                 values={chartConfig.request.filters.excludedGenres}
                 onChange={(excludedGenres) => updateChartFilters({ excludedGenres })}
                 genreOptions={genreSuggestionOptions}
+                onRequestOptions={requestGenreSuggestionRefresh}
               />
               <TextCriterion
                 label="Album artist"
@@ -5159,6 +5220,7 @@ export default function App() {
                 values={albumFilters.genres}
                 onChange={(genres) => updateAlbumFilter("genres", genres)}
                 genreOptions={genreSuggestionOptions}
+                onRequestOptions={requestGenreSuggestionRefresh}
                 placeholder="Synthpop, AOR"
               />
               <GenreListCriterion
@@ -5166,6 +5228,7 @@ export default function App() {
                 values={albumFilters.excludedGenres}
                 onChange={(excludedGenres) => updateAlbumFilter("excludedGenres", excludedGenres)}
                 genreOptions={genreSuggestionOptions}
+                onRequestOptions={requestGenreSuggestionRefresh}
               />
               <NumberField
                 label="Year from"
@@ -5703,6 +5766,7 @@ export default function App() {
                 values={currentFilters.genres}
                 onChange={(genres) => updateFilter("genres", genres)}
                 genreOptions={genreSuggestionOptions}
+                onRequestOptions={requestGenreSuggestionRefresh}
                 placeholder="Synthpop, AOR"
               />
               <GenreListCriterion
@@ -5710,6 +5774,7 @@ export default function App() {
                 values={currentFilters.excludedGenres}
                 onChange={(excludedGenres) => updateFilter("excludedGenres", excludedGenres)}
                 genreOptions={genreSuggestionOptions}
+                onRequestOptions={requestGenreSuggestionRefresh}
               />
               <TextCriterion
                 label="Publisher"

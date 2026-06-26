@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.12.1] - 2026-06-27
+### Fixed
+- Fixed desktop genre suggestions so Search, Albums, and Charts retry loading the canonical genre index independently of startup data loading instead of falling back to only the built-in `scores` alias.
+
 ## [0.12.0] - 2026-06-27
 ### Added
 - Added five-result in-place genre suggestions to Search, Albums, and Charts include/exclude genre filters, with keyboard navigation and substring matching across canonical genre names.
