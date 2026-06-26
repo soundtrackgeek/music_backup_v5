@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.3] - 2026-06-26
+### Changed
+- Changed cover archive imports to link directly to `AlbumCovers` source files instead of copying every archive image into the app data folder.
+- Cover rendering now loads image data through a local backend command, so the app can read configured cover source paths without broad Tauri asset protocol access.
+
+### Fixed
+- Re-running cover import now relinks existing cache-copy entries back to source archive images and removes stale app-cache cover copies for those albums.
+
 ## [0.10.2] - 2026-06-26
 ### Fixed
 - Ignored the local MusicBee TSV export, cover archive, Tauri sources, and built assets in Vite's dev watcher so `npm run tauri:dev` can serve the UI instead of hanging on large local library data.

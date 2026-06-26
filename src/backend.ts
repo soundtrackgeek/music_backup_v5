@@ -1,4 +1,4 @@
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppSettings,
@@ -323,6 +323,7 @@ const mockMusicToolIssues: MusicToolIssueRow[] = [
 let mockSavedSearches: SavedSearch[] = [];
 let mockSavedCharts: SavedChart[] = [];
 let mockSettings: AppSettings = loadCachedSettings();
+const coverDataUrlCache = new Map<string, Promise<string | null> | string | null>();
 
 const mockImportRun = {
   id: 1,
@@ -580,6 +581,26 @@ export async function importAlbumCovers(request: CoverImportRequest) {
   }
 
   return invoke<CoverImportSummary>("import_album_covers", { request });
+}
+
+export async function getAlbumCoverDataUrl(albumId: string) {
+  if (!isTauriRuntime()) {
+    return null;
+  }
+
+  if (coverDataUrlCache.has(albumId)) {
+    return coverDataUrlCache.get(albumId) ?? null;
+  }
+
+  const request = invoke<string | null>("get_album_cover_data_url", { albumId }).catch(() => null);
+  coverDataUrlCache.set(albumId, request);
+  const dataUrl = await request;
+  coverDataUrlCache.set(albumId, dataUrl);
+  return dataUrl;
+}
+
+export function clearCoverImageCache() {
+  coverDataUrlCache.clear();
 }
 
 export async function searchLibrary(request: BrowseRequest) {
@@ -850,13 +871,6 @@ export async function listenToMusicToolProgress(handler: (progress: MusicToolPro
   });
 }
 
-export function coverImageUrl(coverPath: string | null) {
-  if (!coverPath || !isTauriRuntime()) {
-    return null;
-  }
-
-  return convertFileSrc(coverPath);
-}
 
 export function loadCachedSettings() {
   if (typeof window === "undefined") {

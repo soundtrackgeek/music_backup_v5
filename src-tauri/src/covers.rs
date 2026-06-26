@@ -1,10 +1,11 @@
 use crate::db;
 use crate::models::{CoverImportProgress, CoverImportRequest, CoverImportSummary};
 use anyhow::{anyhow, bail, Context, Result};
+use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
 use id3::frame::PictureType;
 use id3::Tag;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -30,6 +31,7 @@ struct ArchiveCover {
 
 #[derive(Debug, Clone)]
 struct ExistingCover {
+    source: String,
     cache_path: String,
 }
 
@@ -54,6 +56,7 @@ struct CoverCounters {
     scanned_albums: u64,
     new_covers_found: u64,
     imported_covers: u64,
+    relinked_covers: u64,
     skipped_existing: u64,
     missing_covers: u64,
 }
@@ -74,6 +77,36 @@ pub fn import_album_covers(
         );
     }
     result
+}
+
+pub fn album_cover_data_url(app: AppHandle, album_id: String) -> Result<Option<String>> {
+    let (conn, _) = db::open(&app)?;
+    let cover = conn
+        .query_row(
+            "
+            SELECT cache_path, mime_type
+            FROM album_covers
+            WHERE album_id = ?1
+            ",
+            params![album_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()
+        .context("Could not load album cover metadata")?;
+
+    let Some((cover_path, mime_type)) = cover else {
+        return Ok(None);
+    };
+
+    let path = PathBuf::from(&cover_path);
+    if !path.is_file() {
+        return Ok(None);
+    }
+
+    let bytes = fs::read(&path)
+        .with_context(|| format!("Could not read cover image {}", path.display()))?;
+    let encoded = general_purpose::STANDARD.encode(bytes);
+    Ok(Some(format!("data:{mime_type};base64,{encoded}")))
 }
 
 fn run_cover_import(
@@ -129,16 +162,26 @@ fn run_cover_import(
     for album in albums {
         counters.scanned_albums += 1;
 
-        if !request.replace_existing && has_valid_existing_cover(&album.album_id, &existing_covers)
-        {
-            counters.skipped_existing += 1;
-            maybe_emit_running_progress(app, &counters);
-            continue;
-        }
-
         match find_cover_for_album(&album, &archive_index, request.extract_embedded_fallback)? {
             Some(payload) => {
-                counters.new_covers_found += 1;
+                let existing_cover = existing_covers.get(&album.album_id);
+                if !request.replace_existing
+                    && existing_cover_matches_payload(existing_cover, &payload)
+                {
+                    counters.skipped_existing += 1;
+                    maybe_emit_running_progress(app, &counters);
+                    continue;
+                }
+
+                if existing_cover
+                    .map(has_valid_existing_cover)
+                    .unwrap_or(false)
+                {
+                    counters.relinked_covers += 1;
+                } else {
+                    counters.new_covers_found += 1;
+                }
+
                 let imported = import_cover_payload(&cache_dir, &album.album_id, payload)?;
                 upsert_cover.execute(params![
                     &album.album_id,
@@ -153,7 +196,16 @@ fn run_cover_import(
                 counters.imported_covers += 1;
             }
             None => {
-                counters.missing_covers += 1;
+                if !request.replace_existing
+                    && existing_covers
+                        .get(&album.album_id)
+                        .map(has_valid_existing_cover)
+                        .unwrap_or(false)
+                {
+                    counters.skipped_existing += 1;
+                } else {
+                    counters.missing_covers += 1;
+                }
             }
         }
 
@@ -178,6 +230,7 @@ fn run_cover_import(
         scanned_albums: counters.scanned_albums,
         new_covers_found: counters.new_covers_found,
         imported_covers: counters.imported_covers,
+        relinked_covers: counters.relinked_covers,
         skipped_existing: counters.skipped_existing,
         missing_covers: counters.missing_covers,
         duration_ms,
@@ -299,7 +352,7 @@ fn load_album_cover_candidates(conn: &Connection) -> Result<Vec<AlbumCoverCandid
 fn load_existing_covers(conn: &Connection) -> Result<HashMap<String, ExistingCover>> {
     let mut stmt = conn.prepare(
         "
-        SELECT album_id, cache_path
+        SELECT album_id, source, cache_path
         FROM album_covers
         ",
     )?;
@@ -308,7 +361,8 @@ fn load_existing_covers(conn: &Connection) -> Result<HashMap<String, ExistingCov
         Ok((
             row.get::<_, String>(0)?,
             ExistingCover {
-                cache_path: row.get(1)?,
+                source: row.get(1)?,
+                cache_path: row.get(2)?,
             },
         ))
     })?;
@@ -317,14 +371,28 @@ fn load_existing_covers(conn: &Connection) -> Result<HashMap<String, ExistingCov
         .context("Could not load existing cover metadata")
 }
 
-fn has_valid_existing_cover(
-    album_id: &str,
-    existing_covers: &HashMap<String, ExistingCover>,
+fn has_valid_existing_cover(cover: &ExistingCover) -> bool {
+    Path::new(&cover.cache_path).is_file()
+}
+
+fn existing_cover_matches_payload(
+    existing_cover: Option<&ExistingCover>,
+    payload: &CoverPayload,
 ) -> bool {
-    existing_covers
-        .get(album_id)
-        .map(|cover| Path::new(&cover.cache_path).is_file())
-        .unwrap_or(false)
+    let Some(existing_cover) = existing_cover else {
+        return false;
+    };
+    if !has_valid_existing_cover(existing_cover) {
+        return false;
+    }
+
+    match payload {
+        CoverPayload::ArchiveFile { path, .. } => {
+            existing_cover.source == "archive"
+                && paths_equal(Path::new(&existing_cover.cache_path), path)
+        }
+        CoverPayload::EmbeddedBytes { .. } => existing_cover.source == "embedded",
+    }
 }
 
 fn find_cover_for_album(
@@ -448,7 +516,7 @@ fn import_cover_payload(
             path.display().to_string(),
             extension.clone(),
             mime_type.clone(),
-            cache_dir.join(format!("{cache_stem}.{extension}")),
+            path.clone(),
         ),
         CoverPayload::EmbeddedBytes {
             source_path,
@@ -464,17 +532,11 @@ fn import_cover_payload(
         ),
     };
 
-    remove_stale_cache_files(cache_dir, &cache_stem, &destination)?;
+    remove_stale_cache_files(cache_dir, &cache_stem, Some(&destination))?;
 
     match payload {
-        CoverPayload::ArchiveFile { path, .. } => {
-            fs::copy(&path, &destination).with_context(|| {
-                format!(
-                    "Could not copy cover from {} to {}",
-                    path.display(),
-                    destination.display()
-                )
-            })?;
+        CoverPayload::ArchiveFile { .. } => {
+            remove_stale_cache_files(cache_dir, &cache_stem, None)?;
         }
         CoverPayload::EmbeddedBytes { bytes, .. } => {
             fs::write(&destination, bytes)
@@ -496,17 +558,31 @@ fn import_cover_payload(
     })
 }
 
-fn remove_stale_cache_files(cache_dir: &Path, cache_stem: &str, destination: &Path) -> Result<()> {
+fn remove_stale_cache_files(
+    cache_dir: &Path,
+    cache_stem: &str,
+    destination: Option<&Path>,
+) -> Result<()> {
     for extension in SUPPORTED_ARCHIVE_EXTENSIONS {
         let extension = canonical_image_extension(extension);
         let stale_path = cache_dir.join(format!("{cache_stem}.{extension}"));
-        if stale_path != destination && stale_path.is_file() {
+        let is_destination = destination
+            .map(|destination| paths_equal(&stale_path, destination))
+            .unwrap_or(false);
+        if !is_destination && stale_path.is_file() {
             fs::remove_file(&stale_path).with_context(|| {
                 format!("Could not remove stale cover {}", stale_path.display())
             })?;
         }
     }
     Ok(())
+}
+
+fn paths_equal(left: &Path, right: &Path) -> bool {
+    match (left.canonicalize(), right.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => left == right,
+    }
 }
 
 fn cover_cache_stem(album_id: &str) -> String {
@@ -599,6 +675,7 @@ fn emit_progress(
             scanned_albums: counters.scanned_albums,
             new_covers_found: counters.new_covers_found,
             imported_covers: counters.imported_covers,
+            relinked_covers: counters.relinked_covers,
             skipped_existing: counters.skipped_existing,
             missing_covers: counters.missing_covers,
             percent,

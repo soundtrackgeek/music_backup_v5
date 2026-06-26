@@ -36,9 +36,10 @@ import {
 import {
   deleteSavedChart,
   deleteSavedSearch,
-  coverImageUrl,
+  clearCoverImageCache,
   exportSearch,
   cacheSettings,
+  getAlbumCoverDataUrl,
   getSettings,
   getStatistics,
   getLibraryStatus,
@@ -167,6 +168,7 @@ const defaultCoverProgress: CoverImportProgress = {
   scannedAlbums: 0,
   newCoversFound: 0,
   importedCovers: 0,
+  relinkedCovers: 0,
   skippedExisting: 0,
   missingCovers: 0,
   percent: 0,
@@ -1025,21 +1027,38 @@ function AlbumCover({
   decorative?: boolean;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const coverPath = row?.coverPath ?? null;
+  const albumId = row?.albumId ?? null;
 
   useEffect(() => {
     setImageFailed(false);
-  }, [coverPath]);
+    setImageUrl(null);
+    if (!albumId || !coverPath) {
+      return;
+    }
 
-  const imageUrl = imageFailed ? null : coverImageUrl(coverPath);
+    let cancelled = false;
+    void getAlbumCoverDataUrl(albumId).then((nextImageUrl) => {
+      if (!cancelled) {
+        setImageUrl(nextImageUrl);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [albumId, coverPath]);
+
+  const displayImageUrl = imageFailed ? null : imageUrl;
   const label = row?.album ? `${row.album} cover` : "Album cover";
-  const classes = ["cover-placeholder", imageUrl ? "cover-image" : "", className].filter(Boolean).join(" ");
+  const classes = ["cover-placeholder", displayImageUrl ? "cover-image" : "", className].filter(Boolean).join(" ");
 
   return (
     <span className={classes} aria-hidden={decorative ? "true" : undefined}>
-      {imageUrl ? (
+      {displayImageUrl ? (
         <img
-          src={imageUrl}
+          src={displayImageUrl}
           alt={decorative ? "" : label}
           loading="lazy"
           onError={() => setImageFailed(true)}
@@ -3446,11 +3465,13 @@ export default function App() {
         scannedAlbums: summary.scannedAlbums,
         newCoversFound: summary.newCoversFound,
         importedCovers: summary.importedCovers,
+        relinkedCovers: summary.relinkedCovers,
         skippedExisting: summary.skippedExisting,
         missingCovers: summary.missingCovers,
         percent: 100,
         message: "Cover import completed.",
       });
+      clearCoverImageCache();
       await loadData();
       setRequest((current) => ({ ...current }));
       setAlbumRequest((current) => ({ ...current }));
@@ -3778,7 +3799,7 @@ export default function App() {
             <div className="panel-heading">
               <div>
                 <h2>Cover art</h2>
-                <p>Scan folder-named image files and optionally embedded MP3 artwork for imported albums.</p>
+                <p>Scan folder-named image files, link archive matches, and optionally extract embedded MP3 artwork.</p>
               </div>
               <RunStatus status={coverProgress.status} />
             </div>
@@ -3830,6 +3851,7 @@ export default function App() {
               </div>
               <div className="progress-meta">
                 <span>{formatNumber(coverProgress.importedCovers)} imported</span>
+                <span>{formatNumber(coverProgress.relinkedCovers)} relinked</span>
                 <span>{formatNumber(coverProgress.skippedExisting)} already had covers</span>
                 <span>{formatNumber(coverProgress.missingCovers)} missing</span>
               </div>
@@ -3838,8 +3860,9 @@ export default function App() {
             {coverImportError ? <p className="error-message">{coverImportError}</p> : null}
             {coverImportSummary ? (
               <p className="success-message">
-                Imported {formatNumber(coverImportSummary.importedCovers)} covers from{" "}
-                {formatNumber(coverImportSummary.newCoversFound)} new matches.
+                Linked or imported {formatNumber(coverImportSummary.importedCovers)} covers from{" "}
+                {formatNumber(coverImportSummary.newCoversFound)} new matches and{" "}
+                {formatNumber(coverImportSummary.relinkedCovers)} existing cache entries.
               </p>
             ) : null}
 
@@ -3854,7 +3877,7 @@ export default function App() {
                 <Play size={17} fill="currentColor" />
                 <span>{isImportingCovers ? "Scanning" : "Import covers"}</span>
               </button>
-              <span className="db-path">Existing cover cache entries are skipped unless replacement is enabled.</span>
+              <span className="db-path">Archive matches are linked directly; older cache copies are relinked on import.</span>
             </div>
           </section>
 

@@ -56,6 +56,7 @@ export type CoverImportProgress = {
   scannedAlbums: number;
   newCoversFound: number;
   importedCovers: number;
+  relinkedCovers: number;
   skippedExisting: number;
   missingCovers: number;
   percent: number;
@@ -67,6 +68,7 @@ export type CoverImportSummary = {
   scannedAlbums: number;
   newCoversFound: number;
   importedCovers: number;
+  relinkedCovers: number;
   skippedExisting: number;
   missingCovers: number;
   durationMs: number;

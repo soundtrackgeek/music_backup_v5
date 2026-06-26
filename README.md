@@ -4,7 +4,7 @@ A local-first desktop app for importing, searching, browsing, and analyzing a Mu
 
 The current Phase 9 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, import real album cover art, browse sortable album and track tables, save searches, build ranked album charts with display-only table-header sorting inside the current ranked set, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
 
-The sidebar currently enables Search, Charts, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. The Imports workspace can scan an `AlbumCovers` folder for folder-named images, cache matches locally, skip covers that are already imported, and optionally fall back to embedded MP3 artwork.
+The sidebar currently enables Search, Charts, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. The Imports workspace can scan an `AlbumCovers` folder for folder-named images, link matching source images directly, skip covers that are already imported, and optionally fall back to embedded MP3 artwork.
 
 ## Requirements
 
@@ -53,8 +53,9 @@ npm run tauri:build
 
 - Cover art import in the Imports workspace with live album scan progress, percentage complete, new-cover counts, imported counts, skipped-existing counts, and missing-cover counts.
 - Folder-named cover archive matching from `AlbumCovers`, using each album's `<File Path>` folder name and supported image files such as JPG, PNG, GIF, and BMP.
-- Optional embedded MP3 artwork fallback using `<File Path>` plus `<Filename>` when no archive image is found.
-- Cached cover images stored under the app data directory and served through Tauri's scoped asset protocol.
+- Archive matches are linked directly to the source image path instead of duplicated into app data.
+- Optional embedded MP3 artwork fallback using `<File Path>` plus `<Filename>` when no archive image is found; only extracted embedded artwork is written into the app data cover folder.
+- Re-running cover import relinks older cache-copy entries back to source archive files and removes stale app-cache copies for those albums.
 - Real artwork replaces album cover placeholders in album indexes, album detail, artist/genre album lists, and chart cover grids while preserving initials placeholders for missing artwork.
 
 ## Phase 8 Music Tools Features

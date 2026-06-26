@@ -427,7 +427,7 @@ Album detail pages should show:
 
 Current note:
 
-- Cover discovery, caching, and image rendering are implemented through the Phase 9 cover import flow.
+- Cover discovery and image rendering are implemented through the Phase 9 cover import flow.
 
 ## 9. Import, Sync, and Backups
 
@@ -670,9 +670,12 @@ These are targets, not hard guarantees. They should be measured once implementat
 
 - Discover real album cover images from a local `AlbumCovers` archive by matching each album's `<File Path>` folder name to image filenames.
 - Optionally discover embedded MP3 cover art by combining `<File Path>` and `<Filename>` for a representative track when no archive image is found.
-- Cache and serve cover images safely through the local app runtime using Tauri's scoped asset protocol.
+- Link archive cover images directly to their source files to avoid duplicating large cover collections.
+- Cache only extracted embedded MP3 artwork when no standalone archive image is available.
+- Serve cover image data safely through the local app runtime.
 - Skip albums that already have imported cover art unless replacement is explicitly enabled.
-- Show live scan progress, percentage complete, new-cover counts, imported counts, skipped-existing counts, and missing-cover counts.
+- Relink older cache-copy entries back to source archive files and remove stale app-cache copies when cover import is run again.
+- Show live scan progress, percentage complete, new-cover counts, imported counts, relinked counts, skipped-existing counts, and missing-cover counts.
 - Replace chart and album placeholder covers with real artwork when available.
 - Preserve useful placeholders for albums without available artwork.
 

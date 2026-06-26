@@ -75,6 +75,17 @@ async fn import_album_covers(
 }
 
 #[tauri::command]
+async fn get_album_cover_data_url(
+    app: AppHandle,
+    album_id: String,
+) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || covers::album_cover_data_url(app, album_id))
+        .await
+        .map_err(|error| format!("Cover image task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn search_library(app: AppHandle, request: BrowseRequest) -> Result<BrowseResponse, String> {
     tauri::async_runtime::spawn_blocking(move || db::search_library_for_app(&app, request))
         .await
@@ -200,6 +211,7 @@ pub fn run() {
             get_statistics,
             import_musicbee_tsv,
             import_album_covers,
+            get_album_cover_data_url,
             search_library,
             list_artists,
             list_genres,
