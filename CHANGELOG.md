@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.10.10] - 2026-06-26
+### Fixed
+- Fixed Search track-view Loved min/max filters to match each track's exact `Love = "L"` marker instead of the album's loved-track total.
+
 ## [0.10.9] - 2026-06-26
 ### Fixed
 - Fixed Search track Minutes min/max filters to compare against each track's duration instead of the album's total duration.

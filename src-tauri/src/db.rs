@@ -2843,7 +2843,11 @@ fn build_where_clause(
     add_i64_range(
         &mut conditions,
         &mut values,
-        "a.loved_tracks",
+        if is_tracks {
+            "(CASE WHEN t.love = 'L' THEN 1 ELSE 0 END)"
+        } else {
+            "a.loved_tracks"
+        },
         filters.loved_tracks_min,
         filters.loved_tracks_max,
     );
@@ -3728,6 +3732,40 @@ mod tests {
         assert_eq!(response.total, 1);
         assert_eq!(response.rows[0].title.as_deref(), Some("Twenty Minute Jam"));
         assert_eq!(response.rows[0].track_seconds, Some(1200));
+    }
+
+    #[test]
+    fn filters_track_search_loved_min_by_track_love_marker() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO tracks (
+                import_run_id, album_id, album_unique_id, display_artist,
+                album_artist_display, album, title, canonical_genre, genre_normalized,
+                publisher, love, normalized_rating, year, release_year, time_seconds,
+                file_path, filename, row_hash
+            ) VALUES (
+                1, 'mb:test', 'test', 'Pet Shop Boys', 'Pet Shop Boys',
+                'Actually', 'Shopping', 'Synthpop',
+                'synthpop', 'Parlophone', '', 80, 1987, 1987, 210,
+                'D:\\Music\\Pet Shop Boys\\Actually', '03 Shopping.mp3', 'hash-shopping'
+            )
+            ",
+            [],
+        )
+        .expect("insert unloved track");
+        let mut request = BrowseRequest::default();
+        request.view = "tracks".to_string();
+        request.filters.loved_tracks_min = Some(1);
+
+        let response = search_library(&conn, request, 50).expect("search loved tracks");
+
+        assert_eq!(response.total, 1);
+        assert_eq!(
+            response.rows[0].title.as_deref(),
+            Some("What Have I Done to Deserve This?")
+        );
+        assert_eq!(response.rows[0].love.as_deref(), Some("L"));
     }
 
     #[test]
