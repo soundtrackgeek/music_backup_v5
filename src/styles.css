@@ -406,7 +406,18 @@ button {
 .missing-flags {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+}
+
+.missing-flags-title {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  color: #6c7974;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 720;
 }
 
 .missing-flags label,
@@ -1723,6 +1734,10 @@ button {
 
 :root[data-theme="dark"] .tool-count-progress {
   color: #85e2d6;
+}
+
+:root[data-theme="dark"] .missing-flags-title {
+  color: #a9b7b2;
 }
 
 :root[data-theme="dark"] .metric-amber .metric-icon,

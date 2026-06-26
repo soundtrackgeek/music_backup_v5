@@ -121,14 +121,32 @@ const operatorLabels: Record<TextFilterOperator, string> = {
   startsWith: "Starts with",
 };
 
-const missingFieldOptions = [
-  { value: "album", label: "Album" },
-  { value: "albumArtist", label: "Album artist" },
-  { value: "genre", label: "Genre" },
-  { value: "year", label: "Year" },
-  { value: "rating", label: "Rating" },
-  { value: "time", label: "Time" },
+type MissingFieldOption = {
+  value: string;
+  albumLabel: string;
+  trackLabel: string;
+};
+
+const missingFieldOptions: MissingFieldOption[] = [
+  { value: "album", albumLabel: "Album title", trackLabel: "Track album" },
+  { value: "albumArtist", albumLabel: "Album artist", trackLabel: "Album artist" },
+  { value: "genre", albumLabel: "Genre", trackLabel: "Track genre" },
+  { value: "year", albumLabel: "Year", trackLabel: "Track year" },
+  { value: "rating", albumLabel: "Album rating", trackLabel: "Track rating" },
+  { value: "time", albumLabel: "Total duration", trackLabel: "Track duration" },
 ];
+
+function missingFieldLabel(value: string, view: BrowseView) {
+  const option = missingFieldOptions.find((field) => field.value === value);
+  if (!option) {
+    return value;
+  }
+  return view === "tracks" ? option.trackLabel : option.albumLabel;
+}
+
+function formatMissingFieldLabels(values: string[], view: BrowseView) {
+  return values.map((value) => missingFieldLabel(value, view)).join(", ");
+}
 
 const rankingOptions = [
   { value: "albumScore", label: "Album Score" },
@@ -3207,13 +3225,13 @@ export default function App() {
     if (currentFilters.missingFields.length) {
       nextChips.push({
         key: "missingFields",
-        label: `Missing: ${currentFilters.missingFields.join(", ")}`,
+        label: `Missing: ${formatMissingFieldLabels(currentFilters.missingFields, request.view)}`,
         remove: () => updateFilter("missingFields", []),
       });
     }
 
     return nextChips;
-  }, [currentFilters, request.searchText]);
+  }, [currentFilters, request.searchText, request.view]);
 
   const albumChips = useMemo(() => {
     const nextChips: { key: string; label: string; remove: () => void }[] = [];
@@ -5497,8 +5515,10 @@ export default function App() {
 
             <div className="query-footer">
               <div className="missing-flags" aria-label="Missing metadata">
+                <span className="missing-flags-title">Missing fields</span>
                 {missingFieldOptions.map((option) => {
                   const checked = currentFilters.missingFields.includes(option.value);
+                  const label = missingFieldLabel(option.value, request.view);
                   return (
                     <label key={option.value}>
                       <input
@@ -5511,7 +5531,7 @@ export default function App() {
                           updateFilter("missingFields", nextValues);
                         }}
                       />
-                      <span>{option.label}</span>
+                      <span>{label}</span>
                     </label>
                   );
                 })}

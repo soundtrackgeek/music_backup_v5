@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.11] - 2026-06-26
+### Changed
+- Clarified Search missing-field checkboxes and active-filter chips with album- or track-specific labels.
+
+### Fixed
+- Fixed web-preview Search missing-field filters so track view follows the same missing track metadata rules as the desktop backend.
+
 ## [0.10.10] - 2026-06-26
 ### Fixed
 - Fixed Search track-view Loved min/max filters to match each track's exact `Love = "L"` marker instead of the album's loved-track total.

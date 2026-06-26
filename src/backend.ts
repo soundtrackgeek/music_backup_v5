@@ -605,12 +605,13 @@ export function clearCoverImageCache() {
 
 export async function searchLibrary(request: BrowseRequest) {
   if (!isTauriRuntime()) {
+    const isTracks = request.view === "tracks";
     const albumIds = new Set(request.filters.albumIds);
     const artistKeys = new Set(request.filters.artistKeys);
     const genreKeys = new Set(request.filters.genres.map(normalizeGenreKey));
     const excludedGenreKeys = new Set(request.filters.excludedGenres.map(normalizeGenreKey));
     const rows = mockRows.filter((row) => {
-      const matchesView = request.view === "tracks" ? row.trackId !== null : row.trackId === null;
+      const matchesView = isTracks ? row.trackId !== null : row.trackId === null;
       const artistKey = normalizeArtistKey(row.albumArtistDisplay);
       const genreKey = normalizeGenreKey(row.canonicalGenre);
       return (
@@ -618,7 +619,8 @@ export async function searchLibrary(request: BrowseRequest) {
         (albumIds.size === 0 || albumIds.has(row.albumId)) &&
         (artistKeys.size === 0 || artistKeys.has(artistKey)) &&
         (genreKeys.size === 0 || genreKeys.has(genreKey)) &&
-        !excludedGenreKeys.has(genreKey)
+        !excludedGenreKeys.has(genreKey) &&
+        matchesMissingFields(row, isTracks, request.filters.missingFields)
       );
     });
     const sorted = [...rows].sort((left, right) => compareBrowseRows(left, right, request.sort.field));
@@ -925,6 +927,31 @@ function normalizeArtistKey(value: string | null) {
 function normalizeGenreKey(value: string | null) {
   const normalized = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   return normalized || "unknown";
+}
+
+function isMissingText(value: string | null) {
+  return (value ?? "").trim() === "";
+}
+
+function matchesMissingFields(row: BrowseRow, isTracks: boolean, fields: string[]) {
+  return fields.every((field) => {
+    switch (field) {
+      case "album":
+        return isMissingText(row.album);
+      case "albumArtist":
+        return isMissingText(row.albumArtistDisplay);
+      case "genre":
+        return isMissingText(row.canonicalGenre);
+      case "year":
+        return row.year == null;
+      case "rating":
+        return isTracks ? row.normalizedRating == null : row.effectiveAlbumRating == null;
+      case "time":
+        return isTracks ? row.trackSeconds == null : (row.totalSeconds ?? 0) <= 0;
+      default:
+        return true;
+    }
+  });
 }
 
 function compareBrowseRows(left: BrowseRow, right: BrowseRow, field: string) {

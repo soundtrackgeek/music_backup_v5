@@ -117,7 +117,7 @@ npm run tauri:build
 
 - Search workspace with album and track table views with clickable sortable column headers.
 - SQLite FTS5 indexes over album, artist, title, genre, publisher, path, and filename fields.
-- Composable query builder for text filters, genres, years, release years, album duration in album views, track duration in track views, track count, album rating, track rating, rating completeness, loved-track count in album views, exact track `Love = "L"` filtering in track views, publisher, file path, filename, and missing metadata flags.
+- Composable query builder for text filters, genres, years, release years, album duration in album views, track duration in track views, track count, album rating, track rating, rating completeness, loved-track count in album views, exact track `Love = "L"` filtering in track views, publisher, file path, filename, and view-specific missing metadata flags.
 - Active filter chips with one-click removal.
 - Saved searches stored in SQLite.
 - CSV, TSV, JSON, and TXT exports for the current filtered result set, with optional calculated columns.
