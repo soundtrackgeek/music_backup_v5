@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.10.7] - 2026-06-26
+### Fixed
+- Fixed artist and genre detail sidebars to show fully rated albums as `rated / total` instead of `total / rated`.
+
 ## [0.10.6] - 2026-06-26
 ### Fixed
 - Improved dark-mode artist detail stat value contrast so compact totals such as total time remain readable.

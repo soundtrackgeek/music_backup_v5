@@ -1535,8 +1535,7 @@ function ArtistDetailPanel({
         <div>
           <dt>Albums</dt>
           <dd>
-            {formatNumber(artist.albumCount)}
-            {artist.ratedAlbumCount ? ` / ${formatNumber(artist.ratedAlbumCount)} fully rated` : ""}
+            {`${formatNumber(artist.ratedAlbumCount)} / ${formatNumber(artist.albumCount)} fully rated`}
           </dd>
         </div>
         <div>
@@ -1784,8 +1783,7 @@ function GenreDetailPanel({
         <div>
           <dt>Albums</dt>
           <dd>
-            {formatNumber(genre.albumCount)}
-            {genre.ratedAlbumCount ? ` / ${formatNumber(genre.ratedAlbumCount)} fully rated` : ""}
+            {`${formatNumber(genre.ratedAlbumCount)} / ${formatNumber(genre.albumCount)} fully rated`}
           </dd>
         </div>
         <div>
