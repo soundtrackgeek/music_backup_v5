@@ -2795,7 +2795,11 @@ fn build_where_clause(
     add_seconds_range(
         &mut conditions,
         &mut values,
-        "a.total_seconds",
+        if is_tracks {
+            "t.time_seconds"
+        } else {
+            "a.total_seconds"
+        },
         filters.total_minutes_min,
         filters.total_minutes_max,
     );
@@ -3693,6 +3697,37 @@ mod tests {
             Some("What Have I Done to Deserve This?")
         );
         assert_eq!(response.rows[0].track_seconds, Some(260));
+    }
+
+    #[test]
+    fn filters_track_search_minutes_by_track_duration() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO tracks (
+                import_run_id, album_id, album_unique_id, display_artist,
+                album_artist_display, album, title, canonical_genre, genre_normalized,
+                publisher, love, normalized_rating, year, release_year, time_seconds,
+                file_path, filename, row_hash
+            ) VALUES (
+                1, 'mb:test', 'test', 'Pet Shop Boys', 'Pet Shop Boys',
+                'Actually', 'Twenty Minute Jam', 'Synthpop',
+                'synthpop', 'Parlophone', '', 80, 1987, 1987, 1200,
+                'D:\\Music\\Pet Shop Boys\\Actually', '10 Twenty Minute Jam.mp3', 'hash-long'
+            )
+            ",
+            [],
+        )
+        .expect("insert long track");
+        let mut request = BrowseRequest::default();
+        request.view = "tracks".to_string();
+        request.filters.total_minutes_min = Some(20.0);
+
+        let response = search_library(&conn, request, 50).expect("search long tracks");
+
+        assert_eq!(response.total, 1);
+        assert_eq!(response.rows[0].title.as_deref(), Some("Twenty Minute Jam"));
+        assert_eq!(response.rows[0].track_seconds, Some(1200));
     }
 
     #[test]

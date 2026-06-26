@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.10.9] - 2026-06-26
+### Fixed
+- Fixed Search track Minutes min/max filters to compare against each track's duration instead of the album's total duration.
+
 ## [0.10.8] - 2026-06-26
 ### Added
 - Added a chart grid cover-size slider for resizing album artwork in Grid view.
