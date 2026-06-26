@@ -643,17 +643,31 @@ button {
 
 .chart-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(calc(var(--chart-grid-cover-size, 144px) + 20px), calc(var(--chart-grid-cover-size, 144px) + 20px))
+  );
   gap: 12px;
+  align-items: start;
+  justify-content: start;
 }
 
 .chart-grid-item {
   display: grid;
+  align-content: start;
   gap: 10px;
+  width: calc(var(--chart-grid-cover-size, 144px) + 20px);
   border: 1px solid #e1e8e5;
   border-radius: 8px;
   background: #ffffff;
   padding: 10px;
+}
+
+.chart-grid-cover {
+  width: var(--chart-grid-cover-size, 144px);
+  height: var(--chart-grid-cover-size, 144px);
+  align-self: start;
+  justify-self: center;
 }
 
 .cover-placeholder {

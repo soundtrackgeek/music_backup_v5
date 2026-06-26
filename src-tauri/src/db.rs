@@ -3189,6 +3189,7 @@ fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
     };
     let result_limit = config.result_limit.clamp(10, 500);
     let threshold = normalize_percentage(config.rating_completeness_threshold) * 100.0;
+    let grid_cover_size = config.grid_cover_size.clamp(96, 224);
     let view_mode = match config.view_mode.as_str() {
         "compact" | "grid" => config.view_mode.clone(),
         _ => "table".to_string(),
@@ -3208,6 +3209,7 @@ fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
     config.result_limit = result_limit;
     config.rating_completeness_threshold = threshold;
     config.view_mode = view_mode;
+    config.grid_cover_size = grid_cover_size;
     config
 }
 

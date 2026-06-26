@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.8] - 2026-06-26
+### Added
+- Added a chart grid cover-size slider for resizing album artwork in Grid view.
+
+### Fixed
+- Fixed chart grid album covers to render as uniform square thumbnails regardless of source artwork dimensions.
+
 ## [0.10.7] - 2026-06-26
 ### Fixed
 - Fixed artist and genre detail sidebars to show fully rated albums as `rated / total` instead of `total / rated`.

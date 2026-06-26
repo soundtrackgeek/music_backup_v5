@@ -492,6 +492,10 @@ pub struct SaveSearchRequest {
     pub request: BrowseRequest,
 }
 
+fn default_chart_grid_cover_size() -> u32 {
+    144
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChartConfig {
@@ -505,6 +509,8 @@ pub struct ChartConfig {
     pub visible_columns: Vec<String>,
     pub export_columns: Vec<String>,
     pub view_mode: String,
+    #[serde(default = "default_chart_grid_cover_size")]
+    pub grid_cover_size: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -319,6 +319,7 @@ export type ChartConfig = {
   visibleColumns: string[];
   exportColumns: string[];
   viewMode: ChartViewMode;
+  gridCoverSize: number;
 };
 
 export type SavedChart = {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   Activity,
   Album,
@@ -155,6 +155,13 @@ const chartViewModes: { value: ChartViewMode; label: string; icon: typeof BarCha
   { value: "compact", label: "List", icon: ListMusic },
   { value: "grid", label: "Grid", icon: Album },
 ];
+
+const chartGridCoverSize = {
+  min: 96,
+  max: 224,
+  step: 8,
+  default: 144,
+} as const;
 
 const defaultProgress: ImportProgress = {
   status: "idle",
@@ -318,7 +325,15 @@ function createChartConfig(): ChartConfig {
     visibleColumns: ["rating", "complete", "score", "loved"],
     exportColumns: ["calculated"],
     viewMode: "table",
+    gridCoverSize: chartGridCoverSize.default,
   };
+}
+
+function normalizeChartGridCoverSize(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) {
+    return chartGridCoverSize.default;
+  }
+  return Math.min(chartGridCoverSize.max, Math.max(chartGridCoverSize.min, value));
 }
 
 function chartRequestFromConfig(config: ChartConfig): BrowseRequest {
@@ -2164,11 +2179,16 @@ function ChartResults({
   }
 
   if (config.viewMode === "grid") {
+    const coverSize = normalizeChartGridCoverSize(config.gridCoverSize);
+    const gridStyle = {
+      "--chart-grid-cover-size": `${coverSize}px`,
+    } as CSSProperties & Record<"--chart-grid-cover-size", string>;
+
     return (
-      <div className="chart-grid" role="list">
+      <div className="chart-grid" role="list" style={gridStyle}>
         {response.rows.map((row, index) => (
           <article className="chart-grid-item" role="listitem" key={row.id}>
-            <AlbumCover row={row} />
+            <AlbumCover row={row} className="chart-grid-cover" />
             <div>
               <strong>#{index + 1}</strong>
               <h3>{row.album ?? "Untitled"}</h3>
@@ -3560,12 +3580,18 @@ export default function App() {
   }
 
   function updateChartConfig(values: Partial<ChartConfig>) {
-    setChartConfig((previous) => ({
-      ...previous,
-      ...values,
-      sortField: values.sortField ?? (values.rankingMetric ? values.rankingMetric : previous.sortField),
-      request: values.request ?? previous.request,
-    }));
+    setChartConfig((previous) => {
+      const nextConfig = {
+        ...previous,
+        ...values,
+        sortField: values.sortField ?? (values.rankingMetric ? values.rankingMetric : previous.sortField),
+        request: values.request ?? previous.request,
+      };
+      if (values.gridCoverSize != null) {
+        nextConfig.gridCoverSize = normalizeChartGridCoverSize(values.gridCoverSize);
+      }
+      return nextConfig;
+    });
     setChartExportResult(null);
   }
 
@@ -3613,6 +3639,7 @@ export default function App() {
     const nextConfig = {
       ...chartConfig,
       sortField: chartConfig.sortField ?? chartConfig.rankingMetric,
+      gridCoverSize: normalizeChartGridCoverSize(chartConfig.gridCoverSize),
       request: chartRequest,
     };
     const fallbackName = `${rankingLabel(nextConfig.rankingMetric)} chart`;
@@ -3698,6 +3725,7 @@ export default function App() {
       : `${formatNumber(toolIssuePageStart)}-${formatNumber(toolIssuePageEnd)} of ${formatNumber(toolIssueTotal)}`;
   const chartTotal = chartResponse?.total ?? 0;
   const chartRows = chartResponse?.rows.length ?? 0;
+  const currentChartGridCoverSize = normalizeChartGridCoverSize(chartConfig.gridCoverSize);
   const ratingAlbumTotal =
     (statistics?.ratingProgress.fullyRatedAlbums ?? 0) +
     (statistics?.ratingProgress.partiallyRatedAlbums ?? 0) +
@@ -4101,6 +4129,22 @@ export default function App() {
                   <strong>{chartConfig.ratingCompletenessThreshold}%</strong>
                 </div>
               </label>
+              {chartConfig.viewMode === "grid" ? (
+                <label className="criterion slider-criterion chart-slider">
+                  <span>Cover size</span>
+                  <div>
+                    <input
+                      type="range"
+                      min={chartGridCoverSize.min}
+                      max={chartGridCoverSize.max}
+                      step={chartGridCoverSize.step}
+                      value={currentChartGridCoverSize}
+                      onChange={(event) => updateChartConfig({ gridCoverSize: Number(event.target.value) })}
+                    />
+                    <strong>{currentChartGridCoverSize}px</strong>
+                  </div>
+                </label>
+              ) : null}
             </div>
 
             <div className="query-footer chart-options">
@@ -5672,7 +5716,10 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      setChartConfig(chart.config);
+                      setChartConfig({
+                        ...chart.config,
+                        gridCoverSize: normalizeChartGridCoverSize(chart.config.gridCoverSize),
+                      });
                       setChartTableSort(null);
                       setActiveSection("Charts");
                     }}
