@@ -1136,7 +1136,7 @@ pub fn list_genres_for_app(
     request: GenreListRequest,
 ) -> Result<GenreListResponse> {
     let (conn, _) = open(app)?;
-    list_genres(&conn, request, 500)
+    list_genres(&conn, request, 2000)
 }
 
 pub fn list_music_tools_for_app(app: &AppHandle) -> Result<Vec<MusicToolSummary>> {

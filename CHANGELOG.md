@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0] - 2026-06-27
+### Added
+- Added five-result in-place genre suggestions to Search, Albums, and Charts include/exclude genre filters, with keyboard navigation and substring matching across canonical genre names.
+
+### Changed
+- Raised the desktop genre-list request cap so the suggestion cache can load the full canonical genre index.
+
 ## [0.11.1] - 2026-06-27
 ### Fixed
 - Fixed the Charts builder to expose the existing Exclude genres filter, including saved chart configurations and exports.

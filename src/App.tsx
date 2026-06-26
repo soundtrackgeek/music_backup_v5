@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import {
   Activity,
   Album,
@@ -182,6 +182,10 @@ const chartGridCoverSize = {
   default: 144,
 } as const;
 
+const genreSuggestionLimit = 2000;
+const genreSuggestionAliases = ["scores"] as const;
+const maxGenreSuggestions = 5;
+
 const defaultProgress: ImportProgress = {
   status: "idle",
   processedRows: 0,
@@ -288,6 +292,15 @@ function createGenreListRequest(): GenreListRequest {
     searchText: "",
     sort: { field: "name", direction: "asc" },
     limit: 50,
+    offset: 0,
+  };
+}
+
+function createGenreSuggestionRequest(): GenreListRequest {
+  return {
+    searchText: "",
+    sort: { field: "name", direction: "asc" },
+    limit: genreSuggestionLimit,
     offset: 0,
   };
 }
@@ -808,6 +821,118 @@ function listsEqual(left: string[], right: string[]) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function normalizeGenreSuggestionText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function uniqueGenreSuggestionOptions(values: string[]) {
+  const seen = new Set<string>();
+  const options: string[] = [];
+  values.forEach((value) => {
+    const trimmed = value.trim();
+    const key = normalizeGenreSuggestionText(trimmed);
+    if (!trimmed || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    options.push(trimmed);
+  });
+  return options;
+}
+
+function genreTokenRange(value: string, caretPosition: number) {
+  const cursor = Math.min(Math.max(caretPosition, 0), value.length);
+  const commaBefore = value.lastIndexOf(",", Math.max(0, cursor - 1));
+  const commaAfter = value.indexOf(",", cursor);
+  return {
+    start: commaBefore + 1,
+    end: commaAfter === -1 ? value.length : commaAfter,
+  };
+}
+
+function currentGenreToken(value: string, caretPosition: number) {
+  const range = genreTokenRange(value, caretPosition);
+  const rawValue = value.slice(range.start, range.end);
+  return {
+    ...range,
+    rawValue,
+    query: rawValue.trim(),
+  };
+}
+
+function replaceGenreToken(value: string, caretPosition: number, genre: string) {
+  const range = genreTokenRange(value, caretPosition);
+  const rawValue = value.slice(range.start, range.end);
+  const leadingWhitespace = rawValue.match(/^\s*/)?.[0] ?? "";
+  const trailingWhitespace = rawValue.match(/\s*$/)?.[0] ?? "";
+  const nextValue = `${value.slice(0, range.start)}${leadingWhitespace}${genre}${trailingWhitespace}${value.slice(range.end)}`;
+
+  return {
+    value: nextValue,
+    caretPosition: range.start + leadingWhitespace.length + genre.length,
+  };
+}
+
+function genreSuggestionScore(option: string, query: string) {
+  const normalizedOption = normalizeGenreSuggestionText(option);
+  const normalizedQuery = normalizeGenreSuggestionText(query);
+  if (!normalizedOption || !normalizedQuery) {
+    return null;
+  }
+  if (normalizedOption === normalizedQuery) {
+    return 0;
+  }
+  if (normalizedOption.startsWith(normalizedQuery)) {
+    return 10 + (normalizedOption.length - normalizedQuery.length) / 100;
+  }
+
+  const wordStartIndex = normalizedOption
+    .split(" ")
+    .findIndex((word) => word.startsWith(normalizedQuery));
+  if (wordStartIndex >= 0) {
+    const characterIndex = normalizedOption.indexOf(normalizedOption.split(" ")[wordStartIndex]);
+    return 20 + characterIndex + (normalizedOption.length - normalizedQuery.length) / 100;
+  }
+
+  const includesIndex = normalizedOption.indexOf(normalizedQuery);
+  if (includesIndex >= 0) {
+    return 40 + includesIndex + (normalizedOption.length - normalizedQuery.length) / 100;
+  }
+
+  let optionIndex = 0;
+  let distance = 0;
+  for (const character of normalizedQuery) {
+    const nextIndex = normalizedOption.indexOf(character, optionIndex);
+    if (nextIndex === -1) {
+      return null;
+    }
+    distance += nextIndex - optionIndex;
+    optionIndex = nextIndex + 1;
+  }
+
+  return 80 + distance + normalizedOption.length / 100;
+}
+
+function genreSuggestions(options: string[], query: string) {
+  const normalizedQuery = normalizeGenreSuggestionText(query);
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  return options
+    .map((option) => ({ option, score: genreSuggestionScore(option, normalizedQuery) }))
+    .filter((item): item is { option: string; score: number } => item.score !== null)
+    .sort((left, right) => left.score - right.score || left.option.localeCompare(right.option))
+    .slice(0, maxGenreSuggestions)
+    .map((item) => item.option);
+}
+
 function numberValue(value: string) {
   if (value.trim() === "") return null;
   const parsed = Number(value);
@@ -894,34 +1019,147 @@ function GenreListCriterion({
   values,
   onChange,
   placeholder,
+  genreOptions = [],
 }: {
   label: string;
   values: string[];
   onChange: (values: string[]) => void;
   placeholder?: string;
+  genreOptions?: string[];
 }) {
+  const inputId = useId();
+  const listboxId = `${inputId}-genre-suggestions`;
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [draftValue, setDraftValue] = useState(() => formatList(values));
+  const [caretPosition, setCaretPosition] = useState(() => draftValue.length);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
+  const activeToken = useMemo(
+    () => currentGenreToken(draftValue, caretPosition),
+    [caretPosition, draftValue],
+  );
+  const suggestions = useMemo(
+    () => genreSuggestions(genreOptions, activeToken.query),
+    [activeToken.query, genreOptions],
+  );
+  const showSuggestions = isSuggestionOpen && suggestions.length > 0 && activeToken.query.trim().length > 0;
+  const activeSuggestionId = showSuggestions
+    ? `${listboxId}-option-${activeSuggestionIndex}`
+    : undefined;
 
   useEffect(() => {
     if (!listsEqual(parseList(draftValue), values)) {
-      setDraftValue(formatList(values));
+      const nextValue = formatList(values);
+      setDraftValue(nextValue);
+      setCaretPosition(nextValue.length);
     }
   }, [draftValue, values]);
 
+  useEffect(() => {
+    setActiveSuggestionIndex(0);
+  }, [activeToken.query, suggestions.length]);
+
+  function syncCaret(input: HTMLInputElement) {
+    setCaretPosition(input.selectionStart ?? input.value.length);
+  }
+
+  function updateDraft(nextValue: string) {
+    setDraftValue(nextValue);
+    onChange(parseList(nextValue));
+  }
+
+  function chooseSuggestion(suggestion: string) {
+    const nextDraft = replaceGenreToken(draftValue, caretPosition, suggestion);
+    updateDraft(nextDraft.value);
+    setCaretPosition(nextDraft.caretPosition);
+    setIsSuggestionOpen(false);
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(nextDraft.caretPosition, nextDraft.caretPosition);
+    });
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown" && suggestions.length > 0) {
+      event.preventDefault();
+      setIsSuggestionOpen(true);
+      setActiveSuggestionIndex((current) => (showSuggestions ? (current + 1) % suggestions.length : 0));
+      return;
+    }
+
+    if (event.key === "ArrowUp" && suggestions.length > 0) {
+      event.preventDefault();
+      setIsSuggestionOpen(true);
+      setActiveSuggestionIndex((current) =>
+        showSuggestions ? (current - 1 + suggestions.length) % suggestions.length : suggestions.length - 1,
+      );
+      return;
+    }
+
+    if ((event.key === "Enter" || event.key === "Tab") && showSuggestions) {
+      event.preventDefault();
+      chooseSuggestion(suggestions[activeSuggestionIndex]);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setIsSuggestionOpen(false);
+    }
+  }
+
   return (
-    <label className="criterion">
-      <span>{label}</span>
+    <div className="criterion genre-list-criterion">
+      <span id={`${inputId}-label`}>{label}</span>
       <input
+        ref={inputRef}
+        id={inputId}
+        aria-labelledby={`${inputId}-label`}
+        aria-autocomplete="list"
+        aria-controls={showSuggestions ? listboxId : undefined}
+        aria-expanded={showSuggestions}
+        aria-activedescendant={activeSuggestionId}
         value={draftValue}
         onChange={(event) => {
           const nextValue = event.target.value;
-          setDraftValue(nextValue);
-          onChange(parseList(nextValue));
+          syncCaret(event.target);
+          updateDraft(nextValue);
+          setIsSuggestionOpen(true);
         }}
-        onBlur={(event) => setDraftValue(formatList(parseList(event.currentTarget.value)))}
+        onFocus={(event) => {
+          syncCaret(event.currentTarget);
+          setIsSuggestionOpen(true);
+        }}
+        onKeyDown={handleKeyDown}
+        onKeyUp={(event) => syncCaret(event.currentTarget)}
+        onClick={(event) => syncCaret(event.currentTarget)}
+        onSelect={(event) => syncCaret(event.currentTarget)}
+        onBlur={(event) => {
+          setDraftValue(formatList(parseList(event.currentTarget.value)));
+          setIsSuggestionOpen(false);
+        }}
         placeholder={placeholder}
       />
-    </label>
+      {showSuggestions ? (
+        <div className="genre-suggestions" id={listboxId} role="listbox">
+          {suggestions.map((suggestion, index) => (
+            <button
+              className={index === activeSuggestionIndex ? "genre-suggestion active" : "genre-suggestion"}
+              id={`${listboxId}-option-${index}`}
+              key={suggestion}
+              type="button"
+              role="option"
+              aria-selected={index === activeSuggestionIndex}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                chooseSuggestion(suggestion);
+              }}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -2579,6 +2817,7 @@ export default function App() {
   const [isGenreAlbumsLoading, setIsGenreAlbumsLoading] = useState(false);
   const [genreIncludeCalculated, setGenreIncludeCalculated] = useState(false);
   const [genreExportResult, setGenreExportResult] = useState<ExportResult | null>(null);
+  const [genreSuggestionNames, setGenreSuggestionNames] = useState<string[]>([]);
   const [musicTools, setMusicTools] = useState<MusicToolSummary[]>(() => musicToolCatalog);
   const [toolsError, setToolsError] = useState<string | null>(null);
   const [isToolsLoading, setIsToolsLoading] = useState(false);
@@ -2606,6 +2845,11 @@ export default function App() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const canImport = isTauriRuntime();
 
+  const refreshGenreSuggestions = useCallback(async () => {
+    const nextGenres = await listGenres(createGenreSuggestionRequest());
+    setGenreSuggestionNames(nextGenres.rows.map((genre) => genre.name));
+  }, []);
+
   const loadData = useCallback(async () => {
     const [nextStatus, nextRuns, nextSavedSearches, nextSavedCharts, nextStatistics, nextSettings] = await Promise.all([
       getLibraryStatus(),
@@ -2621,7 +2865,10 @@ export default function App() {
     setSavedCharts(nextSavedCharts);
     setStatistics(nextStatistics);
     setSettings(nextSettings);
-  }, []);
+    void refreshGenreSuggestions().catch(() => {
+      setGenreSuggestionNames([]);
+    });
+  }, [refreshGenreSuggestions]);
 
   useEffect(() => {
     void loadData().catch((loadError) => {
@@ -2679,6 +2926,10 @@ export default function App() {
   const lastRun = runs[0] ?? status?.lastImport ?? null;
   const currentFilters = request.filters;
   const albumFilters = albumRequest.filters;
+  const genreSuggestionOptions = useMemo(
+    () => uniqueGenreSuggestionOptions([...genreSuggestionAliases, ...genreSuggestionNames]),
+    [genreSuggestionNames],
+  );
   const chartRequest = useMemo(() => chartRequestFromConfig(chartConfig), [chartConfig]);
   const albumTracksRequest = useMemo(
     () => (selectedAlbumId ? createAlbumTracksRequest(selectedAlbumId) : null),
@@ -4130,12 +4381,14 @@ export default function App() {
                 label="Genres"
                 values={chartConfig.request.filters.genres}
                 onChange={(genres) => updateChartFilters({ genres })}
+                genreOptions={genreSuggestionOptions}
                 placeholder="Synthpop, AOR"
               />
               <GenreListCriterion
                 label="Exclude genres"
                 values={chartConfig.request.filters.excludedGenres}
                 onChange={(excludedGenres) => updateChartFilters({ excludedGenres })}
+                genreOptions={genreSuggestionOptions}
               />
               <TextCriterion
                 label="Album artist"
@@ -4905,12 +5158,14 @@ export default function App() {
                 label="Genres"
                 values={albumFilters.genres}
                 onChange={(genres) => updateAlbumFilter("genres", genres)}
+                genreOptions={genreSuggestionOptions}
                 placeholder="Synthpop, AOR"
               />
               <GenreListCriterion
                 label="Exclude genres"
                 values={albumFilters.excludedGenres}
                 onChange={(excludedGenres) => updateAlbumFilter("excludedGenres", excludedGenres)}
+                genreOptions={genreSuggestionOptions}
               />
               <NumberField
                 label="Year from"
@@ -5447,12 +5702,14 @@ export default function App() {
                 label="Genres"
                 values={currentFilters.genres}
                 onChange={(genres) => updateFilter("genres", genres)}
+                genreOptions={genreSuggestionOptions}
                 placeholder="Synthpop, AOR"
               />
               <GenreListCriterion
                 label="Exclude genres"
                 values={currentFilters.excludedGenres}
                 onChange={(excludedGenres) => updateFilter("excludedGenres", excludedGenres)}
+                genreOptions={genreSuggestionOptions}
               />
               <TextCriterion
                 label="Publisher"
