@@ -116,6 +116,14 @@ async fn list_genres(
 }
 
 #[tauri::command]
+async fn list_genre_suggestions(app: AppHandle) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || db::genre_suggestion_names_for_app(&app))
+        .await
+        .map_err(|error| format!("Genre suggestion task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn list_music_tools(app: AppHandle) -> Result<Vec<MusicToolSummary>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_music_tools_for_app(&app))
         .await
@@ -215,6 +223,7 @@ pub fn run() {
             search_library,
             list_artists,
             list_genres,
+            list_genre_suggestions,
             list_music_tools,
             list_music_tool_issues,
             list_saved_searches,

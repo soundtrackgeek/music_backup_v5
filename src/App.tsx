@@ -50,6 +50,7 @@ import {
   isTauriRuntime,
   listArtists,
   listGenres,
+  listGenreSuggestions,
   listMusicToolIssues,
   listMusicTools,
   listImportRuns,
@@ -306,6 +307,12 @@ function createGenreSuggestionRequest(offset = 0): GenreListRequest {
 }
 
 async function loadGenreSuggestionNames() {
+  try {
+    return uniqueGenreSuggestionOptions(await listGenreSuggestions());
+  } catch {
+    // Older desktop builds or command failures can still fall back to the paginated summary command.
+  }
+
   const names: string[] = [];
   let offset = 0;
   let total = 0;

@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.12.2] - 2026-06-27
+### Fixed
+- Fixed desktop genre suggestions to load from a dedicated canonical genre-name command before falling back to the heavier genre summary query.
+
 ## [0.12.1] - 2026-06-27
 ### Fixed
 - Fixed desktop genre suggestions so Search, Albums, and Charts retry loading the canonical genre index independently of startup data loading instead of falling back to only the built-in `scores` alias.

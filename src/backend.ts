@@ -827,6 +827,14 @@ export async function listGenres(request: GenreListRequest) {
   return invoke<GenreListResponse>("list_genres", { request });
 }
 
+export async function listGenreSuggestions() {
+  if (!isTauriRuntime()) {
+    return mockGenres.map((genre) => genre.name);
+  }
+
+  return invoke<string[]>("list_genre_suggestions");
+}
+
 export async function listMusicTools() {
   if (!isTauriRuntime()) {
     return mockMusicTools;

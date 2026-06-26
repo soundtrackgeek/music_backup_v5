@@ -1139,6 +1139,11 @@ pub fn list_genres_for_app(
     list_genres(&conn, request, 2000)
 }
 
+pub fn genre_suggestion_names_for_app(app: &AppHandle) -> Result<Vec<String>> {
+    let (conn, _) = open(app)?;
+    genre_suggestion_names(&conn)
+}
+
 pub fn list_music_tools_for_app(app: &AppHandle) -> Result<Vec<MusicToolSummary>> {
     let (conn, _) = open(app)?;
     list_music_tools(&conn)
@@ -1778,6 +1783,25 @@ fn genre_order_clause(sort: &BrowseSort) -> String {
     };
 
     format!("ORDER BY {field} {direction}, LOWER(genre_name) ASC")
+}
+
+fn genre_suggestion_names(conn: &Connection) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT COALESCE(MIN(NULLIF(TRIM(canonical_genre), '')), 'Unknown') AS genre_name
+        FROM albums
+        WHERE NULLIF(TRIM(COALESCE(genre_normalized, '')), '') IS NOT NULL
+        GROUP BY COALESCE(NULLIF(TRIM(LOWER(genre_normalized)), ''), 'unknown')
+        ORDER BY LOWER(genre_name) ASC
+        ",
+    )?;
+
+    let rows = stmt
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<String>>>()
+        .context("Could not load genre suggestion names")?;
+
+    Ok(rows)
 }
 
 fn list_music_tools(conn: &Connection) -> Result<Vec<MusicToolSummary>> {
@@ -3881,6 +3905,14 @@ mod tests {
             response.rows[0].canonical_genre.as_deref(),
             Some("Synthpop")
         );
+    }
+
+    #[test]
+    fn lists_genre_suggestion_names() {
+        let conn = seeded_connection();
+        let genres = genre_suggestion_names(&conn).expect("list genre suggestion names");
+
+        assert_eq!(genres, vec!["Synthpop"]);
     }
 
     #[test]
