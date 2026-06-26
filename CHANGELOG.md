@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.11.1] - 2026-06-27
+### Fixed
+- Fixed the Charts builder to expose the existing Exclude genres filter, including saved chart configurations and exports.
+
 ## [0.11.0] - 2026-06-27
 ### Added
 - Added a `scores` genre group alias for Search, Albums, Charts, and exports, expanding to Action, Animation, Comedy, Documentary, Drama, Fantasy, Horror, Sci-Fi, Thriller, TV, Video Game, Western, and Anime in include/exclude genre filters.

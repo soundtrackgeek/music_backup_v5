@@ -4132,6 +4132,11 @@ export default function App() {
                 onChange={(genres) => updateChartFilters({ genres })}
                 placeholder="Synthpop, AOR"
               />
+              <GenreListCriterion
+                label="Exclude genres"
+                values={chartConfig.request.filters.excludedGenres}
+                onChange={(excludedGenres) => updateChartFilters({ excludedGenres })}
+              />
               <TextCriterion
                 label="Album artist"
                 filter={chartConfig.request.filters.albumArtist}
