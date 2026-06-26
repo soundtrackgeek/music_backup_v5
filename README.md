@@ -2,9 +2,9 @@
 
 A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-The current Phase 8 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse sortable album and track tables, save searches, build ranked album charts with display-only table-header sorting inside the current ranked set, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
+The current Phase 9 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, import real album cover art, browse sortable album and track tables, save searches, build ranked album charts with display-only table-header sorting inside the current ranked set, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
 
-The sidebar currently enables Search, Charts, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. Cover placeholders and cover-grid-ready layouts exist today, but real cover image discovery, caching, and rendering are planned for Phase 9.
+The sidebar currently enables Search, Charts, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. The Imports workspace can scan an `AlbumCovers` folder for folder-named images, cache matches locally, skip covers that are already imported, and optionally fall back to embedded MP3 artwork.
 
 ## Requirements
 
@@ -34,7 +34,7 @@ Run the full desktop app:
 npm run tauri:dev
 ```
 
-The import screen defaults to `musicbee-library.tsv`. Relative paths are resolved from the app process directory and its parent, so the repo-root TSV works during local development. The TSV is intentionally ignored by git.
+The import screen defaults to `musicbee-library.tsv`. Relative paths are resolved from the app process directory and its parent, so the repo-root TSV works during local development. The TSV and local `AlbumCovers/` archive are intentionally ignored by git.
 
 ## Build
 
@@ -45,8 +45,15 @@ npm run tauri:build
 
 ## Roadmap
 
-- Phase 9: Real cover art support. Current cover UI is placeholder-only.
 - Phase 10: External enrichment and AI features.
+
+## Phase 9 Cover Art Features
+
+- Cover art import in the Imports workspace with live album scan progress, percentage complete, new-cover counts, imported counts, skipped-existing counts, and missing-cover counts.
+- Folder-named cover archive matching from `AlbumCovers`, using each album's `<File Path>` folder name and supported image files such as JPG, PNG, GIF, and BMP.
+- Optional embedded MP3 artwork fallback using `<File Path>` plus `<Filename>` when no archive image is found.
+- Cached cover images stored under the app data directory and served through Tauri's scoped asset protocol.
+- Real artwork replaces album cover placeholders in album indexes, album detail, artist/genre album lists, and chart cover grids while preserving initials placeholders for missing artwork.
 
 ## Phase 8 Music Tools Features
 

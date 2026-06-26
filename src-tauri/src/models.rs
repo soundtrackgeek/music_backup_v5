@@ -30,6 +30,7 @@ pub struct LibraryStatus {
     pub has_database: bool,
     pub track_count: i64,
     pub album_count: i64,
+    pub cover_count: i64,
     pub import_run_count: i64,
     pub last_import: Option<ImportRun>,
 }
@@ -51,6 +52,42 @@ pub struct ImportSummary {
     pub album_count: u64,
     pub duration_ms: u128,
     pub backup_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoverImportRequest {
+    pub source_path: String,
+    #[serde(default)]
+    pub extract_embedded_fallback: bool,
+    #[serde(default)]
+    pub replace_existing: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoverImportProgress {
+    pub status: String,
+    pub total_albums: u64,
+    pub scanned_albums: u64,
+    pub new_covers_found: u64,
+    pub imported_covers: u64,
+    pub skipped_existing: u64,
+    pub missing_covers: u64,
+    pub percent: f64,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoverImportSummary {
+    pub total_albums: u64,
+    pub scanned_albums: u64,
+    pub new_covers_found: u64,
+    pub imported_covers: u64,
+    pub skipped_existing: u64,
+    pub missing_covers: u64,
+    pub duration_ms: u128,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -421,6 +458,8 @@ pub struct BrowseRow {
     pub love: Option<String>,
     pub file_path: Option<String>,
     pub filename: Option<String>,
+    pub cover_path: Option<String>,
+    pub cover_mime_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -24,7 +24,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 5;
+const LATEST_SCHEMA_VERSION: i32 = 6;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const MIN_BACKUP_RETENTION: u32 = 1;
 const MAX_BACKUP_RETENTION: u32 = 50;
@@ -181,7 +181,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_five_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_six_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -293,6 +293,17 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             album_score REAL
         );
 
+        CREATE TABLE IF NOT EXISTS album_covers (
+            album_id TEXT PRIMARY KEY,
+            source TEXT NOT NULL,
+            source_path TEXT,
+            cache_path TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            extension TEXT NOT NULL,
+            file_size_bytes INTEGER NOT NULL DEFAULT 0,
+            imported_at TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_tracks_album_id ON tracks(album_id);
         CREATE INDEX IF NOT EXISTS idx_tracks_year ON tracks(year);
         CREATE INDEX IF NOT EXISTS idx_tracks_rating ON tracks(normalized_rating);
@@ -305,6 +316,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_albums_total_seconds ON albums(total_seconds);
         CREATE INDEX IF NOT EXISTS idx_albums_rating_completeness ON albums(rating_completeness);
         CREATE INDEX IF NOT EXISTS idx_albums_album_score ON albums(album_score);
+        CREATE INDEX IF NOT EXISTS idx_album_covers_imported_at ON album_covers(imported_at);
 
         CREATE VIRTUAL TABLE IF NOT EXISTS album_search_fts USING fts5(
             album_id UNINDEXED,
@@ -411,9 +423,16 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     )
     .map_err(|error| anyhow!("Could not run SQLite migrations: {error}"))?;
     ensure_import_run_change_columns(conn)?;
-    conn.execute_batch("PRAGMA user_version = 5;")
+    conn.execute_batch("PRAGMA user_version = 6;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_six_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_five_schema_exists(conn)?
+        && schema_table_exists(conn, "album_covers")?
+        && schema_column_exists(conn, "album_covers", "cache_path")?
+        && schema_column_exists(conn, "album_covers", "mime_type")?)
 }
 
 fn phase_five_schema_exists(conn: &Connection) -> Result<bool> {
@@ -502,6 +521,7 @@ pub fn library_status(app: &AppHandle) -> Result<LibraryStatus> {
     let (conn, db_path) = open(app)?;
     let track_count = count_rows(&conn, "tracks")?;
     let album_count = count_rows(&conn, "albums")?;
+    let cover_count = count_rows(&conn, "album_covers")?;
     let import_run_count = count_rows(&conn, "import_runs")?;
     let last_import = list_import_runs(&conn, 1)?.into_iter().next();
 
@@ -510,6 +530,7 @@ pub fn library_status(app: &AppHandle) -> Result<LibraryStatus> {
         has_database: db_path.exists(),
         track_count,
         album_count,
+        cover_count,
         import_run_count,
         last_import,
     })
@@ -2469,7 +2490,9 @@ fn search_library(
             t.track_number,
             t.love,
             t.file_path,
-            t.filename
+            t.filename,
+            c.cache_path,
+            c.mime_type
         "
     } else {
         "
@@ -2500,14 +2523,16 @@ fn search_library(
             NULL,
             NULL,
             NULL,
-            NULL
+            NULL,
+            c.cache_path,
+            c.mime_type
         "
     };
 
     let from_sql = if is_tracks {
-        "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id"
+        "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id LEFT JOIN album_covers c ON c.album_id = t.album_id"
     } else {
-        "FROM albums a"
+        "FROM albums a LEFT JOIN album_covers c ON c.album_id = a.id"
     };
 
     let (where_sql, values) = build_where_clause(is_tracks, &request.search_text, filters);
@@ -2568,6 +2593,8 @@ fn browse_row_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BrowseRow> {
         love: row.get(24)?,
         file_path: row.get(25)?,
         filename: row.get(26)?,
+        cover_path: row.get(27)?,
+        cover_mime_type: row.get(28)?,
     })
 }
 
@@ -3778,7 +3805,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_noop_migration_for_current_phase_five_schema() {
+    fn skips_noop_migration_for_current_phase_six_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -3789,7 +3816,7 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_five_schema_exists(&conn).expect("phase five schema exists"));
+        assert!(phase_six_schema_exists(&conn).expect("phase six schema exists"));
     }
 
     #[test]

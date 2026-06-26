@@ -425,6 +425,13 @@ button {
   accent-color: #0e766e;
 }
 
+.cover-options {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 14px;
+  margin-top: 12px;
+}
+
 .sort-controls {
   justify-content: flex-end;
   gap: 10px;
@@ -665,6 +672,17 @@ button {
   font-size: 38px;
   line-height: 1;
   font-weight: 760;
+}
+
+.cover-placeholder img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.cover-placeholder.cover-image {
+  background: #eef3f1;
 }
 
 .cover-mini {
@@ -1042,12 +1060,27 @@ button {
   margin-top: 0;
 }
 
+.cover-progress-block .progress-meta {
+  flex-wrap: wrap;
+}
+
 .error-message {
   margin: 14px 0 0;
   border: 1px solid #e9b8b2;
   border-radius: 8px;
   color: #8d2d25;
   background: #fff5f4;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.success-message {
+  margin: 14px 0 0;
+  border: 1px solid #b8d9c8;
+  border-radius: 8px;
+  color: #1f6849;
+  background: #f0faf4;
   padding: 10px 12px;
   font-size: 13px;
   line-height: 18px;
@@ -1651,7 +1684,8 @@ button {
 :root[data-theme="dark"] .filter-chip,
 :root[data-theme="dark"] .run-status-completed,
 :root[data-theme="dark"] .tool-severity-low,
-:root[data-theme="dark"] .export-result {
+:root[data-theme="dark"] .export-result,
+:root[data-theme="dark"] .success-message {
   color: #85e2d6;
   background: #173a34;
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Music Library",
-  "version": "0.9.4",
+  "version": "0.10.0",
   "identifier": "com.local.musiclibrary",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -20,7 +20,11 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/covers/**"]
+      }
     }
   },
   "bundle": {

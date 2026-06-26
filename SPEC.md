@@ -1,7 +1,7 @@
 # Music Library App Specification
 
 Date: 2026-06-26
-Status: Draft, current implementation through Phase 8
+Status: Draft, current implementation through Phase 9
 
 ## 1. Product Goal
 
@@ -16,7 +16,7 @@ The app should make it easy to answer questions such as:
 - How many albums from 1987 have I fully rated?
 - Which albums were newly rated since the last import?
 
-Speed is the highest priority. The UI should also be polished and functional, with room for real cover art views later.
+Speed is the highest priority. The UI should also be polished and functional, with real cover art views where artwork has been imported.
 
 ## 2. Source Data
 
@@ -388,7 +388,7 @@ View modes:
 
 - Table
 - Compact list
-- Cover grid with placeholders now; real artwork after Phase 9 cover support
+- Cover grid with real artwork when available and placeholders otherwise
 - Album detail drill-down
 
 ### Statistics Dashboards
@@ -422,12 +422,12 @@ Album detail pages should show:
 - Loved tracks
 - Album Score
 - Track list with disc/track order, title, time, rating, love marker, filename, and path
-- Cover placeholder area for future cover art
+- Cover artwork area with placeholder fallback
 - Export action for the album track list
 
 Current note:
 
-- Cover placeholders exist in chart and future album layouts, but real cover art discovery, caching, and image rendering are not implemented yet.
+- Cover discovery, caching, and image rendering are implemented through the Phase 9 cover import flow.
 
 ## 9. Import, Sync, and Backups
 
@@ -571,7 +571,7 @@ The UI should optimize for repeated use:
 - No blocking UI during import.
 - Visible import progress.
 - Export actions available from searches, charts, dashboards, and album details.
-- Cover placeholders built into album and chart layouts from the start; real cover images arrive in Phase 9.
+- Real cover images render in album and chart layouts when available, with placeholders preserved for albums without imported artwork.
 
 Recommended main navigation:
 
@@ -666,10 +666,13 @@ These are targets, not hard guarantees. They should be measured once implementat
 - Issue counts, filterable affected rows/albums, severity, and exports.
 - Later safe fix actions for selected issue types.
 
-### Phase 9: Cover Art Support (future)
+### Phase 9: Cover Art Support (implemented)
 
-- Discover real album cover images from library folders or embedded metadata.
-- Cache and serve cover images safely through the local app runtime.
+- Discover real album cover images from a local `AlbumCovers` archive by matching each album's `<File Path>` folder name to image filenames.
+- Optionally discover embedded MP3 cover art by combining `<File Path>` and `<Filename>` for a representative track when no archive image is found.
+- Cache and serve cover images safely through the local app runtime using Tauri's scoped asset protocol.
+- Skip albums that already have imported cover art unless replacement is explicitly enabled.
+- Show live scan progress, percentage complete, new-cover counts, imported counts, skipped-existing counts, and missing-cover counts.
 - Replace chart and album placeholder covers with real artwork when available.
 - Preserve useful placeholders for albums without available artwork.
 

@@ -9,3 +9,4 @@ src-tauri/gen/
 *.sqlite3
 *.sqlite3-*
 musicbee-library.tsv
+AlbumCovers/

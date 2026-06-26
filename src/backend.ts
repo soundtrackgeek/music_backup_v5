@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppSettings,
@@ -8,6 +8,9 @@ import type {
   BrowseRequest,
   BrowseResponse,
   BrowseRow,
+  CoverImportProgress,
+  CoverImportRequest,
+  CoverImportSummary,
   ExportResult,
   ImportProgress,
   ImportRun,
@@ -34,6 +37,7 @@ const mockStatus: LibraryStatus = {
   hasDatabase: true,
   trackCount: 1130882,
   albumCount: 76789,
+  coverCount: 0,
   importRunCount: 0,
   lastImport: null,
 };
@@ -67,6 +71,8 @@ const mockRows: BrowseRow[] = [
     love: null,
     filePath: null,
     filename: null,
+    coverPath: null,
+    coverMimeType: null,
   },
   {
     id: "mb:mock-2",
@@ -96,6 +102,8 @@ const mockRows: BrowseRow[] = [
     love: null,
     filePath: null,
     filename: null,
+    coverPath: null,
+    coverMimeType: null,
   },
   {
     id: "track:mock-1",
@@ -125,6 +133,8 @@ const mockRows: BrowseRow[] = [
     love: "L",
     filePath: "D:\\Music\\Pet Shop Boys\\Actually",
     filename: "02 What Have I Done to Deserve This.mp3",
+    coverPath: null,
+    coverMimeType: null,
   },
 ];
 
@@ -564,6 +574,14 @@ export async function importMusicBeeTsv(sourcePath: string) {
   return invoke<ImportSummary>("import_musicbee_tsv", { sourcePath });
 }
 
+export async function importAlbumCovers(request: CoverImportRequest) {
+  if (!isTauriRuntime()) {
+    throw new Error("Start cover import from the Tauri desktop app to access local files and SQLite.");
+  }
+
+  return invoke<CoverImportSummary>("import_album_covers", { request });
+}
+
 export async function searchLibrary(request: BrowseRequest) {
   if (!isTauriRuntime()) {
     const albumIds = new Set(request.filters.albumIds);
@@ -812,6 +830,16 @@ export async function listenToImportProgress(handler: (progress: ImportProgress)
   });
 }
 
+export async function listenToCoverImportProgress(handler: (progress: CoverImportProgress) => void) {
+  if (!isTauriRuntime()) {
+    return (() => undefined) satisfies UnlistenFn;
+  }
+
+  return listen<CoverImportProgress>("cover-import-progress", (event) => {
+    handler(event.payload);
+  });
+}
+
 export async function listenToMusicToolProgress(handler: (progress: MusicToolProgress) => void) {
   if (!isTauriRuntime()) {
     return (() => undefined) satisfies UnlistenFn;
@@ -820,6 +848,14 @@ export async function listenToMusicToolProgress(handler: (progress: MusicToolPro
   return listen<MusicToolProgress>("music-tool-progress", (event) => {
     handler(event.payload);
   });
+}
+
+export function coverImageUrl(coverPath: string | null) {
+  if (!coverPath || !isTauriRuntime()) {
+    return null;
+  }
+
+  return convertFileSrc(coverPath);
 }
 
 export function loadCachedSettings() {

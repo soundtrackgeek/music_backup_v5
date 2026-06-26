@@ -36,11 +36,13 @@ import {
 import {
   deleteSavedChart,
   deleteSavedSearch,
+  coverImageUrl,
   exportSearch,
   cacheSettings,
   getSettings,
   getStatistics,
   getLibraryStatus,
+  importAlbumCovers,
   importMusicBeeTsv,
   isTauriRuntime,
   listArtists,
@@ -51,6 +53,7 @@ import {
   listSavedCharts,
   listSavedSearches,
   loadCachedSettings,
+  listenToCoverImportProgress,
   listenToImportProgress,
   listenToMusicToolProgress,
   saveChart,
@@ -72,6 +75,8 @@ import type {
   BrowseView,
   ChartConfig,
   ChartViewMode,
+  CoverImportProgress,
+  CoverImportSummary,
   ExportResult,
   GenreListRequest,
   GenreListResponse,
@@ -154,6 +159,18 @@ const defaultProgress: ImportProgress = {
   processedRows: 0,
   albumCount: 0,
   message: "Ready to import a MusicBee TSV export.",
+};
+
+const defaultCoverProgress: CoverImportProgress = {
+  status: "idle",
+  totalAlbums: 0,
+  scannedAlbums: 0,
+  newCoversFound: 0,
+  importedCovers: 0,
+  skippedExisting: 0,
+  missingCovers: 0,
+  percent: 0,
+  message: "Ready to scan AlbumCovers.",
 };
 
 function createDefaultSettings(): AppSettings {
@@ -998,6 +1015,42 @@ function albumInitial(row: BrowseRow | null) {
   return row?.album?.trim().slice(0, 1).toUpperCase() || "A";
 }
 
+function AlbumCover({
+  row,
+  className = "",
+  decorative = true,
+}: {
+  row: BrowseRow | null;
+  className?: string;
+  decorative?: boolean;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const coverPath = row?.coverPath ?? null;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [coverPath]);
+
+  const imageUrl = imageFailed ? null : coverImageUrl(coverPath);
+  const label = row?.album ? `${row.album} cover` : "Album cover";
+  const classes = ["cover-placeholder", imageUrl ? "cover-image" : "", className].filter(Boolean).join(" ");
+
+  return (
+    <span className={classes} aria-hidden={decorative ? "true" : undefined}>
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={decorative ? "" : label}
+          loading="lazy"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <span>{albumInitial(row)}</span>
+      )}
+    </span>
+  );
+}
+
 function formatTrackPosition(row: BrowseRow) {
   const disc = row.discNumber?.toString() ?? "";
   const track = row.trackNumber?.toString() ?? "";
@@ -1065,9 +1118,7 @@ function AlbumIndexTable({
             }}
           >
             <span className="album-index-title" role="cell">
-              <span className="cover-placeholder cover-mini" aria-hidden="true">
-                <span>{albumInitial(row)}</span>
-              </span>
+              <AlbumCover row={row} className="cover-mini" />
               <span>
                 <strong>{row.album ?? "Untitled"}</strong>
                 <small>{formatMinutes(row.totalSeconds)}</small>
@@ -1185,9 +1236,7 @@ function AlbumDetailPanel({
         </div>
       </div>
 
-      <div className="cover-placeholder album-cover-large" aria-hidden="true">
-        <span>{albumInitial(album)}</span>
-      </div>
+      <AlbumCover row={album} className="album-cover-large" decorative={false} />
 
       <dl className="run-details album-detail-stats">
         <div>
@@ -1388,9 +1437,7 @@ function ArtistAlbumTable({ response }: { response: BrowseResponse | null }) {
       {response.rows.map((row) => (
         <div className="result-table-row" role="row" key={row.id}>
           <span className="album-index-title" role="cell">
-            <span className="cover-placeholder cover-mini" aria-hidden="true">
-              <span>{albumInitial(row)}</span>
-            </span>
+            <AlbumCover row={row} className="cover-mini" />
             <span>
               <strong>{row.album ?? "Untitled"}</strong>
               <small>{formatMinutes(row.totalSeconds)}</small>
@@ -1643,9 +1690,7 @@ function GenreAlbumTable({ response }: { response: BrowseResponse | null }) {
       {response.rows.map((row) => (
         <div className="result-table-row" role="row" key={row.id}>
           <span className="album-index-title" role="cell">
-            <span className="cover-placeholder cover-mini" aria-hidden="true">
-              <span>{albumInitial(row)}</span>
-            </span>
+            <AlbumCover row={row} className="cover-mini" />
             <span>
               <strong>{row.album ?? "Untitled"}</strong>
               <small>{formatMinutes(row.totalSeconds)}</small>
@@ -2097,9 +2142,7 @@ function ChartResults({
       <div className="chart-grid" role="list">
         {response.rows.map((row, index) => (
           <article className="chart-grid-item" role="listitem" key={row.id}>
-            <div className="cover-placeholder" aria-hidden="true">
-              <span>{row.album?.slice(0, 1).toUpperCase() ?? "A"}</span>
-            </div>
+            <AlbumCover row={row} />
             <div>
               <strong>#{index + 1}</strong>
               <h3>{row.album ?? "Untitled"}</h3>
@@ -2355,11 +2398,18 @@ function RatingEventList({ events }: { events: RatingEvent[] }) {
 export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
   const [sourcePath, setSourcePath] = useState("musicbee-library.tsv");
+  const [coverSourcePath, setCoverSourcePath] = useState("AlbumCovers");
+  const [coverExtractEmbeddedFallback, setCoverExtractEmbeddedFallback] = useState(false);
+  const [coverReplaceExisting, setCoverReplaceExisting] = useState(false);
   const [status, setStatus] = useState<LibraryStatus | null>(null);
   const [runs, setRuns] = useState<ImportRun[]>([]);
   const [progress, setProgress] = useState(defaultProgress);
+  const [coverProgress, setCoverProgress] = useState(defaultCoverProgress);
   const [isImporting, setIsImporting] = useState(false);
+  const [isImportingCovers, setIsImportingCovers] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [coverImportError, setCoverImportError] = useState<string | null>(null);
+  const [coverImportSummary, setCoverImportSummary] = useState<CoverImportSummary | null>(null);
   const [request, setRequest] = useState<BrowseRequest>(() => createRequest("albums"));
   const [response, setResponse] = useState<BrowseResponse | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
@@ -2456,6 +2506,17 @@ export default function App() {
   useEffect(() => {
     let unlisten: (() => void) | null = null;
     void listenToImportProgress(setProgress).then((nextUnlisten) => {
+      unlisten = nextUnlisten;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void listenToCoverImportProgress(setCoverProgress).then((nextUnlisten) => {
       unlisten = nextUnlisten;
     });
 
@@ -2980,6 +3041,12 @@ export default function App() {
     return Math.min(96, Math.max(8, (progress.processedRows / 1_130_882) * 100));
   }, [isImporting, progress.processedRows, progress.status]);
 
+  const coverProgressPercent = useMemo(() => {
+    if (coverProgress.status === "completed") return 100;
+    if (coverProgress.scannedAlbums === 0) return isImportingCovers ? 4 : 0;
+    return Math.min(99, Math.max(1, coverProgress.percent));
+  }, [coverProgress.percent, coverProgress.scannedAlbums, coverProgress.status, isImportingCovers]);
+
   const chips = useMemo(() => {
     const nextChips: { key: string; label: string; remove: () => void }[] = [];
     const addTextChip = (key: keyof BrowseFilters, label: string, filter: TextFilter) => {
@@ -3356,6 +3423,53 @@ export default function App() {
     }
   }
 
+  async function startCoverImport() {
+    setIsImportingCovers(true);
+    setCoverImportError(null);
+    setCoverImportSummary(null);
+    setCoverProgress({
+      ...defaultCoverProgress,
+      status: "running",
+      message: "Scanning album folders for cover art.",
+    });
+
+    try {
+      const summary = await importAlbumCovers({
+        sourcePath: coverSourcePath,
+        extractEmbeddedFallback: coverExtractEmbeddedFallback,
+        replaceExisting: coverReplaceExisting,
+      });
+      setCoverImportSummary(summary);
+      setCoverProgress({
+        status: "completed",
+        totalAlbums: summary.totalAlbums,
+        scannedAlbums: summary.scannedAlbums,
+        newCoversFound: summary.newCoversFound,
+        importedCovers: summary.importedCovers,
+        skippedExisting: summary.skippedExisting,
+        missingCovers: summary.missingCovers,
+        percent: 100,
+        message: "Cover import completed.",
+      });
+      await loadData();
+      setRequest((current) => ({ ...current }));
+      setAlbumRequest((current) => ({ ...current }));
+      setChartConfig((current) => ({ ...current }));
+      setArtistAlbumsResponse(null);
+      setGenreAlbumsResponse(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setCoverImportError(message);
+      setCoverProgress((current) => ({
+        ...current,
+        status: "failed",
+        message,
+      }));
+    } finally {
+      setIsImportingCovers(false);
+    }
+  }
+
   async function saveCurrentSearch() {
     const fallbackName =
       request.searchText.trim() || `${request.view === "albums" ? "Album" : "Track"} search`;
@@ -3605,6 +3719,7 @@ export default function App() {
           <section className="metric-grid" aria-label="Library summary">
             <Metric label="Raw tracks" value={formatNumber(status?.trackCount)} tone="teal" icon={ListMusic} />
             <Metric label="Album aggregates" value={formatNumber(status?.albumCount)} tone="amber" icon={Album} />
+            <Metric label="Cover images" value={formatNumber(status?.coverCount)} icon={Album} />
             <Metric label="Import runs" value={formatNumber(status?.importRunCount)} icon={Clock3} />
             <Metric label="Database" value={status?.hasDatabase ? "Ready" : "New"} icon={Database} />
           </section>
@@ -3656,6 +3771,90 @@ export default function App() {
                 <span>{isImporting ? "Importing" : "Start import"}</span>
               </button>
               <span className="db-path">{status?.dbPath ?? "Database path will appear after initialization."}</span>
+            </div>
+          </section>
+
+          <section className="import-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Cover art</h2>
+                <p>Scan folder-named image files and optionally embedded MP3 artwork for imported albums.</p>
+              </div>
+              <RunStatus status={coverProgress.status} />
+            </div>
+
+            <label className="source-input">
+              <span>Cover source folder</span>
+              <input
+                value={coverSourcePath}
+                onChange={(event) => setCoverSourcePath(event.target.value)}
+                placeholder="C:\\Music\\AlbumCovers"
+                disabled={isImportingCovers}
+              />
+            </label>
+
+            <div className="toggle-row cover-options">
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={coverExtractEmbeddedFallback}
+                  onChange={(event) => setCoverExtractEmbeddedFallback(event.target.checked)}
+                  disabled={isImportingCovers}
+                />
+                <span>Use embedded MP3 fallback</span>
+              </label>
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={coverReplaceExisting}
+                  onChange={(event) => setCoverReplaceExisting(event.target.checked)}
+                  disabled={isImportingCovers}
+                />
+                <span>Replace existing covers</span>
+              </label>
+            </div>
+
+            <div className="progress-block cover-progress-block" aria-live="polite">
+              <div className="progress-row">
+                <span>{coverProgress.message}</span>
+                <strong>{Math.round(coverProgressPercent)}%</strong>
+              </div>
+              <div className="progress-track">
+                <div className="progress-fill" style={{ width: `${coverProgressPercent}%` }} />
+              </div>
+              <div className="progress-meta">
+                <span>
+                  {formatNumber(coverProgress.scannedAlbums)} of {formatNumber(coverProgress.totalAlbums)} albums scanned
+                </span>
+                <span>{formatNumber(coverProgress.newCoversFound)} new covers found</span>
+              </div>
+              <div className="progress-meta">
+                <span>{formatNumber(coverProgress.importedCovers)} imported</span>
+                <span>{formatNumber(coverProgress.skippedExisting)} already had covers</span>
+                <span>{formatNumber(coverProgress.missingCovers)} missing</span>
+              </div>
+            </div>
+
+            {coverImportError ? <p className="error-message">{coverImportError}</p> : null}
+            {coverImportSummary ? (
+              <p className="success-message">
+                Imported {formatNumber(coverImportSummary.importedCovers)} covers from{" "}
+                {formatNumber(coverImportSummary.newCoversFound)} new matches.
+              </p>
+            ) : null}
+
+            <div className="action-row">
+              <button
+                className="primary-button"
+                type="button"
+                onClick={startCoverImport}
+                disabled={isImportingCovers || !coverSourcePath.trim() || !canImport || (status?.albumCount ?? 0) === 0}
+                title={canImport ? "Start cover import" : "Open the Tauri desktop app to import covers"}
+              >
+                <Play size={17} fill="currentColor" />
+                <span>{isImportingCovers ? "Scanning" : "Import covers"}</span>
+              </button>
+              <span className="db-path">Existing cover cache entries are skipped unless replacement is enabled.</span>
             </div>
           </section>
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.10.0] - 2026-06-26
+### Added
+- Added Phase 9 cover art support with a cover import panel in the Imports workspace.
+- Added folder-name matching against the local `AlbumCovers` archive with live scan percentage, new-cover, imported, skipped-existing, and missing-cover counts.
+- Added optional embedded MP3 artwork fallback, local cover caching, and Tauri asset rendering for cached images.
+- Added real cover rendering in album indexes, album detail, artist/genre album lists, and chart cover grids with placeholder fallback.
+
+### Changed
+- Ignored the local `AlbumCovers/` archive so cover image collections stay out of git.
+
 ## [0.9.4] - 2026-06-26
 ### Changed
 - Changed Charts table header sorting to reorder only the current ranked result set while preserving each album's original rank number.

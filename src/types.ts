@@ -24,6 +24,7 @@ export type LibraryStatus = {
   hasDatabase: boolean;
   trackCount: number;
   albumCount: number;
+  coverCount: number;
   importRunCount: number;
   lastImport: ImportRun | null;
 };
@@ -41,6 +42,34 @@ export type ImportSummary = {
   albumCount: number;
   durationMs: number;
   backupPath: string | null;
+};
+
+export type CoverImportRequest = {
+  sourcePath: string;
+  extractEmbeddedFallback: boolean;
+  replaceExisting: boolean;
+};
+
+export type CoverImportProgress = {
+  status: string;
+  totalAlbums: number;
+  scannedAlbums: number;
+  newCoversFound: number;
+  importedCovers: number;
+  skippedExisting: number;
+  missingCovers: number;
+  percent: number;
+  message: string;
+};
+
+export type CoverImportSummary = {
+  totalAlbums: number;
+  scannedAlbums: number;
+  newCoversFound: number;
+  importedCovers: number;
+  skippedExisting: number;
+  missingCovers: number;
+  durationMs: number;
 };
 
 export type AppSettings = {
@@ -255,6 +284,8 @@ export type BrowseRow = {
   love: string | null;
   filePath: string | null;
   filename: string | null;
+  coverPath: string | null;
+  coverMimeType: string | null;
 };
 
 export type BrowseResponse = {
