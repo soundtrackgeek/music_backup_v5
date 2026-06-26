@@ -2,9 +2,9 @@
 
 A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-The current Phase 7 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse album and track tables, save searches, build ranked album charts, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, and browse canonical genres with genre-level summary stats and album lists.
+The current Phase 8 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, browse album and track tables, save searches, build ranked album charts, save chart configurations, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
 
-The sidebar currently enables Search, Charts, Statistics, Albums, Artists, Genres, Imports, and Settings. Tools is a planned workspace. Cover placeholders and cover-grid-ready layouts exist today, but real cover image discovery, caching, and rendering are planned for Phase 9.
+The sidebar currently enables Search, Charts, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. Cover placeholders and cover-grid-ready layouts exist today, but real cover image discovery, caching, and rendering are planned for Phase 9.
 
 ## Requirements
 
@@ -45,9 +45,15 @@ npm run tauri:build
 
 ## Roadmap
 
-- Phase 8: Music Tools workspace with validation and cleanup issue lists.
 - Phase 9: Real cover art support. Current cover UI is placeholder-only.
 - Phase 10: External enrichment and AI features.
+
+## Phase 8 Music Tools Features
+
+- Tools workspace with query-backed validation issue counts and affected album/track rows.
+- Initial validation suite for duplicate albums, duplicates within an album, invalid times, non-numeric ratings, missing tags, non-MP3 files, year anomalies, ratings outside accepted values, track/disc numbering issues, inconsistent album metadata, whitespace anomalies, genre normalization issues, conflicting album artists, and multiple years per album.
+- Tool-level severity, issue counts, affected album counts, affected track counts, filterable issue rows, pagination, sorting, and exports to CSV, TSV, XLSX, JSON, and TXT.
+- Web-only preview mock data covers Tools alongside Search, Charts, Statistics, Albums, Artists, Genres, and Imports.
 
 ## Phase 7 Genres Features
 

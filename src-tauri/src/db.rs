@@ -1,13 +1,15 @@
 use crate::models::{
     AppSettings, ArtistListRequest, ArtistListResponse, ArtistSummary, BrowseFilters,
     BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ChartConfig, ExportResult,
-    ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressStats, GenreSummary,
-    ImportRun, LibraryOverviewStats, LibraryStatus, LovedTrackStats, RatingBucket, RatingEvent,
-    RatingHistoryPoint, RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart,
-    SavedSearch, StatisticsResponse, TextFilter, YearProgressStats,
+    ExportMusicToolRequest, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    GenreProgressStats, GenreSummary, ImportRun, LibraryOverviewStats, LibraryStatus,
+    LovedTrackStats, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
+    MusicToolSummary, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
+    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
+    YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::Utc;
+use chrono::{Datelike, Utc};
 use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExtension};
 use rust_xlsxwriter::{Format, Workbook};
 use std::fs;
@@ -22,6 +24,116 @@ const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const MIN_BACKUP_RETENTION: u32 = 1;
 const MAX_BACKUP_RETENTION: u32 = 50;
 static MIGRATION_LOCK: Mutex<()> = Mutex::new(());
+
+#[derive(Debug, Clone, Copy)]
+struct MusicToolDefinition {
+    id: &'static str,
+    label: &'static str,
+    description: &'static str,
+    severity: &'static str,
+    scope: &'static str,
+}
+
+const MUSIC_TOOLS: &[MusicToolDefinition] = &[
+    MusicToolDefinition {
+        id: "duplicate-albums",
+        label: "Duplicate albums",
+        description: "Potential duplicate album versions with the same artist, title, and year.",
+        severity: "medium",
+        scope: "albums",
+    },
+    MusicToolDefinition {
+        id: "duplicates-within-album",
+        label: "Duplicates within album",
+        description: "Tracks that repeat a title or disc/track position inside one album.",
+        severity: "high",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "invalid-time-values",
+        label: "Invalid time values",
+        description: "Tracks where duration could not be parsed into seconds.",
+        severity: "high",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "non-numeric-ratings",
+        label: "Non-numeric ratings",
+        description: "Track ratings that contain non-numeric text.",
+        severity: "medium",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "missing-tags",
+        label: "Missing tags",
+        description: "Tracks missing required album, artist, title, genre, year, or file tags.",
+        severity: "high",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "non-mp3-files",
+        label: "Non-MP3 files",
+        description: "Tracks whose filenames do not end in .mp3.",
+        severity: "low",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "year-anomalies",
+        label: "Year anomalies",
+        description: "Tracks with missing or implausible canonical year values.",
+        severity: "medium",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "ratings-out-of-range",
+        label: "Ratings out of range",
+        description: "Numeric ratings that are not whole-number values from 0 to 5.",
+        severity: "high",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "track-disc-number-issues",
+        label: "Track/disc number issues",
+        description: "Tracks with missing, zero, or negative disc and track numbers.",
+        severity: "medium",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "inconsistent-album-metadata",
+        label: "Inconsistent album metadata",
+        description: "Albums whose tracks disagree on title, genre, or publisher.",
+        severity: "medium",
+        scope: "albums",
+    },
+    MusicToolDefinition {
+        id: "whitespace-anomalies",
+        label: "Whitespace anomalies",
+        description: "Track metadata with repeated internal spaces.",
+        severity: "low",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "genre-normalization-issues",
+        label: "Genre normalization issues",
+        description: "Tracks with multi-value genre strings that were collapsed to one canonical genre.",
+        severity: "low",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "conflicting-album-artists",
+        label: "Conflicting album artists",
+        description: "Albums whose tracks disagree on album artist.",
+        severity: "high",
+        scope: "albums",
+    },
+    MusicToolDefinition {
+        id: "multiple-years-per-album",
+        label: "Multiple years per album",
+        description: "Albums containing tracks with more than one canonical year.",
+        severity: "medium",
+        scope: "albums",
+    },
+];
 
 pub fn database_path(app: &AppHandle) -> Result<PathBuf> {
     let app_data_dir = app
@@ -985,6 +1097,19 @@ pub fn list_genres_for_app(
     list_genres(&conn, request, 500)
 }
 
+pub fn list_music_tools_for_app(app: &AppHandle) -> Result<Vec<MusicToolSummary>> {
+    let (conn, _) = open(app)?;
+    list_music_tools(&conn)
+}
+
+pub fn list_music_tool_issues_for_app(
+    app: &AppHandle,
+    request: MusicToolIssueRequest,
+) -> Result<MusicToolIssueResponse> {
+    let (conn, _) = open(app)?;
+    list_music_tool_issues(&conn, request, 500)
+}
+
 pub fn list_saved_searches_for_app(app: &AppHandle) -> Result<Vec<SavedSearch>> {
     let (conn, _) = open(app)?;
     let mut stmt = conn.prepare(
@@ -1175,6 +1300,69 @@ pub fn export_search_for_app(app: &AppHandle, input: ExportSearchRequest) -> Res
         ],
     )
     .context("Could not record export")?;
+
+    Ok(ExportResult {
+        path: path.display().to_string(),
+        format,
+        row_count: response.rows.len(),
+    })
+}
+
+pub fn export_music_tool_issues_for_app(
+    app: &AppHandle,
+    input: ExportMusicToolRequest,
+) -> Result<ExportResult> {
+    let format = input.format.trim().to_lowercase();
+    if !matches!(format.as_str(), "csv" | "tsv" | "json" | "txt" | "xlsx") {
+        bail!("Unsupported export format: {}", input.format);
+    }
+
+    let (conn, _) = open(app)?;
+    let request = MusicToolIssueRequest {
+        tool_id: input.tool_id.clone(),
+        search_text: input.search_text.clone(),
+        sort: BrowseSort {
+            field: "album".to_string(),
+            direction: "asc".to_string(),
+        },
+        limit: 100_000,
+        offset: 0,
+    };
+    let response = list_music_tool_issues(&conn, request.clone(), 100_000)?;
+
+    let export_dir = app
+        .path()
+        .app_data_dir()
+        .context("Could not resolve the app data directory")?
+        .join("exports");
+    fs::create_dir_all(&export_dir).context("Could not create export directory")?;
+
+    let path = export_dir.join(format!(
+        "music-library-tools-{}-{}.{}",
+        safe_file_segment(&response.tool.id),
+        Utc::now().format("%Y%m%d-%H%M%S"),
+        format
+    ));
+
+    write_issue_export_file(&path, &format, &response.rows)
+        .with_context(|| format!("Could not write export {}", path.display()))?;
+
+    let request_json =
+        serde_json::to_string(&request).context("Could not serialize music tool export query")?;
+    conn.execute(
+        "
+        INSERT INTO exports (created_at, view, format, row_count, path, request_json)
+        VALUES (?1, 'tools', ?2, ?3, ?4, ?5)
+        ",
+        params![
+            Utc::now().to_rfc3339(),
+            &format,
+            response.rows.len() as i64,
+            path.display().to_string(),
+            request_json
+        ],
+    )
+    .context("Could not record music tool export")?;
 
     Ok(ExportResult {
         path: path.display().to_string(),
@@ -1534,6 +1722,515 @@ fn genre_order_clause(sort: &BrowseSort) -> String {
     };
 
     format!("ORDER BY {field} {direction}, LOWER(genre_name) ASC")
+}
+
+fn list_music_tools(conn: &Connection) -> Result<Vec<MusicToolSummary>> {
+    MUSIC_TOOLS
+        .iter()
+        .map(|definition| music_tool_summary(conn, *definition))
+        .collect()
+}
+
+fn list_music_tool_issues(
+    conn: &Connection,
+    request: MusicToolIssueRequest,
+    max_limit: u32,
+) -> Result<MusicToolIssueResponse> {
+    let definition = music_tool_definition(&request.tool_id)?;
+    let tool = music_tool_summary(conn, definition)?;
+    let base_sql = music_tool_issue_sql(definition.id)?;
+    let (where_sql, values) = music_tool_issue_search_where(&request.search_text);
+    let limit = request.limit.clamp(1, max_limit);
+    let offset = request.offset;
+
+    let count_sql = format!("SELECT COUNT(*) FROM ({base_sql}) issue_rows {where_sql}");
+    let total = conn
+        .query_row(&count_sql, params_from_iter(values.iter()), |row| row.get(0))
+        .with_context(|| format!("Could not count {} issues", definition.label))?;
+
+    let order_sql = music_tool_issue_order_clause(&request.sort);
+    let sql = format!("SELECT * FROM ({base_sql}) issue_rows {where_sql} {order_sql} LIMIT ? OFFSET ?");
+    let mut row_values = values;
+    row_values.push(Value::Integer(i64::from(limit)));
+    row_values.push(Value::Integer(i64::from(offset)));
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(params_from_iter(row_values.iter()), music_tool_issue_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .with_context(|| format!("Could not load {} issues", definition.label))?;
+
+    Ok(MusicToolIssueResponse {
+        tool,
+        rows,
+        total,
+        limit,
+        offset,
+    })
+}
+
+fn music_tool_summary(
+    conn: &Connection,
+    definition: MusicToolDefinition,
+) -> Result<MusicToolSummary> {
+    let base_sql = music_tool_issue_sql(definition.id)?;
+    let sql = format!(
+        "
+        SELECT
+            COUNT(*),
+            COUNT(DISTINCT album_id),
+            COUNT(DISTINCT track_id)
+        FROM ({base_sql}) issue_rows
+        "
+    );
+    let (issue_count, album_count, track_count) =
+        conn.query_row(&sql, [], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })
+        .with_context(|| format!("Could not count {} issues", definition.label))?;
+
+    Ok(MusicToolSummary {
+        id: definition.id.to_string(),
+        label: definition.label.to_string(),
+        description: definition.description.to_string(),
+        severity: definition.severity.to_string(),
+        scope: definition.scope.to_string(),
+        issue_count,
+        album_count,
+        track_count,
+    })
+}
+
+fn music_tool_definition(tool_id: &str) -> Result<MusicToolDefinition> {
+    MUSIC_TOOLS
+        .iter()
+        .copied()
+        .find(|definition| definition.id == tool_id)
+        .ok_or_else(|| anyhow!("Unknown music tool: {tool_id}"))
+}
+
+fn music_tool_issue_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MusicToolIssueRow> {
+    Ok(MusicToolIssueRow {
+        id: row.get(0)?,
+        tool_id: row.get(1)?,
+        severity: row.get(2)?,
+        entity_type: row.get(3)?,
+        album_id: row.get(4)?,
+        track_id: row.get(5)?,
+        album: row.get(6)?,
+        album_artist_display: row.get(7)?,
+        title: row.get(8)?,
+        canonical_genre: row.get(9)?,
+        year: row.get(10)?,
+        detail: row.get(11)?,
+        value: row.get(12)?,
+        filename: row.get(13)?,
+        file_path: row.get(14)?,
+    })
+}
+
+fn music_tool_issue_search_where(search_text: &str) -> (String, Vec<Value>) {
+    let search_text = search_text.trim();
+    if search_text.is_empty() {
+        return (String::new(), Vec::new());
+    }
+
+    let normalized = search_text.to_lowercase();
+    (
+        "
+        WHERE LOWER(
+            COALESCE(album, '') || ' ' ||
+            COALESCE(album_artist_display, '') || ' ' ||
+            COALESCE(title, '') || ' ' ||
+            COALESCE(canonical_genre, '') || ' ' ||
+            COALESCE(detail, '') || ' ' ||
+            COALESCE(value, '') || ' ' ||
+            COALESCE(filename, '') || ' ' ||
+            COALESCE(file_path, '')
+        ) LIKE ? ESCAPE '\\'
+        "
+        .to_string(),
+        vec![Value::Text(format!("%{}%", escape_like(&normalized)))],
+    )
+}
+
+fn music_tool_issue_order_clause(sort: &BrowseSort) -> String {
+    let direction = if sort.direction.eq_ignore_ascii_case("desc") {
+        "DESC"
+    } else {
+        "ASC"
+    };
+
+    let field = match sort.field.as_str() {
+        "artist" => "LOWER(COALESCE(album_artist_display, ''))",
+        "year" => "year",
+        "title" => "LOWER(COALESCE(title, ''))",
+        "severity" => "severity",
+        "value" => "LOWER(COALESCE(value, ''))",
+        "filename" => "LOWER(COALESCE(filename, ''))",
+        "detail" => "LOWER(COALESCE(detail, ''))",
+        _ => "LOWER(COALESCE(album, ''))",
+    };
+
+    format!(
+        "ORDER BY {field} {direction}, LOWER(COALESCE(album_artist_display, '')) ASC, LOWER(COALESCE(album, '')) ASC, COALESCE(track_id, 0) ASC"
+    )
+}
+
+fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
+    match tool_id {
+        "duplicate-albums" => Ok(
+            "
+            WITH duplicate_groups AS (
+                SELECT
+                    COALESCE(NULLIF(TRIM(LOWER(album_artist_display)), ''), 'unknown') AS artist_key,
+                    COALESCE(NULLIF(TRIM(LOWER(album)), ''), 'unknown') AS album_key,
+                    COALESCE(year, -1) AS year_key,
+                    COUNT(*) AS version_count
+                FROM albums
+                GROUP BY artist_key, album_key, year_key
+                HAVING COUNT(*) > 1
+            )
+            SELECT
+                'duplicate-albums:' || a.id AS id,
+                'duplicate-albums' AS tool_id,
+                'medium' AS severity,
+                'albums' AS entity_type,
+                a.id AS album_id,
+                NULL AS track_id,
+                a.album,
+                a.album_artist_display,
+                NULL AS title,
+                a.canonical_genre,
+                a.year,
+                'Potential duplicate album version' AS detail,
+                printf('%d albums share artist/title/year', g.version_count) AS value,
+                NULL AS filename,
+                NULL AS file_path
+            FROM albums a
+            JOIN duplicate_groups g
+              ON COALESCE(NULLIF(TRIM(LOWER(a.album_artist_display)), ''), 'unknown') = g.artist_key
+             AND COALESCE(NULLIF(TRIM(LOWER(a.album)), ''), 'unknown') = g.album_key
+             AND COALESCE(a.year, -1) = g.year_key
+            "
+            .to_string(),
+        ),
+        "duplicates-within-album" => Ok(
+            "
+            WITH duplicate_titles AS (
+                SELECT
+                    album_id,
+                    LOWER(TRIM(title)) AS title_key,
+                    COUNT(*) AS match_count
+                FROM tracks
+                WHERE NULLIF(TRIM(COALESCE(title, '')), '') IS NOT NULL
+                GROUP BY album_id, title_key
+                HAVING COUNT(*) > 1
+            ),
+            duplicate_positions AS (
+                SELECT
+                    album_id,
+                    disc_number AS disc_key,
+                    track_number AS track_key,
+                    COUNT(*) AS match_count
+                FROM tracks
+                WHERE disc_number IS NOT NULL
+                  AND track_number IS NOT NULL
+                GROUP BY album_id, disc_key, track_key
+                HAVING COUNT(*) > 1
+            )
+            SELECT DISTINCT
+                'duplicates-within-album:' || t.id AS id,
+                'duplicates-within-album' AS tool_id,
+                'high' AS severity,
+                'tracks' AS entity_type,
+                t.album_id,
+                t.id AS track_id,
+                t.album,
+                t.album_artist_display,
+                t.title,
+                t.canonical_genre,
+                t.year,
+                CASE
+                    WHEN dt.title_key IS NOT NULL AND dp.album_id IS NOT NULL THEN 'Duplicate title and track position'
+                    WHEN dt.title_key IS NOT NULL THEN 'Duplicate title inside album'
+                    ELSE 'Duplicate disc/track position'
+                END AS detail,
+                CASE
+                    WHEN dp.album_id IS NOT NULL THEN printf('Disc %s track %s', COALESCE(CAST(t.disc_number AS TEXT), '?'), COALESCE(CAST(t.track_number AS TEXT), '?'))
+                    ELSE t.title
+                END AS value,
+                t.filename,
+                t.file_path
+            FROM tracks t
+            LEFT JOIN duplicate_titles dt
+              ON dt.album_id = t.album_id
+             AND dt.title_key = LOWER(TRIM(t.title))
+            LEFT JOIN duplicate_positions dp
+              ON dp.album_id = t.album_id
+             AND dp.disc_key = t.disc_number
+             AND dp.track_key = t.track_number
+            WHERE dt.title_key IS NOT NULL
+               OR dp.album_id IS NOT NULL
+            "
+            .to_string(),
+        ),
+        "invalid-time-values" => Ok(track_issue_sql(
+            "invalid-time-values",
+            "high",
+            "Missing or invalid track time",
+            "NULL",
+            "t.time_seconds IS NULL",
+        )),
+        "non-numeric-ratings" => {
+            let numeric = numeric_rating_condition("t.rating_raw");
+            Ok(track_issue_sql(
+                "non-numeric-ratings",
+                "medium",
+                "Track rating is not numeric",
+                "t.rating_raw",
+                &format!(
+                    "NULLIF(TRIM(COALESCE(t.rating_raw, '')), '') IS NOT NULL AND NOT {numeric}"
+                ),
+            ))
+        }
+        "missing-tags" => Ok(track_issue_sql(
+            "missing-tags",
+            "high",
+            "Missing required tag",
+            "
+            TRIM(
+                CASE WHEN NULLIF(TRIM(COALESCE(t.album, '')), '') IS NULL THEN 'Album ' ELSE '' END ||
+                CASE WHEN NULLIF(TRIM(COALESCE(t.album_artist_display, '')), '') IS NULL THEN 'Album artist ' ELSE '' END ||
+                CASE WHEN NULLIF(TRIM(COALESCE(t.display_artist, '')), '') IS NULL THEN 'Display artist ' ELSE '' END ||
+                CASE WHEN NULLIF(TRIM(COALESCE(t.title, '')), '') IS NULL THEN 'Title ' ELSE '' END ||
+                CASE WHEN NULLIF(TRIM(COALESCE(t.canonical_genre, '')), '') IS NULL THEN 'Genre ' ELSE '' END ||
+                CASE WHEN t.year IS NULL THEN 'Year ' ELSE '' END ||
+                CASE WHEN NULLIF(TRIM(COALESCE(t.file_path, '')), '') IS NULL THEN 'File path ' ELSE '' END ||
+                CASE WHEN NULLIF(TRIM(COALESCE(t.filename, '')), '') IS NULL THEN 'Filename ' ELSE '' END
+            )
+            ",
+            "
+            NULLIF(TRIM(COALESCE(t.album, '')), '') IS NULL OR
+            NULLIF(TRIM(COALESCE(t.album_artist_display, '')), '') IS NULL OR
+            NULLIF(TRIM(COALESCE(t.display_artist, '')), '') IS NULL OR
+            NULLIF(TRIM(COALESCE(t.title, '')), '') IS NULL OR
+            NULLIF(TRIM(COALESCE(t.canonical_genre, '')), '') IS NULL OR
+            t.year IS NULL OR
+            NULLIF(TRIM(COALESCE(t.file_path, '')), '') IS NULL OR
+            NULLIF(TRIM(COALESCE(t.filename, '')), '') IS NULL
+            ",
+        )),
+        "non-mp3-files" => Ok(track_issue_sql(
+            "non-mp3-files",
+            "low",
+            "Filename is not MP3",
+            "t.filename",
+            "NULLIF(TRIM(COALESCE(t.filename, '')), '') IS NOT NULL AND LOWER(t.filename) NOT LIKE '%.mp3'",
+        )),
+        "year-anomalies" => {
+            let max_year = Utc::now().year() + 1;
+            Ok(track_issue_sql(
+                "year-anomalies",
+                "medium",
+                "Missing or implausible year",
+                "printf('Year %s / release %s', COALESCE(CAST(t.year AS TEXT), 'missing'), COALESCE(CAST(t.release_year AS TEXT), 'missing'))",
+                &format!(
+                    "t.year IS NULL OR t.year < 1900 OR t.year > {max_year} OR t.release_year < 1900 OR t.release_year > {max_year}"
+                ),
+            ))
+        }
+        "ratings-out-of-range" => {
+            let numeric = numeric_rating_condition("t.rating_raw");
+            Ok(track_issue_sql(
+                "ratings-out-of-range",
+                "high",
+                "Rating is outside accepted whole-number 0-5 values",
+                "t.rating_raw",
+                &format!(
+                    "NULLIF(TRIM(COALESCE(t.rating_raw, '')), '') IS NOT NULL AND {numeric} AND t.normalized_rating IS NULL"
+                ),
+            ))
+        }
+        "track-disc-number-issues" => Ok(track_issue_sql(
+            "track-disc-number-issues",
+            "medium",
+            "Missing or invalid disc/track number",
+            "
+            TRIM(
+                CASE WHEN t.disc_number IS NULL THEN 'Missing disc ' WHEN t.disc_number <= 0 THEN 'Disc <= 0 ' ELSE '' END ||
+                CASE WHEN t.track_number IS NULL THEN 'Missing track ' WHEN t.track_number <= 0 THEN 'Track <= 0 ' ELSE '' END
+            )
+            ",
+            "t.disc_number IS NULL OR t.disc_number <= 0 OR t.track_number IS NULL OR t.track_number <= 0",
+        )),
+        "inconsistent-album-metadata" => Ok(
+            "
+            WITH inconsistent AS (
+                SELECT
+                    album_id,
+                    COUNT(DISTINCT NULLIF(TRIM(LOWER(album)), '')) AS album_names,
+                    COUNT(DISTINCT NULLIF(TRIM(LOWER(canonical_genre)), '')) AS genres,
+                    COUNT(DISTINCT NULLIF(TRIM(LOWER(publisher)), '')) AS publishers
+                FROM tracks
+                GROUP BY album_id
+                HAVING COUNT(DISTINCT NULLIF(TRIM(LOWER(album)), '')) > 1
+                    OR COUNT(DISTINCT NULLIF(TRIM(LOWER(canonical_genre)), '')) > 1
+                    OR COUNT(DISTINCT NULLIF(TRIM(LOWER(publisher)), '')) > 1
+            )
+            SELECT
+                'inconsistent-album-metadata:' || a.id AS id,
+                'inconsistent-album-metadata' AS tool_id,
+                'medium' AS severity,
+                'albums' AS entity_type,
+                a.id AS album_id,
+                NULL AS track_id,
+                a.album,
+                a.album_artist_display,
+                NULL AS title,
+                a.canonical_genre,
+                a.year,
+                'Tracks disagree on album metadata' AS detail,
+                printf('%d titles / %d genres / %d publishers', i.album_names, i.genres, i.publishers) AS value,
+                NULL AS filename,
+                NULL AS file_path
+            FROM inconsistent i
+            JOIN albums a ON a.id = i.album_id
+            "
+            .to_string(),
+        ),
+        "whitespace-anomalies" => Ok(track_issue_sql(
+            "whitespace-anomalies",
+            "low",
+            "Repeated internal whitespace",
+            "'Repeated spaces'",
+            "
+            COALESCE(t.album, '') GLOB '*  *' OR
+            COALESCE(t.album_artist_display, '') GLOB '*  *' OR
+            COALESCE(t.display_artist, '') GLOB '*  *' OR
+            COALESCE(t.title, '') GLOB '*  *' OR
+            COALESCE(t.canonical_genre, '') GLOB '*  *' OR
+            COALESCE(t.publisher, '') GLOB '*  *' OR
+            COALESCE(t.filename, '') GLOB '*  *'
+            ",
+        )),
+        "genre-normalization-issues" => Ok(track_issue_sql(
+            "genre-normalization-issues",
+            "low",
+            "Multiple genre values collapsed to canonical genre",
+            "t.genre",
+            "COALESCE(t.genre, '') LIKE '%;%' OR COALESCE(t.genre, '') LIKE '%|%'",
+        )),
+        "conflicting-album-artists" => Ok(
+            "
+            WITH conflicting AS (
+                SELECT
+                    album_id,
+                    COUNT(DISTINCT NULLIF(TRIM(LOWER(album_artist_display)), '')) AS artist_count
+                FROM tracks
+                GROUP BY album_id
+                HAVING COUNT(DISTINCT NULLIF(TRIM(LOWER(album_artist_display)), '')) > 1
+            )
+            SELECT
+                'conflicting-album-artists:' || a.id AS id,
+                'conflicting-album-artists' AS tool_id,
+                'high' AS severity,
+                'albums' AS entity_type,
+                a.id AS album_id,
+                NULL AS track_id,
+                a.album,
+                a.album_artist_display,
+                NULL AS title,
+                a.canonical_genre,
+                a.year,
+                'Tracks disagree on album artist' AS detail,
+                printf('%d album artists', c.artist_count) AS value,
+                NULL AS filename,
+                NULL AS file_path
+            FROM conflicting c
+            JOIN albums a ON a.id = c.album_id
+            "
+            .to_string(),
+        ),
+        "multiple-years-per-album" => Ok(
+            "
+            WITH multiple_years AS (
+                SELECT
+                    album_id,
+                    COUNT(DISTINCT year) AS year_count
+                FROM tracks
+                WHERE year IS NOT NULL
+                GROUP BY album_id
+                HAVING COUNT(DISTINCT year) > 1
+            )
+            SELECT
+                'multiple-years-per-album:' || a.id AS id,
+                'multiple-years-per-album' AS tool_id,
+                'medium' AS severity,
+                'albums' AS entity_type,
+                a.id AS album_id,
+                NULL AS track_id,
+                a.album,
+                a.album_artist_display,
+                NULL AS title,
+                a.canonical_genre,
+                a.year,
+                'Album contains multiple track years' AS detail,
+                printf('%d years on tracks', y.year_count) AS value,
+                NULL AS filename,
+                NULL AS file_path
+            FROM multiple_years y
+            JOIN albums a ON a.id = y.album_id
+            "
+            .to_string(),
+        ),
+        _ => bail!("Unknown music tool: {tool_id}"),
+    }
+}
+
+fn track_issue_sql(
+    tool_id: &str,
+    severity: &str,
+    detail: &str,
+    value_sql: &str,
+    condition_sql: &str,
+) -> String {
+    format!(
+        "
+        SELECT
+            '{tool_id}:' || t.id AS id,
+            '{tool_id}' AS tool_id,
+            '{severity}' AS severity,
+            'tracks' AS entity_type,
+            t.album_id,
+            t.id AS track_id,
+            t.album,
+            t.album_artist_display,
+            t.title,
+            t.canonical_genre,
+            t.year,
+            '{detail}' AS detail,
+            {value_sql} AS value,
+            t.filename,
+            t.file_path
+        FROM tracks t
+        WHERE {condition_sql}
+        "
+    )
+}
+
+fn numeric_rating_condition(field: &str) -> String {
+    let trimmed = format!("TRIM(COALESCE({field}, ''))");
+    let dot_count = format!("(LENGTH({trimmed}) - LENGTH(REPLACE({trimmed}, '.', '')))");
+    let minus_count = format!("(LENGTH({trimmed}) - LENGTH(REPLACE({trimmed}, '-', '')))");
+
+    format!(
+        "({trimmed} <> '' AND {trimmed} NOT GLOB '*[^0-9.-]*' AND {dot_count} <= 1 AND {minus_count} <= 1 AND (INSTR({trimmed}, '-') = 0 OR INSTR({trimmed}, '-') = 1) AND {trimmed} NOT IN ('.', '-', '-.'))"
+    )
 }
 
 fn search_library(
@@ -2354,6 +3051,27 @@ fn normalize_artist_key(value: &str) -> String {
     }
 }
 
+fn safe_file_segment(value: &str) -> String {
+    let segment = value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || character == '-' || character == '_' {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string();
+
+    if segment.is_empty() {
+        "tools".to_string()
+    } else {
+        segment
+    }
+}
+
 fn write_export_file(
     path: &PathBuf,
     format: &str,
@@ -2362,6 +3080,47 @@ fn write_export_file(
     include_calculated: bool,
 ) -> Result<()> {
     let (headers, values) = export_table(view, rows, include_calculated);
+
+    if format == "xlsx" {
+        write_xlsx_file(path, &headers, &values)?;
+        return Ok(());
+    }
+
+    let mut file = fs::File::create(path)?;
+
+    match format {
+        "json" => {
+            let records = values
+                .iter()
+                .map(|row| {
+                    headers
+                        .iter()
+                        .zip(row.iter())
+                        .map(|(header, value)| {
+                            (
+                                (*header).to_string(),
+                                serde_json::Value::String(value.clone()),
+                            )
+                        })
+                        .collect::<serde_json::Map<_, _>>()
+                })
+                .collect::<Vec<_>>();
+            file.write_all(serde_json::to_string_pretty(&records)?.as_bytes())?;
+        }
+        "tsv" => write_delimited(&mut file, '\t', &headers, &values)?,
+        "txt" => write_delimited(&mut file, '\t', &headers, &values)?,
+        _ => write_delimited(&mut file, ',', &headers, &values)?,
+    }
+
+    Ok(())
+}
+
+fn write_issue_export_file(
+    path: &PathBuf,
+    format: &str,
+    rows: &[MusicToolIssueRow],
+) -> Result<()> {
+    let (headers, values) = issue_export_table(rows);
 
     if format == "xlsx" {
         write_xlsx_file(path, &headers, &values)?;
@@ -2568,6 +3327,45 @@ fn export_table(
     (headers, values)
 }
 
+fn issue_export_table(rows: &[MusicToolIssueRow]) -> (Vec<&'static str>, Vec<Vec<String>>) {
+    let headers = vec![
+        "Tool",
+        "Severity",
+        "Scope",
+        "Album Artist",
+        "Album",
+        "Year",
+        "Track",
+        "Genre",
+        "Issue",
+        "Value",
+        "Filename",
+        "File Path",
+    ];
+
+    let values = rows
+        .iter()
+        .map(|row| {
+            vec![
+                row.tool_id.clone(),
+                row.severity.clone(),
+                row.entity_type.clone(),
+                optional_text(&row.album_artist_display),
+                optional_text(&row.album),
+                optional_i32(row.year),
+                optional_text(&row.title),
+                optional_text(&row.canonical_genre),
+                row.detail.clone(),
+                optional_text(&row.value),
+                optional_text(&row.filename),
+                optional_text(&row.file_path),
+            ]
+        })
+        .collect::<Vec<_>>();
+
+    (headers, values)
+}
+
 fn optional_text(value: &Option<String>) -> String {
     value.clone().unwrap_or_default()
 }
@@ -2737,6 +3535,38 @@ mod tests {
             response.rows[0].canonical_genre.as_deref(),
             Some("Synthpop")
         );
+    }
+
+    #[test]
+    fn lists_music_tool_issues_and_export_rows() {
+        let conn = seeded_connection();
+        conn.execute(
+            "UPDATE tracks SET filename = '02 What Have I Done.flac' WHERE id = 1",
+            [],
+        )
+        .expect("make non-mp3 issue");
+
+        let tools = list_music_tools(&conn).expect("list music tools");
+        let non_mp3 = tools
+            .iter()
+            .find(|tool| tool.id == "non-mp3-files")
+            .expect("non-mp3 tool");
+
+        assert_eq!(non_mp3.issue_count, 1);
+        assert_eq!(non_mp3.album_count, 1);
+        assert_eq!(non_mp3.track_count, 1);
+
+        let mut request = MusicToolIssueRequest::default();
+        request.tool_id = "non-mp3-files".to_string();
+        request.search_text = "flac".to_string();
+        let response =
+            list_music_tool_issues(&conn, request, 50).expect("list non-mp3 issues");
+        let (headers, rows) = issue_export_table(&response.rows);
+
+        assert_eq!(response.total, 1);
+        assert_eq!(response.rows[0].filename.as_deref(), Some("02 What Have I Done.flac"));
+        assert!(headers.contains(&"Issue"));
+        assert_eq!(rows.len(), 1);
     }
 
     #[test]

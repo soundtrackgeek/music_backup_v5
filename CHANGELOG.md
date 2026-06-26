@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0] - 2026-06-26
+### Added
+- Added the Phase 8 Music Tools workspace with validation issue counts, affected album/track rows, severity, filtering, pagination, sorting, and exports.
+- Added Tauri commands for listing Music Tools, listing selected tool issues, and exporting selected tool issue rows.
+- Added the initial validation suite for duplicate albums, duplicate tracks within albums, invalid times, rating anomalies, missing tags, non-MP3 files, year issues, track/disc numbering issues, inconsistent metadata, whitespace anomalies, genre normalization issues, conflicting album artists, and multiple years per album.
+- Added web-preview mock data for the Tools workspace.
+
 ## [0.8.0] - 2026-06-25
 ### Added
 - Added the Phase 7 Genres workspace with a searchable canonical-genre index, selected genre album lists, genre-level summary stats, and genre album-list exports.

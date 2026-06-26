@@ -20,6 +20,10 @@ import type {
   GenreListRequest,
   GenreListResponse,
   GenreSummary,
+  MusicToolIssueRequest,
+  MusicToolIssueResponse,
+  MusicToolIssueRow,
+  MusicToolSummary,
 } from "./types";
 
 export const settingsStorageKey = "musicLibrarySettings:v1";
@@ -198,6 +202,110 @@ const mockGenres: GenreSummary[] = [
     firstYear: 1986,
     lastYear: 1986,
     topArtist: "The Smiths",
+  },
+];
+
+const mockMusicTools: MusicToolSummary[] = [
+  {
+    id: "duplicate-albums",
+    label: "Duplicate albums",
+    description: "Potential duplicate album versions with the same artist, title, and year.",
+    severity: "medium",
+    scope: "albums",
+    issueCount: 2,
+    albumCount: 2,
+    trackCount: 0,
+  },
+  {
+    id: "invalid-time-values",
+    label: "Invalid time values",
+    description: "Tracks where duration could not be parsed into seconds.",
+    severity: "high",
+    scope: "tracks",
+    issueCount: 1,
+    albumCount: 1,
+    trackCount: 1,
+  },
+  {
+    id: "genre-normalization-issues",
+    label: "Genre normalization issues",
+    description: "Tracks with multi-value genre strings that were collapsed to one canonical genre.",
+    severity: "low",
+    scope: "tracks",
+    issueCount: 1,
+    albumCount: 1,
+    trackCount: 1,
+  },
+];
+
+const mockMusicToolIssues: MusicToolIssueRow[] = [
+  {
+    id: "duplicate-albums:mb:mock-1",
+    toolId: "duplicate-albums",
+    severity: "medium",
+    entityType: "albums",
+    albumId: "mb:mock-1",
+    trackId: null,
+    album: "Actually",
+    albumArtistDisplay: "Pet Shop Boys",
+    title: null,
+    canonicalGenre: "Synthpop",
+    year: 1987,
+    detail: "Potential duplicate album version",
+    value: "2 albums share artist/title/year",
+    filename: null,
+    filePath: null,
+  },
+  {
+    id: "duplicate-albums:mb:mock-1-deluxe",
+    toolId: "duplicate-albums",
+    severity: "medium",
+    entityType: "albums",
+    albumId: "mb:mock-1-deluxe",
+    trackId: null,
+    album: "Actually",
+    albumArtistDisplay: "Pet Shop Boys",
+    title: null,
+    canonicalGenre: "Synthpop",
+    year: 1987,
+    detail: "Potential duplicate album version",
+    value: "2 albums share artist/title/year",
+    filename: null,
+    filePath: null,
+  },
+  {
+    id: "invalid-time-values:1",
+    toolId: "invalid-time-values",
+    severity: "high",
+    entityType: "tracks",
+    albumId: "mb:mock-1",
+    trackId: 1,
+    album: "Actually",
+    albumArtistDisplay: "Pet Shop Boys",
+    title: "What Have I Done to Deserve This?",
+    canonicalGenre: "Synthpop",
+    year: 1987,
+    detail: "Missing or invalid track time",
+    value: null,
+    filename: "02 What Have I Done to Deserve This.mp3",
+    filePath: "D:\\Music\\Pet Shop Boys\\Actually",
+  },
+  {
+    id: "genre-normalization-issues:1",
+    toolId: "genre-normalization-issues",
+    severity: "low",
+    entityType: "tracks",
+    albumId: "mb:mock-1",
+    trackId: 1,
+    album: "Actually",
+    albumArtistDisplay: "Pet Shop Boys",
+    title: "What Have I Done to Deserve This?",
+    canonicalGenre: "Synthpop",
+    year: 1987,
+    detail: "Multiple genre values collapsed to canonical genre",
+    value: "Synthpop; Dance-Pop",
+    filename: "02 What Have I Done to Deserve This.mp3",
+    filePath: "D:\\Music\\Pet Shop Boys\\Actually",
   },
 ];
 
@@ -523,6 +631,56 @@ export async function listGenres(request: GenreListRequest) {
   return invoke<GenreListResponse>("list_genres", { request });
 }
 
+export async function listMusicTools() {
+  if (!isTauriRuntime()) {
+    return mockMusicTools;
+  }
+
+  return invoke<MusicToolSummary[]>("list_music_tools");
+}
+
+export async function listMusicToolIssues(request: MusicToolIssueRequest) {
+  if (!isTauriRuntime()) {
+    const searchText = request.searchText.trim().toLowerCase();
+    const tool = mockMusicTools.find((item) => item.id === request.toolId) ?? mockMusicTools[0];
+    const filtered = mockMusicToolIssues.filter((issue) => {
+      if (issue.toolId !== tool.id) {
+        return false;
+      }
+      if (!searchText) {
+        return true;
+      }
+      return [
+        issue.album,
+        issue.albumArtistDisplay,
+        issue.title,
+        issue.canonicalGenre,
+        issue.detail,
+        issue.value,
+        issue.filename,
+        issue.filePath,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(searchText);
+    });
+    const sorted = [...filtered].sort((left, right) => compareMusicToolIssues(left, right, request.sort.field));
+    if (request.sort.direction === "desc") {
+      sorted.reverse();
+    }
+    return {
+      tool,
+      rows: sorted.slice(request.offset, request.offset + request.limit),
+      total: sorted.length,
+      limit: request.limit,
+      offset: request.offset,
+    } satisfies MusicToolIssueResponse;
+  }
+
+  return invoke<MusicToolIssueResponse>("list_music_tool_issues", { request });
+}
+
 export async function listSavedSearches() {
   if (!isTauriRuntime()) {
     return mockSavedSearches;
@@ -602,6 +760,41 @@ export async function exportSearch(request: BrowseRequest, format: string, inclu
   }
 
   return invoke<ExportResult>("export_search", { input: { request, format, includeCalculated } });
+}
+
+export async function exportMusicToolIssues(toolId: string, searchText: string, format: string) {
+  if (!isTauriRuntime()) {
+    const normalizedSearch = searchText.trim().toLowerCase();
+    const rowCount = mockMusicToolIssues.filter((issue) => {
+      if (issue.toolId !== toolId) {
+        return false;
+      }
+      if (!normalizedSearch) {
+        return true;
+      }
+      return [
+        issue.album,
+        issue.albumArtistDisplay,
+        issue.title,
+        issue.canonicalGenre,
+        issue.detail,
+        issue.value,
+        issue.filename,
+        issue.filePath,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch);
+    }).length;
+    return {
+      path: `Preview runtime tools export.${format}`,
+      format,
+      rowCount,
+    } satisfies ExportResult;
+  }
+
+  return invoke<ExportResult>("export_music_tool_issues", { input: { toolId, searchText, format } });
 }
 
 export async function listenToImportProgress(handler: (progress: ImportProgress) => void) {
@@ -738,5 +931,35 @@ function genreSortValue(genre: GenreSummary, field: string) {
       return genre.topArtist ?? "";
     default:
       return genre.name.toLowerCase();
+  }
+}
+
+function compareMusicToolIssues(left: MusicToolIssueRow, right: MusicToolIssueRow, field: string) {
+  const leftValue = musicToolIssueSortValue(left, field);
+  const rightValue = musicToolIssueSortValue(right, field);
+  if (typeof leftValue === "string" || typeof rightValue === "string") {
+    return String(leftValue).localeCompare(String(rightValue));
+  }
+  return (leftValue ?? 0) - (rightValue ?? 0);
+}
+
+function musicToolIssueSortValue(issue: MusicToolIssueRow, field: string) {
+  switch (field) {
+    case "artist":
+      return issue.albumArtistDisplay?.toLowerCase() ?? "";
+    case "year":
+      return issue.year;
+    case "title":
+      return issue.title?.toLowerCase() ?? "";
+    case "severity":
+      return issue.severity;
+    case "value":
+      return issue.value?.toLowerCase() ?? "";
+    case "filename":
+      return issue.filename?.toLowerCase() ?? "";
+    case "detail":
+      return issue.detail.toLowerCase();
+    default:
+      return issue.album?.toLowerCase() ?? "";
   }
 }

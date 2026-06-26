@@ -42,6 +42,8 @@ import {
   isTauriRuntime,
   listArtists,
   listGenres,
+  listMusicToolIssues,
+  listMusicTools,
   listImportRuns,
   listSavedCharts,
   listSavedSearches,
@@ -51,6 +53,7 @@ import {
   saveSearch,
   saveSettings,
   searchLibrary,
+  exportMusicToolIssues,
 } from "./backend";
 import type {
   AppSettings,
@@ -75,6 +78,10 @@ import type {
   GenreProgressStats,
   RatingBucket,
   RatingEvent,
+  MusicToolIssueRequest,
+  MusicToolIssueResponse,
+  MusicToolIssueRow,
+  MusicToolSummary,
   SavedChart,
   SavedSearch,
   StatisticsResponse,
@@ -90,7 +97,7 @@ const navigation = [
   { label: "Albums", icon: Album, enabled: true },
   { label: "Artists", icon: UsersRound, enabled: true },
   { label: "Genres", icon: Tags, enabled: true },
-  { label: "Tools", icon: Wrench, enabled: false },
+  { label: "Tools", icon: Wrench, enabled: true },
   { label: "Imports", icon: FolderInput, enabled: true },
   { label: "Settings", icon: Settings, enabled: true },
 ];
@@ -239,6 +246,16 @@ function createGenreAlbumsRequest(genre: GenreSummary): BrowseRequest {
   request.sort = { field: "year", direction: "asc" };
   request.limit = 100;
   return request;
+}
+
+function createMusicToolIssueRequest(toolId = "duplicate-albums"): MusicToolIssueRequest {
+  return {
+    toolId,
+    searchText: "",
+    sort: { field: "album", direction: "asc" },
+    limit: 50,
+    offset: 0,
+  };
 }
 
 function createChartConfig(): ChartConfig {
@@ -449,6 +466,11 @@ function formatTrackRating(value: number | null | undefined) {
 
 function rankingLabel(value: string) {
   return rankingOptions.find((option) => option.value === value)?.label ?? "Album Score";
+}
+
+function severityLabel(value: string | null | undefined) {
+  if (!value) return "";
+  return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
 function formatChartMetric(row: BrowseRow, metric: string) {
@@ -1480,6 +1502,216 @@ function GenreDetailPanel({
   );
 }
 
+function SeverityBadge({ severity }: { severity: string }) {
+  return <span className={`tool-severity tool-severity-${severity}`}>{severityLabel(severity)}</span>;
+}
+
+function MusicToolIndexTable({
+  tools,
+  selectedToolId,
+  onSelect,
+}: {
+  tools: MusicToolSummary[];
+  selectedToolId: string | null;
+  onSelect: (toolId: string) => void;
+}) {
+  if (tools.length === 0) {
+    return (
+      <div className="empty-state large">
+        <Wrench size={20} />
+        <span>No validation tools loaded.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="result-table tool-index-results" role="table">
+      <div className="result-table-head" role="row">
+        <span role="columnheader">Tool</span>
+        <span role="columnheader">Severity</span>
+        <span role="columnheader">Issues</span>
+        <span role="columnheader">Albums</span>
+        <span role="columnheader">Tracks</span>
+      </div>
+      {tools.map((tool) => {
+        const isSelected = tool.id === selectedToolId;
+        return (
+          <div
+            className={`result-table-row selectable${isSelected ? " selected" : ""}`}
+            role="row"
+            aria-selected={isSelected}
+            tabIndex={0}
+            key={tool.id}
+            onClick={() => onSelect(tool.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect(tool.id);
+              }
+            }}
+          >
+            <span role="cell">
+              <strong>{tool.label}</strong>
+              <small>{tool.description}</small>
+            </span>
+            <span role="cell">
+              <SeverityBadge severity={tool.severity} />
+            </span>
+            <span role="cell">{formatNumber(tool.issueCount)}</span>
+            <span role="cell">{formatNumber(tool.albumCount)}</span>
+            <span role="cell">{formatNumber(tool.trackCount)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MusicToolIssueTable({ response }: { response: MusicToolIssueResponse | null }) {
+  if (!response) {
+    return (
+      <div className="empty-state large">
+        <FileSearch size={20} />
+        <span>Select a validation tool.</span>
+      </div>
+    );
+  }
+
+  if (response.rows.length === 0) {
+    return (
+      <div className="empty-state large">
+        <ShieldCheck size={20} />
+        <span>No matching issues.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="result-table tool-issue-results" role="table">
+      <div className="result-table-head" role="row">
+        <span role="columnheader">Issue</span>
+        <span role="columnheader">Album</span>
+        <span role="columnheader">Track</span>
+        <span role="columnheader">Value</span>
+        <span role="columnheader">File</span>
+      </div>
+      {response.rows.map((issue) => (
+        <div className="result-table-row" role="row" key={issue.id}>
+          <span role="cell">
+            <strong>{issue.detail}</strong>
+            <small>
+              {severityLabel(issue.severity)} / {issue.entityType}
+            </small>
+          </span>
+          <span role="cell">
+            <strong>{issue.album ?? "Untitled"}</strong>
+            <small>{[issue.albumArtistDisplay, issue.year].filter(Boolean).join(" / ")}</small>
+          </span>
+          <span role="cell">
+            <strong>{issue.title ?? (issue.entityType === "albums" ? "Album-level" : "Untitled")}</strong>
+            <small>{issue.canonicalGenre ?? ""}</small>
+          </span>
+          <span role="cell">{issue.value ?? ""}</span>
+          <span role="cell" title={issue.filePath ?? ""}>
+            {issue.filename ?? ""}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MusicToolDetailPanel({
+  tool,
+  exportResult,
+  onExport,
+}: {
+  tool: MusicToolSummary | null;
+  exportResult: ExportResult | null;
+  onExport: (format: string) => Promise<void>;
+}) {
+  if (!tool) {
+    return (
+      <aside className="detail-panel tools-detail" aria-label="Music tools details">
+        <div className="detail-header">
+          <Wrench size={20} />
+          <div>
+            <h2>Music Tools</h2>
+            <p>Select a validation tool</p>
+          </div>
+        </div>
+        <div className="empty-state">
+          <FileSearch size={20} />
+          <span>No tool selected.</span>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="detail-panel tools-detail" aria-label="Music tools details">
+      <div className="detail-header">
+        <Wrench size={20} />
+        <div>
+          <h2>{tool.label}</h2>
+          <p>
+            {severityLabel(tool.severity)} / {tool.scope}
+          </p>
+        </div>
+      </div>
+
+      <dl className="run-details tool-detail-stats">
+        <div>
+          <dt>Issue rows</dt>
+          <dd>{formatNumber(tool.issueCount)}</dd>
+        </div>
+        <div>
+          <dt>Affected albums</dt>
+          <dd>{formatNumber(tool.albumCount)}</dd>
+        </div>
+        <div>
+          <dt>Affected tracks</dt>
+          <dd>{formatNumber(tool.trackCount)}</dd>
+        </div>
+        <div>
+          <dt>Severity</dt>
+          <dd>{severityLabel(tool.severity)}</dd>
+        </div>
+      </dl>
+
+      <section className="calculation-list tools-signals">
+        <div>
+          <FileSearch size={17} />
+          <span>{tool.description}</span>
+        </div>
+        <div>
+          <ShieldCheck size={17} />
+          <span>Issue rows are read-only</span>
+        </div>
+      </section>
+
+      <section className="export-box">
+        <div className="export-grid">
+          {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
+            <button type="button" key={format} onClick={() => void onExport(format)}>
+              <Download size={16} />
+              <span>{format.toUpperCase()}</span>
+            </button>
+          ))}
+        </div>
+        {exportResult ? (
+          <div className="export-result">
+            <Check size={17} />
+            <span>
+              {formatNumber(exportResult.rowCount)} issues to {exportResult.path}
+            </span>
+          </div>
+        ) : null}
+      </section>
+    </aside>
+  );
+}
+
 function ChartResults({ response, config }: { response: BrowseResponse | null; config: ChartConfig }) {
   if (!response) {
     return (
@@ -1781,6 +2013,17 @@ export default function App() {
   const [isGenreAlbumsLoading, setIsGenreAlbumsLoading] = useState(false);
   const [genreIncludeCalculated, setGenreIncludeCalculated] = useState(false);
   const [genreExportResult, setGenreExportResult] = useState<ExportResult | null>(null);
+  const [musicTools, setMusicTools] = useState<MusicToolSummary[]>([]);
+  const [toolsError, setToolsError] = useState<string | null>(null);
+  const [isToolsLoading, setIsToolsLoading] = useState(false);
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
+  const [toolIssueRequest, setToolIssueRequest] = useState<MusicToolIssueRequest>(() =>
+    createMusicToolIssueRequest(),
+  );
+  const [toolIssueResponse, setToolIssueResponse] = useState<MusicToolIssueResponse | null>(null);
+  const [toolIssueError, setToolIssueError] = useState<string | null>(null);
+  const [isToolIssuesLoading, setIsToolIssuesLoading] = useState(false);
+  const [toolExportResult, setToolExportResult] = useState<ExportResult | null>(null);
   const [chartConfig, setChartConfig] = useState<ChartConfig>(() => createChartConfig());
   const [chartResponse, setChartResponse] = useState<BrowseResponse | null>(null);
   const [chartName, setChartName] = useState("");
@@ -1853,6 +2096,7 @@ export default function App() {
     () => (selectedGenre ? createGenreAlbumsRequest(selectedGenre) : null),
     [selectedGenre],
   );
+  const selectedTool = musicTools.find((tool) => tool.id === selectedToolId) ?? null;
 
   useEffect(() => {
     if (activeSection !== "Search") {
@@ -2133,6 +2377,102 @@ export default function App() {
       cancelled = true;
     };
   }, [activeSection, genreAlbumsRequest]);
+
+  useEffect(() => {
+    if (activeSection !== "Tools") {
+      return;
+    }
+
+    let cancelled = false;
+    setIsToolsLoading(true);
+    setToolsError(null);
+    void listMusicTools()
+      .then((nextTools) => {
+        if (!cancelled) {
+          setMusicTools(nextTools);
+        }
+      })
+      .catch((searchError) => {
+        if (!cancelled) {
+          setToolsError(searchError instanceof Error ? searchError.message : String(searchError));
+          setMusicTools([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsToolsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (activeSection !== "Tools") {
+      return;
+    }
+
+    if (musicTools.length === 0) {
+      setSelectedToolId(null);
+      setToolIssueResponse(null);
+      return;
+    }
+
+    setSelectedToolId((previous) =>
+      previous && musicTools.some((tool) => tool.id === previous) ? previous : musicTools[0].id,
+    );
+  }, [activeSection, musicTools]);
+
+  useEffect(() => {
+    if (activeSection !== "Tools" || !selectedToolId) {
+      return;
+    }
+
+    setToolIssueRequest((previous) =>
+      previous.toolId === selectedToolId
+        ? previous
+        : {
+            ...createMusicToolIssueRequest(selectedToolId),
+            limit: previous.limit,
+          },
+    );
+  }, [activeSection, selectedToolId]);
+
+  useEffect(() => {
+    if (activeSection !== "Tools" || !selectedToolId || toolIssueRequest.toolId !== selectedToolId) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setIsToolIssuesLoading(true);
+      setToolIssueError(null);
+      void listMusicToolIssues(toolIssueRequest)
+        .then((nextResponse) => {
+          if (!cancelled) {
+            setToolIssueResponse(nextResponse);
+          }
+        })
+        .catch((searchError) => {
+          if (!cancelled) {
+            setToolIssueError(searchError instanceof Error ? searchError.message : String(searchError));
+            setToolIssueResponse(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsToolIssuesLoading(false);
+          }
+        });
+    }, 160);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeSection, selectedToolId, toolIssueRequest]);
 
   useEffect(() => {
     if (activeSection !== "Charts") {
@@ -2469,6 +2809,36 @@ export default function App() {
     setGenreExportResult(null);
   }
 
+  function clearToolQuery() {
+    setToolIssueRequest((previous) => ({
+      ...createMusicToolIssueRequest(previous.toolId),
+      limit: previous.limit,
+    }));
+    setToolExportResult(null);
+  }
+
+  function selectMusicTool(toolId: string) {
+    setSelectedToolId(toolId);
+    setToolIssueRequest((previous) => ({
+      ...createMusicToolIssueRequest(toolId),
+      limit: previous.limit,
+    }));
+    setToolExportResult(null);
+  }
+
+  async function refreshMusicTools() {
+    setIsToolsLoading(true);
+    setToolsError(null);
+    try {
+      const nextTools = await listMusicTools();
+      setMusicTools(nextTools);
+    } catch (error) {
+      setToolsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsToolsLoading(false);
+    }
+  }
+
   async function startImport() {
     setIsImporting(true);
     setImportError(null);
@@ -2546,6 +2916,14 @@ export default function App() {
     }
     const result = await exportSearch(genreAlbumsRequest, format, genreIncludeCalculated);
     setGenreExportResult(result);
+  }
+
+  async function runToolExport(format: string) {
+    if (!selectedTool) {
+      return;
+    }
+    const result = await exportMusicToolIssues(selectedTool.id, toolIssueRequest.searchText, format);
+    setToolExportResult(result);
   }
 
   function updateChartConfig(values: Partial<ChartConfig>) {
@@ -2659,6 +3037,11 @@ export default function App() {
   const genrePageStart = genreTotal === 0 ? 0 : genreRequest.offset + 1;
   const genrePageEnd = Math.min(genreTotal, genreRequest.offset + genreRequest.limit);
   const selectedGenreAlbumCount = selectedGenre?.albumCount ?? genreAlbumsResponse?.total ?? 0;
+  const toolIssueTotal = toolIssueResponse?.total ?? 0;
+  const toolIssuePageStart = toolIssueTotal === 0 ? 0 : toolIssueRequest.offset + 1;
+  const toolIssuePageEnd = Math.min(toolIssueTotal, toolIssueRequest.offset + toolIssueRequest.limit);
+  const totalToolIssues = musicTools.reduce((sum, tool) => sum + tool.issueCount, 0);
+  const selectedToolIssueCount = selectedTool?.issueCount ?? toolIssueTotal;
   const chartTotal = chartResponse?.total ?? 0;
   const chartRows = chartResponse?.rows.length ?? 0;
   const ratingAlbumTotal =
@@ -3367,6 +3750,184 @@ export default function App() {
 
             {genreAlbumsError ? <p className="error-message">{genreAlbumsError}</p> : null}
             <GenreAlbumTable response={genreAlbumsResponse} />
+          </section>
+        </section>
+      ) : activeSection === "Tools" ? (
+        <section className="workspace tools-workspace">
+          <header className="topbar">
+            <div>
+              <h1>Tools</h1>
+              <p>Validation issue lists for library cleanup checks.</p>
+            </div>
+            <div className="topbar-actions">
+              <button className="icon-button" type="button" aria-label="Clear tool filters" onClick={clearToolQuery}>
+                <RotateCcw size={18} />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Refresh tools"
+                onClick={() => void refreshMusicTools()}
+              >
+                <Database size={18} />
+              </button>
+            </div>
+          </header>
+
+          <section className="metric-grid" aria-label="Tools summary">
+            <Metric label="Validators" value={formatNumber(musicTools.length)} tone="teal" icon={Wrench} />
+            <Metric label="Issue rows" value={formatNumber(totalToolIssues)} tone="amber" icon={FileSearch} />
+            <Metric label="Selected" value={formatNumber(selectedToolIssueCount)} icon={ListMusic} />
+            <Metric label="Severity" value={severityLabel(selectedTool?.severity) || "Select"} icon={ShieldCheck} />
+          </section>
+
+          <section className="query-panel tool-query-panel">
+            <div className="search-row tool-search-row">
+              <div className="search-input">
+                <Search size={18} />
+                <input
+                  value={toolIssueRequest.searchText}
+                  onChange={(event) =>
+                    setToolIssueRequest((previous) => ({
+                      ...previous,
+                      searchText: event.target.value,
+                      offset: 0,
+                    }))
+                  }
+                  placeholder="Filter affected albums, tracks, files, and issue values"
+                />
+              </div>
+              <SelectField
+                label="Sort"
+                value={toolIssueRequest.sort.field}
+                onChange={(field) =>
+                  setToolIssueRequest((previous) => ({
+                    ...previous,
+                    sort: { ...previous.sort, field },
+                    offset: 0,
+                  }))
+                }
+                options={[
+                  { value: "album", label: "Album" },
+                  { value: "artist", label: "Artist" },
+                  { value: "year", label: "Year" },
+                  { value: "title", label: "Track" },
+                  { value: "detail", label: "Issue" },
+                  { value: "value", label: "Value" },
+                  { value: "filename", label: "Filename" },
+                  { value: "severity", label: "Severity" },
+                ]}
+              />
+            </div>
+
+            <div className="query-footer">
+              <div className="chip-row inline" aria-label="Active tool filters">
+                {toolIssueRequest.searchText.trim() ? (
+                  <button
+                    className="filter-chip"
+                    type="button"
+                    onClick={() =>
+                      setToolIssueRequest((previous) => ({
+                        ...previous,
+                        searchText: "",
+                        offset: 0,
+                      }))
+                    }
+                  >
+                    <span>Filter "{toolIssueRequest.searchText.trim()}"</span>
+                    <X size={14} />
+                  </button>
+                ) : (
+                  <span className="chip-empty">No active filters</span>
+                )}
+              </div>
+
+              <div className="sort-controls">
+                <SelectField
+                  label="Direction"
+                  value={toolIssueRequest.sort.direction}
+                  onChange={(direction) =>
+                    setToolIssueRequest((previous) => ({
+                      ...previous,
+                      sort: { ...previous.sort, direction: direction as "asc" | "desc" },
+                      offset: 0,
+                    }))
+                  }
+                  options={[
+                    { value: "asc", label: "Ascending" },
+                    { value: "desc", label: "Descending" },
+                  ]}
+                />
+                <NumberField
+                  label="Rows"
+                  value={toolIssueRequest.limit}
+                  min={10}
+                  max={500}
+                  onChange={(value) =>
+                    setToolIssueRequest((previous) => ({ ...previous, limit: value ?? 50, offset: 0 }))
+                  }
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="table-panel" aria-label="Validation tool index">
+            <div className="panel-heading compact">
+              <div>
+                <h2>Validation suite</h2>
+                <p>{isToolsLoading ? "Loading tools" : `${formatNumber(musicTools.length)} tools`}</p>
+              </div>
+              <span className="run-status">{formatNumber(totalToolIssues)} issues</span>
+            </div>
+
+            {toolsError ? <p className="error-message">{toolsError}</p> : null}
+            <MusicToolIndexTable tools={musicTools} selectedToolId={selectedToolId} onSelect={selectMusicTool} />
+          </section>
+
+          <section className="table-panel" aria-label="Validation issues">
+            <div className="panel-heading compact">
+              <div>
+                <h2>{selectedTool?.label ?? "Issue list"}</h2>
+                <p>
+                  {isToolIssuesLoading
+                    ? "Loading issues"
+                    : `${formatNumber(toolIssuePageStart)}-${formatNumber(toolIssuePageEnd)} of ${formatNumber(toolIssueTotal)}`}
+                </p>
+              </div>
+              <div className="pager">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Previous issue page"
+                  disabled={toolIssueRequest.offset === 0}
+                  onClick={() =>
+                    setToolIssueRequest((previous) => ({
+                      ...previous,
+                      offset: Math.max(0, previous.offset - previous.limit),
+                    }))
+                  }
+                >
+                  <ChevronLeft size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Next issue page"
+                  disabled={toolIssueRequest.offset + toolIssueRequest.limit >= toolIssueTotal}
+                  onClick={() =>
+                    setToolIssueRequest((previous) => ({
+                      ...previous,
+                      offset: previous.offset + previous.limit,
+                    }))
+                  }
+                >
+                  <ChevronRight size={17} />
+                </button>
+              </div>
+            </div>
+
+            {toolIssueError ? <p className="error-message">{toolIssueError}</p> : null}
+            <MusicToolIssueTable response={toolIssueResponse} />
           </section>
         </section>
       ) : activeSection === "Albums" ? (
@@ -4392,6 +4953,8 @@ export default function App() {
           exportResult={genreExportResult}
           onExport={runGenreExport}
         />
+      ) : activeSection === "Tools" ? (
+        <MusicToolDetailPanel tool={selectedTool} exportResult={toolExportResult} onExport={runToolExport} />
       ) : activeSection === "Albums" ? (
         <AlbumDetailPanel
           album={selectedAlbum}

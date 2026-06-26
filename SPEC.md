@@ -1,7 +1,7 @@
 # Music Library App Specification
 
-Date: 2026-06-25
-Status: Draft, current implementation through Phase 7
+Date: 2026-06-26
+Status: Draft, current implementation through Phase 8
 
 ## 1. Product Goal
 
@@ -30,7 +30,7 @@ Current observed TSV profile:
 - Most track ratings are currently blank, so chart eligibility must be based on calculated rating completeness, not only the `Album Rating` field.
 - `Love` currently appears as `L` when set and blank otherwise.
 - `Year` is the canonical year for filtering, charting, and statistics. `Release Year` is secondary reference metadata.
-- Each album should have one canonical genre. If a field contains multiple genres, use the first genre as the canonical album genre and flag the rest later through Music Tools.
+- Each album should have one canonical genre. If a field contains multiple genres, use the first genre as the canonical album genre and flag the rest through Music Tools.
 
 Current columns:
 
@@ -520,7 +520,7 @@ Important indexes:
 
 ## 11. Music Tools Workspace
 
-The Tools navigation item represents a future validation and cleanup workspace. It should remain disabled until the validation suite has usable issue lists and exports.
+The Tools navigation item is enabled as a validation and cleanup workspace. Phase 8 provides query-backed issue lists, severity, filtering, sorting, pagination, affected album/track counts, and exports. Safe fix actions remain future work.
 
 Planned validation and cleanup tools:
 
@@ -539,7 +539,7 @@ Planned validation and cleanup tools:
 - Albums with conflicting album artist values
 - Albums with multiple years across tracks
 
-Each tool should provide:
+Each tool provides:
 
 - Issue count
 - Filterable affected rows/albums
@@ -583,7 +583,7 @@ Recommended main navigation:
 | Albums | Implemented | Phase 5 | Dedicated album index and album detail drill-down. |
 | Artists | Implemented | Phase 6 | Dedicated album-artist index with artist-level album lists and stats. |
 | Genres | Implemented | Phase 7 | Dedicated canonical-genre index with genre-level album lists and stats. |
-| Tools | Planned | Phase 8 | Music Tools validation and cleanup issue lists. |
+| Tools | Implemented | Phase 8 | Music Tools validation and cleanup issue lists. |
 | Imports | Implemented | Phase 1 | TSV import, progress, import history, and backup visibility. |
 | Settings | Implemented | Phase 4 | App preferences such as backup retention and theme. |
 
@@ -659,7 +659,7 @@ These are targets, not hard guarantees. They should be measured once implementat
 
 - Enable the Genres navigation item with canonical-genre index pages, genre album lists, and genre-level summary stats.
 
-### Phase 8: Music Tools Workspace (future)
+### Phase 8: Music Tools Workspace (implemented)
 
 - Enable the Tools navigation item.
 - Music Tools validation suite.
@@ -689,10 +689,10 @@ The following decisions are part of the first implementation unless changed late
 - Use `Display Artist` for track identity and track-level browsing.
 - Use exact `Love = "L"` for loved-track counting.
 - Treat only whole-number track ratings from `0` to `5` as valid, including whole-number decimal equivalents such as `5.0`.
-- Treat half-step ratings such as `3.5` and `4.5` as anomalies for future Music Tools.
+- Treat half-step ratings such as `3.5` and `4.5` as Music Tools anomalies.
 - Count both `5` and `5.0` as rating `5` for TMOE.
 - If `Album Rating` is missing or `-1`, calculate album rating from tracks when every track is rated.
-- Keep albums separate by `<Album Unique Id>`, but later flag likely duplicate versions/remasters through Music Tools.
+- Keep albums separate by `<Album Unique Id>`, but flag likely duplicate versions/remasters through Music Tools.
 - Keep the last 3 database backups by default.
 - Keep backup retention configurable from Settings.
 - Export only visible/default columns by default.

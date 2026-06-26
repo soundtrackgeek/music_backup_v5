@@ -275,6 +275,79 @@ pub struct GenreListResponse {
     pub offset: u32,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicToolSummary {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+    pub severity: String,
+    pub scope: String,
+    pub issue_count: i64,
+    pub album_count: i64,
+    pub track_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicToolIssueRequest {
+    #[serde(default = "default_music_tool_id")]
+    pub tool_id: String,
+    #[serde(default)]
+    pub search_text: String,
+    #[serde(default)]
+    pub sort: BrowseSort,
+    #[serde(default = "default_limit")]
+    pub limit: u32,
+    #[serde(default)]
+    pub offset: u32,
+}
+
+impl Default for MusicToolIssueRequest {
+    fn default() -> Self {
+        Self {
+            tool_id: default_music_tool_id(),
+            search_text: String::new(),
+            sort: BrowseSort {
+                field: "album".to_string(),
+                direction: default_sort_direction(),
+            },
+            limit: default_limit(),
+            offset: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicToolIssueRow {
+    pub id: String,
+    pub tool_id: String,
+    pub severity: String,
+    pub entity_type: String,
+    pub album_id: String,
+    pub track_id: Option<i64>,
+    pub album: Option<String>,
+    pub album_artist_display: Option<String>,
+    pub title: Option<String>,
+    pub canonical_genre: Option<String>,
+    pub year: Option<i32>,
+    pub detail: String,
+    pub value: Option<String>,
+    pub filename: Option<String>,
+    pub file_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicToolIssueResponse {
+    pub tool: MusicToolSummary,
+    pub rows: Vec<MusicToolIssueRow>,
+    pub total: i64,
+    pub limit: u32,
+    pub offset: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowseRequest {
@@ -402,6 +475,15 @@ pub struct ExportSearchRequest {
     pub format: String,
     #[serde(default)]
     pub include_calculated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportMusicToolRequest {
+    pub tool_id: String,
+    #[serde(default)]
+    pub search_text: String,
+    pub format: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -557,4 +639,8 @@ fn default_limit() -> u32 {
 
 fn default_backup_retention() -> u32 {
     3
+}
+
+fn default_music_tool_id() -> String {
+    "duplicate-albums".to_string()
 }

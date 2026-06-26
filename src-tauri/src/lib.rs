@@ -4,8 +4,9 @@ mod models;
 
 use models::{
     AppSettings, ArtistListRequest, ArtistListResponse, BrowseRequest, BrowseResponse,
-    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, SaveChartRequest,
-    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
+    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest,
+    GenreListResponse, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary,
+    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
 };
 use models::{ImportRun, ImportSummary, LibraryStatus};
 use tauri::AppHandle;
@@ -91,6 +92,25 @@ async fn list_genres(
 }
 
 #[tauri::command]
+async fn list_music_tools(app: AppHandle) -> Result<Vec<MusicToolSummary>, String> {
+    tauri::async_runtime::spawn_blocking(move || db::list_music_tools_for_app(&app))
+        .await
+        .map_err(|error| format!("Music tool list task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn list_music_tool_issues(
+    app: AppHandle,
+    request: MusicToolIssueRequest,
+) -> Result<MusicToolIssueResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || db::list_music_tool_issues_for_app(&app, request))
+        .await
+        .map_err(|error| format!("Music tool issue list task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn list_saved_searches(app: AppHandle) -> Result<Vec<SavedSearch>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_saved_searches_for_app(&app))
         .await
@@ -146,6 +166,17 @@ async fn export_search(app: AppHandle, input: ExportSearchRequest) -> Result<Exp
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+async fn export_music_tool_issues(
+    app: AppHandle,
+    input: ExportMusicToolRequest,
+) -> Result<ExportResult, String> {
+    tauri::async_runtime::spawn_blocking(move || db::export_music_tool_issues_for_app(&app, input))
+        .await
+        .map_err(|error| format!("Music tool export task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -158,13 +189,16 @@ pub fn run() {
             search_library,
             list_artists,
             list_genres,
+            list_music_tools,
+            list_music_tool_issues,
             list_saved_searches,
             save_search,
             delete_saved_search,
             list_saved_charts,
             save_chart,
             delete_saved_chart,
-            export_search
+            export_search,
+            export_music_tool_issues
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Music Library app");

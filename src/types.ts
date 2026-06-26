@@ -169,6 +169,55 @@ export type GenreListResponse = {
   offset: number;
 };
 
+export type MusicToolSeverity = "high" | "medium" | "low";
+
+export type MusicToolScope = "albums" | "tracks";
+
+export type MusicToolSummary = {
+  id: string;
+  label: string;
+  description: string;
+  severity: MusicToolSeverity;
+  scope: MusicToolScope;
+  issueCount: number;
+  albumCount: number;
+  trackCount: number;
+};
+
+export type MusicToolIssueRequest = {
+  toolId: string;
+  searchText: string;
+  sort: BrowseSort;
+  limit: number;
+  offset: number;
+};
+
+export type MusicToolIssueRow = {
+  id: string;
+  toolId: string;
+  severity: MusicToolSeverity;
+  entityType: MusicToolScope;
+  albumId: string;
+  trackId: number | null;
+  album: string | null;
+  albumArtistDisplay: string | null;
+  title: string | null;
+  canonicalGenre: string | null;
+  year: number | null;
+  detail: string;
+  value: string | null;
+  filename: string | null;
+  filePath: string | null;
+};
+
+export type MusicToolIssueResponse = {
+  tool: MusicToolSummary;
+  rows: MusicToolIssueRow[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type BrowseRow = {
   id: string;
   trackId: number | null;
