@@ -13,6 +13,7 @@ import {
   Clock3,
   Database,
   Download,
+  Film,
   FileSearch,
   FolderInput,
   Gauge,
@@ -435,6 +436,16 @@ const chartTemplates: ChartTemplate[] = [
     createConfig: () =>
       createChartTemplateConfig({
         request: { filters: { genres: ["Synthpop"] } },
+      }),
+  },
+  {
+    id: "scores",
+    label: "Scores",
+    description: "Film, TV, and game score albums.",
+    icon: Film,
+    createConfig: () =>
+      createChartTemplateConfig({
+        request: { filters: { genres: ["scores"] } },
       }),
   },
   {

@@ -32,6 +32,22 @@ import type {
 
 export const settingsStorageKey = "musicLibrarySettings:v1";
 
+const scoreGenreGroup = [
+  "action",
+  "animation",
+  "comedy",
+  "documentary",
+  "drama",
+  "fantasy",
+  "horror",
+  "sci-fi",
+  "thriller",
+  "tv",
+  "video game",
+  "western",
+  "anime",
+] as const;
+
 const mockStatus: LibraryStatus = {
   dbPath: "Tauri desktop runtime required for SQLite access",
   hasDatabase: true,
@@ -106,6 +122,37 @@ const mockRows: BrowseRow[] = [
     coverMimeType: null,
   },
   {
+    id: "mb:mock-score",
+    trackId: null,
+    albumId: "mb:mock-score",
+    album: "Journey",
+    albumArtistDisplay: "Austin Wintory",
+    displayArtist: null,
+    title: null,
+    canonicalGenre: "Video Game",
+    publisher: "Sony Computer Entertainment",
+    year: 2012,
+    releaseYear: 2012,
+    totalTracks: 18,
+    ratedTracks: 18,
+    ratingCompleteness: 1,
+    totalSeconds: 3480,
+    lovedTracks: 3,
+    tmoeSeconds: 960,
+    aeRatio: 0.2759,
+    effectiveAlbumRating: 91,
+    albumScore: 251.16,
+    trackSeconds: null,
+    normalizedRating: null,
+    discNumber: null,
+    trackNumber: null,
+    love: null,
+    filePath: null,
+    filename: null,
+    coverPath: null,
+    coverMimeType: null,
+  },
+  {
     id: "track:mock-1",
     trackId: 1,
     albumId: "mb:mock-1",
@@ -133,6 +180,37 @@ const mockRows: BrowseRow[] = [
     love: "L",
     filePath: "D:\\Music\\Pet Shop Boys\\Actually",
     filename: "02 What Have I Done to Deserve This.mp3",
+    coverPath: null,
+    coverMimeType: null,
+  },
+  {
+    id: "track:mock-score",
+    trackId: 2,
+    albumId: "mb:mock-score",
+    album: "Journey",
+    albumArtistDisplay: "Austin Wintory",
+    displayArtist: "Austin Wintory",
+    title: "Nascence",
+    canonicalGenre: "Video Game",
+    publisher: "Sony Computer Entertainment",
+    year: 2012,
+    releaseYear: 2012,
+    totalTracks: 18,
+    ratedTracks: 18,
+    ratingCompleteness: 1,
+    totalSeconds: 3480,
+    lovedTracks: 3,
+    tmoeSeconds: 960,
+    aeRatio: 0.2759,
+    effectiveAlbumRating: 91,
+    albumScore: 251.16,
+    trackSeconds: 108,
+    normalizedRating: 100,
+    discNumber: 1,
+    trackNumber: 1,
+    love: "L",
+    filePath: "D:\\Music\\Austin Wintory\\Journey",
+    filename: "01 Nascence.mp3",
     coverPath: null,
     coverMimeType: null,
   },
@@ -213,6 +291,24 @@ const mockGenres: GenreSummary[] = [
     firstYear: 1986,
     lastYear: 1986,
     topArtist: "The Smiths",
+  },
+  {
+    id: "video game",
+    name: "Video Game",
+    albumCount: 1,
+    ratedAlbumCount: 1,
+    partialAlbumCount: 0,
+    unratedAlbumCount: 0,
+    trackCount: 18,
+    totalSeconds: 3480,
+    lovedTracks: 3,
+    tmoeSeconds: 960,
+    averageRatingCompleteness: 1,
+    averageAlbumRating: 91,
+    averageAlbumScore: 251.16,
+    firstYear: 2012,
+    lastYear: 2012,
+    topArtist: "Austin Wintory",
   },
 ];
 
@@ -608,8 +704,8 @@ export async function searchLibrary(request: BrowseRequest) {
     const isTracks = request.view === "tracks";
     const albumIds = new Set(request.filters.albumIds);
     const artistKeys = new Set(request.filters.artistKeys);
-    const genreKeys = new Set(request.filters.genres.map(normalizeGenreKey));
-    const excludedGenreKeys = new Set(request.filters.excludedGenres.map(normalizeGenreKey));
+    const genreKeys = new Set(expandGenreFilterKeys(request.filters.genres));
+    const excludedGenreKeys = new Set(expandGenreFilterKeys(request.filters.excludedGenres));
     const rows = mockRows.filter((row) => {
       const matchesView = isTracks ? row.trackId !== null : row.trackId === null;
       const artistKey = normalizeArtistKey(row.albumArtistDisplay);
@@ -927,6 +1023,32 @@ function normalizeArtistKey(value: string | null) {
 function normalizeGenreKey(value: string | null) {
   const normalized = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   return normalized || "unknown";
+}
+
+function expandGenreFilterKeys(values: string[]) {
+  const keys: string[] = [];
+  values.forEach((value) => {
+    const key = normalizeGenreKey(value);
+    if (key === "unknown") {
+      return;
+    }
+    if (isScoreGenreGroupAlias(key)) {
+      scoreGenreGroup.forEach((genre) => addUnique(keys, genre));
+    } else {
+      addUnique(keys, key);
+    }
+  });
+  return keys;
+}
+
+function isScoreGenreGroupAlias(value: string) {
+  return value === "score" || value === "scores";
+}
+
+function addUnique(values: string[], value: string) {
+  if (!values.includes(value)) {
+    values.push(value);
+  }
 }
 
 function isMissingText(value: string | null) {

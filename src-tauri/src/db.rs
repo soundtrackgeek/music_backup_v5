@@ -28,6 +28,21 @@ const LATEST_SCHEMA_VERSION: i32 = 6;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const MIN_BACKUP_RETENTION: u32 = 1;
 const MAX_BACKUP_RETENTION: u32 = 50;
+const SCORE_GENRE_GROUP: &[&str] = &[
+    "action",
+    "animation",
+    "comedy",
+    "documentary",
+    "drama",
+    "fantasy",
+    "horror",
+    "sci-fi",
+    "thriller",
+    "tv",
+    "video game",
+    "western",
+    "anime",
+];
 static MIGRATION_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, Copy)]
@@ -2971,11 +2986,7 @@ fn add_text_list_condition(
     items: &[String],
     exclude: bool,
 ) {
-    let normalized = items
-        .iter()
-        .map(|item| normalize_text(item))
-        .filter(|item| !item.is_empty())
-        .collect::<Vec<_>>();
+    let normalized = expanded_genre_filter_values(items);
 
     if normalized.is_empty() {
         return;
@@ -2988,6 +2999,35 @@ fn add_text_list_condition(
     let operator = if exclude { "NOT IN" } else { "IN" };
     conditions.push(format!("COALESCE({field}, '') {operator} ({placeholders})"));
     values.extend(normalized.into_iter().map(Value::Text));
+}
+
+fn expanded_genre_filter_values(items: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for item in items {
+        let value = normalize_text(item);
+        if value.is_empty() {
+            continue;
+        }
+        if is_score_genre_group_alias(&value) {
+            for genre in SCORE_GENRE_GROUP {
+                push_unique(&mut normalized, *genre);
+            }
+        } else {
+            push_unique(&mut normalized, value);
+        }
+    }
+    normalized
+}
+
+fn is_score_genre_group_alias(value: &str) -> bool {
+    matches!(value, "score" | "scores")
+}
+
+fn push_unique(values: &mut Vec<String>, value: impl Into<String>) {
+    let value = value.into();
+    if !values.contains(&value) {
+        values.push(value);
+    }
 }
 
 fn add_i32_range(
@@ -3839,6 +3879,49 @@ mod tests {
         assert_eq!(response.total, 1);
         assert_eq!(
             response.rows[0].canonical_genre.as_deref(),
+            Some("Synthpop")
+        );
+    }
+
+    #[test]
+    fn expands_scores_genre_group_for_include_and_exclude_filters() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+            ) VALUES (
+                'mb:score', 1, 'score', 'The Action Score', 'Example Composer',
+                'Action', 'action', 'Example', 2026, 2026,
+                12, 12, 1.0, 3600, 1, 900, 0.25, 90, 225.0
+            )
+            ",
+            [],
+        )
+        .expect("insert score album");
+
+        let mut include_request = BrowseRequest::default();
+        include_request.filters.genres = vec!["scores".to_string()];
+        let include_response =
+            search_library(&conn, include_request, 50).expect("search scores albums");
+
+        assert_eq!(include_response.total, 1);
+        assert_eq!(
+            include_response.rows[0].canonical_genre.as_deref(),
+            Some("Action")
+        );
+
+        let mut exclude_request = BrowseRequest::default();
+        exclude_request.filters.excluded_genres = vec!["scores".to_string()];
+        let exclude_response =
+            search_library(&conn, exclude_request, 50).expect("exclude scores albums");
+
+        assert_eq!(exclude_response.total, 1);
+        assert_eq!(
+            exclude_response.rows[0].canonical_genre.as_deref(),
             Some("Synthpop")
         );
     }

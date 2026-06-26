@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.11.0] - 2026-06-27
+### Added
+- Added a `scores` genre group alias for Search, Albums, Charts, and exports, expanding to Action, Animation, Comedy, Documentary, Drama, Fantasy, Horror, Sci-Fi, Thriller, TV, Video Game, Western, and Anime in include/exclude genre filters.
+- Added a built-in Scores chart template backed by the new genre group.
+
 ## [0.10.12] - 2026-06-26
 ### Fixed
 - Fixed Search, Albums, and Charts genre filter fields so comma-separated genre lists can be typed without the comma being stripped mid-entry.
