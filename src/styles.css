@@ -561,9 +561,9 @@ button {
 .chart-results .result-table-head,
 .chart-results .result-table-row {
   grid-template-columns:
-    48px minmax(180px, 2fr) minmax(140px, 1.35fr) 64px minmax(104px, 1fr)
+    48px minmax(220px, 2fr) minmax(140px, 1.35fr) 64px minmax(104px, 1fr)
     repeat(7, minmax(72px, 0.8fr));
-  min-width: 980px;
+  min-width: 1020px;
 }
 
 .chart-results .result-table-row span:first-child {
@@ -578,7 +578,7 @@ button {
 
 .chart-list-row {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 112px;
+  grid-template-columns: 46px 46px minmax(0, 1fr) 112px;
   align-items: center;
   gap: 12px;
   min-height: 64px;
@@ -693,6 +693,15 @@ button {
 
 .cover-mini span {
   font-size: 16px;
+}
+
+.cover-list {
+  width: 44px;
+  height: 44px;
+}
+
+.cover-list span {
+  font-size: 18px;
 }
 
 .album-cover-large {
@@ -1214,14 +1223,14 @@ button {
 .album-results .result-table-head,
 .album-results .result-table-row {
   grid-template-columns:
-    minmax(180px, 2fr) minmax(140px, 1.4fr) 64px minmax(104px, 1fr) 64px 84px
+    minmax(220px, 2fr) minmax(140px, 1.4fr) 64px minmax(104px, 1fr) 64px 84px
     72px;
 }
 
 .track-results .result-table-head,
 .track-results .result-table-row {
   grid-template-columns:
-    minmax(190px, 2fr) minmax(150px, 1.4fr) minmax(140px, 1.2fr) 64px 64px
+    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(140px, 1.2fr) 64px 64px
     minmax(140px, 1.1fr);
 }
 
@@ -1295,13 +1304,15 @@ button {
   background: #eaf6f3;
 }
 
-.album-index-title {
+.album-index-title,
+.album-title-cell {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.album-index-title > span:last-child {
+.album-index-title > span:last-child,
+.album-title-cell > span:last-child {
   min-width: 0;
 }
 

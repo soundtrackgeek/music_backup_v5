@@ -571,7 +571,7 @@ The UI should optimize for repeated use:
 - No blocking UI during import.
 - Visible import progress.
 - Export actions available from searches, charts, dashboards, and album details.
-- Real cover images render in album and chart layouts when available, with placeholders preserved for albums without imported artwork.
+- Real cover images render in search, album, artist/genre album, and chart layouts when available, with placeholders preserved for albums without imported artwork.
 
 Recommended main navigation:
 
@@ -676,7 +676,7 @@ These are targets, not hard guarantees. They should be measured once implementat
 - Skip albums that already have imported cover art unless replacement is explicitly enabled.
 - Relink older cache-copy entries back to source archive files and remove stale app-cache copies when cover import is run again.
 - Show live scan progress, percentage complete, new-cover counts, imported counts, relinked counts, skipped-existing counts, and missing-cover counts.
-- Replace chart and album placeholder covers with real artwork when available.
+- Replace search, chart, and album placeholder covers with real artwork when available.
 - Preserve useful placeholders for albums without available artwork.
 
 ### Phase 10: External Enrichment and AI (future)

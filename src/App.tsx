@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Activity,
   Album,
@@ -974,7 +975,9 @@ function ResultTable({
               {row.love === "L" ? "  Loved" : ""}
             </small>
           </span>
-          <span role="cell">{row.album ?? ""}</span>
+          <span className="album-title-cell" role="cell">
+            <AlbumTitleContents row={row} subtitle={row.albumArtistDisplay ?? row.year?.toString() ?? null} />
+          </span>
           <span role="cell">{row.displayArtist ?? row.albumArtistDisplay ?? ""}</span>
           <span role="cell">{row.year ?? ""}</span>
           <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
@@ -997,9 +1000,8 @@ function ResultTable({
       </div>
       {response.rows.map((row) => (
         <div className="result-table-row" role="row" key={row.id}>
-          <span role="cell">
-            <strong>{row.album ?? "Untitled"}</strong>
-            <small>{formatMinutes(row.totalSeconds)}</small>
+          <span className="album-title-cell" role="cell">
+            <AlbumTitleContents row={row} />
           </span>
           <span role="cell">{row.albumArtistDisplay ?? ""}</span>
           <span role="cell">{row.year ?? ""}</span>
@@ -1070,6 +1072,24 @@ function AlbumCover({
   );
 }
 
+function AlbumTitleContents({
+  row,
+  subtitle = formatMinutes(row.totalSeconds),
+}: {
+  row: BrowseRow;
+  subtitle?: string | null;
+}) {
+  return (
+    <>
+      <AlbumCover row={row} className="cover-mini" />
+      <span>
+        <strong>{row.album ?? "Untitled"}</strong>
+        {subtitle ? <small>{subtitle}</small> : null}
+      </span>
+    </>
+  );
+}
+
 function formatTrackPosition(row: BrowseRow) {
   const disc = row.discNumber?.toString() ?? "";
   const track = row.trackNumber?.toString() ?? "";
@@ -1136,12 +1156,8 @@ function AlbumIndexTable({
               }
             }}
           >
-            <span className="album-index-title" role="cell">
-              <AlbumCover row={row} className="cover-mini" />
-              <span>
-                <strong>{row.album ?? "Untitled"}</strong>
-                <small>{formatMinutes(row.totalSeconds)}</small>
-              </span>
+            <span className="album-title-cell" role="cell">
+              <AlbumTitleContents row={row} />
             </span>
             <span role="cell">{row.albumArtistDisplay ?? ""}</span>
             <span role="cell">{row.year ?? ""}</span>
@@ -1455,12 +1471,8 @@ function ArtistAlbumTable({ response }: { response: BrowseResponse | null }) {
       </div>
       {response.rows.map((row) => (
         <div className="result-table-row" role="row" key={row.id}>
-          <span className="album-index-title" role="cell">
-            <AlbumCover row={row} className="cover-mini" />
-            <span>
-              <strong>{row.album ?? "Untitled"}</strong>
-              <small>{formatMinutes(row.totalSeconds)}</small>
-            </span>
+          <span className="album-title-cell" role="cell">
+            <AlbumTitleContents row={row} />
           </span>
           <span role="cell">{row.year ?? ""}</span>
           <span role="cell">{row.canonicalGenre ?? ""}</span>
@@ -1708,12 +1720,8 @@ function GenreAlbumTable({ response }: { response: BrowseResponse | null }) {
       </div>
       {response.rows.map((row) => (
         <div className="result-table-row" role="row" key={row.id}>
-          <span className="album-index-title" role="cell">
-            <AlbumCover row={row} className="cover-mini" />
-            <span>
-              <strong>{row.album ?? "Untitled"}</strong>
-              <small>{formatMinutes(row.totalSeconds)}</small>
-            </span>
+          <span className="album-title-cell" role="cell">
+            <AlbumTitleContents row={row} />
           </span>
           <span role="cell">{row.albumArtistDisplay ?? ""}</span>
           <span role="cell">{row.year ?? ""}</span>
@@ -2140,6 +2148,7 @@ function ChartResults({
         {response.rows.map((row, index) => (
           <article className="chart-list-row" role="listitem" key={row.id}>
             <strong className="rank-number">{index + 1}</strong>
+            <AlbumCover row={row} className="cover-list" />
             <div>
               <h3>{row.album ?? "Untitled"}</h3>
               <p>
@@ -2179,10 +2188,17 @@ function ChartResults({
     key: string;
     label: string;
     sortField?: string;
-    value: (row: BrowseRow, index: number) => string;
+    className?: string;
+    value: (row: BrowseRow, index: number) => ReactNode;
   }[] = [
     { key: "rank", label: "#", value: (_row: BrowseRow, rank: number) => `${rank}` },
-    { key: "album", label: "Album", sortField: "album", value: (row: BrowseRow) => row.album ?? "Untitled" },
+    {
+      key: "album",
+      label: "Album",
+      sortField: "album",
+      className: "album-title-cell",
+      value: (row: BrowseRow) => <AlbumTitleContents row={row} />,
+    },
     { key: "artist", label: "Artist", sortField: "artist", value: (row: BrowseRow) => row.albumArtistDisplay ?? "" },
     { key: "year", label: "Year", sortField: "year", value: (row: BrowseRow) => row.year?.toString() ?? "" },
     { key: "genre", label: "Genre", sortField: "genre", value: (row: BrowseRow) => row.canonicalGenre ?? "" },
@@ -2253,7 +2269,7 @@ function ChartResults({
       {displayRows.map(({ row, rank }) => (
         <div className="result-table-row" role="row" key={row.id}>
           {columns.map((column) => (
-            <span role="cell" key={column.key}>
+            <span className={column.className} role="cell" key={column.key}>
               {column.value(row, rank)}
             </span>
           ))}

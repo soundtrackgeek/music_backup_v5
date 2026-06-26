@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.5] - 2026-06-26
+### Added
+- Added album cover thumbnails to Search album results, Search track album cells, chart compact rows, and chart table rows.
+
+### Changed
+- Reused one cover/title cell across album-bearing tables so album, artist, genre, search, and chart result surfaces render artwork consistently.
+
 ## [0.10.4] - 2026-06-26
 ### Changed
 - Changed embedded MP3 cover fallback to save missing artwork into the configured `AlbumCovers` source folder instead of the app data cover cache.
