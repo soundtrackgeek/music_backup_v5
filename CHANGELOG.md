@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.10.6] - 2026-06-26
+### Fixed
+- Improved dark-mode artist detail stat value contrast so compact totals such as total time remain readable.
+
 ## [0.10.5] - 2026-06-26
 ### Added
 - Added album cover thumbnails to Search album results, Search track album cells, chart compact rows, and chart table rows.

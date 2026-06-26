@@ -1423,6 +1423,8 @@ button {
   overflow-wrap: anywhere;
   color: #26322f;
   font-size: 13px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
   line-height: 19px;
 }
 
@@ -1648,6 +1650,10 @@ button {
 :root[data-theme="dark"] .chip-empty,
 :root[data-theme="dark"] .db-path {
   color: #a9b7b2;
+}
+
+:root[data-theme="dark"] .run-details dd {
+  color: #eef7f4;
 }
 
 :root[data-theme="dark"] .icon-button,
