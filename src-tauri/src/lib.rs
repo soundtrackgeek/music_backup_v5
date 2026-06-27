@@ -5,8 +5,8 @@ mod models;
 
 use models::{
     AppSettings, ArtistListRequest, ArtistListResponse, BrowseRequest, BrowseResponse,
-    CoverImportRequest, CoverImportSummary, ExportMusicToolRequest, ExportResult,
-    ExportSearchRequest, GenreListRequest, GenreListResponse, MusicToolIssueRequest,
+    CoverImportRequest, CoverImportSummary, DiscoveryResponse, ExportMusicToolRequest,
+    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, MusicToolIssueRequest,
     MusicToolIssueResponse, MusicToolSummary, SaveChartRequest, SaveSearchRequest, SavedChart,
     SavedSearch, StatisticsResponse,
 };
@@ -52,6 +52,14 @@ async fn get_statistics(app: AppHandle) -> Result<StatisticsResponse, String> {
     tauri::async_runtime::spawn_blocking(move || db::statistics_for_app(&app))
         .await
         .map_err(|error| format!("Statistics task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn get_discovery(app: AppHandle) -> Result<DiscoveryResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || db::discovery_for_app(&app))
+        .await
+        .map_err(|error| format!("Discovery task failed: {error}"))?
         .map_err(|error| error.to_string())
 }
 
@@ -217,6 +225,7 @@ pub fn run() {
             get_settings,
             save_settings,
             get_statistics,
+            get_discovery,
             import_musicbee_tsv,
             import_album_covers,
             get_album_cover_data_url,

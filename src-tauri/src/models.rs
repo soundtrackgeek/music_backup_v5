@@ -322,6 +322,108 @@ pub struct GenreListResponse {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DiscoveryResponse {
+    pub heatmap: Vec<DiscoveryHeatmapCell>,
+    pub backlog_missions: Vec<DiscoveryMission>,
+    pub smart_missions: Vec<DiscoveryMission>,
+    pub love_rating_points: Vec<DiscoveryAlbumPoint>,
+    pub genre_points: Vec<DiscoveryGenrePoint>,
+    pub artist_points: Vec<DiscoveryArtistPoint>,
+    pub generated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryHeatmapCell {
+    pub genre_id: String,
+    pub genre: String,
+    pub year: i32,
+    pub album_count: i64,
+    pub rated_album_count: i64,
+    pub partial_album_count: i64,
+    pub unrated_album_count: i64,
+    pub track_count: i64,
+    pub loved_tracks: i64,
+    pub average_rating_completeness: Option<f64>,
+    pub average_album_score: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryMission {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub action_label: String,
+    pub album_count: i64,
+    pub track_count: i64,
+    pub loved_tracks: i64,
+    pub average_album_score: Option<f64>,
+    pub average_rating_completeness: Option<f64>,
+    pub genre_id: Option<String>,
+    pub genre: Option<String>,
+    pub artist_id: Option<String>,
+    pub artist: Option<String>,
+    pub year_from: Option<i32>,
+    pub year_to: Option<i32>,
+    pub rated_tracks_min: Option<i64>,
+    pub rating_completeness_min: Option<f64>,
+    pub rating_completeness_max: Option<f64>,
+    pub loved_tracks_min: Option<i64>,
+    pub sort_field: String,
+    pub sort_direction: String,
+    pub limit: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryAlbumPoint {
+    pub album_id: String,
+    pub album: Option<String>,
+    pub album_artist_display: Option<String>,
+    pub genre_id: Option<String>,
+    pub genre: Option<String>,
+    pub year: Option<i32>,
+    pub loved_tracks: i64,
+    pub album_score: Option<f64>,
+    pub effective_album_rating: Option<i32>,
+    pub rating_completeness: f64,
+    pub total_seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryGenrePoint {
+    pub genre_id: String,
+    pub genre: String,
+    pub album_count: i64,
+    pub track_count: i64,
+    pub loved_tracks: i64,
+    pub total_seconds: i64,
+    pub partial_album_count: i64,
+    pub unrated_album_count: i64,
+    pub average_rating_completeness: Option<f64>,
+    pub average_album_score: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryArtistPoint {
+    pub artist_id: String,
+    pub artist: String,
+    pub album_count: i64,
+    pub track_count: i64,
+    pub loved_tracks: i64,
+    pub total_seconds: i64,
+    pub partial_album_count: i64,
+    pub unrated_album_count: i64,
+    pub average_rating_completeness: Option<f64>,
+    pub average_album_score: Option<f64>,
+    pub top_genre: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MusicToolSummary {
     pub id: String,
     pub label: String,

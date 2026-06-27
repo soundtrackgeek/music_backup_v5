@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.15.0] - 2026-06-27
+### Added
+- Added the Phase 10 Discovery workspace with a completion heatmap, backlog quest board, smart missions, love-vs-rating scatter, genre universe bubbles, artist constellation bubbles, and clickable album-result drilldowns.
+- Added a desktop `get_discovery` aggregate command and web-preview mock discovery data for exploration dashboards.
+
 ## [0.14.0] - 2026-06-27
 ### Added
 - Added Search min/max filters for rated track counts so album results can be limited to ranges such as 3-5 rated tracks.

@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Compass,
   Database,
   Download,
   Film,
@@ -42,6 +43,7 @@ import {
   exportSearch,
   cacheSettings,
   getAlbumCoverDataUrl,
+  getDiscovery,
   getSettings,
   getStatistics,
   getLibraryStatus,
@@ -81,6 +83,12 @@ import type {
   ChartViewMode,
   CoverImportProgress,
   CoverImportSummary,
+  DiscoveryAlbumPoint,
+  DiscoveryArtistPoint,
+  DiscoveryGenrePoint,
+  DiscoveryHeatmapCell,
+  DiscoveryMission,
+  DiscoveryResponse,
   ExportResult,
   GenreListRequest,
   GenreListResponse,
@@ -108,6 +116,7 @@ import type {
 const navigation = [
   { label: "Search", icon: Search, enabled: true },
   { label: "Charts", icon: BarChart3, enabled: true },
+  { label: "Discovery", icon: Compass, enabled: true },
   { label: "Statistics", icon: Activity, enabled: true },
   { label: "Albums", icon: Album, enabled: true },
   { label: "Artists", icon: UsersRound, enabled: true },
@@ -347,6 +356,64 @@ function createGenreAlbumsRequest(genre: GenreSummary): BrowseRequest {
   request.sort = { field: "year", direction: "asc" };
   request.limit = 100;
   return request;
+}
+
+type DiscoverySelection = {
+  title: string;
+  caption: string;
+};
+
+function createDiscoveryAlbumRequest(
+  filters: Partial<BrowseFilters>,
+  sort: BrowseSort = { field: "albumScore", direction: "desc" },
+  limit = 50,
+) {
+  const request = createRequest("albums");
+  request.filters = { ...request.filters, ...filters };
+  request.sort = sort;
+  request.limit = limit;
+  return request;
+}
+
+function createDiscoveryMissionRequest(mission: DiscoveryMission) {
+  return createDiscoveryAlbumRequest(
+    {
+      genres: mission.genreId ? [mission.genreId] : [],
+      artistKeys: mission.artistId ? [mission.artistId] : [],
+      yearFrom: mission.yearFrom,
+      yearTo: mission.yearTo,
+      ratedTracksMin: mission.ratedTracksMin,
+      ratingCompletenessMin: mission.ratingCompletenessMin,
+      ratingCompletenessMax: mission.ratingCompletenessMax,
+      lovedTracksMin: mission.lovedTracksMin,
+    },
+    { field: mission.sortField, direction: mission.sortDirection },
+    mission.limit,
+  );
+}
+
+function createDiscoveryHeatmapRequest(cell: DiscoveryHeatmapCell) {
+  return createDiscoveryAlbumRequest(
+    { genres: [cell.genreId], yearFrom: cell.year, yearTo: cell.year },
+    { field: "albumScore", direction: "desc" },
+    50,
+  );
+}
+
+function createDiscoveryGenreRequest(point: DiscoveryGenrePoint) {
+  return createDiscoveryAlbumRequest({ genres: [point.genreId] }, { field: "albumScore", direction: "desc" }, 100);
+}
+
+function createDiscoveryArtistRequest(point: DiscoveryArtistPoint) {
+  return createDiscoveryAlbumRequest(
+    { artistKeys: [point.artistId] },
+    { field: "albumScore", direction: "desc" },
+    100,
+  );
+}
+
+function createDiscoveryAlbumPointRequest(point: DiscoveryAlbumPoint) {
+  return createDiscoveryAlbumRequest({ albumIds: [point.albumId] }, { field: "albumScore", direction: "desc" }, 20);
 }
 
 function createMusicToolIssueRequestId(toolId: string) {
@@ -2888,6 +2955,319 @@ function DistributionBars({ buckets }: { buckets: RatingBucket[] }) {
   );
 }
 
+function clampRatio(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
+
+function normalizedValue(value: number | null | undefined, min: number, max: number) {
+  if (value == null || !Number.isFinite(value) || max <= min) return 0.5;
+  return Math.min(1, Math.max(0, (value - min) / (max - min)));
+}
+
+function numericExtent<T>(rows: T[], value: (row: T) => number | null | undefined) {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  rows.forEach((row) => {
+    const nextValue = value(row);
+    if (nextValue == null || !Number.isFinite(nextValue)) return;
+    min = Math.min(min, nextValue);
+    max = Math.max(max, nextValue);
+  });
+  return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : { min: 0, max: 1 };
+}
+
+function heatmapColor(value: number | null | undefined) {
+  const ratio = clampRatio(value);
+  const lightness = 94 - ratio * 43;
+  return `hsl(174 62% ${lightness}%)`;
+}
+
+function discoveryKeyOpen(event: KeyboardEvent, onOpen: () => void) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    onOpen();
+  }
+}
+
+function DiscoveryMissionGrid({
+  missions,
+  emptyLabel,
+  onOpen,
+}: {
+  missions: DiscoveryMission[];
+  emptyLabel: string;
+  onOpen: (mission: DiscoveryMission) => void;
+}) {
+  if (missions.length === 0) {
+    return (
+      <div className="empty-state">
+        <Compass size={20} />
+        <span>{emptyLabel}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="discovery-mission-grid">
+      {missions.map((mission) => (
+        <button className="discovery-mission" type="button" key={mission.id} onClick={() => onOpen(mission)}>
+          <span>{mission.actionLabel}</span>
+          <strong>{mission.title}</strong>
+          <small>{mission.description}</small>
+          <dl>
+            <div>
+              <dt>Albums</dt>
+              <dd>{formatNumber(mission.albumCount)}</dd>
+            </div>
+            <div>
+              <dt>Complete</dt>
+              <dd>{formatPercent(mission.averageRatingCompleteness)}</dd>
+            </div>
+            <div>
+              <dt>Score</dt>
+              <dd>{formatAverage(mission.averageAlbumScore, 1)}</dd>
+            </div>
+          </dl>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CompletionHeatmap({
+  cells,
+  onOpen,
+}: {
+  cells: DiscoveryHeatmapCell[];
+  onOpen: (cell: DiscoveryHeatmapCell) => void;
+}) {
+  const years = useMemo(
+    () => Array.from(new Set(cells.map((cell) => cell.year))).sort((left, right) => left - right),
+    [cells],
+  );
+  const genres = useMemo(() => {
+    const seen = new Map<string, string>();
+    cells.forEach((cell) => {
+      if (!seen.has(cell.genreId)) {
+        seen.set(cell.genreId, cell.genre);
+      }
+    });
+    return Array.from(seen, ([genreId, genre]) => ({ genreId, genre })).sort((left, right) =>
+      left.genre.localeCompare(right.genre),
+    );
+  }, [cells]);
+  const cellLookup = useMemo(() => {
+    const nextLookup = new Map<string, DiscoveryHeatmapCell>();
+    cells.forEach((cell) => nextLookup.set(`${cell.genreId}:${cell.year}`, cell));
+    return nextLookup;
+  }, [cells]);
+  const gridStyle = {
+    "--heatmap-columns": years.length,
+  } as CSSProperties & Record<"--heatmap-columns", number>;
+
+  if (cells.length === 0) {
+    return (
+      <div className="empty-state">
+        <Gauge size={20} />
+        <span>No heatmap cells yet.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="completion-heatmap" style={gridStyle}>
+      <div className="heatmap-corner" />
+      <div className="heatmap-years">
+        {years.map((year) => (
+          <span key={year}>{year}</span>
+        ))}
+      </div>
+      {genres.map((genre) => (
+        <div className="heatmap-row" key={genre.genreId}>
+          <span className="heatmap-genre">{genre.genre}</span>
+          <div className="heatmap-cells">
+            {years.map((year) => {
+              const cell = cellLookup.get(`${genre.genreId}:${year}`) ?? null;
+              if (!cell) {
+                return <span className="heatmap-cell empty" key={year} />;
+              }
+              const completion = cell.averageRatingCompleteness ?? 0;
+              return (
+                <button
+                  className="heatmap-cell"
+                  type="button"
+                  key={year}
+                  style={{ backgroundColor: heatmapColor(completion) }}
+                  title={`${cell.genre} / ${cell.year}: ${formatPercent(completion)} complete`}
+                  onClick={() => onOpen(cell)}
+                >
+                  <strong>{formatPercent(completion, 0)}</strong>
+                  <span>{formatNumber(cell.albumCount)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LoveRatingScatter({
+  points,
+  onOpen,
+}: {
+  points: DiscoveryAlbumPoint[];
+  onOpen: (point: DiscoveryAlbumPoint) => void;
+}) {
+  const scoreExtent = numericExtent(points, (point) => point.albumScore ?? point.effectiveAlbumRating);
+  const lovedExtent = numericExtent(points, (point) => point.lovedTracks);
+  const maxLoved = Math.max(1, lovedExtent.max);
+
+  if (points.length === 0) {
+    return (
+      <div className="empty-state">
+        <Heart size={20} />
+        <span>No loved/rating outliers yet.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="scatter-shell">
+      <svg className="discovery-scatter" viewBox="0 0 340 220" role="img" aria-label="Loved tracks by album score">
+        <line x1="38" y1="178" x2="316" y2="178" />
+        <line x1="38" y1="178" x2="38" y2="22" />
+        <text x="318" y="198">
+          Score
+        </text>
+        <text x="8" y="20">
+          Love
+        </text>
+        <line className="scatter-guide" x1="38" y1="100" x2="316" y2="100" />
+        <line className="scatter-guide" x1="177" y1="22" x2="177" y2="178" />
+        {points.map((point) => {
+          const score = point.albumScore ?? point.effectiveAlbumRating ?? scoreExtent.min;
+          const x = 38 + normalizedValue(score, scoreExtent.min, scoreExtent.max) * 278;
+          const y = 178 - normalizedValue(point.lovedTracks, 0, maxLoved) * 156;
+          const radius = 5 + clampRatio(point.ratingCompleteness) * 5;
+          const label = `${point.album ?? "Untitled"} / ${point.albumArtistDisplay ?? ""}`;
+          return (
+            <circle
+              role="button"
+              tabIndex={0}
+              className="scatter-point"
+              key={point.albumId}
+              cx={x}
+              cy={y}
+              r={radius}
+              aria-label={`Open ${label}`}
+              onClick={() => onOpen(point)}
+              onKeyDown={(event) => discoveryKeyOpen(event, () => onOpen(point))}
+            >
+              <title>
+                {label}: {formatNumber(point.lovedTracks)} loved / {formatAverage(point.albumScore, 1)} score
+              </title>
+            </circle>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function GenreUniverse({
+  points,
+  onOpen,
+}: {
+  points: DiscoveryGenrePoint[];
+  onOpen: (point: DiscoveryGenrePoint) => void;
+}) {
+  const albumExtent = numericExtent(points, (point) => point.albumCount);
+  const scoreExtent = numericExtent(points, (point) => point.averageAlbumScore);
+
+  if (points.length === 0) {
+    return (
+      <div className="empty-state">
+        <Tags size={20} />
+        <span>No genre universe yet.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bubble-plot genre-universe" aria-label="Genre universe">
+      <span className="plot-axis plot-axis-x">Average score</span>
+      <span className="plot-axis plot-axis-y">Completeness</span>
+      {points.map((point) => {
+        const size = 58 + Math.sqrt(normalizedValue(point.albumCount, albumExtent.min, albumExtent.max)) * 74;
+        const x = 10 + normalizedValue(point.averageAlbumScore, scoreExtent.min, scoreExtent.max) * 80;
+        const y = 10 + clampRatio(point.averageRatingCompleteness) * 78;
+        const style = {
+          left: `${x}%`,
+          bottom: `${y}%`,
+          width: `${size}px`,
+          height: `${size}px`,
+          "--bubble-strength": clampRatio(point.averageRatingCompleteness),
+        } as CSSProperties & Record<"--bubble-strength", number>;
+        return (
+          <button className="bubble-point" type="button" key={point.genreId} style={style} onClick={() => onOpen(point)}>
+            <strong>{point.genre}</strong>
+            <span>{formatNumber(point.albumCount)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ArtistConstellation({
+  points,
+  onOpen,
+}: {
+  points: DiscoveryArtistPoint[];
+  onOpen: (point: DiscoveryArtistPoint) => void;
+}) {
+  const albumExtent = numericExtent(points, (point) => point.albumCount);
+  const scoreExtent = numericExtent(points, (point) => point.averageAlbumScore);
+  const lovedExtent = numericExtent(points, (point) => point.lovedTracks);
+
+  if (points.length === 0) {
+    return (
+      <div className="empty-state">
+        <UsersRound size={20} />
+        <span>No artist constellation yet.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bubble-plot artist-constellation" aria-label="Artist constellation">
+      <span className="plot-axis plot-axis-x">Catalog depth</span>
+      <span className="plot-axis plot-axis-y">Average score</span>
+      {points.map((point) => {
+        const size = 58 + Math.sqrt(normalizedValue(point.lovedTracks, lovedExtent.min, lovedExtent.max)) * 68;
+        const x = 10 + normalizedValue(point.albumCount, albumExtent.min, albumExtent.max) * 80;
+        const y = 10 + normalizedValue(point.averageAlbumScore, scoreExtent.min, scoreExtent.max) * 78;
+        const style = {
+          left: `${x}%`,
+          bottom: `${y}%`,
+          width: `${size}px`,
+          height: `${size}px`,
+          "--bubble-strength": clampRatio(point.averageRatingCompleteness),
+        } as CSSProperties & Record<"--bubble-strength", number>;
+        return (
+          <button className="bubble-point artist" type="button" key={point.artistId} style={style} onClick={() => onOpen(point)}>
+            <strong>{point.artist}</strong>
+            <span>{formatNumber(point.albumCount)} albums</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function YearProgressTable({ rows }: { rows: YearProgressStats[] }) {
   if (rows.length === 0) {
     return (
@@ -3078,6 +3458,16 @@ export default function App() {
   const [statistics, setStatistics] = useState<StatisticsResponse | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [isStatsLoading, setIsStatsLoading] = useState(false);
+  const [discovery, setDiscovery] = useState<DiscoveryResponse | null>(null);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
+  const [discoveryAlbumRequest, setDiscoveryAlbumRequest] = useState<BrowseRequest>(() =>
+    createDiscoveryAlbumRequest({}, { field: "albumScore", direction: "desc" }, 30),
+  );
+  const [discoveryAlbumResponse, setDiscoveryAlbumResponse] = useState<BrowseResponse | null>(null);
+  const [discoveryAlbumError, setDiscoveryAlbumError] = useState<string | null>(null);
+  const [isDiscoveryAlbumsLoading, setIsDiscoveryAlbumsLoading] = useState(false);
+  const [discoverySelection, setDiscoverySelection] = useState<DiscoverySelection | null>(null);
   const [settings, setSettings] = useState<AppSettings>(() => createDefaultSettings());
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -3089,12 +3479,21 @@ export default function App() {
   }, []);
 
   const loadData = useCallback(async () => {
-    const [nextStatus, nextRuns, nextSavedSearches, nextSavedCharts, nextStatistics, nextSettings] = await Promise.all([
+    const [
+      nextStatus,
+      nextRuns,
+      nextSavedSearches,
+      nextSavedCharts,
+      nextStatistics,
+      nextDiscovery,
+      nextSettings,
+    ] = await Promise.all([
       getLibraryStatus(),
       listImportRuns(8),
       listSavedSearches(),
       listSavedCharts(),
       getStatistics(),
+      getDiscovery(),
       getSettings(),
     ]);
     setStatus(nextStatus);
@@ -3107,6 +3506,7 @@ export default function App() {
       })),
     );
     setStatistics(nextStatistics);
+    setDiscovery(nextDiscovery);
     setSettings(nextSettings);
     void refreshGenreSuggestions().catch(() => {
       // Keep any suggestions already loaded from focus retry or the Genres page.
@@ -3688,6 +4088,40 @@ export default function App() {
       window.clearTimeout(timer);
     };
   }, [activeSection, chartRequest]);
+
+  useEffect(() => {
+    if (activeSection !== "Discovery" || !discoverySelection) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setIsDiscoveryAlbumsLoading(true);
+      setDiscoveryAlbumError(null);
+      void searchLibrary(discoveryAlbumRequest)
+        .then((nextResponse) => {
+          if (!cancelled) {
+            setDiscoveryAlbumResponse(nextResponse);
+          }
+        })
+        .catch((searchError) => {
+          if (!cancelled) {
+            setDiscoveryAlbumError(searchError instanceof Error ? searchError.message : String(searchError));
+            setDiscoveryAlbumResponse(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsDiscoveryAlbumsLoading(false);
+          }
+        });
+    }, 160);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeSection, discoveryAlbumRequest, discoverySelection]);
 
   const progressPercent = useMemo(() => {
     if (progress.status === "completed") return 100;
@@ -4286,6 +4720,84 @@ export default function App() {
     }
   }
 
+  async function refreshDiscovery() {
+    setIsDiscoveryLoading(true);
+    setDiscoveryError(null);
+    try {
+      const nextDiscovery = await getDiscovery();
+      setDiscovery(nextDiscovery);
+    } catch (error) {
+      setDiscoveryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsDiscoveryLoading(false);
+    }
+  }
+
+  function openDiscoveryAlbums(selection: DiscoverySelection, nextRequest: BrowseRequest) {
+    setDiscoverySelection(selection);
+    setDiscoveryAlbumRequest(nextRequest);
+    setDiscoveryAlbumResponse(null);
+    setDiscoveryAlbumError(null);
+  }
+
+  function openDiscoveryMission(mission: DiscoveryMission) {
+    openDiscoveryAlbums(
+      {
+        title: mission.title,
+        caption: `${formatNumber(mission.albumCount)} albums / ${mission.actionLabel}`,
+      },
+      createDiscoveryMissionRequest(mission),
+    );
+  }
+
+  function openDiscoveryHeatmapCell(cell: DiscoveryHeatmapCell) {
+    openDiscoveryAlbums(
+      {
+        title: `${cell.genre} / ${cell.year}`,
+        caption: `${formatNumber(cell.albumCount)} albums, ${formatPercent(cell.averageRatingCompleteness)} complete`,
+      },
+      createDiscoveryHeatmapRequest(cell),
+    );
+  }
+
+  function openDiscoveryAlbumPoint(point: DiscoveryAlbumPoint) {
+    openDiscoveryAlbums(
+      {
+        title: point.album ?? "Untitled album",
+        caption: [point.albumArtistDisplay, point.year, point.genre].filter(Boolean).join(" / "),
+      },
+      createDiscoveryAlbumPointRequest(point),
+    );
+  }
+
+  function openDiscoveryGenre(point: DiscoveryGenrePoint) {
+    openDiscoveryAlbums(
+      {
+        title: point.genre,
+        caption: `${formatNumber(point.albumCount)} albums / ${formatPercent(point.averageRatingCompleteness)} complete`,
+      },
+      createDiscoveryGenreRequest(point),
+    );
+  }
+
+  function openDiscoveryArtist(point: DiscoveryArtistPoint) {
+    openDiscoveryAlbums(
+      {
+        title: point.artist,
+        caption: [formatNumber(point.albumCount), "albums", point.topGenre].filter(Boolean).join(" / "),
+      },
+      createDiscoveryArtistRequest(point),
+    );
+  }
+
+  function sortDiscoveryAlbumsBy(field: string) {
+    setDiscoveryAlbumRequest((previous) => ({
+      ...previous,
+      sort: nextSort(previous.sort, field),
+      offset: 0,
+    }));
+  }
+
   async function saveAppSettings(values: Partial<AppSettings>) {
     const nextSettings = {
       ...settings,
@@ -4343,6 +4855,10 @@ export default function App() {
   const chartRows = chartResponse?.rows.length ?? 0;
   const currentChartGridCoverSize = normalizeChartGridCoverSize(chartConfig.gridCoverSize);
   const currentChartCompletenessRange = chartCompletenessRange(chartConfig);
+  const discoveryMissionTotal = (discovery?.backlogMissions.length ?? 0) + (discovery?.smartMissions.length ?? 0);
+  const discoveryAlbumTotal = discoveryAlbumResponse?.total ?? 0;
+  const discoveryAlbumPageStart = discoveryAlbumTotal === 0 ? 0 : discoveryAlbumRequest.offset + 1;
+  const discoveryAlbumPageEnd = Math.min(discoveryAlbumTotal, discoveryAlbumRequest.offset + discoveryAlbumRequest.limit);
   const ratingAlbumTotal =
     (statistics?.ratingProgress.fullyRatedAlbums ?? 0) +
     (statistics?.ratingProgress.partiallyRatedAlbums ?? 0) +
@@ -4816,6 +5332,169 @@ export default function App() {
               displaySort={chartTableSort}
               onSort={sortChartBy}
             />
+          </section>
+        </section>
+      ) : activeSection === "Discovery" ? (
+        <section className="workspace discovery-workspace">
+          <header className="topbar">
+            <div>
+              <h1>Discovery</h1>
+              <p>Explore rating backlogs, loved outliers, genre clusters, and artist catalog pockets.</p>
+            </div>
+            <div className="topbar-actions">
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Refresh discovery"
+                onClick={() => void refreshDiscovery()}
+              >
+                <RotateCcw size={18} />
+              </button>
+              <button className="icon-button" type="button" aria-label="Refresh library data" onClick={() => void loadData()}>
+                <Database size={18} />
+              </button>
+            </div>
+          </header>
+
+          <section className="metric-grid" aria-label="Discovery summary">
+            <Metric label="Missions" value={formatNumber(discoveryMissionTotal)} tone="teal" icon={Compass} />
+            <Metric label="Heatmap cells" value={formatNumber(discovery?.heatmap.length)} tone="amber" icon={Gauge} />
+            <Metric label="Genre bubbles" value={formatNumber(discovery?.genrePoints.length)} icon={Tags} />
+            <Metric label="Outliers" value={formatNumber(discovery?.loveRatingPoints.length)} icon={Heart} />
+          </section>
+
+          {discoveryError ? <p className="error-message">{discoveryError}</p> : null}
+
+          <section className="discovery-dashboard-grid" aria-label="Discovery charts">
+            <section className="discovery-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Completion heatmap</h2>
+                  <p>
+                    {isDiscoveryLoading
+                      ? "Refreshing"
+                      : `${formatNumber(discovery?.heatmap.length)} genre/year intersections`}
+                  </p>
+                </div>
+                <Gauge size={18} />
+              </div>
+              <CompletionHeatmap cells={discovery?.heatmap ?? []} onOpen={openDiscoveryHeatmapCell} />
+            </section>
+
+            <section className="discovery-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Backlog quest board</h2>
+                  <p>Rating paths with the strongest payoff signals.</p>
+                </div>
+                <Compass size={18} />
+              </div>
+              <DiscoveryMissionGrid
+                missions={discovery?.backlogMissions ?? []}
+                emptyLabel="No backlog missions yet."
+                onOpen={openDiscoveryMission}
+              />
+            </section>
+
+            <section className="discovery-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Smart missions</h2>
+                  <p>Generated shortcuts into focused album sets.</p>
+                </div>
+                <Sparkles size={18} />
+              </div>
+              <DiscoveryMissionGrid
+                missions={discovery?.smartMissions ?? []}
+                emptyLabel="No smart missions yet."
+                onOpen={openDiscoveryMission}
+              />
+            </section>
+
+            <section className="discovery-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Love vs rating scatter</h2>
+                  <p>Click a point to inspect the album behind an outlier.</p>
+                </div>
+                <Heart size={18} />
+              </div>
+              <LoveRatingScatter points={discovery?.loveRatingPoints ?? []} onOpen={openDiscoveryAlbumPoint} />
+            </section>
+
+            <section className="discovery-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Genre universe</h2>
+                  <p>Bubble size is catalog depth; height is completion.</p>
+                </div>
+                <Tags size={18} />
+              </div>
+              <GenreUniverse points={discovery?.genrePoints ?? []} onOpen={openDiscoveryGenre} />
+            </section>
+
+            <section className="discovery-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Artist constellation</h2>
+                  <p>Find deep catalogs, favorites, and neglected artists.</p>
+                </div>
+                <UsersRound size={18} />
+              </div>
+              <ArtistConstellation points={discovery?.artistPoints ?? []} onOpen={openDiscoveryArtist} />
+            </section>
+
+            <section className="table-panel discovery-results-panel" aria-label="Discovery album results">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>{discoverySelection?.title ?? "Discovery albums"}</h2>
+                  <p>
+                    {!discoverySelection
+                      ? "Click a chart item or mission to open matching albums."
+                      : isDiscoveryAlbumsLoading
+                        ? "Loading"
+                        : `${formatNumber(discoveryAlbumPageStart)}-${formatNumber(discoveryAlbumPageEnd)} of ${formatNumber(discoveryAlbumTotal)} / ${discoverySelection.caption}`}
+                  </p>
+                </div>
+                <div className="pager">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="Previous discovery page"
+                    disabled={!discoverySelection || discoveryAlbumRequest.offset === 0}
+                    onClick={() =>
+                      setDiscoveryAlbumRequest((previous) => ({
+                        ...previous,
+                        offset: Math.max(0, previous.offset - previous.limit),
+                      }))
+                    }
+                  >
+                    <ChevronLeft size={17} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="Next discovery page"
+                    disabled={!discoverySelection || discoveryAlbumRequest.offset + discoveryAlbumRequest.limit >= discoveryAlbumTotal}
+                    onClick={() =>
+                      setDiscoveryAlbumRequest((previous) => ({
+                        ...previous,
+                        offset: previous.offset + previous.limit,
+                      }))
+                    }
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
+              </div>
+
+              {discoveryAlbumError ? <p className="error-message">{discoveryAlbumError}</p> : null}
+              <ResultTable
+                response={discoverySelection ? discoveryAlbumResponse : null}
+                sort={discoveryAlbumRequest.sort}
+                onSort={sortDiscoveryAlbumsBy}
+              />
+            </section>
           </section>
         </section>
       ) : activeSection === "Artists" ? (
@@ -6305,6 +6984,54 @@ export default function App() {
               <dd>{lastRun?.sourcePath ?? sourcePath}</dd>
             </div>
           </dl>
+        </aside>
+      ) : activeSection === "Discovery" ? (
+        <aside className="detail-panel discovery-detail" aria-label="Discovery details">
+          <div className="detail-header">
+            <Compass size={20} />
+            <div>
+              <h2>Discovery Map</h2>
+              <p>{discovery?.generatedAt ? formatDate(discovery.generatedAt) : "Waiting for library data"}</p>
+            </div>
+          </div>
+
+          <dl className="run-details">
+            <div>
+              <dt>Backlog missions</dt>
+              <dd>{formatNumber(discovery?.backlogMissions.length)}</dd>
+            </div>
+            <div>
+              <dt>Smart missions</dt>
+              <dd>{formatNumber(discovery?.smartMissions.length)}</dd>
+            </div>
+            <div>
+              <dt>Current result</dt>
+              <dd>{formatNumber(discoveryAlbumTotal)}</dd>
+            </div>
+            <div>
+              <dt>Selection</dt>
+              <dd>{discoverySelection?.title ?? "None yet"}</dd>
+            </div>
+          </dl>
+
+          <section className="calculation-list discovery-signals">
+            <div>
+              <Gauge size={17} />
+              <span>Heatmap cells open matching genre/year albums</span>
+            </div>
+            <div>
+              <Heart size={17} />
+              <span>Scatter points open individual outlier albums</span>
+            </div>
+            <div>
+              <Tags size={17} />
+              <span>Genre bubbles open full genre album sets</span>
+            </div>
+            <div>
+              <UsersRound size={17} />
+              <span>Artist bubbles open catalog deep dives</span>
+            </div>
+          </section>
         </aside>
       ) : activeSection === "Charts" ? (
         <aside className="detail-panel chart-detail" aria-label="Chart actions">

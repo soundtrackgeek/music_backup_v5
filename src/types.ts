@@ -203,6 +203,96 @@ export type GenreListResponse = {
   offset: number;
 };
 
+export type DiscoveryResponse = {
+  heatmap: DiscoveryHeatmapCell[];
+  backlogMissions: DiscoveryMission[];
+  smartMissions: DiscoveryMission[];
+  loveRatingPoints: DiscoveryAlbumPoint[];
+  genrePoints: DiscoveryGenrePoint[];
+  artistPoints: DiscoveryArtistPoint[];
+  generatedAt: string | null;
+};
+
+export type DiscoveryHeatmapCell = {
+  genreId: string;
+  genre: string;
+  year: number;
+  albumCount: number;
+  ratedAlbumCount: number;
+  partialAlbumCount: number;
+  unratedAlbumCount: number;
+  trackCount: number;
+  lovedTracks: number;
+  averageRatingCompleteness: number | null;
+  averageAlbumScore: number | null;
+};
+
+export type DiscoveryMission = {
+  id: string;
+  title: string;
+  description: string;
+  actionLabel: string;
+  albumCount: number;
+  trackCount: number;
+  lovedTracks: number;
+  averageAlbumScore: number | null;
+  averageRatingCompleteness: number | null;
+  genreId: string | null;
+  genre: string | null;
+  artistId: string | null;
+  artist: string | null;
+  yearFrom: number | null;
+  yearTo: number | null;
+  ratedTracksMin: number | null;
+  ratingCompletenessMin: number | null;
+  ratingCompletenessMax: number | null;
+  lovedTracksMin: number | null;
+  sortField: string;
+  sortDirection: "asc" | "desc";
+  limit: number;
+};
+
+export type DiscoveryAlbumPoint = {
+  albumId: string;
+  album: string | null;
+  albumArtistDisplay: string | null;
+  genreId: string | null;
+  genre: string | null;
+  year: number | null;
+  lovedTracks: number;
+  albumScore: number | null;
+  effectiveAlbumRating: number | null;
+  ratingCompleteness: number;
+  totalSeconds: number;
+};
+
+export type DiscoveryGenrePoint = {
+  genreId: string;
+  genre: string;
+  albumCount: number;
+  trackCount: number;
+  lovedTracks: number;
+  totalSeconds: number;
+  partialAlbumCount: number;
+  unratedAlbumCount: number;
+  averageRatingCompleteness: number | null;
+  averageAlbumScore: number | null;
+};
+
+export type DiscoveryArtistPoint = {
+  artistId: string;
+  artist: string;
+  albumCount: number;
+  trackCount: number;
+  lovedTracks: number;
+  totalSeconds: number;
+  partialAlbumCount: number;
+  unratedAlbumCount: number;
+  averageRatingCompleteness: number | null;
+  averageAlbumScore: number | null;
+  topGenre: string | null;
+};
+
 export type MusicToolSeverity = "high" | "medium" | "low";
 
 export type MusicToolScope = "albums" | "tracks";
