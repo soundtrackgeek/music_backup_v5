@@ -1331,6 +1331,14 @@ button {
   background: #0f766e;
 }
 
+.meter-fill.secondary {
+  background: #2563a6;
+}
+
+.meter-fill.warm {
+  background: #c27a16;
+}
+
 .stat-pairs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1575,6 +1583,151 @@ button {
   paint-order: stroke;
   stroke: #fbfcfc;
   stroke-width: 3px;
+}
+
+.shape-by-time-panel,
+.catalog-concentration-panel,
+.duration-analytics-panel {
+  display: grid;
+  align-items: start;
+  gap: 14px;
+}
+
+.shape-by-time-panel {
+  grid-template-columns: minmax(180px, 0.42fr) minmax(0, 1fr);
+}
+
+.catalog-concentration-panel {
+  grid-template-columns: minmax(164px, 0.46fr) repeat(2, minmax(0, 1fr));
+}
+
+.duration-analytics-panel {
+  grid-template-columns: minmax(140px, 0.34fr) minmax(190px, 0.44fr) repeat(2, minmax(0, 1fr));
+}
+
+.shape-summary,
+.concentration-summary,
+.duration-summary,
+.shape-time-bars,
+.loved-density-list,
+.concentration-bars,
+.duration-album-list {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.shape-summary div,
+.concentration-summary div,
+.duration-summary div,
+.duration-album-row,
+.outlier-stat {
+  min-width: 0;
+  border: 1px solid #e1e8e5;
+  border-radius: 8px;
+  background: #fbfcfc;
+  padding: 10px;
+}
+
+.shape-time-row,
+.loved-density-row,
+.concentration-row {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.shape-time-row {
+  grid-template-columns: 74px repeat(3, minmax(0, 1fr));
+}
+
+.loved-density-row {
+  grid-template-columns: minmax(154px, 0.56fr) minmax(0, 1fr) 146px;
+}
+
+.concentration-row {
+  grid-template-columns: minmax(116px, 0.64fr) minmax(0, 1fr) 58px;
+}
+
+.shape-time-row > div,
+.loved-density-row > div,
+.concentration-row > div,
+.duration-album-row {
+  min-width: 0;
+}
+
+.shape-summary span,
+.shape-time-row span,
+.loved-density-row span,
+.concentration-summary span,
+.concentration-row span,
+.duration-summary span,
+.duration-album-list > span,
+.outlier-stat span {
+  display: block;
+  color: #697671;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 650;
+}
+
+.shape-summary strong,
+.shape-time-row strong,
+.loved-density-row strong,
+.concentration-summary strong,
+.concentration-row strong,
+.duration-summary strong,
+.duration-album-row strong,
+.outlier-stat strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #17211f;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 740;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shape-summary strong,
+.duration-summary strong,
+.outlier-stat strong {
+  margin-top: 2px;
+  font-size: 16px;
+  line-height: 21px;
+}
+
+.loved-density-row small,
+.concentration-summary small,
+.concentration-row small,
+.duration-album-row small,
+.outlier-stat small {
+  color: #53615d;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.loved-density-row small,
+.concentration-row small {
+  text-align: right;
+}
+
+.duration-album-list > span {
+  color: #33413d;
+  font-weight: 740;
+}
+
+.outlier-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
+  gap: 10px;
+}
+
+.outlier-stat {
+  display: grid;
+  gap: 3px;
 }
 
 .stats-table {
@@ -2440,6 +2593,14 @@ button {
 :root[data-theme="dark"] .metadata-coverage-row strong,
 :root[data-theme="dark"] .decade-row strong,
 :root[data-theme="dark"] .import-delta-row strong,
+:root[data-theme="dark"] .shape-summary strong,
+:root[data-theme="dark"] .shape-time-row strong,
+:root[data-theme="dark"] .loved-density-row strong,
+:root[data-theme="dark"] .concentration-summary strong,
+:root[data-theme="dark"] .concentration-row strong,
+:root[data-theme="dark"] .duration-summary strong,
+:root[data-theme="dark"] .duration-album-row strong,
+:root[data-theme="dark"] .outlier-stat strong,
 :root[data-theme="dark"] .burndown-summary strong,
 :root[data-theme="dark"] .rank-metric strong,
 :root[data-theme="dark"] .setting-toggle strong {
@@ -2469,10 +2630,23 @@ button {
 :root[data-theme="dark"] .metadata-coverage-row span,
 :root[data-theme="dark"] .decade-row span,
 :root[data-theme="dark"] .import-delta-row span,
+:root[data-theme="dark"] .shape-summary span,
+:root[data-theme="dark"] .shape-time-row span,
+:root[data-theme="dark"] .loved-density-row span,
+:root[data-theme="dark"] .concentration-summary span,
+:root[data-theme="dark"] .concentration-row span,
+:root[data-theme="dark"] .duration-summary span,
+:root[data-theme="dark"] .duration-album-list > span,
+:root[data-theme="dark"] .outlier-stat span,
 :root[data-theme="dark"] .burndown-summary span,
 :root[data-theme="dark"] .metadata-coverage-row small,
 :root[data-theme="dark"] .decade-row small,
 :root[data-theme="dark"] .import-delta-row small,
+:root[data-theme="dark"] .loved-density-row small,
+:root[data-theme="dark"] .concentration-summary small,
+:root[data-theme="dark"] .concentration-row small,
+:root[data-theme="dark"] .duration-album-row small,
+:root[data-theme="dark"] .outlier-stat small,
 :root[data-theme="dark"] .rating-event small,
 :root[data-theme="dark"] .run-details dt,
 :root[data-theme="dark"] .setting-toggle small,
@@ -2513,6 +2687,11 @@ button {
 :root[data-theme="dark"] .progress-block,
 :root[data-theme="dark"] .stat-pairs div,
 :root[data-theme="dark"] .burndown-summary div,
+:root[data-theme="dark"] .shape-summary div,
+:root[data-theme="dark"] .concentration-summary div,
+:root[data-theme="dark"] .duration-summary div,
+:root[data-theme="dark"] .duration-album-row,
+:root[data-theme="dark"] .outlier-stat,
 :root[data-theme="dark"] .history-point,
 :root[data-theme="dark"] .rating-event,
 :root[data-theme="dark"] .calculation-list div,
@@ -2630,6 +2809,14 @@ button {
 :root[data-theme="dark"] .stacked-track,
 :root[data-theme="dark"] .delta-track {
   background: #293632;
+}
+
+:root[data-theme="dark"] .meter-fill.secondary {
+  background: #4c8bd0;
+}
+
+:root[data-theme="dark"] .meter-fill.warm {
+  background: #d69a3b;
 }
 
 :root[data-theme="dark"] .discovery-scatter line,
@@ -2853,7 +3040,10 @@ button {
   }
 
   .health-score-panel,
-  .burndown-panel {
+  .burndown-panel,
+  .shape-by-time-panel,
+  .catalog-concentration-panel,
+  .duration-analytics-panel {
     grid-template-columns: 1fr;
   }
 
@@ -2864,13 +3054,18 @@ button {
   .health-component,
   .metadata-coverage-row,
   .decade-row,
-  .import-delta-row {
+  .import-delta-row,
+  .shape-time-row,
+  .loved-density-row,
+  .concentration-row {
     grid-template-columns: 1fr;
   }
 
   .metadata-coverage-row small,
   .decade-row small,
-  .import-delta-row small {
+  .import-delta-row small,
+  .loved-density-row small,
+  .concentration-row small {
     text-align: left;
   }
 
@@ -2885,6 +3080,57 @@ button {
 }
 
 @media (max-width: 640px) {
+  .app-shell,
+  .app-shell.left-sidebar-expanded,
+  .app-shell.left-sidebar-icon-only {
+    --left-sidebar-width: 64px;
+    --right-sidebar-width: 0px;
+  }
+
+  .app-shell.left-sidebar-hidden {
+    --left-sidebar-width: 0px;
+  }
+
+  .sidebar {
+    align-items: center;
+    padding: 16px 10px;
+  }
+
+  .sidebar-header,
+  .sidebar-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .brand {
+    padding: 0;
+  }
+
+  .brand div:last-child,
+  .nav-list span {
+    display: none;
+  }
+
+  .nav-list button {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+
+  .detail-column {
+    display: none;
+  }
+
+  .right-sidebar-toggle {
+    display: none;
+  }
+
+  .left-sidebar-hidden .workspace,
+  .right-sidebar-hidden .workspace {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
   .metric-grid,
   .filter-grid,
   .stats-dashboard-grid,

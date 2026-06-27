@@ -440,10 +440,15 @@ export type ExportResult = {
 export type StatisticsResponse = {
   overview: LibraryOverviewStats;
   healthScore: LibraryHealthScore;
+  libraryShape: LibraryShapeStats;
   ratingProgress: RatingProgressStats;
   decadeProgress: DecadeProgressStats[];
   yearProgress: YearProgressStats[];
   genreProgress: GenreProgressStats[];
+  lovedDensity: LovedDensityStat[];
+  catalogConcentration: CatalogConcentrationStats;
+  durationAnalytics: DurationAnalyticsStats;
+  outlierStats: OutlierStat[];
   trackRatingDistribution: RatingBucket[];
   albumRatingDistribution: RatingBucket[];
   metadataCoverage: MetadataCoverageMetric[];
@@ -452,6 +457,14 @@ export type StatisticsResponse = {
   ratingHistory: RatingHistoryPoint[];
   recentRatingEvents: RatingEvent[];
   lastUpdated: string | null;
+};
+
+export type LibraryShapeStats = {
+  medianYear: number | null;
+  mostRepresentedDecade: number | null;
+  mostRepresentedDecadeAlbums: number;
+  peakYear: number | null;
+  peakYearAlbums: number;
 };
 
 export type LibraryHealthScore = {
@@ -518,6 +531,56 @@ export type GenreProgressStats = {
   totalSeconds: number;
   lovedTracks: number;
   averageAlbumScore: number | null;
+};
+
+export type LovedDensityStat = {
+  scope: string;
+  label: string;
+  albumCount: number;
+  trackCount: number;
+  lovedTracks: number;
+  lovedPer100Tracks: number;
+};
+
+export type CatalogConcentrationStats = {
+  artistPoints: ConcentrationPoint[];
+  genrePoints: ConcentrationPoint[];
+  topArtist: string | null;
+  topArtistAlbumCount: number;
+  topGenre: string | null;
+  topGenreAlbumCount: number;
+};
+
+export type ConcentrationPoint = {
+  topN: number;
+  albumCount: number;
+  share: number;
+};
+
+export type DurationAnalyticsStats = {
+  averageAlbumSeconds: number | null;
+  averageTrackSeconds: number | null;
+  longestAlbums: DurationAlbumStat[];
+  shortestAlbums: DurationAlbumStat[];
+  trackCountBuckets: RatingBucket[];
+};
+
+export type DurationAlbumStat = {
+  albumId: string;
+  album: string | null;
+  albumArtistDisplay: string | null;
+  year: number | null;
+  totalTracks: number;
+  totalSeconds: number;
+  ratingCompleteness: number;
+  albumScore: number | null;
+};
+
+export type OutlierStat = {
+  id: string;
+  label: string;
+  value: string;
+  detail: string;
 };
 
 export type MetadataCoverageMetric = {

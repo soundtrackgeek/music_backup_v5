@@ -678,10 +678,15 @@ pub struct ExportResult {
 pub struct StatisticsResponse {
     pub overview: LibraryOverviewStats,
     pub health_score: LibraryHealthScore,
+    pub library_shape: LibraryShapeStats,
     pub rating_progress: RatingProgressStats,
     pub decade_progress: Vec<DecadeProgressStats>,
     pub year_progress: Vec<YearProgressStats>,
     pub genre_progress: Vec<GenreProgressStats>,
+    pub loved_density: Vec<LovedDensityStat>,
+    pub catalog_concentration: CatalogConcentrationStats,
+    pub duration_analytics: DurationAnalyticsStats,
+    pub outlier_stats: Vec<OutlierStat>,
     pub track_rating_distribution: Vec<RatingBucket>,
     pub album_rating_distribution: Vec<RatingBucket>,
     pub metadata_coverage: Vec<MetadataCoverageMetric>,
@@ -690,6 +695,16 @@ pub struct StatisticsResponse {
     pub rating_history: Vec<RatingHistoryPoint>,
     pub recent_rating_events: Vec<RatingEvent>,
     pub last_updated: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryShapeStats {
+    pub median_year: Option<i32>,
+    pub most_represented_decade: Option<i32>,
+    pub most_represented_decade_albums: i64,
+    pub peak_year: Option<i32>,
+    pub peak_year_albums: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -775,6 +790,68 @@ pub struct GenreProgressStats {
 pub struct RatingBucket {
     pub label: String,
     pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LovedDensityStat {
+    pub scope: String,
+    pub label: String,
+    pub album_count: i64,
+    pub track_count: i64,
+    pub loved_tracks: i64,
+    pub loved_per_100_tracks: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogConcentrationStats {
+    pub artist_points: Vec<ConcentrationPoint>,
+    pub genre_points: Vec<ConcentrationPoint>,
+    pub top_artist: Option<String>,
+    pub top_artist_album_count: i64,
+    pub top_genre: Option<String>,
+    pub top_genre_album_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConcentrationPoint {
+    pub top_n: i64,
+    pub album_count: i64,
+    pub share: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DurationAnalyticsStats {
+    pub average_album_seconds: Option<f64>,
+    pub average_track_seconds: Option<f64>,
+    pub longest_albums: Vec<DurationAlbumStat>,
+    pub shortest_albums: Vec<DurationAlbumStat>,
+    pub track_count_buckets: Vec<RatingBucket>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DurationAlbumStat {
+    pub album_id: String,
+    pub album: Option<String>,
+    pub album_artist_display: Option<String>,
+    pub year: Option<i32>,
+    pub total_tracks: i64,
+    pub total_seconds: i64,
+    pub rating_completeness: f64,
+    pub album_score: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutlierStat {
+    pub id: String,
+    pub label: String,
+    pub value: String,
+    pub detail: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

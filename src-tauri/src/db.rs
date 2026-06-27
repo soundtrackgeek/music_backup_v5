@@ -1,14 +1,15 @@
 use crate::models::{
     AppSettings, ArtistListRequest, ArtistListResponse, ArtistSummary, BrowseFilters,
-    BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ChartConfig, DecadeProgressStats,
-    DiscoveryAlbumPoint, DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell,
-    DiscoveryMission, DiscoveryResponse, ExportMusicToolRequest, ExportResult, ExportSearchRequest,
-    GenreListRequest, GenreListResponse, GenreProgressStats, GenreSummary, ImportRun,
-    LibraryHealthScore, LibraryOverviewStats, LibraryStatus, LovedTrackStats,
-    MetadataCoverageMetric, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
-    MusicToolProgress, MusicToolSummary, RatingBucket, RatingEvent, RatingHistoryPoint,
-    RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch,
-    StatisticsResponse, TextFilter, YearProgressStats,
+    BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, CatalogConcentrationStats, ChartConfig,
+    ConcentrationPoint, DecadeProgressStats, DiscoveryAlbumPoint, DiscoveryArtistPoint,
+    DiscoveryGenrePoint, DiscoveryHeatmapCell, DiscoveryMission, DiscoveryResponse,
+    DurationAlbumStat, DurationAnalyticsStats, ExportMusicToolRequest, ExportResult,
+    ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressStats, GenreSummary,
+    ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus,
+    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicToolIssueRequest,
+    MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress, MusicToolSummary, OutlierStat,
+    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, Utc};
@@ -718,6 +719,11 @@ fn statistics(conn: &Connection) -> Result<StatisticsResponse> {
     let decade_progress = decade_progress_stats(conn)?;
     let year_progress = year_progress_stats(conn)?;
     let genre_progress = genre_progress_stats(conn)?;
+    let library_shape = library_shape_stats(&year_progress, &decade_progress);
+    let loved_density = loved_density_stats(conn)?;
+    let catalog_concentration = catalog_concentration_stats(conn, overview.album_count)?;
+    let duration_analytics = duration_analytics_stats(conn)?;
+    let outlier_stats = outlier_stats(conn)?;
     let track_rating_distribution = track_rating_distribution(conn)?;
     let album_rating_distribution = album_rating_distribution(conn)?;
     let loved_tracks = loved_track_stats(conn)?;
@@ -733,10 +739,15 @@ fn statistics(conn: &Connection) -> Result<StatisticsResponse> {
     Ok(StatisticsResponse {
         overview,
         health_score,
+        library_shape,
         rating_progress,
         decade_progress,
         year_progress,
         genre_progress,
+        loved_density,
+        catalog_concentration,
+        duration_analytics,
+        outlier_stats,
         track_rating_distribution,
         album_rating_distribution,
         metadata_coverage,
@@ -874,6 +885,43 @@ fn library_health_score(
     })
 }
 
+fn library_shape_stats(
+    year_progress: &[YearProgressStats],
+    decade_progress: &[DecadeProgressStats],
+) -> LibraryShapeStats {
+    let total_albums = year_progress.iter().map(|row| row.album_count).sum::<i64>();
+    let median_target = (total_albums + 1) / 2;
+    let mut cumulative = 0_i64;
+    let mut years = year_progress.iter().collect::<Vec<_>>();
+    years.sort_by_key(|row| row.year);
+    let median_year = years.iter().find_map(|row| {
+        cumulative += row.album_count;
+        if cumulative >= median_target {
+            Some(row.year)
+        } else {
+            None
+        }
+    });
+    let peak_year = year_progress
+        .iter()
+        .max_by_key(|row| row.album_count)
+        .map(|row| (row.year, row.album_count));
+    let most_represented_decade = decade_progress
+        .iter()
+        .max_by_key(|row| row.album_count)
+        .map(|row| (row.decade, row.album_count));
+
+    LibraryShapeStats {
+        median_year,
+        most_represented_decade: most_represented_decade.map(|(decade, _)| decade),
+        most_represented_decade_albums: most_represented_decade
+            .map(|(_, albums)| albums)
+            .unwrap_or_default(),
+        peak_year: peak_year.map(|(year, _)| year),
+        peak_year_albums: peak_year.map(|(_, albums)| albums).unwrap_or_default(),
+    }
+}
+
 fn decade_progress_stats(conn: &Connection) -> Result<Vec<DecadeProgressStats>> {
     let mut stmt = conn.prepare(
         "
@@ -910,6 +958,427 @@ fn decade_progress_stats(conn: &Connection) -> Result<Vec<DecadeProgressStats>> 
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
+}
+
+fn loved_density_stats(conn: &Connection) -> Result<Vec<LovedDensityStat>> {
+    let mut stats = Vec::new();
+
+    let mut genre_stmt = conn.prepare(
+        "
+        SELECT
+            'Genre',
+            COALESCE(MIN(NULLIF(TRIM(canonical_genre), '')), 'Unknown'),
+            COUNT(*),
+            COALESCE(SUM(total_tracks), 0),
+            COALESCE(SUM(loved_tracks), 0),
+            CAST(COALESCE(SUM(loved_tracks), 0) AS REAL) * 100.0 / MAX(1, COALESCE(SUM(total_tracks), 0))
+        FROM albums
+        WHERE NULLIF(TRIM(COALESCE(genre_normalized, '')), '') IS NOT NULL
+        GROUP BY COALESCE(NULLIF(TRIM(LOWER(genre_normalized)), ''), 'unknown')
+        HAVING COALESCE(SUM(total_tracks), 0) >= 100
+        ORDER BY 6 DESC, 5 DESC, 3 DESC
+        LIMIT 8
+        ",
+    )?;
+    stats.extend(
+        genre_stmt
+            .query_map([], loved_density_from_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?,
+    );
+
+    let mut decade_stmt = conn.prepare(
+        "
+        SELECT
+            'Decade',
+            printf('%ds', CAST((year / 10) * 10 AS INTEGER)),
+            COUNT(*),
+            COALESCE(SUM(total_tracks), 0),
+            COALESCE(SUM(loved_tracks), 0),
+            CAST(COALESCE(SUM(loved_tracks), 0) AS REAL) * 100.0 / MAX(1, COALESCE(SUM(total_tracks), 0))
+        FROM albums
+        WHERE year IS NOT NULL
+        GROUP BY CAST((year / 10) * 10 AS INTEGER)
+        HAVING COALESCE(SUM(total_tracks), 0) >= 100
+        ORDER BY 6 DESC, 5 DESC, 3 DESC
+        LIMIT 8
+        ",
+    )?;
+    stats.extend(
+        decade_stmt
+            .query_map([], loved_density_from_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?,
+    );
+
+    let mut rating_stmt = conn.prepare(
+        "
+        SELECT
+            'Rating bucket',
+            CASE
+                WHEN effective_album_rating IS NULL THEN 'Unrated'
+                WHEN effective_album_rating = 100 THEN '100'
+                ELSE printf('%d-%d', (effective_album_rating / 10) * 10, ((effective_album_rating / 10) * 10) + 9)
+            END,
+            COUNT(*),
+            COALESCE(SUM(total_tracks), 0),
+            COALESCE(SUM(loved_tracks), 0),
+            CAST(COALESCE(SUM(loved_tracks), 0) AS REAL) * 100.0 / MAX(1, COALESCE(SUM(total_tracks), 0))
+        FROM albums
+        GROUP BY
+            CASE
+                WHEN effective_album_rating IS NULL THEN -1
+                WHEN effective_album_rating = 100 THEN 100
+                ELSE (effective_album_rating / 10) * 10
+            END
+        HAVING COALESCE(SUM(total_tracks), 0) >= 100
+        ORDER BY 6 DESC, 5 DESC, 3 DESC
+        LIMIT 8
+        ",
+    )?;
+    stats.extend(
+        rating_stmt
+            .query_map([], loved_density_from_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?,
+    );
+
+    Ok(stats)
+}
+
+fn loved_density_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<LovedDensityStat> {
+    Ok(LovedDensityStat {
+        scope: row.get(0)?,
+        label: row.get(1)?,
+        album_count: row.get(2)?,
+        track_count: row.get(3)?,
+        loved_tracks: row.get(4)?,
+        loved_per_100_tracks: row.get(5)?,
+    })
+}
+
+fn catalog_concentration_stats(
+    conn: &Connection,
+    total_albums: i64,
+) -> Result<CatalogConcentrationStats> {
+    let artist_groups = concentration_groups(
+        conn,
+        "
+        SELECT
+            COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS label,
+            COUNT(*) AS album_count
+        FROM albums
+        GROUP BY COALESCE(NULLIF(TRIM(LOWER(album_artist_display)), ''), 'unknown')
+        ORDER BY album_count DESC, LOWER(label) ASC
+        ",
+    )?;
+    let genre_groups = concentration_groups(
+        conn,
+        "
+        SELECT
+            COALESCE(MIN(NULLIF(TRIM(canonical_genre), '')), 'Unknown') AS label,
+            COUNT(*) AS album_count
+        FROM albums
+        GROUP BY COALESCE(NULLIF(TRIM(LOWER(genre_normalized)), ''), 'unknown')
+        ORDER BY album_count DESC, LOWER(label) ASC
+        ",
+    )?;
+
+    let top_artist = artist_groups.first().map(|(label, _)| label.clone());
+    let top_artist_album_count = artist_groups
+        .first()
+        .map(|(_, album_count)| *album_count)
+        .unwrap_or_default();
+    let top_genre = genre_groups.first().map(|(label, _)| label.clone());
+    let top_genre_album_count = genre_groups
+        .first()
+        .map(|(_, album_count)| *album_count)
+        .unwrap_or_default();
+
+    Ok(CatalogConcentrationStats {
+        artist_points: concentration_points(&artist_groups, total_albums),
+        genre_points: concentration_points(&genre_groups, total_albums),
+        top_artist,
+        top_artist_album_count,
+        top_genre,
+        top_genre_album_count,
+    })
+}
+
+fn concentration_groups(conn: &Connection, sql: &str) -> Result<Vec<(String, i64)>> {
+    let mut stmt = conn.prepare(sql)?;
+    let groups = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load catalog concentration groups")?;
+    Ok(groups)
+}
+
+fn concentration_points(groups: &[(String, i64)], total_albums: i64) -> Vec<ConcentrationPoint> {
+    [10_i64, 25, 50]
+        .into_iter()
+        .map(|top_n| {
+            let album_count = groups
+                .iter()
+                .take(top_n as usize)
+                .map(|(_, count)| *count)
+                .sum::<i64>();
+            ConcentrationPoint {
+                top_n,
+                album_count,
+                share: ratio(album_count, total_albums),
+            }
+        })
+        .collect()
+}
+
+fn duration_analytics_stats(conn: &Connection) -> Result<DurationAnalyticsStats> {
+    let (average_album_seconds, average_track_seconds) = conn
+        .query_row(
+            "
+            SELECT
+                (SELECT AVG(total_seconds) FROM albums WHERE total_seconds > 0),
+                (SELECT CAST(SUM(total_seconds) AS REAL) / NULLIF(SUM(total_tracks), 0)
+                 FROM albums
+                 WHERE total_seconds > 0 AND total_tracks > 0)
+            ",
+            [],
+            |row| Ok((row.get::<_, Option<f64>>(0)?, row.get::<_, Option<f64>>(1)?)),
+        )
+        .context("Could not load duration averages")?;
+
+    Ok(DurationAnalyticsStats {
+        average_album_seconds,
+        average_track_seconds,
+        longest_albums: duration_album_rows(conn, "DESC")?,
+        shortest_albums: duration_album_rows(conn, "ASC")?,
+        track_count_buckets: track_count_distribution(conn)?,
+    })
+}
+
+fn duration_album_rows(conn: &Connection, direction: &str) -> Result<Vec<DurationAlbumStat>> {
+    let sql = format!(
+        "
+        SELECT
+            id,
+            album,
+            album_artist_display,
+            year,
+            total_tracks,
+            total_seconds,
+            rating_completeness,
+            album_score
+        FROM albums
+        WHERE total_seconds > 0
+        ORDER BY total_seconds {direction}, total_tracks {direction}, LOWER(COALESCE(album, '')) ASC
+        LIMIT 5
+        "
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    duration_album_query(&mut stmt)
+}
+
+fn duration_album_query(stmt: &mut rusqlite::Statement<'_>) -> Result<Vec<DurationAlbumStat>> {
+    stmt.query_map([], |row| {
+        Ok(DurationAlbumStat {
+            album_id: row.get(0)?,
+            album: row.get(1)?,
+            album_artist_display: row.get(2)?,
+            year: row.get(3)?,
+            total_tracks: row.get(4)?,
+            total_seconds: row.get(5)?,
+            rating_completeness: row.get(6)?,
+            album_score: row.get(7)?,
+        })
+    })?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .context("Could not load duration album rows")
+}
+
+fn track_count_distribution(conn: &Connection) -> Result<Vec<RatingBucket>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            CASE
+                WHEN total_tracks <= 5 THEN '1-5'
+                WHEN total_tracks <= 10 THEN '6-10'
+                WHEN total_tracks <= 15 THEN '11-15'
+                WHEN total_tracks <= 20 THEN '16-20'
+                ELSE '21+'
+            END AS bucket,
+            COUNT(*),
+            CASE
+                WHEN total_tracks <= 5 THEN 1
+                WHEN total_tracks <= 10 THEN 2
+                WHEN total_tracks <= 15 THEN 3
+                WHEN total_tracks <= 20 THEN 4
+                ELSE 5
+            END AS bucket_order
+        FROM albums
+        GROUP BY bucket_order, bucket
+        ORDER BY bucket_order ASC
+        ",
+    )?;
+    let buckets = stmt
+        .query_map([], |row| {
+            Ok(RatingBucket {
+                label: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load track-count distribution")?;
+    Ok(buckets)
+}
+
+fn outlier_stats(conn: &Connection) -> Result<Vec<OutlierStat>> {
+    let mut stats = Vec::new();
+
+    if let Some(album) = outlier_album(
+        conn,
+        "
+        SELECT id, album, album_artist_display, year, total_tracks, total_seconds, rating_completeness, album_score
+        FROM albums
+        WHERE rating_completeness = 0.0 AND total_seconds > 0
+        ORDER BY total_seconds DESC
+        LIMIT 1
+        ",
+    )? {
+        stats.push(OutlierStat {
+            id: "longest-unrated-album".to_string(),
+            label: "Longest unrated album".to_string(),
+            value: format!("{:.1}h", album.total_seconds as f64 / 3600.0),
+            detail: format_album_detail(&album),
+        });
+    }
+
+    if let Some(album) = outlier_album(
+        conn,
+        "
+        SELECT id, album, album_artist_display, year, total_tracks, total_seconds, rating_completeness, album_score
+        FROM albums
+        WHERE rating_completeness > 0.0
+          AND rating_completeness < 1.0
+          AND album_score IS NOT NULL
+        ORDER BY album_score DESC, total_seconds DESC
+        LIMIT 1
+        ",
+    )? {
+        stats.push(OutlierStat {
+            id: "highest-score-incomplete-album".to_string(),
+            label: "Highest-score incomplete album".to_string(),
+            value: album
+                .album_score
+                .map(|score| format!("{score:.1}"))
+                .unwrap_or_default(),
+            detail: format_album_detail(&album),
+        });
+    }
+
+    if let Some((label, density, loved_tracks, track_count)) = conn
+        .query_row(
+            "
+            SELECT
+                COALESCE(MIN(NULLIF(TRIM(canonical_genre), '')), 'Unknown') AS genre,
+                CAST(COALESCE(SUM(loved_tracks), 0) AS REAL) * 100.0 / MAX(1, COALESCE(SUM(total_tracks), 0)),
+                COALESCE(SUM(loved_tracks), 0),
+                COALESCE(SUM(total_tracks), 0)
+            FROM albums
+            WHERE NULLIF(TRIM(COALESCE(genre_normalized, '')), '') IS NOT NULL
+            GROUP BY COALESCE(NULLIF(TRIM(LOWER(genre_normalized)), ''), 'unknown')
+            HAVING COALESCE(SUM(total_tracks), 0) >= 100
+            ORDER BY 2 DESC, 3 DESC
+            LIMIT 1
+            ",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, f64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            },
+        )
+        .optional()
+        .context("Could not load loved-density genre outlier")?
+    {
+        stats.push(OutlierStat {
+            id: "highest-loved-density-genre".to_string(),
+            label: "Highest loved-density genre".to_string(),
+            value: format!("{density:.2}/100"),
+            detail: format!("{label}: {loved_tracks} loved tracks across {track_count} tracks"),
+        });
+    }
+
+    if let Some((decade, completion, albums)) = conn
+        .query_row(
+            "
+            SELECT
+                CAST((year / 10) * 10 AS INTEGER) AS decade,
+                AVG(rating_completeness),
+                COUNT(*)
+            FROM albums
+            WHERE year IS NOT NULL
+            GROUP BY decade
+            HAVING COUNT(*) >= 5
+            ORDER BY AVG(rating_completeness) ASC, COUNT(*) DESC
+            LIMIT 1
+            ",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, i32>(0)?,
+                    row.get::<_, Option<f64>>(1)?.unwrap_or_default(),
+                    row.get::<_, i64>(2)?,
+                ))
+            },
+        )
+        .optional()
+        .context("Could not load low-completion decade outlier")?
+    {
+        stats.push(OutlierStat {
+            id: "lowest-completion-decade".to_string(),
+            label: "Lowest-completion decade".to_string(),
+            value: format!("{:.0}%", completion * 100.0),
+            detail: format!("{decade}s: {albums} albums with the lowest average completion"),
+        });
+    }
+
+    if let Some(album) = outlier_album(
+        conn,
+        "
+        SELECT id, album, album_artist_display, year, total_tracks, total_seconds, rating_completeness, album_score
+        FROM albums
+        ORDER BY total_tracks DESC, total_seconds DESC
+        LIMIT 1
+        ",
+    )? {
+        stats.push(OutlierStat {
+            id: "largest-track-count-album".to_string(),
+            label: "Largest track-count album".to_string(),
+            value: format!("{} tracks", album.total_tracks),
+            detail: format_album_detail(&album),
+        });
+    }
+
+    Ok(stats)
+}
+
+fn outlier_album(conn: &Connection, sql: &str) -> Result<Option<DurationAlbumStat>> {
+    let mut stmt = conn.prepare(sql)?;
+    Ok(duration_album_query(&mut stmt)?.into_iter().next())
+}
+
+fn format_album_detail(album: &DurationAlbumStat) -> String {
+    let mut parts = Vec::new();
+    if let Some(artist) = &album.album_artist_display {
+        parts.push(artist.clone());
+    }
+    if let Some(title) = &album.album {
+        parts.push(title.clone());
+    }
+    if let Some(year) = album.year {
+        parts.push(year.to_string());
+    }
+    parts.join(" / ")
 }
 
 fn year_progress_stats(conn: &Connection) -> Result<Vec<YearProgressStats>> {

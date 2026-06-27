@@ -81,8 +81,10 @@ import type {
   BrowseView,
   ChartConfig,
   ChartViewMode,
+  ConcentrationPoint,
   CoverImportProgress,
   CoverImportSummary,
+  DecadeProgressStats,
   DiscoveryAlbumPoint,
   DiscoveryArtistPoint,
   DiscoveryGenrePoint,
@@ -93,11 +95,13 @@ import type {
   GenreListRequest,
   GenreListResponse,
   GenreSummary,
-  DecadeProgressStats,
+  DurationAlbumStat,
   ImportProgress,
   ImportRun,
   ImportSummary,
+  LovedDensityStat,
   MetadataCoverageMetric,
+  OutlierStat,
   LibraryStatus,
   LeftSidebarMode,
   GenreProgressStats,
@@ -3285,6 +3289,232 @@ function MetadataCoveragePanel({ metrics }: { metrics: MetadataCoverageMetric[] 
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function LibraryShapeByTime({ statistics }: { statistics: StatisticsResponse | null }) {
+  const rows = statistics?.decadeProgress ?? [];
+  if (!statistics || rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <Clock3 size={20} />
+        <span>No library shape data yet.</span>
+      </div>
+    );
+  }
+
+  const maxAlbums = Math.max(1, ...rows.map((row) => row.albumCount));
+  const maxTracks = Math.max(1, ...rows.map((row) => row.trackCount));
+  const maxSeconds = Math.max(1, ...rows.map((row) => row.totalSeconds));
+  const shape = statistics.libraryShape;
+
+  return (
+    <div className="shape-by-time-panel">
+      <div className="shape-summary">
+        <div>
+          <span>Median year</span>
+          <strong>{shape.medianYear ?? "Unknown"}</strong>
+        </div>
+        <div>
+          <span>Most represented decade</span>
+          <strong>
+            {shape.mostRepresentedDecade == null
+              ? "Unknown"
+              : `${shape.mostRepresentedDecade}s / ${formatNumber(shape.mostRepresentedDecadeAlbums)}`}
+          </strong>
+        </div>
+        <div>
+          <span>Peak release year</span>
+          <strong>
+            {shape.peakYear == null ? "Unknown" : `${shape.peakYear} / ${formatNumber(shape.peakYearAlbums)}`}
+          </strong>
+        </div>
+      </div>
+      <div className="shape-time-bars">
+        {rows.map((row) => (
+          <div className="shape-time-row" key={row.decade}>
+            <strong>{row.decade}s</strong>
+            <div>
+              <span>Albums</span>
+              <div className="meter-track" aria-hidden="true">
+                <div className="meter-fill" style={{ width: `${percentOf(row.albumCount, maxAlbums)}%` }} />
+              </div>
+            </div>
+            <div>
+              <span>Tracks</span>
+              <div className="meter-track" aria-hidden="true">
+                <div className="meter-fill secondary" style={{ width: `${percentOf(row.trackCount, maxTracks)}%` }} />
+              </div>
+            </div>
+            <div>
+              <span>Hours</span>
+              <div className="meter-track" aria-hidden="true">
+                <div className="meter-fill warm" style={{ width: `${percentOf(row.totalSeconds, maxSeconds)}%` }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LovedDensityPanel({ rows }: { rows: LovedDensityStat[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <Heart size={20} />
+        <span>No loved-density data yet.</span>
+      </div>
+    );
+  }
+
+  const maxDensity = Math.max(1, ...rows.map((row) => row.lovedPer100Tracks));
+  return (
+    <div className="loved-density-list">
+      {rows.slice(0, 12).map((row) => (
+        <div className="loved-density-row" key={`${row.scope}:${row.label}`}>
+          <div>
+            <strong>{row.label}</strong>
+            <span>{row.scope}</span>
+          </div>
+          <div className="meter-track" aria-hidden="true">
+            <div className="meter-fill" style={{ width: `${percentOf(row.lovedPer100Tracks, maxDensity)}%` }} />
+          </div>
+          <small>
+            {row.lovedPer100Tracks.toFixed(2)} / 100 / {formatNumber(row.lovedTracks)} loved
+          </small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function concentrationLabel(scope: string, point: ConcentrationPoint) {
+  return `Top ${point.topN} ${scope}`;
+}
+
+function ConcentrationBars({ scope, points }: { scope: string; points: ConcentrationPoint[] }) {
+  return (
+    <div className="concentration-bars">
+      {points.map((point) => (
+        <div className="concentration-row" key={`${scope}:${point.topN}`}>
+          <div>
+            <strong>{concentrationLabel(scope, point)}</strong>
+            <span>{formatNumber(point.albumCount)} albums</span>
+          </div>
+          <div className="meter-track" aria-hidden="true">
+            <div className="meter-fill" style={{ width: `${point.share * 100}%` }} />
+          </div>
+          <small>{formatPercent(point.share, 1)}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CatalogConcentrationPanel({ statistics }: { statistics: StatisticsResponse | null }) {
+  if (!statistics) {
+    return (
+      <div className="empty-state">
+        <UsersRound size={20} />
+        <span>No concentration data yet.</span>
+      </div>
+    );
+  }
+
+  const concentration = statistics.catalogConcentration;
+  return (
+    <div className="catalog-concentration-panel">
+      <div className="concentration-summary">
+        <div>
+          <span>Top artist</span>
+          <strong>{concentration.topArtist ?? "Unknown"}</strong>
+          <small>{formatNumber(concentration.topArtistAlbumCount)} albums</small>
+        </div>
+        <div>
+          <span>Top genre</span>
+          <strong>{concentration.topGenre ?? "Unknown"}</strong>
+          <small>{formatNumber(concentration.topGenreAlbumCount)} albums</small>
+        </div>
+      </div>
+      <ConcentrationBars scope="artists" points={concentration.artistPoints} />
+      <ConcentrationBars scope="genres" points={concentration.genrePoints} />
+    </div>
+  );
+}
+
+function durationAlbumLabel(album: DurationAlbumStat) {
+  return [album.albumArtistDisplay, album.album, album.year].filter(Boolean).join(" / ");
+}
+
+function DurationAlbumList({ title, albums }: { title: string; albums: DurationAlbumStat[] }) {
+  return (
+    <div className="duration-album-list">
+      <span>{title}</span>
+      {albums.slice(0, 4).map((album) => (
+        <div className="duration-album-row" key={album.albumId}>
+          <strong>{durationAlbumLabel(album) || "Untitled"}</strong>
+          <small>
+            {formatHours(album.totalSeconds)} / {formatNumber(album.totalTracks)} tracks /{" "}
+            {formatPercent(album.ratingCompleteness, 0)} complete
+          </small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DurationAnalyticsPanel({ statistics }: { statistics: StatisticsResponse | null }) {
+  if (!statistics) {
+    return (
+      <div className="empty-state">
+        <Clock3 size={20} />
+        <span>No duration analytics yet.</span>
+      </div>
+    );
+  }
+
+  const analytics = statistics.durationAnalytics;
+  return (
+    <div className="duration-analytics-panel">
+      <div className="duration-summary">
+        <div>
+          <span>Average album</span>
+          <strong>{formatHours(analytics.averageAlbumSeconds)}</strong>
+        </div>
+        <div>
+          <span>Average track</span>
+          <strong>{formatMinutes(analytics.averageTrackSeconds)}</strong>
+        </div>
+      </div>
+      <DistributionBars buckets={analytics.trackCountBuckets} />
+      <DurationAlbumList title="Longest albums" albums={analytics.longestAlbums} />
+      <DurationAlbumList title="Shortest albums" albums={analytics.shortestAlbums} />
+    </div>
+  );
+}
+
+function OutlierStatsPanel({ rows }: { rows: OutlierStat[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <Sparkles size={20} />
+        <span>No outlier stats yet.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="outlier-stat-grid">
+      {rows.map((row) => (
+        <article className="outlier-stat" key={row.id}>
+          <span>{row.label}</span>
+          <strong>{row.value}</strong>
+          <small>{row.detail}</small>
+        </article>
+      ))}
     </div>
   );
 }
@@ -6738,7 +6968,7 @@ export default function App() {
           <header className="topbar">
             <div>
               <h1>Statistics</h1>
-              <p>Library health, rating progress, metadata coverage, import deltas, and history.</p>
+              <p>Library health, rating progress, metadata coverage, time shape, duration, and outlier signals.</p>
             </div>
             <div className="topbar-actions">
               <button
@@ -6836,6 +7066,61 @@ export default function App() {
                 <FolderInput size={18} />
               </div>
               <ImportDeltaTimeline runs={statistics?.importHistory ?? []} />
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Library shape by time</h2>
+                  <p>Albums, tracks, duration, and release-year center of gravity.</p>
+                </div>
+                <Clock3 size={18} />
+              </div>
+              <LibraryShapeByTime statistics={statistics} />
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Loved density</h2>
+                  <p>Loved tracks per 100 tracks by genre, decade, and rating bucket.</p>
+                </div>
+                <Heart size={18} />
+              </div>
+              <LovedDensityPanel rows={statistics?.lovedDensity ?? []} />
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Catalog concentration</h2>
+                  <p>Top artist and genre slices as a share of the album library.</p>
+                </div>
+                <UsersRound size={18} />
+              </div>
+              <CatalogConcentrationPanel statistics={statistics} />
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Duration analytics</h2>
+                  <p>Listening time, album length extremes, and tracks-per-album shape.</p>
+                </div>
+                <Clock3 size={18} />
+              </div>
+              <DurationAnalyticsPanel statistics={statistics} />
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Outlier stats</h2>
+                  <p>Aggregate oddities worth knowing without leaving Statistics.</p>
+                </div>
+                <Sparkles size={18} />
+              </div>
+              <OutlierStatsPanel rows={statistics?.outlierStats ?? []} />
             </section>
 
             <section className="stats-panel rating-progress-panel">
@@ -7719,6 +8004,14 @@ export default function App() {
               <dt>Top loved genre</dt>
               <dd>{statistics?.lovedTracks.topLovedGenre ?? "Not yet"}</dd>
             </div>
+            <div>
+              <dt>Median release year</dt>
+              <dd>{statistics?.libraryShape.medianYear ?? "Not yet"}</dd>
+            </div>
+            <div>
+              <dt>Top artist share</dt>
+              <dd>{formatPercent(statistics?.catalogConcentration.artistPoints[0]?.share, 1)}</dd>
+            </div>
           </dl>
 
           <section className="calculation-list statistics-signals">
@@ -7741,6 +8034,10 @@ export default function App() {
             <div>
               <ShieldCheck size={17} />
               <span>{formatPercent(statistics?.healthScore.metadataCoverage, 0)} metadata coverage</span>
+            </div>
+            <div>
+              <Clock3 size={17} />
+              <span>{formatHours(statistics?.durationAnalytics.averageAlbumSeconds)} average album</span>
             </div>
           </section>
 

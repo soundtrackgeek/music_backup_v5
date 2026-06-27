@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.18.0] - 2026-06-27
+### Added
+- Added a second batch of Statistics dashboards: Library Shape by Time, Loved Density, Catalog Concentration / Long Tail, Duration Analytics, and Outlier Stats.
+- Added statistics API payloads for library shape, loved-density groups, catalog concentration, duration analytics, and aggregate outlier summaries, with web-preview mock data.
+
 ## [0.17.1] - 2026-06-27
 ### Fixed
 - Fixed MusicBee TSV imports so quote characters in titles and tags are treated as literal text instead of collapsing later rows into one parsed record.
