@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from "react";
 import {
   Activity,
   Album,
@@ -183,6 +183,12 @@ const chartGridCoverSize = {
   default: 144,
 } as const;
 
+const completenessRange = {
+  min: 0,
+  max: 100,
+  step: 1,
+} as const;
+
 const genreSuggestionPageSize = 500;
 const genreSuggestionAliases = ["scores"] as const;
 const maxGenreSuggestions = 5;
@@ -243,6 +249,7 @@ function createFilters(): BrowseFilters {
     trackRatingMin: null,
     trackRatingMax: null,
     ratingCompletenessMin: null,
+    ratingCompletenessMax: null,
     lovedTracksMin: null,
     lovedTracksMax: null,
   };
@@ -378,7 +385,8 @@ function createChartConfig(): ChartConfig {
     request,
     rankingMetric: "albumScore",
     sortField: "albumScore",
-    ratingCompletenessThreshold: 100,
+    ratingCompletenessMin: 100,
+    ratingCompletenessMax: 100,
     sortDirection: "desc",
     resultLimit: 50,
     visibleColumns: ["rating", "complete", "score", "loved"],
@@ -396,6 +404,7 @@ function normalizeChartGridCoverSize(value: number | null | undefined) {
 }
 
 function chartRequestFromConfig(config: ChartConfig): BrowseRequest {
+  const { min, max } = chartCompletenessRange(config);
   return {
     ...config.request,
     view: "albums",
@@ -407,7 +416,7 @@ function chartRequestFromConfig(config: ChartConfig): BrowseRequest {
     },
     filters: {
       ...config.request.filters,
-      ratingCompletenessMin: config.ratingCompletenessThreshold,
+      ...toCompletenessFilterRange(min, max),
     },
   };
 }
@@ -971,6 +980,53 @@ function clampBackupRetention(value: number | null | undefined) {
   return Math.min(50, Math.max(1, Math.round(value)));
 }
 
+function clampCompletenessValue(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return completenessRange.min;
+  return Math.min(completenessRange.max, Math.max(completenessRange.min, Math.round(value)));
+}
+
+function normalizeCompletenessRange(minValue: number | null | undefined, maxValue: number | null | undefined) {
+  const minimum = clampCompletenessValue(minValue);
+  const maximum = clampCompletenessValue(maxValue);
+  return minimum <= maximum ? { min: minimum, max: maximum } : { min: maximum, max: minimum };
+}
+
+function toCompletenessFilterRange(minValue: number | null | undefined, maxValue: number | null | undefined) {
+  const range = normalizeCompletenessRange(minValue, maxValue);
+  return {
+    ratingCompletenessMin: range.min <= completenessRange.min ? null : range.min,
+    ratingCompletenessMax: range.max >= completenessRange.max ? null : range.max,
+  } satisfies Pick<BrowseFilters, "ratingCompletenessMin" | "ratingCompletenessMax">;
+}
+
+function chartCompletenessRange(config: ChartConfig) {
+  const legacyThreshold = config.ratingCompletenessThreshold;
+  return normalizeCompletenessRange(
+    config.ratingCompletenessMin ?? legacyThreshold ?? completenessRange.max,
+    config.ratingCompletenessMax ?? completenessRange.max,
+  );
+}
+
+function normalizeChartConfigForClient(config: ChartConfig) {
+  const { min, max } = chartCompletenessRange(config);
+  return {
+    ...config,
+    ratingCompletenessMin: min,
+    ratingCompletenessMax: max,
+    ratingCompletenessThreshold: null,
+    gridCoverSize: normalizeChartGridCoverSize(config.gridCoverSize),
+  } satisfies ChartConfig;
+}
+
+function formatCompletenessRange(minValue: number | null | undefined, maxValue: number | null | undefined) {
+  const { min, max } = normalizeCompletenessRange(minValue, maxValue);
+  if (min <= completenessRange.min && max >= completenessRange.max) return "0-100%";
+  if (min === max) return `${min}%`;
+  if (min <= completenessRange.min) return `<= ${max}%`;
+  if (max >= completenessRange.max) return `>= ${min}%`;
+  return `${min}-${max}%`;
+}
+
 function textFilterLabel(label: string, filter: TextFilter) {
   if (!filter.value.trim()) return null;
   return `${label} ${operatorLabels[filter.operator].toLowerCase()} "${filter.value.trim()}"`;
@@ -1222,6 +1278,154 @@ function NumberField({
         onChange={(event) => onChange(numberValue(event.target.value))}
       />
     </label>
+  );
+}
+
+function CompletenessRangeCriterion({
+  minValue,
+  maxValue,
+  onChange,
+  className = "",
+}: {
+  minValue: number | null;
+  maxValue: number | null;
+  onChange: (range: { min: number; max: number }) => void;
+  className?: string;
+}) {
+  const { min, max } = normalizeCompletenessRange(
+    minValue ?? completenessRange.min,
+    maxValue ?? completenessRange.max,
+  );
+  const style = {
+    "--range-min": `${min}%`,
+    "--range-max": `${max}%`,
+  } as CSSProperties;
+  const minHandleStyle = { "--handle-position": `${min}%` } as CSSProperties;
+  const maxHandleStyle = { "--handle-position": `${max}%` } as CSSProperties;
+  const controlRef = useRef<HTMLDivElement | null>(null);
+
+  function updateMin(value: number) {
+    onChange(normalizeCompletenessRange(Math.min(value, max), max));
+  }
+
+  function updateMax(value: number) {
+    onChange(normalizeCompletenessRange(min, Math.max(value, min)));
+  }
+
+  function valueFromPointer(clientX: number) {
+    const rect = controlRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return completenessRange.min;
+    return clampCompletenessValue(((clientX - rect.left) / rect.width) * completenessRange.max);
+  }
+
+  function updateHandle(handle: "min" | "max", value: number) {
+    if (handle === "min") {
+      updateMin(value);
+    } else {
+      updateMax(value);
+    }
+  }
+
+  function handlePointerDown(event: PointerEvent<HTMLButtonElement>, handle: "min" | "max") {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateHandle(handle, valueFromPointer(event.clientX));
+  }
+
+  function handlePointerMove(event: PointerEvent<HTMLButtonElement>, handle: "min" | "max") {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      updateHandle(handle, valueFromPointer(event.clientX));
+    }
+  }
+
+  function handlePointerUp(event: PointerEvent<HTMLButtonElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, handle: "min" | "max") {
+    const current = handle === "min" ? min : max;
+    const step = event.shiftKey ? 10 : completenessRange.step;
+    let nextValue: number | null = null;
+
+    switch (event.key) {
+      case "ArrowLeft":
+      case "ArrowDown":
+        nextValue = current - step;
+        break;
+      case "ArrowRight":
+      case "ArrowUp":
+        nextValue = current + step;
+        break;
+      case "PageDown":
+        nextValue = current - 10;
+        break;
+      case "PageUp":
+        nextValue = current + 10;
+        break;
+      case "Home":
+        nextValue = completenessRange.min;
+        break;
+      case "End":
+        nextValue = completenessRange.max;
+        break;
+      default:
+        break;
+    }
+
+    if (nextValue != null) {
+      event.preventDefault();
+      updateHandle(handle, nextValue);
+    }
+  }
+
+  return (
+    <div className={`criterion slider-criterion completeness-range-criterion ${className}`.trim()}>
+      <span>Completeness</span>
+      <div className="range-slider" style={style}>
+        <div className="range-control" ref={controlRef}>
+          <span className="range-track" aria-hidden="true" />
+          <button
+            className={
+              min === max && min === completenessRange.max
+                ? "range-handle range-handle-min range-handle-overlap"
+                : "range-handle range-handle-min"
+            }
+            type="button"
+            role="slider"
+            aria-label="Minimum completeness"
+            aria-valuemin={completenessRange.min}
+            aria-valuemax={max}
+            aria-valuenow={min}
+            aria-valuetext={`${min}%`}
+            style={minHandleStyle}
+            onPointerDown={(event) => handlePointerDown(event, "min")}
+            onPointerMove={(event) => handlePointerMove(event, "min")}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onKeyDown={(event) => handleKeyDown(event, "min")}
+          />
+          <button
+            className="range-handle range-handle-max"
+            type="button"
+            role="slider"
+            aria-label="Maximum completeness"
+            aria-valuemin={min}
+            aria-valuemax={completenessRange.max}
+            aria-valuenow={max}
+            aria-valuetext={`${max}%`}
+            style={maxHandleStyle}
+            onPointerDown={(event) => handlePointerDown(event, "max")}
+            onPointerMove={(event) => handlePointerMove(event, "max")}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onKeyDown={(event) => handleKeyDown(event, "max")}
+          />
+        </div>
+        <strong>{formatCompletenessRange(min, max)}</strong>
+      </div>
+    </div>
   );
 }
 
@@ -2894,7 +3098,12 @@ export default function App() {
     setStatus(nextStatus);
     setRuns(nextRuns);
     setSavedSearches(nextSavedSearches);
-    setSavedCharts(nextSavedCharts);
+    setSavedCharts(
+      nextSavedCharts.map((chart) => ({
+        ...chart,
+        config: normalizeChartConfigForClient(chart.config),
+      })),
+    );
     setStatistics(nextStatistics);
     setSettings(nextSettings);
     void refreshGenreSuggestions().catch(() => {
@@ -3577,13 +3786,15 @@ export default function App() {
       () => updateFilters({ trackRatingMin: null, trackRatingMax: null }),
     );
 
-    if (currentFilters.ratingCompletenessMin != null) {
-      nextChips.push({
-        key: "ratingCompletenessMin",
-        label: `Complete >= ${currentFilters.ratingCompletenessMin}%`,
-        remove: () => updateFilter("ratingCompletenessMin", null),
-      });
-    }
+    addRangeChip(
+      nextChips,
+      "ratingCompleteness",
+      "Complete",
+      currentFilters.ratingCompletenessMin,
+      currentFilters.ratingCompletenessMax,
+      () => updateFilters({ ratingCompletenessMin: null, ratingCompletenessMax: null }),
+      "%",
+    );
     if (currentFilters.lovedTracksMin != null || currentFilters.lovedTracksMax != null) {
       addRangeChip(
         nextChips,
@@ -3673,13 +3884,15 @@ export default function App() {
       () => updateAlbumFilters({ trackCountMin: null, trackCountMax: null }),
     );
 
-    if (albumFilters.ratingCompletenessMin != null) {
-      nextChips.push({
-        key: "ratingCompletenessMin",
-        label: `Complete >= ${albumFilters.ratingCompletenessMin}%`,
-        remove: () => updateAlbumFilter("ratingCompletenessMin", null),
-      });
-    }
+    addRangeChip(
+      nextChips,
+      "ratingCompleteness",
+      "Complete",
+      albumFilters.ratingCompletenessMin,
+      albumFilters.ratingCompletenessMax,
+      () => updateAlbumFilters({ ratingCompletenessMin: null, ratingCompletenessMax: null }),
+      "%",
+    );
     if (albumFilters.lovedTracksMin != null || albumFilters.lovedTracksMax != null) {
       addRangeChip(
         nextChips,
@@ -4027,14 +4240,17 @@ export default function App() {
 
   async function saveCurrentChart() {
     const nextConfig = {
-      ...chartConfig,
+      ...normalizeChartConfigForClient(chartConfig),
       sortField: chartConfig.sortField ?? chartConfig.rankingMetric,
       gridCoverSize: normalizeChartGridCoverSize(chartConfig.gridCoverSize),
       request: chartRequest,
     };
     const fallbackName = `${rankingLabel(nextConfig.rankingMetric)} chart`;
     const saved = await saveChart(chartName.trim() || fallbackName, nextConfig);
-    setSavedCharts((previous) => [saved, ...previous.filter((chart) => chart.id !== saved.id)]);
+    setSavedCharts((previous) => [
+      { ...saved, config: normalizeChartConfigForClient(saved.config) },
+      ...previous.filter((chart) => chart.id !== saved.id),
+    ]);
     setChartName("");
   }
 
@@ -4116,6 +4332,7 @@ export default function App() {
   const chartTotal = chartResponse?.total ?? 0;
   const chartRows = chartResponse?.rows.length ?? 0;
   const currentChartGridCoverSize = normalizeChartGridCoverSize(chartConfig.gridCoverSize);
+  const currentChartCompletenessRange = chartCompletenessRange(chartConfig);
   const ratingAlbumTotal =
     (statistics?.ratingProgress.fullyRatedAlbums ?? 0) +
     (statistics?.ratingProgress.partiallyRatedAlbums ?? 0) +
@@ -4513,19 +4730,18 @@ export default function App() {
                 max={500}
                 onChange={(value) => updateChartConfig({ resultLimit: value ?? 50 })}
               />
-              <label className="criterion slider-criterion chart-slider">
-                <span>Completeness</span>
-                <div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={chartConfig.ratingCompletenessThreshold}
-                    onChange={(event) => updateChartConfig({ ratingCompletenessThreshold: Number(event.target.value) })}
-                  />
-                  <strong>{chartConfig.ratingCompletenessThreshold}%</strong>
-                </div>
-              </label>
+              <CompletenessRangeCriterion
+                minValue={currentChartCompletenessRange.min}
+                maxValue={currentChartCompletenessRange.max}
+                className="chart-slider"
+                onChange={(range) =>
+                  updateChartConfig({
+                    ratingCompletenessMin: range.min,
+                    ratingCompletenessMax: range.max,
+                    ratingCompletenessThreshold: null,
+                  })
+                }
+              />
               {chartConfig.viewMode === "grid" ? (
                 <label className="criterion slider-criterion chart-slider">
                   <span>Cover size</span>
@@ -4578,7 +4794,9 @@ export default function App() {
                     : `${formatNumber(chartRows)} shown from ${formatNumber(chartTotal)} matches`}
                 </p>
               </div>
-              <span className="run-status">{chartConfig.ratingCompletenessThreshold}% complete</span>
+              <span className="run-status">
+                {formatCompletenessRange(currentChartCompletenessRange.min, currentChartCompletenessRange.max)} complete
+              </span>
             </div>
 
             {chartError ? <p className="error-message">{chartError}</p> : null}
@@ -5271,19 +5489,11 @@ export default function App() {
                 max={100}
                 onChange={(value) => updateAlbumFilter("albumRatingMin", value)}
               />
-              <label className="criterion slider-criterion">
-                <span>Completeness</span>
-                <div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={albumFilters.ratingCompletenessMin ?? 0}
-                    onChange={(event) => updateAlbumFilter("ratingCompletenessMin", Number(event.target.value))}
-                  />
-                  <strong>{albumFilters.ratingCompletenessMin ?? 0}%</strong>
-                </div>
-              </label>
+              <CompletenessRangeCriterion
+                minValue={albumFilters.ratingCompletenessMin}
+                maxValue={albumFilters.ratingCompletenessMax}
+                onChange={(range) => updateAlbumFilters(toCompletenessFilterRange(range.min, range.max))}
+              />
             </div>
 
             <div className="query-footer">
@@ -5861,19 +6071,11 @@ export default function App() {
                 onChange={(value) => updateFilter("trackRatingMax", value)}
               />
 
-              <label className="criterion slider-criterion">
-                <span>Completeness</span>
-                <div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={currentFilters.ratingCompletenessMin ?? 0}
-                    onChange={(event) => updateFilter("ratingCompletenessMin", Number(event.target.value))}
-                  />
-                  <strong>{currentFilters.ratingCompletenessMin ?? 0}%</strong>
-                </div>
-              </label>
+              <CompletenessRangeCriterion
+                minValue={currentFilters.ratingCompletenessMin}
+                maxValue={currentFilters.ratingCompletenessMax}
+                onChange={(range) => updateFilters(toCompletenessFilterRange(range.min, range.max))}
+              />
               <NumberField
                 label="Loved min"
                 value={currentFilters.lovedTracksMin}
@@ -6115,10 +6317,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      setChartConfig({
-                        ...chart.config,
-                        gridCoverSize: normalizeChartGridCoverSize(chart.config.gridCoverSize),
-                      });
+                      setChartConfig(normalizeChartConfigForClient(chart.config));
                       setChartTableSort(null);
                       setActiveSection("Charts");
                     }}
@@ -6380,13 +6579,15 @@ function addRangeChip(
   minimum: number | null,
   maximum: number | null,
   remove: () => void,
+  suffix = "",
 ) {
   if (minimum == null && maximum == null) return;
+  const formatValue = (value: number) => `${value}${suffix}`;
   const text =
     minimum != null && maximum != null
-      ? `${label} ${minimum}-${maximum}`
+      ? `${label} ${formatValue(minimum)}-${formatValue(maximum)}`
       : minimum != null
-        ? `${label} >= ${minimum}`
-        : `${label} <= ${maximum}`;
+        ? `${label} >= ${formatValue(minimum)}`
+        : `${label} <= ${formatValue(maximum ?? 0)}`;
   chips.push({ key, label: text, remove });
 }

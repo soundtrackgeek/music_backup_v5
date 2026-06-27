@@ -1259,6 +1259,7 @@ pub fn list_saved_charts_for_app(app: &AppHandle) -> Result<Vec<SavedChart>> {
                     Box::new(error),
                 )
             })?;
+            let config = normalize_chart_config(config);
 
             Ok(SavedChart {
                 id: row.get(0)?,
@@ -2878,6 +2879,10 @@ fn build_where_clause(
         conditions.push("a.rating_completeness >= ?".to_string());
         values.push(Value::Real(normalize_percentage(minimum)));
     }
+    if let Some(maximum) = filters.rating_completeness_max {
+        conditions.push("a.rating_completeness <= ?".to_string());
+        values.push(Value::Real(normalize_percentage(maximum)));
+    }
 
     add_i64_range(
         &mut conditions,
@@ -3260,7 +3265,16 @@ fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
         "desc".to_string()
     };
     let result_limit = config.result_limit.clamp(10, 500);
-    let threshold = normalize_percentage(config.rating_completeness_threshold) * 100.0;
+    let minimum_source = config
+        .rating_completeness_min
+        .or(config.rating_completeness_threshold)
+        .unwrap_or(100.0);
+    let maximum_source = config.rating_completeness_max.unwrap_or(100.0);
+    let mut minimum = normalize_percentage(minimum_source) * 100.0;
+    let mut maximum = normalize_percentage(maximum_source) * 100.0;
+    if minimum > maximum {
+        std::mem::swap(&mut minimum, &mut maximum);
+    }
     let grid_cover_size = config.grid_cover_size.clamp(96, 224);
     let view_mode = match config.view_mode.as_str() {
         "compact" | "grid" => config.view_mode.clone(),
@@ -3274,12 +3288,20 @@ fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
         field: ranking_metric.clone(),
         direction: sort_direction.clone(),
     };
-    config.request.filters.rating_completeness_min = Some(threshold);
+    config.request.filters.rating_completeness_min =
+        if minimum <= 0.0 { None } else { Some(minimum) };
+    config.request.filters.rating_completeness_max = if maximum >= 100.0 {
+        None
+    } else {
+        Some(maximum)
+    };
     config.ranking_metric = ranking_metric;
     config.sort_field = Some(sort_field);
     config.sort_direction = sort_direction;
     config.result_limit = result_limit;
-    config.rating_completeness_threshold = threshold;
+    config.rating_completeness_min = Some(minimum);
+    config.rating_completeness_max = Some(maximum);
+    config.rating_completeness_threshold = None;
     config.view_mode = view_mode;
     config.grid_cover_size = grid_cover_size;
     config

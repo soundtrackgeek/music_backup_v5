@@ -116,6 +116,7 @@ export type BrowseFilters = {
   trackRatingMin: number | null;
   trackRatingMax: number | null;
   ratingCompletenessMin: number | null;
+  ratingCompletenessMax: number | null;
   lovedTracksMin: number | null;
   lovedTracksMax: number | null;
 };
@@ -313,7 +314,9 @@ export type ChartConfig = {
   request: BrowseRequest;
   rankingMetric: string;
   sortField?: string | null;
-  ratingCompletenessThreshold: number;
+  ratingCompletenessMin: number;
+  ratingCompletenessMax: number;
+  ratingCompletenessThreshold?: number | null;
   sortDirection: "asc" | "desc";
   resultLimit: number;
   visibleColumns: string[];

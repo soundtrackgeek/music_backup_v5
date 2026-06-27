@@ -760,16 +760,21 @@ export async function searchLibrary(request: BrowseRequest) {
     const artistKeys = new Set(request.filters.artistKeys);
     const genreKeys = new Set(expandGenreFilterKeys(request.filters.genres));
     const excludedGenreKeys = new Set(expandGenreFilterKeys(request.filters.excludedGenres));
+    const ratingCompletenessMin = normalizePercentFilter(request.filters.ratingCompletenessMin);
+    const ratingCompletenessMax = normalizePercentFilter(request.filters.ratingCompletenessMax);
     const rows = mockRows.filter((row) => {
       const matchesView = isTracks ? row.trackId !== null : row.trackId === null;
       const artistKey = normalizeArtistKey(row.albumArtistDisplay);
       const genreKey = normalizeGenreKey(row.canonicalGenre);
+      const ratingCompleteness = row.ratingCompleteness ?? 0;
       return (
         matchesView &&
         (albumIds.size === 0 || albumIds.has(row.albumId)) &&
         (artistKeys.size === 0 || artistKeys.has(artistKey)) &&
         (genreKeys.size === 0 || genreKeys.has(genreKey)) &&
         !excludedGenreKeys.has(genreKey) &&
+        (ratingCompletenessMin == null || ratingCompleteness >= ratingCompletenessMin) &&
+        (ratingCompletenessMax == null || ratingCompleteness <= ratingCompletenessMax) &&
         matchesMissingFields(row, isTracks, request.filters.missingFields)
       );
     });
@@ -1115,6 +1120,13 @@ function addUnique(values: string[], value: string) {
 
 function isMissingText(value: string | null) {
   return (value ?? "").trim() === "";
+}
+
+function normalizePercentFilter(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) {
+    return null;
+  }
+  return value > 1 ? Math.min(1, Math.max(0, value / 100)) : Math.min(1, Math.max(0, value));
 }
 
 function matchesMissingFields(row: BrowseRow, isTracks: boolean, fields: string[]) {

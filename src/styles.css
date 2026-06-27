@@ -412,9 +412,9 @@ button {
   gap: 6px;
 }
 
-.slider-criterion div {
+.slider-criterion > div {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px;
+  grid-template-columns: minmax(0, 1fr) 64px;
   align-items: center;
   gap: 10px;
   height: 38px;
@@ -424,6 +424,39 @@ button {
   background: #fbfcfc;
 }
 
+.range-slider {
+  position: relative;
+}
+
+.range-control {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  height: 24px;
+  min-width: 0;
+}
+
+.range-slider .range-track {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    #d8e2de 0%,
+    #d8e2de var(--range-min),
+    #0e766e var(--range-min),
+    #0e766e var(--range-max),
+    #d8e2de var(--range-max),
+    #d8e2de 100%
+  );
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
 .slider-criterion input {
   height: auto;
   border: 0;
@@ -431,7 +464,44 @@ button {
   accent-color: #0e766e;
 }
 
+.range-handle {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: var(--handle-position);
+  width: 18px;
+  height: 18px;
+  border: 0;
+  padding: 0;
+  border: 2px solid #fbfcfc;
+  border-radius: 999px;
+  background: #0e766e;
+  box-shadow: 0 1px 3px rgba(21, 34, 31, 0.22);
+  cursor: grab;
+  touch-action: none;
+  transform: translate(-50%, -50%);
+}
+
+.range-handle:active {
+  cursor: grabbing;
+}
+
+.range-handle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(22, 130, 121, 0.16), 0 1px 3px rgba(21, 34, 31, 0.22);
+}
+
+.range-handle-max {
+  z-index: 3;
+}
+
+.range-handle-overlap {
+  z-index: 4;
+}
+
 .slider-criterion strong {
+  grid-column: 2;
+  grid-row: 1;
   color: #33413d;
   font-size: 12px;
   line-height: 16px;
@@ -1722,12 +1792,29 @@ button {
   color: #eef7f4;
 }
 
+:root[data-theme="dark"] .range-slider .range-track {
+  background: linear-gradient(
+    to right,
+    #35433e 0%,
+    #35433e var(--range-min),
+    #14a094 var(--range-min),
+    #14a094 var(--range-max),
+    #35433e var(--range-max),
+    #35433e 100%
+  );
+}
+
+:root[data-theme="dark"] .range-handle {
+  border-color: #111815;
+  background: #14a094;
+}
+
 :root[data-theme="dark"] .icon-button,
 :root[data-theme="dark"] .search-input,
 :root[data-theme="dark"] .criterion input,
 :root[data-theme="dark"] .criterion select,
 :root[data-theme="dark"] .source-input input,
-:root[data-theme="dark"] .slider-criterion div,
+:root[data-theme="dark"] .slider-criterion > div,
 :root[data-theme="dark"] .segmented-control,
 :root[data-theme="dark"] .progress-block,
 :root[data-theme="dark"] .stat-pairs div,

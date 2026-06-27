@@ -177,6 +177,8 @@ pub struct BrowseFilters {
     #[serde(default)]
     pub rating_completeness_min: Option<f64>,
     #[serde(default)]
+    pub rating_completeness_max: Option<f64>,
+    #[serde(default)]
     pub loved_tracks_min: Option<i64>,
     #[serde(default)]
     pub loved_tracks_max: Option<i64>,
@@ -503,7 +505,12 @@ pub struct ChartConfig {
     pub ranking_metric: String,
     #[serde(default)]
     pub sort_field: Option<String>,
-    pub rating_completeness_threshold: f64,
+    #[serde(default)]
+    pub rating_completeness_min: Option<f64>,
+    #[serde(default)]
+    pub rating_completeness_max: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rating_completeness_threshold: Option<f64>,
     pub sort_direction: String,
     pub result_limit: u32,
     pub visible_columns: Vec<String>,

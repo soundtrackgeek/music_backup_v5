@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.13.0] - 2026-06-27
+### Added
+- Added min/max rating completeness range sliders to Search, Albums, and Charts so albums can be filtered to intervals such as 30-70%.
+
 ## [0.12.3] - 2026-06-27
 ### Fixed
 - Fixed album detail track rating counts to show `rated / total rated` instead of `total / rated rated`.

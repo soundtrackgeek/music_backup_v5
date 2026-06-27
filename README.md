@@ -2,7 +2,7 @@
 
 A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-The current Phase 9 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, import and display real album cover art, browse sortable album and track tables, save searches, build ranked album charts with include/exclude genre filters and in-place genre suggestions, display-only table-header sorting inside the current ranked set, and resizable square cover-grid artwork, save chart configurations, expand the `scores` genre group in include/exclude genre filters, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
+The current Phase 9 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, import and display real album cover art, browse sortable album and track tables, save searches, build ranked album charts with include/exclude genre filters, min/max rating-completeness ranges, and in-place genre suggestions, display-only table-header sorting inside the current ranked set, and resizable square cover-grid artwork, save chart configurations, expand the `scores` genre group in include/exclude genre filters, export filtered result sets, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
 
 The sidebar currently enables Search, Charts, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. The Imports workspace can scan an `AlbumCovers` folder for folder-named images, link matching source images directly, skip covers that are already imported, and extract missing embedded MP3 artwork into the same `AlbumCovers` folder.
 
@@ -84,7 +84,7 @@ npm run tauri:build
 
 ## Phase 5 Albums Features
 
-- Albums workspace with a dedicated filterable, sortable, paginated album index.
+- Albums workspace with a dedicated filterable, sortable, paginated album index and min/max rating-completeness range filtering.
 - Album include/exclude genre filters use the same five-result in-place genre suggestions as Search and Charts.
 - Album detail drill-down with cover placeholders, album metadata, rating completeness, TMOE, AE, loved tracks, and Album Score.
 - Ordered album track lists with disc/track positions, track durations, ratings, love markers, filenames, and paths.
@@ -109,7 +109,7 @@ npm run tauri:build
 ## Phase 3 Features
 
 - Charts workspace with built-in templates for year, decade, genre, scores, album artist, loved albums, AE, and TMOE rankings.
-- Custom chart builder for album filters, include/exclude genre lists with five-result in-place suggestions, ranking metric, display-only sortable table headers, sort direction, result limit, rating completeness threshold, visible metric columns, and chart view mode.
+- Custom chart builder for album filters, include/exclude genre lists with five-result in-place suggestions, ranking metric, display-only sortable table headers, sort direction, result limit, rating completeness min/max range, visible metric columns, and chart view mode.
 - Ranked table, compact list, and resizable square cover-grid chart result views, with table headers preserving the current ranked result set and original rank numbers.
 - Saved chart configurations stored in SQLite.
 - XLSX export for Search and Charts, alongside CSV, TSV, JSON, and TXT.
@@ -118,7 +118,7 @@ npm run tauri:build
 
 - Search workspace with album and track table views with clickable sortable column headers.
 - SQLite FTS5 indexes over album, artist, title, genre, publisher, path, and filename fields.
-- Composable query builder for text filters, comma-separated genre and exclude-genre lists with five-result in-place suggestions loaded from the canonical genre index and matched anywhere in genre names, years, release years, album duration in album views, track duration in track views, track count, album rating, track rating, rating completeness, loved-track count in album views, exact track `Love = "L"` filtering in track views, publisher, file path, filename, and view-specific missing metadata flags.
+- Composable query builder for text filters, comma-separated genre and exclude-genre lists with five-result in-place suggestions loaded from the canonical genre index and matched anywhere in genre names, years, release years, album duration in album views, track duration in track views, track count, album rating, track rating, rating completeness min/max ranges, loved-track count in album views, exact track `Love = "L"` filtering in track views, publisher, file path, filename, and view-specific missing metadata flags.
 - Genre and exclude-genre lists expand `scores` to Action, Animation, Comedy, Documentary, Drama, Fantasy, Horror, Sci-Fi, Thriller, TV, Video Game, Western, and Anime.
 - Active filter chips with one-click removal.
 - Saved searches stored in SQLite.
