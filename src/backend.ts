@@ -20,6 +20,8 @@ import type {
   SavedChart,
   SavedSearch,
   ChartConfig,
+  LeftSidebarMode,
+  RightSidebarMode,
   StatisticsResponse,
   GenreListRequest,
   GenreListResponse,
@@ -1551,6 +1553,8 @@ function normalizeSettings(settings: Partial<AppSettings>): AppSettings {
   return {
     backupRetention: Math.min(50, Math.max(1, Number.isFinite(backupRetention) ? backupRetention : 3)),
     darkMode: Boolean(settings.darkMode),
+    leftSidebarDefault: normalizeLeftSidebarMode(settings.leftSidebarDefault),
+    rightSidebarDefault: normalizeRightSidebarMode(settings.rightSidebarDefault),
     updatedAt: settings.updatedAt ?? null,
   };
 }
@@ -1559,8 +1563,18 @@ function defaultSettings(): AppSettings {
   return {
     backupRetention: 3,
     darkMode: false,
+    leftSidebarDefault: "expanded",
+    rightSidebarDefault: "expanded",
     updatedAt: null,
   };
+}
+
+function normalizeLeftSidebarMode(value: unknown): LeftSidebarMode {
+  return value === "iconOnly" || value === "hidden" || value === "expanded" ? value : "expanded";
+}
+
+function normalizeRightSidebarMode(value: unknown): RightSidebarMode {
+  return value === "hidden" || value === "expanded" ? value : "expanded";
 }
 
 function normalizeArtistKey(value: string | null) {

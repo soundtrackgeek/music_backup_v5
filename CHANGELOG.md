@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.16.0] - 2026-06-27
+### Added
+- Added on-demand layout controls for collapsing the left navigation sidebar, switching it to icon-only mode, and hiding or showing the right detail sidebar.
+- Added Settings defaults for full, icon-only, or hidden left navigation and shown or hidden right detail panels.
+
 ## [0.15.2] - 2026-06-27
 ### Fixed
 - Fixed Discovery heatmap aggregation performance on large libraries so the Discovery page populates instead of appearing empty while the backend query runs.

@@ -2,9 +2,9 @@
 
 A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-The current Phase 10 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, import and display real album cover art, browse sortable album and track tables, save searches, filter Search albums by rated-track ranges, build ranked album charts with include/exclude genre filters, min/max rating-completeness ranges, and in-place genre suggestions, display-only table-header sorting inside the current ranked set, and resizable square cover-grid artwork, save chart configurations, expand the `scores` genre group in include/exclude genre filters, export filtered result sets, explore discovery dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
+The current Phase 10 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, import and display real album cover art, browse sortable album and track tables, save searches, filter Search albums by rated-track ranges, build ranked album charts with include/exclude genre filters, min/max rating-completeness ranges, and in-place genre suggestions, display-only table-header sorting inside the current ranked set, and resizable square cover-grid artwork, save chart configurations, expand the `scores` genre group in include/exclude genre filters, export filtered result sets, explore discovery dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions, analyze library/rating/import progress dashboards, manage settings, switch between light and dark mode, choose default sidebar visibility, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists with exports.
 
-The sidebar currently enables Search, Charts, Discovery, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. The Imports workspace can scan an `AlbumCovers` folder for folder-named images, link matching source images directly, skip covers that are already imported, and extract missing embedded MP3 artwork into the same `AlbumCovers` folder.
+The sidebar currently enables Search, Charts, Discovery, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. The left navigation can be shown in full, icon-only, or hidden mode, while the right detail sidebar can be shown or hidden so the main workspace expands into the available page width. The Imports workspace can scan an `AlbumCovers` folder for folder-named images, link matching source images directly, skip covers that are already imported, and extract missing embedded MP3 artwork into the same `AlbumCovers` folder.
 
 ## Requirements
 
@@ -105,7 +105,8 @@ npm run tauri:build
 - Settings workspace for app preferences.
 - Configurable rolling database backup retention, defaulting to 3 backups.
 - Persisted dark mode for the desktop app and web-only preview.
-- SQLite schema version 5 with persisted app settings.
+- Persisted layout defaults for full, icon-only, or hidden left navigation and shown or hidden right detail panels.
+- SQLite schema version 7 with persisted app settings.
 
 ## Phase 4 Features
 

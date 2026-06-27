@@ -74,9 +74,15 @@ export type CoverImportSummary = {
   durationMs: number;
 };
 
+export type LeftSidebarMode = "expanded" | "iconOnly" | "hidden";
+
+export type RightSidebarMode = "expanded" | "hidden";
+
 export type AppSettings = {
   backupRetention: number;
   darkMode: boolean;
+  leftSidebarDefault: LeftSidebarMode;
+  rightSidebarDefault: RightSidebarMode;
   updatedAt: string | null;
 };
 

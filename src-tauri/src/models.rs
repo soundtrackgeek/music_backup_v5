@@ -99,6 +99,10 @@ pub struct AppSettings {
     pub backup_retention: u32,
     #[serde(default)]
     pub dark_mode: bool,
+    #[serde(default = "default_left_sidebar_default")]
+    pub left_sidebar_default: String,
+    #[serde(default = "default_right_sidebar_default")]
+    pub right_sidebar_default: String,
     #[serde(default)]
     pub updated_at: Option<String>,
 }
@@ -814,6 +818,14 @@ fn default_limit() -> u32 {
 
 fn default_backup_retention() -> u32 {
     3
+}
+
+fn default_left_sidebar_default() -> String {
+    "expanded".to_string()
+}
+
+fn default_right_sidebar_default() -> String {
+    "expanded".to_string()
 }
 
 fn default_music_tool_id() -> String {

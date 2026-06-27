@@ -25,7 +25,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 6;
+const LATEST_SCHEMA_VERSION: i32 = 7;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const MIN_BACKUP_RETENTION: u32 = 1;
 const MAX_BACKUP_RETENTION: u32 = 50;
@@ -197,7 +197,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_six_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_seven_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -427,6 +427,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             id INTEGER PRIMARY KEY CHECK (id = 1),
             backup_retention INTEGER NOT NULL DEFAULT 3,
             dark_mode INTEGER NOT NULL DEFAULT 0,
+            left_sidebar_default TEXT NOT NULL DEFAULT 'expanded',
+            right_sidebar_default TEXT NOT NULL DEFAULT 'expanded',
             updated_at TEXT NOT NULL
         );
 
@@ -439,9 +441,16 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     )
     .map_err(|error| anyhow!("Could not run SQLite migrations: {error}"))?;
     ensure_import_run_change_columns(conn)?;
-    conn.execute_batch("PRAGMA user_version = 6;")
+    ensure_app_settings_layout_columns(conn)?;
+    conn.execute_batch("PRAGMA user_version = 7;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_seven_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_six_schema_exists(conn)?
+        && schema_column_exists(conn, "app_settings", "left_sidebar_default")?
+        && schema_column_exists(conn, "app_settings", "right_sidebar_default")?)
 }
 
 fn phase_six_schema_exists(conn: &Connection) -> Result<bool> {
@@ -516,6 +525,21 @@ fn ensure_import_run_change_columns(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn ensure_app_settings_layout_columns(conn: &Connection) -> Result<()> {
+    for (name, definition) in [
+        ("left_sidebar_default", "TEXT NOT NULL DEFAULT 'expanded'"),
+        ("right_sidebar_default", "TEXT NOT NULL DEFAULT 'expanded'"),
+    ] {
+        if !schema_column_exists(conn, "app_settings", name)? {
+            let sql = format!("ALTER TABLE app_settings ADD COLUMN {name} {definition}");
+            conn.execute_batch(&sql)
+                .with_context(|| format!("Could not add app_settings.{name}"))?;
+        }
+    }
+
+    Ok(())
+}
+
 fn schema_column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
     let sql = format!("PRAGMA table_info({table})");
     let mut stmt = conn
@@ -571,7 +595,7 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
     let settings = conn
         .query_row(
             "
-            SELECT backup_retention, dark_mode, updated_at
+            SELECT backup_retention, dark_mode, left_sidebar_default, right_sidebar_default, updated_at
             FROM app_settings
             WHERE id = 1
             ",
@@ -588,6 +612,8 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
             AppSettings {
                 backup_retention: DEFAULT_BACKUP_RETENTION,
                 dark_mode: false,
+                left_sidebar_default: "expanded".to_string(),
+                right_sidebar_default: "expanded".to_string(),
                 updated_at: None,
             },
         ),
@@ -599,16 +625,22 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
     let now = Utc::now().to_rfc3339();
     conn.execute(
         "
-        INSERT INTO app_settings (id, backup_retention, dark_mode, updated_at)
-        VALUES (1, ?1, ?2, ?3)
+        INSERT INTO app_settings (
+            id, backup_retention, dark_mode, left_sidebar_default, right_sidebar_default, updated_at
+        )
+        VALUES (1, ?1, ?2, ?3, ?4, ?5)
         ON CONFLICT(id) DO UPDATE SET
             backup_retention = excluded.backup_retention,
             dark_mode = excluded.dark_mode,
+            left_sidebar_default = excluded.left_sidebar_default,
+            right_sidebar_default = excluded.right_sidebar_default,
             updated_at = excluded.updated_at
         ",
         params![
             i64::from(settings.backup_retention),
             if settings.dark_mode { 1 } else { 0 },
+            settings.left_sidebar_default,
+            settings.right_sidebar_default,
             now
         ],
     )
@@ -623,7 +655,9 @@ fn settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppSettings> {
     Ok(AppSettings {
         backup_retention: backup_retention.max(0) as u32,
         dark_mode: dark_mode != 0,
-        updated_at: row.get(2)?,
+        left_sidebar_default: row.get(2)?,
+        right_sidebar_default: row.get(3)?,
+        updated_at: row.get(4)?,
     })
 }
 
@@ -631,7 +665,23 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
     settings.backup_retention = settings
         .backup_retention
         .clamp(MIN_BACKUP_RETENTION, MAX_BACKUP_RETENTION);
+    settings.left_sidebar_default = normalize_left_sidebar_default(&settings.left_sidebar_default);
+    settings.right_sidebar_default = normalize_right_sidebar_default(&settings.right_sidebar_default);
     settings
+}
+
+fn normalize_left_sidebar_default(value: &str) -> String {
+    match value {
+        "expanded" | "iconOnly" | "hidden" => value.to_string(),
+        _ => "expanded".to_string(),
+    }
+}
+
+fn normalize_right_sidebar_default(value: &str) -> String {
+    match value {
+        "expanded" | "hidden" => value.to_string(),
+        _ => "expanded".to_string(),
+    }
 }
 
 pub fn statistics_for_app(app: &AppHandle) -> Result<StatisticsResponse> {
@@ -4969,7 +5019,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_noop_migration_for_current_phase_six_schema() {
+    fn skips_noop_migration_for_current_phase_seven_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -4980,7 +5030,7 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_six_schema_exists(&conn).expect("phase six schema exists"));
+        assert!(phase_seven_schema_exists(&conn).expect("phase seven schema exists"));
     }
 
     #[test]
@@ -4994,6 +5044,8 @@ mod tests {
             AppSettings {
                 backup_retention: 500,
                 dark_mode: true,
+                left_sidebar_default: "iconOnly".to_string(),
+                right_sidebar_default: "hidden".to_string(),
                 updated_at: None,
             },
         )
@@ -5001,10 +5053,14 @@ mod tests {
 
         assert_eq!(saved.backup_retention, MAX_BACKUP_RETENTION);
         assert!(saved.dark_mode);
+        assert_eq!(saved.left_sidebar_default, "iconOnly");
+        assert_eq!(saved.right_sidebar_default, "hidden");
 
         let loaded = settings_for_connection(&conn).expect("load settings");
         assert_eq!(loaded.backup_retention, MAX_BACKUP_RETENTION);
         assert!(loaded.dark_mode);
+        assert_eq!(loaded.left_sidebar_default, "iconOnly");
+        assert_eq!(loaded.right_sidebar_default, "hidden");
         assert!(loaded.updated_at.is_some());
     }
 

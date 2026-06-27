@@ -97,9 +97,11 @@ import type {
   ImportRun,
   ImportSummary,
   LibraryStatus,
+  LeftSidebarMode,
   GenreProgressStats,
   RatingBucket,
   RatingEvent,
+  RightSidebarMode,
   MusicToolIssueRequest,
   MusicToolIssueResponse,
   MusicToolIssueRow,
@@ -125,6 +127,28 @@ const navigation = [
   { label: "Imports", icon: FolderInput, enabled: true },
   { label: "Settings", icon: Settings, enabled: true },
 ];
+
+const leftSidebarModeOptions: { value: LeftSidebarMode; label: string }[] = [
+  { value: "expanded", label: "Full" },
+  { value: "iconOnly", label: "Icons" },
+  { value: "hidden", label: "Hidden" },
+];
+
+const rightSidebarModeOptions: { value: RightSidebarMode; label: string }[] = [
+  { value: "expanded", label: "Shown" },
+  { value: "hidden", label: "Hidden" },
+];
+
+const leftSidebarModeLabels: Record<LeftSidebarMode, string> = {
+  expanded: "Full",
+  iconOnly: "Icons",
+  hidden: "Hidden",
+};
+
+const rightSidebarModeLabels: Record<RightSidebarMode, string> = {
+  expanded: "Shown",
+  hidden: "Hidden",
+};
 
 const operatorLabels: Record<TextFilterOperator, string> = {
   contains: "Contains",
@@ -224,6 +248,14 @@ const defaultCoverProgress: CoverImportProgress = {
 
 function createDefaultSettings(): AppSettings {
   return loadCachedSettings();
+}
+
+function createDefaultLeftSidebarMode(): LeftSidebarMode {
+  return loadCachedSettings().leftSidebarDefault;
+}
+
+function createDefaultRightSidebarMode(): RightSidebarMode {
+  return loadCachedSettings().rightSidebarDefault;
 }
 
 function createTextFilter(): TextFilter {
@@ -3477,8 +3509,11 @@ export default function App() {
   const [isDiscoveryAlbumsLoading, setIsDiscoveryAlbumsLoading] = useState(false);
   const [discoverySelection, setDiscoverySelection] = useState<DiscoverySelection | null>(null);
   const [settings, setSettings] = useState<AppSettings>(() => createDefaultSettings());
+  const [leftSidebarMode, setLeftSidebarMode] = useState<LeftSidebarMode>(() => createDefaultLeftSidebarMode());
+  const [rightSidebarMode, setRightSidebarMode] = useState<RightSidebarMode>(() => createDefaultRightSidebarMode());
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const hasAppliedLayoutDefaults = useRef(false);
   const canImport = isTauriRuntime();
 
   const refreshGenreSuggestions = useCallback(async () => {
@@ -3506,6 +3541,11 @@ export default function App() {
     );
     setStatistics(nextStatistics);
     setSettings(nextSettings);
+    if (!hasAppliedLayoutDefaults.current) {
+      setLeftSidebarMode(nextSettings.leftSidebarDefault);
+      setRightSidebarMode(nextSettings.rightSidebarDefault);
+      hasAppliedLayoutDefaults.current = true;
+    }
     void refreshGenreSuggestions().catch(() => {
       // Keep any suggestions already loaded from focus retry or the Genres page.
     });
@@ -4810,6 +4850,8 @@ export default function App() {
       ...settings,
       ...values,
       backupRetention: clampBackupRetention(values.backupRetention ?? settings.backupRetention),
+      leftSidebarDefault: values.leftSidebarDefault ?? settings.leftSidebarDefault,
+      rightSidebarDefault: values.rightSidebarDefault ?? settings.rightSidebarDefault,
     };
     setSettings(nextSettings);
     cacheSettings(nextSettings);
@@ -4824,6 +4866,16 @@ export default function App() {
     } finally {
       setIsSavingSettings(false);
     }
+  }
+
+  function saveLeftSidebarDefault(mode: LeftSidebarMode) {
+    setLeftSidebarMode(mode);
+    void saveAppSettings({ leftSidebarDefault: mode });
+  }
+
+  function saveRightSidebarDefault(mode: RightSidebarMode) {
+    setRightSidebarMode(mode);
+    void saveAppSettings({ rightSidebarDefault: mode });
   }
 
   const total = response?.total ?? 0;
@@ -4882,17 +4934,66 @@ export default function App() {
     (statistics?.ratingProgress.unratedAlbums ?? 0);
   const ratingTrackTotal =
     (statistics?.ratingProgress.ratedTracks ?? 0) + (statistics?.ratingProgress.unratedTracks ?? 0);
+  const isLeftSidebarHidden = leftSidebarMode === "hidden";
+  const isRightSidebarHidden = rightSidebarMode === "hidden";
+  const leftSidebarClass = leftSidebarMode === "iconOnly" ? "left-sidebar-icon-only" : `left-sidebar-${leftSidebarMode}`;
+  const appShellClassName = `app-shell ${leftSidebarClass} right-sidebar-${rightSidebarMode}`;
+  const leftIconOnlyToggleLabel =
+    leftSidebarMode === "iconOnly" ? "Show navigation labels" : "Show navigation icons only";
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar" aria-label="Main navigation">
-        <div className="brand">
-          <div className="brand-mark" aria-hidden="true">
-            <Library size={20} />
+    <main className={appShellClassName}>
+      {isLeftSidebarHidden ? (
+        <button
+          className="icon-button edge-toggle left-sidebar-toggle"
+          type="button"
+          aria-label="Show navigation"
+          title="Show navigation"
+          onClick={() => setLeftSidebarMode("expanded")}
+        >
+          <ChevronRight size={18} />
+        </button>
+      ) : null}
+      <button
+        className="icon-button edge-toggle right-sidebar-toggle"
+        type="button"
+        aria-label={isRightSidebarHidden ? "Show details sidebar" : "Hide details sidebar"}
+        title={isRightSidebarHidden ? "Show details sidebar" : "Hide details sidebar"}
+        onClick={() => setRightSidebarMode(isRightSidebarHidden ? "expanded" : "hidden")}
+      >
+        {isRightSidebarHidden ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+      </button>
+      <aside className="sidebar" aria-label="Main navigation" aria-hidden={isLeftSidebarHidden}>
+        <div className="sidebar-header">
+          <div className="brand">
+            <div className="brand-mark" aria-hidden="true">
+              <Library size={20} />
+            </div>
+            <div>
+              <strong>Music Library</strong>
+              <span>Local TSV browser</span>
+            </div>
           </div>
-          <div>
-            <strong>Music Library</strong>
-            <span>Local TSV browser</span>
+
+          <div className="sidebar-actions">
+            <button
+              className="icon-button sidebar-action"
+              type="button"
+              aria-label={leftIconOnlyToggleLabel}
+              title={leftIconOnlyToggleLabel}
+              onClick={() => setLeftSidebarMode(leftSidebarMode === "iconOnly" ? "expanded" : "iconOnly")}
+            >
+              <ListMusic size={16} />
+            </button>
+            <button
+              className="icon-button sidebar-action"
+              type="button"
+              aria-label="Collapse navigation"
+              title="Collapse navigation"
+              onClick={() => setLeftSidebarMode("hidden")}
+            >
+              <ChevronLeft size={16} />
+            </button>
           </div>
         </div>
 
@@ -6550,7 +6651,7 @@ export default function App() {
           <header className="topbar">
             <div>
               <h1>Settings</h1>
-              <p>Backup retention and app appearance.</p>
+              <p>Backup retention, appearance, and workspace layout.</p>
             </div>
             <button className="icon-button" type="button" aria-label="Reload settings" onClick={() => void loadData()}>
               <RotateCcw size={18} />
@@ -6565,8 +6666,8 @@ export default function App() {
               icon={Database}
             />
             <Metric label="Theme" value={settings.darkMode ? "Dark" : "Light"} tone="amber" icon={Moon} />
-            <Metric label="Settings" value={isSavingSettings ? "Saving" : "Saved"} icon={Save} />
-            <Metric label="Runtime" value={canImport ? "Desktop" : "Preview"} icon={Settings} />
+            <Metric label="Navigation" value={leftSidebarModeLabels[settings.leftSidebarDefault]} icon={Library} />
+            <Metric label="Details" value={rightSidebarModeLabels[settings.rightSidebarDefault]} icon={SlidersHorizontal} />
           </section>
 
           {settingsError ? <p className="error-message">{settingsError}</p> : null}
@@ -6618,6 +6719,50 @@ export default function App() {
                   <small>{settings.darkMode ? "On" : "Off"}</small>
                 </span>
               </label>
+            </section>
+
+            <section className="settings-panel layout-settings-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Layout</h2>
+                  <p>{isSavingSettings ? "Saving preferences" : "Preferences saved"}</p>
+                </div>
+                <SlidersHorizontal size={18} />
+              </div>
+
+              <div className="layout-setting-stack">
+                <div className="layout-setting">
+                  <span>Left sidebar default</span>
+                  <div className="segmented-control layout-mode-control left-layout-mode-control" role="group" aria-label="Left sidebar default">
+                    {leftSidebarModeOptions.map((option) => (
+                      <button
+                        className={settings.leftSidebarDefault === option.value ? "active" : ""}
+                        type="button"
+                        key={option.value}
+                        onClick={() => saveLeftSidebarDefault(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="layout-setting">
+                  <span>Right sidebar default</span>
+                  <div className="segmented-control layout-mode-control right-layout-mode-control" role="group" aria-label="Right sidebar default">
+                    {rightSidebarModeOptions.map((option) => (
+                      <button
+                        className={settings.rightSidebarDefault === option.value ? "active" : ""}
+                        type="button"
+                        key={option.value}
+                        onClick={() => saveRightSidebarDefault(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </section>
           </section>
         </section>
@@ -6970,8 +7115,9 @@ export default function App() {
         </section>
       )}
 
-      {activeSection === "Imports" ? (
-        <aside className="detail-panel" aria-label="Selected import details">
+      <section className="detail-column" aria-hidden={isRightSidebarHidden}>
+        {activeSection === "Imports" ? (
+          <aside className="detail-panel" aria-label="Selected import details">
           <div className="detail-header">
             <Sparkles size={20} />
             <div>
@@ -7253,6 +7399,14 @@ export default function App() {
               <dd>{settings.darkMode ? "Dark" : "Light"}</dd>
             </div>
             <div>
+              <dt>Navigation</dt>
+              <dd>{leftSidebarModeLabels[settings.leftSidebarDefault]}</dd>
+            </div>
+            <div>
+              <dt>Details</dt>
+              <dd>{rightSidebarModeLabels[settings.rightSidebarDefault]}</dd>
+            </div>
+            <div>
               <dt>Runtime</dt>
               <dd>{canImport ? "Tauri desktop" : "Web preview"}</dd>
             </div>
@@ -7350,6 +7504,7 @@ export default function App() {
           </section>
         </aside>
       )}
+      </section>
     </main>
   );
 }
