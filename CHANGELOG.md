@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.14.0] - 2026-06-27
+### Added
+- Added Search min/max filters for rated track counts so album results can be limited to ranges such as 3-5 rated tracks.
+
 ## [0.13.0] - 2026-06-27
 ### Added
 - Added min/max rating completeness range sliders to Search, Albums, and Charts so albums can be filtered to intervals such as 30-70%.

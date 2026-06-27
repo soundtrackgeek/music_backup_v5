@@ -244,6 +244,8 @@ function createFilters(): BrowseFilters {
     totalMinutesMax: null,
     trackCountMin: null,
     trackCountMax: null,
+    ratedTracksMin: null,
+    ratedTracksMax: null,
     albumRatingMin: null,
     albumRatingMax: null,
     trackRatingMin: null,
@@ -3771,6 +3773,14 @@ export default function App() {
     );
     addRangeChip(
       nextChips,
+      "ratedTracks",
+      "Tracks rated",
+      currentFilters.ratedTracksMin,
+      currentFilters.ratedTracksMax,
+      () => updateFilters({ ratedTracksMin: null, ratedTracksMax: null }),
+    );
+    addRangeChip(
+      nextChips,
       "albumRating",
       "Album rating",
       currentFilters.albumRatingMin,
@@ -6040,6 +6050,18 @@ export default function App() {
                 label="Tracks max"
                 value={currentFilters.trackCountMax}
                 onChange={(value) => updateFilter("trackCountMax", value)}
+              />
+              <NumberField
+                label="Tracks rated min"
+                value={currentFilters.ratedTracksMin}
+                min={0}
+                onChange={(value) => updateFilter("ratedTracksMin", value)}
+              />
+              <NumberField
+                label="Tracks rated max"
+                value={currentFilters.ratedTracksMax}
+                min={0}
+                onChange={(value) => updateFilter("ratedTracksMax", value)}
               />
 
               <NumberField

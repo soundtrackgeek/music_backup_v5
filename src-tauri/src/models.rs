@@ -167,6 +167,10 @@ pub struct BrowseFilters {
     #[serde(default)]
     pub track_count_max: Option<i64>,
     #[serde(default)]
+    pub rated_tracks_min: Option<i64>,
+    #[serde(default)]
+    pub rated_tracks_max: Option<i64>,
+    #[serde(default)]
     pub album_rating_min: Option<i32>,
     #[serde(default)]
     pub album_rating_max: Option<i32>,

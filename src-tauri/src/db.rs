@@ -2850,6 +2850,13 @@ fn build_where_clause(
         filters.track_count_min,
         filters.track_count_max,
     );
+    add_i64_range(
+        &mut conditions,
+        &mut values,
+        "a.rated_tracks",
+        filters.rated_tracks_min,
+        filters.rated_tracks_max,
+    );
     add_i32_range(
         &mut conditions,
         &mut values,
@@ -3852,6 +3859,36 @@ mod tests {
             Some("What Have I Done to Deserve This?")
         );
         assert_eq!(response.rows[0].love.as_deref(), Some("L"));
+    }
+
+    #[test]
+    fn filters_album_search_by_rated_track_count() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+            ) VALUES (
+                'mb:partial', 1, 'partial', 'Partly Rated', 'Example Artist',
+                'Synthpop', 'synthpop', 'Example', 1990, 1990,
+                10, 4, 0.4, 2400, 0, 0, 0.0, 80, 0.0
+            )
+            ",
+            [],
+        )
+        .expect("insert partly rated album");
+        let mut request = BrowseRequest::default();
+        request.filters.rated_tracks_min = Some(3);
+        request.filters.rated_tracks_max = Some(5);
+
+        let response = search_library(&conn, request, 50).expect("search by rated tracks");
+
+        assert_eq!(response.total, 1);
+        assert_eq!(response.rows[0].album.as_deref(), Some("Partly Rated"));
+        assert_eq!(response.rows[0].rated_tracks, Some(4));
     }
 
     #[test]

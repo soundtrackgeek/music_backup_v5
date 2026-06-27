@@ -760,12 +760,15 @@ export async function searchLibrary(request: BrowseRequest) {
     const artistKeys = new Set(request.filters.artistKeys);
     const genreKeys = new Set(expandGenreFilterKeys(request.filters.genres));
     const excludedGenreKeys = new Set(expandGenreFilterKeys(request.filters.excludedGenres));
+    const ratedTracksMin = request.filters.ratedTracksMin;
+    const ratedTracksMax = request.filters.ratedTracksMax;
     const ratingCompletenessMin = normalizePercentFilter(request.filters.ratingCompletenessMin);
     const ratingCompletenessMax = normalizePercentFilter(request.filters.ratingCompletenessMax);
     const rows = mockRows.filter((row) => {
       const matchesView = isTracks ? row.trackId !== null : row.trackId === null;
       const artistKey = normalizeArtistKey(row.albumArtistDisplay);
       const genreKey = normalizeGenreKey(row.canonicalGenre);
+      const ratedTracks = row.ratedTracks ?? 0;
       const ratingCompleteness = row.ratingCompleteness ?? 0;
       return (
         matchesView &&
@@ -773,6 +776,8 @@ export async function searchLibrary(request: BrowseRequest) {
         (artistKeys.size === 0 || artistKeys.has(artistKey)) &&
         (genreKeys.size === 0 || genreKeys.has(genreKey)) &&
         !excludedGenreKeys.has(genreKey) &&
+        (ratedTracksMin == null || ratedTracks >= ratedTracksMin) &&
+        (ratedTracksMax == null || ratedTracks <= ratedTracksMax) &&
         (ratingCompletenessMin == null || ratingCompleteness >= ratingCompletenessMin) &&
         (ratingCompletenessMax == null || ratingCompleteness <= ratingCompletenessMax) &&
         matchesMissingFields(row, isTracks, request.filters.missingFields)

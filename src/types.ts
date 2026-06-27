@@ -111,6 +111,8 @@ export type BrowseFilters = {
   totalMinutesMax: number | null;
   trackCountMin: number | null;
   trackCountMax: number | null;
+  ratedTracksMin: number | null;
+  ratedTracksMax: number | null;
   albumRatingMin: number | null;
   albumRatingMax: number | null;
   trackRatingMin: number | null;
