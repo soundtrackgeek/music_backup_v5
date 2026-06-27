@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.15.1] - 2026-06-27
+### Fixed
+- Fixed startup hydration so slow or failed Discovery aggregates cannot block core Search summary metrics, library status, statistics, settings, saved searches, or saved charts from loading.
+
 ## [0.15.0] - 2026-06-27
 ### Added
 - Added the Phase 10 Discovery workspace with a completion heatmap, backlog quest board, smart missions, love-vs-rating scatter, genre universe bubbles, artist constellation bubbles, and clickable album-result drilldowns.

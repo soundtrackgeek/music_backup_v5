@@ -3479,21 +3479,12 @@ export default function App() {
   }, []);
 
   const loadData = useCallback(async () => {
-    const [
-      nextStatus,
-      nextRuns,
-      nextSavedSearches,
-      nextSavedCharts,
-      nextStatistics,
-      nextDiscovery,
-      nextSettings,
-    ] = await Promise.all([
+    const [nextStatus, nextRuns, nextSavedSearches, nextSavedCharts, nextStatistics, nextSettings] = await Promise.all([
       getLibraryStatus(),
       listImportRuns(8),
       listSavedSearches(),
       listSavedCharts(),
       getStatistics(),
-      getDiscovery(),
       getSettings(),
     ]);
     setStatus(nextStatus);
@@ -3506,18 +3497,26 @@ export default function App() {
       })),
     );
     setStatistics(nextStatistics);
-    setDiscovery(nextDiscovery);
     setSettings(nextSettings);
     void refreshGenreSuggestions().catch(() => {
       // Keep any suggestions already loaded from focus retry or the Genres page.
     });
   }, [refreshGenreSuggestions]);
 
+  const loadDiscoveryData = useCallback(async () => {
+    const nextDiscovery = await getDiscovery();
+    setDiscovery(nextDiscovery);
+    setDiscoveryError(null);
+  }, []);
+
   useEffect(() => {
     void loadData().catch((loadError) => {
       setImportError(loadError instanceof Error ? loadError.message : String(loadError));
     });
-  }, [loadData]);
+    void loadDiscoveryData().catch((loadError) => {
+      setDiscoveryError(loadError instanceof Error ? loadError.message : String(loadError));
+    });
+  }, [loadData, loadDiscoveryData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4724,8 +4723,7 @@ export default function App() {
     setIsDiscoveryLoading(true);
     setDiscoveryError(null);
     try {
-      const nextDiscovery = await getDiscovery();
-      setDiscovery(nextDiscovery);
+      await loadDiscoveryData();
     } catch (error) {
       setDiscoveryError(error instanceof Error ? error.message : String(error));
     } finally {
