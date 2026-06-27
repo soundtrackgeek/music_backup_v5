@@ -439,16 +439,28 @@ export type ExportResult = {
 
 export type StatisticsResponse = {
   overview: LibraryOverviewStats;
+  healthScore: LibraryHealthScore;
   ratingProgress: RatingProgressStats;
+  decadeProgress: DecadeProgressStats[];
   yearProgress: YearProgressStats[];
   genreProgress: GenreProgressStats[];
   trackRatingDistribution: RatingBucket[];
   albumRatingDistribution: RatingBucket[];
+  metadataCoverage: MetadataCoverageMetric[];
   lovedTracks: LovedTrackStats;
   importHistory: ImportRun[];
   ratingHistory: RatingHistoryPoint[];
   recentRatingEvents: RatingEvent[];
   lastUpdated: string | null;
+};
+
+export type LibraryHealthScore = {
+  score: number;
+  ratingCoverage: number;
+  albumCompletion: number;
+  metadataCoverage: number;
+  coverCoverage: number;
+  scoreCoverage: number;
 };
 
 export type LibraryOverviewStats = {
@@ -470,6 +482,18 @@ export type RatingProgressStats = {
   unratedTracks: number;
   averageRatingCompleteness: number | null;
   averageAlbumRating: number | null;
+};
+
+export type DecadeProgressStats = {
+  decade: number;
+  albumCount: number;
+  ratedAlbumCount: number;
+  partialAlbumCount: number;
+  unratedAlbumCount: number;
+  trackCount: number;
+  totalSeconds: number;
+  lovedTracks: number;
+  averageAlbumScore: number | null;
 };
 
 export type YearProgressStats = {
@@ -494,6 +518,14 @@ export type GenreProgressStats = {
   totalSeconds: number;
   lovedTracks: number;
   averageAlbumScore: number | null;
+};
+
+export type MetadataCoverageMetric = {
+  id: string;
+  label: string;
+  scope: string;
+  coveredCount: number;
+  totalCount: number;
 };
 
 export type RatingBucket = {

@@ -93,9 +93,11 @@ import type {
   GenreListRequest,
   GenreListResponse,
   GenreSummary,
+  DecadeProgressStats,
   ImportProgress,
   ImportRun,
   ImportSummary,
+  MetadataCoverageMetric,
   LibraryStatus,
   LeftSidebarMode,
   GenreProgressStats,
@@ -857,9 +859,19 @@ function percentOf(value: number, total: number) {
   return Math.max(0, Math.min(100, (value / total) * 100));
 }
 
+function ratioOf(value: number | null | undefined, total: number | null | undefined) {
+  if (!value || !total || total <= 0) return 0;
+  return Math.max(0, Math.min(1, value / total));
+}
+
 function formatAverage(value: number | null | undefined, digits = 1) {
   if (value == null) return "";
   return value.toFixed(digits);
+}
+
+function formatSignedNumber(value: number) {
+  if (value === 0) return "0";
+  return `${value > 0 ? "+" : "-"}${formatNumber(Math.abs(value))}`;
 }
 
 function formatTrackRating(value: number | null | undefined) {
@@ -2983,6 +2995,296 @@ function DistributionBars({ buckets }: { buckets: RatingBucket[] }) {
           <strong>{formatNumber(bucket.count)}</strong>
         </div>
       ))}
+    </div>
+  );
+}
+
+function LibraryHealthScorePanel({ statistics }: { statistics: StatisticsResponse | null }) {
+  if (!statistics) {
+    return (
+      <div className="empty-state">
+        <ShieldCheck size={20} />
+        <span>No health score yet.</span>
+      </div>
+    );
+  }
+
+  const health = statistics.healthScore;
+  const score = Math.round(health.score);
+  const ringStyle = {
+    "--score": `${Math.max(0, Math.min(100, health.score))}%`,
+  } as CSSProperties & Record<"--score", string>;
+  const components = [
+    { label: "Ratings", value: health.ratingCoverage },
+    { label: "Albums complete", value: health.albumCompletion },
+    { label: "Metadata", value: health.metadataCoverage },
+    { label: "Covers", value: health.coverCoverage },
+    { label: "Scored albums", value: health.scoreCoverage },
+  ];
+
+  return (
+    <div className="health-score-panel">
+      <div className="health-score-ring" style={ringStyle} aria-label={`Library health score ${score} of 100`}>
+        <strong>{score}</strong>
+        <span>/100</span>
+      </div>
+      <div className="health-score-components">
+        {components.map((component) => (
+          <div className="health-component" key={component.label}>
+            <div>
+              <span>{component.label}</span>
+              <strong>{formatPercent(component.value, 0)}</strong>
+            </div>
+            <div className="meter-track" aria-hidden="true">
+              <div className="meter-fill" style={{ width: `${component.value * 100}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function nextMilestone(ratedTracks: number, totalTracks: number) {
+  if (totalTracks <= 0) return null;
+  const ratio = ratedTracks / totalTracks;
+  const milestone = [0.25, 0.5, 0.75, 0.9, 1].find((target) => ratio < target);
+  if (!milestone) return null;
+  return {
+    label: formatPercent(milestone, 0),
+    remaining: Math.max(0, Math.ceil(totalTracks * milestone - ratedTracks)),
+  };
+}
+
+function RatingCompletionBurndown({ statistics }: { statistics: StatisticsResponse | null }) {
+  const points = (statistics?.ratingHistory ?? []).slice(-10);
+  if (!statistics || points.length === 0) {
+    return (
+      <div className="empty-state">
+        <Activity size={20} />
+        <span>No rating history yet.</span>
+      </div>
+    );
+  }
+
+  const maxUnrated = Math.max(1, ...points.map((point) => point.unratedTracks));
+  const path = points
+    .map((point, index) => {
+      const x = 42 + (points.length === 1 ? 0.5 : index / (points.length - 1)) * 320;
+      const y = 194 - (point.unratedTracks / maxUnrated) * 152;
+      return `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const latest = points[points.length - 1];
+  const totalTracks = latest.trackCount || statistics.overview.trackCount;
+  const milestone = nextMilestone(latest.ratedTracks, totalTracks);
+
+  return (
+    <div className="burndown-panel">
+      <svg className="burndown-chart" viewBox="0 0 400 230" role="img" aria-label="Unrated tracks over rating history">
+        <line x1="42" y1="194" x2="372" y2="194" />
+        <line x1="42" y1="34" x2="42" y2="194" />
+        <text x="42" y="218">
+          Older
+        </text>
+        <text x="326" y="218">
+          Latest
+        </text>
+        <text x="8" y="28">
+          Unrated
+        </text>
+        <path d={path} />
+        {points.map((point, index) => {
+          const x = 42 + (points.length === 1 ? 0.5 : index / (points.length - 1)) * 320;
+          const y = 194 - (point.unratedTracks / maxUnrated) * 152;
+          return (
+            <circle key={point.importRunId} cx={x} cy={y} r={5}>
+              <title>
+                {formatDate(point.createdAt)}: {formatNumber(point.unratedTracks)} unrated tracks
+              </title>
+            </circle>
+          );
+        })}
+      </svg>
+      <div className="burndown-summary">
+        <div>
+          <span>Rated now</span>
+          <strong>{formatPercent(ratioOf(latest.ratedTracks, totalTracks))}</strong>
+        </div>
+        <div>
+          <span>Remaining</span>
+          <strong>{formatNumber(latest.unratedTracks)}</strong>
+        </div>
+        <div>
+          <span>Next milestone</span>
+          <strong>{milestone ? `${formatNumber(milestone.remaining)} to ${milestone.label}` : "Complete"}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DecadeProgressTimeline({ rows }: { rows: DecadeProgressStats[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <Clock3 size={20} />
+        <span>No decade statistics yet.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="decade-timeline">
+      {rows.map((row) => (
+        <div className="decade-row" key={row.decade}>
+          <div>
+            <strong>{row.decade}s</strong>
+            <span>{formatNumber(row.albumCount)} albums / {formatHours(row.totalSeconds)}</span>
+          </div>
+          <div className="stacked-track" aria-label={`${row.decade}s rating progress`}>
+            <span className="segment rated" style={{ width: `${percentOf(row.ratedAlbumCount, row.albumCount)}%` }} />
+            <span className="segment partial" style={{ width: `${percentOf(row.partialAlbumCount, row.albumCount)}%` }} />
+            <span className="segment unrated" style={{ width: `${percentOf(row.unratedAlbumCount, row.albumCount)}%` }} />
+          </div>
+          <small>
+            {formatNumber(row.ratedAlbumCount)} rated / {formatNumber(row.partialAlbumCount)} partial /{" "}
+            {formatNumber(row.unratedAlbumCount)} open
+          </small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function genreCompletionRatio(row: GenreProgressStats) {
+  if (row.albumCount <= 0) return 0;
+  return Math.max(0, Math.min(1, (row.ratedAlbumCount + row.partialAlbumCount * 0.5) / row.albumCount));
+}
+
+function GenrePortfolioMatrix({ rows }: { rows: GenreProgressStats[] }) {
+  const points = rows.slice(0, 24);
+  if (points.length === 0) {
+    return (
+      <div className="empty-state">
+        <Tags size={20} />
+        <span>No genre portfolio yet.</span>
+      </div>
+    );
+  }
+
+  const scoreExtent = numericExtent(points, (row) => row.averageAlbumScore);
+  const albumExtent = numericExtent(points, (row) => row.albumCount);
+
+  return (
+    <svg className="genre-portfolio-chart" viewBox="0 0 430 250" role="img" aria-label="Genre size, score, and completion matrix">
+      <line x1="44" y1="204" x2="398" y2="204" />
+      <line x1="44" y1="34" x2="44" y2="204" />
+      <text x="302" y="232">
+        Average score
+      </text>
+      <text x="8" y="24">
+        Completion
+      </text>
+      <line className="matrix-guide" x1="44" y1="119" x2="398" y2="119" />
+      <line className="matrix-guide" x1="221" y1="34" x2="221" y2="204" />
+      {points.map((row, index) => {
+        const completion = genreCompletionRatio(row);
+        const x = 44 + normalizedValue(row.averageAlbumScore, scoreExtent.min, scoreExtent.max) * 354;
+        const y = 204 - completion * 170;
+        const radius = 7 + Math.sqrt(normalizedValue(row.albumCount, albumExtent.min, albumExtent.max)) * 17;
+        const fill = `hsl(${185 - completion * 40} 62% ${72 - completion * 18}%)`;
+        return (
+          <g className="genre-portfolio-point" key={row.genre}>
+            <circle cx={x} cy={y} r={radius} style={{ fill }}>
+              <title>
+                {row.genre}: {formatNumber(row.albumCount)} albums / {formatPercent(completion)} complete /{" "}
+                {formatAverage(row.averageAlbumScore, 1)} score
+              </title>
+            </circle>
+            {index < 8 ? (
+              <text x={x} y={y - radius - 5}>
+                {row.genre}
+              </text>
+            ) : null}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function ImportDeltaTimeline({ runs }: { runs: ImportRun[] }) {
+  const rows = [...runs].sort((left, right) => left.id - right.id).slice(-8);
+  if (rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <FolderInput size={20} />
+        <span>No import deltas yet.</span>
+      </div>
+    );
+  }
+
+  const maxDelta = Math.max(
+    1,
+    ...rows.map((run) => run.addedTracks + run.changedTracks + run.removedTracks),
+  );
+
+  return (
+    <div className="import-delta-timeline">
+      {rows.map((run) => {
+        const totalDelta = run.addedTracks + run.changedTracks + run.removedTracks;
+        return (
+          <div className="import-delta-row" key={run.id}>
+            <div>
+              <strong>{formatDate(run.completedAt)}</strong>
+              <span>{formatNumber(run.ratingEventsCount)} rating events</span>
+            </div>
+            <div className="delta-track" aria-label={`Import ${run.id} track deltas`}>
+              <span className="delta added" style={{ width: `${percentOf(run.addedTracks, maxDelta)}%` }} />
+              <span className="delta changed" style={{ width: `${percentOf(run.changedTracks, maxDelta)}%` }} />
+              <span className="delta removed" style={{ width: `${percentOf(run.removedTracks, maxDelta)}%` }} />
+            </div>
+            <small>
+              {formatSignedNumber(run.addedTracks)} added / {formatNumber(run.changedTracks)} changed /{" "}
+              {formatNumber(run.removedTracks)} removed / {formatNumber(totalDelta)} touched
+            </small>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MetadataCoveragePanel({ metrics }: { metrics: MetadataCoverageMetric[] }) {
+  if (metrics.length === 0) {
+    return (
+      <div className="empty-state">
+        <ShieldCheck size={20} />
+        <span>No metadata coverage yet.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="metadata-coverage-list">
+      {metrics.map((metric) => {
+        const coverage = ratioOf(metric.coveredCount, metric.totalCount);
+        return (
+          <div className="metadata-coverage-row" key={metric.id}>
+            <div>
+              <strong>{metric.label}</strong>
+              <span>{metric.scope}</span>
+            </div>
+            <div className="meter-track" aria-hidden="true">
+              <div className="meter-fill" style={{ width: `${coverage * 100}%` }} />
+            </div>
+            <small>
+              {formatPercent(coverage, 0)} / {formatNumber(metric.coveredCount)} of {formatNumber(metric.totalCount)}
+            </small>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -6436,7 +6738,7 @@ export default function App() {
           <header className="topbar">
             <div>
               <h1>Statistics</h1>
-              <p>Library totals, rating progress, import deltas, and rating history.</p>
+              <p>Library health, rating progress, metadata coverage, import deltas, and history.</p>
             </div>
             <div className="topbar-actions">
               <button
@@ -6470,6 +6772,72 @@ export default function App() {
           {statsError ? <p className="error-message">{statsError}</p> : null}
 
           <section className="stats-dashboard-grid" aria-label="Statistics dashboards">
+            <section className="stats-panel health-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Library health score</h2>
+                  <p>{statistics ? "Ratings, metadata, covers, and score coverage" : "Waiting for library data"}</p>
+                </div>
+                <ShieldCheck size={18} />
+              </div>
+              <LibraryHealthScorePanel statistics={statistics} />
+            </section>
+
+            <section className="stats-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Rating completion burndown</h2>
+                  <p>Unrated tracks remaining across rating snapshots.</p>
+                </div>
+                <Activity size={18} />
+              </div>
+              <RatingCompletionBurndown statistics={statistics} />
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Decade progress timeline</h2>
+                  <p>Rated, partial, and open albums by release decade.</p>
+                </div>
+                <Clock3 size={18} />
+              </div>
+              <DecadeProgressTimeline rows={statistics?.decadeProgress ?? []} />
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Genre portfolio matrix</h2>
+                  <p>Catalog size, completion, and average Album Score by genre.</p>
+                </div>
+                <Tags size={18} />
+              </div>
+              <GenrePortfolioMatrix rows={statistics?.genreProgress ?? []} />
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Metadata coverage</h2>
+                  <p>Core album, track, artwork, and rating fields.</p>
+                </div>
+                <ShieldCheck size={18} />
+              </div>
+              <MetadataCoveragePanel metrics={statistics?.metadataCoverage ?? []} />
+            </section>
+
+            <section className="stats-panel wide">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Import delta timeline</h2>
+                  <p>Added, changed, removed, and rating-event movement by import.</p>
+                </div>
+                <FolderInput size={18} />
+              </div>
+              <ImportDeltaTimeline runs={statistics?.importHistory ?? []} />
+            </section>
+
             <section className="stats-panel rating-progress-panel">
               <div className="panel-heading compact">
                 <div>
@@ -7332,6 +7700,10 @@ export default function App() {
 
           <dl className="run-details">
             <div>
+              <dt>Health score</dt>
+              <dd>{statistics ? `${Math.round(statistics.healthScore.score)}/100` : ""}</dd>
+            </div>
+            <div>
               <dt>Average album rating</dt>
               <dd>{formatAverage(statistics?.ratingProgress.averageAlbumRating, 1)}</dd>
             </div>
@@ -7365,6 +7737,10 @@ export default function App() {
             <div>
               <FolderInput size={17} />
               <span>{formatNumber(statistics?.importHistory.length)} import runs</span>
+            </div>
+            <div>
+              <ShieldCheck size={17} />
+              <span>{formatPercent(statistics?.healthScore.metadataCoverage, 0)} metadata coverage</span>
             </div>
           </section>
 

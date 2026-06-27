@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.17.0] - 2026-06-27
+### Added
+- Added a first batch of expanded Statistics dashboards: Library Health Score, Rating Completion Burndown, Decade Progress Timeline, Genre Portfolio Matrix, Import Delta Timeline, and Metadata Coverage.
+- Added statistics API payloads for library health scoring, decade progress, and metadata coverage, with web-preview mock data for the new panels.
+
 ## [0.16.0] - 2026-06-27
 ### Added
 - Added on-demand layout controls for collapsing the left navigation sidebar, switching it to icon-only mode, and hiding or showing the right detail sidebar.

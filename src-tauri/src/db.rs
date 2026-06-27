@@ -1,13 +1,14 @@
 use crate::models::{
     AppSettings, ArtistListRequest, ArtistListResponse, ArtistSummary, BrowseFilters,
-    BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ChartConfig, DiscoveryAlbumPoint,
-    DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell, DiscoveryMission,
-    DiscoveryResponse, ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest,
-    GenreListResponse, GenreProgressStats, GenreSummary, ImportRun, LibraryOverviewStats,
-    LibraryStatus, LovedTrackStats, MusicToolIssueRequest, MusicToolIssueResponse,
-    MusicToolIssueRow, MusicToolProgress, MusicToolSummary, RatingBucket, RatingEvent,
-    RatingHistoryPoint, RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart,
-    SavedSearch, StatisticsResponse, TextFilter, YearProgressStats,
+    BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, ChartConfig, DecadeProgressStats,
+    DiscoveryAlbumPoint, DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell,
+    DiscoveryMission, DiscoveryResponse, ExportMusicToolRequest, ExportResult, ExportSearchRequest,
+    GenreListRequest, GenreListResponse, GenreProgressStats, GenreSummary, ImportRun,
+    LibraryHealthScore, LibraryOverviewStats, LibraryStatus, LovedTrackStats,
+    MetadataCoverageMetric, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
+    MusicToolProgress, MusicToolSummary, RatingBucket, RatingEvent, RatingHistoryPoint,
+    RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch,
+    StatisticsResponse, TextFilter, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, Utc};
@@ -666,7 +667,8 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
         .backup_retention
         .clamp(MIN_BACKUP_RETENTION, MAX_BACKUP_RETENTION);
     settings.left_sidebar_default = normalize_left_sidebar_default(&settings.left_sidebar_default);
-    settings.right_sidebar_default = normalize_right_sidebar_default(&settings.right_sidebar_default);
+    settings.right_sidebar_default =
+        normalize_right_sidebar_default(&settings.right_sidebar_default);
     settings
 }
 
@@ -711,12 +713,15 @@ pub fn list_import_runs(conn: &Connection, limit: u32) -> Result<Vec<ImportRun>>
 fn statistics(conn: &Connection) -> Result<StatisticsResponse> {
     let overview = library_overview_stats(conn)?;
     let rating_progress = rating_progress_stats(conn)?;
+    let metadata_coverage = metadata_coverage_stats(conn)?;
+    let health_score = library_health_score(conn, &overview, &rating_progress, &metadata_coverage)?;
+    let decade_progress = decade_progress_stats(conn)?;
     let year_progress = year_progress_stats(conn)?;
     let genre_progress = genre_progress_stats(conn)?;
     let track_rating_distribution = track_rating_distribution(conn)?;
     let album_rating_distribution = album_rating_distribution(conn)?;
     let loved_tracks = loved_track_stats(conn)?;
-    let import_history = list_import_runs(conn, 8)?;
+    let import_history = list_import_runs(conn, 16)?;
     let rating_history = rating_history(conn, &rating_progress, &overview)?;
     let recent_rating_events = recent_rating_events(conn, 10)?;
     let last_updated = import_history.first().and_then(|run| {
@@ -727,11 +732,14 @@ fn statistics(conn: &Connection) -> Result<StatisticsResponse> {
 
     Ok(StatisticsResponse {
         overview,
+        health_score,
         rating_progress,
+        decade_progress,
         year_progress,
         genre_progress,
         track_rating_distribution,
         album_rating_distribution,
+        metadata_coverage,
         loved_tracks,
         import_history,
         rating_history,
@@ -803,6 +811,105 @@ fn rating_progress_stats(conn: &Connection) -> Result<RatingProgressStats> {
         },
     )
     .context("Could not load rating progress statistics")
+}
+
+fn ratio(part: i64, total: i64) -> f64 {
+    if total <= 0 {
+        0.0
+    } else {
+        (part as f64 / total as f64).clamp(0.0, 1.0)
+    }
+}
+
+fn library_health_score(
+    conn: &Connection,
+    overview: &LibraryOverviewStats,
+    rating_progress: &RatingProgressStats,
+    metadata_coverage: &[MetadataCoverageMetric],
+) -> Result<LibraryHealthScore> {
+    let cover_count = conn
+        .query_row(
+            "
+            SELECT COUNT(DISTINCT a.id)
+            FROM albums a
+            JOIN album_covers c ON c.album_id = a.id
+            ",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .context("Could not load cover coverage for health score")?;
+
+    let metadata_values = metadata_coverage
+        .iter()
+        .filter(|metric| metric.scope == "Albums" || metric.scope == "Tracks")
+        .filter(|metric| metric.total_count > 0)
+        .map(|metric| ratio(metric.covered_count, metric.total_count))
+        .collect::<Vec<_>>();
+    let metadata_coverage_score = if metadata_values.is_empty() {
+        0.0
+    } else {
+        metadata_values.iter().sum::<f64>() / metadata_values.len() as f64
+    };
+
+    let rating_coverage = ratio(rating_progress.rated_tracks, overview.track_count);
+    let album_completion = ratio(rating_progress.fully_rated_albums, overview.album_count);
+    let cover_coverage = ratio(cover_count, overview.album_count);
+    let score_coverage = ratio(
+        rating_progress.albums_with_effective_rating,
+        overview.album_count,
+    );
+    let score = rating_coverage * 35.0
+        + album_completion * 20.0
+        + metadata_coverage_score * 25.0
+        + cover_coverage * 10.0
+        + score_coverage * 10.0;
+
+    Ok(LibraryHealthScore {
+        score,
+        rating_coverage,
+        album_completion,
+        metadata_coverage: metadata_coverage_score,
+        cover_coverage,
+        score_coverage,
+    })
+}
+
+fn decade_progress_stats(conn: &Connection) -> Result<Vec<DecadeProgressStats>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            CAST((year / 10) * 10 AS INTEGER) AS decade,
+            COUNT(*),
+            SUM(CASE WHEN rating_completeness >= 1.0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN rating_completeness > 0.0 AND rating_completeness < 1.0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN rating_completeness = 0.0 THEN 1 ELSE 0 END),
+            COALESCE(SUM(total_tracks), 0),
+            COALESCE(SUM(total_seconds), 0),
+            COALESCE(SUM(loved_tracks), 0),
+            AVG(album_score)
+        FROM albums
+        WHERE year IS NOT NULL
+        GROUP BY decade
+        ORDER BY decade ASC
+        ",
+    )?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(DecadeProgressStats {
+                decade: row.get(0)?,
+                album_count: row.get(1)?,
+                rated_album_count: row.get(2)?,
+                partial_album_count: row.get(3)?,
+                unrated_album_count: row.get(4)?,
+                track_count: row.get(5)?,
+                total_seconds: row.get(6)?,
+                loved_tracks: row.get(7)?,
+                average_album_score: row.get(8)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
 }
 
 fn year_progress_stats(conn: &Connection) -> Result<Vec<YearProgressStats>> {
@@ -937,6 +1044,208 @@ fn album_rating_distribution(conn: &Connection) -> Result<Vec<RatingBucket>> {
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
+}
+
+fn coverage_metric(
+    id: &str,
+    label: &str,
+    scope: &str,
+    covered_count: i64,
+    total_count: i64,
+) -> MetadataCoverageMetric {
+    MetadataCoverageMetric {
+        id: id.to_string(),
+        label: label.to_string(),
+        scope: scope.to_string(),
+        covered_count,
+        total_count,
+    }
+}
+
+fn metadata_coverage_stats(conn: &Connection) -> Result<Vec<MetadataCoverageMetric>> {
+    let (
+        album_total,
+        album_title_count,
+        album_artist_count,
+        genre_count,
+        year_count,
+        release_year_count,
+        publisher_count,
+        album_rating_count,
+    ) = conn
+        .query_row(
+            "
+            SELECT
+                COUNT(*),
+                COALESCE(SUM(CASE WHEN NULLIF(TRIM(COALESCE(album, '')), '') IS NOT NULL THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN NULLIF(TRIM(COALESCE(genre_normalized, '')), '') IS NOT NULL THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN year IS NOT NULL THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN release_year IS NOT NULL THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN NULLIF(TRIM(COALESCE(publisher, '')), '') IS NOT NULL THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN effective_album_rating IS NOT NULL THEN 1 ELSE 0 END), 0)
+            FROM albums
+            ",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, i64>(7)?,
+                ))
+            },
+        )
+        .context("Could not load album metadata coverage")?;
+    let (
+        track_total,
+        track_title_count,
+        display_artist_count,
+        track_number_count,
+        disc_number_count,
+        duration_count,
+        filename_count,
+        track_rating_count,
+    ) = conn
+        .query_row(
+            "
+            SELECT
+                COUNT(*),
+                COALESCE(SUM(CASE WHEN NULLIF(TRIM(COALESCE(title, '')), '') IS NOT NULL THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN NULLIF(TRIM(COALESCE(display_artist, '')), '') IS NOT NULL THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN track_number IS NOT NULL AND track_number > 0 THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN disc_number IS NOT NULL AND disc_number > 0 THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN time_seconds IS NOT NULL AND time_seconds > 0 THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN NULLIF(TRIM(COALESCE(filename, '')), '') IS NOT NULL THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN normalized_rating IS NOT NULL THEN 1 ELSE 0 END), 0)
+            FROM tracks
+            ",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, i64>(7)?,
+                ))
+            },
+        )
+        .context("Could not load track metadata coverage")?;
+    let cover_count = conn
+        .query_row(
+            "
+            SELECT COUNT(DISTINCT a.id)
+            FROM albums a
+            JOIN album_covers c ON c.album_id = a.id
+            ",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .context("Could not load artwork metadata coverage")?;
+
+    Ok(vec![
+        coverage_metric(
+            "album-title",
+            "Album title",
+            "Albums",
+            album_title_count,
+            album_total,
+        ),
+        coverage_metric(
+            "album-artist",
+            "Album artist",
+            "Albums",
+            album_artist_count,
+            album_total,
+        ),
+        coverage_metric("genre", "Genre", "Albums", genre_count, album_total),
+        coverage_metric("year", "Year", "Albums", year_count, album_total),
+        coverage_metric(
+            "release-year",
+            "Release year",
+            "Albums",
+            release_year_count,
+            album_total,
+        ),
+        coverage_metric(
+            "publisher",
+            "Publisher",
+            "Albums",
+            publisher_count,
+            album_total,
+        ),
+        coverage_metric(
+            "track-title",
+            "Track title",
+            "Tracks",
+            track_title_count,
+            track_total,
+        ),
+        coverage_metric(
+            "display-artist",
+            "Display artist",
+            "Tracks",
+            display_artist_count,
+            track_total,
+        ),
+        coverage_metric(
+            "track-number",
+            "Track number",
+            "Tracks",
+            track_number_count,
+            track_total,
+        ),
+        coverage_metric(
+            "disc-number",
+            "Disc number",
+            "Tracks",
+            disc_number_count,
+            track_total,
+        ),
+        coverage_metric(
+            "duration",
+            "Duration",
+            "Tracks",
+            duration_count,
+            track_total,
+        ),
+        coverage_metric(
+            "filename",
+            "Filename",
+            "Tracks",
+            filename_count,
+            track_total,
+        ),
+        coverage_metric(
+            "cover-art",
+            "Cover art",
+            "Artwork",
+            cover_count,
+            album_total,
+        ),
+        coverage_metric(
+            "track-rating",
+            "Track rating",
+            "Ratings",
+            track_rating_count,
+            track_total,
+        ),
+        coverage_metric(
+            "album-rating",
+            "Album rating",
+            "Ratings",
+            album_rating_count,
+            album_total,
+        ),
+    ])
 }
 
 fn loved_track_stats(conn: &Connection) -> Result<LovedTrackStats> {

@@ -1344,6 +1344,239 @@ button {
   padding: 12px;
 }
 
+.health-score-panel {
+  display: grid;
+  grid-template-columns: 126px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.health-score-ring {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  width: 120px;
+  height: 120px;
+  border-radius: 999px;
+  color: #12312d;
+  background:
+    radial-gradient(circle at center, #ffffff 0 56%, transparent 57%),
+    conic-gradient(#0f766e var(--score), #e4ebe8 0);
+}
+
+.health-score-ring strong {
+  font-size: 38px;
+  line-height: 42px;
+  font-weight: 780;
+}
+
+.health-score-ring span {
+  color: #697671;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 720;
+}
+
+.health-score-components,
+.metadata-coverage-list,
+.decade-timeline,
+.import-delta-timeline {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.health-component {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.8fr) minmax(72px, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.metadata-coverage-row {
+  display: grid;
+  grid-template-columns: minmax(124px, 0.8fr) minmax(120px, 1fr) 116px;
+  align-items: center;
+  gap: 10px;
+}
+
+.health-component > div:first-child,
+.metadata-coverage-row > div:first-child,
+.decade-row > div:first-child,
+.import-delta-row > div:first-child {
+  min-width: 0;
+}
+
+.health-component span,
+.metadata-coverage-row span,
+.decade-row span,
+.import-delta-row span {
+  display: block;
+  color: #697671;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 650;
+}
+
+.health-component strong,
+.metadata-coverage-row strong,
+.decade-row strong,
+.import-delta-row strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #17211f;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 740;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metadata-coverage-row small,
+.decade-row small,
+.import-delta-row small {
+  color: #53615d;
+  font-size: 11px;
+  line-height: 15px;
+  text-align: right;
+}
+
+.burndown-panel {
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) minmax(120px, 0.54fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.burndown-chart,
+.genre-portfolio-chart {
+  width: 100%;
+  min-height: 230px;
+  overflow: visible;
+}
+
+.burndown-chart line,
+.genre-portfolio-chart line {
+  stroke: #bfcdc8;
+  stroke-width: 1.2;
+}
+
+.burndown-chart path {
+  fill: none;
+  stroke: #0f766e;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.burndown-chart circle {
+  fill: #ffffff;
+  stroke: #0f766e;
+  stroke-width: 2;
+}
+
+.burndown-chart text,
+.genre-portfolio-chart text {
+  fill: #697671;
+  font-size: 10px;
+  font-weight: 720;
+}
+
+.burndown-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.burndown-summary div {
+  border: 1px solid #e1e8e5;
+  border-radius: 8px;
+  background: #fbfcfc;
+  padding: 10px;
+}
+
+.burndown-summary span {
+  display: block;
+  color: #697671;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 650;
+}
+
+.burndown-summary strong {
+  display: block;
+  margin-top: 2px;
+  color: #17211f;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.decade-row,
+.import-delta-row {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.44fr) minmax(180px, 1fr) minmax(190px, 0.8fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.stacked-track,
+.delta-track {
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e4ebe8;
+}
+
+.segment,
+.delta {
+  min-width: 2px;
+  height: 100%;
+}
+
+.segment.rated,
+.delta.added {
+  background: #0f766e;
+}
+
+.segment.partial,
+.delta.changed {
+  background: #d19020;
+}
+
+.segment.unrated,
+.delta.removed {
+  background: #cfd8d4;
+}
+
+.genre-portfolio-chart {
+  min-height: 320px;
+  border: 1px solid #e1e8e5;
+  border-radius: 8px;
+  background:
+    linear-gradient(to right, transparent 0, transparent 49.8%, #e7eeeb 50%, transparent 50.2%),
+    linear-gradient(to top, transparent 0, transparent 49.8%, #e7eeeb 50%, transparent 50.2%),
+    #fbfcfc;
+}
+
+.genre-portfolio-chart .matrix-guide {
+  stroke: #dce5e1;
+  stroke-dasharray: 4 5;
+}
+
+.genre-portfolio-point circle {
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.genre-portfolio-point text {
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: #fbfcfc;
+  stroke-width: 3px;
+}
+
 .stats-table {
   display: grid;
   gap: 1px;
@@ -2203,6 +2436,11 @@ button {
 :root[data-theme="dark"] .meter-row strong,
 :root[data-theme="dark"] .stat-pairs strong,
 :root[data-theme="dark"] .history-point strong,
+:root[data-theme="dark"] .health-component strong,
+:root[data-theme="dark"] .metadata-coverage-row strong,
+:root[data-theme="dark"] .decade-row strong,
+:root[data-theme="dark"] .import-delta-row strong,
+:root[data-theme="dark"] .burndown-summary strong,
 :root[data-theme="dark"] .rank-metric strong,
 :root[data-theme="dark"] .setting-toggle strong {
   color: #f3f8f6;
@@ -2227,6 +2465,14 @@ button {
 :root[data-theme="dark"] .meter-row span,
 :root[data-theme="dark"] .stat-pairs span,
 :root[data-theme="dark"] .history-point span,
+:root[data-theme="dark"] .health-component span,
+:root[data-theme="dark"] .metadata-coverage-row span,
+:root[data-theme="dark"] .decade-row span,
+:root[data-theme="dark"] .import-delta-row span,
+:root[data-theme="dark"] .burndown-summary span,
+:root[data-theme="dark"] .metadata-coverage-row small,
+:root[data-theme="dark"] .decade-row small,
+:root[data-theme="dark"] .import-delta-row small,
 :root[data-theme="dark"] .rating-event small,
 :root[data-theme="dark"] .run-details dt,
 :root[data-theme="dark"] .setting-toggle small,
@@ -2266,10 +2512,12 @@ button {
 :root[data-theme="dark"] .segmented-control,
 :root[data-theme="dark"] .progress-block,
 :root[data-theme="dark"] .stat-pairs div,
+:root[data-theme="dark"] .burndown-summary div,
 :root[data-theme="dark"] .history-point,
 :root[data-theme="dark"] .rating-event,
 :root[data-theme="dark"] .calculation-list div,
 :root[data-theme="dark"] .setting-toggle,
+:root[data-theme="dark"] .genre-portfolio-chart,
 :root[data-theme="dark"] .bubble-plot,
 :root[data-theme="dark"] .heatmap-cell.empty {
   border-color: #35433e;
@@ -2378,20 +2626,58 @@ button {
 }
 
 :root[data-theme="dark"] .meter-track,
-:root[data-theme="dark"] .progress-track {
+:root[data-theme="dark"] .progress-track,
+:root[data-theme="dark"] .stacked-track,
+:root[data-theme="dark"] .delta-track {
   background: #293632;
 }
 
-:root[data-theme="dark"] .discovery-scatter line {
+:root[data-theme="dark"] .discovery-scatter line,
+:root[data-theme="dark"] .burndown-chart line,
+:root[data-theme="dark"] .genre-portfolio-chart line {
   stroke: #4c5c56;
 }
 
-:root[data-theme="dark"] .discovery-scatter .scatter-guide {
+:root[data-theme="dark"] .discovery-scatter .scatter-guide,
+:root[data-theme="dark"] .genre-portfolio-chart .matrix-guide {
   stroke: #2f3d38;
 }
 
-:root[data-theme="dark"] .discovery-scatter text {
+:root[data-theme="dark"] .discovery-scatter text,
+:root[data-theme="dark"] .burndown-chart text,
+:root[data-theme="dark"] .genre-portfolio-chart text {
   fill: #a9b7b2;
+}
+
+:root[data-theme="dark"] .health-score-ring {
+  color: #effaf7;
+  background:
+    radial-gradient(circle at center, #111815 0 56%, transparent 57%),
+    conic-gradient(#24a397 var(--score), #293632 0);
+}
+
+:root[data-theme="dark"] .burndown-chart path {
+  stroke: #24a397;
+}
+
+:root[data-theme="dark"] .burndown-chart circle,
+:root[data-theme="dark"] .genre-portfolio-point circle {
+  stroke: #111815;
+}
+
+:root[data-theme="dark"] .burndown-chart circle {
+  fill: #17231f;
+}
+
+:root[data-theme="dark"] .genre-portfolio-chart {
+  background:
+    linear-gradient(to right, transparent 0, transparent 49.8%, #2c3935 50%, transparent 50.2%),
+    linear-gradient(to top, transparent 0, transparent 49.8%, #2c3935 50%, transparent 50.2%),
+    #111815;
+}
+
+:root[data-theme="dark"] .genre-portfolio-point text {
+  stroke: #111815;
 }
 
 :root[data-theme="dark"] .scatter-point {
@@ -2564,6 +2850,28 @@ button {
 
   .stats-panel.wide {
     grid-column: span 2;
+  }
+
+  .health-score-panel,
+  .burndown-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .health-score-ring {
+    justify-self: center;
+  }
+
+  .health-component,
+  .metadata-coverage-row,
+  .decade-row,
+  .import-delta-row {
+    grid-template-columns: 1fr;
+  }
+
+  .metadata-coverage-row small,
+  .decade-row small,
+  .import-delta-row small {
+    text-align: left;
   }
 
   .discovery-panel.wide,

@@ -677,16 +677,30 @@ pub struct ExportResult {
 #[serde(rename_all = "camelCase")]
 pub struct StatisticsResponse {
     pub overview: LibraryOverviewStats,
+    pub health_score: LibraryHealthScore,
     pub rating_progress: RatingProgressStats,
+    pub decade_progress: Vec<DecadeProgressStats>,
     pub year_progress: Vec<YearProgressStats>,
     pub genre_progress: Vec<GenreProgressStats>,
     pub track_rating_distribution: Vec<RatingBucket>,
     pub album_rating_distribution: Vec<RatingBucket>,
+    pub metadata_coverage: Vec<MetadataCoverageMetric>,
     pub loved_tracks: LovedTrackStats,
     pub import_history: Vec<ImportRun>,
     pub rating_history: Vec<RatingHistoryPoint>,
     pub recent_rating_events: Vec<RatingEvent>,
     pub last_updated: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryHealthScore {
+    pub score: f64,
+    pub rating_coverage: f64,
+    pub album_completion: f64,
+    pub metadata_coverage: f64,
+    pub cover_coverage: f64,
+    pub score_coverage: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -712,6 +726,20 @@ pub struct RatingProgressStats {
     pub unrated_tracks: i64,
     pub average_rating_completeness: Option<f64>,
     pub average_album_rating: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DecadeProgressStats {
+    pub decade: i32,
+    pub album_count: i64,
+    pub rated_album_count: i64,
+    pub partial_album_count: i64,
+    pub unrated_album_count: i64,
+    pub track_count: i64,
+    pub total_seconds: i64,
+    pub loved_tracks: i64,
+    pub average_album_score: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -747,6 +775,16 @@ pub struct GenreProgressStats {
 pub struct RatingBucket {
     pub label: String,
     pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetadataCoverageMetric {
+    pub id: String,
+    pub label: String,
+    pub scope: String,
+    pub covered_count: i64,
+    pub total_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
