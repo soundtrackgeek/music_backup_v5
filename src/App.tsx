@@ -1635,8 +1635,8 @@ function AlbumDetailPanel({
         <div>
           <dt>Tracks</dt>
           <dd>
-            {formatNumber(album.totalTracks)}
-            {album.ratedTracks != null ? ` / ${formatNumber(album.ratedTracks)} rated` : ""}
+            {album.ratedTracks != null ? formatNumber(album.ratedTracks) : formatNumber(album.totalTracks)}
+            {album.ratedTracks != null ? ` / ${formatNumber(album.totalTracks)} rated` : ""}
             {isLoading ? " / loading" : ""}
           </dd>
         </div>

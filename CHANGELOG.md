@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.12.3] - 2026-06-27
+### Fixed
+- Fixed album detail track rating counts to show `rated / total rated` instead of `total / rated rated`.
+
 ## [0.12.2] - 2026-06-27
 ### Fixed
 - Fixed desktop genre suggestions to load from a dedicated canonical genre-name command before falling back to the heavier genre summary query.
