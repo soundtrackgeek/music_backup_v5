@@ -300,9 +300,7 @@ fn run_import(
     let mut previous_albums = load_previous_albums(conn)?;
     let mut changes = ImportChanges::default();
 
-    let mut reader = csv::ReaderBuilder::new()
-        .delimiter(b'\t')
-        .flexible(true)
+    let mut reader = musicbee_tsv_reader_builder()
         .from_path(source_path)
         .with_context(|| format!("Could not open TSV source {}", source_path.display()))?;
 
@@ -1182,6 +1180,12 @@ fn resolve_source_path(source_path: &str) -> Result<PathBuf> {
         .ok_or_else(|| anyhow!("Could not find TSV source path: {source_path}"))
 }
 
+fn musicbee_tsv_reader_builder() -> csv::ReaderBuilder {
+    let mut builder = csv::ReaderBuilder::new();
+    builder.delimiter(b'\t').flexible(true).quoting(false);
+    builder
+}
+
 fn header_index(headers: &StringRecord, name: &str) -> Result<usize> {
     headers
         .iter()
@@ -1347,6 +1351,76 @@ mod tests {
         assert_eq!(normalize_track_rating("0"), Some(0));
         assert_eq!(normalize_track_rating("3.5"), None);
         assert_eq!(normalize_track_rating("6"), None);
+    }
+
+    #[test]
+    fn treats_musicbee_tsv_quotes_as_literal_text() {
+        let tsv = [
+            REQUIRED_COLUMNS.join("\t"),
+            [
+                "Artist",
+                "",
+                "1",
+                "Album",
+                "Genre",
+                "",
+                "Publisher",
+                "4",
+                "\"Unclosed Quote",
+                "1",
+                "2026",
+                "2026",
+                "album-1",
+                "D:\\Music\\Artist - Album (2026)",
+                "01 - Artist - Unclosed Quote.mp3",
+                "Artist",
+                "3:21",
+            ]
+            .join("\t"),
+            [
+                "Artist",
+                "",
+                "1",
+                "Album",
+                "Genre",
+                "",
+                "Publisher",
+                "5",
+                "Next Track",
+                "2",
+                "2026",
+                "2026",
+                "album-1",
+                "D:\\Music\\Artist - Album (2026)",
+                "02 - Artist - Next Track.mp3",
+                "Artist",
+                "2:34",
+            ]
+            .join("\t"),
+        ]
+        .join("\n");
+
+        let mut reader = musicbee_tsv_reader_builder().from_reader(tsv.as_bytes());
+        let headers = reader.headers().expect("read headers").clone();
+        let header_map = HeaderMap::from_headers(&headers).expect("map headers");
+        let rows = reader
+            .records()
+            .collect::<csv::Result<Vec<_>>>()
+            .expect("read records");
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(
+            TrackRow::from_record(&rows[0], &header_map)
+                .expect("parse first row")
+                .title,
+            "\"Unclosed Quote"
+        );
+        assert_eq!(
+            TrackRow::from_record(&rows[1], &header_map)
+                .expect("parse second row")
+                .title,
+            "Next Track"
+        );
     }
 
     #[test]

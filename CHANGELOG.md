@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.17.1] - 2026-06-27
+### Fixed
+- Fixed MusicBee TSV imports so quote characters in titles and tags are treated as literal text instead of collapsing later rows into one parsed record.
+
 ## [0.17.0] - 2026-06-27
 ### Added
 - Added a first batch of expanded Statistics dashboards: Library Health Score, Rating Completion Burndown, Decade Progress Timeline, Genre Portfolio Matrix, Import Delta Timeline, and Metadata Coverage.
