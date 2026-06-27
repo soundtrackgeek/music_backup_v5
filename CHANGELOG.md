@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.15.2] - 2026-06-27
+### Fixed
+- Fixed Discovery heatmap aggregation performance on large libraries so the Discovery page populates instead of appearing empty while the backend query runs.
+- Improved Discovery loading states so initial startup shows loading copy instead of misleading zero-count empty states.
+
 ## [0.15.1] - 2026-06-27
 ### Fixed
 - Fixed startup hydration so slow or failed Discovery aggregates cannot block core Search summary metrics, library status, statistics, settings, saved searches, or saved charts from loading.

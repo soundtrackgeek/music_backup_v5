@@ -3037,9 +3037,11 @@ function DiscoveryMissionGrid({
 
 function CompletionHeatmap({
   cells,
+  emptyLabel = "No heatmap cells yet.",
   onOpen,
 }: {
   cells: DiscoveryHeatmapCell[];
+  emptyLabel?: string;
   onOpen: (cell: DiscoveryHeatmapCell) => void;
 }) {
   const years = useMemo(
@@ -3070,7 +3072,7 @@ function CompletionHeatmap({
     return (
       <div className="empty-state">
         <Gauge size={20} />
-        <span>No heatmap cells yet.</span>
+        <span>{emptyLabel}</span>
       </div>
     );
   }
@@ -3116,9 +3118,11 @@ function CompletionHeatmap({
 
 function LoveRatingScatter({
   points,
+  emptyLabel = "No loved/rating outliers yet.",
   onOpen,
 }: {
   points: DiscoveryAlbumPoint[];
+  emptyLabel?: string;
   onOpen: (point: DiscoveryAlbumPoint) => void;
 }) {
   const scoreExtent = numericExtent(points, (point) => point.albumScore ?? point.effectiveAlbumRating);
@@ -3129,7 +3133,7 @@ function LoveRatingScatter({
     return (
       <div className="empty-state">
         <Heart size={20} />
-        <span>No loved/rating outliers yet.</span>
+        <span>{emptyLabel}</span>
       </div>
     );
   }
@@ -3179,9 +3183,11 @@ function LoveRatingScatter({
 
 function GenreUniverse({
   points,
+  emptyLabel = "No genre universe yet.",
   onOpen,
 }: {
   points: DiscoveryGenrePoint[];
+  emptyLabel?: string;
   onOpen: (point: DiscoveryGenrePoint) => void;
 }) {
   const albumExtent = numericExtent(points, (point) => point.albumCount);
@@ -3191,7 +3197,7 @@ function GenreUniverse({
     return (
       <div className="empty-state">
         <Tags size={20} />
-        <span>No genre universe yet.</span>
+        <span>{emptyLabel}</span>
       </div>
     );
   }
@@ -3224,9 +3230,11 @@ function GenreUniverse({
 
 function ArtistConstellation({
   points,
+  emptyLabel = "No artist constellation yet.",
   onOpen,
 }: {
   points: DiscoveryArtistPoint[];
+  emptyLabel?: string;
   onOpen: (point: DiscoveryArtistPoint) => void;
 }) {
   const albumExtent = numericExtent(points, (point) => point.albumCount);
@@ -3237,7 +3245,7 @@ function ArtistConstellation({
     return (
       <div className="empty-state">
         <UsersRound size={20} />
-        <span>No artist constellation yet.</span>
+        <span>{emptyLabel}</span>
       </div>
     );
   }
@@ -3460,7 +3468,7 @@ export default function App() {
   const [isStatsLoading, setIsStatsLoading] = useState(false);
   const [discovery, setDiscovery] = useState<DiscoveryResponse | null>(null);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
-  const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
+  const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(true);
   const [discoveryAlbumRequest, setDiscoveryAlbumRequest] = useState<BrowseRequest>(() =>
     createDiscoveryAlbumRequest({}, { field: "albumScore", direction: "desc" }, 30),
   );
@@ -3504,9 +3512,11 @@ export default function App() {
   }, [refreshGenreSuggestions]);
 
   const loadDiscoveryData = useCallback(async () => {
+    setIsDiscoveryLoading(true);
     const nextDiscovery = await getDiscovery();
     setDiscovery(nextDiscovery);
     setDiscoveryError(null);
+    setIsDiscoveryLoading(false);
   }, []);
 
   useEffect(() => {
@@ -3515,6 +3525,7 @@ export default function App() {
     });
     void loadDiscoveryData().catch((loadError) => {
       setDiscoveryError(loadError instanceof Error ? loadError.message : String(loadError));
+      setIsDiscoveryLoading(false);
     });
   }, [loadData, loadDiscoveryData]);
 
@@ -4720,13 +4731,11 @@ export default function App() {
   }
 
   async function refreshDiscovery() {
-    setIsDiscoveryLoading(true);
     setDiscoveryError(null);
     try {
       await loadDiscoveryData();
     } catch (error) {
       setDiscoveryError(error instanceof Error ? error.message : String(error));
-    } finally {
       setIsDiscoveryLoading(false);
     }
   }
@@ -4854,6 +4863,16 @@ export default function App() {
   const currentChartGridCoverSize = normalizeChartGridCoverSize(chartConfig.gridCoverSize);
   const currentChartCompletenessRange = chartCompletenessRange(chartConfig);
   const discoveryMissionTotal = (discovery?.backlogMissions.length ?? 0) + (discovery?.smartMissions.length ?? 0);
+  const discoveryMetricValue = (value: number | null | undefined) =>
+    isDiscoveryLoading && !discovery ? "Loading" : formatNumber(value);
+  const discoveryHeatmapEmptyLabel = isDiscoveryLoading ? "Loading heatmap cells." : "No heatmap cells yet.";
+  const discoveryBacklogEmptyLabel = isDiscoveryLoading ? "Loading backlog missions." : "No backlog missions yet.";
+  const discoverySmartMissionEmptyLabel = isDiscoveryLoading ? "Loading smart missions." : "No smart missions yet.";
+  const discoveryOutlierEmptyLabel = isDiscoveryLoading
+    ? "Loading loved/rating outliers."
+    : "No loved/rating outliers yet.";
+  const discoveryGenreEmptyLabel = isDiscoveryLoading ? "Loading genre universe." : "No genre universe yet.";
+  const discoveryArtistEmptyLabel = isDiscoveryLoading ? "Loading artist constellation." : "No artist constellation yet.";
   const discoveryAlbumTotal = discoveryAlbumResponse?.total ?? 0;
   const discoveryAlbumPageStart = discoveryAlbumTotal === 0 ? 0 : discoveryAlbumRequest.offset + 1;
   const discoveryAlbumPageEnd = Math.min(discoveryAlbumTotal, discoveryAlbumRequest.offset + discoveryAlbumRequest.limit);
@@ -5355,10 +5374,10 @@ export default function App() {
           </header>
 
           <section className="metric-grid" aria-label="Discovery summary">
-            <Metric label="Missions" value={formatNumber(discoveryMissionTotal)} tone="teal" icon={Compass} />
-            <Metric label="Heatmap cells" value={formatNumber(discovery?.heatmap.length)} tone="amber" icon={Gauge} />
-            <Metric label="Genre bubbles" value={formatNumber(discovery?.genrePoints.length)} icon={Tags} />
-            <Metric label="Outliers" value={formatNumber(discovery?.loveRatingPoints.length)} icon={Heart} />
+            <Metric label="Missions" value={discoveryMetricValue(discoveryMissionTotal)} tone="teal" icon={Compass} />
+            <Metric label="Heatmap cells" value={discoveryMetricValue(discovery?.heatmap.length)} tone="amber" icon={Gauge} />
+            <Metric label="Genre bubbles" value={discoveryMetricValue(discovery?.genrePoints.length)} icon={Tags} />
+            <Metric label="Outliers" value={discoveryMetricValue(discovery?.loveRatingPoints.length)} icon={Heart} />
           </section>
 
           {discoveryError ? <p className="error-message">{discoveryError}</p> : null}
@@ -5370,13 +5389,17 @@ export default function App() {
                   <h2>Completion heatmap</h2>
                   <p>
                     {isDiscoveryLoading
-                      ? "Refreshing"
+                      ? "Loading"
                       : `${formatNumber(discovery?.heatmap.length)} genre/year intersections`}
                   </p>
                 </div>
                 <Gauge size={18} />
               </div>
-              <CompletionHeatmap cells={discovery?.heatmap ?? []} onOpen={openDiscoveryHeatmapCell} />
+              <CompletionHeatmap
+                cells={discovery?.heatmap ?? []}
+                emptyLabel={discoveryHeatmapEmptyLabel}
+                onOpen={openDiscoveryHeatmapCell}
+              />
             </section>
 
             <section className="discovery-panel">
@@ -5389,7 +5412,7 @@ export default function App() {
               </div>
               <DiscoveryMissionGrid
                 missions={discovery?.backlogMissions ?? []}
-                emptyLabel="No backlog missions yet."
+                emptyLabel={discoveryBacklogEmptyLabel}
                 onOpen={openDiscoveryMission}
               />
             </section>
@@ -5404,7 +5427,7 @@ export default function App() {
               </div>
               <DiscoveryMissionGrid
                 missions={discovery?.smartMissions ?? []}
-                emptyLabel="No smart missions yet."
+                emptyLabel={discoverySmartMissionEmptyLabel}
                 onOpen={openDiscoveryMission}
               />
             </section>
@@ -5417,7 +5440,11 @@ export default function App() {
                 </div>
                 <Heart size={18} />
               </div>
-              <LoveRatingScatter points={discovery?.loveRatingPoints ?? []} onOpen={openDiscoveryAlbumPoint} />
+              <LoveRatingScatter
+                points={discovery?.loveRatingPoints ?? []}
+                emptyLabel={discoveryOutlierEmptyLabel}
+                onOpen={openDiscoveryAlbumPoint}
+              />
             </section>
 
             <section className="discovery-panel">
@@ -5428,7 +5455,11 @@ export default function App() {
                 </div>
                 <Tags size={18} />
               </div>
-              <GenreUniverse points={discovery?.genrePoints ?? []} onOpen={openDiscoveryGenre} />
+              <GenreUniverse
+                points={discovery?.genrePoints ?? []}
+                emptyLabel={discoveryGenreEmptyLabel}
+                onOpen={openDiscoveryGenre}
+              />
             </section>
 
             <section className="discovery-panel">
@@ -5439,7 +5470,11 @@ export default function App() {
                 </div>
                 <UsersRound size={18} />
               </div>
-              <ArtistConstellation points={discovery?.artistPoints ?? []} onOpen={openDiscoveryArtist} />
+              <ArtistConstellation
+                points={discovery?.artistPoints ?? []}
+                emptyLabel={discoveryArtistEmptyLabel}
+                onOpen={openDiscoveryArtist}
+              />
             </section>
 
             <section className="table-panel discovery-results-panel" aria-label="Discovery album results">

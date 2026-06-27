@@ -1831,42 +1831,51 @@ fn discovery(conn: &Connection) -> Result<DiscoveryResponse> {
 fn discovery_heatmap(conn: &Connection) -> Result<Vec<DiscoveryHeatmapCell>> {
     let mut stmt = conn.prepare(
         "
-        WITH top_genres AS (
+        WITH album_projection AS (
             SELECT
                 COALESCE(NULLIF(TRIM(LOWER(genre_normalized)), ''), 'unknown') AS genre_id,
-                COALESCE(MIN(NULLIF(TRIM(canonical_genre), '')), 'Unknown') AS genre
+                COALESCE(NULLIF(TRIM(canonical_genre), ''), 'Unknown') AS genre,
+                year,
+                rating_completeness,
+                album_score,
+                total_tracks,
+                loved_tracks
             FROM albums
-            WHERE NULLIF(TRIM(COALESCE(genre_normalized, '')), '') IS NOT NULL
+            WHERE year IS NOT NULL
+              AND NULLIF(TRIM(COALESCE(genre_normalized, '')), '') IS NOT NULL
+        ),
+        top_genres AS (
+            SELECT
+                genre_id
+            FROM album_projection
             GROUP BY genre_id
-            ORDER BY COUNT(*) DESC, LOWER(genre) ASC
+            ORDER BY COUNT(*) DESC, LOWER(MIN(genre)) ASC
             LIMIT 12
         ),
         top_years AS (
             SELECT year
-            FROM albums
-            WHERE year IS NOT NULL
+            FROM album_projection
             GROUP BY year
             ORDER BY COUNT(*) DESC, year DESC
             LIMIT 16
         )
         SELECT
-            tg.genre_id,
-            tg.genre,
-            a.year,
+            genre_id,
+            MIN(genre),
+            year,
             COUNT(*),
-            SUM(CASE WHEN a.rating_completeness >= 1.0 THEN 1 ELSE 0 END),
-            SUM(CASE WHEN a.rating_completeness > 0.0 AND a.rating_completeness < 1.0 THEN 1 ELSE 0 END),
-            SUM(CASE WHEN a.rating_completeness = 0.0 THEN 1 ELSE 0 END),
-            COALESCE(SUM(a.total_tracks), 0),
-            COALESCE(SUM(a.loved_tracks), 0),
-            AVG(a.rating_completeness),
-            AVG(a.album_score)
-        FROM albums a
-        JOIN top_genres tg
-          ON COALESCE(NULLIF(TRIM(LOWER(a.genre_normalized)), ''), 'unknown') = tg.genre_id
-        JOIN top_years ty ON ty.year = a.year
-        GROUP BY tg.genre_id, tg.genre, a.year
-        ORDER BY LOWER(tg.genre), a.year ASC
+            SUM(CASE WHEN rating_completeness >= 1.0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN rating_completeness > 0.0 AND rating_completeness < 1.0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN rating_completeness = 0.0 THEN 1 ELSE 0 END),
+            COALESCE(SUM(total_tracks), 0),
+            COALESCE(SUM(loved_tracks), 0),
+            AVG(rating_completeness),
+            AVG(album_score)
+        FROM album_projection
+        WHERE genre_id IN (SELECT genre_id FROM top_genres)
+          AND year IN (SELECT year FROM top_years)
+        GROUP BY genre_id, year
+        ORDER BY LOWER(MIN(genre)), year ASC
         ",
     )?;
 
