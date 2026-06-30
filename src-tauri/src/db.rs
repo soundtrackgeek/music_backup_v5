@@ -2220,17 +2220,10 @@ pub fn export_music_tool_issues_for_app(
     }
 
     let (conn, _) = open(app)?;
-    let request = MusicToolIssueRequest {
-        tool_id: input.tool_id.clone(),
-        request_id: String::new(),
-        search_text: input.search_text.clone(),
-        sort: BrowseSort {
-            field: "album".to_string(),
-            direction: "asc".to_string(),
-        },
-        limit: 100_000,
-        offset: 0,
-    };
+    let mut request = input.request.clone();
+    request.request_id = String::new();
+    request.limit = 100_000;
+    request.offset = 0;
     let response = list_music_tool_issues(&conn, request.clone(), 100_000, None)?;
 
     let export_dir = app

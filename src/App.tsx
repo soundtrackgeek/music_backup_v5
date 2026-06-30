@@ -121,6 +121,8 @@ import type {
   YearProgressStats,
 } from "./types";
 
+const EXPORT_FORMATS = ["csv", "tsv", "xlsx", "json", "txt"];
+
 const navigation = [
   { label: "Search", icon: Search, enabled: true },
   { label: "Charts", icon: BarChart3, enabled: true },
@@ -2688,6 +2690,47 @@ function MusicToolIssueTable({
   );
 }
 
+function MusicToolExportControls({
+  tool,
+  isPending,
+  exportResult,
+  onExport,
+}: {
+  tool: MusicToolSummary | null;
+  isPending: boolean;
+  exportResult: ExportResult | null;
+  onExport: (format: string) => Promise<void>;
+}) {
+  const isDisabled = !tool || isPending;
+
+  return (
+    <div className="tool-export-controls" aria-label="Export validation issues">
+      <div className="export-strip">
+        {EXPORT_FORMATS.map((format) => (
+          <button
+            type="button"
+            key={format}
+            disabled={isDisabled}
+            aria-label={`Export ${tool?.label ?? "validation issues"} as ${format.toUpperCase()}`}
+            onClick={() => void onExport(format)}
+          >
+            <Download size={15} />
+            <span>{format.toUpperCase()}</span>
+          </button>
+        ))}
+      </div>
+      {exportResult ? (
+        <div className="export-result tool-export-result">
+          <Check size={17} />
+          <span>
+            {formatNumber(exportResult.rowCount)} issues to {exportResult.path}
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MusicToolDetailPanel({
   tool,
   progress,
@@ -2780,7 +2823,7 @@ function MusicToolDetailPanel({
 
       <section className="export-box">
         <div className="export-grid">
-          {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
+          {EXPORT_FORMATS.map((format) => (
             <button type="button" key={format} onClick={() => void onExport(format)}>
               <Download size={16} />
               <span>{format.toUpperCase()}</span>
@@ -4648,6 +4691,15 @@ export default function App() {
   }, [toolIssueResponse]);
 
   useEffect(() => {
+    setToolExportResult(null);
+  }, [
+    toolIssueRequest.toolId,
+    toolIssueRequest.searchText,
+    toolIssueRequest.sort.field,
+    toolIssueRequest.sort.direction,
+  ]);
+
+  useEffect(() => {
     if (activeSection !== "Charts") {
       return;
     }
@@ -5214,7 +5266,13 @@ export default function App() {
     if (!selectedTool) {
       return;
     }
-    const result = await exportMusicToolIssues(selectedTool.id, toolIssueRequest.searchText, format);
+    const result = await exportMusicToolIssues(
+      {
+        ...toolIssueRequest,
+        toolId: selectedTool.id,
+      },
+      format,
+    );
     setToolExportResult(result);
   }
 
@@ -6683,37 +6741,45 @@ export default function App() {
                 <h2>{selectedTool?.label ?? "Issue list"}</h2>
                 <p>{toolIssuePanelCaption}</p>
               </div>
-              <div className="pager">
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Previous issue page"
-                  disabled={toolIssueRequest.offset === 0}
-                  onClick={() =>
-                    setToolIssueRequest((previous) =>
-                      renewMusicToolIssueRequest(previous, {
-                        offset: Math.max(0, previous.offset - previous.limit),
-                      }),
-                    )
-                  }
-                >
-                  <ChevronLeft size={17} />
-                </button>
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Next issue page"
-                  disabled={toolIssueRequest.offset + toolIssueRequest.limit >= toolIssueTotal}
-                  onClick={() =>
-                    setToolIssueRequest((previous) =>
-                      renewMusicToolIssueRequest(previous, {
-                        offset: previous.offset + previous.limit,
-                      }),
-                    )
-                  }
-                >
-                  <ChevronRight size={17} />
-                </button>
+              <div className="panel-actions">
+                <MusicToolExportControls
+                  tool={selectedTool}
+                  isPending={isToolRunPending}
+                  exportResult={toolExportResult}
+                  onExport={runToolExport}
+                />
+                <div className="pager">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="Previous issue page"
+                    disabled={toolIssueRequest.offset === 0}
+                    onClick={() =>
+                      setToolIssueRequest((previous) =>
+                        renewMusicToolIssueRequest(previous, {
+                          offset: Math.max(0, previous.offset - previous.limit),
+                        }),
+                      )
+                    }
+                  >
+                    <ChevronLeft size={17} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="Next issue page"
+                    disabled={toolIssueRequest.offset + toolIssueRequest.limit >= toolIssueTotal}
+                    onClick={() =>
+                      setToolIssueRequest((previous) =>
+                        renewMusicToolIssueRequest(previous, {
+                          offset: previous.offset + previous.limit,
+                        }),
+                      )
+                    }
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
               </div>
             </div>
 

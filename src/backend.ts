@@ -1789,11 +1789,11 @@ export async function exportSearch(request: BrowseRequest, format: string, inclu
   return invoke<ExportResult>("export_search", { input: { request, format, includeCalculated } });
 }
 
-export async function exportMusicToolIssues(toolId: string, searchText: string, format: string) {
+export async function exportMusicToolIssues(request: MusicToolIssueRequest, format: string) {
   if (!isTauriRuntime()) {
-    const normalizedSearch = searchText.trim().toLowerCase();
+    const normalizedSearch = request.searchText.trim().toLowerCase();
     const rowCount = mockMusicToolIssues.filter((issue) => {
-      if (issue.toolId !== toolId) {
+      if (issue.toolId !== request.toolId) {
         return false;
       }
       if (!normalizedSearch) {
@@ -1821,7 +1821,7 @@ export async function exportMusicToolIssues(toolId: string, searchText: string, 
     } satisfies ExportResult;
   }
 
-  return invoke<ExportResult>("export_music_tool_issues", { input: { toolId, searchText, format } });
+  return invoke<ExportResult>("export_music_tool_issues", { input: { request, format } });
 }
 
 export async function listenToImportProgress(handler: (progress: ImportProgress) => void) {

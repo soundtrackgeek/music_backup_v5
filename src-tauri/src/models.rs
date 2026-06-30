@@ -659,9 +659,7 @@ pub struct ExportSearchRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportMusicToolRequest {
-    pub tool_id: String,
-    #[serde(default)]
-    pub search_text: String,
+    pub request: MusicToolIssueRequest,
     pub format: String,
 }
 

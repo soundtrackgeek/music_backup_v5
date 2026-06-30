@@ -72,7 +72,7 @@ npm run tauri:build
 - Tools workspace with query-backed validation issue counts and affected album/track rows.
 - Tool catalog renders immediately; selected validator counts show live percentage progress while affected rows load on demand.
 - Initial validation suite for duplicate albums, albums without embedded cover image records, duplicates within an album, invalid times, non-numeric ratings, missing tags, non-MP3 files, year anomalies, ratings outside accepted values, track/disc numbering issues, inconsistent album metadata, whitespace anomalies, genre normalization issues, conflicting album artists, and multiple years per album.
-- Tool-level severity, issue counts, affected album counts, affected track counts, filterable issue rows, pagination, sorting, and exports to CSV, TSV, XLSX, JSON, and TXT.
+- Tool-level severity, issue counts, affected album counts, affected track counts, filterable issue rows, pagination, sorting, and direct issue-result exports to CSV, TSV, XLSX, JSON, and TXT that preserve the active filter and sort.
 - Web-only preview mock data covers Tools alongside Search, Charts, Statistics, Albums, Artists, Genres, and Imports.
 
 ## Phase 7 Genres Features

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0] - 2026-06-30
+### Added
+- Added direct export controls to the Music Tools issue result panel for CSV, TSV, XLSX, JSON, and TXT exports.
+
+### Changed
+- Music Tools exports now preserve the active validator, text filter, and sort order from the visible issue result set.
+
 ## [0.19.0] - 2026-06-30
 ### Added
 - Added a Music Tools validator for albums missing imported archive or embedded cover image records, with affected album rows and exports.

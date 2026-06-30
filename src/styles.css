@@ -211,6 +211,7 @@ button {
 .topbar,
 .topbar-actions,
 .panel-heading,
+.panel-actions,
 .progress-row,
 .progress-meta,
 .action-row,
@@ -218,6 +219,7 @@ button {
 .sort-controls,
 .pager,
 .toggle-row,
+.export-strip,
 .export-result {
   display: flex;
   align-items: center;
@@ -232,6 +234,14 @@ button {
 .topbar-actions,
 .pager {
   gap: 8px;
+}
+
+.panel-actions {
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .topbar h1,
@@ -2395,11 +2405,46 @@ button {
   gap: 8px;
 }
 
+.tool-export-controls {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  justify-items: end;
+}
+
+.export-strip {
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .export-grid button {
   min-height: 38px;
   border: 1px solid #d3ded9;
   color: #33413d;
   background: #ffffff;
+}
+
+.export-strip button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid #d3ded9;
+  border-radius: 8px;
+  padding: 0 9px;
+  color: #33413d;
+  background: #ffffff;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.export-strip button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .export-result {
@@ -2412,6 +2457,11 @@ button {
   background: #eff8f5;
   font-size: 12px;
   line-height: 17px;
+}
+
+.tool-export-result {
+  max-width: min(520px, 100%);
+  padding: 8px 10px;
 }
 
 .export-result span {
@@ -2545,7 +2595,8 @@ button {
 :root[data-theme="dark"] .stats-table-row,
 :root[data-theme="dark"] .empty-state,
 :root[data-theme="dark"] .saved-search > button:first-child,
-:root[data-theme="dark"] .export-grid button {
+:root[data-theme="dark"] .export-grid button,
+:root[data-theme="dark"] .export-strip button {
   border-color: #2f3d38;
   color: #dce7e3;
   background: #171f1c;
@@ -2733,7 +2784,8 @@ button {
 }
 
 :root[data-theme="dark"] .segmented-control button,
-:root[data-theme="dark"] .export-grid button {
+:root[data-theme="dark"] .export-grid button,
+:root[data-theme="dark"] .export-strip button {
   color: #c8d6d1;
 }
 
@@ -2983,9 +3035,24 @@ button {
 
   .query-footer,
   .sort-controls,
+  .panel-actions,
   .action-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .tool-export-controls {
+    justify-items: stretch;
+    width: 100%;
+  }
+
+  .export-strip {
+    justify-content: flex-start;
+  }
+
+  .export-strip button {
+    flex: 1 1 68px;
+    justify-content: center;
   }
 
   .sort-controls .criterion {
