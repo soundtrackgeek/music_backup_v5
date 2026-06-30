@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.21.0] - 2026-06-30
+### Added
+- Added an Artist page album cover board with clickable covers and inline track detail showing rating stars, loved status, and clock time.
+
 ## [0.20.0] - 2026-06-30
 ### Added
 - Added direct export controls to the Music Tools issue result panel for CSV, TSV, XLSX, JSON, and TXT exports.

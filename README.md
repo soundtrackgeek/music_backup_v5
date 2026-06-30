@@ -88,6 +88,7 @@ npm run tauri:build
 - Artists workspace with a searchable, sortable, paginated album-artist index.
 - Artist-level summary stats for album counts, rating progress, year span, top genre, track totals, loved tracks, TMOE, average completeness, average album rating, and average Album Score.
 - Selected artist album lists backed by normalized artist-key filtering so casing differences do not split album lists.
+- Artist album cover board below the selected album list, with clickable covers and inline track detail showing ratings, loved status, and clock time.
 - Artist album-list export to CSV, TSV, XLSX, JSON, and TXT with optional calculated columns.
 - Web-only preview mock data covers Artists alongside Search, Charts, Statistics, Albums, and Imports.
 
