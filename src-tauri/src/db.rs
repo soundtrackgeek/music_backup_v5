@@ -66,6 +66,13 @@ const MUSIC_TOOLS: &[MusicToolDefinition] = &[
         scope: "albums",
     },
     MusicToolDefinition {
+        id: "albums-without-cover-image",
+        label: "Albums without embedded cover image",
+        description: "Albums missing an imported archive or embedded cover image record.",
+        severity: "low",
+        scope: "albums",
+    },
+    MusicToolDefinition {
         id: "duplicates-within-album",
         label: "Duplicates within album",
         description: "Tracks that repeat a title or disc/track position inside one album.",
@@ -3919,6 +3926,39 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             "
             .to_string(),
         ),
+        "albums-without-cover-image" => Ok(
+            "
+            WITH representative_paths AS (
+                SELECT
+                    album_id,
+                    MIN(NULLIF(TRIM(filename), '')) AS filename,
+                    MIN(NULLIF(TRIM(file_path), '')) AS file_path
+                FROM tracks
+                GROUP BY album_id
+            )
+            SELECT
+                'albums-without-cover-image:' || a.id AS id,
+                'albums-without-cover-image' AS tool_id,
+                'low' AS severity,
+                'albums' AS entity_type,
+                a.id AS album_id,
+                NULL AS track_id,
+                a.album,
+                a.album_artist_display,
+                NULL AS title,
+                a.canonical_genre,
+                a.year,
+                'No imported cover image' AS detail,
+                'Missing album cover record' AS value,
+                p.filename,
+                p.file_path
+            FROM albums a
+            LEFT JOIN album_covers c ON c.album_id = a.id
+            LEFT JOIN representative_paths p ON p.album_id = a.id
+            WHERE c.album_id IS NULL
+            "
+            .to_string(),
+        ),
         "duplicates-within-album" => Ok(
             "
             WITH duplicate_titles AS (
@@ -5794,6 +5834,48 @@ mod tests {
         );
         assert!(headers.contains(&"Issue"));
         assert_eq!(rows.len(), 1);
+    }
+
+    #[test]
+    fn lists_albums_without_cover_image_records() {
+        let conn = seeded_connection();
+        let mut request = MusicToolIssueRequest::default();
+        request.tool_id = "albums-without-cover-image".to_string();
+
+        let response =
+            list_music_tool_issues(&conn, request.clone(), 50, None).expect("list cover issues");
+
+        assert_eq!(response.tool.issue_count, 1);
+        assert_eq!(response.tool.album_count, 1);
+        assert_eq!(response.tool.track_count, 0);
+        assert_eq!(response.total, 1);
+        assert_eq!(response.rows[0].album.as_deref(), Some("Actually"));
+        assert_eq!(
+            response.rows[0].file_path.as_deref(),
+            Some("D:\\Music\\Pet Shop Boys\\Actually")
+        );
+
+        conn.execute(
+            "
+            INSERT INTO album_covers (
+                album_id, source, source_path, cache_path, mime_type, extension,
+                file_size_bytes, imported_at
+            ) VALUES (
+                'mb:test', 'archive', 'D:\\Music\\AlbumCovers\\Actually.jpg',
+                'D:\\Music\\AlbumCovers\\Actually.jpg', 'image/jpeg', 'jpg',
+                2048, '2026-06-30T00:00:00Z'
+            )
+            ",
+            [],
+        )
+        .expect("insert album cover");
+
+        let response = list_music_tool_issues(&conn, request, 50, None)
+            .expect("list cover issues after import");
+
+        assert_eq!(response.tool.issue_count, 0);
+        assert_eq!(response.tool.album_count, 0);
+        assert_eq!(response.total, 0);
     }
 
     #[test]

@@ -525,6 +525,7 @@ The Tools navigation item is enabled as a validation and cleanup workspace. Phas
 Planned validation and cleanup tools:
 
 - Duplicate albums
+- Albums without embedded cover image records
 - Duplicates within an album
 - Invalid time values
 - Non-numeric ratings
@@ -662,7 +663,7 @@ These are targets, not hard guarantees. They should be measured once implementat
 ### Phase 8: Music Tools Workspace (implemented)
 
 - Enable the Tools navigation item.
-- Music Tools validation suite.
+- Music Tools validation suite, including albums missing imported cover image records.
 - Issue counts, filterable affected rows/albums, severity, and exports.
 - Later safe fix actions for selected issue types.
 

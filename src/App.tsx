@@ -661,6 +661,16 @@ const musicToolCatalog: MusicToolSummary[] = [
     trackCount: -1,
   },
   {
+    id: "albums-without-cover-image",
+    label: "Albums without embedded cover image",
+    description: "Albums missing an imported archive or embedded cover image record.",
+    severity: "low",
+    scope: "albums",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
     id: "duplicates-within-album",
     label: "Duplicates within album",
     description: "Tracks that repeat a title or disc/track position inside one album.",

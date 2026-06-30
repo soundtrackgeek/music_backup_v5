@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.19.0] - 2026-06-30
+### Added
+- Added a Music Tools validator for albums missing imported archive or embedded cover image records, with affected album rows and exports.
+
 ## [0.18.0] - 2026-06-27
 ### Added
 - Added a second batch of Statistics dashboards: Library Shape by Time, Loved Density, Catalog Concentration / Long Tail, Duration Analytics, and Outlier Stats.
