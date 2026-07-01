@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.22.2] - 2026-07-01
+### Fixed
+- Fixed Billboard CSV matching so library artists and albums with diacritics can match plain ASCII chart text such as `Mötley Crüe` to `MOTLEY CRUE`.
+
 ## [0.22.1] - 2026-07-01
 ### Fixed
 - Fixed upgrades from existing databases so the Billboard rank index is created only after the new album columns are added.

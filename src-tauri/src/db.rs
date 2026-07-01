@@ -27,6 +27,7 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
+use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
 const LATEST_SCHEMA_VERSION: i32 = 8;
@@ -864,9 +865,25 @@ fn billboard_key_variants(key: &str) -> Vec<String> {
 }
 
 fn billboard_text_key(value: &str) -> String {
-    value
-        .replace('&', " and ")
-        .to_lowercase()
+    let lowercased = value.replace('&', " and ").to_lowercase();
+    let folded = lowercased
+        .nfd()
+        .filter(|character| !is_combining_mark(*character))
+        .fold(String::new(), |mut normalized, character| {
+            match character {
+                'æ' => normalized.push_str("ae"),
+                'œ' => normalized.push_str("oe"),
+                'ø' => normalized.push('o'),
+                'ð' => normalized.push('d'),
+                'þ' => normalized.push_str("th"),
+                'ł' => normalized.push('l'),
+                'ß' => normalized.push_str("ss"),
+                _ => normalized.push(character),
+            }
+            normalized
+        });
+
+    folded
         .split(|character: char| !character.is_alphanumeric())
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
@@ -5899,6 +5916,59 @@ mod tests {
         assert_eq!(summary.matched_albums, 1);
         assert_eq!(response.rows[0].billboard_rank, Some(103));
         assert_eq!(response.rows[0].billboard_year, Some(1987));
+
+        fs::remove_dir_all(source_dir).expect("remove billboard csv dir");
+    }
+
+    #[test]
+    fn imports_billboard_csv_with_diacritic_library_text() {
+        let mut conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+            ) VALUES (
+                'mb:motley', 1, 'motley', 'Dr. Feelgood', 'Mötley Crüe',
+                'Hard Rock', 'hard rock', 'Elektra', 1989, 1989,
+                11, 11, 1.0, 2720, 3, 960, 0.3529, 90, 245.13
+            )
+            ",
+            [],
+        )
+        .expect("insert motley album");
+        let source_dir = std::env::temp_dir().join(format!(
+            "music-library-billboard-diacritic-test-{}",
+            Utc::now().timestamp_millis()
+        ));
+        fs::create_dir_all(&source_dir).expect("create billboard csv dir");
+        fs::write(
+            source_dir.join("1989.csv"),
+            "EOY Rank,Artist,Title\n5,MOTLEY CRUE,Dr. Feelgood\n",
+        )
+        .expect("write diacritic chart");
+
+        let summary =
+            import_billboard_charts(&mut conn, &source_dir).expect("import billboard charts");
+        let (rank, year): (Option<i32>, Option<i32>) = conn
+            .query_row(
+                "
+                SELECT billboard_rank, billboard_year
+                FROM albums
+                WHERE id = 'mb:motley'
+                ",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("load motley billboard rank");
+
+        assert_eq!(summary.files_scanned, 1);
+        assert_eq!(summary.chart_entries, 1);
+        assert_eq!(summary.matched_albums, 1);
+        assert_eq!(rank, Some(5));
+        assert_eq!(year, Some(1989));
 
         fs::remove_dir_all(source_dir).expect("remove billboard csv dir");
     }
