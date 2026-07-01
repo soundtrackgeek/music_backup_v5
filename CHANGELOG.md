@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.23.0] - 2026-07-01
+### Added
+- Added a Missing Billboard Albums tool that lists imported Billboard chart rows not linked to any library album, with filtering, sorting, pagination, and existing Music Tools exports.
+- Persisted imported Billboard chart rows in SQLite so missing Billboard albums can be compared from the database after running the Billboard import.
+
 ## [0.22.4] - 2026-07-01
 ### Fixed
 - Fixed Charts grid album cards so Billboard badges always render below the artist line and above the ranking metric, preventing long title rows from making individual cards taller.

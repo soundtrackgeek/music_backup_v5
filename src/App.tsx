@@ -697,6 +697,16 @@ const musicToolCatalog: MusicToolSummary[] = [
     trackCount: -1,
   },
   {
+    id: "missing-billboard-albums",
+    label: "Missing Billboard Albums",
+    description: "Imported Billboard chart albums that are not linked to any library album.",
+    severity: "low",
+    scope: "albums",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
     id: "duplicates-within-album",
     label: "Duplicates within album",
     description: "Tracks that repeat a title or disc/track position inside one album.",

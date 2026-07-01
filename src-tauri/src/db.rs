@@ -30,7 +30,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 8;
+const LATEST_SCHEMA_VERSION: i32 = 9;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const MIN_BACKUP_RETENTION: u32 = 1;
 const MAX_BACKUP_RETENTION: u32 = 50;
@@ -62,6 +62,9 @@ struct MusicToolDefinition {
 
 #[derive(Debug, Clone)]
 struct BillboardChartEntry {
+    source_file: String,
+    artist: String,
+    album: String,
     artist_key: String,
     album_key: String,
     rank: i32,
@@ -80,6 +83,13 @@ const MUSIC_TOOLS: &[MusicToolDefinition] = &[
         id: "albums-without-cover-image",
         label: "Albums without embedded cover image",
         description: "Albums missing an imported archive or embedded cover image record.",
+        severity: "low",
+        scope: "albums",
+    },
+    MusicToolDefinition {
+        id: "missing-billboard-albums",
+        label: "Missing Billboard Albums",
+        description: "Imported Billboard chart albums that are not linked to any library album.",
         severity: "low",
         scope: "albums",
     },
@@ -217,7 +227,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_eight_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_nine_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -342,6 +352,19 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             imported_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS billboard_chart_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            rank INTEGER NOT NULL,
+            artist TEXT NOT NULL,
+            album TEXT NOT NULL,
+            artist_key TEXT NOT NULL,
+            album_key TEXT NOT NULL,
+            matched_album_id TEXT REFERENCES albums(id) ON DELETE SET NULL,
+            imported_at TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_tracks_album_id ON tracks(album_id);
         CREATE INDEX IF NOT EXISTS idx_tracks_year ON tracks(year);
         CREATE INDEX IF NOT EXISTS idx_tracks_rating ON tracks(normalized_rating);
@@ -355,6 +378,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_albums_rating_completeness ON albums(rating_completeness);
         CREATE INDEX IF NOT EXISTS idx_albums_album_score ON albums(album_score);
         CREATE INDEX IF NOT EXISTS idx_album_covers_imported_at ON album_covers(imported_at);
+        CREATE INDEX IF NOT EXISTS idx_billboard_chart_entries_match
+            ON billboard_chart_entries(matched_album_id);
+        CREATE INDEX IF NOT EXISTS idx_billboard_chart_entries_year_rank
+            ON billboard_chart_entries(year, rank);
 
         CREATE VIRTUAL TABLE IF NOT EXISTS album_search_fts USING fts5(
             album_id UNINDEXED,
@@ -465,9 +492,16 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_import_run_change_columns(conn)?;
     ensure_app_settings_layout_columns(conn)?;
     ensure_album_billboard_columns(conn)?;
-    conn.execute_batch("PRAGMA user_version = 8;")
+    ensure_billboard_chart_entries_table(conn)?;
+    conn.execute_batch("PRAGMA user_version = 9;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_nine_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_eight_schema_exists(conn)?
+        && schema_table_exists(conn, "billboard_chart_entries")?
+        && schema_column_exists(conn, "billboard_chart_entries", "matched_album_id")?)
 }
 
 fn phase_eight_schema_exists(conn: &Connection) -> Result<bool> {
@@ -586,6 +620,33 @@ fn ensure_album_billboard_columns(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn ensure_billboard_chart_entries_table(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS billboard_chart_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            rank INTEGER NOT NULL,
+            artist TEXT NOT NULL,
+            album TEXT NOT NULL,
+            artist_key TEXT NOT NULL,
+            album_key TEXT NOT NULL,
+            matched_album_id TEXT REFERENCES albums(id) ON DELETE SET NULL,
+            imported_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_billboard_chart_entries_match
+            ON billboard_chart_entries(matched_album_id);
+        CREATE INDEX IF NOT EXISTS idx_billboard_chart_entries_year_rank
+            ON billboard_chart_entries(year, rank);
+        ",
+    )
+    .context("Could not create Billboard chart entry table")?;
+
+    Ok(())
+}
+
 fn schema_column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
     let sql = format!("PRAGMA table_info({table})");
     let mut stmt = conn
@@ -643,14 +704,21 @@ fn import_billboard_charts(
 
     let mut files_scanned = 0_usize;
     let mut source_entry_count = 0_usize;
+    let mut source_entries = Vec::new();
     let mut best_entries: HashMap<String, BillboardChartEntry> = HashMap::new();
+    let mut entry_indexes_by_match_key: HashMap<String, Vec<usize>> = HashMap::new();
     for csv_file in csv_files {
         let year = billboard_year_from_path(&csv_file)?;
         let entries = read_billboard_chart_file(&csv_file, year)?;
         files_scanned += 1;
         source_entry_count += entries.len();
         for entry in entries {
+            let entry_index = source_entries.len();
             for key in billboard_match_keys(&entry.artist_key, &entry.album_key) {
+                entry_indexes_by_match_key
+                    .entry(key.clone())
+                    .or_default()
+                    .push(entry_index);
                 let should_replace = best_entries
                     .get(&key)
                     .map(|existing| {
@@ -662,6 +730,7 @@ fn import_billboard_charts(
                     best_entries.insert(key, entry.clone());
                 }
             }
+            source_entries.push(entry);
         }
     }
 
@@ -674,7 +743,9 @@ fn import_billboard_charts(
     )
     .context("Could not clear existing Billboard rankings")?;
 
-    let album_matches = {
+    let mut matched_entry_album_ids = vec![None::<String>; source_entries.len()];
+    let mut album_matches = Vec::new();
+    {
         let mut stmt = tx.prepare(
             "
             SELECT id, album_artist_display, album
@@ -691,22 +762,41 @@ fn import_billboard_charts(
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
-        album_rows
-            .into_iter()
-            .filter_map(|(album_id, artist, album)| {
-                let artist_key = billboard_text_key(artist.as_deref().unwrap_or_default());
-                let album_key = billboard_text_key(album.as_deref().unwrap_or_default());
-                if artist_key.is_empty() || album_key.is_empty() {
-                    return None;
+        for (album_id, artist, album) in album_rows {
+            let artist_key = billboard_text_key(artist.as_deref().unwrap_or_default());
+            let album_key = billboard_text_key(album.as_deref().unwrap_or_default());
+            if artist_key.is_empty() || album_key.is_empty() {
+                continue;
+            }
+
+            let mut best_match: Option<&BillboardChartEntry> = None;
+            for key in billboard_match_keys(&artist_key, &album_key) {
+                if let Some(indexes) = entry_indexes_by_match_key.get(&key) {
+                    for &entry_index in indexes {
+                        if matched_entry_album_ids[entry_index].is_none() {
+                            matched_entry_album_ids[entry_index] = Some(album_id.clone());
+                        }
+                    }
                 }
-                billboard_match_keys(&artist_key, &album_key)
-                    .into_iter()
-                    .filter_map(|key| best_entries.get(&key))
-                    .min_by_key(|entry| (entry.rank, entry.year))
-                    .map(|entry| (album_id, entry.rank, entry.year))
-            })
-            .collect::<Vec<_>>()
-    };
+
+                if let Some(entry) = best_entries.get(&key) {
+                    if best_match
+                        .map(|existing| {
+                            entry.rank < existing.rank
+                                || (entry.rank == existing.rank && entry.year < existing.year)
+                        })
+                        .unwrap_or(true)
+                    {
+                        best_match = Some(entry);
+                    }
+                }
+            }
+
+            if let Some(entry) = best_match {
+                album_matches.push((album_id, entry.rank, entry.year));
+            }
+        }
+    }
 
     {
         let mut update_album = tx.prepare(
@@ -721,6 +811,42 @@ fn import_billboard_charts(
             update_album
                 .execute(params![rank, year, album_id])
                 .with_context(|| format!("Could not update Billboard ranking for {album_id}"))?;
+        }
+    }
+
+    tx.execute("DELETE FROM billboard_chart_entries", [])
+        .context("Could not clear existing Billboard chart entries")?;
+    {
+        let imported_at = Utc::now().to_rfc3339();
+        let mut insert_entry = tx.prepare(
+            "
+            INSERT INTO billboard_chart_entries (
+                source_file, year, rank, artist, album, artist_key, album_key,
+                matched_album_id, imported_at
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
+            )
+            ",
+        )?;
+        for (index, entry) in source_entries.iter().enumerate() {
+            insert_entry
+                .execute(params![
+                    &entry.source_file,
+                    entry.year,
+                    entry.rank,
+                    &entry.artist,
+                    &entry.album,
+                    &entry.artist_key,
+                    &entry.album_key,
+                    matched_entry_album_ids[index].as_deref(),
+                    &imported_at,
+                ])
+                .with_context(|| {
+                    format!(
+                        "Could not import Billboard chart entry #{} {} {}",
+                        entry.rank, entry.artist, entry.album
+                    )
+                })?;
         }
     }
 
@@ -773,6 +899,11 @@ fn read_billboard_chart_file(path: &Path, year: i32) -> Result<Vec<BillboardChar
     let rank_index = csv_header_index(&headers, "EOY Rank")?;
     let artist_index = csv_header_index(&headers, "Artist")?;
     let title_index = csv_header_index(&headers, "Title")?;
+    let source_file = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_string();
 
     let mut entries = Vec::new();
     for result in reader.records() {
@@ -781,11 +912,24 @@ fn read_billboard_chart_file(path: &Path, year: i32) -> Result<Vec<BillboardChar
         let rank = record
             .get(rank_index)
             .and_then(|value| value.trim().parse::<i32>().ok());
-        let artist_key = billboard_text_key(record.get(artist_index).unwrap_or_default());
-        let album_key = billboard_text_key(record.get(title_index).unwrap_or_default());
+        let artist = record
+            .get(artist_index)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        let album = record
+            .get(title_index)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        let artist_key = billboard_text_key(&artist);
+        let album_key = billboard_text_key(&album);
         if let Some(rank) = rank {
             if !artist_key.is_empty() && !album_key.is_empty() {
                 entries.push(BillboardChartEntry {
+                    source_file: source_file.clone(),
+                    artist,
+                    album,
                     artist_key,
                     album_key,
                     rank,
@@ -4257,6 +4401,29 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             "
             .to_string(),
         ),
+        "missing-billboard-albums" => Ok(
+            "
+            SELECT
+                'missing-billboard-albums:' || b.id AS id,
+                'missing-billboard-albums' AS tool_id,
+                'low' AS severity,
+                'albums' AS entity_type,
+                'billboard:' || b.artist_key || char(31) || b.album_key AS album_id,
+                NULL AS track_id,
+                b.album,
+                b.artist AS album_artist_display,
+                NULL AS title,
+                NULL AS canonical_genre,
+                b.year,
+                'Billboard album missing from library' AS detail,
+                printf('#%d / %d', b.rank, b.year) AS value,
+                b.source_file AS filename,
+                NULL AS file_path
+            FROM billboard_chart_entries b
+            WHERE b.matched_album_id IS NULL
+            "
+            .to_string(),
+        ),
         "duplicates-within-album" => Ok(
             "
             WITH duplicate_titles AS (
@@ -5898,7 +6065,7 @@ mod tests {
         fs::create_dir_all(&source_dir).expect("create billboard csv dir");
         fs::write(
             source_dir.join("1987.csv"),
-            "EOY Rank,Artist,Title\n103,PET SHOP BOYS,Actually\n",
+            "EOY Rank,Artist,Title\n1,WHITNEY HOUSTON,Whitney\n103,PET SHOP BOYS,Actually\n",
         )
         .expect("write 1987 chart");
         fs::write(
@@ -5912,10 +6079,25 @@ mod tests {
         let response = search_library(&conn, BrowseRequest::default(), 50).expect("search albums");
 
         assert_eq!(summary.files_scanned, 2);
-        assert_eq!(summary.chart_entries, 2);
+        assert_eq!(summary.chart_entries, 3);
         assert_eq!(summary.matched_albums, 1);
         assert_eq!(response.rows[0].billboard_rank, Some(103));
         assert_eq!(response.rows[0].billboard_year, Some(1987));
+
+        let mut request = MusicToolIssueRequest::default();
+        request.tool_id = "missing-billboard-albums".to_string();
+        let missing_response = list_music_tool_issues(&conn, request, 50, None)
+            .expect("list missing Billboard albums");
+
+        assert_eq!(missing_response.tool.issue_count, 1);
+        assert_eq!(missing_response.tool.album_count, 1);
+        assert_eq!(missing_response.total, 1);
+        assert_eq!(missing_response.rows[0].album.as_deref(), Some("Whitney"));
+        assert_eq!(
+            missing_response.rows[0].album_artist_display.as_deref(),
+            Some("WHITNEY HOUSTON")
+        );
+        assert_eq!(missing_response.rows[0].value.as_deref(), Some("#1 / 1987"));
 
         fs::remove_dir_all(source_dir).expect("remove billboard csv dir");
     }
@@ -6290,7 +6472,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_noop_migration_for_current_phase_eight_schema() {
+    fn skips_noop_migration_for_current_phase_nine_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -6301,7 +6483,7 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_eight_schema_exists(&conn).expect("phase eight schema exists"));
+        assert!(phase_nine_schema_exists(&conn).expect("phase nine schema exists"));
     }
 
     #[test]
@@ -6344,7 +6526,9 @@ mod tests {
             .expect("billboard rank column exists"));
         assert!(schema_column_exists(&conn, "albums", "billboard_year")
             .expect("billboard year column exists"));
-        assert!(phase_eight_schema_exists(&conn).expect("phase eight schema exists"));
+        assert!(schema_table_exists(&conn, "billboard_chart_entries")
+            .expect("billboard chart entry table exists"));
+        assert!(phase_nine_schema_exists(&conn).expect("phase nine schema exists"));
     }
 
     #[test]
