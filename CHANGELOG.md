@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.22.4] - 2026-07-01
+### Fixed
+- Fixed Charts grid album cards so Billboard badges always render below the artist line and above the ranking metric, preventing long title rows from making individual cards taller.
+
 ## [0.22.3] - 2026-07-01
 ### Fixed
 - Fixed Charts grid cards so long album titles, artist names, cover art, and Billboard badges stay contained within each album tile.

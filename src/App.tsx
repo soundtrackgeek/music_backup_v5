@@ -3208,20 +3208,27 @@ function ChartResults({
 
     return (
       <div className="chart-grid" role="list" style={gridStyle}>
-        {response.rows.map((row, index) => (
-          <article className="chart-grid-item" role="listitem" key={row.id}>
-            <AlbumCover row={row} className="chart-grid-cover" />
-            <div>
-              <strong>#{index + 1}</strong>
-              <h3>
-                <span>{row.album ?? "Untitled"}</span>
-                {formatBillboardRank(row) ? <span className="billboard-badge">{formatBillboardRank(row)}</span> : null}
-              </h3>
-              <p>{row.albumArtistDisplay ?? ""}</p>
-              <span>{formatChartMetric(row, config.rankingMetric)}</span>
-            </div>
-          </article>
-        ))}
+        {response.rows.map((row, index) => {
+          const albumTitle = row.album ?? "Untitled";
+          const billboardLabel = formatBillboardRank(row);
+
+          return (
+            <article className="chart-grid-item" role="listitem" key={row.id}>
+              <AlbumCover row={row} className="chart-grid-cover" />
+              <div className="chart-grid-meta">
+                <strong className="chart-grid-rank">#{index + 1}</strong>
+                <h3 className="chart-grid-title" title={albumTitle}>
+                  {albumTitle}
+                </h3>
+                <p className="chart-grid-artist" title={row.albumArtistDisplay ?? ""}>
+                  {row.albumArtistDisplay ?? ""}
+                </p>
+                {billboardLabel ? <span className="billboard-badge chart-grid-billboard">{billboardLabel}</span> : null}
+                <span className="chart-grid-score">{formatChartMetric(row, config.rankingMetric)}</span>
+              </div>
+            </article>
+          );
+        })}
       </div>
     );
   }

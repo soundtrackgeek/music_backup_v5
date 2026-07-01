@@ -823,7 +823,7 @@ button {
 }
 
 .chart-list-row h3,
-.chart-grid-item h3 {
+.chart-grid-title {
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -835,7 +835,7 @@ button {
 }
 
 .chart-list-row p,
-.chart-grid-item p {
+.chart-grid-artist {
   min-width: 0;
   margin: 3px 0 0;
   overflow: hidden;
@@ -899,7 +899,11 @@ button {
   justify-self: center;
 }
 
-.chart-grid-item > div {
+.chart-grid-meta {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 3px;
   min-width: 0;
   overflow: hidden;
 }
@@ -960,8 +964,8 @@ button {
   font-size: 72px;
 }
 
-.chart-grid-item strong,
-.chart-grid-item span {
+.chart-grid-rank,
+.chart-grid-score {
   color: #0b625c;
   font-size: 12px;
   line-height: 16px;
@@ -2242,16 +2246,14 @@ button {
 }
 
 .album-title-cell strong,
-.chart-list-row h3,
-.chart-grid-item h3 {
+.chart-list-row h3 {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
 .album-title-cell strong > span:first-child,
-.chart-list-row h3 > span:first-child,
-.chart-grid-item h3 > span:first-child {
+.chart-list-row h3 > span:first-child {
   min-width: 0;
   overflow: hidden;
   color: inherit;
@@ -2297,17 +2299,8 @@ button {
   text-overflow: clip;
 }
 
-.chart-grid-item h3 {
-  flex-wrap: wrap;
-  align-items: flex-start;
-  max-width: 100%;
-  overflow: visible;
-  white-space: normal;
-}
-
-.chart-grid-item h3 > span:first-child {
+.chart-grid-title {
   display: -webkit-box;
-  flex: 1 1 auto;
   max-width: 100%;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -2317,15 +2310,14 @@ button {
   text-overflow: clip;
 }
 
-.chart-grid-item h3 .billboard-badge {
-  flex: 0 1 auto;
+.chart-grid-billboard {
+  display: inline-flex;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  margin-top: 1px;
 }
 
-.chart-grid-item p,
-.chart-grid-item > div > span {
+.chart-grid-artist,
+.chart-grid-score {
   display: block;
   max-width: 100%;
 }
