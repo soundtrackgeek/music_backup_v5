@@ -353,7 +353,6 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_albums_total_seconds ON albums(total_seconds);
         CREATE INDEX IF NOT EXISTS idx_albums_rating_completeness ON albums(rating_completeness);
         CREATE INDEX IF NOT EXISTS idx_albums_album_score ON albums(album_score);
-        CREATE INDEX IF NOT EXISTS idx_albums_billboard_rank ON albums(billboard_rank);
         CREATE INDEX IF NOT EXISTS idx_album_covers_imported_at ON album_covers(imported_at);
 
         CREATE VIRTUAL TABLE IF NOT EXISTS album_search_fts USING fts5(
@@ -6232,6 +6231,49 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
+        assert!(phase_eight_schema_exists(&conn).expect("phase eight schema exists"));
+    }
+
+    #[test]
+    fn migrates_existing_album_table_before_billboard_index() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        conn.execute_batch(
+            "
+            CREATE TABLE albums (
+                id TEXT PRIMARY KEY,
+                import_run_id INTEGER NOT NULL,
+                album_unique_id TEXT,
+                album TEXT,
+                album_artist_display TEXT,
+                canonical_genre TEXT,
+                genre_normalized TEXT,
+                publisher TEXT,
+                year INTEGER,
+                release_year INTEGER,
+                total_tracks INTEGER NOT NULL,
+                rated_tracks INTEGER NOT NULL,
+                rating_completeness REAL NOT NULL,
+                total_seconds INTEGER NOT NULL,
+                loved_tracks INTEGER NOT NULL,
+                tmoe_seconds INTEGER NOT NULL,
+                ae_ratio REAL NOT NULL,
+                album_rating INTEGER,
+                calculated_album_rating INTEGER,
+                effective_album_rating INTEGER,
+                album_score REAL
+            );
+            PRAGMA user_version = 7;
+            ",
+        )
+        .expect("create pre-billboard albums table");
+
+        migrate(&conn).expect("migrate pre-billboard schema");
+
+        assert!(schema_column_exists(&conn, "albums", "billboard_rank")
+            .expect("billboard rank column exists"));
+        assert!(schema_column_exists(&conn, "albums", "billboard_year")
+            .expect("billboard year column exists"));
         assert!(phase_eight_schema_exists(&conn).expect("phase eight schema exists"));
     }
 

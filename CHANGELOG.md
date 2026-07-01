@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.22.1] - 2026-07-01
+### Fixed
+- Fixed upgrades from existing databases so the Billboard rank index is created only after the new album columns are added.
+
 ## [0.22.0] - 2026-07-01
 ### Added
 - Added Billboard year-end CSV imports from the `CSV/` folder, storing each matched album's best year-end rank and chart year.
