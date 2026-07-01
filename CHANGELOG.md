@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.22.3] - 2026-07-01
+### Fixed
+- Fixed Charts grid cards so long album titles, artist names, cover art, and Billboard badges stay contained within each album tile.
+
 ## [0.22.2] - 2026-07-01
 ### Fixed
 - Fixed Billboard CSV matching so library artists and albums with diacritics can match plain ASCII chart text such as `Mötley Crüe` to `MOTLEY CRUE`.

@@ -865,10 +865,11 @@ button {
 }
 
 .chart-grid {
+  --chart-grid-card-size: calc(var(--chart-grid-cover-size, 144px) + 20px);
   display: grid;
   grid-template-columns: repeat(
     auto-fill,
-    minmax(calc(var(--chart-grid-cover-size, 144px) + 20px), calc(var(--chart-grid-cover-size, 144px) + 20px))
+    minmax(var(--chart-grid-card-size), var(--chart-grid-card-size))
   );
   gap: 12px;
   align-items: start;
@@ -877,20 +878,30 @@ button {
 
 .chart-grid-item {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 10px;
-  width: calc(var(--chart-grid-cover-size, 144px) + 20px);
+  width: var(--chart-grid-card-size);
+  min-width: 0;
   border: 1px solid #e1e8e5;
   border-radius: 8px;
   background: #ffffff;
   padding: 10px;
+  overflow: hidden;
 }
 
 .chart-grid-cover {
   width: var(--chart-grid-cover-size, 144px);
-  height: var(--chart-grid-cover-size, 144px);
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1;
   align-self: start;
   justify-self: center;
+}
+
+.chart-grid-item > div {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .cover-placeholder {
@@ -2284,6 +2295,39 @@ button {
   min-width: auto;
   overflow: visible;
   text-overflow: clip;
+}
+
+.chart-grid-item h3 {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  max-width: 100%;
+  overflow: visible;
+  white-space: normal;
+}
+
+.chart-grid-item h3 > span:first-child {
+  display: -webkit-box;
+  flex: 1 1 auto;
+  max-width: 100%;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.chart-grid-item h3 .billboard-badge {
+  flex: 0 1 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-grid-item p,
+.chart-grid-item > div > span {
+  display: block;
+  max-width: 100%;
 }
 
 .artist-album-board-heading {
