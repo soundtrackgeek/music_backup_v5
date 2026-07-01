@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.23.1] - 2026-07-01
+### Fixed
+- Fixed Missing Billboard Albums so selecting it prepares comparison rows from the default `CSV/` folder when the new chart-entry table is empty, making upgraded databases work without a separate manual re-import first.
+- Clarified the Missing Billboard Albums empty state when no rows are returned.
+
 ## [0.23.0] - 2026-07-01
 ### Added
 - Added a Missing Billboard Albums tool that lists imported Billboard chart rows not linked to any library album, with filtering, sorting, pagination, and existing Music Tools exports.

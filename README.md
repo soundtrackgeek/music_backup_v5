@@ -55,7 +55,7 @@ npm run tauri:build
 - CSV matching uses `EOY Rank`, `Artist`, and `Title`, normalizes case/punctuation, stores every imported chart row, links matched rows to library albums, and stores the best rank when an album appears in multiple chart years.
 - Album rows now carry a compact Billboard badge such as `#103 1987` across Search, Charts, Discovery album results, Albums, Artists, Genres, detail panels, and exports.
 - Search, Albums, and Charts support Billboard min/max rank filters; Charts adds a Billboard ranking metric, visible column, and built-in Billboard template.
-- The Tools workspace includes Missing Billboard Albums, which lists imported Billboard chart rows that are not linked to any library album. After upgrading from an earlier Billboard build, run the Billboard import once to populate the new chart-entry table.
+- The Tools workspace includes Missing Billboard Albums, which lists imported Billboard chart rows that are not linked to any library album. If the chart-entry table is empty after upgrading, selecting the tool prepares it from the default `CSV/` folder.
 - SQLite schema version 9 adds persisted Billboard chart entries alongside nullable Billboard rank/year album fields.
 
 ## Phase 10 Discovery Features

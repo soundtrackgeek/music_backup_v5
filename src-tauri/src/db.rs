@@ -2443,9 +2443,10 @@ pub fn list_music_tool_issues_for_app(
     app: &AppHandle,
     request: MusicToolIssueRequest,
 ) -> Result<MusicToolIssueResponse> {
-    let (conn, _) = open(app)?;
+    let (mut conn, _) = open(app)?;
     let tool_id = request.tool_id.clone();
     let request_id = request.request_id.clone();
+    ensure_billboard_chart_entries_for_tool(app, &mut conn, &request)?;
     let result = list_music_tool_issues(&conn, request, 500, Some(app));
     if result.is_err() {
         emit_music_tool_progress(
@@ -2458,6 +2459,35 @@ pub fn list_music_tool_issues_for_app(
         );
     }
     result
+}
+
+fn ensure_billboard_chart_entries_for_tool(
+    app: &AppHandle,
+    conn: &mut Connection,
+    request: &MusicToolIssueRequest,
+) -> Result<()> {
+    if request.tool_id != "missing-billboard-albums"
+        || count_rows(conn, "billboard_chart_entries")? > 0
+    {
+        return Ok(());
+    }
+
+    let Ok(source_path) = resolve_billboard_source_path("CSV") else {
+        return Ok(());
+    };
+
+    emit_music_tool_progress(
+        Some(app),
+        &request.tool_id,
+        &request.request_id,
+        "loading",
+        15,
+        "Preparing Billboard chart rows from CSV.",
+    );
+    import_billboard_charts(conn, &source_path)
+        .context("Could not prepare Missing Billboard Albums data from CSV")?;
+
+    Ok(())
 }
 
 pub fn list_saved_searches_for_app(app: &AppHandle) -> Result<Vec<SavedSearch>> {
@@ -2668,11 +2698,12 @@ pub fn export_music_tool_issues_for_app(
         bail!("Unsupported export format: {}", input.format);
     }
 
-    let (conn, _) = open(app)?;
+    let (mut conn, _) = open(app)?;
     let mut request = input.request.clone();
     request.request_id = String::new();
     request.limit = 100_000;
     request.offset = 0;
+    ensure_billboard_chart_entries_for_tool(app, &mut conn, &request)?;
     let response = list_music_tool_issues(&conn, request.clone(), 100_000, None)?;
 
     let export_dir = app

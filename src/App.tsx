@@ -2959,10 +2959,15 @@ function MusicToolIssueTable({
   }
 
   if (response.rows.length === 0) {
+    const emptyMessage =
+      response.tool.id === "missing-billboard-albums"
+        ? "No missing Billboard albums. If you expected rows, import the Billboard CSV folder once."
+        : "No matching issues.";
+
     return (
       <div className="empty-state large">
         <ShieldCheck size={20} />
-        <span>No matching issues.</span>
+        <span>{emptyMessage}</span>
       </div>
     );
   }
