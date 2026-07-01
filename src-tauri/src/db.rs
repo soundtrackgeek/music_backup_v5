@@ -4434,6 +4434,16 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
         ),
         "missing-billboard-albums" => Ok(
             "
+            WITH ranked_missing AS (
+                SELECT
+                    b.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY b.artist_key, b.album_key
+                        ORDER BY b.year ASC, b.rank ASC, b.id ASC
+                    ) AS duplicate_rank
+                FROM billboard_chart_entries b
+                WHERE b.matched_album_id IS NULL
+            )
             SELECT
                 'missing-billboard-albums:' || b.id AS id,
                 'missing-billboard-albums' AS tool_id,
@@ -4450,8 +4460,8 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                 printf('#%d / %d', b.rank, b.year) AS value,
                 b.source_file AS filename,
                 NULL AS file_path
-            FROM billboard_chart_entries b
-            WHERE b.matched_album_id IS NULL
+            FROM ranked_missing b
+            WHERE b.duplicate_rank = 1
             "
             .to_string(),
         ),
@@ -6101,7 +6111,7 @@ mod tests {
         .expect("write 1987 chart");
         fs::write(
             source_dir.join("1988.csv"),
-            "EOY Rank,Artist,Title\n107,PET SHOP BOYS,Actually\n",
+            "EOY Rank,Artist,Title\n7,WHITNEY HOUSTON,Whitney\n107,PET SHOP BOYS,Actually\n",
         )
         .expect("write 1988 chart");
 
@@ -6110,7 +6120,7 @@ mod tests {
         let response = search_library(&conn, BrowseRequest::default(), 50).expect("search albums");
 
         assert_eq!(summary.files_scanned, 2);
-        assert_eq!(summary.chart_entries, 3);
+        assert_eq!(summary.chart_entries, 4);
         assert_eq!(summary.matched_albums, 1);
         assert_eq!(response.rows[0].billboard_rank, Some(103));
         assert_eq!(response.rows[0].billboard_year, Some(1987));

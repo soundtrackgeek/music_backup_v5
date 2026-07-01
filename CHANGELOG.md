@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.23.2] - 2026-07-01
+### Fixed
+- Fixed Missing Billboard Albums to collapse overlapping chart-year entries for the same imported Billboard artist/title and keep only the earliest year in the tool results.
+
 ## [0.23.1] - 2026-07-01
 ### Fixed
 - Fixed Missing Billboard Albums so selecting it prepares comparison rows from the default `CSV/` folder when the new chart-entry table is empty, making upgraded databases work without a separate manual re-import first.
