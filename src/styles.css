@@ -785,8 +785,8 @@ button {
 .chart-results .result-table-row {
   grid-template-columns:
     48px minmax(220px, 2fr) minmax(140px, 1.35fr) 64px minmax(104px, 1fr)
-    repeat(7, minmax(72px, 0.8fr));
-  min-width: 1020px;
+    repeat(8, minmax(72px, 0.8fr));
+  min-width: 1090px;
 }
 
 .chart-results .result-table-row span:first-child {
@@ -2230,6 +2230,42 @@ button {
   gap: 10px;
 }
 
+.album-title-cell strong,
+.chart-list-row h3,
+.chart-grid-item h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.album-title-cell strong > span:first-child,
+.chart-list-row h3 > span:first-child,
+.chart-grid-item h3 > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font: inherit;
+  text-overflow: ellipsis;
+}
+
+.billboard-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-width: auto;
+  max-width: max-content;
+  border: 1px solid #d7c588;
+  border-radius: 999px;
+  background: #fff7dc;
+  color: #7a5708;
+  padding: 1px 6px;
+  overflow: visible;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
 .album-index-title > span:last-child,
 .album-title-cell > span:last-child {
   min-width: 0;
@@ -2242,6 +2278,12 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.result-table-row .billboard-badge {
+  min-width: auto;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .artist-album-board-heading {
@@ -2361,15 +2403,35 @@ button {
 }
 
 .artist-album-cover-overlay strong {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   font-size: 12px;
   line-height: 16px;
   font-weight: 760;
+}
+
+.artist-album-cover-overlay strong > span:first-child {
+  width: auto;
+  min-width: 0;
+  overflow: hidden;
+  font: inherit;
+  text-overflow: ellipsis;
 }
 
 .artist-album-cover-overlay span {
   font-size: 11px;
   line-height: 14px;
   font-weight: 620;
+}
+
+.artist-album-cover-overlay .billboard-badge {
+  width: auto;
+  min-width: auto;
+  overflow: visible;
+  color: #7a5708;
+  text-shadow: none;
 }
 
 .artist-album-card-meta {
@@ -2473,6 +2535,9 @@ button {
 }
 
 .artist-album-expanded-title h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   overflow: hidden;
   color: #fffaf5;
@@ -2481,6 +2546,12 @@ button {
   font-weight: 760;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.artist-album-expanded-title h3 > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .artist-album-expanded-title svg {
@@ -2602,6 +2673,12 @@ button {
 
 .result-table-row strong {
   font-weight: 700;
+}
+
+.result-table-row .album-title-cell strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .result-table-row small {
@@ -2960,6 +3037,12 @@ button {
   border-color: #315a53;
   color: #7dd3c7;
   background: #19352f;
+}
+
+:root[data-theme="dark"] .billboard-badge {
+  border-color: #6e6234;
+  color: #f7d66d;
+  background: #302814;
 }
 
 :root[data-theme="dark"] .nav-list button {

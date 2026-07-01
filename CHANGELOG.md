@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.22.0] - 2026-07-01
+### Added
+- Added Billboard year-end CSV imports from the `CSV/` folder, storing each matched album's best year-end rank and chart year.
+- Added Billboard badges, filters, sorting, chart ranking support, chart columns, detail-panel display, and exports for album rows across the app.
+
+### Changed
+- Ignored local Billboard CSV data in git and Vite file watching alongside the MusicBee TSV and cover archive.
+
 ## [0.21.0] - 2026-06-30
 ### Added
 - Added an Artist page album cover board with clickable covers and inline track detail showing rating stars, loved status, and clock time.

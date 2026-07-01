@@ -49,6 +49,7 @@ import {
   getStatistics,
   getLibraryStatus,
   importAlbumCovers,
+  importBillboardCharts,
   importMusicBeeTsv,
   isTauriRuntime,
   listArtists,
@@ -74,6 +75,7 @@ import type {
   ArtistListRequest,
   ArtistListResponse,
   ArtistSummary,
+  BillboardImportSummary,
   BrowseFilters,
   BrowseRequest,
   BrowseResponse,
@@ -176,6 +178,7 @@ const missingFieldOptions: MissingFieldOption[] = [
   { value: "albumArtist", albumLabel: "Album artist", trackLabel: "Album artist" },
   { value: "genre", albumLabel: "Genre", trackLabel: "Track genre" },
   { value: "year", albumLabel: "Year", trackLabel: "Track year" },
+  { value: "billboard", albumLabel: "Billboard rank", trackLabel: "Album Billboard rank" },
   { value: "rating", albumLabel: "Album rating", trackLabel: "Track rating" },
   { value: "time", albumLabel: "Total duration", trackLabel: "Track duration" },
 ];
@@ -194,6 +197,7 @@ function formatMissingFieldLabels(values: string[], view: BrowseView) {
 
 const rankingOptions = [
   { value: "albumScore", label: "Album Score" },
+  { value: "billboardRank", label: "Billboard rank" },
   { value: "albumRating", label: "Album rating" },
   { value: "lovedTracks", label: "Loved tracks" },
   { value: "ae", label: "AE" },
@@ -203,6 +207,7 @@ const rankingOptions = [
 ];
 
 const chartColumnOptions = [
+  { value: "billboard", label: "Billboard" },
   { value: "rating", label: "Rating" },
   { value: "complete", label: "Complete" },
   { value: "score", label: "Score" },
@@ -286,6 +291,8 @@ function createFilters(): BrowseFilters {
     genres: [],
     excludedGenres: [],
     missingFields: [],
+    billboardRankMin: null,
+    billboardRankMax: null,
     yearFrom: null,
     yearTo: null,
     releaseYearFrom: null,
@@ -499,7 +506,7 @@ function createChartConfig(): ChartConfig {
     ratingCompletenessMax: 100,
     sortDirection: "desc",
     resultLimit: 50,
-    visibleColumns: ["rating", "complete", "score", "loved"],
+    visibleColumns: ["billboard", "rating", "complete", "score", "loved"],
     exportColumns: ["calculated"],
     viewMode: "table",
     gridCoverSize: chartGridCoverSize.default,
@@ -585,6 +592,22 @@ const chartTemplates: ChartTemplate[] = [
     createConfig: () =>
       createChartTemplateConfig({
         request: { filters: { yearFrom: 1980, yearTo: 1989 } },
+      }),
+  },
+  {
+    id: "billboard",
+    label: "Billboard",
+    description: "Albums with imported Billboard year-end ranks.",
+    icon: BarChart3,
+    createConfig: () =>
+      createChartTemplateConfig({
+        rankingMetric: "billboardRank",
+        sortDirection: "asc",
+        visibleColumns: ["billboard", "rating", "complete", "score"],
+        request: {
+          sort: { field: "billboardRank", direction: "asc" },
+          filters: { billboardRankMin: 1 },
+        },
       }),
   },
   {
@@ -946,8 +969,15 @@ function severityLabel(value: string | null | undefined) {
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
+function formatBillboardRank(row: Pick<BrowseRow, "billboardRank" | "billboardYear">) {
+  if (row.billboardRank == null) return "";
+  return row.billboardYear == null ? `#${row.billboardRank}` : `#${row.billboardRank} ${row.billboardYear}`;
+}
+
 function formatChartMetric(row: BrowseRow, metric: string) {
   switch (metric) {
+    case "billboardRank":
+      return formatBillboardRank(row);
     case "albumRating":
       return row.effectiveAlbumRating?.toString() ?? "";
     case "lovedTracks":
@@ -977,6 +1007,8 @@ function browseRowSortValue(row: BrowseRow, field: string) {
       return row.year;
     case "genre":
       return row.canonicalGenre?.toLowerCase() ?? "";
+    case "billboardRank":
+      return row.billboardRank;
     case "trackRating":
       return row.normalizedRating;
     case "time":
@@ -1812,11 +1844,15 @@ function AlbumTitleContents({
   row: BrowseRow;
   subtitle?: string | null;
 }) {
+  const billboardLabel = formatBillboardRank(row);
   return (
     <>
       <AlbumCover row={row} className="cover-mini" />
       <span>
-        <strong>{row.album ?? "Untitled"}</strong>
+        <strong>
+          <span>{row.album ?? "Untitled"}</span>
+          {billboardLabel ? <span className="billboard-badge">{billboardLabel}</span> : null}
+        </strong>
         {subtitle ? <small>{subtitle}</small> : null}
       </span>
     </>
@@ -2044,6 +2080,10 @@ function AlbumDetailPanel({
           <dd>{album.albumScore?.toFixed(3) ?? ""}</dd>
         </div>
         <div>
+          <dt>Billboard</dt>
+          <dd>{formatBillboardRank(album)}</dd>
+        </div>
+        <div>
           <dt>Publisher</dt>
           <dd>{album.publisher ?? ""}</dd>
         </div>
@@ -2253,6 +2293,7 @@ function ArtistAlbumCoverCard({
   onSelect: (albumId: string) => void;
 }) {
   const title = `${row.album ?? "Untitled"}${row.year ? ` [${row.year}]` : ""}`;
+  const billboardLabel = formatBillboardRank(row);
 
   return (
     <button
@@ -2264,7 +2305,10 @@ function ArtistAlbumCoverCard({
     >
       <AlbumCover row={row} className="artist-album-cover-art" />
       <span className="artist-album-cover-overlay">
-        <strong>{title}</strong>
+        <strong>
+          <span>{title}</span>
+          {billboardLabel ? <span className="billboard-badge">{billboardLabel}</span> : null}
+        </strong>
         <span>{row.albumArtistDisplay ?? ""}</span>
         <span>{row.canonicalGenre ?? ""}</span>
         <span className="artist-album-card-meta">
@@ -2341,6 +2385,7 @@ function ArtistAlbumExpandedPanel({
   isLoading: boolean;
   onClose: () => void;
 }) {
+  const billboardLabel = formatBillboardRank(album);
   return (
     <section className="artist-album-expanded" aria-label={`${album.album ?? "Selected album"} tracks`}>
       <div className="artist-album-expanded-cover">
@@ -2350,7 +2395,10 @@ function ArtistAlbumExpandedPanel({
         <div className="artist-album-expanded-header">
           <div>
             <div className="artist-album-expanded-title">
-              <h3>{album.album ?? "Untitled"}</h3>
+              <h3>
+                <span>{album.album ?? "Untitled"}</span>
+                {billboardLabel ? <span className="billboard-badge">{billboardLabel}</span> : null}
+              </h3>
               <Play size={17} aria-hidden="true" />
             </div>
             <p>{[album.albumArtistDisplay, album.year, album.canonicalGenre].filter(Boolean).join(" / ")}</p>
@@ -3134,7 +3182,10 @@ function ChartResults({
             <strong className="rank-number">{index + 1}</strong>
             <AlbumCover row={row} className="cover-list" />
             <div>
-              <h3>{row.album ?? "Untitled"}</h3>
+              <h3>
+                <span>{row.album ?? "Untitled"}</span>
+                {formatBillboardRank(row) ? <span className="billboard-badge">{formatBillboardRank(row)}</span> : null}
+              </h3>
               <p>
                 {[row.albumArtistDisplay, row.year, row.canonicalGenre].filter(Boolean).join(" / ")}
               </p>
@@ -3162,7 +3213,10 @@ function ChartResults({
             <AlbumCover row={row} className="chart-grid-cover" />
             <div>
               <strong>#{index + 1}</strong>
-              <h3>{row.album ?? "Untitled"}</h3>
+              <h3>
+                <span>{row.album ?? "Untitled"}</span>
+                {formatBillboardRank(row) ? <span className="billboard-badge">{formatBillboardRank(row)}</span> : null}
+              </h3>
               <p>{row.albumArtistDisplay ?? ""}</p>
               <span>{formatChartMetric(row, config.rankingMetric)}</span>
             </div>
@@ -3191,6 +3245,12 @@ function ChartResults({
     { key: "artist", label: "Artist", sortField: "artist", value: (row: BrowseRow) => row.albumArtistDisplay ?? "" },
     { key: "year", label: "Year", sortField: "year", value: (row: BrowseRow) => row.year?.toString() ?? "" },
     { key: "genre", label: "Genre", sortField: "genre", value: (row: BrowseRow) => row.canonicalGenre ?? "" },
+    {
+      key: "billboard",
+      label: "Billboard",
+      sortField: "billboardRank",
+      value: (row: BrowseRow) => formatBillboardRank(row),
+    },
     {
       key: "rating",
       label: "Rating",
@@ -4271,6 +4331,10 @@ export default function App() {
   const [importError, setImportError] = useState<string | null>(null);
   const [coverImportError, setCoverImportError] = useState<string | null>(null);
   const [coverImportSummary, setCoverImportSummary] = useState<CoverImportSummary | null>(null);
+  const [billboardSourcePath, setBillboardSourcePath] = useState("CSV");
+  const [isImportingBillboard, setIsImportingBillboard] = useState(false);
+  const [billboardImportError, setBillboardImportError] = useState<string | null>(null);
+  const [billboardImportSummary, setBillboardImportSummary] = useState<BillboardImportSummary | null>(null);
   const [request, setRequest] = useState<BrowseRequest>(() => createRequest("albums"));
   const [response, setResponse] = useState<BrowseResponse | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
@@ -5147,6 +5211,14 @@ export default function App() {
     });
     addRangeChip(
       nextChips,
+      "billboard",
+      "Billboard",
+      currentFilters.billboardRankMin,
+      currentFilters.billboardRankMax,
+      () => updateFilters({ billboardRankMin: null, billboardRankMax: null }),
+    );
+    addRangeChip(
+      nextChips,
       "releaseYear",
       "Release",
       currentFilters.releaseYearFrom,
@@ -5259,6 +5331,14 @@ export default function App() {
     addRangeChip(nextChips, "year", "Year", albumFilters.yearFrom, albumFilters.yearTo, () => {
       updateAlbumFilters({ yearFrom: null, yearTo: null });
     });
+    addRangeChip(
+      nextChips,
+      "billboard",
+      "Billboard",
+      albumFilters.billboardRankMin,
+      albumFilters.billboardRankMax,
+      () => updateAlbumFilters({ billboardRankMin: null, billboardRankMax: null }),
+    );
     addRangeChip(
       nextChips,
       "minutes",
@@ -5542,6 +5622,31 @@ export default function App() {
       }));
     } finally {
       setIsImportingCovers(false);
+    }
+  }
+
+  async function startBillboardImport() {
+    setIsImportingBillboard(true);
+    setBillboardImportError(null);
+    setBillboardImportSummary(null);
+
+    try {
+      const summary = await importBillboardCharts(billboardSourcePath);
+      setBillboardImportSummary(summary);
+      await loadData();
+      setRequest((current) => ({ ...current }));
+      setAlbumRequest((current) => ({ ...current }));
+      setChartConfig((current) => ({ ...current }));
+      setArtistRequest((current) => ({ ...current }));
+      setGenreRequest((current) => ({ ...current }));
+      setDiscoveryAlbumRequest((current) => ({ ...current }));
+      setArtistAlbumsResponse(null);
+      setGenreAlbumsResponse(null);
+      setDiscoveryAlbumResponse(null);
+    } catch (error) {
+      setBillboardImportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsImportingBillboard(false);
     }
   }
 
@@ -6107,6 +6212,53 @@ export default function App() {
             </div>
           </section>
 
+          <section className="import-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Billboard year-end charts</h2>
+                <p>Import album ranks from yearly CSV files and annotate matching library albums.</p>
+              </div>
+              <RunStatus
+                status={isImportingBillboard ? "running" : billboardImportSummary ? "completed" : "idle"}
+              />
+            </div>
+
+            <label className="source-input">
+              <span>Chart CSV folder</span>
+              <input
+                value={billboardSourcePath}
+                onChange={(event) => setBillboardSourcePath(event.target.value)}
+                placeholder="CSV"
+                disabled={isImportingBillboard}
+              />
+            </label>
+
+            {billboardImportError ? <p className="error-message">{billboardImportError}</p> : null}
+            {billboardImportSummary ? (
+              <p className="success-message">
+                Matched {formatNumber(billboardImportSummary.matchedAlbums)} albums from{" "}
+                {formatNumber(billboardImportSummary.chartEntries)} chart rows across{" "}
+                {formatNumber(billboardImportSummary.filesScanned)} files.
+              </p>
+            ) : null}
+
+            <div className="action-row">
+              <button
+                className="primary-button"
+                type="button"
+                onClick={startBillboardImport}
+                disabled={isImportingBillboard || !billboardSourcePath.trim() || !canImport || (status?.albumCount ?? 0) === 0}
+                title={canImport ? "Import Billboard charts" : "Open the Tauri desktop app to import Billboard charts"}
+              >
+                <BarChart3 size={17} />
+                <span>{isImportingBillboard ? "Importing" : "Import Billboard"}</span>
+              </button>
+              <span className="db-path">
+                Best rank wins when an album appears in more than one year-end chart.
+              </span>
+            </div>
+          </section>
+
           <section className="table-panel" aria-label="Import history">
             <div className="panel-heading compact">
               <div>
@@ -6234,6 +6386,18 @@ export default function App() {
                 label="Year to"
                 value={chartConfig.request.filters.yearTo}
                 onChange={(value) => updateChartFilters({ yearTo: value })}
+              />
+              <NumberField
+                label="Billboard min"
+                value={chartConfig.request.filters.billboardRankMin}
+                min={1}
+                onChange={(value) => updateChartFilters({ billboardRankMin: value })}
+              />
+              <NumberField
+                label="Billboard max"
+                value={chartConfig.request.filters.billboardRankMax}
+                min={1}
+                onChange={(value) => updateChartFilters({ billboardRankMax: value })}
               />
               <GenreListCriterion
                 label="Genres"
@@ -7255,6 +7419,18 @@ export default function App() {
                 onChange={(value) => updateAlbumFilter("yearTo", value)}
               />
               <NumberField
+                label="Billboard min"
+                value={albumFilters.billboardRankMin}
+                min={1}
+                onChange={(value) => updateAlbumFilter("billboardRankMin", value)}
+              />
+              <NumberField
+                label="Billboard max"
+                value={albumFilters.billboardRankMax}
+                min={1}
+                onChange={(value) => updateAlbumFilter("billboardRankMax", value)}
+              />
+              <NumberField
                 label="Minutes min"
                 value={albumFilters.totalMinutesMin}
                 step={0.5}
@@ -7963,6 +8139,18 @@ export default function App() {
               <NumberField label="Year from" value={currentFilters.yearFrom} onChange={(value) => updateFilter("yearFrom", value)} />
               <NumberField label="Year to" value={currentFilters.yearTo} onChange={(value) => updateFilter("yearTo", value)} />
               <NumberField
+                label="Billboard min"
+                value={currentFilters.billboardRankMin}
+                min={1}
+                onChange={(value) => updateFilter("billboardRankMin", value)}
+              />
+              <NumberField
+                label="Billboard max"
+                value={currentFilters.billboardRankMax}
+                min={1}
+                onChange={(value) => updateFilter("billboardRankMax", value)}
+              />
+              <NumberField
                 label="Release from"
                 value={currentFilters.releaseYearFrom}
                 onChange={(value) => updateFilter("releaseYearFrom", value)}
@@ -8098,6 +8286,7 @@ export default function App() {
                           { value: "album", label: "Album" },
                           { value: "displayArtist", label: "Display artist" },
                           { value: "year", label: "Year" },
+                          { value: "billboardRank", label: "Billboard" },
                           { value: "trackRating", label: "Track rating" },
                           { value: "trackNumber", label: "Track number" },
                         ]
@@ -8105,6 +8294,7 @@ export default function App() {
                           { value: "album", label: "Album" },
                           { value: "artist", label: "Artist" },
                           { value: "year", label: "Year" },
+                          { value: "billboardRank", label: "Billboard" },
                           { value: "genre", label: "Genre" },
                           { value: "totalMinutes", label: "Minutes" },
                           { value: "trackCount", label: "Tracks" },

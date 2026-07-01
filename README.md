@@ -2,9 +2,9 @@
 
 A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-The current Phase 10 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, import and display real album cover art, browse sortable album and track tables, save searches, filter Search albums by rated-track ranges, build ranked album charts with include/exclude genre filters, min/max rating-completeness ranges, and in-place genre suggestions, display-only table-header sorting inside the current ranked set, and resizable square cover-grid artwork, save chart configurations, expand the `scores` genre group in include/exclude genre filters, export filtered result sets, explore discovery dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions, analyze library health, rating burndown, time shape, loved density, catalog concentration, duration, outlier, decade progress, genre portfolio, metadata coverage, rating, and import dashboards, manage settings, switch between light and dark mode, choose default sidebar visibility, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists, including albums missing imported cover image records, with exports.
+The current Phase 11 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, import and display real album cover art, import Billboard year-end album CSV rankings, browse sortable album and track tables, save searches, filter Search albums by rated-track and Billboard rank ranges, build ranked album charts with include/exclude genre filters, min/max rating-completeness ranges, Billboard rank templates, and in-place genre suggestions, display-only table-header sorting inside the current ranked set, and resizable square cover-grid artwork, save chart configurations, expand the `scores` genre group in include/exclude genre filters, export filtered result sets, explore discovery dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions, analyze library health, rating burndown, time shape, loved density, catalog concentration, duration, outlier, decade progress, genre portfolio, metadata coverage, rating, and import dashboards, manage settings, switch between light and dark mode, choose default sidebar visibility, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists, including albums missing imported cover image records, with exports.
 
-The sidebar currently enables Search, Charts, Discovery, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. The left navigation can be shown in full, icon-only, or hidden mode, while the right detail sidebar can be shown or hidden so the main workspace expands into the available page width. The Imports workspace can scan an `AlbumCovers` folder for folder-named images, link matching source images directly, skip covers that are already imported, and extract missing embedded MP3 artwork into the same `AlbumCovers` folder.
+The sidebar currently enables Search, Charts, Discovery, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. The left navigation can be shown in full, icon-only, or hidden mode, while the right detail sidebar can be shown or hidden so the main workspace expands into the available page width. The Imports workspace can scan an `AlbumCovers` folder for folder-named images, link matching source images directly, skip covers that are already imported, extract missing embedded MP3 artwork into the same `AlbumCovers` folder, and import yearly Billboard chart CSV files from `CSV/`.
 
 ## Requirements
 
@@ -34,9 +34,9 @@ Run the full desktop app:
 npm run tauri:dev
 ```
 
-The desktop dev shell loads Vite from `http://127.0.0.1:1420/`, matching the loopback host used by `npm run dev`. Vite ignores the local `musicbee-library.tsv` export and `AlbumCovers/` archive during development so large library data cannot stall the dev server watcher. If the Tauri window opens but stays blank, make sure port `1420` is free and restart `npm run tauri:dev`.
+The desktop dev shell loads Vite from `http://127.0.0.1:1420/`, matching the loopback host used by `npm run dev`. Vite ignores the local `musicbee-library.tsv` export, `AlbumCovers/` archive, and `CSV/` chart folder during development so large library data cannot stall the dev server watcher. If the Tauri window opens but stays blank, make sure port `1420` is free and restart `npm run tauri:dev`.
 
-The import screen defaults to `musicbee-library.tsv`. Relative paths are resolved from the app process directory and its parent, so the repo-root TSV works during local development. MusicBee TSV quote characters are treated as literal tag text during import, matching plain TSV exports where titles can contain unpaired quotes. The TSV and local `AlbumCovers/` archive are intentionally ignored by git.
+The import screen defaults to `musicbee-library.tsv`, `AlbumCovers`, and `CSV`. Relative paths are resolved from the app process directory and its parent, so repo-root source folders work during local development. MusicBee TSV quote characters are treated as literal tag text during import, matching plain TSV exports where titles can contain unpaired quotes. The TSV, local `AlbumCovers/` archive, and local `CSV/` chart folder are intentionally ignored by git.
 
 ## Build
 
@@ -47,7 +47,15 @@ npm run tauri:build
 
 ## Roadmap
 
-- Phase 11: External enrichment and AI features.
+- Phase 12: Additional external enrichment and AI features.
+
+## Phase 11 Billboard Features
+
+- Billboard year-end chart import in the Imports workspace from yearly CSV files such as `CSV/1987.csv`.
+- CSV matching uses `EOY Rank`, `Artist`, and `Title`, normalizes case/punctuation, and stores the best rank when an album appears in multiple chart years.
+- Album rows now carry a compact Billboard badge such as `#103 1987` across Search, Charts, Discovery album results, Albums, Artists, Genres, detail panels, and exports.
+- Search, Albums, and Charts support Billboard min/max rank filters; Charts adds a Billboard ranking metric, visible column, and built-in Billboard template.
+- SQLite schema version 8 adds nullable Billboard rank/year album fields.
 
 ## Phase 10 Discovery Features
 

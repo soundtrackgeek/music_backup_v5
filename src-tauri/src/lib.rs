@@ -4,11 +4,11 @@ mod importer;
 mod models;
 
 use models::{
-    AppSettings, ArtistListRequest, ArtistListResponse, BrowseRequest, BrowseResponse,
-    CoverImportRequest, CoverImportSummary, DiscoveryResponse, ExportMusicToolRequest,
-    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, MusicToolIssueRequest,
-    MusicToolIssueResponse, MusicToolSummary, SaveChartRequest, SaveSearchRequest, SavedChart,
-    SavedSearch, StatisticsResponse,
+    AppSettings, ArtistListRequest, ArtistListResponse, BillboardImportSummary, BrowseRequest,
+    BrowseResponse, CoverImportRequest, CoverImportSummary, DiscoveryResponse,
+    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
 };
 use models::{ImportRun, ImportSummary, LibraryStatus};
 use tauri::AppHandle;
@@ -80,6 +80,19 @@ async fn import_album_covers(
         .await
         .map_err(|error| format!("Cover import task failed: {error}"))?
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn import_billboard_charts(
+    app: AppHandle,
+    source_path: String,
+) -> Result<BillboardImportSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::import_billboard_charts_for_app(&app, source_path)
+    })
+    .await
+    .map_err(|error| format!("Billboard import task failed: {error}"))?
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -228,6 +241,7 @@ pub fn run() {
             get_discovery,
             import_musicbee_tsv,
             import_album_covers,
+            import_billboard_charts,
             get_album_cover_data_url,
             search_library,
             list_artists,

@@ -5,6 +5,7 @@ import type {
   ArtistListRequest,
   ArtistListResponse,
   ArtistSummary,
+  BillboardImportSummary,
   BrowseRequest,
   BrowseResponse,
   BrowseRow,
@@ -83,6 +84,8 @@ const mockRows: BrowseRow[] = [
     aeRatio: 0.2916,
     effectiveAlbumRating: 86,
     albumScore: 207.62,
+    billboardRank: 103,
+    billboardYear: 1987,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -114,6 +117,8 @@ const mockRows: BrowseRow[] = [
     aeRatio: 0.2702,
     effectiveAlbumRating: 88,
     albumScore: 108.4,
+    billboardRank: 282,
+    billboardYear: 1986,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -145,6 +150,8 @@ const mockRows: BrowseRow[] = [
     aeRatio: 0.2759,
     effectiveAlbumRating: 91,
     albumScore: 251.16,
+    billboardRank: null,
+    billboardYear: null,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -176,6 +183,8 @@ const mockRows: BrowseRow[] = [
     aeRatio: 0.1904,
     effectiveAlbumRating: 74,
     albumScore: 82.1,
+    billboardRank: 428,
+    billboardYear: 1984,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -207,6 +216,8 @@ const mockRows: BrowseRow[] = [
     aeRatio: 0.132,
     effectiveAlbumRating: 68,
     albumScore: 61.5,
+    billboardRank: 20,
+    billboardYear: 1999,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -238,6 +249,8 @@ const mockRows: BrowseRow[] = [
     aeRatio: 0,
     effectiveAlbumRating: null,
     albumScore: null,
+    billboardRank: null,
+    billboardYear: null,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -269,6 +282,8 @@ const mockRows: BrowseRow[] = [
     aeRatio: 0.2916,
     effectiveAlbumRating: 86,
     albumScore: 207.62,
+    billboardRank: 103,
+    billboardYear: 1987,
     trackSeconds: 260,
     normalizedRating: 100,
     discNumber: 1,
@@ -300,6 +315,8 @@ const mockRows: BrowseRow[] = [
     aeRatio: 0.2759,
     effectiveAlbumRating: 91,
     albumScore: 251.16,
+    billboardRank: null,
+    billboardYear: null,
     trackSeconds: 108,
     normalizedRating: 100,
     discNumber: 1,
@@ -1536,6 +1553,21 @@ export async function importAlbumCovers(request: CoverImportRequest) {
   return invoke<CoverImportSummary>("import_album_covers", { request });
 }
 
+export async function importBillboardCharts(sourcePath: string) {
+  if (!isTauriRuntime()) {
+    const matchedAlbums = mockRows.filter((row) => row.trackId === null && row.billboardRank != null).length;
+    return {
+      sourcePath,
+      filesScanned: 70,
+      chartEntries: 12000,
+      matchedAlbums,
+      durationMs: 0,
+    } satisfies BillboardImportSummary;
+  }
+
+  return invoke<BillboardImportSummary>("import_billboard_charts", { sourcePath });
+}
+
 export async function getAlbumCoverDataUrl(albumId: string) {
   if (!isTauriRuntime()) {
     return null;
@@ -1567,6 +1599,8 @@ export async function searchLibrary(request: BrowseRequest) {
     const ratedTracksMax = request.filters.ratedTracksMax;
     const yearFrom = request.filters.yearFrom;
     const yearTo = request.filters.yearTo;
+    const billboardRankMin = request.filters.billboardRankMin;
+    const billboardRankMax = request.filters.billboardRankMax;
     const lovedTracksMin = request.filters.lovedTracksMin;
     const lovedTracksMax = request.filters.lovedTracksMax;
     const ratingCompletenessMin = normalizePercentFilter(request.filters.ratingCompletenessMin);
@@ -1579,6 +1613,7 @@ export async function searchLibrary(request: BrowseRequest) {
       const ratingCompleteness = row.ratingCompleteness ?? 0;
       const lovedTracks = row.lovedTracks ?? 0;
       const year = row.year ?? 0;
+      const billboardRank = row.billboardRank ?? 0;
       return (
         matchesView &&
         (albumIds.size === 0 || albumIds.has(row.albumId)) &&
@@ -1587,6 +1622,8 @@ export async function searchLibrary(request: BrowseRequest) {
         !excludedGenreKeys.has(genreKey) &&
         (yearFrom == null || year >= yearFrom) &&
         (yearTo == null || year <= yearTo) &&
+        (billboardRankMin == null || (row.billboardRank != null && billboardRank >= billboardRankMin)) &&
+        (billboardRankMax == null || (row.billboardRank != null && billboardRank <= billboardRankMax)) &&
         (ratedTracksMin == null || ratedTracks >= ratedTracksMin) &&
         (ratedTracksMax == null || ratedTracks <= ratedTracksMax) &&
         (lovedTracksMin == null || lovedTracks >= lovedTracksMin) &&
@@ -1970,6 +2007,8 @@ function matchesMissingFields(row: BrowseRow, isTracks: boolean, fields: string[
         return isMissingText(row.canonicalGenre);
       case "year":
         return row.year == null;
+      case "billboard":
+        return row.billboardRank == null;
       case "rating":
         return isTracks ? row.normalizedRating == null : row.effectiveAlbumRating == null;
       case "time":
@@ -2001,6 +2040,8 @@ function browseSortValue(row: BrowseRow, field: string) {
       return row.year;
     case "genre":
       return row.canonicalGenre?.toLowerCase() ?? "";
+    case "billboardRank":
+      return row.billboardRank;
     case "trackRating":
       return row.normalizedRating;
     case "time":
