@@ -408,8 +408,6 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_tracks_rating ON tracks(normalized_rating);
         CREATE INDEX IF NOT EXISTS idx_tracks_love ON tracks(love);
         CREATE INDEX IF NOT EXISTS idx_tracks_file ON tracks(file_path, filename);
-        CREATE INDEX IF NOT EXISTS idx_tracks_billboard_single_rank
-            ON tracks(billboard_single_rank);
         CREATE INDEX IF NOT EXISTS idx_albums_unique_id ON albums(album_unique_id);
         CREATE INDEX IF NOT EXISTS idx_albums_year ON albums(year);
         CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums(album_artist_display);
@@ -7216,6 +7214,57 @@ mod tests {
         );
         assert!(schema_table_exists(&conn, "billboard_single_chart_entries")
             .expect("billboard single chart entry table exists"));
+        assert!(phase_ten_schema_exists(&conn).expect("phase ten schema exists"));
+    }
+
+    #[test]
+    fn migrates_existing_track_table_before_billboard_singles_index() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        conn.execute_batch(
+            "
+            CREATE TABLE tracks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                import_run_id INTEGER NOT NULL,
+                album_id TEXT NOT NULL,
+                album_unique_id TEXT,
+                display_artist TEXT,
+                album_artist_display TEXT,
+                album TEXT,
+                title TEXT,
+                genre TEXT,
+                canonical_genre TEXT,
+                genre_normalized TEXT,
+                publisher TEXT,
+                love TEXT,
+                rating_raw TEXT,
+                normalized_rating INTEGER,
+                album_rating_raw TEXT,
+                album_rating INTEGER,
+                disc_number INTEGER,
+                track_number INTEGER,
+                year INTEGER,
+                release_year INTEGER,
+                time_seconds INTEGER,
+                file_path TEXT,
+                filename TEXT,
+                row_hash TEXT NOT NULL
+            );
+            PRAGMA user_version = 9;
+            ",
+        )
+        .expect("create pre-singles tracks table");
+
+        migrate(&conn).expect("migrate pre-singles schema");
+
+        assert!(
+            schema_column_exists(&conn, "tracks", "billboard_single_rank")
+                .expect("billboard single rank column exists")
+        );
+        assert!(
+            schema_column_exists(&conn, "tracks", "billboard_single_year")
+                .expect("billboard single year column exists")
+        );
         assert!(phase_ten_schema_exists(&conn).expect("phase ten schema exists"));
     }
 

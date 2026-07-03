@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.24.1] - 2026-07-03
+### Fixed
+- Fixed upgrades from existing databases so the Billboard singles rank index is created only after the new track columns are added.
+
 ## [0.24.0] - 2026-07-03
 ### Added
 - Added Billboard year-end singles CSV imports from `CSV_SINGLES/`, matching `Yearly Rank`, `Artist`, optional `Featured`, and `Track` against library track display artists and titles.
