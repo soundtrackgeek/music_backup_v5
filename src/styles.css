@@ -2164,8 +2164,8 @@ button {
 .track-results .result-table-head,
 .track-results .result-table-row {
   grid-template-columns:
-    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(140px, 1.2fr) 64px 64px
-    minmax(140px, 1.1fr);
+    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(140px, 1.2fr) 64px 72px
+    64px minmax(140px, 1.1fr);
 }
 
 .album-index-results .result-table-head,

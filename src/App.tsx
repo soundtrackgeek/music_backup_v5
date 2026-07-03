@@ -50,6 +50,7 @@ import {
   getLibraryStatus,
   importAlbumCovers,
   importBillboardCharts,
+  importBillboardSingles,
   importMusicBeeTsv,
   isTauriRuntime,
   listArtists,
@@ -76,6 +77,7 @@ import type {
   ArtistListResponse,
   ArtistSummary,
   BillboardImportSummary,
+  BillboardSinglesImportSummary,
   BrowseFilters,
   BrowseRequest,
   BrowseResponse,
@@ -179,6 +181,7 @@ const missingFieldOptions: MissingFieldOption[] = [
   { value: "genre", albumLabel: "Genre", trackLabel: "Track genre" },
   { value: "year", albumLabel: "Year", trackLabel: "Track year" },
   { value: "billboard", albumLabel: "Billboard rank", trackLabel: "Album Billboard rank" },
+  { value: "billboardSingle", albumLabel: "Single Billboard rank", trackLabel: "Single Billboard rank" },
   { value: "rating", albumLabel: "Album rating", trackLabel: "Track rating" },
   { value: "time", albumLabel: "Total duration", trackLabel: "Track duration" },
 ];
@@ -293,6 +296,8 @@ function createFilters(): BrowseFilters {
     missingFields: [],
     billboardRankMin: null,
     billboardRankMax: null,
+    billboardSingleRankMin: null,
+    billboardSingleRankMax: null,
     yearFrom: null,
     yearTo: null,
     releaseYearFrom: null,
@@ -707,6 +712,16 @@ const musicToolCatalog: MusicToolSummary[] = [
     trackCount: -1,
   },
   {
+    id: "missing-billboard-singles",
+    label: "Missing Billboard Singles",
+    description: "Imported Billboard chart singles that are not linked to any library track.",
+    severity: "low",
+    scope: "tracks",
+    issueCount: -1,
+    albumCount: -1,
+    trackCount: -1,
+  },
+  {
     id: "duplicates-within-album",
     label: "Duplicates within album",
     description: "Tracks that repeat a title or disc/track position inside one album.",
@@ -984,6 +999,13 @@ function formatBillboardRank(row: Pick<BrowseRow, "billboardRank" | "billboardYe
   return row.billboardYear == null ? `#${row.billboardRank}` : `#${row.billboardRank} ${row.billboardYear}`;
 }
 
+function formatBillboardSingleRank(row: Pick<BrowseRow, "billboardSingleRank" | "billboardSingleYear">) {
+  if (row.billboardSingleRank == null) return "";
+  return row.billboardSingleYear == null
+    ? `#${row.billboardSingleRank}`
+    : `#${row.billboardSingleRank} ${row.billboardSingleYear}`;
+}
+
 function formatChartMetric(row: BrowseRow, metric: string) {
   switch (metric) {
     case "billboardRank":
@@ -1019,6 +1041,8 @@ function browseRowSortValue(row: BrowseRow, field: string) {
       return row.canonicalGenre?.toLowerCase() ?? "";
     case "billboardRank":
       return row.billboardRank;
+    case "billboardSingleRank":
+      return row.billboardSingleRank;
     case "trackRating":
       return row.normalizedRating;
     case "time":
@@ -1738,29 +1762,37 @@ function ResultTable({
         <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Artist" field="displayArtist" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Single" field="billboardSingleRank" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Rating" field="trackRating" sort={sort} onSort={onSort} />
         <span role="columnheader">File</span>
       </div>
-      {response.rows.map((row) => (
-        <div className="result-table-row" role="row" key={row.id}>
-          <span role="cell">
-            <strong>{row.title ?? "Untitled"}</strong>
-            <small>
-              {[row.discNumber, row.trackNumber].filter((value) => value != null).join(".")}
-              {row.love === "L" ? "  Loved" : ""}
-            </small>
-          </span>
-          <span className="album-title-cell" role="cell">
-            <AlbumTitleContents row={row} subtitle={row.albumArtistDisplay ?? row.year?.toString() ?? null} />
-          </span>
-          <span role="cell">{row.displayArtist ?? row.albumArtistDisplay ?? ""}</span>
-          <span role="cell">{row.year ?? ""}</span>
-          <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
-          <span role="cell" title={row.filePath ?? ""}>
-            {row.filename ?? ""}
-          </span>
-        </div>
-      ))}
+      {response.rows.map((row) => {
+        const singleLabel = formatBillboardSingleRank(row);
+        return (
+          <div className="result-table-row" role="row" key={row.id}>
+            <span role="cell">
+              <strong>
+                <span>{row.title ?? "Untitled"}</span>
+                {singleLabel ? <span className="billboard-badge">{singleLabel}</span> : null}
+              </strong>
+              <small>
+                {[row.discNumber, row.trackNumber].filter((value) => value != null).join(".")}
+                {row.love === "L" ? "  Loved" : ""}
+              </small>
+            </span>
+            <span className="album-title-cell" role="cell">
+              <AlbumTitleContents row={row} subtitle={row.albumArtistDisplay ?? row.year?.toString() ?? null} />
+            </span>
+            <span role="cell">{row.displayArtist ?? row.albumArtistDisplay ?? ""}</span>
+            <span role="cell">{row.year ?? ""}</span>
+            <span role="cell">{singleLabel}</span>
+            <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
+            <span role="cell" title={row.filePath ?? ""}>
+              {row.filename ?? ""}
+            </span>
+          </div>
+        );
+      })}
     </div>
   ) : (
     <div className="result-table album-results" role="table">
@@ -2962,6 +2994,8 @@ function MusicToolIssueTable({
     const emptyMessage =
       response.tool.id === "missing-billboard-albums"
         ? "No missing Billboard albums. If you expected rows, import the Billboard CSV folder once."
+        : response.tool.id === "missing-billboard-singles"
+          ? "No missing Billboard singles. If you expected rows, import the Billboard singles CSV folder once."
         : "No matching issues.";
 
     return (
@@ -4357,6 +4391,11 @@ export default function App() {
   const [isImportingBillboard, setIsImportingBillboard] = useState(false);
   const [billboardImportError, setBillboardImportError] = useState<string | null>(null);
   const [billboardImportSummary, setBillboardImportSummary] = useState<BillboardImportSummary | null>(null);
+  const [billboardSinglesSourcePath, setBillboardSinglesSourcePath] = useState("CSV_SINGLES");
+  const [isImportingBillboardSingles, setIsImportingBillboardSingles] = useState(false);
+  const [billboardSinglesImportError, setBillboardSinglesImportError] = useState<string | null>(null);
+  const [billboardSinglesImportSummary, setBillboardSinglesImportSummary] =
+    useState<BillboardSinglesImportSummary | null>(null);
   const [request, setRequest] = useState<BrowseRequest>(() => createRequest("albums"));
   const [response, setResponse] = useState<BrowseResponse | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
@@ -5234,11 +5273,21 @@ export default function App() {
     addRangeChip(
       nextChips,
       "billboard",
-      "Billboard",
+      request.view === "tracks" ? "Album Billboard" : "Billboard",
       currentFilters.billboardRankMin,
       currentFilters.billboardRankMax,
       () => updateFilters({ billboardRankMin: null, billboardRankMax: null }),
     );
+    if (request.view === "tracks") {
+      addRangeChip(
+        nextChips,
+        "billboardSingle",
+        "Single Billboard",
+        currentFilters.billboardSingleRankMin,
+        currentFilters.billboardSingleRankMax,
+        () => updateFilters({ billboardSingleRankMin: null, billboardSingleRankMax: null }),
+      );
+    }
     addRangeChip(
       nextChips,
       "releaseYear",
@@ -5669,6 +5718,27 @@ export default function App() {
       setBillboardImportError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsImportingBillboard(false);
+    }
+  }
+
+  async function startBillboardSinglesImport() {
+    setIsImportingBillboardSingles(true);
+    setBillboardSinglesImportError(null);
+    setBillboardSinglesImportSummary(null);
+
+    try {
+      const summary = await importBillboardSingles(billboardSinglesSourcePath);
+      setBillboardSinglesImportSummary(summary);
+      await loadData();
+      setRequest((current) => ({ ...current }));
+      setAlbumTracksResponse(null);
+      setArtistAlbumTracksResponse(null);
+      setGenreAlbumsResponse(null);
+      setDiscoveryAlbumResponse(null);
+    } catch (error) {
+      setBillboardSinglesImportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsImportingBillboardSingles(false);
     }
   }
 
@@ -6277,6 +6347,64 @@ export default function App() {
               </button>
               <span className="db-path">
                 Best rank wins when an album appears in more than one year-end chart.
+              </span>
+            </div>
+          </section>
+
+          <section className="import-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Billboard year-end singles</h2>
+                <p>Import single ranks from yearly CSV files and annotate matching library tracks.</p>
+              </div>
+              <RunStatus
+                status={
+                  isImportingBillboardSingles ? "running" : billboardSinglesImportSummary ? "completed" : "idle"
+                }
+              />
+            </div>
+
+            <label className="source-input">
+              <span>Singles CSV folder</span>
+              <input
+                value={billboardSinglesSourcePath}
+                onChange={(event) => setBillboardSinglesSourcePath(event.target.value)}
+                placeholder="CSV_SINGLES"
+                disabled={isImportingBillboardSingles}
+              />
+            </label>
+
+            {billboardSinglesImportError ? <p className="error-message">{billboardSinglesImportError}</p> : null}
+            {billboardSinglesImportSummary ? (
+              <p className="success-message">
+                Matched {formatNumber(billboardSinglesImportSummary.matchedTracks)} tracks from{" "}
+                {formatNumber(billboardSinglesImportSummary.chartEntries)} singles rows across{" "}
+                {formatNumber(billboardSinglesImportSummary.filesScanned)} files.
+              </p>
+            ) : null}
+
+            <div className="action-row">
+              <button
+                className="primary-button"
+                type="button"
+                onClick={startBillboardSinglesImport}
+                disabled={
+                  isImportingBillboardSingles ||
+                  !billboardSinglesSourcePath.trim() ||
+                  !canImport ||
+                  (status?.trackCount ?? 0) === 0
+                }
+                title={
+                  canImport
+                    ? "Import Billboard singles"
+                    : "Open the Tauri desktop app to import Billboard singles"
+                }
+              >
+                <ListMusic size={17} />
+                <span>{isImportingBillboardSingles ? "Importing" : "Import singles"}</span>
+              </button>
+              <span className="db-path">
+                Matches use Display Artist and Track; best rank wins across repeated years.
               </span>
             </div>
           </section>
@@ -8161,17 +8289,33 @@ export default function App() {
               <NumberField label="Year from" value={currentFilters.yearFrom} onChange={(value) => updateFilter("yearFrom", value)} />
               <NumberField label="Year to" value={currentFilters.yearTo} onChange={(value) => updateFilter("yearTo", value)} />
               <NumberField
-                label="Billboard min"
+                label={request.view === "tracks" ? "Album Billboard min" : "Billboard min"}
                 value={currentFilters.billboardRankMin}
                 min={1}
                 onChange={(value) => updateFilter("billboardRankMin", value)}
               />
               <NumberField
-                label="Billboard max"
+                label={request.view === "tracks" ? "Album Billboard max" : "Billboard max"}
                 value={currentFilters.billboardRankMax}
                 min={1}
                 onChange={(value) => updateFilter("billboardRankMax", value)}
               />
+              {request.view === "tracks" ? (
+                <>
+                  <NumberField
+                    label="Single Billboard min"
+                    value={currentFilters.billboardSingleRankMin}
+                    min={1}
+                    onChange={(value) => updateFilter("billboardSingleRankMin", value)}
+                  />
+                  <NumberField
+                    label="Single Billboard max"
+                    value={currentFilters.billboardSingleRankMax}
+                    min={1}
+                    onChange={(value) => updateFilter("billboardSingleRankMax", value)}
+                  />
+                </>
+              ) : null}
               <NumberField
                 label="Release from"
                 value={currentFilters.releaseYearFrom}
@@ -8273,7 +8417,7 @@ export default function App() {
             <div className="query-footer">
               <div className="missing-flags" aria-label="Missing metadata">
                 <span className="missing-flags-title">Missing fields</span>
-                {missingFieldOptions.map((option) => {
+                {missingFieldOptions.filter((option) => request.view === "tracks" || option.value !== "billboardSingle").map((option) => {
                   const checked = currentFilters.missingFields.includes(option.value);
                   const label = missingFieldLabel(option.value, request.view);
                   return (
@@ -8308,7 +8452,8 @@ export default function App() {
                           { value: "album", label: "Album" },
                           { value: "displayArtist", label: "Display artist" },
                           { value: "year", label: "Year" },
-                          { value: "billboardRank", label: "Billboard" },
+                          { value: "billboardRank", label: "Album Billboard" },
+                          { value: "billboardSingleRank", label: "Single Billboard" },
                           { value: "trackRating", label: "Track rating" },
                           { value: "trackNumber", label: "Track number" },
                         ]

@@ -82,6 +82,14 @@ export type BillboardImportSummary = {
   durationMs: number;
 };
 
+export type BillboardSinglesImportSummary = {
+  sourcePath: string;
+  filesScanned: number;
+  chartEntries: number;
+  matchedTracks: number;
+  durationMs: number;
+};
+
 export type LeftSidebarMode = "expanded" | "iconOnly" | "hidden";
 
 export type RightSidebarMode = "expanded" | "hidden";
@@ -119,6 +127,8 @@ export type BrowseFilters = {
   missingFields: string[];
   billboardRankMin: number | null;
   billboardRankMax: number | null;
+  billboardSingleRankMin: number | null;
+  billboardSingleRankMax: number | null;
   yearFrom: number | null;
   yearTo: number | null;
   releaseYearFrom: number | null;
@@ -390,6 +400,8 @@ export type BrowseRow = {
   albumScore: number | null;
   billboardRank: number | null;
   billboardYear: number | null;
+  billboardSingleRank: number | null;
+  billboardSingleYear: number | null;
   trackSeconds: number | null;
   normalizedRating: number | null;
   discNumber: number | null;

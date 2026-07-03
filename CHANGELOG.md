@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.24.0] - 2026-07-03
+### Added
+- Added Billboard year-end singles CSV imports from `CSV_SINGLES/`, matching `Yearly Rank`, `Artist`, optional `Featured`, and `Track` against library track display artists and titles.
+- Added track-level Billboard singles rank/year fields, Search track badges, Single Billboard sorting and min/max filters, export columns, and a Missing Billboard Singles tool backed by persisted singles chart rows.
+
+### Changed
+- Local `CSV_SINGLES/` chart data is now ignored by git and Vite file watching alongside the existing album `CSV/` folder.
+
 ## [0.23.2] - 2026-07-01
 ### Fixed
 - Fixed Missing Billboard Albums to collapse overlapping chart-year entries for the same imported Billboard artist/title and keep only the earliest year in the tool results.

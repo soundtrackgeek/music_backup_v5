@@ -6,6 +6,7 @@ import type {
   ArtistListResponse,
   ArtistSummary,
   BillboardImportSummary,
+  BillboardSinglesImportSummary,
   BrowseRequest,
   BrowseResponse,
   BrowseRow,
@@ -86,6 +87,8 @@ const mockRows: BrowseRow[] = [
     albumScore: 207.62,
     billboardRank: 103,
     billboardYear: 1987,
+    billboardSingleRank: null,
+    billboardSingleYear: null,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -119,6 +122,8 @@ const mockRows: BrowseRow[] = [
     albumScore: 108.4,
     billboardRank: 282,
     billboardYear: 1986,
+    billboardSingleRank: null,
+    billboardSingleYear: null,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -152,6 +157,8 @@ const mockRows: BrowseRow[] = [
     albumScore: 251.16,
     billboardRank: null,
     billboardYear: null,
+    billboardSingleRank: null,
+    billboardSingleYear: null,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -185,6 +192,8 @@ const mockRows: BrowseRow[] = [
     albumScore: 82.1,
     billboardRank: 428,
     billboardYear: 1984,
+    billboardSingleRank: null,
+    billboardSingleYear: null,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -218,6 +227,8 @@ const mockRows: BrowseRow[] = [
     albumScore: 61.5,
     billboardRank: 20,
     billboardYear: 1999,
+    billboardSingleRank: null,
+    billboardSingleYear: null,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -251,6 +262,8 @@ const mockRows: BrowseRow[] = [
     albumScore: null,
     billboardRank: null,
     billboardYear: null,
+    billboardSingleRank: null,
+    billboardSingleYear: null,
     trackSeconds: null,
     normalizedRating: null,
     discNumber: null,
@@ -284,6 +297,8 @@ const mockRows: BrowseRow[] = [
     albumScore: 207.62,
     billboardRank: 103,
     billboardYear: 1987,
+    billboardSingleRank: 10,
+    billboardSingleYear: 1987,
     trackSeconds: 260,
     normalizedRating: 100,
     discNumber: 1,
@@ -317,6 +332,8 @@ const mockRows: BrowseRow[] = [
     albumScore: 251.16,
     billboardRank: null,
     billboardYear: null,
+    billboardSingleRank: null,
+    billboardSingleYear: null,
     trackSeconds: 108,
     normalizedRating: 100,
     discNumber: 1,
@@ -1595,6 +1612,21 @@ export async function importBillboardCharts(sourcePath: string) {
   return invoke<BillboardImportSummary>("import_billboard_charts", { sourcePath });
 }
 
+export async function importBillboardSingles(sourcePath: string) {
+  if (!isTauriRuntime()) {
+    const matchedTracks = mockRows.filter((row) => row.trackId !== null && row.billboardSingleRank != null).length;
+    return {
+      sourcePath,
+      filesScanned: 135,
+      chartEntries: 18000,
+      matchedTracks,
+      durationMs: 0,
+    } satisfies BillboardSinglesImportSummary;
+  }
+
+  return invoke<BillboardSinglesImportSummary>("import_billboard_singles", { sourcePath });
+}
+
 export async function getAlbumCoverDataUrl(albumId: string) {
   if (!isTauriRuntime()) {
     return null;
@@ -1628,6 +1660,8 @@ export async function searchLibrary(request: BrowseRequest) {
     const yearTo = request.filters.yearTo;
     const billboardRankMin = request.filters.billboardRankMin;
     const billboardRankMax = request.filters.billboardRankMax;
+    const billboardSingleRankMin = request.filters.billboardSingleRankMin;
+    const billboardSingleRankMax = request.filters.billboardSingleRankMax;
     const lovedTracksMin = request.filters.lovedTracksMin;
     const lovedTracksMax = request.filters.lovedTracksMax;
     const ratingCompletenessMin = normalizePercentFilter(request.filters.ratingCompletenessMin);
@@ -1641,6 +1675,7 @@ export async function searchLibrary(request: BrowseRequest) {
       const lovedTracks = row.lovedTracks ?? 0;
       const year = row.year ?? 0;
       const billboardRank = row.billboardRank ?? 0;
+      const billboardSingleRank = row.billboardSingleRank ?? 0;
       return (
         matchesView &&
         (albumIds.size === 0 || albumIds.has(row.albumId)) &&
@@ -1651,6 +1686,12 @@ export async function searchLibrary(request: BrowseRequest) {
         (yearTo == null || year <= yearTo) &&
         (billboardRankMin == null || (row.billboardRank != null && billboardRank >= billboardRankMin)) &&
         (billboardRankMax == null || (row.billboardRank != null && billboardRank <= billboardRankMax)) &&
+        (!isTracks ||
+          billboardSingleRankMin == null ||
+          (row.billboardSingleRank != null && billboardSingleRank >= billboardSingleRankMin)) &&
+        (!isTracks ||
+          billboardSingleRankMax == null ||
+          (row.billboardSingleRank != null && billboardSingleRank <= billboardSingleRankMax)) &&
         (ratedTracksMin == null || ratedTracks >= ratedTracksMin) &&
         (ratedTracksMax == null || ratedTracks <= ratedTracksMax) &&
         (lovedTracksMin == null || lovedTracks >= lovedTracksMin) &&
@@ -2036,6 +2077,8 @@ function matchesMissingFields(row: BrowseRow, isTracks: boolean, fields: string[
         return row.year == null;
       case "billboard":
         return row.billboardRank == null;
+      case "billboardSingle":
+        return isTracks ? row.billboardSingleRank == null : true;
       case "rating":
         return isTracks ? row.normalizedRating == null : row.effectiveAlbumRating == null;
       case "time":
@@ -2069,6 +2112,8 @@ function browseSortValue(row: BrowseRow, field: string) {
       return row.canonicalGenre?.toLowerCase() ?? "";
     case "billboardRank":
       return row.billboardRank;
+    case "billboardSingleRank":
+      return row.billboardSingleRank;
     case "trackRating":
       return row.normalizedRating;
     case "time":

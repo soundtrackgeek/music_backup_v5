@@ -102,6 +102,16 @@ pub struct BillboardImportSummary {
     pub duration_ms: u128,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BillboardSinglesImportSummary {
+    pub source_path: String,
+    pub files_scanned: usize,
+    pub chart_entries: usize,
+    pub matched_tracks: i64,
+    pub duration_ms: u128,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
@@ -168,6 +178,10 @@ pub struct BrowseFilters {
     pub billboard_rank_min: Option<i32>,
     #[serde(default)]
     pub billboard_rank_max: Option<i32>,
+    #[serde(default)]
+    pub billboard_single_rank_min: Option<i32>,
+    #[serde(default)]
+    pub billboard_single_rank_max: Option<i32>,
     #[serde(default)]
     pub year_from: Option<i32>,
     #[serde(default)]
@@ -581,6 +595,8 @@ pub struct BrowseRow {
     pub album_score: Option<f64>,
     pub billboard_rank: Option<i32>,
     pub billboard_year: Option<i32>,
+    pub billboard_single_rank: Option<i32>,
+    pub billboard_single_year: Option<i32>,
     pub track_seconds: Option<i64>,
     pub normalized_rating: Option<i32>,
     pub disc_number: Option<i32>,

@@ -4,11 +4,12 @@ mod importer;
 mod models;
 
 use models::{
-    AppSettings, ArtistListRequest, ArtistListResponse, BillboardImportSummary, BrowseRequest,
-    BrowseResponse, CoverImportRequest, CoverImportSummary, DiscoveryResponse,
-    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
-    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, SaveChartRequest,
-    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
+    AppSettings, ArtistListRequest, ArtistListResponse, BillboardImportSummary,
+    BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
+    CoverImportSummary, DiscoveryResponse, ExportMusicToolRequest, ExportResult,
+    ExportSearchRequest, GenreListRequest, GenreListResponse, MusicToolIssueRequest,
+    MusicToolIssueResponse, MusicToolSummary, SaveChartRequest, SaveSearchRequest, SavedChart,
+    SavedSearch, StatisticsResponse,
 };
 use models::{ImportRun, ImportSummary, LibraryStatus};
 use tauri::AppHandle;
@@ -104,6 +105,19 @@ async fn get_album_cover_data_url(
         .await
         .map_err(|error| format!("Cover image task failed: {error}"))?
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn import_billboard_singles(
+    app: AppHandle,
+    source_path: String,
+) -> Result<BillboardSinglesImportSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::import_billboard_singles_for_app(&app, source_path)
+    })
+    .await
+    .map_err(|error| format!("Billboard singles import task failed: {error}"))?
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -242,6 +256,7 @@ pub fn run() {
             import_musicbee_tsv,
             import_album_covers,
             import_billboard_charts,
+            import_billboard_singles,
             get_album_cover_data_url,
             search_library,
             list_artists,
