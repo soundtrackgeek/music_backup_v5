@@ -14,7 +14,6 @@ import {
   Compass,
   Database,
   Download,
-  Film,
   FileSearch,
   FolderInput,
   Gauge,
@@ -85,9 +84,7 @@ import type {
   BrowseSort,
   BrowseView,
   ChartConfig,
-  ChartViewMode,
   ConcentrationPoint,
-  CoverImportProgress,
   CoverImportSummary,
   DecadeProgressStats,
   DiscoveryAlbumPoint,
@@ -101,7 +98,6 @@ import type {
   GenreListResponse,
   GenreSummary,
   DurationAlbumStat,
-  ImportProgress,
   ImportRun,
   ImportSummary,
   LovedDensityStat,
@@ -125,143 +121,94 @@ import type {
   TextFilterOperator,
   YearProgressStats,
 } from "./types";
-
-const EXPORT_FORMATS = ["csv", "tsv", "xlsx", "json", "txt"];
-
-const navigation = [
-  { label: "Search", icon: Search, enabled: true },
-  { label: "Charts", icon: BarChart3, enabled: true },
-  { label: "Discovery", icon: Compass, enabled: true },
-  { label: "Statistics", icon: Activity, enabled: true },
-  { label: "Albums", icon: Album, enabled: true },
-  { label: "Artists", icon: UsersRound, enabled: true },
-  { label: "Genres", icon: Tags, enabled: true },
-  { label: "Tools", icon: Wrench, enabled: true },
-  { label: "Imports", icon: FolderInput, enabled: true },
-  { label: "Settings", icon: Settings, enabled: true },
-];
-
-const leftSidebarModeOptions: { value: LeftSidebarMode; label: string }[] = [
-  { value: "expanded", label: "Full" },
-  { value: "iconOnly", label: "Icons" },
-  { value: "hidden", label: "Hidden" },
-];
-
-const rightSidebarModeOptions: { value: RightSidebarMode; label: string }[] = [
-  { value: "expanded", label: "Shown" },
-  { value: "hidden", label: "Hidden" },
-];
-
-const leftSidebarModeLabels: Record<LeftSidebarMode, string> = {
-  expanded: "Full",
-  iconOnly: "Icons",
-  hidden: "Hidden",
-};
-
-const rightSidebarModeLabels: Record<RightSidebarMode, string> = {
-  expanded: "Shown",
-  hidden: "Hidden",
-};
-
-const operatorLabels: Record<TextFilterOperator, string> = {
-  contains: "Contains",
-  equals: "Equals",
-  startsWith: "Starts with",
-};
-
-type MissingFieldOption = {
-  value: string;
-  albumLabel: string;
-  trackLabel: string;
-};
-
-const missingFieldOptions: MissingFieldOption[] = [
-  { value: "album", albumLabel: "Album title", trackLabel: "Track album" },
-  { value: "albumArtist", albumLabel: "Album artist", trackLabel: "Album artist" },
-  { value: "genre", albumLabel: "Genre", trackLabel: "Track genre" },
-  { value: "year", albumLabel: "Year", trackLabel: "Track year" },
-  { value: "billboard", albumLabel: "Billboard rank", trackLabel: "Album Billboard rank" },
-  { value: "billboardSingle", albumLabel: "Single Billboard rank", trackLabel: "Single Billboard rank" },
-  { value: "rating", albumLabel: "Album rating", trackLabel: "Track rating" },
-  { value: "time", albumLabel: "Total duration", trackLabel: "Track duration" },
-];
-
-function missingFieldLabel(value: string, view: BrowseView) {
-  const option = missingFieldOptions.find((field) => field.value === value);
-  if (!option) {
-    return value;
-  }
-  return view === "tracks" ? option.trackLabel : option.albumLabel;
-}
-
-function formatMissingFieldLabels(values: string[], view: BrowseView) {
-  return values.map((value) => missingFieldLabel(value, view)).join(", ");
-}
-
-const rankingOptions = [
-  { value: "albumScore", label: "Album Score" },
-  { value: "billboardRank", label: "Billboard rank" },
-  { value: "albumRating", label: "Album rating" },
-  { value: "lovedTracks", label: "Loved tracks" },
-  { value: "ae", label: "AE" },
-  { value: "tmoe", label: "TMOE" },
-  { value: "ratingCompleteness", label: "Completeness" },
-  { value: "totalMinutes", label: "Minutes" },
-];
-
-const chartColumnOptions = [
-  { value: "billboard", label: "Billboard" },
-  { value: "rating", label: "Rating" },
-  { value: "complete", label: "Complete" },
-  { value: "score", label: "Score" },
-  { value: "loved", label: "Loved" },
-  { value: "ae", label: "AE" },
-  { value: "tmoe", label: "TMOE" },
-  { value: "minutes", label: "Minutes" },
-];
-
-const chartViewModes: { value: ChartViewMode; label: string; icon: typeof BarChart3 }[] = [
-  { value: "table", label: "Table", icon: BarChart3 },
-  { value: "compact", label: "List", icon: ListMusic },
-  { value: "grid", label: "Grid", icon: Album },
-];
-
-const chartGridCoverSize = {
-  min: 96,
-  max: 224,
-  step: 8,
-  default: 144,
-} as const;
-
-const completenessRange = {
-  min: 0,
-  max: 100,
-  step: 1,
-} as const;
-
-const genreSuggestionPageSize = 500;
-const genreSuggestionAliases = ["scores"] as const;
-const maxGenreSuggestions = 5;
-
-const defaultProgress: ImportProgress = {
-  status: "idle",
-  processedRows: 0,
-  albumCount: 0,
-  message: "Ready to import a MusicBee TSV export.",
-};
-
-const defaultCoverProgress: CoverImportProgress = {
-  status: "idle",
-  totalAlbums: 0,
-  scannedAlbums: 0,
-  newCoversFound: 0,
-  importedCovers: 0,
-  relinkedCovers: 0,
-  skippedExisting: 0,
-  missingCovers: 0,
-  percent: 0,
-  message: "Ready to scan AlbumCovers.",
-};
+import { chartTemplates, type ChartTemplate } from "./app/chartTemplates";
+import {
+  EXPORT_FORMATS,
+  chartColumnOptions,
+  chartGridCoverSize,
+  chartViewModes,
+  completenessRange,
+  defaultCoverProgress,
+  defaultProgress,
+  formatMissingFieldLabels,
+  genreSuggestionAliases,
+  leftSidebarModeLabels,
+  leftSidebarModeOptions,
+  missingFieldLabel,
+  missingFieldOptions,
+  musicToolCatalog,
+  navigation,
+  operatorLabels,
+  rankingOptions,
+  rightSidebarModeLabels,
+  rightSidebarModeOptions,
+} from "./app/config";
+import {
+  compareBrowseRows,
+  formatAverage,
+  formatBillboardRank,
+  formatBillboardSingleRank,
+  formatBytes,
+  formatChartMetric,
+  formatClockTime,
+  formatCompletenessRange,
+  formatDate,
+  formatDuration,
+  formatHours,
+  formatMinutes,
+  formatNumber,
+  formatPercent,
+  formatSignedNumber,
+  formatToolCount,
+  formatToolProgress,
+  formatTrackRating,
+  isMusicToolProgressActive,
+  percentOf,
+  rankingLabel,
+  ratingStarCount,
+  ratioOf,
+  severityLabel,
+  textFilterLabel,
+} from "./app/display";
+import {
+  currentGenreToken,
+  formatList,
+  genreSuggestions,
+  listsEqual,
+  parseList,
+  replaceGenreToken,
+  uniqueGenreSuggestionOptions,
+} from "./app/genreSuggestions";
+import { clampBackupRetention, numberValue } from "./app/input";
+import {
+  chartCompletenessRange,
+  chartRequestFromConfig,
+  clampCompletenessValue,
+  createAlbumTracksRequest,
+  createArtistAlbumsRequest,
+  createArtistListRequest,
+  createChartConfig,
+  createDiscoveryAlbumPointRequest,
+  createDiscoveryAlbumRequest,
+  createDiscoveryArtistRequest,
+  createDiscoveryGenreRequest,
+  createDiscoveryHeatmapRequest,
+  createDiscoveryMissionRequest,
+  createGenreAlbumsRequest,
+  createGenreListRequest,
+  createGenreSuggestionRequest,
+  createMusicToolIssueRequest,
+  createRequest,
+  createTextFilter,
+  defaultSort,
+  nextSort,
+  normalizeChartConfigForClient,
+  normalizeChartGridCoverSize,
+  normalizeCompletenessRange,
+  renewMusicToolIssueRequest,
+  toCompletenessFilterRange,
+  type DiscoverySelection,
+} from "./app/requests";
 
 function createDefaultSettings(): AppSettings {
   return loadCachedSettings();
@@ -273,108 +220,6 @@ function createDefaultLeftSidebarMode(): LeftSidebarMode {
 
 function createDefaultRightSidebarMode(): RightSidebarMode {
   return loadCachedSettings().rightSidebarDefault;
-}
-
-function createTextFilter(): TextFilter {
-  return { operator: "contains", value: "" };
-}
-
-function createFilters(): BrowseFilters {
-  return {
-    albumIds: [],
-    artistKeys: [],
-    albumTitle: createTextFilter(),
-    trackTitle: createTextFilter(),
-    albumArtist: createTextFilter(),
-    displayArtist: createTextFilter(),
-    publisher: createTextFilter(),
-    filePath: createTextFilter(),
-    filename: createTextFilter(),
-    hasTrackText: "",
-    genres: [],
-    excludedGenres: [],
-    missingFields: [],
-    billboardRankMin: null,
-    billboardRankMax: null,
-    billboardSingleRankMin: null,
-    billboardSingleRankMax: null,
-    yearFrom: null,
-    yearTo: null,
-    releaseYearFrom: null,
-    releaseYearTo: null,
-    totalMinutesMin: null,
-    totalMinutesMax: null,
-    trackCountMin: null,
-    trackCountMax: null,
-    ratedTracksMin: null,
-    ratedTracksMax: null,
-    albumRatingMin: null,
-    albumRatingMax: null,
-    trackRatingMin: null,
-    trackRatingMax: null,
-    ratingCompletenessMin: null,
-    ratingCompletenessMax: null,
-    lovedTracksMin: null,
-    lovedTracksMax: null,
-  };
-}
-
-function defaultSort(view: BrowseView) {
-  return { field: view === "tracks" ? "title" : "album", direction: "asc" as const };
-}
-
-function createRequest(view: BrowseView = "albums"): BrowseRequest {
-  return {
-    view,
-    searchText: "",
-    filters: createFilters(),
-    sort: defaultSort(view),
-    limit: 50,
-    offset: 0,
-  };
-}
-
-function createAlbumTracksRequest(albumId: string): BrowseRequest {
-  const request = createRequest("tracks");
-  request.filters.albumIds = [albumId];
-  request.sort = { field: "trackNumber", direction: "asc" };
-  request.limit = 500;
-  return request;
-}
-
-function createArtistListRequest(): ArtistListRequest {
-  return {
-    searchText: "",
-    sort: { field: "name", direction: "asc" },
-    limit: 50,
-    offset: 0,
-  };
-}
-
-function createArtistAlbumsRequest(artist: ArtistSummary): BrowseRequest {
-  const request = createRequest("albums");
-  request.filters.artistKeys = [artist.id];
-  request.sort = { field: "year", direction: "asc" };
-  request.limit = 100;
-  return request;
-}
-
-function createGenreListRequest(): GenreListRequest {
-  return {
-    searchText: "",
-    sort: { field: "name", direction: "asc" },
-    limit: 50,
-    offset: 0,
-  };
-}
-
-function createGenreSuggestionRequest(offset = 0): GenreListRequest {
-  return {
-    searchText: "",
-    sort: { field: "name", direction: "asc" },
-    limit: genreSuggestionPageSize,
-    offset,
-  };
 }
 
 async function loadGenreSuggestionNames() {
@@ -403,560 +248,6 @@ async function loadGenreSuggestionNames() {
   return uniqueGenreSuggestionOptions(names);
 }
 
-function createGenreAlbumsRequest(genre: GenreSummary): BrowseRequest {
-  const request = createRequest("albums");
-  request.filters.genres = [genre.id];
-  request.sort = { field: "year", direction: "asc" };
-  request.limit = 100;
-  return request;
-}
-
-type DiscoverySelection = {
-  title: string;
-  caption: string;
-};
-
-function createDiscoveryAlbumRequest(
-  filters: Partial<BrowseFilters>,
-  sort: BrowseSort = { field: "albumScore", direction: "desc" },
-  limit = 50,
-) {
-  const request = createRequest("albums");
-  request.filters = { ...request.filters, ...filters };
-  request.sort = sort;
-  request.limit = limit;
-  return request;
-}
-
-function createDiscoveryMissionRequest(mission: DiscoveryMission) {
-  return createDiscoveryAlbumRequest(
-    {
-      genres: mission.genreId ? [mission.genreId] : [],
-      artistKeys: mission.artistId ? [mission.artistId] : [],
-      yearFrom: mission.yearFrom,
-      yearTo: mission.yearTo,
-      ratedTracksMin: mission.ratedTracksMin,
-      ratingCompletenessMin: mission.ratingCompletenessMin,
-      ratingCompletenessMax: mission.ratingCompletenessMax,
-      lovedTracksMin: mission.lovedTracksMin,
-    },
-    { field: mission.sortField, direction: mission.sortDirection },
-    mission.limit,
-  );
-}
-
-function createDiscoveryHeatmapRequest(cell: DiscoveryHeatmapCell) {
-  return createDiscoveryAlbumRequest(
-    { genres: [cell.genreId], yearFrom: cell.year, yearTo: cell.year },
-    { field: "albumScore", direction: "desc" },
-    50,
-  );
-}
-
-function createDiscoveryGenreRequest(point: DiscoveryGenrePoint) {
-  return createDiscoveryAlbumRequest({ genres: [point.genreId] }, { field: "albumScore", direction: "desc" }, 100);
-}
-
-function createDiscoveryArtistRequest(point: DiscoveryArtistPoint) {
-  return createDiscoveryAlbumRequest(
-    { artistKeys: [point.artistId] },
-    { field: "albumScore", direction: "desc" },
-    100,
-  );
-}
-
-function createDiscoveryAlbumPointRequest(point: DiscoveryAlbumPoint) {
-  return createDiscoveryAlbumRequest({ albumIds: [point.albumId] }, { field: "albumScore", direction: "desc" }, 20);
-}
-
-function createMusicToolIssueRequestId(toolId: string) {
-  return `${toolId}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function createMusicToolIssueRequest(toolId = "duplicate-albums"): MusicToolIssueRequest {
-  return {
-    toolId,
-    requestId: createMusicToolIssueRequestId(toolId),
-    searchText: "",
-    sort: { field: "album", direction: "asc" },
-    limit: 50,
-    offset: 0,
-  };
-}
-
-function renewMusicToolIssueRequest(
-  previous: MusicToolIssueRequest,
-  values: Omit<Partial<MusicToolIssueRequest>, "requestId">,
-): MusicToolIssueRequest {
-  const toolId = values.toolId ?? previous.toolId;
-  return {
-    ...previous,
-    ...values,
-    toolId,
-    requestId: createMusicToolIssueRequestId(toolId),
-  };
-}
-
-function createChartConfig(): ChartConfig {
-  const request = createRequest("albums");
-  request.sort = { field: "albumScore", direction: "desc" };
-  request.limit = 50;
-  request.filters.ratingCompletenessMin = 100;
-
-  return {
-    request,
-    rankingMetric: "albumScore",
-    sortField: "albumScore",
-    ratingCompletenessMin: 100,
-    ratingCompletenessMax: 100,
-    sortDirection: "desc",
-    resultLimit: 50,
-    visibleColumns: ["billboard", "rating", "complete", "score", "loved"],
-    exportColumns: ["calculated"],
-    viewMode: "table",
-    gridCoverSize: chartGridCoverSize.default,
-  };
-}
-
-function normalizeChartGridCoverSize(value: number | null | undefined) {
-  if (value == null || !Number.isFinite(value)) {
-    return chartGridCoverSize.default;
-  }
-  return Math.min(chartGridCoverSize.max, Math.max(chartGridCoverSize.min, value));
-}
-
-function chartRequestFromConfig(config: ChartConfig): BrowseRequest {
-  const { min, max } = chartCompletenessRange(config);
-  return {
-    ...config.request,
-    view: "albums",
-    offset: 0,
-    limit: config.resultLimit,
-    sort: {
-      field: config.rankingMetric,
-      direction: config.sortDirection,
-    },
-    filters: {
-      ...config.request.filters,
-      ...toCompletenessFilterRange(min, max),
-    },
-  };
-}
-
-type ChartTemplateConfigOverrides = Omit<Partial<ChartConfig>, "request"> & {
-  request?: Partial<Omit<BrowseRequest, "filters">> & { filters?: Partial<BrowseFilters> };
-};
-
-function createChartTemplateConfig(values: ChartTemplateConfigOverrides) {
-  const base = createChartConfig();
-  const rankingMetric = values.rankingMetric ?? base.rankingMetric;
-  const filters = {
-    ...base.request.filters,
-    ...(values.request?.filters ?? {}),
-  };
-
-  return {
-    ...base,
-    ...values,
-    rankingMetric,
-    sortField: values.sortField ?? values.request?.sort?.field ?? rankingMetric,
-    request: {
-      ...base.request,
-      ...(values.request ?? {}),
-      view: "albums",
-      filters,
-      offset: 0,
-    },
-  } satisfies ChartConfig;
-}
-
-type ChartTemplate = {
-  id: string;
-  label: string;
-  description: string;
-  icon: typeof BarChart3;
-  createConfig: () => ChartConfig;
-};
-
-const chartTemplates: ChartTemplate[] = [
-  {
-    id: "year",
-    label: "Year",
-    description: "Top albums from a selected year.",
-    icon: BarChart3,
-    createConfig: () =>
-      createChartTemplateConfig({
-        request: { filters: { yearFrom: 1987, yearTo: 1987 } },
-      }),
-  },
-  {
-    id: "decade",
-    label: "Decade",
-    description: "Top albums from a selected decade.",
-    icon: Gauge,
-    createConfig: () =>
-      createChartTemplateConfig({
-        request: { filters: { yearFrom: 1980, yearTo: 1989 } },
-      }),
-  },
-  {
-    id: "billboard",
-    label: "Billboard",
-    description: "Albums with imported Billboard year-end ranks.",
-    icon: BarChart3,
-    createConfig: () =>
-      createChartTemplateConfig({
-        rankingMetric: "billboardRank",
-        sortDirection: "asc",
-        visibleColumns: ["billboard", "rating", "complete", "score"],
-        request: {
-          sort: { field: "billboardRank", direction: "asc" },
-          filters: { billboardRankMin: 1 },
-        },
-      }),
-  },
-  {
-    id: "genre",
-    label: "Genre",
-    description: "Top albums in a canonical genre.",
-    icon: Tags,
-    createConfig: () =>
-      createChartTemplateConfig({
-        request: { filters: { genres: ["Synthpop"] } },
-      }),
-  },
-  {
-    id: "scores",
-    label: "Scores",
-    description: "Film, TV, and game score albums.",
-    icon: Film,
-    createConfig: () =>
-      createChartTemplateConfig({
-        request: { filters: { genres: ["scores"] } },
-      }),
-  },
-  {
-    id: "artist",
-    label: "Artist",
-    description: "Top albums by album artist.",
-    icon: UsersRound,
-    createConfig: () =>
-      createChartTemplateConfig({
-        request: { filters: { albumArtist: { operator: "contains", value: "Pet Shop Boys" } } },
-      }),
-  },
-  {
-    id: "loved",
-    label: "Loved",
-    description: "Albums with the most loved tracks.",
-    icon: Heart,
-    createConfig: () =>
-      createChartTemplateConfig({
-        rankingMetric: "lovedTracks",
-        request: { sort: { field: "lovedTracks", direction: "desc" }, filters: { lovedTracksMin: 1 } },
-      }),
-  },
-  {
-    id: "ae",
-    label: "AE",
-    description: "Albums with the highest Album Excellence.",
-    icon: Sparkles,
-    createConfig: () =>
-      createChartTemplateConfig({
-        rankingMetric: "ae",
-        request: { sort: { field: "ae", direction: "desc" } },
-      }),
-  },
-  {
-    id: "tmoe",
-    label: "TMOE",
-    description: "Albums with the highest Total Minutes Of Excellence.",
-    icon: Clock3,
-    createConfig: () =>
-      createChartTemplateConfig({
-        rankingMetric: "tmoe",
-        request: { sort: { field: "tmoe", direction: "desc" } },
-      }),
-  },
-];
-
-const musicToolCatalog: MusicToolSummary[] = [
-  {
-    id: "duplicate-albums",
-    label: "Duplicate albums",
-    description: "Potential duplicate album versions with the same artist, title, and year.",
-    severity: "medium",
-    scope: "albums",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "albums-without-cover-image",
-    label: "Albums without embedded cover image",
-    description: "Albums missing an imported archive or embedded cover image record.",
-    severity: "low",
-    scope: "albums",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "missing-billboard-albums",
-    label: "Missing Billboard Albums",
-    description: "Imported Billboard chart albums that are not linked to any library album.",
-    severity: "low",
-    scope: "albums",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "missing-billboard-singles",
-    label: "Missing Billboard Singles",
-    description: "Imported Billboard chart singles that are not linked to any library track.",
-    severity: "low",
-    scope: "tracks",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "duplicates-within-album",
-    label: "Duplicates within album",
-    description: "Tracks that repeat a title or disc/track position inside one album.",
-    severity: "high",
-    scope: "tracks",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "invalid-time-values",
-    label: "Invalid time values",
-    description: "Tracks where duration could not be parsed into seconds.",
-    severity: "high",
-    scope: "tracks",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "non-numeric-ratings",
-    label: "Non-numeric ratings",
-    description: "Track ratings that contain non-numeric text.",
-    severity: "medium",
-    scope: "tracks",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "missing-tags",
-    label: "Missing tags",
-    description: "Tracks missing required album, artist, title, genre, year, or file tags.",
-    severity: "high",
-    scope: "tracks",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "non-mp3-files",
-    label: "Non-MP3 files",
-    description: "Tracks whose filenames do not end in .mp3.",
-    severity: "low",
-    scope: "tracks",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "year-anomalies",
-    label: "Year anomalies",
-    description: "Tracks with missing or implausible canonical year values.",
-    severity: "medium",
-    scope: "tracks",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "ratings-out-of-range",
-    label: "Ratings out of range",
-    description: "Numeric ratings that are not whole-number values from 0 to 5.",
-    severity: "high",
-    scope: "tracks",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "track-disc-number-issues",
-    label: "Track/disc number issues",
-    description: "Tracks with missing, zero, or negative disc and track numbers.",
-    severity: "medium",
-    scope: "tracks",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "inconsistent-album-metadata",
-    label: "Inconsistent album metadata",
-    description: "Albums whose tracks disagree on title, genre, or publisher.",
-    severity: "medium",
-    scope: "albums",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "whitespace-anomalies",
-    label: "Whitespace anomalies",
-    description: "Track metadata with repeated internal spaces.",
-    severity: "low",
-    scope: "tracks",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "genre-normalization-issues",
-    label: "Genre normalization issues",
-    description: "Tracks with multi-value genre strings that were collapsed to one canonical genre.",
-    severity: "low",
-    scope: "tracks",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "conflicting-album-artists",
-    label: "Conflicting album artists",
-    description: "Albums whose tracks disagree on album artist.",
-    severity: "high",
-    scope: "albums",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-  {
-    id: "multiple-years-per-album",
-    label: "Multiple years per album",
-    description: "Albums containing tracks with more than one canonical year.",
-    severity: "medium",
-    scope: "albums",
-    issueCount: -1,
-    albumCount: -1,
-    trackCount: -1,
-  },
-];
-
-function formatNumber(value: number | null | undefined) {
-  return new Intl.NumberFormat().format(value ?? 0);
-}
-
-function formatToolCount(value: number | null | undefined) {
-  if (value == null || value < 0) {
-    return "On select";
-  }
-  return formatNumber(value);
-}
-
-function formatToolProgress(progress: MusicToolProgress | null) {
-  if (!progress) {
-    return null;
-  }
-  return `${Math.round(progress.percent)}%`;
-}
-
-function isMusicToolProgressActive(progress: MusicToolProgress | null) {
-  return Boolean(progress && progress.status !== "completed" && progress.status !== "failed");
-}
-
-function formatDuration(ms: number) {
-  if (!ms) return "0s";
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}m ${remainingSeconds}s`;
-}
-
-function formatBytes(bytes: number) {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  let size = bytes;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-  return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
-}
-
-function formatDate(value: string | null) {
-  if (!value) return "Not completed";
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function formatMinutes(seconds: number | null | undefined) {
-  if (seconds == null) return "";
-  return `${(seconds / 60).toFixed(1)}m`;
-}
-
-function formatHours(seconds: number | null | undefined) {
-  if (!seconds) return "0h";
-  return `${(seconds / 3600).toFixed(1)}h`;
-}
-
-function formatPercent(value: number | null | undefined, digits = 1) {
-  if (value == null) return "";
-  return `${(value * 100).toFixed(digits)}%`;
-}
-
-function percentOf(value: number, total: number) {
-  if (total <= 0) return 0;
-  return Math.max(0, Math.min(100, (value / total) * 100));
-}
-
-function ratioOf(value: number | null | undefined, total: number | null | undefined) {
-  if (!value || !total || total <= 0) return 0;
-  return Math.max(0, Math.min(1, value / total));
-}
-
-function formatAverage(value: number | null | undefined, digits = 1) {
-  if (value == null) return "";
-  return value.toFixed(digits);
-}
-
-function formatSignedNumber(value: number) {
-  if (value === 0) return "0";
-  return `${value > 0 ? "+" : "-"}${formatNumber(Math.abs(value))}`;
-}
-
-function formatTrackRating(value: number | null | undefined) {
-  if (value == null) return "";
-  return `${value / 20}`;
-}
-
-function formatClockTime(seconds: number | null | undefined) {
-  if (seconds == null) return "";
-  const totalSeconds = Math.max(0, Math.round(seconds));
-  const minutes = Math.floor(totalSeconds / 60);
-  const remainingSeconds = totalSeconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
-}
-
-function ratingStarCount(value: number | null | undefined) {
-  if (value == null) return 0;
-  return Math.max(0, Math.min(5, Math.round(value / 20)));
-}
-
 function RatingStars({
   value,
   label = "Rating",
@@ -983,290 +274,6 @@ function RatingStars({
       {showValue ? <small>{ratingLabel || "Unrated"}</small> : null}
     </span>
   );
-}
-
-function rankingLabel(value: string) {
-  return rankingOptions.find((option) => option.value === value)?.label ?? "Album Score";
-}
-
-function severityLabel(value: string | null | undefined) {
-  if (!value) return "";
-  return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
-}
-
-function formatBillboardRank(row: Pick<BrowseRow, "billboardRank" | "billboardYear">) {
-  if (row.billboardRank == null) return "";
-  return row.billboardYear == null ? `#${row.billboardRank}` : `#${row.billboardRank} ${row.billboardYear}`;
-}
-
-function formatBillboardSingleRank(row: Pick<BrowseRow, "billboardSingleRank" | "billboardSingleYear">) {
-  if (row.billboardSingleRank == null) return "";
-  return row.billboardSingleYear == null
-    ? `#${row.billboardSingleRank}`
-    : `#${row.billboardSingleRank} ${row.billboardSingleYear}`;
-}
-
-function formatChartMetric(row: BrowseRow, metric: string) {
-  switch (metric) {
-    case "billboardRank":
-      return formatBillboardRank(row);
-    case "albumRating":
-      return row.effectiveAlbumRating?.toString() ?? "";
-    case "lovedTracks":
-      return row.lovedTracks?.toString() ?? "0";
-    case "ae":
-      return formatPercent(row.aeRatio, 2);
-    case "tmoe":
-      return formatMinutes(row.tmoeSeconds);
-    case "ratingCompleteness":
-      return formatPercent(row.ratingCompleteness);
-    case "totalMinutes":
-      return formatMinutes(row.totalSeconds);
-    default:
-      return row.albumScore?.toFixed(3) ?? "";
-  }
-}
-
-function browseRowSortValue(row: BrowseRow, field: string) {
-  switch (field) {
-    case "title":
-      return row.title?.toLowerCase() ?? "";
-    case "displayArtist":
-      return row.displayArtist?.toLowerCase() ?? "";
-    case "artist":
-      return row.albumArtistDisplay?.toLowerCase() ?? "";
-    case "year":
-      return row.year;
-    case "genre":
-      return row.canonicalGenre?.toLowerCase() ?? "";
-    case "billboardRank":
-      return row.billboardRank;
-    case "billboardSingleRank":
-      return row.billboardSingleRank;
-    case "trackRating":
-      return row.normalizedRating;
-    case "time":
-      return row.trackSeconds;
-    case "trackNumber":
-      return (row.discNumber ?? 0) * 10000 + (row.trackNumber ?? 0);
-    case "totalMinutes":
-      return row.totalSeconds;
-    case "trackCount":
-      return row.totalTracks;
-    case "albumRating":
-      return row.effectiveAlbumRating;
-    case "ratingCompleteness":
-      return row.ratingCompleteness;
-    case "lovedTracks":
-      return row.lovedTracks;
-    case "ae":
-      return row.aeRatio;
-    case "tmoe":
-      return row.tmoeSeconds;
-    case "albumScore":
-      return row.albumScore;
-    default:
-      return row.album?.toLowerCase() ?? "";
-  }
-}
-
-function compareBrowseRows(left: BrowseRow, right: BrowseRow, field: string) {
-  const leftValue = browseRowSortValue(left, field);
-  const rightValue = browseRowSortValue(right, field);
-  if (typeof leftValue === "string" || typeof rightValue === "string") {
-    return String(leftValue).localeCompare(String(rightValue));
-  }
-  return (leftValue ?? 0) - (rightValue ?? 0);
-}
-
-function parseList(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function formatList(values: string[]) {
-  return values.join(", ");
-}
-
-function listsEqual(left: string[], right: string[]) {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function normalizeGenreSuggestionText(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/['’]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function uniqueGenreSuggestionOptions(values: string[]) {
-  const seen = new Set<string>();
-  const options: string[] = [];
-  values.forEach((value) => {
-    const trimmed = value.trim();
-    const key = normalizeGenreSuggestionText(trimmed);
-    if (!trimmed || seen.has(key)) {
-      return;
-    }
-    seen.add(key);
-    options.push(trimmed);
-  });
-  return options;
-}
-
-function genreTokenRange(value: string, caretPosition: number) {
-  const cursor = Math.min(Math.max(caretPosition, 0), value.length);
-  const commaBefore = value.lastIndexOf(",", Math.max(0, cursor - 1));
-  const commaAfter = value.indexOf(",", cursor);
-  return {
-    start: commaBefore + 1,
-    end: commaAfter === -1 ? value.length : commaAfter,
-  };
-}
-
-function currentGenreToken(value: string, caretPosition: number) {
-  const range = genreTokenRange(value, caretPosition);
-  const rawValue = value.slice(range.start, range.end);
-  return {
-    ...range,
-    rawValue,
-    query: rawValue.trim(),
-  };
-}
-
-function replaceGenreToken(value: string, caretPosition: number, genre: string) {
-  const range = genreTokenRange(value, caretPosition);
-  const rawValue = value.slice(range.start, range.end);
-  const leadingWhitespace = rawValue.match(/^\s*/)?.[0] ?? "";
-  const trailingWhitespace = rawValue.match(/\s*$/)?.[0] ?? "";
-  const nextValue = `${value.slice(0, range.start)}${leadingWhitespace}${genre}${trailingWhitespace}${value.slice(range.end)}`;
-
-  return {
-    value: nextValue,
-    caretPosition: range.start + leadingWhitespace.length + genre.length,
-  };
-}
-
-function genreSuggestionScore(option: string, query: string) {
-  const normalizedOption = normalizeGenreSuggestionText(option);
-  const normalizedQuery = normalizeGenreSuggestionText(query);
-  if (!normalizedOption || !normalizedQuery) {
-    return null;
-  }
-  if (normalizedOption === normalizedQuery) {
-    return 0;
-  }
-  if (normalizedOption.startsWith(normalizedQuery)) {
-    return 10 + (normalizedOption.length - normalizedQuery.length) / 100;
-  }
-
-  const wordStartIndex = normalizedOption
-    .split(" ")
-    .findIndex((word) => word.startsWith(normalizedQuery));
-  if (wordStartIndex >= 0) {
-    const characterIndex = normalizedOption.indexOf(normalizedOption.split(" ")[wordStartIndex]);
-    return 20 + characterIndex + (normalizedOption.length - normalizedQuery.length) / 100;
-  }
-
-  const includesIndex = normalizedOption.indexOf(normalizedQuery);
-  if (includesIndex >= 0) {
-    return 40 + includesIndex + (normalizedOption.length - normalizedQuery.length) / 100;
-  }
-
-  let optionIndex = 0;
-  let distance = 0;
-  for (const character of normalizedQuery) {
-    const nextIndex = normalizedOption.indexOf(character, optionIndex);
-    if (nextIndex === -1) {
-      return null;
-    }
-    distance += nextIndex - optionIndex;
-    optionIndex = nextIndex + 1;
-  }
-
-  return 80 + distance + normalizedOption.length / 100;
-}
-
-function genreSuggestions(options: string[], query: string) {
-  const normalizedQuery = normalizeGenreSuggestionText(query);
-  if (!normalizedQuery) {
-    return [];
-  }
-
-  return options
-    .map((option) => ({ option, score: genreSuggestionScore(option, normalizedQuery) }))
-    .filter((item): item is { option: string; score: number } => item.score !== null)
-    .sort((left, right) => left.score - right.score || left.option.localeCompare(right.option))
-    .slice(0, maxGenreSuggestions)
-    .map((item) => item.option);
-}
-
-function numberValue(value: string) {
-  if (value.trim() === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function clampBackupRetention(value: number | null | undefined) {
-  if (value == null || !Number.isFinite(value)) return 3;
-  return Math.min(50, Math.max(1, Math.round(value)));
-}
-
-function clampCompletenessValue(value: number | null | undefined) {
-  if (value == null || !Number.isFinite(value)) return completenessRange.min;
-  return Math.min(completenessRange.max, Math.max(completenessRange.min, Math.round(value)));
-}
-
-function normalizeCompletenessRange(minValue: number | null | undefined, maxValue: number | null | undefined) {
-  const minimum = clampCompletenessValue(minValue);
-  const maximum = clampCompletenessValue(maxValue);
-  return minimum <= maximum ? { min: minimum, max: maximum } : { min: maximum, max: minimum };
-}
-
-function toCompletenessFilterRange(minValue: number | null | undefined, maxValue: number | null | undefined) {
-  const range = normalizeCompletenessRange(minValue, maxValue);
-  return {
-    ratingCompletenessMin: range.min <= completenessRange.min ? null : range.min,
-    ratingCompletenessMax: range.max >= completenessRange.max ? null : range.max,
-  } satisfies Pick<BrowseFilters, "ratingCompletenessMin" | "ratingCompletenessMax">;
-}
-
-function chartCompletenessRange(config: ChartConfig) {
-  const legacyThreshold = config.ratingCompletenessThreshold;
-  return normalizeCompletenessRange(
-    config.ratingCompletenessMin ?? legacyThreshold ?? completenessRange.max,
-    config.ratingCompletenessMax ?? completenessRange.max,
-  );
-}
-
-function normalizeChartConfigForClient(config: ChartConfig) {
-  const { min, max } = chartCompletenessRange(config);
-  return {
-    ...config,
-    ratingCompletenessMin: min,
-    ratingCompletenessMax: max,
-    ratingCompletenessThreshold: null,
-    gridCoverSize: normalizeChartGridCoverSize(config.gridCoverSize),
-  } satisfies ChartConfig;
-}
-
-function formatCompletenessRange(minValue: number | null | undefined, maxValue: number | null | undefined) {
-  const { min, max } = normalizeCompletenessRange(minValue, maxValue);
-  if (min <= completenessRange.min && max >= completenessRange.max) return "0-100%";
-  if (min === max) return `${min}%`;
-  if (min <= completenessRange.min) return `<= ${max}%`;
-  if (max >= completenessRange.max) return `>= ${min}%`;
-  return `${min}-${max}%`;
-}
-
-function textFilterLabel(label: string, filter: TextFilter) {
-  if (!filter.value.trim()) return null;
-  return `${label} ${operatorLabels[filter.operator].toLowerCase()} "${filter.value.trim()}"`;
 }
 
 function Metric({
@@ -1689,13 +696,6 @@ function SelectField({
       </select>
     </label>
   );
-}
-
-function nextSort(current: BrowseSort, field: string): BrowseSort {
-  return {
-    field,
-    direction: current.field === field && current.direction === "asc" ? "desc" : "asc",
-  };
 }
 
 function SortableColumnHeader({

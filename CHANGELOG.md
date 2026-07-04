@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.24.3] - 2026-07-04
+### Changed
+- Split frontend app constants, request factories, chart presets, display helpers, genre suggestion logic, and input helpers out of `App.tsx` into focused `src/app` modules.
+
 ## [0.24.2] - 2026-07-04
 ### Fixed
 - Fixed Windows Rust unit tests for the Tauri app by excluding desktop-only Tauri/Wry command glue from lib test builds, avoiding the Common Controls v6 loader failure that surfaced as `STATUS_ENTRYPOINT_NOT_FOUND`.
