@@ -45,6 +45,15 @@ npm run build
 npm run tauri:build
 ```
 
+## Test
+
+Run the Rust backend unit tests:
+
+```powershell
+cd src-tauri
+cargo test
+```
+
 ## Roadmap
 
 - Phase 12: Additional external enrichment and AI features.

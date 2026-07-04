@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.24.2] - 2026-07-04
+### Fixed
+- Fixed Windows Rust unit tests for the Tauri app by excluding desktop-only Tauri/Wry command glue from lib test builds, avoiding the Common Controls v6 loader failure that surfaced as `STATUS_ENTRYPOINT_NOT_FOUND`.
+
 ## [0.24.1] - 2026-07-03
 ### Fixed
 - Fixed upgrades from existing databases so the Billboard singles rank index is created only after the new track columns are added.

@@ -26,7 +26,13 @@ use std::sync::{
 };
 use std::thread;
 use std::time::{Duration, Instant};
+#[cfg(not(test))]
 use tauri::{AppHandle, Emitter, Manager};
+
+#[cfg(not(test))]
+type ProgressApp<'a> = &'a AppHandle;
+#[cfg(test)]
+type ProgressApp<'a> = &'a ();
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
@@ -208,6 +214,7 @@ const MUSIC_TOOLS: &[MusicToolDefinition] = &[
     },
 ];
 
+#[cfg(not(test))]
 pub fn database_path(app: &AppHandle) -> Result<PathBuf> {
     let app_data_dir = app
         .path()
@@ -217,6 +224,7 @@ pub fn database_path(app: &AppHandle) -> Result<PathBuf> {
     Ok(app_data_dir.join(DB_FILE_NAME))
 }
 
+#[cfg(not(test))]
 pub fn open(app: &AppHandle) -> Result<(Connection, PathBuf)> {
     let db_path = database_path(app)?;
     let conn = Connection::open(&db_path)
@@ -765,6 +773,7 @@ fn schema_column_exists(conn: &Connection, table: &str, column: &str) -> Result<
     Ok(false)
 }
 
+#[cfg(not(test))]
 pub fn library_status(app: &AppHandle) -> Result<LibraryStatus> {
     let (conn, db_path) = open(app)?;
     let track_count = count_rows(&conn, "tracks")?;
@@ -784,6 +793,7 @@ pub fn library_status(app: &AppHandle) -> Result<LibraryStatus> {
     })
 }
 
+#[cfg(not(test))]
 pub fn import_billboard_charts_for_app(
     app: &AppHandle,
     source_path: String,
@@ -963,6 +973,7 @@ fn import_billboard_charts(
     })
 }
 
+#[cfg(not(test))]
 pub fn import_billboard_singles_for_app(
     app: &AppHandle,
     source_path: String,
@@ -1489,16 +1500,19 @@ fn billboard_text_key(value: &str) -> String {
         .join(" ")
 }
 
+#[cfg(not(test))]
 pub fn list_import_runs_for_app(app: &AppHandle, limit: u32) -> Result<Vec<ImportRun>> {
     let (conn, _) = open(app)?;
     list_import_runs(&conn, limit)
 }
 
+#[cfg(not(test))]
 pub fn settings_for_app(app: &AppHandle) -> Result<AppSettings> {
     let (conn, _) = open(app)?;
     settings_for_connection(&conn)
 }
 
+#[cfg(not(test))]
 pub fn save_settings_for_app(app: &AppHandle, settings: AppSettings) -> Result<AppSettings> {
     let (conn, _) = open(app)?;
     save_settings_for_connection(&conn, settings)
@@ -1598,6 +1612,7 @@ fn normalize_right_sidebar_default(value: &str) -> String {
     }
 }
 
+#[cfg(not(test))]
 pub fn statistics_for_app(app: &AppHandle) -> Result<StatisticsResponse> {
     let (conn, _) = open(app)?;
     statistics(&conn)
@@ -2857,12 +2872,14 @@ pub fn rebuild_search_indexes(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(test))]
 pub fn search_library_for_app(app: &AppHandle, request: BrowseRequest) -> Result<BrowseResponse> {
     let (conn, _) = open(app)?;
     ensure_search_indexes(&conn)?;
     search_library(&conn, request, 500)
 }
 
+#[cfg(not(test))]
 pub fn list_artists_for_app(
     app: &AppHandle,
     request: ArtistListRequest,
@@ -2871,6 +2888,7 @@ pub fn list_artists_for_app(
     list_artists(&conn, request, 500)
 }
 
+#[cfg(not(test))]
 pub fn list_genres_for_app(
     app: &AppHandle,
     request: GenreListRequest,
@@ -2879,21 +2897,25 @@ pub fn list_genres_for_app(
     list_genres(&conn, request, 2000)
 }
 
+#[cfg(not(test))]
 pub fn genre_suggestion_names_for_app(app: &AppHandle) -> Result<Vec<String>> {
     let (conn, _) = open(app)?;
     genre_suggestion_names(&conn)
 }
 
+#[cfg(not(test))]
 pub fn discovery_for_app(app: &AppHandle) -> Result<DiscoveryResponse> {
     let (conn, _) = open(app)?;
     discovery(&conn)
 }
 
+#[cfg(not(test))]
 pub fn list_music_tools_for_app(app: &AppHandle) -> Result<Vec<MusicToolSummary>> {
     let (conn, _) = open(app)?;
     list_music_tools(&conn)
 }
 
+#[cfg(not(test))]
 pub fn list_music_tool_issues_for_app(
     app: &AppHandle,
     request: MusicToolIssueRequest,
@@ -2916,6 +2938,7 @@ pub fn list_music_tool_issues_for_app(
     result
 }
 
+#[cfg(not(test))]
 fn ensure_billboard_chart_entries_for_tool(
     app: &AppHandle,
     conn: &mut Connection,
@@ -2968,6 +2991,7 @@ fn ensure_billboard_chart_entries_for_tool(
     Ok(())
 }
 
+#[cfg(not(test))]
 pub fn list_saved_searches_for_app(app: &AppHandle) -> Result<Vec<SavedSearch>> {
     let (conn, _) = open(app)?;
     let mut stmt = conn.prepare(
@@ -3003,6 +3027,7 @@ pub fn list_saved_searches_for_app(app: &AppHandle) -> Result<Vec<SavedSearch>> 
     Ok(searches)
 }
 
+#[cfg(not(test))]
 pub fn save_search_for_app(app: &AppHandle, input: SaveSearchRequest) -> Result<SavedSearch> {
     let (conn, _) = open(app)?;
     let name = input.name.trim();
@@ -3030,6 +3055,7 @@ pub fn save_search_for_app(app: &AppHandle, input: SaveSearchRequest) -> Result<
     Ok(saved)
 }
 
+#[cfg(not(test))]
 pub fn delete_saved_search_for_app(app: &AppHandle, id: i64) -> Result<()> {
     let (conn, _) = open(app)?;
     conn.execute("DELETE FROM saved_queries WHERE id = ?1", params![id])
@@ -3037,6 +3063,7 @@ pub fn delete_saved_search_for_app(app: &AppHandle, id: i64) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(test))]
 pub fn list_saved_charts_for_app(app: &AppHandle) -> Result<Vec<SavedChart>> {
     let (conn, _) = open(app)?;
     let mut stmt = conn.prepare(
@@ -3071,6 +3098,7 @@ pub fn list_saved_charts_for_app(app: &AppHandle) -> Result<Vec<SavedChart>> {
     Ok(charts)
 }
 
+#[cfg(not(test))]
 pub fn save_chart_for_app(app: &AppHandle, input: SaveChartRequest) -> Result<SavedChart> {
     let (conn, _) = open(app)?;
     let name = input.name.trim();
@@ -3098,6 +3126,7 @@ pub fn save_chart_for_app(app: &AppHandle, input: SaveChartRequest) -> Result<Sa
     Ok(saved)
 }
 
+#[cfg(not(test))]
 pub fn delete_saved_chart_for_app(app: &AppHandle, id: i64) -> Result<()> {
     let (conn, _) = open(app)?;
     conn.execute("DELETE FROM saved_charts WHERE id = ?1", params![id])
@@ -3105,6 +3134,7 @@ pub fn delete_saved_chart_for_app(app: &AppHandle, id: i64) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(test))]
 pub fn export_search_for_app(app: &AppHandle, input: ExportSearchRequest) -> Result<ExportResult> {
     let format = input.format.trim().to_lowercase();
     if !matches!(format.as_str(), "csv" | "tsv" | "json" | "txt" | "xlsx") {
@@ -3167,6 +3197,7 @@ pub fn export_search_for_app(app: &AppHandle, input: ExportSearchRequest) -> Res
     })
 }
 
+#[cfg(not(test))]
 pub fn export_music_tool_issues_for_app(
     app: &AppHandle,
     input: ExportMusicToolRequest,
@@ -4518,7 +4549,7 @@ fn list_music_tool_issues(
     conn: &Connection,
     request: MusicToolIssueRequest,
     max_limit: u32,
-    progress_app: Option<&AppHandle>,
+    progress_app: Option<ProgressApp<'_>>,
 ) -> Result<MusicToolIssueResponse> {
     let definition = music_tool_definition(&request.tool_id)?;
     emit_music_tool_progress(
@@ -4677,8 +4708,9 @@ fn music_tool_catalog_summary(definition: MusicToolDefinition) -> MusicToolSumma
     }
 }
 
+#[cfg(not(test))]
 fn emit_music_tool_progress(
-    app: Option<&AppHandle>,
+    app: Option<ProgressApp<'_>>,
     tool_id: &str,
     request_id: &str,
     status: &str,
@@ -4699,6 +4731,17 @@ fn emit_music_tool_progress(
     }
 }
 
+#[cfg(test)]
+fn emit_music_tool_progress(
+    _app: Option<ProgressApp<'_>>,
+    _tool_id: &str,
+    _request_id: &str,
+    _status: &str,
+    _percent: u8,
+    _message: &str,
+) {
+}
+
 struct MusicToolProgressPulse {
     stop: Arc<AtomicBool>,
     handle: Option<thread::JoinHandle<()>>,
@@ -4713,8 +4756,9 @@ impl Drop for MusicToolProgressPulse {
     }
 }
 
+#[cfg(not(test))]
 fn start_music_tool_progress_pulse(
-    app: Option<&AppHandle>,
+    app: Option<ProgressApp<'_>>,
     tool_id: &str,
     request_id: &str,
     status: &'static str,
@@ -4761,6 +4805,19 @@ fn start_music_tool_progress_pulse(
         stop,
         handle: Some(handle),
     })
+}
+
+#[cfg(test)]
+fn start_music_tool_progress_pulse(
+    _app: Option<ProgressApp<'_>>,
+    _tool_id: &str,
+    _request_id: &str,
+    _status: &'static str,
+    _start: u8,
+    _cap: u8,
+    _message: &'static str,
+) -> Option<MusicToolProgressPulse> {
+    None
 }
 
 fn music_tool_definition(tool_id: &str) -> Result<MusicToolDefinition> {

@@ -1,4 +1,6 @@
+#[cfg(not(test))]
 use crate::db;
+#[cfg(not(test))]
 use crate::models::{ImportProgress, ImportSummary};
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
@@ -9,6 +11,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+#[cfg(not(test))]
 use tauri::{AppHandle, Emitter};
 
 const REQUIRED_COLUMNS: [&str; 17] = [
@@ -172,6 +175,7 @@ struct RatingEventRecord {
     current_effective_album_rating: Option<i32>,
 }
 
+#[cfg(not(test))]
 pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<ImportSummary> {
     let started = Instant::now();
     let (mut conn, db_path) = db::open(&app)?;
@@ -290,6 +294,7 @@ pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<Import
     }
 }
 
+#[cfg(not(test))]
 fn run_import(
     app: &AppHandle,
     conn: &mut Connection,
@@ -520,6 +525,7 @@ fn run_import(
     Ok((processed_rows, albums.len() as u64, changes))
 }
 
+#[cfg(not(test))]
 fn load_previous_track_hashes(conn: &Connection) -> Result<HashMap<String, String>> {
     let mut stmt = conn.prepare(
         "
@@ -538,6 +544,7 @@ fn load_previous_track_hashes(conn: &Connection) -> Result<HashMap<String, Strin
     Ok(rows)
 }
 
+#[cfg(not(test))]
 fn load_previous_albums(conn: &Connection) -> Result<HashMap<String, PreviousAlbum>> {
     let mut stmt = conn.prepare(
         "
@@ -584,10 +591,12 @@ fn load_previous_albums(conn: &Connection) -> Result<HashMap<String, PreviousAlb
     Ok(rows)
 }
 
+#[cfg(not(test))]
 fn track_identity(file_path: &str, filename: &str) -> String {
     format!("{file_path}\u{1f}{filename}")
 }
 
+#[cfg(not(test))]
 fn album_changed(previous: &PreviousAlbum, current: &FinalAlbum) -> bool {
     previous.album != current.album
         || previous.album_artist_display != current.album_artist_display
@@ -603,6 +612,7 @@ fn album_changed(previous: &PreviousAlbum, current: &FinalAlbum) -> bool {
         || optional_float_changed(previous.album_score, current.album_score)
 }
 
+#[cfg(not(test))]
 fn rating_event_for_changed_album(
     previous: &PreviousAlbum,
     current: &FinalAlbum,
@@ -642,6 +652,7 @@ fn rating_event_for_changed_album(
     })
 }
 
+#[cfg(not(test))]
 fn rating_event_for_added_album(current: &FinalAlbum) -> Option<RatingEventRecord> {
     if current.rated_tracks == 0 && current.effective_album_rating.is_none() {
         return None;
@@ -666,6 +677,7 @@ fn rating_event_for_added_album(current: &FinalAlbum) -> Option<RatingEventRecor
     })
 }
 
+#[cfg(not(test))]
 fn rating_event_for_removed_album(previous: &PreviousAlbum) -> Option<RatingEventRecord> {
     if previous.rated_tracks == 0 && previous.effective_album_rating.is_none() {
         return None;
@@ -686,6 +698,7 @@ fn rating_event_for_removed_album(previous: &PreviousAlbum) -> Option<RatingEven
     })
 }
 
+#[cfg(not(test))]
 fn insert_rating_events(
     tx: &Transaction<'_>,
     import_run_id: i64,
@@ -726,6 +739,7 @@ fn insert_rating_events(
     Ok(())
 }
 
+#[cfg(not(test))]
 fn insert_rating_snapshot(
     tx: &Transaction<'_>,
     import_run_id: i64,
@@ -792,10 +806,12 @@ fn insert_rating_snapshot(
     Ok(())
 }
 
+#[cfg(not(test))]
 fn float_changed(previous: f64, current: f64) -> bool {
     (previous - current).abs() > 0.000_001
 }
 
+#[cfg(not(test))]
 fn optional_float_changed(previous: Option<f64>, current: Option<f64>) -> bool {
     match (previous, current) {
         (Some(previous), Some(current)) => float_changed(previous, current),
@@ -804,6 +820,7 @@ fn optional_float_changed(previous: Option<f64>, current: Option<f64>) -> bool {
     }
 }
 
+#[cfg(not(test))]
 fn average_i32(values: impl Iterator<Item = i32>) -> Option<f64> {
     let mut count = 0_u64;
     let mut total = 0_i64;
@@ -819,6 +836,7 @@ fn average_i32(values: impl Iterator<Item = i32>) -> Option<f64> {
     }
 }
 
+#[cfg(not(test))]
 fn average_f64(values: impl Iterator<Item = f64>) -> Option<f64> {
     let mut count = 0_u64;
     let mut total = 0.0;
@@ -1075,6 +1093,7 @@ impl AlbumAggregate {
     }
 }
 
+#[cfg(not(test))]
 fn create_backup(
     conn: &Connection,
     db_path: &Path,
@@ -1126,6 +1145,7 @@ fn create_backup(
     Ok(Some(backup_path))
 }
 
+#[cfg(not(test))]
 fn enforce_backup_retention(backup_dir: &Path, backup_retention: usize) -> Result<()> {
     let mut backups = fs::read_dir(backup_dir)
         .with_context(|| format!("Could not read backup directory {}", backup_dir.display()))?
@@ -1155,6 +1175,7 @@ fn enforce_backup_retention(backup_dir: &Path, backup_retention: usize) -> Resul
     Ok(())
 }
 
+#[cfg(not(test))]
 fn resolve_source_path(source_path: &str) -> Result<PathBuf> {
     let trimmed = source_path.trim();
     if trimmed.is_empty() {
@@ -1315,6 +1336,7 @@ fn row_hash(values: &[&str]) -> String {
     hex::encode(hasher.finalize())
 }
 
+#[cfg(not(test))]
 fn emit_progress(
     app: &AppHandle,
     status: &str,

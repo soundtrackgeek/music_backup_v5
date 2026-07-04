@@ -1,8 +1,12 @@
+#![cfg_attr(test, allow(dead_code, unused_imports))]
+
+#[cfg(not(test))]
 mod covers;
 mod db;
 mod importer;
 mod models;
 
+#[cfg(not(test))]
 use models::{
     AppSettings, ArtistListRequest, ArtistListResponse, BillboardImportSummary,
     BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
@@ -11,9 +15,12 @@ use models::{
     MusicToolIssueResponse, MusicToolSummary, SaveChartRequest, SaveSearchRequest, SavedChart,
     SavedSearch, StatisticsResponse,
 };
+#[cfg(not(test))]
 use models::{ImportRun, ImportSummary, LibraryStatus};
+#[cfg(not(test))]
 use tauri::AppHandle;
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn get_library_status(app: AppHandle) -> Result<LibraryStatus, String> {
     tauri::async_runtime::spawn_blocking(move || db::library_status(&app))
@@ -22,6 +29,7 @@ async fn get_library_status(app: AppHandle) -> Result<LibraryStatus, String> {
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn list_import_runs(app: AppHandle, limit: Option<u32>) -> Result<Vec<ImportRun>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -32,6 +40,7 @@ async fn list_import_runs(app: AppHandle, limit: Option<u32>) -> Result<Vec<Impo
     .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
     tauri::async_runtime::spawn_blocking(move || db::settings_for_app(&app))
@@ -40,6 +49,7 @@ async fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
     tauri::async_runtime::spawn_blocking(move || db::save_settings_for_app(&app, settings))
@@ -48,6 +58,7 @@ async fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSetti
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn get_statistics(app: AppHandle) -> Result<StatisticsResponse, String> {
     tauri::async_runtime::spawn_blocking(move || db::statistics_for_app(&app))
@@ -56,6 +67,7 @@ async fn get_statistics(app: AppHandle) -> Result<StatisticsResponse, String> {
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn get_discovery(app: AppHandle) -> Result<DiscoveryResponse, String> {
     tauri::async_runtime::spawn_blocking(move || db::discovery_for_app(&app))
@@ -64,6 +76,7 @@ async fn get_discovery(app: AppHandle) -> Result<DiscoveryResponse, String> {
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<ImportSummary, String> {
     tauri::async_runtime::spawn_blocking(move || importer::import_musicbee_tsv(app, source_path))
@@ -72,6 +85,7 @@ async fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<Impo
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn import_album_covers(
     app: AppHandle,
@@ -83,6 +97,7 @@ async fn import_album_covers(
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn import_billboard_charts(
     app: AppHandle,
@@ -96,6 +111,7 @@ async fn import_billboard_charts(
     .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn get_album_cover_data_url(
     app: AppHandle,
@@ -107,6 +123,7 @@ async fn get_album_cover_data_url(
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn import_billboard_singles(
     app: AppHandle,
@@ -120,6 +137,7 @@ async fn import_billboard_singles(
     .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn search_library(app: AppHandle, request: BrowseRequest) -> Result<BrowseResponse, String> {
     tauri::async_runtime::spawn_blocking(move || db::search_library_for_app(&app, request))
@@ -128,6 +146,7 @@ async fn search_library(app: AppHandle, request: BrowseRequest) -> Result<Browse
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn list_artists(
     app: AppHandle,
@@ -139,6 +158,7 @@ async fn list_artists(
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn list_genres(
     app: AppHandle,
@@ -150,6 +170,7 @@ async fn list_genres(
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn list_genre_suggestions(app: AppHandle) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || db::genre_suggestion_names_for_app(&app))
@@ -158,6 +179,7 @@ async fn list_genre_suggestions(app: AppHandle) -> Result<Vec<String>, String> {
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn list_music_tools(app: AppHandle) -> Result<Vec<MusicToolSummary>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_music_tools_for_app(&app))
@@ -166,6 +188,7 @@ async fn list_music_tools(app: AppHandle) -> Result<Vec<MusicToolSummary>, Strin
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn list_music_tool_issues(
     app: AppHandle,
@@ -177,6 +200,7 @@ async fn list_music_tool_issues(
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn list_saved_searches(app: AppHandle) -> Result<Vec<SavedSearch>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_saved_searches_for_app(&app))
@@ -185,6 +209,7 @@ async fn list_saved_searches(app: AppHandle) -> Result<Vec<SavedSearch>, String>
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn save_search(app: AppHandle, input: SaveSearchRequest) -> Result<SavedSearch, String> {
     tauri::async_runtime::spawn_blocking(move || db::save_search_for_app(&app, input))
@@ -193,6 +218,7 @@ async fn save_search(app: AppHandle, input: SaveSearchRequest) -> Result<SavedSe
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn delete_saved_search(app: AppHandle, id: i64) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || db::delete_saved_search_for_app(&app, id))
@@ -201,6 +227,7 @@ async fn delete_saved_search(app: AppHandle, id: i64) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn list_saved_charts(app: AppHandle) -> Result<Vec<SavedChart>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_saved_charts_for_app(&app))
@@ -209,6 +236,7 @@ async fn list_saved_charts(app: AppHandle) -> Result<Vec<SavedChart>, String> {
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn save_chart(app: AppHandle, input: SaveChartRequest) -> Result<SavedChart, String> {
     tauri::async_runtime::spawn_blocking(move || db::save_chart_for_app(&app, input))
@@ -217,6 +245,7 @@ async fn save_chart(app: AppHandle, input: SaveChartRequest) -> Result<SavedChar
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn delete_saved_chart(app: AppHandle, id: i64) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || db::delete_saved_chart_for_app(&app, id))
@@ -225,6 +254,7 @@ async fn delete_saved_chart(app: AppHandle, id: i64) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn export_search(app: AppHandle, input: ExportSearchRequest) -> Result<ExportResult, String> {
     tauri::async_runtime::spawn_blocking(move || db::export_search_for_app(&app, input))
@@ -233,6 +263,7 @@ async fn export_search(app: AppHandle, input: ExportSearchRequest) -> Result<Exp
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn export_music_tool_issues(
     app: AppHandle,
@@ -244,6 +275,7 @@ async fn export_music_tool_issues(
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(test))]
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
