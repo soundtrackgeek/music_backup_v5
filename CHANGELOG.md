@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.24.4] - 2026-07-04
+### Changed
+- Reworked `SPEC.md` into a living product spec and roadmap covering current capabilities, data contracts, architecture boundaries, phase history, and Now/Next/Later planning.
+- Updated the README roadmap section to point to the living spec instead of duplicating a stale short roadmap.
+
 ## [0.24.3] - 2026-07-04
 ### Changed
 - Split frontend app constants, request factories, chart presets, display helpers, genre suggestion logic, and input helpers out of `App.tsx` into focused `src/app` modules.

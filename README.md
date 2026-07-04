@@ -54,9 +54,9 @@ cd src-tauri
 cargo test
 ```
 
-## Roadmap
+## Roadmap and Spec
 
-- Phase 12: Additional external enrichment and AI features.
+`SPEC.md` is the living product spec and roadmap. It tracks the current implementation, data contracts, architecture map, open decisions, and the Now/Next/Later roadmap. The current next focus is backup restore and recovery, followed by deeper backend and frontend modularization.
 
 ## Phase 11 Billboard Features
 
