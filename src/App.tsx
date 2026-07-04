@@ -41,6 +41,7 @@ import {
   deleteSavedSearch,
   clearCoverImageCache,
   exportSearch,
+  fixMusicToolIssues,
   cacheSettings,
   getAlbumCoverDataUrl,
   getDiscovery,
@@ -113,6 +114,7 @@ import type {
   RatingBucket,
   RatingEvent,
   RightSidebarMode,
+  MusicToolFixSummary,
   MusicToolIssueRequest,
   MusicToolIssueResponse,
   MusicToolIssueRow,
@@ -2086,6 +2088,68 @@ function MusicToolExportControls({
   );
 }
 
+function MusicToolFixControls({
+  tool,
+  response,
+  isPending,
+  fixSummary,
+  fixError,
+  onPreview,
+  onApply,
+}: {
+  tool: MusicToolSummary | null;
+  response: MusicToolIssueResponse | null;
+  isPending: boolean;
+  fixSummary: MusicToolFixSummary | null;
+  fixError: string | null;
+  onPreview: () => Promise<void>;
+  onApply: () => Promise<void>;
+}) {
+  const canFix = tool?.id === "whitespace-anomalies";
+  if (!canFix) {
+    return null;
+  }
+
+  const rowCount = response?.rows.length ?? 0;
+  const isDisabled = isPending || rowCount === 0;
+  const matchingSummary = fixSummary?.toolId === tool?.id ? fixSummary : null;
+
+  return (
+    <div className="tool-fix-controls" aria-label="Fix visible validation issues">
+      <div className="export-strip">
+        <button
+          type="button"
+          disabled={isDisabled}
+          aria-label={`Preview fixes for ${tool.label}`}
+          onClick={() => void onPreview()}
+        >
+          <FileSearch size={15} />
+          <span>Preview</span>
+        </button>
+        <button
+          type="button"
+          disabled={isDisabled}
+          aria-label={`Apply fixes for ${tool.label}`}
+          onClick={() => void onApply()}
+        >
+          <Wrench size={15} />
+          <span>Apply</span>
+        </button>
+      </div>
+      {matchingSummary ? (
+        <div className="export-result tool-fix-result">
+          <Check size={17} />
+          <span>
+            {matchingSummary.message}
+            {matchingSummary.backupPath ? ` Backup: ${matchingSummary.backupPath}` : ""}
+          </span>
+        </div>
+      ) : null}
+      {fixError ? <p className="error-message tool-fix-error">{fixError}</p> : null}
+    </div>
+  );
+}
+
 function MusicToolDetailPanel({
   tool,
   progress,
@@ -2172,7 +2236,9 @@ function MusicToolDetailPanel({
         </div>
         <div>
           <ShieldCheck size={17} />
-          <span>Issue rows are read-only</span>
+          <span>
+            {tool.id === "whitespace-anomalies" ? "Whitespace rows can be compacted" : "Issue rows are read-only"}
+          </span>
         </div>
       </section>
 
@@ -3460,6 +3526,9 @@ export default function App() {
   const [isToolIssuesLoading, setIsToolIssuesLoading] = useState(false);
   const [toolProgress, setToolProgress] = useState<MusicToolProgress | null>(null);
   const [toolExportResult, setToolExportResult] = useState<ExportResult | null>(null);
+  const [toolFixSummary, setToolFixSummary] = useState<MusicToolFixSummary | null>(null);
+  const [toolFixError, setToolFixError] = useState<string | null>(null);
+  const [isToolFixing, setIsToolFixing] = useState(false);
   const [chartConfig, setChartConfig] = useState<ChartConfig>(() => createChartConfig());
   const [chartTableSort, setChartTableSort] = useState<BrowseSort | null>(null);
   const [chartResponse, setChartResponse] = useState<BrowseResponse | null>(null);
@@ -3665,7 +3734,7 @@ export default function App() {
       : null;
   const activeToolProgressText = formatToolProgress(activeToolProgress);
   const isToolProgressActive = isMusicToolProgressActive(activeToolProgress);
-  const isToolRunPending = isToolIssuesLoading || isToolProgressActive;
+  const isToolRunPending = isToolIssuesLoading || isToolProgressActive || isToolFixing;
 
   useEffect(() => {
     if (activeSection !== "Search") {
@@ -4148,6 +4217,8 @@ export default function App() {
 
   useEffect(() => {
     setToolExportResult(null);
+    setToolFixSummary(null);
+    setToolFixError(null);
   }, [
     toolIssueRequest.toolId,
     toolIssueRequest.searchText,
@@ -4609,6 +4680,8 @@ export default function App() {
       limit: previous.limit,
     }));
     setToolExportResult(null);
+    setToolFixSummary(null);
+    setToolFixError(null);
   }
 
   function selectMusicTool(toolId: string) {
@@ -4618,6 +4691,8 @@ export default function App() {
       limit: previous.limit,
     }));
     setToolExportResult(null);
+    setToolFixSummary(null);
+    setToolFixError(null);
   }
 
   async function refreshMusicTools() {
@@ -4819,6 +4894,49 @@ export default function App() {
       format,
     );
     setToolExportResult(result);
+  }
+
+  async function runToolFix(apply: boolean) {
+    if (!selectedTool || !currentToolIssueResponse) {
+      return;
+    }
+
+    const issueIds = currentToolIssueResponse.rows.map((row) => row.id);
+    if (issueIds.length === 0) {
+      return;
+    }
+
+    if (apply) {
+      const confirmed = window.confirm(
+        `Apply whitespace cleanup to ${formatNumber(issueIds.length)} visible issue rows? A database backup is created first in the desktop app.`,
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setIsToolFixing(true);
+    setToolFixError(null);
+    try {
+      const summary = await fixMusicToolIssues({
+        toolId: selectedTool.id,
+        issueIds,
+        apply,
+      });
+      setToolFixSummary(summary);
+      if (apply) {
+        setToolExportResult(null);
+        setToolIssueRequest((previous) =>
+          renewMusicToolIssueRequest(previous, {
+            offset: 0,
+          }),
+        );
+      }
+    } catch (error) {
+      setToolFixError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsToolFixing(false);
+    }
   }
 
   function updateChartConfig(values: Partial<ChartConfig>) {
@@ -6471,6 +6589,15 @@ export default function App() {
                 <p>{toolIssuePanelCaption}</p>
               </div>
               <div className="panel-actions">
+                <MusicToolFixControls
+                  tool={selectedTool}
+                  response={currentToolIssueResponse}
+                  isPending={isToolRunPending}
+                  fixSummary={toolFixSummary}
+                  fixError={toolFixError}
+                  onPreview={() => runToolFix(false)}
+                  onApply={() => runToolFix(true)}
+                />
                 <MusicToolExportControls
                   tool={selectedTool}
                   isPending={isToolRunPending}

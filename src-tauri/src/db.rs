@@ -7,16 +7,17 @@ use crate::models::{
     DurationAlbumStat, DurationAnalyticsStats, ExportMusicToolRequest, ExportResult,
     ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressStats, GenreSummary,
     ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus,
-    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicToolIssueRequest,
-    MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress, MusicToolSummary, OutlierStat,
-    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
-    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter, YearProgressStats,
+    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicToolFixRequest,
+    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
+    MusicToolProgress, MusicToolSummary, OutlierStat, RatingBucket, RatingEvent,
+    RatingHistoryPoint, RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart,
+    SavedSearch, StatisticsResponse, TextFilter, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{DateTime, Datelike, Utc};
 use rusqlite::{params, params_from_iter, types::Value, Connection, OpenFlags, OptionalExtension};
 use rust_xlsxwriter::{Format, Workbook};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -102,6 +103,18 @@ struct BackupMetadata {
     track_rows: Option<i64>,
     album_count: Option<i64>,
 }
+
+const WHITESPACE_ANOMALY_CONDITION_SQL: &str = "
+    COALESCE(t.album, '') GLOB '*  *' OR
+    COALESCE(t.album_artist_display, '') GLOB '*  *' OR
+    COALESCE(t.display_artist, '') GLOB '*  *' OR
+    COALESCE(t.title, '') GLOB '*  *' OR
+    COALESCE(t.genre, '') GLOB '*  *' OR
+    COALESCE(t.canonical_genre, '') GLOB '*  *' OR
+    COALESCE(t.publisher, '') GLOB '*  *' OR
+    COALESCE(t.file_path, '') GLOB '*  *' OR
+    COALESCE(t.filename, '') GLOB '*  *'
+";
 
 const MUSIC_TOOLS: &[MusicToolDefinition] = &[
     MusicToolDefinition {
@@ -3303,6 +3316,15 @@ pub fn list_music_tool_issues_for_app(
 }
 
 #[cfg(not(test))]
+pub fn fix_music_tool_issues_for_app(
+    app: &AppHandle,
+    input: MusicToolFixRequest,
+) -> Result<MusicToolFixSummary> {
+    let (mut conn, db_path) = open(app)?;
+    fix_music_tool_issues(&mut conn, Some(db_path.as_path()), input)
+}
+
+#[cfg(not(test))]
 fn ensure_billboard_chart_entries_for_tool(
     app: &AppHandle,
     conn: &mut Connection,
@@ -4901,6 +4923,344 @@ fn discovery_artist_points(conn: &Connection) -> Result<Vec<DiscoveryArtistPoint
     Ok(rows)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MusicToolTrackTextFields {
+    display_artist: Option<String>,
+    album_artist_display: Option<String>,
+    album: Option<String>,
+    title: Option<String>,
+    genre: Option<String>,
+    canonical_genre: Option<String>,
+    publisher: Option<String>,
+    file_path: Option<String>,
+    filename: Option<String>,
+}
+
+impl MusicToolTrackTextFields {
+    fn compacted(&self) -> Self {
+        Self {
+            display_artist: compact_optional_whitespace(&self.display_artist),
+            album_artist_display: compact_optional_whitespace(&self.album_artist_display),
+            album: compact_optional_whitespace(&self.album),
+            title: compact_optional_whitespace(&self.title),
+            genre: compact_optional_whitespace(&self.genre),
+            canonical_genre: compact_optional_whitespace(&self.canonical_genre),
+            publisher: compact_optional_whitespace(&self.publisher),
+            file_path: compact_optional_whitespace(&self.file_path),
+            filename: compact_optional_whitespace(&self.filename),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MusicToolAlbumTextFields {
+    album: Option<String>,
+    album_artist_display: Option<String>,
+    canonical_genre: Option<String>,
+    genre_normalized: Option<String>,
+    publisher: Option<String>,
+}
+
+impl MusicToolAlbumTextFields {
+    fn compacted(&self) -> Self {
+        Self {
+            album: compact_optional_whitespace(&self.album),
+            album_artist_display: compact_optional_whitespace(&self.album_artist_display),
+            canonical_genre: compact_optional_whitespace(&self.canonical_genre),
+            genre_normalized: compact_optional_whitespace(&self.genre_normalized),
+            publisher: compact_optional_whitespace(&self.publisher),
+        }
+    }
+}
+
+fn fix_music_tool_issues(
+    conn: &mut Connection,
+    db_path: Option<&Path>,
+    input: MusicToolFixRequest,
+) -> Result<MusicToolFixSummary> {
+    let MusicToolFixRequest {
+        tool_id,
+        issue_ids,
+        apply,
+    } = input;
+
+    music_tool_definition(&tool_id)?;
+    if tool_id != "whitespace-anomalies" {
+        bail!("No fix action is available for this music tool yet: {tool_id}");
+    }
+
+    let requested_issue_ids = issue_ids.into_iter().collect::<HashSet<_>>();
+    let requested_count = requested_issue_ids.len();
+    let action = "compact-whitespace".to_string();
+    if requested_count == 0 {
+        return Ok(MusicToolFixSummary {
+            tool_id,
+            action,
+            applied: apply,
+            requested_count,
+            fixable_count: 0,
+            affected_album_count: 0,
+            affected_track_count: 0,
+            changed_album_count: 0,
+            changed_track_count: 0,
+            skipped_count: 0,
+            backup_path: None,
+            message: "No visible issue rows were selected for fixing.".to_string(),
+        });
+    }
+
+    let issue_prefix = format!("{tool_id}:");
+    let selected_track_ids = requested_issue_ids
+        .iter()
+        .filter_map(|issue_id| {
+            issue_id
+                .strip_prefix(&issue_prefix)
+                .and_then(|track_id| track_id.parse::<i64>().ok())
+        })
+        .collect::<HashSet<_>>();
+    let (affected_track_ids, affected_album_ids) =
+        whitespace_fix_targets(conn, &selected_track_ids)?;
+    let fixable_count = affected_track_ids.len();
+    let skipped_count = requested_count.saturating_sub(fixable_count);
+
+    if !apply {
+        return Ok(MusicToolFixSummary {
+            tool_id,
+            action,
+            applied: false,
+            requested_count,
+            fixable_count,
+            affected_album_count: affected_album_ids.len(),
+            affected_track_count: affected_track_ids.len(),
+            changed_album_count: 0,
+            changed_track_count: 0,
+            skipped_count,
+            backup_path: None,
+            message: format!(
+                "Preview found {fixable_count} visible whitespace issue rows that can be compacted."
+            ),
+        });
+    }
+
+    let backup_path = if fixable_count > 0 {
+        match db_path {
+            Some(path) => create_database_file_backup(path, "music-tool-fix")?,
+            None => None,
+        }
+    } else {
+        None
+    };
+
+    let mut changed_track_count = 0_usize;
+    let mut changed_album_count = 0_usize;
+    {
+        let tx = conn
+            .transaction()
+            .context("Could not start Music Tool fix transaction")?;
+
+        for track_id in &affected_track_ids {
+            if compact_track_whitespace(&tx, *track_id)? {
+                changed_track_count += 1;
+            }
+        }
+
+        for album_id in &affected_album_ids {
+            if compact_album_whitespace(&tx, album_id)? {
+                changed_album_count += 1;
+            }
+        }
+
+        tx.commit()
+            .context("Could not commit Music Tool whitespace fix")?;
+    }
+
+    if changed_track_count > 0 || changed_album_count > 0 {
+        rebuild_search_indexes(conn)?;
+    }
+
+    Ok(MusicToolFixSummary {
+        tool_id,
+        action,
+        applied: true,
+        requested_count,
+        fixable_count,
+        affected_album_count: affected_album_ids.len(),
+        affected_track_count: affected_track_ids.len(),
+        changed_album_count,
+        changed_track_count,
+        skipped_count,
+        backup_path: backup_path.map(|path| path.display().to_string()),
+        message: format!(
+            "Compacted whitespace for {changed_track_count} tracks and {changed_album_count} albums."
+        ),
+    })
+}
+
+fn whitespace_fix_targets(
+    conn: &Connection,
+    selected_track_ids: &HashSet<i64>,
+) -> Result<(HashSet<i64>, HashSet<String>)> {
+    let sql = format!(
+        "
+        SELECT album_id
+        FROM tracks t
+        WHERE t.id = ?1
+          AND ({WHITESPACE_ANOMALY_CONDITION_SQL})
+        "
+    );
+    let mut affected_track_ids = HashSet::new();
+    let mut affected_album_ids = HashSet::new();
+
+    for track_id in selected_track_ids {
+        let album_id = conn
+            .query_row(&sql, params![track_id], |row| row.get::<_, String>(0))
+            .optional()
+            .with_context(|| format!("Could not validate whitespace issue track {track_id}"))?;
+        if let Some(album_id) = album_id {
+            affected_track_ids.insert(*track_id);
+            affected_album_ids.insert(album_id);
+        }
+    }
+
+    Ok((affected_track_ids, affected_album_ids))
+}
+
+fn compact_track_whitespace(conn: &Connection, track_id: i64) -> Result<bool> {
+    let current = conn
+        .query_row(
+            "
+            SELECT
+                display_artist,
+                album_artist_display,
+                album,
+                title,
+                genre,
+                canonical_genre,
+                publisher,
+                file_path,
+                filename
+            FROM tracks
+            WHERE id = ?1
+            ",
+            params![track_id],
+            |row| {
+                Ok(MusicToolTrackTextFields {
+                    display_artist: row.get(0)?,
+                    album_artist_display: row.get(1)?,
+                    album: row.get(2)?,
+                    title: row.get(3)?,
+                    genre: row.get(4)?,
+                    canonical_genre: row.get(5)?,
+                    publisher: row.get(6)?,
+                    file_path: row.get(7)?,
+                    filename: row.get(8)?,
+                })
+            },
+        )
+        .optional()
+        .with_context(|| format!("Could not load track {track_id} for whitespace fix"))?;
+
+    let Some(current) = current else {
+        return Ok(false);
+    };
+    let next = current.compacted();
+    if current == next {
+        return Ok(false);
+    }
+
+    conn.execute(
+        "
+        UPDATE tracks
+        SET display_artist = ?1,
+            album_artist_display = ?2,
+            album = ?3,
+            title = ?4,
+            genre = ?5,
+            canonical_genre = ?6,
+            publisher = ?7,
+            file_path = ?8,
+            filename = ?9
+        WHERE id = ?10
+        ",
+        params![
+            next.display_artist.as_deref(),
+            next.album_artist_display.as_deref(),
+            next.album.as_deref(),
+            next.title.as_deref(),
+            next.genre.as_deref(),
+            next.canonical_genre.as_deref(),
+            next.publisher.as_deref(),
+            next.file_path.as_deref(),
+            next.filename.as_deref(),
+            track_id
+        ],
+    )
+    .with_context(|| format!("Could not compact whitespace for track {track_id}"))?;
+    Ok(true)
+}
+
+fn compact_album_whitespace(conn: &Connection, album_id: &str) -> Result<bool> {
+    let current = conn
+        .query_row(
+            "
+            SELECT
+                album,
+                album_artist_display,
+                canonical_genre,
+                genre_normalized,
+                publisher
+            FROM albums
+            WHERE id = ?1
+            ",
+            params![album_id],
+            |row| {
+                Ok(MusicToolAlbumTextFields {
+                    album: row.get(0)?,
+                    album_artist_display: row.get(1)?,
+                    canonical_genre: row.get(2)?,
+                    genre_normalized: row.get(3)?,
+                    publisher: row.get(4)?,
+                })
+            },
+        )
+        .optional()
+        .with_context(|| format!("Could not load album {album_id} for whitespace fix"))?;
+
+    let Some(current) = current else {
+        return Ok(false);
+    };
+    let next = current.compacted();
+    if current == next {
+        return Ok(false);
+    }
+
+    conn.execute(
+        "
+        UPDATE albums
+        SET album = ?1,
+            album_artist_display = ?2,
+            canonical_genre = ?3,
+            genre_normalized = ?4,
+            publisher = ?5
+        WHERE id = ?6
+        ",
+        params![
+            next.album.as_deref(),
+            next.album_artist_display.as_deref(),
+            next.canonical_genre.as_deref(),
+            next.genre_normalized.as_deref(),
+            next.publisher.as_deref(),
+            album_id
+        ],
+    )
+    .with_context(|| format!("Could not compact whitespace for album {album_id}"))?;
+    Ok(true)
+}
+
+fn compact_optional_whitespace(value: &Option<String>) -> Option<String> {
+    value.as_deref().map(compact_whitespace)
+}
+
 fn list_music_tools(conn: &Connection) -> Result<Vec<MusicToolSummary>> {
     let _ = count_rows(conn, "tracks")?;
     Ok(MUSIC_TOOLS
@@ -5586,15 +5946,7 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             "low",
             "Repeated internal whitespace",
             "'Repeated spaces'",
-            "
-            COALESCE(t.album, '') GLOB '*  *' OR
-            COALESCE(t.album_artist_display, '') GLOB '*  *' OR
-            COALESCE(t.display_artist, '') GLOB '*  *' OR
-            COALESCE(t.title, '') GLOB '*  *' OR
-            COALESCE(t.canonical_genre, '') GLOB '*  *' OR
-            COALESCE(t.publisher, '') GLOB '*  *' OR
-            COALESCE(t.filename, '') GLOB '*  *'
-            ",
+            WHITESPACE_ANOMALY_CONDITION_SQL,
         )),
         "genre-normalization-issues" => Ok(track_issue_sql(
             "genre-normalization-issues",
@@ -7582,6 +7934,151 @@ mod tests {
         );
         assert!(headers.contains(&"Issue"));
         assert_eq!(rows.len(), 1);
+    }
+
+    #[test]
+    fn previews_and_applies_whitespace_music_tool_fix() {
+        let mut conn = seeded_connection();
+        conn.execute(
+            "
+            UPDATE tracks
+            SET album = 'Actually  Deluxe',
+                album_artist_display = 'Pet  Shop Boys',
+                display_artist = 'Pet  Shop Boys',
+                title = 'What  Have I Done?',
+                genre = 'Synthpop  Dance',
+                canonical_genre = 'Synthpop  Dance',
+                publisher = 'Parlo  phone',
+                file_path = 'D:\\Music\\Pet  Shop Boys\\Actually',
+                filename = '02 What  Have I Done.mp3'
+            WHERE id = 1
+            ",
+            [],
+        )
+        .expect("make track whitespace issue");
+        conn.execute(
+            "
+            UPDATE albums
+            SET album = 'Actually  Deluxe',
+                album_artist_display = 'Pet  Shop Boys',
+                canonical_genre = 'Synthpop  Dance',
+                genre_normalized = 'synthpop  dance',
+                publisher = 'Parlo  phone'
+            WHERE id = 'mb:test'
+            ",
+            [],
+        )
+        .expect("make album whitespace issue");
+        rebuild_search_indexes(&conn).expect("rebuild search indexes");
+
+        let mut request = MusicToolIssueRequest::default();
+        request.tool_id = "whitespace-anomalies".to_string();
+        let response = list_music_tool_issues(&conn, request.clone(), 50, None)
+            .expect("list whitespace issues");
+
+        assert_eq!(response.tool.issue_count, 1);
+        assert_eq!(response.total, 1);
+
+        let issue_ids = response
+            .rows
+            .iter()
+            .map(|row| row.id.clone())
+            .collect::<Vec<_>>();
+        let preview = fix_music_tool_issues(
+            &mut conn,
+            None,
+            MusicToolFixRequest {
+                tool_id: "whitespace-anomalies".to_string(),
+                issue_ids: issue_ids.clone(),
+                apply: false,
+            },
+        )
+        .expect("preview whitespace fix");
+
+        assert!(!preview.applied);
+        assert_eq!(preview.fixable_count, 1);
+        assert_eq!(preview.changed_track_count, 0);
+
+        let still_dirty = list_music_tool_issues(&conn, request.clone(), 50, None)
+            .expect("list whitespace issues after preview");
+        assert_eq!(still_dirty.total, 1);
+
+        let summary = fix_music_tool_issues(
+            &mut conn,
+            None,
+            MusicToolFixRequest {
+                tool_id: "whitespace-anomalies".to_string(),
+                issue_ids,
+                apply: true,
+            },
+        )
+        .expect("apply whitespace fix");
+
+        assert!(summary.applied);
+        assert_eq!(summary.fixable_count, 1);
+        assert_eq!(summary.changed_track_count, 1);
+        assert_eq!(summary.changed_album_count, 1);
+        assert!(summary.backup_path.is_none());
+
+        let clean = list_music_tool_issues(&conn, request, 50, None)
+            .expect("list whitespace issues after fix");
+        assert_eq!(clean.total, 0);
+
+        let (track_album, track_artist, track_title, track_genre, track_path, track_filename): (
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ) = conn
+            .query_row(
+                "
+                SELECT album, album_artist_display, title, canonical_genre, file_path, filename
+                FROM tracks
+                WHERE id = 1
+                ",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .expect("load compacted track");
+        let (album_title, album_artist, album_genre): (
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ) = conn
+            .query_row(
+                "
+                SELECT album, album_artist_display, canonical_genre
+                FROM albums
+                WHERE id = 'mb:test'
+                ",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("load compacted album");
+
+        assert_eq!(track_album.as_deref(), Some("Actually Deluxe"));
+        assert_eq!(track_artist.as_deref(), Some("Pet Shop Boys"));
+        assert_eq!(track_title.as_deref(), Some("What Have I Done?"));
+        assert_eq!(track_genre.as_deref(), Some("Synthpop Dance"));
+        assert_eq!(
+            track_path.as_deref(),
+            Some("D:\\Music\\Pet Shop Boys\\Actually")
+        );
+        assert_eq!(track_filename.as_deref(), Some("02 What Have I Done.mp3"));
+        assert_eq!(album_title.as_deref(), Some("Actually Deluxe"));
+        assert_eq!(album_artist.as_deref(), Some("Pet Shop Boys"));
+        assert_eq!(album_genre.as_deref(), Some("Synthpop Dance"));
     }
 
     #[test]

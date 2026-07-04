@@ -569,6 +569,33 @@ pub struct MusicToolIssueResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MusicToolFixRequest {
+    pub tool_id: String,
+    #[serde(default)]
+    pub issue_ids: Vec<String>,
+    #[serde(default)]
+    pub apply: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicToolFixSummary {
+    pub tool_id: String,
+    pub action: String,
+    pub applied: bool,
+    pub requested_count: usize,
+    pub fixable_count: usize,
+    pub affected_album_count: usize,
+    pub affected_track_count: usize,
+    pub changed_album_count: usize,
+    pub changed_track_count: usize,
+    pub skipped_count: usize,
+    pub backup_path: Option<String>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BrowseRequest {
     #[serde(default = "default_browse_view")]
     pub view: String,

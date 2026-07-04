@@ -30,6 +30,8 @@ import type {
   GenreListRequest,
   GenreListResponse,
   GenreSummary,
+  MusicToolFixRequest,
+  MusicToolFixSummary,
   MusicToolIssueRequest,
   MusicToolIssueResponse,
   MusicToolIssueRow,
@@ -498,7 +500,7 @@ const mockGenres: GenreSummary[] = [
   },
 ];
 
-const mockMusicTools: MusicToolSummary[] = [
+let mockMusicTools: MusicToolSummary[] = [
   {
     id: "duplicate-albums",
     label: "Duplicate albums",
@@ -549,9 +551,19 @@ const mockMusicTools: MusicToolSummary[] = [
     albumCount: 1,
     trackCount: 1,
   },
+  {
+    id: "whitespace-anomalies",
+    label: "Whitespace anomalies",
+    description: "Track metadata with repeated internal spaces.",
+    severity: "low",
+    scope: "tracks",
+    issueCount: 1,
+    albumCount: 1,
+    trackCount: 1,
+  },
 ];
 
-const mockMusicToolIssues: MusicToolIssueRow[] = [
+let mockMusicToolIssues: MusicToolIssueRow[] = [
   {
     id: "duplicate-albums:mb:mock-1",
     toolId: "duplicate-albums",
@@ -653,6 +665,23 @@ const mockMusicToolIssues: MusicToolIssueRow[] = [
     value: "Synthpop; Dance-Pop",
     filename: "02 What Have I Done to Deserve This.mp3",
     filePath: "D:\\Music\\Pet Shop Boys\\Actually",
+  },
+  {
+    id: "whitespace-anomalies:2",
+    toolId: "whitespace-anomalies",
+    severity: "low",
+    entityType: "tracks",
+    albumId: "mb:mock-1",
+    trackId: 2,
+    album: "Actually",
+    albumArtistDisplay: "Pet  Shop Boys",
+    title: "What  Have I Done to Deserve This?",
+    canonicalGenre: "Synthpop",
+    year: 1987,
+    detail: "Repeated internal whitespace",
+    value: "Repeated spaces",
+    filename: "02 What  Have I Done to Deserve This.mp3",
+    filePath: "D:\\Music\\Pet  Shop Boys\\Actually",
   },
 ];
 
@@ -1844,6 +1873,53 @@ export async function listMusicToolIssues(request: MusicToolIssueRequest) {
   }
 
   return invoke<MusicToolIssueResponse>("list_music_tool_issues", { request });
+}
+
+export async function fixMusicToolIssues(input: MusicToolFixRequest) {
+  if (!isTauriRuntime()) {
+    const requestedIds = new Set(input.issueIds);
+    const fixableRows = mockMusicToolIssues.filter(
+      (issue) => issue.toolId === "whitespace-anomalies" && issue.toolId === input.toolId && requestedIds.has(issue.id),
+    );
+    if (input.toolId !== "whitespace-anomalies") {
+      throw new Error(`No fix action is available for this music tool yet: ${input.toolId}`);
+    }
+
+    if (input.apply) {
+      mockMusicToolIssues = mockMusicToolIssues.filter(
+        (issue) => !(issue.toolId === input.toolId && requestedIds.has(issue.id)),
+      );
+      mockMusicTools = mockMusicTools.map((tool) =>
+        tool.id === input.toolId
+          ? {
+              ...tool,
+              issueCount: Math.max(0, tool.issueCount - fixableRows.length),
+              albumCount: fixableRows.length > 0 ? 0 : tool.albumCount,
+              trackCount: Math.max(0, tool.trackCount - fixableRows.length),
+            }
+          : tool,
+      );
+    }
+
+    return {
+      toolId: input.toolId,
+      action: "compact-whitespace",
+      applied: input.apply,
+      requestedCount: requestedIds.size,
+      fixableCount: fixableRows.length,
+      affectedAlbumCount: new Set(fixableRows.map((issue) => issue.albumId)).size,
+      affectedTrackCount: new Set(fixableRows.map((issue) => issue.trackId).filter((trackId) => trackId != null)).size,
+      changedAlbumCount: input.apply && fixableRows.length > 0 ? 1 : 0,
+      changedTrackCount: input.apply ? fixableRows.length : 0,
+      skippedCount: Math.max(0, requestedIds.size - fixableRows.length),
+      backupPath: null,
+      message: input.apply
+        ? `Compacted whitespace for ${fixableRows.length} tracks and ${fixableRows.length > 0 ? 1 : 0} albums.`
+        : `Preview found ${fixableRows.length} visible whitespace issue rows that can be compacted.`,
+    } satisfies MusicToolFixSummary;
+  }
+
+  return invoke<MusicToolFixSummary>("fix_music_tool_issues", { input });
 }
 
 export async function listSavedSearches() {

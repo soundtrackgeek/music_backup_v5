@@ -2,8 +2,8 @@
 
 Last updated: 2026-07-04
 Status: Living product and implementation contract
-Current implementation: Phase 12 complete
-Current package version: 0.25.0
+Current implementation: Phase 13 complete
+Current package version: 0.26.0
 SQLite schema version: 10
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -57,7 +57,7 @@ Core principles:
 | Albums | Implemented | Album index, album filters, detail drill-down, track lists, and album-level exports. |
 | Artists | Implemented | Album-artist index, artist summary stats, album lists, cover board, and exports. |
 | Genres | Implemented | Canonical-genre index, genre summary stats, album lists, and exports. |
-| Tools | Implemented | Query-backed validation issue lists, severity, progress, pagination, sorting, counts, and exports. |
+| Tools | Implemented | Query-backed validation issue lists, severity, progress, pagination, sorting, counts, exports, and guarded whitespace cleanup. |
 | Imports | Implemented | MusicBee TSV import, cover art import, Billboard album CSV import, Billboard singles CSV import, progress, and import history. |
 | Settings | Implemented | Theme, backup retention, backup restore, and default left/right sidebar visibility. |
 
@@ -315,6 +315,7 @@ Expected next backend modularization:
 - Query-backed issue counts and affected rows.
 - Severity, progress, filtering, sorting, pagination, affected album/track counts, and exports.
 - Validators for duplicate albums, missing cover image records, missing Billboard albums/singles, duplicates within album, invalid times, non-numeric ratings, missing tags, non-MP3 files, year anomalies, ratings out of range, track/disc issues, inconsistent metadata, whitespace anomalies, genre normalization issues, conflicting album artists, and multiple years per album.
+- Whitespace Anomalies can preview and apply a guarded local database cleanup for visible issue rows.
 
 ### Phase 9: Cover Art
 
@@ -363,11 +364,19 @@ Expected next backend modularization:
 - The restored database is reopened, migrated if needed, counted, and reported back to the UI.
 - Rust tests cover metadata-enriched backup listing, path validation, and restore behavior.
 
+### Phase 13: Initial Music Tools Fix Actions
+
+- Whitespace Anomalies is the first automated fix action.
+- Preview mode reports how many visible rows are still fixable without changing the database.
+- Apply mode creates a pre-fix SQLite backup in the desktop app, compacts repeated whitespace in selected track metadata fields, compacts affected album display fields, and rebuilds search indexes.
+- The fix action mutates only the app-local SQLite database. Re-importing unchanged source TSV data can reintroduce the same whitespace issues.
+- Rust tests cover preview, apply, and post-fix validator cleanup behavior.
+
 ## Roadmap
 
 ### Now
 
-#### Phase 13: Backend Modularization
+#### Phase 14: Backend Modularization
 
 Problem:
 
@@ -396,7 +405,7 @@ Done criteria:
 - New module names make future feature work easier to locate.
 - Shared SQL helpers stay small and explicit.
 
-#### Phase 14: Frontend Workspace Modularization
+#### Phase 15: Frontend Workspace Modularization
 
 Problem:
 
@@ -425,7 +434,7 @@ Done criteria:
 
 ### Next
 
-#### Phase 15: Import Safety and Incremental Sync
+#### Phase 16: Import Safety and Incremental Sync
 
 Expected outcome:
 
@@ -439,7 +448,7 @@ Candidate work:
 - Better failure recovery when source files disappear mid-import.
 - Import benchmarks for the 1.13M-row library.
 
-#### Phase 16: Performance and Observability
+#### Phase 17: Performance and Observability
 
 Expected outcome:
 
@@ -453,7 +462,7 @@ Candidate work:
 - Audit indexes after Billboard and Discovery growth.
 - Add lightweight diagnostics view or developer log export.
 
-#### Phase 17: Safe Music Tools Fix Actions
+#### Phase 18: Expanded Music Tools Fix Actions
 
 Expected outcome:
 
@@ -461,16 +470,16 @@ Expected outcome:
 
 Candidate work:
 
-- Dry-run fix plans.
-- Backups before fix actions.
+- More dry-run fix plans.
+- Backups before every mutating fix action.
 - Reviewable affected-row lists.
 - Fix history.
 - Undo/restore path.
-- Initial safe fixes for whitespace cleanup, duplicate position reports, and metadata normalization suggestions.
+- Safe fixes for duplicate position reports and metadata normalization suggestions.
 
 ### Later
 
-#### Phase 18: External Enrichment
+#### Phase 19: External Enrichment
 
 Expected outcome:
 
@@ -482,7 +491,7 @@ Constraints:
 - Review all enrichment before applying.
 - Keep source and confidence visible.
 
-#### Phase 19: Optional AI Assistance
+#### Phase 20: Optional AI Assistance
 
 Expected outcome:
 
@@ -500,7 +509,7 @@ Constraints:
 - No library data should leave the machine without explicit user action.
 - Generated actions should remain reviewable before they affect saved state.
 
-#### Phase 20: Packaging and Release Polish
+#### Phase 21: Packaging and Release Polish
 
 Expected outcome:
 
@@ -516,7 +525,7 @@ Candidate work:
 
 ## Open Questions
 
-- Should future Music Tools fixes update MusicBee source files, app-local metadata only, or both?
+- Should later Music Tools fixes ever write back to MusicBee source files, or should all fixes remain app-local?
 - Should Billboard matching expose manual link/unlink review for misses and ambiguous matches?
 - Should Discovery missions become saveable views or remain generated shortcuts?
 - What is the preferred first external enrichment source: MusicBrainz, Discogs, or a lightweight local CSV workflow?
@@ -536,6 +545,7 @@ Candidate work:
 - Keep the last 3 database backups by default.
 - Keep backup retention configurable from Settings.
 - Keep backup restore in Settings until there is enough lifecycle surface area to justify a dedicated Maintenance workspace.
+- Keep the initial Whitespace Anomalies fix app-local to SQLite; re-importing unchanged source TSV data may reintroduce the same issue.
 - Export only visible/default columns by default.
 - Let users opt into calculated export columns such as Album Score.
 - Keep external enrichment and AI optional.

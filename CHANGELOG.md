@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.26.0] - 2026-07-04
+### Added
+- Added the first Music Tools fix action for Whitespace Anomalies, with preview/apply controls that compact visible track metadata rows and affected album display fields.
+- Added pre-fix SQLite safety backups for desktop Music Tools apply actions and a Rust test covering preview, apply, and validator cleanup behavior.
+
+### Changed
+- Expanded Whitespace Anomalies detection to include raw genre and file path whitespace so it matches the fields cleaned by the fix action.
+
 ## [0.25.0] - 2026-07-04
 ### Added
 - Added database backup inventory and restore support in Settings, including schema validation, restore confirmation, success/failure messaging, and a pre-restore safety backup before replacing the active SQLite database.

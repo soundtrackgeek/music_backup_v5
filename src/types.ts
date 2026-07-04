@@ -400,6 +400,27 @@ export type MusicToolIssueResponse = {
   offset: number;
 };
 
+export type MusicToolFixRequest = {
+  toolId: string;
+  issueIds: string[];
+  apply: boolean;
+};
+
+export type MusicToolFixSummary = {
+  toolId: string;
+  action: string;
+  applied: boolean;
+  requestedCount: number;
+  fixableCount: number;
+  affectedAlbumCount: number;
+  affectedTrackCount: number;
+  changedAlbumCount: number;
+  changedTrackCount: number;
+  skippedCount: number;
+  backupPath: string | null;
+  message: string;
+};
+
 export type BrowseRow = {
   id: string;
   trackId: number | null;

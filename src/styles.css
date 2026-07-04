@@ -2865,7 +2865,8 @@ button {
   gap: 8px;
 }
 
-.tool-export-controls {
+.tool-export-controls,
+.tool-fix-controls {
   display: grid;
   min-width: 0;
   gap: 8px;
@@ -2919,7 +2920,8 @@ button {
   line-height: 17px;
 }
 
-.tool-export-result {
+.tool-export-result,
+.tool-fix-result {
   max-width: min(520px, 100%);
   padding: 8px 10px;
 }
@@ -2927,6 +2929,12 @@ button {
 .export-result span {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.tool-fix-error {
+  max-width: min(520px, 100%);
+  margin: 0;
+  text-align: right;
 }
 
 .settings-grid {

@@ -12,8 +12,9 @@ use models::{
     BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
-    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, SaveChartRequest,
-    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
+    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
+    MusicToolSummary, SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch,
+    StatisticsResponse,
 };
 #[cfg(not(test))]
 use models::{ImportRun, ImportSummary, LibraryStatus};
@@ -225,6 +226,18 @@ async fn list_music_tool_issues(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn fix_music_tool_issues(
+    app: AppHandle,
+    input: MusicToolFixRequest,
+) -> Result<MusicToolFixSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || db::fix_music_tool_issues_for_app(&app, input))
+        .await
+        .map_err(|error| format!("Music tool fix task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn list_saved_searches(app: AppHandle) -> Result<Vec<SavedSearch>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_saved_searches_for_app(&app))
         .await
@@ -321,6 +334,7 @@ pub fn run() {
             list_genre_suggestions,
             list_music_tools,
             list_music_tool_issues,
+            fix_music_tool_issues,
             list_saved_searches,
             save_search,
             delete_saved_search,
