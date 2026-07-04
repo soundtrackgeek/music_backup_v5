@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.27.0] - 2026-07-04
+### Added
+- Added an on-demand Performance Proof panel in Settings that runs representative Search, Charts, Music Tools, Statistics, and Discovery probes against the active SQLite database and reports timings, counts, and sampled query details.
+- Added a Tauri performance probe command plus Rust coverage for the structured diagnostics report.
+
 ## [0.26.0] - 2026-07-04
 ### Added
 - Added the first Music Tools fix action for Whitespace Anomalies, with preview/apply controls that compact visible track metadata rows and affected album display fields.

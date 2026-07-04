@@ -37,6 +37,32 @@ pub struct LibraryStatus {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PerformanceProbeOperation {
+    pub id: String,
+    pub label: String,
+    pub category: String,
+    pub status: String,
+    pub duration_ms: u128,
+    pub total_count: Option<i64>,
+    pub row_count: Option<usize>,
+    pub detail: String,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PerformanceProbeResponse {
+    pub generated_at: String,
+    pub database_path: String,
+    pub track_count: i64,
+    pub album_count: i64,
+    pub total_duration_ms: u128,
+    pub slowest_operation_ms: u128,
+    pub operations: Vec<PerformanceProbeOperation>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DatabaseBackup {
     pub id: Option<i64>,
     pub created_at: String,

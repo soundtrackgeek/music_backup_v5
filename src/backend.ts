@@ -37,6 +37,7 @@ import type {
   MusicToolIssueRow,
   MusicToolProgress,
   MusicToolSummary,
+  PerformanceProbeResponse,
 } from "./types";
 
 export const settingsStorageKey = "musicLibrarySettings:v1";
@@ -1576,6 +1577,43 @@ export async function getLibraryStatus() {
   }
 
   return invoke<LibraryStatus>("get_library_status");
+}
+
+export async function runPerformanceProbe() {
+  if (!isTauriRuntime()) {
+    const operations = [
+      ["search-albums-default", "Album search default page", "Search", 18, mockRows.length, "Default album page, sorted by album."],
+      ["search-albums-sampled-text", "Album search sampled text", "Search", 23, 1, "Sampled album text: Actually"],
+      ["search-tracks-sampled-text", "Track search sampled text", "Search", 27, 1, "Sampled track text: What Have I Done to Deserve This?"],
+      ["chart-album-score", "Chart-style album score ranking", "Charts", 31, 1, "Fully rated albums sorted by Album Score."],
+      ["tools-missing-covers", "Music Tool missing covers", "Tools", 34, 1, "Albums without imported cover records."],
+      ["tools-whitespace", "Music Tool whitespace anomalies", "Tools", 12, 1, "Repeated whitespace validator."],
+      ["statistics-dashboard", "Statistics dashboard payload", "Statistics", 44, mockRows.length, "Mock dashboard summary."],
+      ["discovery-dashboard", "Discovery dashboard payload", "Discovery", 39, 12, "Mock discovery summary."],
+    ] as const;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      databasePath: mockStatus.dbPath,
+      trackCount: mockStatus.trackCount,
+      albumCount: mockStatus.albumCount,
+      totalDurationMs: operations.reduce((sum, operation) => sum + operation[3], 0),
+      slowestOperationMs: Math.max(...operations.map((operation) => operation[3])),
+      operations: operations.map(([id, label, category, durationMs, rowCount, detail]) => ({
+        id,
+        label,
+        category,
+        status: "ok",
+        durationMs,
+        totalCount: rowCount,
+        rowCount,
+        detail,
+        errorMessage: null,
+      })),
+    } satisfies PerformanceProbeResponse;
+  }
+
+  return invoke<PerformanceProbeResponse>("run_performance_probe");
 }
 
 export async function listImportRuns(limit: number) {

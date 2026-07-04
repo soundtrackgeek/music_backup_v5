@@ -2959,12 +2959,124 @@ button {
   grid-column: span 2;
 }
 
+.performance-settings-panel {
+  grid-column: span 2;
+}
+
 .backup-settings-toolbar {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
   margin-top: 16px;
+}
+
+.performance-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.performance-toolbar > span,
+.performance-database-path {
+  color: #697671;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 650;
+}
+
+.performance-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 0;
+}
+
+.performance-summary div {
+  min-width: 0;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background: #fbfcfc;
+  padding: 10px;
+}
+
+.performance-summary dt,
+.performance-probe-row dt {
+  color: #6f7c78;
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 720;
+  text-transform: uppercase;
+}
+
+.performance-summary dd,
+.performance-probe-row dd {
+  margin: 2px 0 0;
+  color: #26322f;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
+.performance-probe-list {
+  display: grid;
+  gap: 0;
+  margin-top: 14px;
+  border-top: 1px solid #e0e7e4;
+}
+
+.performance-probe-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 0.8fr);
+  gap: 8px 14px;
+  min-width: 0;
+  border-bottom: 1px solid #e0e7e4;
+  padding: 12px 0;
+}
+
+.performance-probe-row.failed {
+  color: #8f2d2d;
+}
+
+.performance-probe-row > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.performance-probe-row strong {
+  color: #17211f;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.performance-probe-row span,
+.performance-probe-row small {
+  color: #697671;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.performance-probe-row dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(64px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.performance-probe-row small,
+.performance-database-path {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.performance-database-path {
+  display: block;
+  margin-top: 10px;
 }
 
 .restore-result {
@@ -3228,13 +3340,23 @@ button {
 }
 
 :root[data-theme="dark"] .database-backup-list,
-:root[data-theme="dark"] .database-backup-card {
+:root[data-theme="dark"] .database-backup-card,
+:root[data-theme="dark"] .performance-probe-list,
+:root[data-theme="dark"] .performance-probe-row {
   border-color: #2f3d38;
 }
 
 :root[data-theme="dark"] .database-backup-card strong,
-:root[data-theme="dark"] .database-backup-card dd {
+:root[data-theme="dark"] .database-backup-card dd,
+:root[data-theme="dark"] .performance-summary dd,
+:root[data-theme="dark"] .performance-probe-row strong,
+:root[data-theme="dark"] .performance-probe-row dd {
   color: #eef7f4;
+}
+
+:root[data-theme="dark"] .performance-summary div {
+  border-color: #35433e;
+  background: #111815;
 }
 
 :root[data-theme="dark"] .brand span,
@@ -3245,6 +3367,8 @@ button {
 :root[data-theme="dark"] .metric p,
 :root[data-theme="dark"] .criterion span,
 :root[data-theme="dark"] .layout-setting > span,
+:root[data-theme="dark"] .performance-toolbar > span,
+:root[data-theme="dark"] .performance-database-path,
 :root[data-theme="dark"] .source-input span,
 :root[data-theme="dark"] .chart-template-panel small,
 :root[data-theme="dark"] .chart-list-row p,
@@ -3284,6 +3408,10 @@ button {
 :root[data-theme="dark"] .database-backup-card dt,
 :root[data-theme="dark"] .database-backup-card small,
 :root[data-theme="dark"] .database-backup-card > div:first-child span,
+:root[data-theme="dark"] .performance-summary dt,
+:root[data-theme="dark"] .performance-probe-row dt,
+:root[data-theme="dark"] .performance-probe-row span,
+:root[data-theme="dark"] .performance-probe-row small,
 :root[data-theme="dark"] .saved-search span,
 :root[data-theme="dark"] .chip-empty,
 :root[data-theme="dark"] .db-path {
@@ -3762,6 +3890,11 @@ button {
     align-items: stretch;
   }
 
+  .performance-summary,
+  .performance-probe-row {
+    grid-template-columns: 1fr;
+  }
+
   .database-backup-card dl {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3838,7 +3971,8 @@ button {
   }
 
   .layout-settings-panel,
-  .backup-settings-panel {
+  .backup-settings-panel,
+  .performance-settings-panel {
     grid-column: span 1;
   }
 

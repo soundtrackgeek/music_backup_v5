@@ -2,8 +2,8 @@
 
 Last updated: 2026-07-04
 Status: Living product and implementation contract
-Current implementation: Phase 13 complete
-Current package version: 0.26.0
+Current implementation: Phase 14 complete
+Current package version: 0.27.0
 SQLite schema version: 10
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -59,7 +59,7 @@ Core principles:
 | Genres | Implemented | Canonical-genre index, genre summary stats, album lists, and exports. |
 | Tools | Implemented | Query-backed validation issue lists, severity, progress, pagination, sorting, counts, exports, and guarded whitespace cleanup. |
 | Imports | Implemented | MusicBee TSV import, cover art import, Billboard album CSV import, Billboard singles CSV import, progress, and import history. |
-| Settings | Implemented | Theme, backup retention, backup restore, and default left/right sidebar visibility. |
+| Settings | Implemented | Theme, backup retention, backup restore, Performance Proof diagnostics, and default left/right sidebar visibility. |
 
 The left sidebar supports full, icon-only, and hidden modes. The right detail sidebar supports shown and hidden modes.
 
@@ -372,11 +372,20 @@ Expected next backend modularization:
 - The fix action mutates only the app-local SQLite database. Re-importing unchanged source TSV data can reintroduce the same whitespace issues.
 - Rust tests cover preview, apply, and post-fix validator cleanup behavior.
 
+### Phase 14: Performance Proof
+
+- Settings includes an on-demand Performance Proof panel.
+- The desktop probe runs against the active SQLite database and records timings for representative Search, Charts, Music Tools, Statistics, and Discovery operations.
+- Sampled text probes use existing album and track titles from the database.
+- Each probe row reports duration, total count, returned row count, detail text, and per-operation failure status.
+- Web-only preview mode returns mock probe rows for layout work.
+- Rust tests cover the structured probe report on a seeded database.
+
 ## Roadmap
 
 ### Now
 
-#### Phase 14: Backend Modularization
+#### Phase 15: Backend Modularization
 
 Problem:
 
@@ -405,7 +414,7 @@ Done criteria:
 - New module names make future feature work easier to locate.
 - Shared SQL helpers stay small and explicit.
 
-#### Phase 15: Frontend Workspace Modularization
+#### Phase 16: Frontend Workspace Modularization
 
 Problem:
 
@@ -434,7 +443,7 @@ Done criteria:
 
 ### Next
 
-#### Phase 16: Import Safety and Incremental Sync
+#### Phase 17: Import Safety and Incremental Sync
 
 Expected outcome:
 
@@ -448,7 +457,7 @@ Candidate work:
 - Better failure recovery when source files disappear mid-import.
 - Import benchmarks for the 1.13M-row library.
 
-#### Phase 17: Performance and Observability
+#### Phase 18: Performance and Observability
 
 Expected outcome:
 
@@ -456,13 +465,13 @@ Expected outcome:
 
 Candidate work:
 
-- Record query timing for major backend operations.
+- Persist or export performance probe reports.
 - Surface slow operation details in development logs.
 - Benchmark common indexed filters and chart loads.
 - Audit indexes after Billboard and Discovery growth.
-- Add lightweight diagnostics view or developer log export.
+- Add developer log export.
 
-#### Phase 18: Expanded Music Tools Fix Actions
+#### Phase 19: Expanded Music Tools Fix Actions
 
 Expected outcome:
 
@@ -479,7 +488,7 @@ Candidate work:
 
 ### Later
 
-#### Phase 19: External Enrichment
+#### Phase 20: External Enrichment
 
 Expected outcome:
 
@@ -491,7 +500,7 @@ Constraints:
 - Review all enrichment before applying.
 - Keep source and confidence visible.
 
-#### Phase 20: Optional AI Assistance
+#### Phase 21: Optional AI Assistance
 
 Expected outcome:
 
@@ -509,7 +518,7 @@ Constraints:
 - No library data should leave the machine without explicit user action.
 - Generated actions should remain reviewable before they affect saved state.
 
-#### Phase 21: Packaging and Release Polish
+#### Phase 22: Packaging and Release Polish
 
 Expected outcome:
 

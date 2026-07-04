@@ -29,6 +29,28 @@ export type LibraryStatus = {
   lastImport: ImportRun | null;
 };
 
+export type PerformanceProbeOperation = {
+  id: string;
+  label: string;
+  category: string;
+  status: "ok" | "failed";
+  durationMs: number;
+  totalCount: number | null;
+  rowCount: number | null;
+  detail: string;
+  errorMessage: string | null;
+};
+
+export type PerformanceProbeResponse = {
+  generatedAt: string;
+  databasePath: string;
+  trackCount: number;
+  albumCount: number;
+  totalDurationMs: number;
+  slowestOperationMs: number;
+  operations: PerformanceProbeOperation[];
+};
+
 export type DatabaseBackup = {
   id: number | null;
   createdAt: string;

@@ -13,8 +13,8 @@ use models::{
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
     MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
-    MusicToolSummary, SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch,
-    StatisticsResponse,
+    MusicToolSummary, PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest, SavedChart,
+    SavedSearch, StatisticsResponse,
 };
 #[cfg(not(test))]
 use models::{ImportRun, ImportSummary, LibraryStatus};
@@ -27,6 +27,15 @@ async fn get_library_status(app: AppHandle) -> Result<LibraryStatus, String> {
     tauri::async_runtime::spawn_blocking(move || db::library_status(&app))
         .await
         .map_err(|error| format!("Library status task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn run_performance_probe(app: AppHandle) -> Result<PerformanceProbeResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || db::performance_probe_for_app(&app))
+        .await
+        .map_err(|error| format!("Performance probe task failed: {error}"))?
         .map_err(|error| error.to_string())
 }
 
@@ -316,6 +325,7 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             get_library_status,
+            run_performance_probe,
             list_import_runs,
             list_database_backups,
             restore_database_backup,
