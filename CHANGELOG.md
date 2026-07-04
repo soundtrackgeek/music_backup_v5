@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.25.0] - 2026-07-04
+### Added
+- Added database backup inventory and restore support in Settings, including schema validation, restore confirmation, success/failure messaging, and a pre-restore safety backup before replacing the active SQLite database.
+- Added Rust backup lifecycle tests for metadata-enriched backup listing, backup path validation, and restore behavior.
+
 ## [0.24.4] - 2026-07-04
 ### Changed
 - Reworked `SPEC.md` into a living product spec and roadmap covering current capabilities, data contracts, architecture boundaries, phase history, and Now/Next/Later planning.

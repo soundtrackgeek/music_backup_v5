@@ -2947,6 +2947,100 @@ button {
   grid-column: span 2;
 }
 
+.backup-settings-panel {
+  grid-column: span 2;
+}
+
+.backup-settings-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.restore-result {
+  margin-top: 12px;
+}
+
+.database-backup-list {
+  display: grid;
+  gap: 0;
+  margin-top: 14px;
+  border-top: 1px solid #e0e7e4;
+}
+
+.database-backup-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 14px;
+  align-items: center;
+  min-width: 0;
+  border-bottom: 1px solid #e0e7e4;
+  padding: 12px 0;
+}
+
+.database-backup-card > div:first-child,
+.database-backup-card dl,
+.database-backup-card small {
+  min-width: 0;
+}
+
+.database-backup-card > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.database-backup-card strong {
+  color: #17211f;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.database-backup-card > div:first-child span {
+  color: #697671;
+  font-size: 12px;
+  line-height: 16px;
+  text-transform: capitalize;
+}
+
+.database-backup-card dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.database-backup-card dt {
+  color: #6f7c78;
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 720;
+  text-transform: uppercase;
+}
+
+.database-backup-card dd {
+  margin: 0;
+  color: #26322f;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+}
+
+.database-backup-card small {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+  color: #697671;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.database-backup-card .primary-button {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
 .setting-number {
   max-width: 220px;
 }
@@ -3125,6 +3219,16 @@ button {
   color: #f3f8f6;
 }
 
+:root[data-theme="dark"] .database-backup-list,
+:root[data-theme="dark"] .database-backup-card {
+  border-color: #2f3d38;
+}
+
+:root[data-theme="dark"] .database-backup-card strong,
+:root[data-theme="dark"] .database-backup-card dd {
+  color: #eef7f4;
+}
+
 :root[data-theme="dark"] .brand span,
 :root[data-theme="dark"] .topbar p,
 :root[data-theme="dark"] .panel-heading p,
@@ -3169,6 +3273,9 @@ button {
 :root[data-theme="dark"] .rating-event small,
 :root[data-theme="dark"] .run-details dt,
 :root[data-theme="dark"] .setting-toggle small,
+:root[data-theme="dark"] .database-backup-card dt,
+:root[data-theme="dark"] .database-backup-card small,
+:root[data-theme="dark"] .database-backup-card > div:first-child span,
 :root[data-theme="dark"] .saved-search span,
 :root[data-theme="dark"] .chip-empty,
 :root[data-theme="dark"] .db-path {
@@ -3642,6 +3749,19 @@ button {
     grid-column: span 2;
   }
 
+  .database-backup-card {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .database-backup-card dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .database-backup-card .primary-button {
+    justify-self: start;
+  }
+
   .db-path {
     max-width: 100%;
   }
@@ -3709,7 +3829,8 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .layout-settings-panel {
+  .layout-settings-panel,
+  .backup-settings-panel {
     grid-column: span 1;
   }
 

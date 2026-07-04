@@ -29,6 +29,29 @@ export type LibraryStatus = {
   lastImport: ImportRun | null;
 };
 
+export type DatabaseBackup = {
+  id: number | null;
+  createdAt: string;
+  operation: string;
+  sourcePath: string | null;
+  sourceSizeBytes: number;
+  backupPath: string;
+  fileSizeBytes: number;
+  trackRows: number | null;
+  albumCount: number | null;
+  schemaVersion: number | null;
+  exists: boolean;
+  canRestore: boolean;
+};
+
+export type DatabaseRestoreSummary = {
+  restoredBackup: DatabaseBackup;
+  preRestoreBackupPath: string | null;
+  trackCount: number;
+  albumCount: number;
+  schemaVersion: number;
+};
+
 export type ImportProgress = {
   status: string;
   processedRows: number;

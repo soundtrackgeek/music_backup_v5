@@ -10,10 +10,10 @@ mod models;
 use models::{
     AppSettings, ArtistListRequest, ArtistListResponse, BillboardImportSummary,
     BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
-    CoverImportSummary, DiscoveryResponse, ExportMusicToolRequest, ExportResult,
-    ExportSearchRequest, GenreListRequest, GenreListResponse, MusicToolIssueRequest,
-    MusicToolIssueResponse, MusicToolSummary, SaveChartRequest, SaveSearchRequest, SavedChart,
-    SavedSearch, StatisticsResponse,
+    CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
+    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
 };
 #[cfg(not(test))]
 use models::{ImportRun, ImportSummary, LibraryStatus};
@@ -37,6 +37,29 @@ async fn list_import_runs(app: AppHandle, limit: Option<u32>) -> Result<Vec<Impo
     })
     .await
     .map_err(|error| format!("Import run list task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn list_database_backups(app: AppHandle) -> Result<Vec<DatabaseBackup>, String> {
+    tauri::async_runtime::spawn_blocking(move || db::list_database_backups_for_app(&app))
+        .await
+        .map_err(|error| format!("Database backup list task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn restore_database_backup(
+    app: AppHandle,
+    backup_path: String,
+) -> Result<DatabaseRestoreSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::restore_database_backup_for_app(&app, backup_path)
+    })
+    .await
+    .map_err(|error| format!("Database restore task failed: {error}"))?
     .map_err(|error| error.to_string())
 }
 
@@ -281,6 +304,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_library_status,
             list_import_runs,
+            list_database_backups,
+            restore_database_backup,
             get_settings,
             save_settings,
             get_statistics,

@@ -52,6 +52,7 @@ import {
   importBillboardSingles,
   importMusicBeeTsv,
   isTauriRuntime,
+  listDatabaseBackups,
   listArtists,
   listGenres,
   listGenreSuggestions,
@@ -69,6 +70,7 @@ import {
   saveSettings,
   searchLibrary,
   exportMusicToolIssues,
+  restoreDatabaseBackup,
 } from "./backend";
 import type {
   AppSettings,
@@ -86,6 +88,8 @@ import type {
   ChartConfig,
   ConcentrationPoint,
   CoverImportSummary,
+  DatabaseBackup,
+  DatabaseRestoreSummary,
   DecadeProgressStats,
   DiscoveryAlbumPoint,
   DiscoveryArtistPoint,
@@ -3479,6 +3483,10 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(() => createDefaultSettings());
   const [leftSidebarMode, setLeftSidebarMode] = useState<LeftSidebarMode>(() => createDefaultLeftSidebarMode());
   const [rightSidebarMode, setRightSidebarMode] = useState<RightSidebarMode>(() => createDefaultRightSidebarMode());
+  const [databaseBackups, setDatabaseBackups] = useState<DatabaseBackup[]>([]);
+  const [backupError, setBackupError] = useState<string | null>(null);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [restoreSummary, setRestoreSummary] = useState<DatabaseRestoreSummary | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const hasAppliedLayoutDefaults = useRef(false);
@@ -3490,9 +3498,18 @@ export default function App() {
   }, []);
 
   const loadData = useCallback(async () => {
-    const [nextStatus, nextRuns, nextSavedSearches, nextSavedCharts, nextStatistics, nextSettings] = await Promise.all([
+    const [
+      nextStatus,
+      nextRuns,
+      nextBackups,
+      nextSavedSearches,
+      nextSavedCharts,
+      nextStatistics,
+      nextSettings,
+    ] = await Promise.all([
       getLibraryStatus(),
       listImportRuns(8),
+      listDatabaseBackups(),
       listSavedSearches(),
       listSavedCharts(),
       getStatistics(),
@@ -3500,6 +3517,8 @@ export default function App() {
     ]);
     setStatus(nextStatus);
     setRuns(nextRuns);
+    setDatabaseBackups(nextBackups);
+    setBackupError(null);
     setSavedSearches(nextSavedSearches);
     setSavedCharts(
       nextSavedCharts.map((chart) => ({
@@ -4991,6 +5010,44 @@ export default function App() {
       setSettingsError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsSavingSettings(false);
+    }
+  }
+
+  async function restoreBackup(backup: DatabaseBackup) {
+    if (!backup.canRestore || isRestoringBackup) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      [
+        `Restore database backup from ${formatDate(backup.createdAt)}?`,
+        "",
+        backup.backupPath,
+        "",
+        "The current database will be copied to a pre-restore backup first.",
+      ].join("\n"),
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsRestoringBackup(true);
+    setBackupError(null);
+    setRestoreSummary(null);
+
+    try {
+      const summary = await restoreDatabaseBackup(backup.backupPath);
+      clearCoverImageCache();
+      setRestoreSummary(summary);
+      await loadData();
+      await loadDiscoveryData().catch((error) => {
+        setDiscoveryError(error instanceof Error ? error.message : String(error));
+        setIsDiscoveryLoading(false);
+      });
+    } catch (error) {
+      setBackupError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsRestoringBackup(false);
     }
   }
 
@@ -7086,29 +7143,104 @@ export default function App() {
           {settingsError ? <p className="error-message">{settingsError}</p> : null}
 
           <section className="settings-grid" aria-label="Application settings">
-            <section className="settings-panel">
+            <section className="settings-panel backup-settings-panel">
               <div className="panel-heading compact">
                 <div>
                   <h2>Backups</h2>
-                  <p>{settings.backupRetention} retained after each import</p>
+                  <p>
+                    {formatNumber(databaseBackups.length)} available / {settings.backupRetention} retained
+                  </p>
                 </div>
                 <Database size={18} />
               </div>
 
-              <label className="criterion setting-number">
-                <span>Rolling backups</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={settings.backupRetention}
-                  onChange={(event) =>
-                    void saveAppSettings({
-                      backupRetention: clampBackupRetention(numberValue(event.target.value)),
-                    })
-                  }
-                />
-              </label>
+              <div className="backup-settings-toolbar">
+                <label className="criterion setting-number">
+                  <span>Rolling backups</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={settings.backupRetention}
+                    onChange={(event) =>
+                      void saveAppSettings({
+                        backupRetention: clampBackupRetention(numberValue(event.target.value)),
+                      })
+                    }
+                  />
+                </label>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Refresh backups"
+                  onClick={() => void loadData()}
+                >
+                  <RotateCcw size={18} />
+                </button>
+              </div>
+
+              {backupError ? <p className="error-message">{backupError}</p> : null}
+              {restoreSummary ? (
+                <div className="export-result restore-result">
+                  <Check size={17} />
+                  <span>
+                    Restored {formatNumber(restoreSummary.trackCount)} tracks /{" "}
+                    {formatNumber(restoreSummary.albumCount)} albums. Safety copy:{" "}
+                    {restoreSummary.preRestoreBackupPath ?? "not needed"}
+                  </span>
+                </div>
+              ) : null}
+
+              {!canImport ? (
+                <div className="empty-state">
+                  <Database size={20} />
+                  <span>Desktop runtime required.</span>
+                </div>
+              ) : databaseBackups.length === 0 ? (
+                <div className="empty-state">
+                  <Database size={20} />
+                  <span>No backups found.</span>
+                </div>
+              ) : (
+                <div className="database-backup-list">
+                  {databaseBackups.map((backup) => (
+                    <article className="database-backup-card" key={backup.backupPath}>
+                      <div>
+                        <strong>{formatDate(backup.createdAt)}</strong>
+                        <span>{backup.operation}</span>
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>Rows</dt>
+                          <dd>{backup.trackRows == null ? "Unknown" : formatNumber(backup.trackRows)}</dd>
+                        </div>
+                        <div>
+                          <dt>Albums</dt>
+                          <dd>{backup.albumCount == null ? "Unknown" : formatNumber(backup.albumCount)}</dd>
+                        </div>
+                        <div>
+                          <dt>Schema</dt>
+                          <dd>{backup.schemaVersion == null ? "Unknown" : backup.schemaVersion}</dd>
+                        </div>
+                        <div>
+                          <dt>Size</dt>
+                          <dd>{formatBytes(backup.fileSizeBytes)}</dd>
+                        </div>
+                      </dl>
+                      <small>{backup.backupPath}</small>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        disabled={!backup.canRestore || isRestoringBackup}
+                        onClick={() => void restoreBackup(backup)}
+                      >
+                        <Database size={16} />
+                        <span>{isRestoringBackup ? "Restoring" : backup.canRestore ? "Restore" : "Unavailable"}</span>
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              )}
             </section>
 
             <section className="settings-panel">

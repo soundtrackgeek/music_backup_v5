@@ -2,8 +2,8 @@
 
 Last updated: 2026-07-04
 Status: Living product and implementation contract
-Current implementation: Phase 11 complete
-Current package version: 0.24.4
+Current implementation: Phase 12 complete
+Current package version: 0.25.0
 SQLite schema version: 10
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -59,7 +59,7 @@ Core principles:
 | Genres | Implemented | Canonical-genre index, genre summary stats, album lists, and exports. |
 | Tools | Implemented | Query-backed validation issue lists, severity, progress, pagination, sorting, counts, and exports. |
 | Imports | Implemented | MusicBee TSV import, cover art import, Billboard album CSV import, Billboard singles CSV import, progress, and import history. |
-| Settings | Implemented | Theme, backup retention, and default left/right sidebar visibility. |
+| Settings | Implemented | Theme, backup retention, backup restore, and default left/right sidebar visibility. |
 
 The left sidebar supports full, icon-only, and hidden modes. The right detail sidebar supports shown and hidden modes.
 
@@ -351,35 +351,21 @@ Expected next backend modularization:
 - Frontend app helper layer split into focused `src/app` modules.
 - This living specification is the current roadmap/spec source of truth.
 
+### Phase 12: Backup Restore and Recovery
+
+- Settings lists available local SQLite backups from the app backup directory.
+- Backup rows show operation, timestamp, file size, schema version, and import row/album counts when metadata is available.
+- Restore is limited to `.sqlite3` files inside the app backup directory.
+- Backup schema version is inspected before restore.
+- Restore asks for confirmation from the UI.
+- The current active database is copied to a `before-restore` safety backup before replacement.
+- Stale SQLite WAL sidecar files are removed around restore.
+- The restored database is reopened, migrated if needed, counted, and reported back to the UI.
+- Rust tests cover metadata-enriched backup listing, path validation, and restore behavior.
+
 ## Roadmap
 
 ### Now
-
-#### Phase 12: Backup Restore and Recovery
-
-Problem:
-
-- The app creates backups before imports, but restore/recovery is not yet a first-class workflow.
-
-Expected outcome:
-
-- Users can inspect, validate, restore, and recover from backups without manually finding SQLite files.
-
-Implementation areas:
-
-- Rust backup metadata and validation helpers.
-- Imports or Settings workspace restore UI.
-- Backup restore confirmation flow.
-- Optional dry-run validation of backup readability and schema version.
-- Post-restore refresh of status, statistics, saved searches, charts, and visible result sets.
-
-Done criteria:
-
-- List available backups with operation, timestamp, source path, size, row count, album count, and schema version when available.
-- Restore a selected backup after confirmation.
-- Create a pre-restore backup before replacing the active database.
-- Show success/failure messaging.
-- Cover restore behavior with Rust tests where practical.
 
 #### Phase 13: Backend Modularization
 
@@ -530,7 +516,6 @@ Candidate work:
 
 ## Open Questions
 
-- Should backup restore live in Imports, Settings, or its own Maintenance panel?
 - Should future Music Tools fixes update MusicBee source files, app-local metadata only, or both?
 - Should Billboard matching expose manual link/unlink review for misses and ambiguous matches?
 - Should Discovery missions become saveable views or remain generated shortcuts?
@@ -550,6 +535,7 @@ Candidate work:
 - Keep albums separate by `<Album Unique Id>`, but flag likely duplicate versions through Music Tools.
 - Keep the last 3 database backups by default.
 - Keep backup retention configurable from Settings.
+- Keep backup restore in Settings until there is enough lifecycle surface area to justify a dedicated Maintenance workspace.
 - Export only visible/default columns by default.
 - Let users opt into calculated export columns such as Album Score.
 - Keep external enrichment and AI optional.

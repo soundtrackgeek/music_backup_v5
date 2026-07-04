@@ -13,6 +13,8 @@ import type {
   CoverImportProgress,
   CoverImportRequest,
   CoverImportSummary,
+  DatabaseBackup,
+  DatabaseRestoreSummary,
   DiscoveryResponse,
   ExportResult,
   ImportProgress,
@@ -728,6 +730,21 @@ const mockImportRuns: ImportRun[] = [
     ratingEventsCount: 51,
   },
 ];
+
+const mockDatabaseBackups: DatabaseBackup[] = mockImportRuns.slice(0, 3).map((run, index) => ({
+  id: index + 1,
+  createdAt: run.startedAt,
+  operation: "import",
+  sourcePath: run.sourcePath,
+  sourceSizeBytes: run.sourceSizeBytes,
+  backupPath: run.backupPath ?? `Preview runtime backup ${index + 1}.sqlite3`,
+  fileSizeBytes: 64_000_000 - index * 1_500_000,
+  trackRows: run.trackRows,
+  albumCount: run.albumCount,
+  schemaVersion: 10,
+  exists: true,
+  canRestore: false,
+}));
 
 const mockStatistics: StatisticsResponse = {
   overview: {
@@ -1538,6 +1555,22 @@ export async function listImportRuns(limit: number) {
   }
 
   return invoke<ImportRun[]>("list_import_runs", { limit });
+}
+
+export async function listDatabaseBackups() {
+  if (!isTauriRuntime()) {
+    return mockDatabaseBackups satisfies DatabaseBackup[];
+  }
+
+  return invoke<DatabaseBackup[]>("list_database_backups");
+}
+
+export async function restoreDatabaseBackup(backupPath: string) {
+  if (!isTauriRuntime()) {
+    throw new Error("Start restore from the Tauri desktop app to access local SQLite backups.");
+  }
+
+  return invoke<DatabaseRestoreSummary>("restore_database_backup", { backupPath });
 }
 
 export async function getStatistics() {

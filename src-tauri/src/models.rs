@@ -37,6 +37,33 @@ pub struct LibraryStatus {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DatabaseBackup {
+    pub id: Option<i64>,
+    pub created_at: String,
+    pub operation: String,
+    pub source_path: Option<String>,
+    pub source_size_bytes: i64,
+    pub backup_path: String,
+    pub file_size_bytes: i64,
+    pub track_rows: Option<i64>,
+    pub album_count: Option<i64>,
+    pub schema_version: Option<i32>,
+    pub exists: bool,
+    pub can_restore: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseRestoreSummary {
+    pub restored_backup: DatabaseBackup,
+    pub pre_restore_backup_path: Option<String>,
+    pub track_count: i64,
+    pub album_count: i64,
+    pub schema_version: i32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImportProgress {
     pub status: String,
     pub processed_rows: u64,
