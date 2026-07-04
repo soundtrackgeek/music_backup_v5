@@ -2,8 +2,8 @@
 
 Last updated: 2026-07-04
 Status: Living product and implementation contract
-Current implementation: Phase 14 complete
-Current package version: 0.27.0
+Current implementation: Phase 15 complete
+Current package version: 0.28.0
 SQLite schema version: 10
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -219,6 +219,7 @@ Focused frontend modules:
 - `src/app/display.ts`: formatting, labels, rating stars support, Billboard labels, chart metric labels, and browse-row sorting.
 - `src/app/genreSuggestions.ts`: comma-list parsing, genre token replacement, normalization, and suggestion ranking.
 - `src/app/input.ts`: small input parsing and clamping helpers.
+- `src/app/themeBootstrap.ts`: startup theme hint loaded through the bundled TypeScript entrypoint so production CSP can disallow inline scripts.
 
 Expected next frontend modularization:
 
@@ -230,12 +231,22 @@ Expected next frontend modularization:
 
 Core files:
 
+- `src-tauri/tauri.conf.json`: app identity, build settings, release CSP, development CSP, and explicit capability selection.
+- `src-tauri/capabilities/default.json`: selected main-window Tauri permission boundary.
 - `src-tauri/src/lib.rs`: Tauri command registration and desktop runtime glue.
 - `src-tauri/src/main.rs`: app entrypoint.
 - `src-tauri/src/models.rs`: Rust payload models shared by commands, database logic, and import logic.
 - `src-tauri/src/db.rs`: SQLite migrations, search, charts, statistics, discovery, Billboard imports, Music Tools, settings, saved objects, and exports.
 - `src-tauri/src/importer.rs`: MusicBee TSV parsing, normalization, import run handling, album aggregation, backup retention, and rating event capture.
 - `src-tauri/src/covers.rs`: cover image import, relinking, embedded-art extraction, and local image serving.
+
+Release and security boundary:
+
+- Production CSP is explicit and disallows inline scripts/styles, object sources, embedding, base URI injection, and form submissions.
+- Development CSP is separate and permits the local Vite host plus HMR websocket.
+- Local source data, SQLite databases, backup sidecars, cover archives, and chart CSV folders remain ignored by git.
+- App version metadata must stay synchronized across `package.json`, `package-lock.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock`.
+- `npm run security:check` is the fast guard for these invariants; `npm run check` adds frontend build and Rust tests; `npm run release:check` adds Tauri packaging.
 
 Important test boundary:
 
@@ -381,11 +392,20 @@ Expected next backend modularization:
 - Web-only preview mode returns mock probe rows for layout work.
 - Rust tests cover the structured probe report on a seeded database.
 
+### Phase 15: Release and Security Polish
+
+- Tauri production CSP is enabled and hardened instead of disabled.
+- Tauri development CSP permits the local Vite server and HMR websocket without weakening production policy.
+- Tauri capability selection is explicit in config and points at the selected main-window capability file.
+- Startup theme bootstrap moved from inline HTML into the bundled TypeScript entrypoint.
+- App version metadata is synchronized across package, Tauri, and Cargo files.
+- `npm run security:check`, `npm run check`, and `npm run release:check` provide repeatable release verification.
+
 ## Roadmap
 
 ### Now
 
-#### Phase 15: Backend Modularization
+#### Phase 16: Backend Modularization
 
 Problem:
 
@@ -414,7 +434,7 @@ Done criteria:
 - New module names make future feature work easier to locate.
 - Shared SQL helpers stay small and explicit.
 
-#### Phase 16: Frontend Workspace Modularization
+#### Phase 17: Frontend Workspace Modularization
 
 Problem:
 
@@ -443,7 +463,7 @@ Done criteria:
 
 ### Next
 
-#### Phase 17: Import Safety and Incremental Sync
+#### Phase 18: Import Safety and Incremental Sync
 
 Expected outcome:
 
@@ -457,7 +477,7 @@ Candidate work:
 - Better failure recovery when source files disappear mid-import.
 - Import benchmarks for the 1.13M-row library.
 
-#### Phase 18: Performance and Observability
+#### Phase 19: Performance and Observability
 
 Expected outcome:
 
@@ -471,7 +491,7 @@ Candidate work:
 - Audit indexes after Billboard and Discovery growth.
 - Add developer log export.
 
-#### Phase 19: Expanded Music Tools Fix Actions
+#### Phase 20: Expanded Music Tools Fix Actions
 
 Expected outcome:
 
@@ -488,7 +508,7 @@ Candidate work:
 
 ### Later
 
-#### Phase 20: External Enrichment
+#### Phase 21: External Enrichment
 
 Expected outcome:
 
@@ -500,7 +520,7 @@ Constraints:
 - Review all enrichment before applying.
 - Keep source and confidence visible.
 
-#### Phase 21: Optional AI Assistance
+#### Phase 22: Optional AI Assistance
 
 Expected outcome:
 
@@ -518,7 +538,7 @@ Constraints:
 - No library data should leave the machine without explicit user action.
 - Generated actions should remain reviewable before they affect saved state.
 
-#### Phase 22: Packaging and Release Polish
+#### Phase 23: Packaging and Release Operations
 
 Expected outcome:
 
@@ -555,6 +575,9 @@ Candidate work:
 - Keep backup retention configurable from Settings.
 - Keep backup restore in Settings until there is enough lifecycle surface area to justify a dedicated Maintenance workspace.
 - Keep the initial Whitespace Anomalies fix app-local to SQLite; re-importing unchanged source TSV data may reintroduce the same issue.
+- Keep production Tauri CSP enabled and keep startup code out of inline HTML.
+- Keep Tauri capabilities explicitly selected in config so permission boundaries are reviewable.
+- Keep app versions synchronized across package, Tauri, and Cargo metadata.
 - Export only visible/default columns by default.
 - Let users opt into calculated export columns such as Album Score.
 - Keep external enrichment and AI optional.

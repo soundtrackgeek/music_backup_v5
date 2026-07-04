@@ -2,7 +2,7 @@
 
 A local-first desktop app for importing, searching, browsing, and analyzing a MusicBee TSV library export.
 
-The current Phase 14 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, list and restore local database backups with a pre-restore safety copy, run a Performance Proof probe against the active SQLite database, import and display real album cover art, import Billboard year-end album and singles CSV rankings, browse sortable album and track tables, save searches, filter Search albums by rated-track and Billboard rank ranges, filter Search tracks by imported Billboard singles rank ranges, build ranked album charts with include/exclude genre filters, min/max rating-completeness ranges, Billboard rank templates, and in-place genre suggestions, display-only table-header sorting inside the current ranked set, and resizable square cover-grid artwork, save chart configurations, expand the `scores` genre group in include/exclude genre filters, export filtered result sets, explore discovery dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions, analyze library health, rating burndown, time shape, loved density, catalog concentration, duration, outlier, decade progress, genre portfolio, metadata coverage, rating, and import dashboards, manage settings, switch between light and dark mode, choose default sidebar visibility, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists, including albums missing imported cover image records and imported Billboard albums or singles missing from the library, with exports and a guarded whitespace cleanup action.
+The current Phase 15 build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation with hardened release/security checks. The app can stream `musicbee-library.tsv`, store raw track rows, calculate album aggregates, keep configurable rolling SQLite backups before replacing imported data, list and restore local database backups with a pre-restore safety copy, run a Performance Proof probe against the active SQLite database, import and display real album cover art, import Billboard year-end album and singles CSV rankings, browse sortable album and track tables, save searches, filter Search albums by rated-track and Billboard rank ranges, filter Search tracks by imported Billboard singles rank ranges, build ranked album charts with include/exclude genre filters, min/max rating-completeness ranges, Billboard rank templates, and in-place genre suggestions, display-only table-header sorting inside the current ranked set, and resizable square cover-grid artwork, save chart configurations, expand the `scores` genre group in include/exclude genre filters, export filtered result sets, explore discovery dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions, analyze library health, rating burndown, time shape, loved density, catalog concentration, duration, outlier, decade progress, genre portfolio, metadata coverage, rating, and import dashboards, manage settings, switch between light and dark mode, choose default sidebar visibility, drill into dedicated album detail pages with ordered track lists, browse album artists with artist-level summary stats and album lists, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists, including albums missing imported cover image records and imported Billboard albums or singles missing from the library, with exports and a guarded whitespace cleanup action.
 
 The sidebar currently enables Search, Charts, Discovery, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. The left navigation can be shown in full, icon-only, or hidden mode, while the right detail sidebar can be shown or hidden so the main workspace expands into the available page width. The Imports workspace can scan an `AlbumCovers` folder for folder-named images, link matching source images directly, skip covers that are already imported, extract missing embedded MP3 artwork into the same `AlbumCovers` folder, import yearly Billboard album chart CSV files from `CSV/`, and import yearly Billboard singles chart CSV files from `CSV_SINGLES/`.
 
@@ -45,6 +45,12 @@ npm run build
 npm run tauri:build
 ```
 
+Run the full release gate, including security checks, frontend build, Rust tests, and Tauri packaging:
+
+```powershell
+npm run release:check
+```
+
 ## Test
 
 Run the Rust backend unit tests:
@@ -54,9 +60,30 @@ cd src-tauri
 cargo test
 ```
 
+Run the full local verification gate without packaging:
+
+```powershell
+npm run check
+```
+
+Run only the release/security guardrails:
+
+```powershell
+npm run security:check
+```
+
 ## Roadmap and Spec
 
-`SPEC.md` is the living product spec and roadmap. It tracks the current implementation, data contracts, architecture map, open decisions, and the Now/Next/Later roadmap. The current next focus is deeper backend and frontend modularization plus additional guided Music Tools cleanup actions.
+`SPEC.md` is the living product spec and roadmap. It tracks the current implementation, data contracts, architecture map, open decisions, and the Now/Next/Later roadmap. The current next focus is deeper backend and frontend modularization plus import safety work.
+
+## Phase 15 Release/Security Features
+
+- Production Tauri builds now use an explicit CSP that disallows inline scripts/styles, object sources, embedding, base URI injection, and form submissions.
+- Development builds use a separate dev CSP that permits the local Vite server and HMR websocket.
+- The Tauri config explicitly selects the default capability file, and the capability description documents the local-only main-window intent.
+- `npm run security:check` verifies CSP invariants, no inline HTML script/style blocks, explicit Tauri capabilities, ignored local library data, and version sync across package, Tauri, and Cargo metadata.
+- `npm run check` runs the release/security guard, frontend build, and Rust tests; `npm run release:check` adds Tauri packaging.
+- The startup theme bootstrap now runs through the bundled TypeScript entrypoint instead of inline HTML.
 
 ## Phase 14 Performance Proof Features
 

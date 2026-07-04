@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.28.0] - 2026-07-04
+### Added
+- Added `npm run security:check`, `npm run check`, and `npm run release:check` for release/security verification.
+- Added a release/security guard that checks CSP hardening, inline HTML restrictions, explicit Tauri capabilities, ignored local data, and version alignment across package, Tauri, and Cargo metadata.
+
+### Changed
+- Enabled explicit Tauri production and development CSP values instead of leaving CSP disabled.
+- Moved startup theme bootstrapping out of inline HTML and into the bundled TypeScript entrypoint.
+- Synced the app version across `package.json`, `package-lock.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`.
+
 ## [0.27.0] - 2026-07-04
 ### Added
 - Added an on-demand Performance Proof panel in Settings that runs representative Search, Charts, Music Tools, Statistics, and Discovery probes against the active SQLite database and reports timings, counts, and sampled query details.

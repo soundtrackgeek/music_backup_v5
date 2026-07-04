@@ -3,30 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>
-      (() => {
-        try {
-          const stored = window.localStorage.getItem("musicLibrarySettings:v1");
-          if (!stored) return;
-          const settings = JSON.parse(stored);
-          if (typeof settings.darkMode === "boolean") {
-            document.documentElement.dataset.theme = settings.darkMode ? "dark" : "light";
-          }
-        } catch {
-          // The persisted theme is a best-effort startup hint.
-        }
-      })();
-    </script>
-    <style>
-      :root[data-theme="dark"] {
-        background: #101614;
-        color-scheme: dark;
-      }
-
-      :root[data-theme="dark"] body {
-        background: #101614;
-      }
-    </style>
     <title>Music Library</title>
   </head>
   <body>
