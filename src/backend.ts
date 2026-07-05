@@ -37,10 +37,12 @@ import type {
   MusicToolIssueRow,
   MusicToolProgress,
   MusicToolSummary,
+  MusicBrainzCacheStatus,
   PerformanceProbeResponse,
 } from "./types";
 
 export const settingsStorageKey = "musicLibrarySettings:v1";
+export const defaultMusicBrainzCachePath = "MusicBrainz/musicbrainz_cache.db";
 
 const scoreGenreGroup = [
   "action",
@@ -66,6 +68,35 @@ const mockStatus: LibraryStatus = {
   coverCount: 0,
   importRunCount: 0,
   lastImport: null,
+};
+
+const mockMusicBrainzCacheStatus: MusicBrainzCacheStatus = {
+  cachePath: defaultMusicBrainzCachePath,
+  resolvedPath: `Preview runtime / ${defaultMusicBrainzCachePath}`,
+  exists: true,
+  valid: true,
+  state: "warning",
+  message: "Preview cache is readable, with artist mapping warnings to review.",
+  fileSizeBytes: 152_092_672,
+  artistCount: 20_208,
+  distinctMbidCount: 18_552,
+  duplicateMbidCount: 1_656,
+  suspiciousMappingCount: 1_656,
+  releaseGroupCount: 483_675,
+  officialReleaseGroupCount: 483_675,
+  pureAlbumReleaseGroupCount: 188_420,
+  releaseYearMin: 1889,
+  releaseYearMax: 2026,
+  cacheDateMin: "2026-02-07 20:09:01",
+  cacheDateMax: "2026-02-11 14:47:32",
+  warningExamples: [
+    {
+      mbid: "preview-shared-mbid",
+      cachedNameCount: 4,
+      releaseGroupCount: 242,
+      cachedNames: ["canonical artist", "alternate spelling", "featured credit", "search mismatch"],
+    },
+  ],
 };
 
 const mockRows: BrowseRow[] = [
@@ -1666,6 +1697,21 @@ export async function getSettings() {
   return settings;
 }
 
+export async function getMusicBrainzCacheStatus(cachePath?: string) {
+  if (!isTauriRuntime()) {
+    const nextCachePath = normalizeMusicBrainzCachePath(cachePath ?? mockSettings.musicBrainzCachePath);
+    return {
+      ...mockMusicBrainzCacheStatus,
+      cachePath: nextCachePath,
+      resolvedPath: `Preview runtime / ${nextCachePath}`,
+    } satisfies MusicBrainzCacheStatus;
+  }
+
+  return invoke<MusicBrainzCacheStatus>("get_musicbrainz_cache_status", {
+    cachePath: cachePath ?? null,
+  });
+}
+
 export async function saveSettings(settings: AppSettings) {
   if (!isTauriRuntime()) {
     mockSettings = {
@@ -2142,6 +2188,7 @@ function normalizeSettings(settings: Partial<AppSettings>): AppSettings {
     darkMode: Boolean(settings.darkMode),
     leftSidebarDefault: normalizeLeftSidebarMode(settings.leftSidebarDefault),
     rightSidebarDefault: normalizeRightSidebarMode(settings.rightSidebarDefault),
+    musicBrainzCachePath: normalizeMusicBrainzCachePath(settings.musicBrainzCachePath),
     updatedAt: settings.updatedAt ?? null,
   };
 }
@@ -2152,6 +2199,7 @@ function defaultSettings(): AppSettings {
     darkMode: false,
     leftSidebarDefault: "expanded",
     rightSidebarDefault: "expanded",
+    musicBrainzCachePath: defaultMusicBrainzCachePath,
     updatedAt: null,
   };
 }
@@ -2162,6 +2210,11 @@ function normalizeLeftSidebarMode(value: unknown): LeftSidebarMode {
 
 function normalizeRightSidebarMode(value: unknown): RightSidebarMode {
   return value === "hidden" || value === "expanded" ? value : "expanded";
+}
+
+function normalizeMusicBrainzCachePath(value: unknown) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return normalized || defaultMusicBrainzCachePath;
 }
 
 function normalizeArtistKey(value: string | null) {

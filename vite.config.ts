@@ -13,6 +13,7 @@ export default defineConfig({
         "**/AlbumCovers/**",
         "**/CSV/**",
         "**/CSV_SINGLES/**",
+        "**/MusicBrainz/**",
         "**/musicbee-library.tsv",
         "**/dist/**",
       ],

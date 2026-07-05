@@ -40,11 +40,13 @@ import {
   deleteSavedChart,
   deleteSavedSearch,
   clearCoverImageCache,
+  defaultMusicBrainzCachePath,
   exportSearch,
   fixMusicToolIssues,
   cacheSettings,
   getAlbumCoverDataUrl,
   getDiscovery,
+  getMusicBrainzCacheStatus,
   getSettings,
   getStatistics,
   getLibraryStatus,
@@ -121,6 +123,7 @@ import type {
   MusicToolIssueRow,
   MusicToolProgress,
   MusicToolSummary,
+  MusicBrainzCacheStatus,
   PerformanceProbeResponse,
   SavedChart,
   SavedSearch,
@@ -310,6 +313,37 @@ function Metric({
 
 function RunStatus({ status }: { status: string }) {
   return <span className={`run-status run-status-${status.toLowerCase()}`}>{status}</span>;
+}
+
+function musicBrainzStateLabel(state: MusicBrainzCacheStatus["state"] | null | undefined) {
+  switch (state) {
+    case "available":
+      return "Available";
+    case "warning":
+      return "Warnings";
+    case "invalid":
+      return "Invalid";
+    case "unavailable":
+      return "Unavailable";
+    default:
+      return "Not checked";
+  }
+}
+
+function musicBrainzYearRange(status: MusicBrainzCacheStatus | null) {
+  if (!status?.releaseYearMin || !status.releaseYearMax) {
+    return "Unknown";
+  }
+  return `${status.releaseYearMin}-${status.releaseYearMax}`;
+}
+
+function musicBrainzCacheDateRange(status: MusicBrainzCacheStatus | null) {
+  if (!status?.cacheDateMin || !status.cacheDateMax) {
+    return "Unknown";
+  }
+  const dateFrom = status.cacheDateMin.slice(0, 10);
+  const dateTo = status.cacheDateMax.slice(0, 10);
+  return dateFrom === dateTo ? dateFrom : `${dateFrom}-${dateTo}`;
 }
 
 function TextCriterion({
@@ -3561,6 +3595,12 @@ export default function App() {
   const [performanceProbe, setPerformanceProbe] = useState<PerformanceProbeResponse | null>(null);
   const [performanceProbeError, setPerformanceProbeError] = useState<string | null>(null);
   const [isPerformanceProbeRunning, setIsPerformanceProbeRunning] = useState(false);
+  const [musicBrainzStatus, setMusicBrainzStatus] = useState<MusicBrainzCacheStatus | null>(null);
+  const [musicBrainzStatusError, setMusicBrainzStatusError] = useState<string | null>(null);
+  const [isMusicBrainzChecking, setIsMusicBrainzChecking] = useState(false);
+  const [musicBrainzCachePathDraft, setMusicBrainzCachePathDraft] = useState(
+    settings.musicBrainzCachePath || defaultMusicBrainzCachePath,
+  );
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const hasAppliedLayoutDefaults = useRef(false);
@@ -3580,6 +3620,7 @@ export default function App() {
       nextSavedCharts,
       nextStatistics,
       nextSettings,
+      nextMusicBrainzStatus,
     ] = await Promise.all([
       getLibraryStatus(),
       listImportRuns(8),
@@ -3588,6 +3629,7 @@ export default function App() {
       listSavedCharts(),
       getStatistics(),
       getSettings(),
+      getMusicBrainzCacheStatus(),
     ]);
     setStatus(nextStatus);
     setRuns(nextRuns);
@@ -3602,6 +3644,9 @@ export default function App() {
     );
     setStatistics(nextStatistics);
     setSettings(nextSettings);
+    setMusicBrainzCachePathDraft(nextSettings.musicBrainzCachePath || defaultMusicBrainzCachePath);
+    setMusicBrainzStatus(nextMusicBrainzStatus);
+    setMusicBrainzStatusError(null);
     if (!hasAppliedLayoutDefaults.current) {
       setLeftSidebarMode(nextSettings.leftSidebarDefault);
       setRightSidebarMode(nextSettings.rightSidebarDefault);
@@ -5120,6 +5165,7 @@ export default function App() {
       backupRetention: clampBackupRetention(values.backupRetention ?? settings.backupRetention),
       leftSidebarDefault: values.leftSidebarDefault ?? settings.leftSidebarDefault,
       rightSidebarDefault: values.rightSidebarDefault ?? settings.rightSidebarDefault,
+      musicBrainzCachePath: (values.musicBrainzCachePath ?? settings.musicBrainzCachePath).trim() || defaultMusicBrainzCachePath,
     };
     setSettings(nextSettings);
     cacheSettings(nextSettings);
@@ -5185,6 +5231,23 @@ export default function App() {
       setPerformanceProbeError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsPerformanceProbeRunning(false);
+    }
+  }
+
+  async function checkMusicBrainzCache() {
+    const cachePath = musicBrainzCachePathDraft.trim() || defaultMusicBrainzCachePath;
+    setIsMusicBrainzChecking(true);
+    setMusicBrainzStatusError(null);
+
+    try {
+      await saveAppSettings({ musicBrainzCachePath: cachePath });
+      const result = await getMusicBrainzCacheStatus(cachePath);
+      setMusicBrainzStatus(result);
+      setMusicBrainzCachePathDraft(result.cachePath);
+    } catch (error) {
+      setMusicBrainzStatusError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsMusicBrainzChecking(false);
     }
   }
 
@@ -5258,6 +5321,13 @@ export default function App() {
     (statistics?.ratingProgress.ratedTracks ?? 0) + (statistics?.ratingProgress.unratedTracks ?? 0);
   const isLeftSidebarHidden = leftSidebarMode === "hidden";
   const isRightSidebarHidden = rightSidebarMode === "hidden";
+  const musicBrainzMetricTone =
+    musicBrainzStatus?.state === "available" ? "teal" : musicBrainzStatus?.state === "warning" ? "amber" : "neutral";
+  const musicBrainzStatusLabel = musicBrainzStateLabel(musicBrainzStatus?.state);
+  const musicBrainzStatusText = musicBrainzStatus
+    ? `${musicBrainzStatusLabel} / ${formatNumber(musicBrainzStatus.artistCount)} artists`
+    : "Not checked";
+  const musicBrainzHasWarnings = (musicBrainzStatus?.suspiciousMappingCount ?? 0) > 0;
   const leftSidebarClass = leftSidebarMode === "iconOnly" ? "left-sidebar-icon-only" : `left-sidebar-${leftSidebarMode}`;
   const appShellClassName = `app-shell ${leftSidebarClass} right-sidebar-${rightSidebarMode}`;
   const leftIconOnlyToggleLabel =
@@ -7284,6 +7354,7 @@ export default function App() {
             <Metric label="Theme" value={settings.darkMode ? "Dark" : "Light"} tone="amber" icon={Moon} />
             <Metric label="Navigation" value={leftSidebarModeLabels[settings.leftSidebarDefault]} icon={Library} />
             <Metric label="Details" value={rightSidebarModeLabels[settings.rightSidebarDefault]} icon={SlidersHorizontal} />
+            <Metric label="MusicBrainz" value={musicBrainzStatusLabel} tone={musicBrainzMetricTone} icon={ShieldCheck} />
           </section>
 
           {settingsError ? <p className="error-message">{settingsError}</p> : null}
@@ -7385,6 +7456,124 @@ export default function App() {
                       </button>
                     </article>
                   ))}
+                </div>
+              )}
+            </section>
+
+            <section className="settings-panel musicbrainz-settings-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>MusicBrainz Cache</h2>
+                  <p>{musicBrainzStatusText}</p>
+                </div>
+                <ShieldCheck size={18} />
+              </div>
+
+              <div className="musicbrainz-toolbar">
+                <label className="criterion musicbrainz-cache-path">
+                  <span>Cache path</span>
+                  <input
+                    type="text"
+                    value={musicBrainzCachePathDraft}
+                    onChange={(event) => setMusicBrainzCachePathDraft(event.target.value)}
+                    placeholder={defaultMusicBrainzCachePath}
+                  />
+                </label>
+                <button
+                  className="primary-button"
+                  type="button"
+                  disabled={isMusicBrainzChecking}
+                  onClick={() => void checkMusicBrainzCache()}
+                >
+                  <ShieldCheck size={16} />
+                  <span>{isMusicBrainzChecking ? "Checking" : "Save and check"}</span>
+                </button>
+              </div>
+
+              {musicBrainzStatusError ? <p className="error-message">{musicBrainzStatusError}</p> : null}
+
+              {musicBrainzStatus ? (
+                <>
+                  <div className={`musicbrainz-status-strip musicbrainz-status-${musicBrainzStatus.state}`}>
+                    <RunStatus status={musicBrainzStatus.state} />
+                    <span>{musicBrainzStatus.message}</span>
+                  </div>
+
+                  <dl className="performance-summary musicbrainz-summary">
+                    <div>
+                      <dt>File</dt>
+                      <dd>{musicBrainzStatus.exists ? formatBytes(musicBrainzStatus.fileSizeBytes) : "Missing"}</dd>
+                    </div>
+                    <div>
+                      <dt>Artists</dt>
+                      <dd>{formatNumber(musicBrainzStatus.artistCount)}</dd>
+                    </div>
+                    <div>
+                      <dt>MBIDs</dt>
+                      <dd>{formatNumber(musicBrainzStatus.distinctMbidCount)}</dd>
+                    </div>
+                    <div>
+                      <dt>Releases</dt>
+                      <dd>{formatNumber(musicBrainzStatus.releaseGroupCount)}</dd>
+                    </div>
+                    <div>
+                      <dt>Pure albums</dt>
+                      <dd>{formatNumber(musicBrainzStatus.pureAlbumReleaseGroupCount)}</dd>
+                    </div>
+                    <div>
+                      <dt>Years</dt>
+                      <dd>{musicBrainzYearRange(musicBrainzStatus)}</dd>
+                    </div>
+                  </dl>
+
+                  <dl className="musicbrainz-quality-grid">
+                    <div>
+                      <dt>Official releases</dt>
+                      <dd>{formatNumber(musicBrainzStatus.officialReleaseGroupCount)}</dd>
+                    </div>
+                    <div>
+                      <dt>Duplicate MBIDs</dt>
+                      <dd>{formatNumber(musicBrainzStatus.duplicateMbidCount)}</dd>
+                    </div>
+                    <div>
+                      <dt>Mapping warnings</dt>
+                      <dd>{formatNumber(musicBrainzStatus.suspiciousMappingCount)}</dd>
+                    </div>
+                    <div>
+                      <dt>Cache dates</dt>
+                      <dd>{musicBrainzCacheDateRange(musicBrainzStatus)}</dd>
+                    </div>
+                  </dl>
+
+                  {musicBrainzHasWarnings ? (
+                    <div className="musicbrainz-warning-list">
+                      {musicBrainzStatus.warningExamples.map((example) => (
+                        <article key={example.mbid}>
+                          <div>
+                            <strong>{example.cachedNames.join(", ") || example.mbid}</strong>
+                            <span>{example.mbid}</span>
+                          </div>
+                          <dl>
+                            <div>
+                              <dt>Names</dt>
+                              <dd>{formatNumber(example.cachedNameCount)}</dd>
+                            </div>
+                            <div>
+                              <dt>Releases</dt>
+                              <dd>{formatNumber(example.releaseGroupCount)}</dd>
+                            </div>
+                          </dl>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <small className="performance-database-path">{musicBrainzStatus.resolvedPath}</small>
+                </>
+              ) : (
+                <div className="empty-state">
+                  <ShieldCheck size={20} />
+                  <span>No MusicBrainz cache check has run yet.</span>
                 </div>
               )}
             </section>

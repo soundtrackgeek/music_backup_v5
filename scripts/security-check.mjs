@@ -49,7 +49,15 @@ check(Array.isArray(capabilities) && capabilities.includes("default"), "Tauri ca
 check(!/<script(?![^>]*\bsrc=)[^>]*>/i.test(indexHtml), "index.html must not contain inline script tags.");
 check(!/<style[\s>]/i.test(indexHtml), "index.html must not contain inline style tags.");
 
-for (const entry of ["musicbee-library.tsv", "AlbumCovers/", "CSV/", "CSV_SINGLES/", "*.sqlite3", "*.sqlite3-*"]) {
+for (const entry of [
+  "musicbee-library.tsv",
+  "AlbumCovers/",
+  "CSV/",
+  "CSV_SINGLES/",
+  "MusicBrainz/",
+  "*.sqlite3",
+  "*.sqlite3-*",
+]) {
   check(gitignore.includes(entry), `.gitignore must keep ${entry} ignored.`);
 }
 

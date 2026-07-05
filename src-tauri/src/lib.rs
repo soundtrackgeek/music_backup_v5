@@ -5,6 +5,7 @@ mod covers;
 mod db;
 mod importer;
 mod models;
+mod musicbrainz;
 
 #[cfg(not(test))]
 use models::{
@@ -12,9 +13,9 @@ use models::{
     BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
-    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
-    MusicToolSummary, PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest, SavedChart,
-    SavedSearch, StatisticsResponse,
+    MusicBrainzCacheStatus, MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest,
+    MusicToolIssueResponse, MusicToolSummary, PerformanceProbeResponse, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
 };
 #[cfg(not(test))]
 use models::{ImportRun, ImportSummary, LibraryStatus};
@@ -80,6 +81,20 @@ async fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
         .await
         .map_err(|error| format!("Settings task failed: {error}"))?
         .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_musicbrainz_cache_status(
+    app: AppHandle,
+    cache_path: Option<String>,
+) -> Result<MusicBrainzCacheStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        musicbrainz::cache_status_for_app(&app, cache_path)
+    })
+    .await
+    .map_err(|error| format!("MusicBrainz cache status task failed: {error}"))?
+    .map_err(|error| error.to_string())
 }
 
 #[cfg(not(test))]
@@ -330,6 +345,7 @@ pub fn run() {
             list_database_backups,
             restore_database_backup,
             get_settings,
+            get_musicbrainz_cache_status,
             save_settings,
             get_statistics,
             get_discovery,

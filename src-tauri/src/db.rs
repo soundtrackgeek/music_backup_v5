@@ -38,8 +38,9 @@ type ProgressApp<'a> = &'a ();
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 10;
+const LATEST_SCHEMA_VERSION: i32 = 11;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
+const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const MIN_BACKUP_RETENTION: u32 = 1;
 const MAX_BACKUP_RETENTION: u32 = 50;
 const SCORE_GENRE_GROUP: &[&str] = &[
@@ -288,7 +289,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_ten_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_eleven_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -560,8 +561,39 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             dark_mode INTEGER NOT NULL DEFAULT 0,
             left_sidebar_default TEXT NOT NULL DEFAULT 'expanded',
             right_sidebar_default TEXT NOT NULL DEFAULT 'expanded',
+            musicbrainz_cache_path TEXT NOT NULL DEFAULT 'MusicBrainz/musicbrainz_cache.db',
             updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_links (
+            local_artist_key TEXT PRIMARY KEY,
+            display_artist TEXT NOT NULL,
+            mbid TEXT,
+            canonical_name TEXT,
+            match_method TEXT NOT NULL DEFAULT 'unverified',
+            confidence REAL,
+            verification_state TEXT NOT NULL DEFAULT 'unverified',
+            ignored INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_release_decisions (
+            local_artist_key TEXT NOT NULL,
+            release_mbid TEXT NOT NULL,
+            decision TEXT NOT NULL,
+            local_album_id TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (local_artist_key, release_mbid),
+            FOREIGN KEY(local_artist_key) REFERENCES musicbrainz_artist_links(local_artist_key)
+                ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_links_mbid
+            ON musicbrainz_artist_links(mbid);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_release_decisions_decision
+            ON musicbrainz_release_decisions(decision);
 
         INSERT OR IGNORE INTO app_settings (
             id, backup_retention, dark_mode, updated_at
@@ -577,9 +609,18 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_billboard_chart_entries_table(conn)?;
     ensure_track_billboard_single_columns(conn)?;
     ensure_billboard_single_chart_entries_table(conn)?;
-    conn.execute_batch("PRAGMA user_version = 10;")
+    ensure_app_settings_musicbrainz_columns(conn)?;
+    ensure_musicbrainz_decision_tables(conn)?;
+    conn.execute_batch("PRAGMA user_version = 11;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_eleven_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_ten_schema_exists(conn)?
+        && schema_column_exists(conn, "app_settings", "musicbrainz_cache_path")?
+        && schema_table_exists(conn, "musicbrainz_artist_links")?
+        && schema_table_exists(conn, "musicbrainz_release_decisions")?)
 }
 
 fn phase_ten_schema_exists(conn: &Connection) -> Result<bool> {
@@ -691,6 +732,56 @@ fn ensure_app_settings_layout_columns(conn: &Connection) -> Result<()> {
                 .with_context(|| format!("Could not add app_settings.{name}"))?;
         }
     }
+
+    Ok(())
+}
+
+fn ensure_app_settings_musicbrainz_columns(conn: &Connection) -> Result<()> {
+    if !schema_column_exists(conn, "app_settings", "musicbrainz_cache_path")? {
+        conn.execute_batch(
+            "ALTER TABLE app_settings ADD COLUMN musicbrainz_cache_path TEXT NOT NULL DEFAULT 'MusicBrainz/musicbrainz_cache.db';",
+        )
+        .context("Could not add app_settings.musicbrainz_cache_path")?;
+    }
+
+    Ok(())
+}
+
+fn ensure_musicbrainz_decision_tables(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_links (
+            local_artist_key TEXT PRIMARY KEY,
+            display_artist TEXT NOT NULL,
+            mbid TEXT,
+            canonical_name TEXT,
+            match_method TEXT NOT NULL DEFAULT 'unverified',
+            confidence REAL,
+            verification_state TEXT NOT NULL DEFAULT 'unverified',
+            ignored INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_release_decisions (
+            local_artist_key TEXT NOT NULL,
+            release_mbid TEXT NOT NULL,
+            decision TEXT NOT NULL,
+            local_album_id TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (local_artist_key, release_mbid),
+            FOREIGN KEY(local_artist_key) REFERENCES musicbrainz_artist_links(local_artist_key)
+                ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_links_mbid
+            ON musicbrainz_artist_links(mbid);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_release_decisions_decision
+            ON musicbrainz_release_decisions(decision);
+        ",
+    )
+    .context("Could not create MusicBrainz decision tables")?;
 
     Ok(())
 }
@@ -1912,7 +2003,8 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
     let settings = conn
         .query_row(
             "
-            SELECT backup_retention, dark_mode, left_sidebar_default, right_sidebar_default, updated_at
+            SELECT backup_retention, dark_mode, left_sidebar_default, right_sidebar_default,
+                   musicbrainz_cache_path, updated_at
             FROM app_settings
             WHERE id = 1
             ",
@@ -1931,6 +2023,7 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
                 dark_mode: false,
                 left_sidebar_default: "expanded".to_string(),
                 right_sidebar_default: "expanded".to_string(),
+                musicbrainz_cache_path: DEFAULT_MUSICBRAINZ_CACHE_PATH.to_string(),
                 updated_at: None,
             },
         ),
@@ -1943,14 +2036,16 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
     conn.execute(
         "
         INSERT INTO app_settings (
-            id, backup_retention, dark_mode, left_sidebar_default, right_sidebar_default, updated_at
+            id, backup_retention, dark_mode, left_sidebar_default, right_sidebar_default,
+            musicbrainz_cache_path, updated_at
         )
-        VALUES (1, ?1, ?2, ?3, ?4, ?5)
+        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)
         ON CONFLICT(id) DO UPDATE SET
             backup_retention = excluded.backup_retention,
             dark_mode = excluded.dark_mode,
             left_sidebar_default = excluded.left_sidebar_default,
             right_sidebar_default = excluded.right_sidebar_default,
+            musicbrainz_cache_path = excluded.musicbrainz_cache_path,
             updated_at = excluded.updated_at
         ",
         params![
@@ -1958,6 +2053,7 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
             if settings.dark_mode { 1 } else { 0 },
             settings.left_sidebar_default,
             settings.right_sidebar_default,
+            settings.musicbrainz_cache_path,
             now
         ],
     )
@@ -1974,7 +2070,8 @@ fn settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppSettings> {
         dark_mode: dark_mode != 0,
         left_sidebar_default: row.get(2)?,
         right_sidebar_default: row.get(3)?,
-        updated_at: row.get(4)?,
+        musicbrainz_cache_path: row.get(4)?,
+        updated_at: row.get(5)?,
     })
 }
 
@@ -1985,6 +2082,8 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
     settings.left_sidebar_default = normalize_left_sidebar_default(&settings.left_sidebar_default);
     settings.right_sidebar_default =
         normalize_right_sidebar_default(&settings.right_sidebar_default);
+    settings.musicbrainz_cache_path =
+        normalize_musicbrainz_cache_path(&settings.musicbrainz_cache_path);
     settings
 }
 
@@ -1999,6 +2098,15 @@ fn normalize_right_sidebar_default(value: &str) -> String {
     match value {
         "expanded" | "hidden" => value.to_string(),
         _ => "expanded".to_string(),
+    }
+}
+
+fn normalize_musicbrainz_cache_path(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        DEFAULT_MUSICBRAINZ_CACHE_PATH.to_string()
+    } else {
+        trimmed.to_string()
     }
 }
 
@@ -8422,7 +8530,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_noop_migration_for_current_phase_ten_schema() {
+    fn skips_noop_migration_for_current_phase_eleven_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -8433,7 +8541,7 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_ten_schema_exists(&conn).expect("phase ten schema exists"));
+        assert!(phase_eleven_schema_exists(&conn).expect("phase eleven schema exists"));
     }
 
     #[test]
@@ -8488,7 +8596,7 @@ mod tests {
         );
         assert!(schema_table_exists(&conn, "billboard_single_chart_entries")
             .expect("billboard single chart entry table exists"));
-        assert!(phase_ten_schema_exists(&conn).expect("phase ten schema exists"));
+        assert!(phase_eleven_schema_exists(&conn).expect("phase eleven schema exists"));
     }
 
     #[test]
@@ -8539,7 +8647,7 @@ mod tests {
             schema_column_exists(&conn, "tracks", "billboard_single_year")
                 .expect("billboard single year column exists")
         );
-        assert!(phase_ten_schema_exists(&conn).expect("phase ten schema exists"));
+        assert!(phase_eleven_schema_exists(&conn).expect("phase eleven schema exists"));
     }
 
     #[test]
@@ -8555,6 +8663,7 @@ mod tests {
                 dark_mode: true,
                 left_sidebar_default: "iconOnly".to_string(),
                 right_sidebar_default: "hidden".to_string(),
+                musicbrainz_cache_path: "MusicBrainz/custom-cache.db".to_string(),
                 updated_at: None,
             },
         )
@@ -8564,12 +8673,14 @@ mod tests {
         assert!(saved.dark_mode);
         assert_eq!(saved.left_sidebar_default, "iconOnly");
         assert_eq!(saved.right_sidebar_default, "hidden");
+        assert_eq!(saved.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
 
         let loaded = settings_for_connection(&conn).expect("load settings");
         assert_eq!(loaded.backup_retention, MAX_BACKUP_RETENTION);
         assert!(loaded.dark_mode);
         assert_eq!(loaded.left_sidebar_default, "iconOnly");
         assert_eq!(loaded.right_sidebar_default, "hidden");
+        assert_eq!(loaded.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
         assert!(loaded.updated_at.is_some());
     }
 

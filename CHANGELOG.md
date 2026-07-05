@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.29.0] - 2026-07-05
+### Added
+- Added a MusicBrainz Cache panel in Settings for saving and checking the local `MusicBrainz/musicbrainz_cache.db` path.
+- Added a read-only Tauri MusicBrainz cache status command that validates the cache schema and reports counts, year/date ranges, and suspicious artist mapping examples.
+- Added SQLite schema version 11 with a persisted MusicBrainz cache path plus app-owned artist-link and release-decision tables for later verified MusicBrainz matching.
+- Added web-preview MusicBrainz cache status data for frontend layout work without a local cache.
+
+### Changed
+- Updated release/security checks to require `MusicBrainz/` to remain ignored by git.
+- Bumped synchronized app metadata to `0.29.0`.
+
 ## [0.28.1] - 2026-07-05
 ### Changed
 - Expanded the MusicBrainz roadmap in `SPEC.md` with the local cache strategy, cache quality checks, app-owned verification/ignore decisions, and explicit artist refresh guidance.

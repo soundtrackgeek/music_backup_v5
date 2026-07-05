@@ -144,7 +144,37 @@ export type AppSettings = {
   darkMode: boolean;
   leftSidebarDefault: LeftSidebarMode;
   rightSidebarDefault: RightSidebarMode;
+  musicBrainzCachePath: string;
   updatedAt: string | null;
+};
+
+export type MusicBrainzCacheWarningExample = {
+  mbid: string;
+  cachedNameCount: number;
+  releaseGroupCount: number;
+  cachedNames: string[];
+};
+
+export type MusicBrainzCacheStatus = {
+  cachePath: string;
+  resolvedPath: string;
+  exists: boolean;
+  valid: boolean;
+  state: "available" | "warning" | "unavailable" | "invalid";
+  message: string;
+  fileSizeBytes: number;
+  artistCount: number;
+  distinctMbidCount: number;
+  duplicateMbidCount: number;
+  suspiciousMappingCount: number;
+  releaseGroupCount: number;
+  officialReleaseGroupCount: number;
+  pureAlbumReleaseGroupCount: number;
+  releaseYearMin: number | null;
+  releaseYearMax: number | null;
+  cacheDateMin: string | null;
+  cacheDateMax: string | null;
+  warningExamples: MusicBrainzCacheWarningExample[];
 };
 
 export type BrowseView = "albums" | "tracks";

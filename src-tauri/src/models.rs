@@ -176,8 +176,43 @@ pub struct AppSettings {
     pub left_sidebar_default: String,
     #[serde(default = "default_right_sidebar_default")]
     pub right_sidebar_default: String,
+    #[serde(default = "default_musicbrainz_cache_path")]
+    pub musicbrainz_cache_path: String,
     #[serde(default)]
     pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzCacheWarningExample {
+    pub mbid: String,
+    pub cached_name_count: i64,
+    pub release_group_count: i64,
+    pub cached_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzCacheStatus {
+    pub cache_path: String,
+    pub resolved_path: String,
+    pub exists: bool,
+    pub valid: bool,
+    pub state: String,
+    pub message: String,
+    pub file_size_bytes: i64,
+    pub artist_count: i64,
+    pub distinct_mbid_count: i64,
+    pub duplicate_mbid_count: i64,
+    pub suspicious_mapping_count: i64,
+    pub release_group_count: i64,
+    pub official_release_group_count: i64,
+    pub pure_album_release_group_count: i64,
+    pub release_year_min: Option<i32>,
+    pub release_year_max: Option<i32>,
+    pub cache_date_min: Option<String>,
+    pub cache_date_max: Option<String>,
+    pub warning_examples: Vec<MusicBrainzCacheWarningExample>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1051,6 +1086,10 @@ fn default_left_sidebar_default() -> String {
 
 fn default_right_sidebar_default() -> String {
     "expanded".to_string()
+}
+
+fn default_musicbrainz_cache_path() -> String {
+    "MusicBrainz/musicbrainz_cache.db".to_string()
 }
 
 fn default_music_tool_id() -> String {
