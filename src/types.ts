@@ -177,7 +177,7 @@ export type MusicBrainzCacheStatus = {
   warningExamples: MusicBrainzCacheWarningExample[];
 };
 
-export type MusicBrainzReleaseDecision = "not-in-scope" | "ignored" | null;
+export type MusicBrainzReleaseDecision = "not-in-scope" | "ignored" | "include" | "auto-not-official" | null;
 
 export type MusicBrainzArtistReleaseRow = {
   releaseMbid: string;

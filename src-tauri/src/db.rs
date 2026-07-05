@@ -38,7 +38,7 @@ type ProgressApp<'a> = &'a ();
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 11;
+const LATEST_SCHEMA_VERSION: i32 = 12;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const MIN_BACKUP_RETENTION: u32 = 1;
@@ -289,7 +289,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_eleven_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_twelve_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -595,6 +595,17 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_musicbrainz_release_decisions_decision
             ON musicbrainz_release_decisions(decision);
 
+        CREATE TABLE IF NOT EXISTS musicbrainz_release_status_cache (
+            artist_mbid TEXT NOT NULL,
+            release_mbid TEXT NOT NULL,
+            has_official_release INTEGER NOT NULL,
+            checked_at TEXT NOT NULL,
+            PRIMARY KEY (artist_mbid, release_mbid)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_release_status_cache_checked
+            ON musicbrainz_release_status_cache(checked_at);
+
         INSERT OR IGNORE INTO app_settings (
             id, backup_retention, dark_mode, updated_at
         ) VALUES (
@@ -611,9 +622,15 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_billboard_single_chart_entries_table(conn)?;
     ensure_app_settings_musicbrainz_columns(conn)?;
     ensure_musicbrainz_decision_tables(conn)?;
-    conn.execute_batch("PRAGMA user_version = 11;")
+    ensure_musicbrainz_release_status_cache(conn)?;
+    conn.execute_batch("PRAGMA user_version = 12;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_twelve_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_eleven_schema_exists(conn)?
+        && schema_table_exists(conn, "musicbrainz_release_status_cache")?)
 }
 
 fn phase_eleven_schema_exists(conn: &Connection) -> Result<bool> {
@@ -782,6 +799,26 @@ fn ensure_musicbrainz_decision_tables(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create MusicBrainz decision tables")?;
+
+    Ok(())
+}
+
+fn ensure_musicbrainz_release_status_cache(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS musicbrainz_release_status_cache (
+            artist_mbid TEXT NOT NULL,
+            release_mbid TEXT NOT NULL,
+            has_official_release INTEGER NOT NULL,
+            checked_at TEXT NOT NULL,
+            PRIMARY KEY (artist_mbid, release_mbid)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_release_status_cache_checked
+            ON musicbrainz_release_status_cache(checked_at);
+        ",
+    )
+    .context("Could not create MusicBrainz release status cache")?;
 
     Ok(())
 }
@@ -8530,7 +8567,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_noop_migration_for_current_phase_eleven_schema() {
+    fn skips_noop_migration_for_current_phase_twelve_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -8541,7 +8578,7 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_eleven_schema_exists(&conn).expect("phase eleven schema exists"));
+        assert!(phase_twelve_schema_exists(&conn).expect("phase twelve schema exists"));
     }
 
     #[test]
@@ -8596,7 +8633,7 @@ mod tests {
         );
         assert!(schema_table_exists(&conn, "billboard_single_chart_entries")
             .expect("billboard single chart entry table exists"));
-        assert!(phase_eleven_schema_exists(&conn).expect("phase eleven schema exists"));
+        assert!(phase_twelve_schema_exists(&conn).expect("phase twelve schema exists"));
     }
 
     #[test]
@@ -8647,7 +8684,7 @@ mod tests {
             schema_column_exists(&conn, "tracks", "billboard_single_year")
                 .expect("billboard single year column exists")
         );
-        assert!(phase_eleven_schema_exists(&conn).expect("phase eleven schema exists"));
+        assert!(phase_twelve_schema_exists(&conn).expect("phase twelve schema exists"));
     }
 
     #[test]

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.30.2] - 2026-07-05
+### Fixed
+- Excluded MusicBrainz release groups with no official releases from selected-artist missing-album counts after app-owned official-status verification, fixing bootleg-only rows such as Def Leppard's `Yeah! Unfinished and Unreleased` and `Retromania`.
+
+### Added
+- Added SQLite schema version 12 with an app-owned MusicBrainz release-status cache.
+- Added bounded MusicBrainz release-status verification for selected artists when the local app status cache is missing.
+- Added Rust coverage for automatic non-official MusicBrainz release-group exclusion.
+
+### Changed
+- Bumped synchronized app metadata to `0.30.2`.
+
 ## [0.30.1] - 2026-07-05
 ### Added
 - Added MusicBrainz release not-in-scope controls in Artists so cache-only bootlegs or other out-of-scope rows can be excluded from missing counts and restored later.

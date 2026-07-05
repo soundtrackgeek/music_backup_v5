@@ -6,17 +6,30 @@ use crate::models::{
 };
 use anyhow::{bail, Context, Result};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
+use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 #[cfg(test)]
 use std::path::Path;
 use std::path::PathBuf;
 #[cfg(not(test))]
+use std::thread;
+#[cfg(not(test))]
+use std::time::Duration;
+#[cfg(not(test))]
 use tauri::AppHandle;
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DEFAULT_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
+#[cfg(not(test))]
+const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
+#[cfg(not(test))]
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.30.2 (local desktop app)";
+#[cfg(not(test))]
+const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
+#[cfg(not(test))]
+const MUSICBRAINZ_RATE_LIMIT_DELAY_MS: u64 = 1100;
 
 #[cfg(not(test))]
 pub fn cache_status_for_app(
@@ -274,13 +287,16 @@ pub fn artist_discography_for_connection(
 
     let decisions = release_decisions(app_conn, &artist_key)?;
     let pure_releases = pure_album_release_groups(&cache_conn, &artist_match.mbid)?;
+    let official_statuses =
+        official_release_statuses(app_conn, &artist_match.mbid, &pure_releases)?;
     let local_album_count = local_albums.len() as i64;
     let local_by_title = local_albums_by_title(local_albums);
     let releases = pure_releases
         .into_iter()
         .map(|release| {
             let decision = decisions.get(&release.release_mbid).cloned();
-            release_row_with_local_match(release, &local_by_title, decision)
+            let has_official_release = official_statuses.get(&release.release_mbid).copied();
+            release_row_with_local_match(release, &local_by_title, decision, has_official_release)
         })
         .collect::<Vec<_>>();
     let owned_count = releases
@@ -682,10 +698,168 @@ fn ensure_artist_link_for_decision(
 fn normalized_release_decision(decision: &str) -> Result<Option<String>> {
     let normalized = decision.trim().to_lowercase();
     match normalized.as_str() {
-        "" | "clear" | "include" => Ok(None),
-        "not-in-scope" | "ignored" => Ok(Some(normalized)),
+        "" | "clear" => Ok(None),
+        "include" | "not-in-scope" | "ignored" => Ok(Some(normalized)),
         _ => bail!("Unsupported MusicBrainz release decision: {decision}"),
     }
+}
+
+fn official_release_statuses(
+    conn: &Connection,
+    artist_mbid: &str,
+    releases: &[MusicBrainzReleaseGroup],
+) -> Result<HashMap<String, bool>> {
+    let release_ids = releases
+        .iter()
+        .map(|release| release.release_mbid.clone())
+        .collect::<Vec<_>>();
+    let mut statuses = cached_official_release_statuses(conn, artist_mbid)?;
+    let missing_status = release_ids
+        .iter()
+        .any(|release_mbid| !statuses.contains_key(release_mbid));
+
+    if missing_status {
+        match fetch_official_release_group_ids(artist_mbid) {
+            Ok(Some(official_release_group_ids)) => {
+                for release_mbid in &release_ids {
+                    statuses.insert(
+                        release_mbid.clone(),
+                        official_release_group_ids.contains(release_mbid),
+                    );
+                }
+                save_official_release_statuses(conn, artist_mbid, &statuses)?;
+            }
+            Ok(None) => {}
+            Err(error) => {
+                eprintln!(
+                    "Could not verify MusicBrainz official releases for {artist_mbid}: {error:#}"
+                );
+            }
+        }
+    }
+
+    Ok(statuses)
+}
+
+fn cached_official_release_statuses(
+    conn: &Connection,
+    artist_mbid: &str,
+) -> Result<HashMap<String, bool>> {
+    if !table_exists(conn, "musicbrainz_release_status_cache")? {
+        return Ok(HashMap::new());
+    }
+
+    let mut stmt = conn
+        .prepare(
+            "
+            SELECT release_mbid, has_official_release
+            FROM musicbrainz_release_status_cache
+            WHERE artist_mbid = ?1
+            ",
+        )
+        .context("Could not prepare MusicBrainz release-status cache lookup")?;
+    let rows = stmt
+        .query_map(params![artist_mbid], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? != 0))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not read MusicBrainz release-status cache")?;
+
+    Ok(rows.into_iter().collect())
+}
+
+fn save_official_release_statuses(
+    conn: &Connection,
+    artist_mbid: &str,
+    statuses: &HashMap<String, bool>,
+) -> Result<()> {
+    if !table_exists(conn, "musicbrainz_release_status_cache")? {
+        return Ok(());
+    }
+
+    for (release_mbid, has_official_release) in statuses {
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_release_status_cache (
+                artist_mbid, release_mbid, has_official_release, checked_at
+            ) VALUES (
+                ?1, ?2, ?3, datetime('now')
+            )
+            ON CONFLICT(artist_mbid, release_mbid) DO UPDATE SET
+                has_official_release = excluded.has_official_release,
+                checked_at = datetime('now')
+            ",
+            params![artist_mbid, release_mbid, *has_official_release as i64],
+        )
+        .context("Could not save MusicBrainz release-status cache row")?;
+    }
+
+    Ok(())
+}
+
+#[cfg(not(test))]
+fn fetch_official_release_group_ids(artist_mbid: &str) -> Result<Option<HashSet<String>>> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(20))
+        .build();
+    let mut official_ids = HashSet::new();
+    let mut offset = 0usize;
+
+    loop {
+        let url = format!(
+            "{MUSICBRAINZ_RELEASES_URL}?artist={artist_mbid}&type=album&status=official&inc=release-groups&fmt=json&limit={MUSICBRAINZ_PAGE_LIMIT}&offset={offset}"
+        );
+        let response = agent
+            .get(&url)
+            .set("User-Agent", MUSICBRAINZ_USER_AGENT)
+            .call()
+            .with_context(|| {
+                format!("Could not fetch MusicBrainz official releases for {artist_mbid}")
+            })?;
+        let payload = response
+            .into_json::<MusicBrainzReleaseResponse>()
+            .context("Could not parse MusicBrainz official releases response")?;
+
+        for release in payload.releases {
+            if release.status.as_deref() == Some("Official") {
+                if let Some(release_group) = release.release_group {
+                    official_ids.insert(release_group.id);
+                }
+            }
+        }
+
+        offset += MUSICBRAINZ_PAGE_LIMIT;
+        if offset >= payload.release_count.unwrap_or(0) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
+    }
+
+    Ok(Some(official_ids))
+}
+
+#[cfg(test)]
+fn fetch_official_release_group_ids(_artist_mbid: &str) -> Result<Option<HashSet<String>>> {
+    Ok(None)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct MusicBrainzReleaseResponse {
+    release_count: Option<usize>,
+    releases: Vec<MusicBrainzRelease>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct MusicBrainzRelease {
+    status: Option<String>,
+    release_group: Option<MusicBrainzReleaseGroupSummary>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MusicBrainzReleaseGroupSummary {
+    id: String,
 }
 
 fn release_decisions(conn: &Connection, artist_key: &str) -> Result<HashMap<String, String>> {
@@ -751,8 +925,18 @@ fn release_row_with_local_match(
     release: MusicBrainzReleaseGroup,
     local_by_title: &HashMap<String, Vec<LocalAlbum>>,
     decision: Option<String>,
+    has_official_release: Option<bool>,
 ) -> MusicBrainzArtistReleaseRow {
-    if matches!(decision.as_deref(), Some("not-in-scope" | "ignored")) {
+    let manual_include = decision.as_deref() == Some("include");
+    let excluded_decision = if matches!(decision.as_deref(), Some("not-in-scope" | "ignored")) {
+        decision.clone()
+    } else if !manual_include && has_official_release == Some(false) {
+        Some("auto-not-official".to_string())
+    } else {
+        None
+    };
+
+    if let Some(excluded_decision) = excluded_decision {
         return MusicBrainzArtistReleaseRow {
             release_mbid: release.release_mbid,
             title: release.title,
@@ -762,9 +946,9 @@ fn release_row_with_local_match(
             local_album_id: None,
             local_album_title: None,
             local_year: None,
-            match_method: decision.clone().unwrap_or_else(|| "excluded".to_string()),
+            match_method: excluded_decision.clone(),
             confidence: 0.0,
-            decision,
+            decision: Some(excluded_decision),
         };
     }
 
@@ -1289,6 +1473,52 @@ mod tests {
     }
 
     #[test]
+    fn release_status_cache_auto_excludes_non_official_groups() {
+        let temp_dir = temp_cache_dir("discography-official-status");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_discography_cache(&cache_path, false);
+        let app_conn = create_artist_app_db();
+        create_decision_tables(&app_conn);
+        app_conn
+            .execute(
+                "
+                INSERT INTO musicbrainz_release_status_cache (
+                    artist_mbid, release_mbid, has_official_release, checked_at
+                ) VALUES
+                    ('mbid-psb', 'release-actually', 1, '2026-07-05T00:00:00Z'),
+                    ('mbid-psb', 'release-please', 0, '2026-07-05T00:00:00Z')
+                ",
+                [],
+            )
+            .expect("seed official status cache");
+
+        let response = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            MusicBrainzArtistDiscographyRequest {
+                artist_key: "pet shop boys".to_string(),
+                artist_name: "Pet Shop Boys".to_string(),
+            },
+        )
+        .expect("compare artist discography with official status cache");
+
+        assert_eq!(response.pure_album_count, 1);
+        assert_eq!(response.owned_count, 1);
+        assert_eq!(response.missing_count, 0);
+        assert_eq!(response.excluded_count, 1);
+        assert_eq!(response.completion, Some(1.0));
+        let excluded = response
+            .releases
+            .iter()
+            .find(|release| release.release_mbid == "release-please")
+            .expect("excluded release row");
+        assert_eq!(excluded.status, "excluded");
+        assert_eq!(excluded.decision.as_deref(), Some("auto-not-official"));
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
     fn warns_for_suspect_artist_cache_mapping() {
         let temp_dir = temp_cache_dir("discography-warning");
         let cache_path = temp_dir.join("musicbrainz_cache.db");
@@ -1483,6 +1713,13 @@ mod tests {
                 PRIMARY KEY (local_artist_key, release_mbid),
                 FOREIGN KEY(local_artist_key) REFERENCES musicbrainz_artist_links(local_artist_key)
                     ON DELETE CASCADE
+            );
+            CREATE TABLE musicbrainz_release_status_cache (
+                artist_mbid TEXT NOT NULL,
+                release_mbid TEXT NOT NULL,
+                has_official_release INTEGER NOT NULL,
+                checked_at TEXT NOT NULL,
+                PRIMARY KEY (artist_mbid, release_mbid)
             );
             ",
         )
