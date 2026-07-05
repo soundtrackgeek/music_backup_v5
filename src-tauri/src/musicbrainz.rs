@@ -1,14 +1,18 @@
 use crate::db;
-use crate::models::{MusicBrainzCacheStatus, MusicBrainzCacheWarningExample};
+use crate::models::{
+    MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
+    MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus, MusicBrainzCacheWarningExample,
+};
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection, OpenFlags};
-use std::collections::HashSet;
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 #[cfg(test)]
 use std::path::Path;
 use std::path::PathBuf;
 #[cfg(not(test))]
 use tauri::AppHandle;
+use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DEFAULT_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
@@ -23,6 +27,16 @@ pub fn cache_status_for_app(
         None => db::settings_for_app(app)?.musicbrainz_cache_path,
     };
     cache_status_for_path(Some(path))
+}
+
+#[cfg(not(test))]
+pub fn artist_discography_for_app(
+    app: &AppHandle,
+    request: MusicBrainzArtistDiscographyRequest,
+) -> Result<MusicBrainzArtistDiscographyResponse> {
+    let (app_conn, _) = db::open(app)?;
+    let settings = db::settings_for_app(app)?;
+    artist_discography_for_connection(&app_conn, Some(settings.musicbrainz_cache_path), request)
 }
 
 pub fn cache_status_for_path(cache_path: Option<String>) -> Result<MusicBrainzCacheStatus> {
@@ -201,6 +215,110 @@ fn read_cache_status(
     })
 }
 
+pub fn artist_discography_for_connection(
+    app_conn: &Connection,
+    cache_path: Option<String>,
+    request: MusicBrainzArtistDiscographyRequest,
+) -> Result<MusicBrainzArtistDiscographyResponse> {
+    let artist_name = normalize_display_name(&request.artist_name, &request.artist_key);
+    let artist_key = normalize_local_artist_key(&request.artist_key, &artist_name);
+    let cache_status = cache_status_for_path(cache_path)?;
+    let local_albums = local_artist_albums(app_conn, &artist_key)?;
+
+    if !cache_status.valid {
+        return Ok(empty_discography_response(
+            artist_key,
+            artist_name,
+            &cache_status,
+            &cache_status.state,
+            &cache_status.message,
+            local_albums.len() as i64,
+        ));
+    }
+
+    let cache_conn = Connection::open_with_flags(
+        &cache_status.resolved_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .with_context(|| {
+        format!(
+            "Could not open MusicBrainz cache read-only at {}",
+            cache_status.resolved_path
+        )
+    })?;
+    validate_cache_schema(&cache_conn)?;
+
+    let artist_match = match find_artist_match(app_conn, &cache_conn, &artist_key, &artist_name)? {
+        Some(artist_match) => artist_match,
+        None => {
+            return Ok(empty_discography_response(
+                artist_key,
+                artist_name,
+                &cache_status,
+                "notFound",
+                "No MusicBrainz artist match was found in the local cache.",
+                local_albums.len() as i64,
+            ));
+        }
+    };
+
+    let pure_releases = pure_album_release_groups(&cache_conn, &artist_match.mbid)?;
+    let local_album_count = local_albums.len() as i64;
+    let local_by_title = local_albums_by_title(local_albums);
+    let releases = pure_releases
+        .into_iter()
+        .map(|release| release_row_with_local_match(release, &local_by_title))
+        .collect::<Vec<_>>();
+    let owned_count = releases
+        .iter()
+        .filter(|release| release.status == "owned")
+        .count() as i64;
+    let pure_album_count = releases.len() as i64;
+    let missing_count = pure_album_count.saturating_sub(owned_count);
+    let completion = if pure_album_count > 0 {
+        Some(owned_count as f64 / pure_album_count as f64)
+    } else {
+        None
+    };
+    let state = if artist_match.suspect_mapping {
+        "warning"
+    } else {
+        "available"
+    };
+    let message = if artist_match.suspect_mapping {
+        format!(
+            "Matched through the local cache, but this MBID has {} cached names and {} release groups. Review before trusting broad missing-album results.",
+            artist_match.cached_name_count, artist_match.total_release_group_count
+        )
+    } else {
+        format!(
+            "Matched {} pure official MusicBrainz albums against {} local albums.",
+            pure_album_count, local_album_count
+        )
+    };
+
+    Ok(MusicBrainzArtistDiscographyResponse {
+        artist_key,
+        artist_name,
+        state: state.to_string(),
+        message,
+        cache_path: cache_status.cache_path,
+        resolved_path: cache_status.resolved_path,
+        musicbrainz_mbid: Some(artist_match.mbid),
+        matched_cache_name: artist_match.matched_name,
+        match_method: artist_match.match_method,
+        suspect_mapping: artist_match.suspect_mapping,
+        cached_name_count: artist_match.cached_name_count,
+        total_release_group_count: artist_match.total_release_group_count,
+        pure_album_count,
+        owned_count,
+        missing_count,
+        local_album_count,
+        completion,
+        releases,
+    })
+}
+
 fn validate_cache_schema(conn: &Connection) -> Result<()> {
     require_columns(conn, "artist_cache", &["name", "mbid", "cached_at"])?;
     require_columns(
@@ -219,6 +337,345 @@ fn validate_cache_schema(conn: &Connection) -> Result<()> {
         ],
     )?;
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct ArtistMatch {
+    mbid: String,
+    matched_name: Option<String>,
+    match_method: String,
+    cached_name_count: i64,
+    total_release_group_count: i64,
+    suspect_mapping: bool,
+}
+
+#[derive(Debug, Clone)]
+struct LocalAlbum {
+    album_id: String,
+    title: String,
+    year: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+struct MusicBrainzReleaseGroup {
+    release_mbid: String,
+    title: String,
+    year: Option<i32>,
+    track_count: Option<i64>,
+}
+
+fn empty_discography_response(
+    artist_key: String,
+    artist_name: String,
+    cache_status: &MusicBrainzCacheStatus,
+    state: &str,
+    message: &str,
+    local_album_count: i64,
+) -> MusicBrainzArtistDiscographyResponse {
+    MusicBrainzArtistDiscographyResponse {
+        artist_key,
+        artist_name,
+        state: state.to_string(),
+        message: message.to_string(),
+        cache_path: cache_status.cache_path.clone(),
+        resolved_path: cache_status.resolved_path.clone(),
+        musicbrainz_mbid: None,
+        matched_cache_name: None,
+        match_method: "none".to_string(),
+        suspect_mapping: false,
+        cached_name_count: 0,
+        total_release_group_count: 0,
+        pure_album_count: 0,
+        owned_count: 0,
+        missing_count: 0,
+        local_album_count,
+        completion: None,
+        releases: Vec::new(),
+    }
+}
+
+fn find_artist_match(
+    app_conn: &Connection,
+    cache_conn: &Connection,
+    artist_key: &str,
+    artist_name: &str,
+) -> Result<Option<ArtistMatch>> {
+    if let Some(verified_match) = verified_artist_link(app_conn, cache_conn, artist_key)? {
+        return Ok(Some(verified_match));
+    }
+
+    if let Some((matched_name, mbid)) = cache_conn
+        .query_row(
+            "
+            SELECT name, mbid
+            FROM artist_cache
+            WHERE LOWER(name) = LOWER(?1)
+              AND mbid IS NOT NULL
+              AND TRIM(mbid) <> ''
+            ORDER BY name
+            LIMIT 1
+            ",
+            params![artist_name],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()
+        .context("Could not lookup exact MusicBrainz artist cache match")?
+    {
+        return artist_match_from_mbid(cache_conn, mbid, Some(matched_name), "exact-name", true);
+    }
+
+    let normalized_artist_name = musicbrainz_text_key(artist_name);
+    if normalized_artist_name.is_empty() {
+        return Ok(None);
+    }
+
+    let mut stmt = cache_conn
+        .prepare(
+            "
+            SELECT name, mbid
+            FROM artist_cache
+            WHERE mbid IS NOT NULL AND TRIM(mbid) <> ''
+            ORDER BY name
+            ",
+        )
+        .context("Could not prepare normalized MusicBrainz artist lookup")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not read MusicBrainz artist cache names")?;
+
+    for (name, mbid) in rows {
+        if musicbrainz_text_key(&name) == normalized_artist_name {
+            return artist_match_from_mbid(cache_conn, mbid, Some(name), "normalized-name", true);
+        }
+    }
+
+    Ok(None)
+}
+
+fn verified_artist_link(
+    app_conn: &Connection,
+    cache_conn: &Connection,
+    artist_key: &str,
+) -> Result<Option<ArtistMatch>> {
+    if !table_exists(app_conn, "musicbrainz_artist_links")? {
+        return Ok(None);
+    }
+
+    let row = app_conn
+        .query_row(
+            "
+            SELECT mbid, canonical_name
+            FROM musicbrainz_artist_links
+            WHERE local_artist_key = ?1
+              AND ignored = 0
+              AND verification_state = 'verified'
+              AND mbid IS NOT NULL
+              AND TRIM(mbid) <> ''
+            LIMIT 1
+            ",
+            params![artist_key],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+        )
+        .optional()
+        .context("Could not read verified MusicBrainz artist link")?;
+
+    match row {
+        Some((mbid, canonical_name)) => {
+            artist_match_from_mbid(cache_conn, mbid, canonical_name, "verified-link", false)
+        }
+        None => Ok(None),
+    }
+}
+
+fn artist_match_from_mbid(
+    cache_conn: &Connection,
+    mbid: String,
+    matched_name: Option<String>,
+    match_method: &str,
+    should_warn_for_cache_quality: bool,
+) -> Result<Option<ArtistMatch>> {
+    let cached_name_count = cached_name_count(cache_conn, &mbid)?;
+    let total_release_group_count = release_group_count_for_mbid(cache_conn, &mbid)?;
+    let suspect_mapping = should_warn_for_cache_quality
+        && (cached_name_count > 1
+            || total_release_group_count >= SUSPICIOUS_RELEASE_GROUP_THRESHOLD);
+
+    Ok(Some(ArtistMatch {
+        mbid,
+        matched_name,
+        match_method: match_method.to_string(),
+        cached_name_count,
+        total_release_group_count,
+        suspect_mapping,
+    }))
+}
+
+fn cached_name_count(conn: &Connection, mbid: &str) -> Result<i64> {
+    conn.query_row(
+        "
+        SELECT COUNT(DISTINCT name)
+        FROM artist_cache
+        WHERE mbid = ?1
+        ",
+        params![mbid],
+        |row| row.get(0),
+    )
+    .context("Could not count MusicBrainz artist cache names")
+}
+
+fn release_group_count_for_mbid(conn: &Connection, mbid: &str) -> Result<i64> {
+    conn.query_row(
+        "
+        SELECT COUNT(*)
+        FROM release_groups
+        WHERE artist_mbid = ?1
+        ",
+        params![mbid],
+        |row| row.get(0),
+    )
+    .context("Could not count MusicBrainz artist release groups")
+}
+
+fn pure_album_release_groups(
+    conn: &Connection,
+    artist_mbid: &str,
+) -> Result<Vec<MusicBrainzReleaseGroup>> {
+    let mut stmt = conn
+        .prepare(
+            "
+            SELECT release_mbid, title, year, track_count
+            FROM release_groups
+            WHERE artist_mbid = ?1
+              AND status = 'Official'
+              AND type = 'Album'
+              AND COALESCE(secondary_types, '') = ''
+            ORDER BY COALESCE(year, 9999), LOWER(title), release_mbid
+            ",
+        )
+        .context("Could not prepare MusicBrainz pure-album lookup")?;
+    let releases = stmt
+        .query_map(params![artist_mbid], |row| {
+            Ok(MusicBrainzReleaseGroup {
+                release_mbid: row.get(0)?,
+                title: row.get(1)?,
+                year: row.get(2)?,
+                track_count: row.get(3)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load MusicBrainz pure official albums")?;
+    Ok(releases)
+}
+
+fn local_artist_albums(conn: &Connection, artist_key: &str) -> Result<Vec<LocalAlbum>> {
+    let mut stmt = conn
+        .prepare(
+            "
+            SELECT id, COALESCE(album, 'Untitled'), year
+            FROM albums
+            WHERE COALESCE(NULLIF(TRIM(LOWER(album_artist_display)), ''), 'unknown') = ?1
+            ORDER BY COALESCE(year, 9999), LOWER(COALESCE(album, '')), id
+            ",
+        )
+        .context("Could not prepare local artist album lookup")?;
+    let albums = stmt
+        .query_map(params![artist_key], |row| {
+            Ok(LocalAlbum {
+                album_id: row.get(0)?,
+                title: row.get(1)?,
+                year: row.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load local artist albums")?;
+    Ok(albums)
+}
+
+fn local_albums_by_title(local_albums: Vec<LocalAlbum>) -> HashMap<String, Vec<LocalAlbum>> {
+    let mut by_title: HashMap<String, Vec<LocalAlbum>> = HashMap::new();
+    for album in local_albums {
+        let title_key = musicbrainz_text_key(&album.title);
+        if !title_key.is_empty() {
+            by_title.entry(title_key).or_default().push(album);
+        }
+    }
+    by_title
+}
+
+fn release_row_with_local_match(
+    release: MusicBrainzReleaseGroup,
+    local_by_title: &HashMap<String, Vec<LocalAlbum>>,
+) -> MusicBrainzArtistReleaseRow {
+    let title_key = musicbrainz_text_key(&release.title);
+    let local_album = local_by_title
+        .get(&title_key)
+        .and_then(|albums| best_local_album_match(albums, release.year));
+
+    match local_album {
+        Some(album) => {
+            let same_year = release.year.is_some() && release.year == album.year;
+            MusicBrainzArtistReleaseRow {
+                release_mbid: release.release_mbid,
+                title: release.title,
+                year: release.year,
+                track_count: release.track_count,
+                status: "owned".to_string(),
+                local_album_id: Some(album.album_id.clone()),
+                local_album_title: Some(album.title.clone()),
+                local_year: album.year,
+                match_method: if same_year {
+                    "normalized-title-year".to_string()
+                } else {
+                    "normalized-title".to_string()
+                },
+                confidence: if same_year { 1.0 } else { 0.92 },
+            }
+        }
+        None => MusicBrainzArtistReleaseRow {
+            release_mbid: release.release_mbid,
+            title: release.title,
+            year: release.year,
+            track_count: release.track_count,
+            status: "missing".to_string(),
+            local_album_id: None,
+            local_album_title: None,
+            local_year: None,
+            match_method: "none".to_string(),
+            confidence: 0.0,
+        },
+    }
+}
+
+fn best_local_album_match(albums: &[LocalAlbum], release_year: Option<i32>) -> Option<&LocalAlbum> {
+    if albums.is_empty() {
+        return None;
+    }
+
+    if let Some(year) = release_year {
+        if let Some(exact_year) = albums.iter().find(|album| album.year == Some(year)) {
+            return Some(exact_year);
+        }
+    }
+
+    albums.first()
+}
+
+fn table_exists(conn: &Connection, table: &str) -> Result<bool> {
+    conn.query_row(
+        "
+        SELECT EXISTS(
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table' AND name = ?1
+        )
+        ",
+        params![table],
+        |row| row.get(0),
+    )
+    .with_context(|| format!("Could not inspect SQLite table {table}"))
 }
 
 fn require_columns(conn: &Connection, table: &str, required_columns: &[&str]) -> Result<()> {
@@ -408,6 +865,70 @@ fn resolve_cache_path(cache_path: &str) -> Result<PathBuf> {
     }
 }
 
+fn normalize_display_name(artist_name: &str, artist_key: &str) -> String {
+    let trimmed = artist_name.trim();
+    if !trimmed.is_empty() {
+        trimmed.to_string()
+    } else {
+        let fallback = artist_key.trim();
+        if fallback.is_empty() {
+            "Unknown Artist".to_string()
+        } else {
+            fallback.to_string()
+        }
+    }
+}
+
+fn normalize_local_artist_key(artist_key: &str, artist_name: &str) -> String {
+    let trimmed_key = artist_key
+        .trim()
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if !trimmed_key.is_empty() {
+        trimmed_key
+    } else {
+        let name_key = artist_name
+            .trim()
+            .to_lowercase()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        if name_key.is_empty() {
+            "unknown".to_string()
+        } else {
+            name_key
+        }
+    }
+}
+
+fn musicbrainz_text_key(value: &str) -> String {
+    let lowercased = value.replace('&', " and ").to_lowercase();
+    let folded = lowercased
+        .nfd()
+        .filter(|character| !is_combining_mark(*character))
+        .fold(String::new(), |mut normalized, character| {
+            match character {
+                'æ' => normalized.push_str("ae"),
+                'œ' => normalized.push_str("oe"),
+                'ø' => normalized.push('o'),
+                'ð' => normalized.push('d'),
+                'þ' => normalized.push_str("th"),
+                'ł' => normalized.push('l'),
+                'ß' => normalized.push_str("ss"),
+                _ => normalized.push(character),
+            }
+            normalized
+        });
+
+    folded
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn empty_status(
     cache_path: String,
     resolved_path: String,
@@ -520,6 +1041,115 @@ mod tests {
         fs::remove_dir_all(temp_dir).expect("remove temp dir");
     }
 
+    #[test]
+    fn compares_artist_discography_against_local_albums() {
+        let temp_dir = temp_cache_dir("discography");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_discography_cache(&cache_path, false);
+        let app_conn = create_artist_app_db();
+
+        let response = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            MusicBrainzArtistDiscographyRequest {
+                artist_key: "pet shop boys".to_string(),
+                artist_name: "Pet Shop Boys".to_string(),
+            },
+        )
+        .expect("compare artist discography");
+
+        assert_eq!(response.state, "available");
+        assert_eq!(response.musicbrainz_mbid.as_deref(), Some("mbid-psb"));
+        assert_eq!(response.pure_album_count, 2);
+        assert_eq!(response.owned_count, 1);
+        assert_eq!(response.missing_count, 1);
+        assert_eq!(response.local_album_count, 2);
+        assert_eq!(response.completion, Some(0.5));
+        assert!(response
+            .releases
+            .iter()
+            .any(|release| release.title == "Actually"
+                && release.status == "owned"
+                && release.local_album_title.as_deref() == Some("Actually")));
+        assert!(response
+            .releases
+            .iter()
+            .any(|release| release.title == "Please" && release.status == "missing"));
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn warns_for_suspect_artist_cache_mapping() {
+        let temp_dir = temp_cache_dir("discography-warning");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_discography_cache(&cache_path, true);
+        let app_conn = create_artist_app_db();
+
+        let response = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            MusicBrainzArtistDiscographyRequest {
+                artist_key: "pet shop boys".to_string(),
+                artist_name: "Pet Shop Boys".to_string(),
+            },
+        )
+        .expect("compare suspect artist discography");
+
+        assert_eq!(response.state, "warning");
+        assert!(response.suspect_mapping);
+        assert_eq!(response.cached_name_count, 2);
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn verified_artist_link_overrides_suspect_cache_mapping() {
+        let temp_dir = temp_cache_dir("discography-verified");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_discography_cache(&cache_path, true);
+        let app_conn = create_artist_app_db();
+        app_conn
+            .execute_batch(
+                "
+                CREATE TABLE musicbrainz_artist_links (
+                    local_artist_key TEXT PRIMARY KEY,
+                    mbid TEXT NOT NULL,
+                    canonical_name TEXT,
+                    verification_state TEXT NOT NULL,
+                    ignored INTEGER NOT NULL DEFAULT 0
+                );
+                INSERT INTO musicbrainz_artist_links (
+                    local_artist_key, mbid, canonical_name, verification_state, ignored
+                ) VALUES (
+                    'pet shop boys', 'mbid-psb', 'Pet Shop Boys', 'verified', 0
+                );
+                ",
+            )
+            .expect("seed verified artist link");
+
+        let response = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            MusicBrainzArtistDiscographyRequest {
+                artist_key: "pet shop boys".to_string(),
+                artist_name: "Pet Shop Boys".to_string(),
+            },
+        )
+        .expect("compare verified artist discography");
+
+        assert_eq!(response.state, "available");
+        assert!(!response.suspect_mapping);
+        assert_eq!(response.cached_name_count, 2);
+        assert_eq!(response.match_method, "verified-link");
+        assert_eq!(
+            response.matched_cache_name.as_deref(),
+            Some("Pet Shop Boys")
+        );
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
     fn create_valid_cache(path: &Path) {
         let conn = Connection::open(path).expect("open test cache");
         conn.execute_batch(
@@ -554,6 +1184,69 @@ mod tests {
             ",
         )
         .expect("seed valid cache");
+    }
+
+    fn create_discography_cache(path: &Path, include_alias: bool) {
+        let conn = Connection::open(path).expect("open test cache");
+        conn.execute_batch(
+            "
+            CREATE TABLE artist_cache (
+                name TEXT PRIMARY KEY,
+                mbid TEXT,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE release_groups (
+                artist_mbid TEXT,
+                release_mbid TEXT,
+                title TEXT,
+                year INTEGER,
+                type TEXT,
+                secondary_types TEXT,
+                track_count INTEGER,
+                status TEXT,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (artist_mbid, release_mbid)
+            );
+            INSERT INTO artist_cache (name, mbid, cached_at) VALUES
+                ('pet shop boys', 'mbid-psb', '2026-02-01 12:00:00');
+            INSERT INTO release_groups (
+                artist_mbid, release_mbid, title, year, type, secondary_types,
+                track_count, status, cached_at
+            ) VALUES
+                ('mbid-psb', 'release-please', 'Please', 1986, 'Album', '', 11, 'Official', '2026-02-01 12:03:00'),
+                ('mbid-psb', 'release-actually', 'Actually', 1987, 'Album', '', 10, 'Official', '2026-02-01 12:04:00'),
+                ('mbid-psb', 'release-disco', 'Disco', 1986, 'Album', 'Remix', 6, 'Official', '2026-02-01 12:05:00');
+            ",
+        )
+        .expect("seed discography cache");
+
+        if include_alias {
+            conn.execute(
+                "INSERT INTO artist_cache (name, mbid, cached_at) VALUES ('psb', 'mbid-psb', '2026-02-01 12:06:00')",
+                [],
+            )
+            .expect("insert alias");
+        }
+    }
+
+    fn create_artist_app_db() -> Connection {
+        let conn = Connection::open_in_memory().expect("open app db");
+        conn.execute_batch(
+            "
+            CREATE TABLE albums (
+                id TEXT PRIMARY KEY,
+                album TEXT,
+                album_artist_display TEXT,
+                year INTEGER
+            );
+            INSERT INTO albums (id, album, album_artist_display, year) VALUES
+                ('local-actually', 'Actually', 'Pet Shop Boys', 1987),
+                ('local-local-only', 'A Local Compilation', 'Pet Shop Boys', 1992),
+                ('local-other', 'The Queen Is Dead', 'The Smiths', 1986);
+            ",
+        )
+        .expect("seed app albums");
+        conn
     }
 
     fn temp_cache_dir(label: &str) -> PathBuf {

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.30.0] - 2026-07-05
+### Added
+- Added a MusicBrainz Discography panel in Artists for the selected artist, showing cache state, suspect mapping warnings, pure official album counts, owned/missing totals, completion, and release rows.
+- Added a read-only Tauri MusicBrainz artist discography command that matches verified app-owned artist links first, then exact and normalized cache names, and compares pure official album release groups against local artist albums.
+- Added web-preview MusicBrainz artist discography mock data for frontend layout work without a local cache.
+- Added Rust coverage for deterministic owned/missing MusicBrainz comparison and suspicious artist mapping warnings.
+
+### Changed
+- Bumped synchronized app metadata to `0.30.0`.
+
 ## [0.29.0] - 2026-07-05
 ### Added
 - Added a MusicBrainz Cache panel in Settings for saving and checking the local `MusicBrainz/musicbrainz_cache.db` path.

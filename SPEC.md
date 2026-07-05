@@ -2,8 +2,8 @@
 
 Last updated: 2026-07-05
 Status: Living product and implementation contract
-Current implementation: Phase 16 complete
-Current package version: 0.29.0
+Current implementation: Phase 17 complete
+Current package version: 0.30.0
 SQLite schema version: 11
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -55,7 +55,7 @@ Core principles:
 | Discovery | Implemented | Exploration dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions. |
 | Statistics | Implemented | Library health, rating progress, metadata coverage, import history, time shape, duration, concentration, and outlier dashboards. |
 | Albums | Implemented | Album index, album filters, detail drill-down, track lists, and album-level exports. |
-| Artists | Implemented | Album-artist index, artist summary stats, album lists, cover board, and exports. |
+| Artists | Implemented | Album-artist index, artist summary stats, album lists, cover board, MusicBrainz pure-official-album discography status, and exports. |
 | Genres | Implemented | Canonical-genre index, genre summary stats, album lists, and exports. |
 | Tools | Implemented | Query-backed validation issue lists, severity, progress, pagination, sorting, counts, exports, and guarded whitespace cleanup. |
 | Imports | Implemented | MusicBee TSV import, cover art import, Billboard album CSV import, Billboard singles CSV import, progress, and import history. |
@@ -200,7 +200,7 @@ Singles chart files:
 - Matching uses library track `Display Artist` and `Title`.
 - Imported rows are persisted, linked to tracks when possible, and collapsed to the best stored single rank.
 
-### MusicBrainz Local Cache Data (Planned)
+### MusicBrainz Local Cache Data
 
 The v3 MusicBrainz integration used a local read-only `musicbrainz_cache.db` plus local matching utilities instead of live API calls. The v5 implementation should start from that shape.
 
@@ -225,7 +225,7 @@ Minimum expected cache tables:
 
 Discography query rules:
 
-- Match local album artists against `artist_cache.name`, starting with exact lowercase lookup and then normalized lookup.
+- Match local album artists with app-owned verified links first, then `artist_cache.name`, starting with exact lowercase lookup and then normalized lookup.
 - Prefer exact normalized artist matches before fuzzy matching.
 - Default fuzzy threshold should start at 85 on a 0-100 confidence scale, matching v3.
 - Load releases by matched `artist_mbid`.
@@ -236,7 +236,7 @@ Discography query rules:
 
 Collection comparison rules:
 
-- Compare MusicBrainz release titles against the local artist's album titles with fuzzy album matching.
+- Compare MusicBrainz release titles against the local artist's album titles with deterministic normalized-title matching first; fuzzy album matching should be added only as reviewable evidence.
 - Start with local albums where the selected artist is the album artist, then decide whether featured/collaboration albums should participate.
 - Record both owned and missing matches with confidence, local matched album title, MusicBrainz release MBID, year, combined type, track count, and status.
 - Flag suspect artist mappings before comparison when a single MBID is associated with many cached query names, when the artist has an unusually large release count, or when the cached lookup only matched through a weak normalized/fuzzy path.
@@ -290,7 +290,7 @@ Core files:
 - `src-tauri/src/main.rs`: app entrypoint.
 - `src-tauri/src/models.rs`: Rust payload models shared by commands, database logic, and import logic.
 - `src-tauri/src/db.rs`: SQLite migrations, search, charts, statistics, discovery, Billboard imports, Music Tools, settings, saved objects, and exports.
-- `src-tauri/src/musicbrainz.rs`: Read-only MusicBrainz cache validation and status reporting against the optional local `musicbrainz_cache.db`.
+- `src-tauri/src/musicbrainz.rs`: Read-only MusicBrainz cache validation, status reporting, and selected-artist discography comparison against the optional local `musicbrainz_cache.db`.
 - `src-tauri/src/importer.rs`: MusicBee TSV parsing, normalization, import run handling, album aggregation, backup retention, and rating event capture.
 - `src-tauri/src/covers.rs`: cover image import, relinking, embedded-art extraction, and local image serving.
 
@@ -301,6 +301,7 @@ Expected MusicBrainz boundary:
 - Persist only app-owned MusicBrainz settings, artist link decisions, release link/ignore decisions, cache quality snapshots, and refresh metadata in the app SQLite database.
 - Keep MusicBrainz source rows separate from MusicBee source rows and calculated album aggregates.
 - The first implemented slice persists `musicbrainz_cache_path`, opens the cache read-only, validates expected tables, reports cache quality/status, and creates app-owned artist-link/release-decision tables for later matching workflows.
+- The second implemented slice compares the selected Artist workspace artist against pure official MusicBrainz album release groups, using verified artist links first, cache matches second, and deterministic local title matching for owned/missing status.
 - Keep normal Artist workspace rendering cache-only and fast; any live MusicBrainz refresh must be an explicit user action with progress and rate-limit messaging.
 - If a refresh/update path is added, isolate it from read-only lookup code, back up the cache first, and require MusicBrainz user-agent/contact configuration.
 - Reuse the same export, pagination, sorting, and issue-list conventions used by Artists and Music Tools where possible.
@@ -477,11 +478,21 @@ Expected next backend modularization:
 - Web-only preview mode includes a mock MusicBrainz cache warning state.
 - The release/security guard verifies that `MusicBrainz/` remains ignored by git.
 
+### Phase 17: MusicBrainz Artist Discography
+
+- The Artists workspace includes a MusicBrainz Discography panel for the selected artist when a cache is configured.
+- The desktop backend loads pure official MusicBrainz album release groups only and compares them against the selected local artist's albums.
+- Artist matching checks verified app-owned links first, exact cache-name matches second, and normalized cache-name matches third.
+- Local owned/missing matching is deterministic by normalized album title, with matching year increasing confidence when available.
+- The panel shows cache/artist state, suspect mapping warnings, MBID/cache-name metadata, local album count, pure album count, owned/missing totals, completion percentage, and owned/missing release rows.
+- Web-only preview mode includes representative owned/missing MusicBrainz artist discographies.
+- Rust tests cover selected-artist owned/missing comparison and suspicious cache mapping warnings.
+
 ## Roadmap
 
 ### Now
 
-#### Phase 17: Backend Modularization
+#### Phase 18: Backend Modularization
 
 Problem:
 
@@ -510,7 +521,7 @@ Done criteria:
 - New module names make future feature work easier to locate.
 - Shared SQL helpers stay small and explicit.
 
-#### Phase 18: Frontend Workspace Modularization
+#### Phase 19: Frontend Workspace Modularization
 
 Problem:
 
@@ -539,7 +550,7 @@ Done criteria:
 
 ### Next
 
-#### Phase 19: Import Safety and Incremental Sync
+#### Phase 20: Import Safety and Incremental Sync
 
 Expected outcome:
 
@@ -553,7 +564,7 @@ Candidate work:
 - Better failure recovery when source files disappear mid-import.
 - Import benchmarks for the 1.13M-row library.
 
-#### Phase 20: Performance and Observability
+#### Phase 21: Performance and Observability
 
 Expected outcome:
 
@@ -567,7 +578,7 @@ Candidate work:
 - Audit indexes after Billboard and Discovery growth.
 - Add developer log export.
 
-#### Phase 21: Expanded Music Tools Fix Actions
+#### Phase 22: Expanded Music Tools Fix Actions
 
 Expected outcome:
 
@@ -582,7 +593,7 @@ Candidate work:
 - Undo/restore path.
 - Safe fixes for duplicate position reports and metadata normalization suggestions.
 
-#### Phase 22: Local MusicBrainz Discography Enrichment
+#### Phase 23: Local MusicBrainz Discography Enrichment
 
 Expected outcome:
 
@@ -602,13 +613,20 @@ Completed in 0.29.0:
 - Add a cache quality panel that explains suspect mappings and lets the user inspect examples before enabling broad reports.
 - Add app-owned MusicBrainz artist link and release-decision tables for verified, ignored, and suspect mappings in later workflows.
 
+Completed in 0.30.0:
+
+- Add selected-artist MusicBrainz discography status in the Artists workspace.
+- Add artist discography lookup by album artist with manual verified links first, exact lowercase cache lookup second, and normalized lookup third.
+- Add artist detail totals for MusicBrainz pure album count, local album count, owned count, missing count, completion percentage, and match confidence.
+- Add a missing/owned releases table with default pure-official-album filtering, year/title sorting, confidence/source columns, and quality warnings.
+- Add Rust coverage for deterministic owned/missing comparison and suspicious duplicate-MBID/high-release-count detection.
+
 Remaining candidate work:
 
 - Add matcher availability and cache staleness checks once the matching utilities are wired into the app.
-- Add artist discography lookup by album artist with manual verified links first, exact lowercase cache lookup second, normalized lookup third, and fuzzy matching only as a reviewable candidate.
-- Add artist detail panels for total MusicBrainz releases, owned count, missing count, completion percentage, and match confidence.
+- Add fuzzy artist matching only as a reviewable candidate.
 - Add release-type breakdown progress for combined MusicBrainz types.
-- Add a missing releases table with default pure-official-album filtering, optional secondary-type filters, year/title sorting, confidence/source columns, quality warnings, and CSV/XLSX export.
+- Add optional secondary-type filters and CSV/XLSX export for MusicBrainz release rows.
 - Add a complete discography timeline that shows owned vs missing releases by year and release type.
 - Add optional manual link, unlink, ignore, and "not in scope" decisions after the read-only lookup is stable.
 - Add an explicit "refresh this artist" action after cache-only reads are stable; the action should back up the cache, use MusicBrainz rate limiting, require user-agent/contact configuration, and update only the selected artist.
@@ -641,7 +659,7 @@ Done criteria:
 
 ### Later
 
-#### Phase 23: Optional Broader External Enrichment
+#### Phase 24: Optional Broader External Enrichment
 
 Expected outcome:
 
@@ -661,7 +679,7 @@ Constraints:
 - Review all enrichment before applying.
 - No library data should leave the machine without explicit user action.
 
-#### Phase 24: Optional AI Assistance
+#### Phase 25: Optional AI Assistance
 
 Expected outcome:
 
@@ -679,7 +697,7 @@ Constraints:
 - No library data should leave the machine without explicit user action.
 - Generated actions should remain reviewable before they affect saved state.
 
-#### Phase 25: Packaging and Release Operations
+#### Phase 26: Packaging and Release Operations
 
 Expected outcome:
 
@@ -699,7 +717,6 @@ Candidate work:
 - Should Billboard matching expose manual link/unlink review for misses and ambiguous matches?
 - Should Discovery missions become saveable views or remain generated shortcuts?
 - Should MusicBrainz Settings expose only the default local cache path at first, or allow selecting an arbitrary cache file immediately?
-- Should the first MusicBrainz comparison use album titles only, or should year and track count participate in match confidence?
 - Should featured/collaboration albums count as owned MusicBrainz releases for an artist, or remain separate from primary album-artist completion?
 
 ## Resolved Decisions
@@ -730,4 +747,5 @@ Candidate work:
 - Treat MusicBrainz matches as reviewable discovery evidence, not automatic source metadata replacements.
 - Add app-owned MusicBrainz artist/release link decisions instead of trusting the external cache directly.
 - Exclude suspect MusicBrainz cache mappings from broad reports until reviewed or manually verified.
+- Use normalized album title as the first MusicBrainz owned/missing comparison key; use matching year to raise confidence, not to decide ownership alone.
 - Keep external enrichment and AI optional.

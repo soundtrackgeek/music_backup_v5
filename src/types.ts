@@ -177,6 +177,40 @@ export type MusicBrainzCacheStatus = {
   warningExamples: MusicBrainzCacheWarningExample[];
 };
 
+export type MusicBrainzArtistReleaseRow = {
+  releaseMbid: string;
+  title: string;
+  year: number | null;
+  trackCount: number | null;
+  status: "owned" | "missing";
+  localAlbumId: string | null;
+  localAlbumTitle: string | null;
+  localYear: number | null;
+  matchMethod: string;
+  confidence: number;
+};
+
+export type MusicBrainzArtistDiscographyResponse = {
+  artistKey: string;
+  artistName: string;
+  state: "available" | "warning" | "unavailable" | "invalid" | "notFound";
+  message: string;
+  cachePath: string;
+  resolvedPath: string;
+  musicbrainzMbid: string | null;
+  matchedCacheName: string | null;
+  matchMethod: string;
+  suspectMapping: boolean;
+  cachedNameCount: number;
+  totalReleaseGroupCount: number;
+  pureAlbumCount: number;
+  ownedCount: number;
+  missingCount: number;
+  localAlbumCount: number;
+  completion: number | null;
+  releases: MusicBrainzArtistReleaseRow[];
+};
+
 export type BrowseView = "albums" | "tracks";
 
 export type TextFilterOperator = "contains" | "equals" | "startsWith";

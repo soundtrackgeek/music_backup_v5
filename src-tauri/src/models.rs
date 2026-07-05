@@ -215,6 +215,53 @@ pub struct MusicBrainzCacheStatus {
     pub warning_examples: Vec<MusicBrainzCacheWarningExample>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistDiscographyRequest {
+    #[serde(default)]
+    pub artist_key: String,
+    #[serde(default)]
+    pub artist_name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistReleaseRow {
+    pub release_mbid: String,
+    pub title: String,
+    pub year: Option<i32>,
+    pub track_count: Option<i64>,
+    pub status: String,
+    pub local_album_id: Option<String>,
+    pub local_album_title: Option<String>,
+    pub local_year: Option<i32>,
+    pub match_method: String,
+    pub confidence: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistDiscographyResponse {
+    pub artist_key: String,
+    pub artist_name: String,
+    pub state: String,
+    pub message: String,
+    pub cache_path: String,
+    pub resolved_path: String,
+    pub musicbrainz_mbid: Option<String>,
+    pub matched_cache_name: Option<String>,
+    pub match_method: String,
+    pub suspect_mapping: bool,
+    pub cached_name_count: i64,
+    pub total_release_group_count: i64,
+    pub pure_album_count: i64,
+    pub owned_count: i64,
+    pub missing_count: i64,
+    pub local_album_count: i64,
+    pub completion: Option<f64>,
+    pub releases: Vec<MusicBrainzArtistReleaseRow>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TextFilter {

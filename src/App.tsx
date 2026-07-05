@@ -46,6 +46,7 @@ import {
   cacheSettings,
   getAlbumCoverDataUrl,
   getDiscovery,
+  getMusicBrainzArtistDiscography,
   getMusicBrainzCacheStatus,
   getSettings,
   getStatistics,
@@ -123,6 +124,8 @@ import type {
   MusicToolIssueRow,
   MusicToolProgress,
   MusicToolSummary,
+  MusicBrainzArtistDiscographyResponse,
+  MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
   PerformanceProbeResponse,
   SavedChart,
@@ -315,7 +318,9 @@ function RunStatus({ status }: { status: string }) {
   return <span className={`run-status run-status-${status.toLowerCase()}`}>{status}</span>;
 }
 
-function musicBrainzStateLabel(state: MusicBrainzCacheStatus["state"] | null | undefined) {
+function musicBrainzStateLabel(
+  state: MusicBrainzCacheStatus["state"] | MusicBrainzArtistDiscographyResponse["state"] | null | undefined,
+) {
   switch (state) {
     case "available":
       return "Available";
@@ -325,6 +330,8 @@ function musicBrainzStateLabel(state: MusicBrainzCacheStatus["state"] | null | u
       return "Invalid";
     case "unavailable":
       return "Unavailable";
+    case "notFound":
+      return "Not found";
     default:
       return "Not checked";
   }
@@ -1363,6 +1370,151 @@ function ArtistAlbumTable({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function MusicBrainzArtistDiscographyPanel({
+  artist,
+  response,
+  isLoading,
+  error,
+  onRefresh,
+}: {
+  artist: ArtistSummary | null;
+  response: MusicBrainzArtistDiscographyResponse | null;
+  isLoading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  const rows = response?.releases ?? [];
+  const statusLabel = musicBrainzStateLabel(response?.state);
+
+  return (
+    <section className="table-panel musicbrainz-artist-panel" aria-label="MusicBrainz artist discography">
+      <div className="panel-heading compact">
+        <div>
+          <h2>MusicBrainz Discography</h2>
+          <p>
+            {isLoading
+              ? "Checking local cache"
+              : response
+                ? `${formatNumber(response.ownedCount)} owned / ${formatNumber(response.missingCount)} missing pure albums`
+                : artist
+                  ? "Not checked"
+                  : "Select an artist"}
+          </p>
+        </div>
+        <div className="panel-actions">
+          <span className={`run-status run-status-${(response?.state ?? "unavailable").toLowerCase()}`}>
+            {statusLabel}
+          </span>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Refresh MusicBrainz discography"
+            disabled={!artist || isLoading}
+            onClick={onRefresh}
+          >
+            <RotateCcw size={18} />
+          </button>
+        </div>
+      </div>
+
+      {error ? <p className="error-message">{error}</p> : null}
+
+      {!artist ? (
+        <div className="empty-state large">
+          <UsersRound size={20} />
+          <span>Select an artist.</span>
+        </div>
+      ) : !response ? (
+        <div className="empty-state large">
+          <ShieldCheck size={20} />
+          <span>{isLoading ? "Checking MusicBrainz cache." : "No MusicBrainz result yet."}</span>
+        </div>
+      ) : (
+        <>
+          <div className={`musicbrainz-status-strip musicbrainz-status-${response.state}`}>
+            <span className={`run-status run-status-${response.state.toLowerCase()}`}>{statusLabel}</span>
+            <span>{response.message}</span>
+          </div>
+
+          <dl className="performance-summary musicbrainz-artist-summary">
+            <div>
+              <dt>Completion</dt>
+              <dd>{response.completion == null ? "n/a" : formatPercent(response.completion, 0)}</dd>
+            </div>
+            <div>
+              <dt>Owned</dt>
+              <dd>{formatNumber(response.ownedCount)}</dd>
+            </div>
+            <div>
+              <dt>Missing</dt>
+              <dd>{formatNumber(response.missingCount)}</dd>
+            </div>
+            <div>
+              <dt>Pure albums</dt>
+              <dd>{formatNumber(response.pureAlbumCount)}</dd>
+            </div>
+            <div>
+              <dt>Local albums</dt>
+              <dd>{formatNumber(response.localAlbumCount)}</dd>
+            </div>
+            <div>
+              <dt>Match</dt>
+              <dd>{response.matchMethod}</dd>
+            </div>
+          </dl>
+
+          <div className="musicbrainz-artist-meta">
+            <span>{response.matchedCacheName ?? "No cache artist"}</span>
+            <span>{response.musicbrainzMbid ?? "No MBID"}</span>
+            {response.suspectMapping ? (
+              <span>{`${formatNumber(response.cachedNameCount)} cache names / ${formatNumber(response.totalReleaseGroupCount)} release groups`}</span>
+            ) : null}
+          </div>
+
+          <MusicBrainzReleaseTable rows={rows} />
+          <small className="performance-database-path">{response.resolvedPath}</small>
+        </>
+      )}
+    </section>
+  );
+}
+
+function MusicBrainzReleaseTable({ rows }: { rows: MusicBrainzArtistReleaseRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <FileSearch size={18} />
+        <span>No pure official albums found.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="result-table musicbrainz-release-results" role="table">
+      <div className="result-table-head" role="row">
+        <span role="columnheader">MusicBrainz album</span>
+        <span role="columnheader">Year</span>
+        <span role="columnheader">Status</span>
+        <span role="columnheader">Local match</span>
+        <span role="columnheader">Confidence</span>
+      </div>
+      {rows.map((row) => (
+        <div className={`result-table-row musicbrainz-release-row ${row.status}`} role="row" key={row.releaseMbid}>
+          <span role="cell" title={row.title}>{row.title}</span>
+          <span role="cell">{row.year ?? ""}</span>
+          <span role="cell">
+            <RunStatus status={row.status} />
+          </span>
+          <span role="cell" title={row.localAlbumTitle ?? ""}>
+            {row.localAlbumTitle ? `${row.localAlbumTitle}${row.localYear ? ` (${row.localYear})` : ""}` : ""}
+          </span>
+          <span role="cell">{row.status === "owned" ? formatPercent(row.confidence, 0) : ""}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -3537,6 +3689,10 @@ export default function App() {
   const [artistAlbumTracksResponse, setArtistAlbumTracksResponse] = useState<BrowseResponse | null>(null);
   const [artistAlbumTracksError, setArtistAlbumTracksError] = useState<string | null>(null);
   const [isArtistAlbumTracksLoading, setIsArtistAlbumTracksLoading] = useState(false);
+  const [musicBrainzArtistDiscography, setMusicBrainzArtistDiscography] =
+    useState<MusicBrainzArtistDiscographyResponse | null>(null);
+  const [musicBrainzArtistError, setMusicBrainzArtistError] = useState<string | null>(null);
+  const [isMusicBrainzArtistLoading, setIsMusicBrainzArtistLoading] = useState(false);
   const [artistIncludeCalculated, setArtistIncludeCalculated] = useState(false);
   const [artistExportResult, setArtistExportResult] = useState<ExportResult | null>(null);
   const [genreRequest, setGenreRequest] = useState<GenreListRequest>(() => createGenreListRequest());
@@ -4031,6 +4187,42 @@ export default function App() {
       cancelled = true;
     };
   }, [activeSection, artistAlbumTracksRequest]);
+
+  useEffect(() => {
+    if (activeSection !== "Artists" || !selectedArtist) {
+      setMusicBrainzArtistDiscography(null);
+      setMusicBrainzArtistError(null);
+      setIsMusicBrainzArtistLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsMusicBrainzArtistLoading(true);
+    setMusicBrainzArtistError(null);
+    void getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name)
+      .then((nextResponse) => {
+        if (!cancelled) {
+          setMusicBrainzArtistDiscography(nextResponse);
+        }
+      })
+      .catch((discographyError) => {
+        if (!cancelled) {
+          setMusicBrainzArtistError(
+            discographyError instanceof Error ? discographyError.message : String(discographyError),
+          );
+          setMusicBrainzArtistDiscography(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsMusicBrainzArtistLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, selectedArtist]);
 
   useEffect(() => {
     if (activeSection !== "Genres") {
@@ -4922,6 +5114,25 @@ export default function App() {
     }
     const result = await exportSearch(artistAlbumsRequest, format, artistIncludeCalculated);
     setArtistExportResult(result);
+  }
+
+  async function refreshArtistMusicBrainz() {
+    if (!selectedArtist) {
+      return;
+    }
+
+    setIsMusicBrainzArtistLoading(true);
+    setMusicBrainzArtistError(null);
+
+    try {
+      const result = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
+      setMusicBrainzArtistDiscography(result);
+    } catch (error) {
+      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+      setMusicBrainzArtistDiscography(null);
+    } finally {
+      setIsMusicBrainzArtistLoading(false);
+    }
   }
 
   async function runGenreExport(format: string) {
@@ -6324,7 +6535,17 @@ export default function App() {
               selectedAlbumId={selectedArtistAlbumId}
               onSelect={selectArtistAlbum}
             />
+          </section>
 
+          <MusicBrainzArtistDiscographyPanel
+            artist={selectedArtist}
+            response={musicBrainzArtistDiscography}
+            isLoading={isMusicBrainzArtistLoading}
+            error={musicBrainzArtistError}
+            onRefresh={() => void refreshArtistMusicBrainz()}
+          />
+
+          <section className="table-panel" aria-label="Selected artist cover view">
             <div className="artist-album-board-heading">
               <div>
                 <h3>Cover view</h3>

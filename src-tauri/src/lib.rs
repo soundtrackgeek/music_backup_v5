@@ -13,6 +13,7 @@ use models::{
     BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
     MusicBrainzCacheStatus, MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest,
     MusicToolIssueResponse, MusicToolSummary, PerformanceProbeResponse, SaveChartRequest,
     SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
@@ -94,6 +95,20 @@ async fn get_musicbrainz_cache_status(
     })
     .await
     .map_err(|error| format!("MusicBrainz cache status task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_musicbrainz_artist_discography(
+    app: AppHandle,
+    request: MusicBrainzArtistDiscographyRequest,
+) -> Result<MusicBrainzArtistDiscographyResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        musicbrainz::artist_discography_for_app(&app, request)
+    })
+    .await
+    .map_err(|error| format!("MusicBrainz artist discography task failed: {error}"))?
     .map_err(|error| error.to_string())
 }
 
@@ -346,6 +361,7 @@ pub fn run() {
             restore_database_backup,
             get_settings,
             get_musicbrainz_cache_status,
+            get_musicbrainz_artist_discography,
             save_settings,
             get_statistics,
             get_discovery,

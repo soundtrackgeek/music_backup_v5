@@ -37,6 +37,7 @@ import type {
   MusicToolIssueRow,
   MusicToolProgress,
   MusicToolSummary,
+  MusicBrainzArtistDiscographyResponse,
   MusicBrainzCacheStatus,
   PerformanceProbeResponse,
 } from "./types";
@@ -97,6 +98,111 @@ const mockMusicBrainzCacheStatus: MusicBrainzCacheStatus = {
       cachedNames: ["canonical artist", "alternate spelling", "featured credit", "search mismatch"],
     },
   ],
+};
+
+const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyResponse> = {
+  "pet shop boys": {
+    artistKey: "pet shop boys",
+    artistName: "Pet Shop Boys",
+    state: "available",
+    message: "Matched 3 pure official MusicBrainz albums against 1 local album.",
+    cachePath: defaultMusicBrainzCachePath,
+    resolvedPath: `Preview runtime / ${defaultMusicBrainzCachePath}`,
+    musicbrainzMbid: "012151a8-preview-psb",
+    matchedCacheName: "pet shop boys",
+    matchMethod: "exact-name",
+    suspectMapping: false,
+    cachedNameCount: 1,
+    totalReleaseGroupCount: 3,
+    pureAlbumCount: 3,
+    ownedCount: 1,
+    missingCount: 2,
+    localAlbumCount: 1,
+    completion: 1 / 3,
+    releases: [
+      {
+        releaseMbid: "preview-please",
+        title: "Please",
+        year: 1986,
+        trackCount: 11,
+        status: "missing",
+        localAlbumId: null,
+        localAlbumTitle: null,
+        localYear: null,
+        matchMethod: "none",
+        confidence: 0,
+      },
+      {
+        releaseMbid: "preview-actually",
+        title: "Actually",
+        year: 1987,
+        trackCount: 10,
+        status: "owned",
+        localAlbumId: "mb:mock-1",
+        localAlbumTitle: "Actually",
+        localYear: 1987,
+        matchMethod: "normalized-title-year",
+        confidence: 1,
+      },
+      {
+        releaseMbid: "preview-behaviour",
+        title: "Behaviour",
+        year: 1990,
+        trackCount: 10,
+        status: "missing",
+        localAlbumId: null,
+        localAlbumTitle: null,
+        localYear: null,
+        matchMethod: "none",
+        confidence: 0,
+      },
+    ],
+  },
+  "the smiths": {
+    artistKey: "the smiths",
+    artistName: "The Smiths",
+    state: "available",
+    message: "Matched 2 pure official MusicBrainz albums against 1 local album.",
+    cachePath: defaultMusicBrainzCachePath,
+    resolvedPath: `Preview runtime / ${defaultMusicBrainzCachePath}`,
+    musicbrainzMbid: "preview-smiths",
+    matchedCacheName: "the smiths",
+    matchMethod: "exact-name",
+    suspectMapping: false,
+    cachedNameCount: 1,
+    totalReleaseGroupCount: 2,
+    pureAlbumCount: 2,
+    ownedCount: 1,
+    missingCount: 1,
+    localAlbumCount: 1,
+    completion: 0.5,
+    releases: [
+      {
+        releaseMbid: "preview-queen-is-dead",
+        title: "The Queen Is Dead",
+        year: 1986,
+        trackCount: 10,
+        status: "owned",
+        localAlbumId: "mb:mock-2",
+        localAlbumTitle: "The Queen Is Dead",
+        localYear: 1986,
+        matchMethod: "normalized-title-year",
+        confidence: 1,
+      },
+      {
+        releaseMbid: "preview-strangeways",
+        title: "Strangeways, Here We Come",
+        year: 1987,
+        trackCount: 10,
+        status: "missing",
+        localAlbumId: null,
+        localAlbumTitle: null,
+        localYear: null,
+        matchMethod: "none",
+        confidence: 0,
+      },
+    ],
+  },
 };
 
 const mockRows: BrowseRow[] = [
@@ -1709,6 +1815,40 @@ export async function getMusicBrainzCacheStatus(cachePath?: string) {
 
   return invoke<MusicBrainzCacheStatus>("get_musicbrainz_cache_status", {
     cachePath: cachePath ?? null,
+  });
+}
+
+export async function getMusicBrainzArtistDiscography(artistKey: string, artistName: string) {
+  if (!isTauriRuntime()) {
+    const normalizedKey = normalizeArtistKey(artistKey || artistName);
+    const mockDiscography = mockMusicBrainzDiscographies[normalizedKey];
+    if (mockDiscography) {
+      return mockDiscography;
+    }
+    return {
+      artistKey: normalizedKey,
+      artistName: artistName || artistKey || "Unknown Artist",
+      state: "notFound",
+      message: "No MusicBrainz artist match was found in the preview cache.",
+      cachePath: mockSettings.musicBrainzCachePath,
+      resolvedPath: `Preview runtime / ${mockSettings.musicBrainzCachePath}`,
+      musicbrainzMbid: null,
+      matchedCacheName: null,
+      matchMethod: "none",
+      suspectMapping: false,
+      cachedNameCount: 0,
+      totalReleaseGroupCount: 0,
+      pureAlbumCount: 0,
+      ownedCount: 0,
+      missingCount: 0,
+      localAlbumCount: 0,
+      completion: null,
+      releases: [],
+    } satisfies MusicBrainzArtistDiscographyResponse;
+  }
+
+  return invoke<MusicBrainzArtistDiscographyResponse>("get_musicbrainz_artist_discography", {
+    request: { artistKey, artistName },
   });
 }
 

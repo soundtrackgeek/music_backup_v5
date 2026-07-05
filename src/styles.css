@@ -1905,7 +1905,8 @@ button {
   white-space: nowrap;
 }
 
-.run-status-completed {
+.run-status-completed,
+.run-status-owned {
   color: #0c6f67;
   background: #e5f4f0;
 }
@@ -1922,6 +1923,7 @@ button {
   background: #fff2d1;
 }
 
+.run-status-missing,
 .run-status-failed,
 .run-status-invalid {
   color: #9c342d;
@@ -2209,6 +2211,12 @@ button {
     minmax(190px, 1.5fr) minmax(190px, 1.4fr) minmax(170px, 1.2fr)
     minmax(132px, 1fr) minmax(150px, 1fr);
   min-width: 960px;
+}
+
+.musicbrainz-release-results .result-table-head,
+.musicbrainz-release-results .result-table-row {
+  grid-template-columns: minmax(240px, 2fr) 70px 96px minmax(220px, 1.5fr) 92px;
+  min-width: 760px;
 }
 
 .artist-album-results .result-table-head,
@@ -3043,6 +3051,45 @@ button {
   grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
+.performance-summary.musicbrainz-artist-summary {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.musicbrainz-artist-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.musicbrainz-artist-meta span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #d8e1dd;
+  border-radius: 999px;
+  background: #fbfcfc;
+  color: #4e5b57;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.musicbrainz-release-results {
+  margin-top: 14px;
+}
+
+.musicbrainz-release-row.owned {
+  background: #fbfffd;
+}
+
+.musicbrainz-release-row.missing {
+  background: #fffafa;
+}
+
 .musicbrainz-quality-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3483,7 +3530,8 @@ button {
 :root[data-theme="dark"] .performance-probe-list,
 :root[data-theme="dark"] .performance-probe-row,
 :root[data-theme="dark"] .musicbrainz-warning-list,
-:root[data-theme="dark"] .musicbrainz-warning-list article {
+:root[data-theme="dark"] .musicbrainz-warning-list article,
+:root[data-theme="dark"] .musicbrainz-artist-meta span {
   border-color: #2f3d38;
 }
 
@@ -3560,6 +3608,7 @@ button {
 :root[data-theme="dark"] .musicbrainz-quality-grid dt,
 :root[data-theme="dark"] .musicbrainz-warning-list dt,
 :root[data-theme="dark"] .musicbrainz-warning-list span,
+:root[data-theme="dark"] .musicbrainz-artist-meta span,
 :root[data-theme="dark"] .saved-search span,
 :root[data-theme="dark"] .chip-empty,
 :root[data-theme="dark"] .db-path {
@@ -3658,6 +3707,7 @@ button {
 :root[data-theme="dark"] .filter-chip,
 :root[data-theme="dark"] .run-status-completed,
 :root[data-theme="dark"] .run-status-available,
+:root[data-theme="dark"] .run-status-owned,
 :root[data-theme="dark"] .tool-severity-low,
 :root[data-theme="dark"] .export-result,
 :root[data-theme="dark"] .success-message {
@@ -3693,6 +3743,7 @@ button {
 
 :root[data-theme="dark"] .run-status-failed,
 :root[data-theme="dark"] .run-status-invalid,
+:root[data-theme="dark"] .run-status-missing,
 :root[data-theme="dark"] .tool-severity-high,
 :root[data-theme="dark"] .error-message {
   color: #ffb5ad;
@@ -3717,6 +3768,12 @@ button {
 :root[data-theme="dark"] .musicbrainz-status-invalid {
   border-color: #713b37;
   background: #3a1d1b;
+}
+
+:root[data-theme="dark"] .musicbrainz-artist-meta span,
+:root[data-theme="dark"] .musicbrainz-release-row.owned,
+:root[data-theme="dark"] .musicbrainz-release-row.missing {
+  background: #111815;
 }
 
 :root[data-theme="dark"] .run-table,
@@ -3987,6 +4044,8 @@ button {
   .tool-index-results .result-table-row,
   .tool-issue-results .result-table-head,
   .tool-issue-results .result-table-row,
+  .musicbrainz-release-results .result-table-head,
+  .musicbrainz-release-results .result-table-row,
   .artist-album-results .result-table-head,
   .artist-album-results .result-table-row,
   .genre-album-results .result-table-head,
@@ -4062,6 +4121,7 @@ button {
 
   .performance-summary,
   .performance-summary.musicbrainz-summary,
+  .performance-summary.musicbrainz-artist-summary,
   .performance-probe-row,
   .musicbrainz-quality-grid,
   .musicbrainz-warning-list article {
