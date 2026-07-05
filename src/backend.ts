@@ -38,6 +38,7 @@ import type {
   MusicToolProgress,
   MusicToolSummary,
   MusicBrainzArtistDiscographyResponse,
+  MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
   PerformanceProbeResponse,
 } from "./types";
@@ -117,6 +118,7 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
     pureAlbumCount: 3,
     ownedCount: 1,
     missingCount: 2,
+    excludedCount: 0,
     localAlbumCount: 1,
     completion: 1 / 3,
     releases: [
@@ -131,6 +133,7 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
         localYear: null,
         matchMethod: "none",
         confidence: 0,
+        decision: null,
       },
       {
         releaseMbid: "preview-actually",
@@ -143,6 +146,7 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
         localYear: 1987,
         matchMethod: "normalized-title-year",
         confidence: 1,
+        decision: null,
       },
       {
         releaseMbid: "preview-behaviour",
@@ -155,6 +159,7 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
         localYear: null,
         matchMethod: "none",
         confidence: 0,
+        decision: null,
       },
     ],
   },
@@ -174,6 +179,7 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
     pureAlbumCount: 2,
     ownedCount: 1,
     missingCount: 1,
+    excludedCount: 0,
     localAlbumCount: 1,
     completion: 0.5,
     releases: [
@@ -188,6 +194,7 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
         localYear: 1986,
         matchMethod: "normalized-title-year",
         confidence: 1,
+        decision: null,
       },
       {
         releaseMbid: "preview-strangeways",
@@ -200,6 +207,7 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
         localYear: null,
         matchMethod: "none",
         confidence: 0,
+        decision: null,
       },
     ],
   },
@@ -1841,6 +1849,7 @@ export async function getMusicBrainzArtistDiscography(artistKey: string, artistN
       pureAlbumCount: 0,
       ownedCount: 0,
       missingCount: 0,
+      excludedCount: 0,
       localAlbumCount: 0,
       completion: null,
       releases: [],
@@ -1850,6 +1859,74 @@ export async function getMusicBrainzArtistDiscography(artistKey: string, artistN
   return invoke<MusicBrainzArtistDiscographyResponse>("get_musicbrainz_artist_discography", {
     request: { artistKey, artistName },
   });
+}
+
+export async function setMusicBrainzReleaseDecision(input: {
+  artistKey: string;
+  artistName: string;
+  musicbrainzMbid: string | null;
+  releaseMbid: string;
+  decision: "not-in-scope" | "ignored" | "clear" | "include";
+  localAlbumId?: string | null;
+}) {
+  if (!isTauriRuntime()) {
+    const normalizedKey = normalizeArtistKey(input.artistKey || input.artistName);
+    const mockDiscography = mockMusicBrainzDiscographies[normalizedKey];
+    if (!mockDiscography) {
+      return;
+    }
+
+    const nextDecision =
+      input.decision === "clear" || input.decision === "include" ? null : input.decision;
+    mockDiscography.releases = mockDiscography.releases.map((row) =>
+      row.releaseMbid === input.releaseMbid
+        ? applyMockMusicBrainzReleaseDecision(row, nextDecision)
+        : row,
+    );
+    recomputeMockMusicBrainzDiscographyCounts(mockDiscography);
+    return;
+  }
+
+  return invoke<void>("set_musicbrainz_release_decision", {
+    request: input,
+  });
+}
+
+function applyMockMusicBrainzReleaseDecision(
+  row: MusicBrainzArtistReleaseRow,
+  decision: "not-in-scope" | "ignored" | null,
+): MusicBrainzArtistReleaseRow {
+  if (decision) {
+    return {
+      ...row,
+      status: "excluded",
+      localAlbumId: null,
+      localAlbumTitle: null,
+      localYear: null,
+      matchMethod: decision,
+      confidence: 0,
+      decision,
+    };
+  }
+
+  const owned = Boolean(row.localAlbumTitle);
+  return {
+    ...row,
+    status: owned ? "owned" : "missing",
+    matchMethod: owned ? row.matchMethod || "normalized-title" : "none",
+    confidence: owned ? row.confidence || 0.92 : 0,
+    decision: null,
+  };
+}
+
+function recomputeMockMusicBrainzDiscographyCounts(response: MusicBrainzArtistDiscographyResponse) {
+  response.ownedCount = response.releases.filter((row) => row.status === "owned").length;
+  response.missingCount = response.releases.filter((row) => row.status === "missing").length;
+  response.excludedCount = response.releases.filter((row) => row.status === "excluded").length;
+  response.pureAlbumCount = response.ownedCount + response.missingCount;
+  response.completion =
+    response.pureAlbumCount > 0 ? response.ownedCount / response.pureAlbumCount : null;
+  response.message = `Matched ${response.pureAlbumCount} scoped MusicBrainz albums against ${response.localAlbumCount} local albums; ${response.excludedCount} excluded by release decisions.`;
 }
 
 export async function saveSettings(settings: AppSettings) {

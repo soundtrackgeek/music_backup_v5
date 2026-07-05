@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.30.1] - 2026-07-05
+### Added
+- Added MusicBrainz release not-in-scope controls in Artists so cache-only bootlegs or other out-of-scope rows can be excluded from missing counts and restored later.
+- Added a Tauri command for persisting MusicBrainz release decisions in the app-owned `musicbrainz_release_decisions` table.
+- Added Rust coverage for excluding release decisions from MusicBrainz missing-album counts.
+
+### Changed
+- Bumped synchronized app metadata to `0.30.1`.
+
 ## [0.30.0] - 2026-07-05
 ### Added
 - Added a MusicBrainz Discography panel in Artists for the selected artist, showing cache state, suspect mapping warnings, pure official album counts, owned/missing totals, completion, and release rows.

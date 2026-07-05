@@ -3,7 +3,7 @@
 Last updated: 2026-07-05
 Status: Living product and implementation contract
 Current implementation: Phase 17 complete
-Current package version: 0.30.0
+Current package version: 0.30.1
 SQLite schema version: 11
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -485,6 +485,7 @@ Expected next backend modularization:
 - Artist matching checks verified app-owned links first, exact cache-name matches second, and normalized cache-name matches third.
 - Local owned/missing matching is deterministic by normalized album title, with matching year increasing confidence when available.
 - The panel shows cache/artist state, suspect mapping warnings, MBID/cache-name metadata, local album count, pure album count, owned/missing totals, completion percentage, and owned/missing release rows.
+- Missing release rows can be marked not in scope and restored; excluded rows remain visible but do not count as missing or lower completion.
 - Web-only preview mode includes representative owned/missing MusicBrainz artist discographies.
 - Rust tests cover selected-artist owned/missing comparison and suspicious cache mapping warnings.
 
@@ -621,6 +622,12 @@ Completed in 0.30.0:
 - Add a missing/owned releases table with default pure-official-album filtering, year/title sorting, confidence/source columns, and quality warnings.
 - Add Rust coverage for deterministic owned/missing comparison and suspicious duplicate-MBID/high-release-count detection.
 
+Completed in 0.30.1:
+
+- Add per-release not-in-scope decisions for selected artist MusicBrainz rows, backed by the app-owned `musicbrainz_release_decisions` table.
+- Exclude not-in-scope and ignored MusicBrainz rows from missing counts and completion while keeping them visible and restorable.
+- Add Rust coverage for release decisions excluding rows from missing counts.
+
 Remaining candidate work:
 
 - Add matcher availability and cache staleness checks once the matching utilities are wired into the app.
@@ -628,7 +635,7 @@ Remaining candidate work:
 - Add release-type breakdown progress for combined MusicBrainz types.
 - Add optional secondary-type filters and CSV/XLSX export for MusicBrainz release rows.
 - Add a complete discography timeline that shows owned vs missing releases by year and release type.
-- Add optional manual link, unlink, ignore, and "not in scope" decisions after the read-only lookup is stable.
+- Add optional manual link, unlink, and broader ignore workflows after the selected-artist not-in-scope flow is stable.
 - Add an explicit "refresh this artist" action after cache-only reads are stable; the action should back up the cache, use MusicBrainz rate limiting, require user-agent/contact configuration, and update only the selected artist.
 - Consider a Music Tool that lists high-confidence missing MusicBrainz albums across favorite or high-coverage artists after artist-link quality gates exist.
 
@@ -748,4 +755,5 @@ Candidate work:
 - Add app-owned MusicBrainz artist/release link decisions instead of trusting the external cache directly.
 - Exclude suspect MusicBrainz cache mappings from broad reports until reviewed or manually verified.
 - Use normalized album title as the first MusicBrainz owned/missing comparison key; use matching year to raise confidence, not to decide ownership alone.
+- Treat legacy cache `release_groups.status` values as weak evidence because the recovered cache builder hardcoded `Official`; use app-owned not-in-scope decisions until a richer cache stores real release-status metadata.
 - Keep external enrichment and AI optional.

@@ -2,8 +2,9 @@ use crate::db;
 use crate::models::{
     MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
     MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus, MusicBrainzCacheWarningExample,
+    MusicBrainzReleaseDecisionRequest,
 };
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -37,6 +38,15 @@ pub fn artist_discography_for_app(
     let (app_conn, _) = db::open(app)?;
     let settings = db::settings_for_app(app)?;
     artist_discography_for_connection(&app_conn, Some(settings.musicbrainz_cache_path), request)
+}
+
+#[cfg(not(test))]
+pub fn set_release_decision_for_app(
+    app: &AppHandle,
+    request: MusicBrainzReleaseDecisionRequest,
+) -> Result<()> {
+    let (conn, _) = db::open(app)?;
+    set_release_decision_for_connection(&conn, request)
 }
 
 pub fn cache_status_for_path(cache_path: Option<String>) -> Result<MusicBrainzCacheStatus> {
@@ -262,19 +272,30 @@ pub fn artist_discography_for_connection(
         }
     };
 
+    let decisions = release_decisions(app_conn, &artist_key)?;
     let pure_releases = pure_album_release_groups(&cache_conn, &artist_match.mbid)?;
     let local_album_count = local_albums.len() as i64;
     let local_by_title = local_albums_by_title(local_albums);
     let releases = pure_releases
         .into_iter()
-        .map(|release| release_row_with_local_match(release, &local_by_title))
+        .map(|release| {
+            let decision = decisions.get(&release.release_mbid).cloned();
+            release_row_with_local_match(release, &local_by_title, decision)
+        })
         .collect::<Vec<_>>();
     let owned_count = releases
         .iter()
         .filter(|release| release.status == "owned")
         .count() as i64;
-    let pure_album_count = releases.len() as i64;
-    let missing_count = pure_album_count.saturating_sub(owned_count);
+    let missing_count = releases
+        .iter()
+        .filter(|release| release.status == "missing")
+        .count() as i64;
+    let excluded_count = releases
+        .iter()
+        .filter(|release| release.status == "excluded")
+        .count() as i64;
+    let pure_album_count = owned_count + missing_count;
     let completion = if pure_album_count > 0 {
         Some(owned_count as f64 / pure_album_count as f64)
     } else {
@@ -292,8 +313,8 @@ pub fn artist_discography_for_connection(
         )
     } else {
         format!(
-            "Matched {} pure official MusicBrainz albums against {} local albums.",
-            pure_album_count, local_album_count
+            "Matched {} scoped MusicBrainz albums against {} local albums; {} excluded by release decisions.",
+            pure_album_count, local_album_count, excluded_count
         )
     };
 
@@ -313,6 +334,7 @@ pub fn artist_discography_for_connection(
         pure_album_count,
         owned_count,
         missing_count,
+        excluded_count,
         local_album_count,
         completion,
         releases,
@@ -388,6 +410,7 @@ fn empty_discography_response(
         pure_album_count: 0,
         owned_count: 0,
         missing_count: 0,
+        excluded_count: 0,
         local_album_count,
         completion: None,
         releases: Vec::new(),
@@ -570,6 +593,125 @@ fn pure_album_release_groups(
     Ok(releases)
 }
 
+pub fn set_release_decision_for_connection(
+    conn: &Connection,
+    request: MusicBrainzReleaseDecisionRequest,
+) -> Result<()> {
+    let artist_name = normalize_display_name(&request.artist_name, &request.artist_key);
+    let artist_key = normalize_local_artist_key(&request.artist_key, &artist_name);
+    let release_mbid = request.release_mbid.trim();
+
+    if release_mbid.is_empty() {
+        bail!("MusicBrainz release MBID is required");
+    }
+
+    if !table_exists(conn, "musicbrainz_artist_links")?
+        || !table_exists(conn, "musicbrainz_release_decisions")?
+    {
+        bail!("MusicBrainz decision tables are unavailable");
+    }
+
+    match normalized_release_decision(&request.decision)? {
+        Some(decision) => {
+            ensure_artist_link_for_decision(
+                conn,
+                &artist_key,
+                &artist_name,
+                request.musicbrainz_mbid.as_deref(),
+            )?;
+            conn.execute(
+                "
+                INSERT INTO musicbrainz_release_decisions (
+                    local_artist_key, release_mbid, decision, local_album_id, created_at, updated_at
+                ) VALUES (
+                    ?1, ?2, ?3, ?4, datetime('now'), datetime('now')
+                )
+                ON CONFLICT(local_artist_key, release_mbid) DO UPDATE SET
+                    decision = excluded.decision,
+                    local_album_id = excluded.local_album_id,
+                    updated_at = datetime('now')
+                ",
+                params![artist_key, release_mbid, decision, request.local_album_id],
+            )
+            .context("Could not save MusicBrainz release decision")?;
+        }
+        None => {
+            conn.execute(
+                "
+                DELETE FROM musicbrainz_release_decisions
+                WHERE local_artist_key = ?1 AND release_mbid = ?2
+                ",
+                params![artist_key, release_mbid],
+            )
+            .context("Could not clear MusicBrainz release decision")?;
+        }
+    }
+
+    Ok(())
+}
+
+fn ensure_artist_link_for_decision(
+    conn: &Connection,
+    artist_key: &str,
+    artist_name: &str,
+    musicbrainz_mbid: Option<&str>,
+) -> Result<()> {
+    let mbid = musicbrainz_mbid
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    conn.execute(
+        "
+        INSERT INTO musicbrainz_artist_links (
+            local_artist_key, display_artist, mbid, canonical_name, match_method,
+            confidence, verification_state, ignored, created_at, updated_at
+        ) VALUES (
+            ?1, ?2, ?3, NULL, 'release-decision', NULL, 'unverified', 0,
+            datetime('now'), datetime('now')
+        )
+        ON CONFLICT(local_artist_key) DO UPDATE SET
+            display_artist = excluded.display_artist,
+            mbid = COALESCE(excluded.mbid, musicbrainz_artist_links.mbid),
+            updated_at = datetime('now')
+        ",
+        params![artist_key, artist_name, mbid],
+    )
+    .context("Could not ensure MusicBrainz artist link for release decision")?;
+    Ok(())
+}
+
+fn normalized_release_decision(decision: &str) -> Result<Option<String>> {
+    let normalized = decision.trim().to_lowercase();
+    match normalized.as_str() {
+        "" | "clear" | "include" => Ok(None),
+        "not-in-scope" | "ignored" => Ok(Some(normalized)),
+        _ => bail!("Unsupported MusicBrainz release decision: {decision}"),
+    }
+}
+
+fn release_decisions(conn: &Connection, artist_key: &str) -> Result<HashMap<String, String>> {
+    if !table_exists(conn, "musicbrainz_release_decisions")? {
+        return Ok(HashMap::new());
+    }
+
+    let mut stmt = conn
+        .prepare(
+            "
+            SELECT release_mbid, decision
+            FROM musicbrainz_release_decisions
+            WHERE local_artist_key = ?1
+            ",
+        )
+        .context("Could not prepare MusicBrainz release-decision lookup")?;
+    let rows = stmt
+        .query_map(params![artist_key], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not read MusicBrainz release decisions")?;
+
+    Ok(rows.into_iter().collect())
+}
+
 fn local_artist_albums(conn: &Connection, artist_key: &str) -> Result<Vec<LocalAlbum>> {
     let mut stmt = conn
         .prepare(
@@ -608,7 +750,24 @@ fn local_albums_by_title(local_albums: Vec<LocalAlbum>) -> HashMap<String, Vec<L
 fn release_row_with_local_match(
     release: MusicBrainzReleaseGroup,
     local_by_title: &HashMap<String, Vec<LocalAlbum>>,
+    decision: Option<String>,
 ) -> MusicBrainzArtistReleaseRow {
+    if matches!(decision.as_deref(), Some("not-in-scope" | "ignored")) {
+        return MusicBrainzArtistReleaseRow {
+            release_mbid: release.release_mbid,
+            title: release.title,
+            year: release.year,
+            track_count: release.track_count,
+            status: "excluded".to_string(),
+            local_album_id: None,
+            local_album_title: None,
+            local_year: None,
+            match_method: decision.clone().unwrap_or_else(|| "excluded".to_string()),
+            confidence: 0.0,
+            decision,
+        };
+    }
+
     let title_key = musicbrainz_text_key(&release.title);
     let local_album = local_by_title
         .get(&title_key)
@@ -632,6 +791,7 @@ fn release_row_with_local_match(
                     "normalized-title".to_string()
                 },
                 confidence: if same_year { 1.0 } else { 0.92 },
+                decision,
             }
         }
         None => MusicBrainzArtistReleaseRow {
@@ -645,6 +805,7 @@ fn release_row_with_local_match(
             local_year: None,
             match_method: "none".to_string(),
             confidence: 0.0,
+            decision,
         },
     }
 }
@@ -1063,6 +1224,7 @@ mod tests {
         assert_eq!(response.pure_album_count, 2);
         assert_eq!(response.owned_count, 1);
         assert_eq!(response.missing_count, 1);
+        assert_eq!(response.excluded_count, 0);
         assert_eq!(response.local_album_count, 2);
         assert_eq!(response.completion, Some(0.5));
         assert!(response
@@ -1075,6 +1237,53 @@ mod tests {
             .releases
             .iter()
             .any(|release| release.title == "Please" && release.status == "missing"));
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn release_decisions_exclude_rows_from_missing_counts() {
+        let temp_dir = temp_cache_dir("discography-decision");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_discography_cache(&cache_path, false);
+        let app_conn = create_artist_app_db();
+        create_decision_tables(&app_conn);
+
+        set_release_decision_for_connection(
+            &app_conn,
+            MusicBrainzReleaseDecisionRequest {
+                artist_key: "pet shop boys".to_string(),
+                artist_name: "Pet Shop Boys".to_string(),
+                musicbrainz_mbid: Some("mbid-psb".to_string()),
+                release_mbid: "release-please".to_string(),
+                decision: "not-in-scope".to_string(),
+                local_album_id: None,
+            },
+        )
+        .expect("save release decision");
+
+        let response = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            MusicBrainzArtistDiscographyRequest {
+                artist_key: "pet shop boys".to_string(),
+                artist_name: "Pet Shop Boys".to_string(),
+            },
+        )
+        .expect("compare artist discography with decision");
+
+        assert_eq!(response.pure_album_count, 1);
+        assert_eq!(response.owned_count, 1);
+        assert_eq!(response.missing_count, 0);
+        assert_eq!(response.excluded_count, 1);
+        assert_eq!(response.completion, Some(1.0));
+        let excluded = response
+            .releases
+            .iter()
+            .find(|release| release.release_mbid == "release-please")
+            .expect("excluded release row");
+        assert_eq!(excluded.status, "excluded");
+        assert_eq!(excluded.decision.as_deref(), Some("not-in-scope"));
 
         fs::remove_dir_all(temp_dir).expect("remove temp dir");
     }
@@ -1247,6 +1456,37 @@ mod tests {
         )
         .expect("seed app albums");
         conn
+    }
+
+    fn create_decision_tables(conn: &Connection) {
+        conn.execute_batch(
+            "
+            CREATE TABLE musicbrainz_artist_links (
+                local_artist_key TEXT PRIMARY KEY,
+                display_artist TEXT NOT NULL,
+                mbid TEXT,
+                canonical_name TEXT,
+                match_method TEXT NOT NULL DEFAULT 'unverified',
+                confidence REAL,
+                verification_state TEXT NOT NULL DEFAULT 'unverified',
+                ignored INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE musicbrainz_release_decisions (
+                local_artist_key TEXT NOT NULL,
+                release_mbid TEXT NOT NULL,
+                decision TEXT NOT NULL,
+                local_album_id TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (local_artist_key, release_mbid),
+                FOREIGN KEY(local_artist_key) REFERENCES musicbrainz_artist_links(local_artist_key)
+                    ON DELETE CASCADE
+            );
+            ",
+        )
+        .expect("create decision tables");
     }
 
     fn temp_cache_dir(label: &str) -> PathBuf {

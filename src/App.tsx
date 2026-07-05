@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  Ban,
   BarChart3,
   Check,
   ChevronLeft,
@@ -72,6 +73,7 @@ import {
   saveChart,
   saveSearch,
   saveSettings,
+  setMusicBrainzReleaseDecision,
   searchLibrary,
   exportMusicToolIssues,
   restoreDatabaseBackup,
@@ -1380,12 +1382,14 @@ function MusicBrainzArtistDiscographyPanel({
   isLoading,
   error,
   onRefresh,
+  onSetReleaseDecision,
 }: {
   artist: ArtistSummary | null;
   response: MusicBrainzArtistDiscographyResponse | null;
   isLoading: boolean;
   error: string | null;
   onRefresh: () => void;
+  onSetReleaseDecision: (row: MusicBrainzArtistReleaseRow, decision: "not-in-scope" | "include") => void;
 }) {
   const rows = response?.releases ?? [];
   const statusLabel = musicBrainzStateLabel(response?.state);
@@ -1399,7 +1403,7 @@ function MusicBrainzArtistDiscographyPanel({
             {isLoading
               ? "Checking local cache"
               : response
-                ? `${formatNumber(response.ownedCount)} owned / ${formatNumber(response.missingCount)} missing pure albums`
+                ? `${formatNumber(response.ownedCount)} owned / ${formatNumber(response.missingCount)} missing scoped albums`
                 : artist
                   ? "Not checked"
                   : "Select an artist"}
@@ -1454,7 +1458,11 @@ function MusicBrainzArtistDiscographyPanel({
               <dd>{formatNumber(response.missingCount)}</dd>
             </div>
             <div>
-              <dt>Pure albums</dt>
+              <dt>Excluded</dt>
+              <dd>{formatNumber(response.excludedCount)}</dd>
+            </div>
+            <div>
+              <dt>Scoped albums</dt>
               <dd>{formatNumber(response.pureAlbumCount)}</dd>
             </div>
             <div>
@@ -1475,7 +1483,7 @@ function MusicBrainzArtistDiscographyPanel({
             ) : null}
           </div>
 
-          <MusicBrainzReleaseTable rows={rows} />
+          <MusicBrainzReleaseTable rows={rows} onSetReleaseDecision={onSetReleaseDecision} />
           <small className="performance-database-path">{response.resolvedPath}</small>
         </>
       )}
@@ -1483,7 +1491,13 @@ function MusicBrainzArtistDiscographyPanel({
   );
 }
 
-function MusicBrainzReleaseTable({ rows }: { rows: MusicBrainzArtistReleaseRow[] }) {
+function MusicBrainzReleaseTable({
+  rows,
+  onSetReleaseDecision,
+}: {
+  rows: MusicBrainzArtistReleaseRow[];
+  onSetReleaseDecision: (row: MusicBrainzArtistReleaseRow, decision: "not-in-scope" | "include") => void;
+}) {
   if (rows.length === 0) {
     return (
       <div className="empty-state">
@@ -1501,6 +1515,7 @@ function MusicBrainzReleaseTable({ rows }: { rows: MusicBrainzArtistReleaseRow[]
         <span role="columnheader">Status</span>
         <span role="columnheader">Local match</span>
         <span role="columnheader">Confidence</span>
+        <span role="columnheader">Scope</span>
       </div>
       {rows.map((row) => (
         <div className={`result-table-row musicbrainz-release-row ${row.status}`} role="row" key={row.releaseMbid}>
@@ -1513,6 +1528,29 @@ function MusicBrainzReleaseTable({ rows }: { rows: MusicBrainzArtistReleaseRow[]
             {row.localAlbumTitle ? `${row.localAlbumTitle}${row.localYear ? ` (${row.localYear})` : ""}` : ""}
           </span>
           <span role="cell">{row.status === "owned" ? formatPercent(row.confidence, 0) : ""}</span>
+          <span role="cell" className="musicbrainz-scope-action">
+            {row.status === "excluded" ? (
+              <button
+                className="icon-button"
+                type="button"
+                title="Include in MusicBrainz album comparison"
+                aria-label={`Include ${row.title} in MusicBrainz album comparison`}
+                onClick={() => onSetReleaseDecision(row, "include")}
+              >
+                <RotateCcw size={16} />
+              </button>
+            ) : row.status === "missing" ? (
+              <button
+                className="icon-button"
+                type="button"
+                title="Mark not in scope"
+                aria-label={`Mark ${row.title} as not in scope`}
+                onClick={() => onSetReleaseDecision(row, "not-in-scope")}
+              >
+                <Ban size={16} />
+              </button>
+            ) : null}
+          </span>
         </div>
       ))}
     </div>
@@ -5135,6 +5173,35 @@ export default function App() {
     }
   }
 
+  async function setArtistMusicBrainzReleaseDecision(
+    row: MusicBrainzArtistReleaseRow,
+    decision: "not-in-scope" | "include",
+  ) {
+    if (!selectedArtist || !musicBrainzArtistDiscography) {
+      return;
+    }
+
+    setIsMusicBrainzArtistLoading(true);
+    setMusicBrainzArtistError(null);
+
+    try {
+      await setMusicBrainzReleaseDecision({
+        artistKey: selectedArtist.id,
+        artistName: selectedArtist.name,
+        musicbrainzMbid: musicBrainzArtistDiscography.musicbrainzMbid,
+        releaseMbid: row.releaseMbid,
+        decision,
+        localAlbumId: row.localAlbumId,
+      });
+      const result = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
+      setMusicBrainzArtistDiscography(result);
+    } catch (error) {
+      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsMusicBrainzArtistLoading(false);
+    }
+  }
+
   async function runGenreExport(format: string) {
     if (!genreAlbumsRequest) {
       return;
@@ -6543,6 +6610,7 @@ export default function App() {
             isLoading={isMusicBrainzArtistLoading}
             error={musicBrainzArtistError}
             onRefresh={() => void refreshArtistMusicBrainz()}
+            onSetReleaseDecision={(row, decision) => void setArtistMusicBrainzReleaseDecision(row, decision)}
           />
 
           <section className="table-panel" aria-label="Selected artist cover view">

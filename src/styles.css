@@ -1930,6 +1930,11 @@ button {
   background: #fdeceb;
 }
 
+.run-status-excluded {
+  color: #5c615f;
+  background: #e8ecea;
+}
+
 .tool-severity {
   display: inline-flex;
   align-items: center;
@@ -2215,8 +2220,8 @@ button {
 
 .musicbrainz-release-results .result-table-head,
 .musicbrainz-release-results .result-table-row {
-  grid-template-columns: minmax(240px, 2fr) 70px 96px minmax(220px, 1.5fr) 92px;
-  min-width: 760px;
+  grid-template-columns: minmax(240px, 2fr) 70px 96px minmax(220px, 1.5fr) 92px 72px;
+  min-width: 840px;
 }
 
 .artist-album-results .result-table-head,
@@ -3052,7 +3057,7 @@ button {
 }
 
 .performance-summary.musicbrainz-artist-summary {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
 .musicbrainz-artist-meta {
@@ -3088,6 +3093,21 @@ button {
 
 .musicbrainz-release-row.missing {
   background: #fffafa;
+}
+
+.musicbrainz-release-row.excluded {
+  color: #6a7470;
+  background: #f7f9f8;
+}
+
+.musicbrainz-scope-action {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.musicbrainz-scope-action .icon-button {
+  width: 30px;
+  height: 30px;
 }
 
 .musicbrainz-quality-grid {
@@ -3751,6 +3771,11 @@ button {
   border-color: #713b37;
 }
 
+:root[data-theme="dark"] .run-status-excluded {
+  color: #b8c2be;
+  background: #2a3430;
+}
+
 :root[data-theme="dark"] .musicbrainz-status-strip {
   border-color: #315a53;
   background: #13241f;
@@ -3772,8 +3797,13 @@ button {
 
 :root[data-theme="dark"] .musicbrainz-artist-meta span,
 :root[data-theme="dark"] .musicbrainz-release-row.owned,
-:root[data-theme="dark"] .musicbrainz-release-row.missing {
+:root[data-theme="dark"] .musicbrainz-release-row.missing,
+:root[data-theme="dark"] .musicbrainz-release-row.excluded {
   background: #111815;
+}
+
+:root[data-theme="dark"] .musicbrainz-release-row.excluded {
+  color: #93a29d;
 }
 
 :root[data-theme="dark"] .run-table,

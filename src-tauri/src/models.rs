@@ -224,6 +224,23 @@ pub struct MusicBrainzArtistDiscographyRequest {
     pub artist_name: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzReleaseDecisionRequest {
+    #[serde(default)]
+    pub artist_key: String,
+    #[serde(default)]
+    pub artist_name: String,
+    #[serde(default)]
+    pub musicbrainz_mbid: Option<String>,
+    #[serde(default)]
+    pub release_mbid: String,
+    #[serde(default)]
+    pub decision: String,
+    #[serde(default)]
+    pub local_album_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistReleaseRow {
@@ -237,6 +254,7 @@ pub struct MusicBrainzArtistReleaseRow {
     pub local_year: Option<i32>,
     pub match_method: String,
     pub confidence: f64,
+    pub decision: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -257,6 +275,7 @@ pub struct MusicBrainzArtistDiscographyResponse {
     pub pure_album_count: i64,
     pub owned_count: i64,
     pub missing_count: i64,
+    pub excluded_count: i64,
     pub local_album_count: i64,
     pub completion: Option<f64>,
     pub releases: Vec<MusicBrainzArtistReleaseRow>,

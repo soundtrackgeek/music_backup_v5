@@ -177,17 +177,20 @@ export type MusicBrainzCacheStatus = {
   warningExamples: MusicBrainzCacheWarningExample[];
 };
 
+export type MusicBrainzReleaseDecision = "not-in-scope" | "ignored" | null;
+
 export type MusicBrainzArtistReleaseRow = {
   releaseMbid: string;
   title: string;
   year: number | null;
   trackCount: number | null;
-  status: "owned" | "missing";
+  status: "owned" | "missing" | "excluded";
   localAlbumId: string | null;
   localAlbumTitle: string | null;
   localYear: number | null;
   matchMethod: string;
   confidence: number;
+  decision: MusicBrainzReleaseDecision;
 };
 
 export type MusicBrainzArtistDiscographyResponse = {
@@ -206,6 +209,7 @@ export type MusicBrainzArtistDiscographyResponse = {
   pureAlbumCount: number;
   ownedCount: number;
   missingCount: number;
+  excludedCount: number;
   localAlbumCount: number;
   completion: number | null;
   releases: MusicBrainzArtistReleaseRow[];
