@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.28.1] - 2026-07-05
+### Changed
+- Expanded the MusicBrainz roadmap in `SPEC.md` with the local cache strategy, cache quality checks, app-owned verification/ignore decisions, and explicit artist refresh guidance.
+- Ignored the local `MusicBrainz/` cache folder so large MusicBrainz databases and backups stay out of git.
+
 ## [0.28.0] - 2026-07-04
 ### Added
 - Added `npm run security:check`, `npm run check`, and `npm run release:check` for release/security verification.
