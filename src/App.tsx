@@ -1458,7 +1458,7 @@ function MusicBrainzArtistDiscographyPanel({
               <dd>{formatNumber(response.missingCount)}</dd>
             </div>
             <div>
-              <dt>Excluded</dt>
+              <dt>Filtered</dt>
               <dd>{formatNumber(response.excludedCount)}</dd>
             </div>
             <div>
@@ -1498,11 +1498,13 @@ function MusicBrainzReleaseTable({
   rows: MusicBrainzArtistReleaseRow[];
   onSetReleaseDecision: (row: MusicBrainzArtistReleaseRow, decision: "not-in-scope" | "include") => void;
 }) {
-  if (rows.length === 0) {
+  const visibleRows = rows.filter((row) => row.status !== "excluded");
+
+  if (visibleRows.length === 0) {
     return (
       <div className="empty-state">
         <FileSearch size={18} />
-        <span>No pure official albums found.</span>
+        <span>No in-scope MusicBrainz albums found.</span>
       </div>
     );
   }
@@ -1517,7 +1519,7 @@ function MusicBrainzReleaseTable({
         <span role="columnheader">Confidence</span>
         <span role="columnheader">Scope</span>
       </div>
-      {rows.map((row) => (
+      {visibleRows.map((row) => (
         <div className={`result-table-row musicbrainz-release-row ${row.status}`} role="row" key={row.releaseMbid}>
           <span role="cell" title={row.title}>{row.title}</span>
           <span role="cell">{row.year ?? ""}</span>

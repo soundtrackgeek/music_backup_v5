@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.30.3] - 2026-07-05
+### Changed
+- Hid excluded MusicBrainz release rows from the selected-artist owned/missing table and renamed the summary count to `Filtered`.
+- Bumped synchronized app metadata to `0.30.3`.
+
 ## [0.30.2] - 2026-07-05
 ### Fixed
 - Excluded MusicBrainz release groups with no official releases from selected-artist missing-album counts after app-owned official-status verification, fixing bootleg-only rows such as Def Leppard's `Yeah! Unfinished and Unreleased` and `Retromania`.

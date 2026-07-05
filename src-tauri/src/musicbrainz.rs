@@ -25,7 +25,7 @@ const SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.30.2 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.30.3 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 #[cfg(not(test))]

@@ -3,7 +3,7 @@
 Last updated: 2026-07-05
 Status: Living product and implementation contract
 Current implementation: Phase 17 complete
-Current package version: 0.30.2
+Current package version: 0.30.3
 SQLite schema version: 12
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -486,7 +486,7 @@ Expected next backend modularization:
 - Artist matching checks verified app-owned links first, exact cache-name matches second, and normalized cache-name matches third.
 - Local owned/missing matching is deterministic by normalized album title, with matching year increasing confidence when available.
 - The panel shows cache/artist state, suspect mapping warnings, MBID/cache-name metadata, local album count, pure album count, owned/missing totals, completion percentage, and owned/missing release rows.
-- Missing release rows can be marked not in scope and restored; excluded rows remain visible but do not count as missing or lower completion.
+- Missing release rows can be marked not in scope; filtered rows are hidden from the main owned/missing album list and do not count as missing or lower completion.
 - Cached release groups with no official MusicBrainz releases are automatically excluded when release-status verification has succeeded for the selected artist.
 - Web-only preview mode includes representative owned/missing MusicBrainz artist discographies.
 - Rust tests cover selected-artist owned/missing comparison and suspicious cache mapping warnings.
@@ -637,6 +637,11 @@ Completed in 0.30.2:
 - Automatically exclude cached release groups that have no official MusicBrainz releases, covering bootleg-only rows such as Def Leppard's `Yeah! Unfinished and Unreleased` and `Retromania`.
 - Keep manual include/not-in-scope controls as review overrides after automatic status verification.
 - Add Rust coverage for automatic release-status exclusion.
+
+Completed in 0.30.3:
+
+- Hide excluded MusicBrainz release rows from the selected-artist owned/missing table by default.
+- Rename the selected-artist summary count from `Excluded` to `Filtered`.
 
 Remaining candidate work:
 

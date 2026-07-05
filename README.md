@@ -82,7 +82,7 @@ npm run security:check
 - The desktop backend matches the selected local artist to the local MusicBrainz cache by verified link, exact cache name, then normalized cache name.
 - The artist comparison lists pure official MusicBrainz album release groups as owned or missing based on deterministic normalized-title matching against local albums.
 - The app verifies which cached release groups have official MusicBrainz releases when the app-owned status cache is missing, then caches that status locally so bootleg-only groups are excluded automatically on later visits.
-- Missing MusicBrainz rows can be marked not in scope, which excludes bootlegs or other cache-only edge cases from missing counts while keeping them restorable.
+- Missing MusicBrainz rows can be marked not in scope, and filtered rows are hidden from the main owned/missing album list.
 - Suspect artist cache mappings are shown as warnings when a matched MBID has multiple cached names or unusually high release-group counts.
 - Web-only preview mode includes mock owned/missing MusicBrainz rows for Artists layout work.
 
