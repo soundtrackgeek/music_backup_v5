@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.31.0] - 2026-07-05
+### Added
+- Added MusicBrainz artist match review controls in Artists with Verify, Ignore, Unlink, and manual MBID correction actions.
+- Added a Tauri command for persisting selected-artist MusicBrainz match decisions in the app-owned `musicbrainz_artist_links` table.
+- Added Rust coverage for ignored artist suppression and manual MusicBrainz artist-link decisions.
+
+### Changed
+- Verified MusicBrainz artist links now override raw cache lookup, and ignored artist links suppress selected-artist MusicBrainz album rows.
+- Bumped synchronized app metadata to `0.31.0`.
+
 ## [0.30.3] - 2026-07-05
 ### Changed
 - Hid excluded MusicBrainz release rows from the selected-artist owned/missing table and renamed the summary count to `Filtered`.

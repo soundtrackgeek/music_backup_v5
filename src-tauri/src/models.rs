@@ -241,6 +241,21 @@ pub struct MusicBrainzReleaseDecisionRequest {
     pub local_album_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistLinkRequest {
+    #[serde(default)]
+    pub artist_key: String,
+    #[serde(default)]
+    pub artist_name: String,
+    #[serde(default)]
+    pub action: String,
+    #[serde(default)]
+    pub musicbrainz_mbid: Option<String>,
+    #[serde(default)]
+    pub canonical_name: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistReleaseRow {
@@ -269,6 +284,8 @@ pub struct MusicBrainzArtistDiscographyResponse {
     pub musicbrainz_mbid: Option<String>,
     pub matched_cache_name: Option<String>,
     pub match_method: String,
+    pub artist_link_state: String,
+    pub artist_link_ignored: bool,
     pub suspect_mapping: bool,
     pub cached_name_count: i64,
     pub total_release_group_count: i64,

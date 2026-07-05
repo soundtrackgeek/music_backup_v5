@@ -1,8 +1,8 @@
 use crate::db;
 use crate::models::{
     MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
-    MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus, MusicBrainzCacheWarningExample,
-    MusicBrainzReleaseDecisionRequest,
+    MusicBrainzArtistLinkRequest, MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus,
+    MusicBrainzCacheWarningExample, MusicBrainzReleaseDecisionRequest,
 };
 use anyhow::{bail, Context, Result};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
@@ -25,7 +25,7 @@ const SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.30.3 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.31.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 #[cfg(not(test))]
@@ -60,6 +60,15 @@ pub fn set_release_decision_for_app(
 ) -> Result<()> {
     let (conn, _) = db::open(app)?;
     set_release_decision_for_connection(&conn, request)
+}
+
+#[cfg(not(test))]
+pub fn set_artist_link_for_app(
+    app: &AppHandle,
+    request: MusicBrainzArtistLinkRequest,
+) -> Result<()> {
+    let (conn, _) = db::open(app)?;
+    set_artist_link_for_connection(&conn, request)
 }
 
 pub fn cache_status_for_path(cache_path: Option<String>) -> Result<MusicBrainzCacheStatus> {
@@ -247,6 +256,17 @@ pub fn artist_discography_for_connection(
     let artist_key = normalize_local_artist_key(&request.artist_key, &artist_name);
     let cache_status = cache_status_for_path(cache_path)?;
     let local_albums = local_artist_albums(app_conn, &artist_key)?;
+    let artist_link = artist_link_record(app_conn, &artist_key)?;
+
+    if let Some(link) = artist_link.as_ref().filter(|link| link.ignored) {
+        return Ok(ignored_discography_response(
+            artist_key,
+            artist_name,
+            &cache_status,
+            local_albums.len() as i64,
+            link,
+        ));
+    }
 
     if !cache_status.valid {
         return Ok(empty_discography_response(
@@ -344,6 +364,8 @@ pub fn artist_discography_for_connection(
         musicbrainz_mbid: Some(artist_match.mbid),
         matched_cache_name: artist_match.matched_name,
         match_method: artist_match.match_method,
+        artist_link_state: artist_match.artist_link_state,
+        artist_link_ignored: false,
         suspect_mapping: artist_match.suspect_mapping,
         cached_name_count: artist_match.cached_name_count,
         total_release_group_count: artist_match.total_release_group_count,
@@ -382,9 +404,19 @@ struct ArtistMatch {
     mbid: String,
     matched_name: Option<String>,
     match_method: String,
+    artist_link_state: String,
     cached_name_count: i64,
     total_release_group_count: i64,
     suspect_mapping: bool,
+}
+
+#[derive(Debug, Clone)]
+struct ArtistLinkRecord {
+    mbid: Option<String>,
+    canonical_name: Option<String>,
+    match_method: String,
+    verification_state: String,
+    ignored: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -420,6 +452,40 @@ fn empty_discography_response(
         musicbrainz_mbid: None,
         matched_cache_name: None,
         match_method: "none".to_string(),
+        artist_link_state: "none".to_string(),
+        artist_link_ignored: false,
+        suspect_mapping: false,
+        cached_name_count: 0,
+        total_release_group_count: 0,
+        pure_album_count: 0,
+        owned_count: 0,
+        missing_count: 0,
+        excluded_count: 0,
+        local_album_count,
+        completion: None,
+        releases: Vec::new(),
+    }
+}
+
+fn ignored_discography_response(
+    artist_key: String,
+    artist_name: String,
+    cache_status: &MusicBrainzCacheStatus,
+    local_album_count: i64,
+    artist_link: &ArtistLinkRecord,
+) -> MusicBrainzArtistDiscographyResponse {
+    MusicBrainzArtistDiscographyResponse {
+        artist_key,
+        artist_name,
+        state: "ignored".to_string(),
+        message: "MusicBrainz is ignored for this local artist.".to_string(),
+        cache_path: cache_status.cache_path.clone(),
+        resolved_path: cache_status.resolved_path.clone(),
+        musicbrainz_mbid: artist_link.mbid.clone(),
+        matched_cache_name: artist_link.canonical_name.clone(),
+        match_method: artist_link.match_method.clone(),
+        artist_link_state: "ignored".to_string(),
+        artist_link_ignored: true,
         suspect_mapping: false,
         cached_name_count: 0,
         total_release_group_count: 0,
@@ -439,8 +505,19 @@ fn find_artist_match(
     artist_key: &str,
     artist_name: &str,
 ) -> Result<Option<ArtistMatch>> {
-    if let Some(verified_match) = verified_artist_link(app_conn, cache_conn, artist_key)? {
-        return Ok(Some(verified_match));
+    if let Some(link) = artist_link_record(app_conn, artist_key)? {
+        if link.verification_state == "verified" && !link.ignored {
+            if let Some(mbid) = link.mbid {
+                return artist_match_from_mbid(
+                    cache_conn,
+                    mbid,
+                    link.canonical_name,
+                    &link.match_method,
+                    false,
+                    "verified",
+                );
+            }
+        }
     }
 
     if let Some((matched_name, mbid)) = cache_conn
@@ -460,7 +537,14 @@ fn find_artist_match(
         .optional()
         .context("Could not lookup exact MusicBrainz artist cache match")?
     {
-        return artist_match_from_mbid(cache_conn, mbid, Some(matched_name), "exact-name", true);
+        return artist_match_from_mbid(
+            cache_conn,
+            mbid,
+            Some(matched_name),
+            "exact-name",
+            true,
+            "unverified",
+        );
     }
 
     let normalized_artist_name = musicbrainz_text_key(artist_name);
@@ -487,46 +571,46 @@ fn find_artist_match(
 
     for (name, mbid) in rows {
         if musicbrainz_text_key(&name) == normalized_artist_name {
-            return artist_match_from_mbid(cache_conn, mbid, Some(name), "normalized-name", true);
+            return artist_match_from_mbid(
+                cache_conn,
+                mbid,
+                Some(name),
+                "normalized-name",
+                true,
+                "unverified",
+            );
         }
     }
 
     Ok(None)
 }
 
-fn verified_artist_link(
-    app_conn: &Connection,
-    cache_conn: &Connection,
-    artist_key: &str,
-) -> Result<Option<ArtistMatch>> {
+fn artist_link_record(app_conn: &Connection, artist_key: &str) -> Result<Option<ArtistLinkRecord>> {
     if !table_exists(app_conn, "musicbrainz_artist_links")? {
         return Ok(None);
     }
 
-    let row = app_conn
+    app_conn
         .query_row(
             "
-            SELECT mbid, canonical_name
+            SELECT mbid, canonical_name, match_method, verification_state, ignored
             FROM musicbrainz_artist_links
             WHERE local_artist_key = ?1
-              AND ignored = 0
-              AND verification_state = 'verified'
-              AND mbid IS NOT NULL
-              AND TRIM(mbid) <> ''
             LIMIT 1
             ",
             params![artist_key],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+            |row| {
+                Ok(ArtistLinkRecord {
+                    mbid: row.get::<_, Option<String>>(0)?,
+                    canonical_name: row.get::<_, Option<String>>(1)?,
+                    match_method: row.get::<_, String>(2)?,
+                    verification_state: row.get::<_, String>(3)?,
+                    ignored: row.get::<_, i64>(4)? != 0,
+                })
+            },
         )
         .optional()
-        .context("Could not read verified MusicBrainz artist link")?;
-
-    match row {
-        Some((mbid, canonical_name)) => {
-            artist_match_from_mbid(cache_conn, mbid, canonical_name, "verified-link", false)
-        }
-        None => Ok(None),
-    }
+        .context("Could not read MusicBrainz artist link")
 }
 
 fn artist_match_from_mbid(
@@ -535,6 +619,7 @@ fn artist_match_from_mbid(
     matched_name: Option<String>,
     match_method: &str,
     should_warn_for_cache_quality: bool,
+    artist_link_state: &str,
 ) -> Result<Option<ArtistMatch>> {
     let cached_name_count = cached_name_count(cache_conn, &mbid)?;
     let total_release_group_count = release_group_count_for_mbid(cache_conn, &mbid)?;
@@ -546,6 +631,7 @@ fn artist_match_from_mbid(
         mbid,
         matched_name,
         match_method: match_method.to_string(),
+        artist_link_state: artist_link_state.to_string(),
         cached_name_count,
         total_release_group_count,
         suspect_mapping,
@@ -666,6 +752,99 @@ pub fn set_release_decision_for_connection(
     Ok(())
 }
 
+pub fn set_artist_link_for_connection(
+    conn: &Connection,
+    request: MusicBrainzArtistLinkRequest,
+) -> Result<()> {
+    let artist_name = normalize_display_name(&request.artist_name, &request.artist_key);
+    let artist_key = normalize_local_artist_key(&request.artist_key, &artist_name);
+    let action = request.action.trim().to_lowercase();
+
+    if !table_exists(conn, "musicbrainz_artist_links")? {
+        bail!("MusicBrainz artist link table is unavailable");
+    }
+
+    if action == "unlink" {
+        conn.execute(
+            "
+            DELETE FROM musicbrainz_artist_links
+            WHERE local_artist_key = ?1
+            ",
+            params![artist_key],
+        )
+        .context("Could not unlink MusicBrainz artist match")?;
+        return Ok(());
+    }
+
+    let canonical_name = request
+        .canonical_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    let (mbid, match_method, verification_state, ignored, confidence) = match action.as_str() {
+        "verify" => (
+            Some(required_mbid(request.musicbrainz_mbid.as_deref())?),
+            "verified-link",
+            "verified",
+            false,
+            Some(1.0),
+        ),
+        "set" | "manual" | "manual-mbid" => (
+            Some(required_mbid(request.musicbrainz_mbid.as_deref())?),
+            "manual-mbid",
+            "verified",
+            false,
+            Some(1.0),
+        ),
+        "ignore" => (
+            optional_mbid(request.musicbrainz_mbid.as_deref())?,
+            "ignored",
+            "ignored",
+            true,
+            None,
+        ),
+        _ => bail!(
+            "Unsupported MusicBrainz artist link action: {}",
+            request.action
+        ),
+    };
+
+    conn.execute(
+        "
+        INSERT INTO musicbrainz_artist_links (
+            local_artist_key, display_artist, mbid, canonical_name, match_method,
+            confidence, verification_state, ignored, created_at, updated_at
+        ) VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now')
+        )
+        ON CONFLICT(local_artist_key) DO UPDATE SET
+            display_artist = excluded.display_artist,
+            mbid = excluded.mbid,
+            canonical_name = excluded.canonical_name,
+            match_method = excluded.match_method,
+            confidence = excluded.confidence,
+            verification_state = excluded.verification_state,
+            ignored = excluded.ignored,
+            updated_at = datetime('now')
+        ",
+        params![
+            artist_key,
+            artist_name,
+            mbid,
+            canonical_name,
+            match_method,
+            confidence,
+            verification_state,
+            if ignored { 1 } else { 0 }
+        ],
+    )
+    .context("Could not save MusicBrainz artist match decision")?;
+
+    Ok(())
+}
+
 fn ensure_artist_link_for_decision(
     conn: &Connection,
     artist_key: &str,
@@ -702,6 +881,32 @@ fn normalized_release_decision(decision: &str) -> Result<Option<String>> {
         "include" | "not-in-scope" | "ignored" => Ok(Some(normalized)),
         _ => bail!("Unsupported MusicBrainz release decision: {decision}"),
     }
+}
+
+fn required_mbid(mbid: Option<&str>) -> Result<String> {
+    optional_mbid(mbid)?.context("MusicBrainz artist MBID is required")
+}
+
+fn optional_mbid(mbid: Option<&str>) -> Result<Option<String>> {
+    let Some(mbid) = mbid.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let normalized = mbid.to_lowercase();
+    if !is_valid_mbid(&normalized) {
+        bail!("MusicBrainz artist MBID must be a valid UUID");
+    }
+    Ok(Some(normalized))
+}
+
+fn is_valid_mbid(value: &str) -> bool {
+    if value.len() != 36 {
+        return false;
+    }
+
+    value.chars().enumerate().all(|(index, character)| {
+        matches!(index, 8 | 13 | 18 | 23) && character == '-'
+            || !matches!(index, 8 | 13 | 18 | 23) && character.is_ascii_hexdigit()
+    })
 }
 
 fn official_release_statuses(
@@ -1553,15 +1758,19 @@ mod tests {
                 "
                 CREATE TABLE musicbrainz_artist_links (
                     local_artist_key TEXT PRIMARY KEY,
+                    display_artist TEXT NOT NULL DEFAULT '',
                     mbid TEXT NOT NULL,
                     canonical_name TEXT,
+                    match_method TEXT NOT NULL DEFAULT 'verified-link',
                     verification_state TEXT NOT NULL,
                     ignored INTEGER NOT NULL DEFAULT 0
                 );
                 INSERT INTO musicbrainz_artist_links (
-                    local_artist_key, mbid, canonical_name, verification_state, ignored
+                    local_artist_key, display_artist, mbid, canonical_name, match_method,
+                    verification_state, ignored
                 ) VALUES (
-                    'pet shop boys', 'mbid-psb', 'Pet Shop Boys', 'verified', 0
+                    'pet shop boys', 'Pet Shop Boys', 'mbid-psb', 'Pet Shop Boys',
+                    'verified-link', 'verified', 0
                 );
                 ",
             )
@@ -1581,12 +1790,160 @@ mod tests {
         assert!(!response.suspect_mapping);
         assert_eq!(response.cached_name_count, 2);
         assert_eq!(response.match_method, "verified-link");
+        assert_eq!(response.artist_link_state, "verified");
+        assert!(!response.artist_link_ignored);
         assert_eq!(
             response.matched_cache_name.as_deref(),
             Some("Pet Shop Boys")
         );
 
         fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn ignored_artist_link_suppresses_discography_rows() {
+        let temp_dir = temp_cache_dir("discography-ignored");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_discography_cache(&cache_path, false);
+        let app_conn = create_artist_app_db();
+        create_decision_tables(&app_conn);
+        app_conn
+            .execute(
+                "
+                INSERT INTO musicbrainz_artist_links (
+                    local_artist_key, display_artist, mbid, canonical_name, match_method,
+                    confidence, verification_state, ignored, created_at, updated_at
+                ) VALUES (
+                    'pet shop boys', 'Pet Shop Boys', 'mbid-psb', 'Pet Shop Boys', 'ignored',
+                    NULL, 'ignored', 1, datetime('now'), datetime('now')
+                )
+                ",
+                [],
+            )
+            .expect("seed ignored artist link");
+
+        let response = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            MusicBrainzArtistDiscographyRequest {
+                artist_key: "pet shop boys".to_string(),
+                artist_name: "Pet Shop Boys".to_string(),
+            },
+        )
+        .expect("compare ignored artist discography");
+
+        assert_eq!(response.state, "ignored");
+        assert_eq!(response.artist_link_state, "ignored");
+        assert!(response.artist_link_ignored);
+        assert_eq!(response.match_method, "ignored");
+        assert_eq!(response.musicbrainz_mbid.as_deref(), Some("mbid-psb"));
+        assert_eq!(response.local_album_count, 2);
+        assert_eq!(response.pure_album_count, 0);
+        assert_eq!(response.owned_count, 0);
+        assert_eq!(response.missing_count, 0);
+        assert!(response.releases.is_empty());
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn saves_manual_artist_link_decisions() {
+        let app_conn = Connection::open_in_memory().expect("open app db");
+        create_decision_tables(&app_conn);
+        let def_leppard_mbid = "7249B899-8DB8-43E7-9E6E-22F1E736024E".to_string();
+
+        set_artist_link_for_connection(
+            &app_conn,
+            MusicBrainzArtistLinkRequest {
+                artist_key: "def leppard".to_string(),
+                artist_name: "Def Leppard".to_string(),
+                action: "set".to_string(),
+                musicbrainz_mbid: Some(def_leppard_mbid),
+                canonical_name: Some("Def Leppard".to_string()),
+            },
+        )
+        .expect("save manual artist link");
+
+        let saved = app_conn
+            .query_row(
+                "
+                SELECT mbid, canonical_name, match_method, verification_state, ignored
+                FROM musicbrainz_artist_links
+                WHERE local_artist_key = 'def leppard'
+                ",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, i64>(4)?,
+                    ))
+                },
+            )
+            .expect("read saved manual artist link");
+
+        assert_eq!(saved.0, "7249b899-8db8-43e7-9e6e-22f1e736024e");
+        assert_eq!(saved.1.as_deref(), Some("Def Leppard"));
+        assert_eq!(saved.2, "manual-mbid");
+        assert_eq!(saved.3, "verified");
+        assert_eq!(saved.4, 0);
+
+        set_artist_link_for_connection(
+            &app_conn,
+            MusicBrainzArtistLinkRequest {
+                artist_key: "def leppard".to_string(),
+                artist_name: "Def Leppard".to_string(),
+                action: "ignore".to_string(),
+                musicbrainz_mbid: Some("7249b899-8db8-43e7-9e6e-22f1e736024e".to_string()),
+                canonical_name: Some("Def Leppard".to_string()),
+            },
+        )
+        .expect("save ignored artist link");
+
+        let ignored = app_conn
+            .query_row(
+                "
+                SELECT match_method, verification_state, ignored
+                FROM musicbrainz_artist_links
+                WHERE local_artist_key = 'def leppard'
+                ",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                },
+            )
+            .expect("read ignored artist link");
+
+        assert_eq!(ignored.0, "ignored");
+        assert_eq!(ignored.1, "ignored");
+        assert_eq!(ignored.2, 1);
+
+        set_artist_link_for_connection(
+            &app_conn,
+            MusicBrainzArtistLinkRequest {
+                artist_key: "def leppard".to_string(),
+                artist_name: "Def Leppard".to_string(),
+                action: "unlink".to_string(),
+                musicbrainz_mbid: None,
+                canonical_name: None,
+            },
+        )
+        .expect("unlink artist link");
+
+        let remaining = app_conn
+            .query_row(
+                "SELECT COUNT(*) FROM musicbrainz_artist_links WHERE local_artist_key = 'def leppard'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("count remaining artist links");
+        assert_eq!(remaining, 0);
     }
 
     fn create_valid_cache(path: &Path) {

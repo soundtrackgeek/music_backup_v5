@@ -112,6 +112,8 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
     musicbrainzMbid: "012151a8-preview-psb",
     matchedCacheName: "pet shop boys",
     matchMethod: "exact-name",
+    artistLinkState: "unverified",
+    artistLinkIgnored: false,
     suspectMapping: false,
     cachedNameCount: 1,
     totalReleaseGroupCount: 3,
@@ -173,6 +175,8 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
     musicbrainzMbid: "preview-smiths",
     matchedCacheName: "the smiths",
     matchMethod: "exact-name",
+    artistLinkState: "unverified",
+    artistLinkIgnored: false,
     suspectMapping: false,
     cachedNameCount: 1,
     totalReleaseGroupCount: 2,
@@ -1843,6 +1847,8 @@ export async function getMusicBrainzArtistDiscography(artistKey: string, artistN
       musicbrainzMbid: null,
       matchedCacheName: null,
       matchMethod: "none",
+      artistLinkState: "none",
+      artistLinkIgnored: false,
       suspectMapping: false,
       cachedNameCount: 0,
       totalReleaseGroupCount: 0,
@@ -1858,6 +1864,61 @@ export async function getMusicBrainzArtistDiscography(artistKey: string, artistN
 
   return invoke<MusicBrainzArtistDiscographyResponse>("get_musicbrainz_artist_discography", {
     request: { artistKey, artistName },
+  });
+}
+
+export async function setMusicBrainzArtistLink(input: {
+  artistKey: string;
+  artistName: string;
+  action: "verify" | "ignore" | "unlink" | "set";
+  musicbrainzMbid?: string | null;
+  canonicalName?: string | null;
+}) {
+  if (!isTauriRuntime()) {
+    const normalizedKey = normalizeArtistKey(input.artistKey || input.artistName);
+    const mockDiscography = mockMusicBrainzDiscographies[normalizedKey];
+    if (!mockDiscography) {
+      return;
+    }
+
+    if (input.action === "unlink") {
+      mockDiscography.artistLinkState = "unverified";
+      mockDiscography.artistLinkIgnored = false;
+      mockDiscography.matchMethod = mockDiscography.musicbrainzMbid ? "exact-name" : "none";
+      mockDiscography.state = mockDiscography.musicbrainzMbid ? "available" : "notFound";
+      recomputeMockMusicBrainzDiscographyCounts(mockDiscography);
+      return;
+    }
+
+    const nextMbid = input.musicbrainzMbid?.trim() || mockDiscography.musicbrainzMbid;
+    const nextName = input.canonicalName?.trim() || mockDiscography.matchedCacheName || input.artistName;
+
+    if (input.action === "ignore") {
+      mockDiscography.musicbrainzMbid = nextMbid;
+      mockDiscography.matchedCacheName = nextName;
+      mockDiscography.matchMethod = "ignored";
+      mockDiscography.artistLinkState = "ignored";
+      mockDiscography.artistLinkIgnored = true;
+      mockDiscography.state = "ignored";
+      mockDiscography.message = "MusicBrainz is ignored for this local artist.";
+      mockDiscography.releases = [];
+      recomputeMockMusicBrainzDiscographyCounts(mockDiscography);
+      mockDiscography.message = "MusicBrainz is ignored for this local artist.";
+      return;
+    }
+
+    mockDiscography.musicbrainzMbid = nextMbid;
+    mockDiscography.matchedCacheName = nextName;
+    mockDiscography.matchMethod = input.action === "set" ? "manual-mbid" : "verified-link";
+    mockDiscography.artistLinkState = "verified";
+    mockDiscography.artistLinkIgnored = false;
+    mockDiscography.state = "available";
+    recomputeMockMusicBrainzDiscographyCounts(mockDiscography);
+    return;
+  }
+
+  return invoke<void>("set_musicbrainz_artist_link", {
+    request: input,
   });
 }
 

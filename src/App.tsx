@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from "react";
+import type { CSSProperties, FormEvent, KeyboardEvent, PointerEvent, ReactNode } from "react";
 import {
   Activity,
   Album,
@@ -15,6 +15,7 @@ import {
   Compass,
   Database,
   Download,
+  ExternalLink,
   FileSearch,
   FolderInput,
   Gauge,
@@ -33,6 +34,7 @@ import {
   Star,
   Tags,
   Trash2,
+  Unlink,
   UsersRound,
   Wrench,
   X,
@@ -73,6 +75,7 @@ import {
   saveChart,
   saveSearch,
   saveSettings,
+  setMusicBrainzArtistLink,
   setMusicBrainzReleaseDecision,
   searchLibrary,
   exportMusicToolIssues,
@@ -334,6 +337,8 @@ function musicBrainzStateLabel(
       return "Unavailable";
     case "notFound":
       return "Not found";
+    case "ignored":
+      return "Ignored";
     default:
       return "Not checked";
   }
@@ -1382,6 +1387,7 @@ function MusicBrainzArtistDiscographyPanel({
   isLoading,
   error,
   onRefresh,
+  onSetArtistLink,
   onSetReleaseDecision,
 }: {
   artist: ArtistSummary | null;
@@ -1389,10 +1395,44 @@ function MusicBrainzArtistDiscographyPanel({
   isLoading: boolean;
   error: string | null;
   onRefresh: () => void;
+  onSetArtistLink: (
+    action: "verify" | "ignore" | "unlink" | "set",
+    musicbrainzMbid?: string | null,
+  ) => void;
   onSetReleaseDecision: (row: MusicBrainzArtistReleaseRow, decision: "not-in-scope" | "include") => void;
 }) {
   const rows = response?.releases ?? [];
   const statusLabel = musicBrainzStateLabel(response?.state);
+  const [manualMbid, setManualMbid] = useState("");
+  const musicBrainzArtistUrl = response?.musicbrainzMbid
+    ? `https://musicbrainz.org/artist/${encodeURIComponent(response.musicbrainzMbid)}`
+    : null;
+  const artistLinkLabel =
+    response?.artistLinkState === "verified"
+      ? "Verified"
+      : response?.artistLinkState === "ignored"
+        ? "Ignored"
+        : response?.artistLinkState === "unverified"
+          ? "Unverified"
+          : "No review";
+  const canVerify = Boolean(artist && response?.musicbrainzMbid && response.artistLinkState !== "verified");
+  const canIgnore = Boolean(artist && response && !response.artistLinkIgnored);
+  const canUnlink = Boolean(
+    artist && response && (response.artistLinkState === "verified" || response.artistLinkState === "ignored"),
+  );
+  const manualMbidValue = manualMbid.trim();
+  const canSetManualMbid = Boolean(artist && manualMbidValue && !isLoading);
+
+  useEffect(() => {
+    setManualMbid(response?.musicbrainzMbid ?? "");
+  }, [response?.artistKey, response?.musicbrainzMbid]);
+
+  function handleManualMbidSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (manualMbidValue) {
+      onSetArtistLink("set", manualMbidValue);
+    }
+  }
 
   return (
     <section className="table-panel musicbrainz-artist-panel" aria-label="MusicBrainz artist discography">
@@ -1476,14 +1516,77 @@ function MusicBrainzArtistDiscographyPanel({
           </dl>
 
           <div className="musicbrainz-artist-meta">
-            <span>{response.matchedCacheName ?? "No cache artist"}</span>
-            <span>{response.musicbrainzMbid ?? "No MBID"}</span>
+            <span>{`Cache: ${response.matchedCacheName ?? "No cache artist"}`}</span>
+            {musicBrainzArtistUrl ? (
+              <a href={musicBrainzArtistUrl} target="_blank" rel="noreferrer">
+                {`MBID: ${response.musicbrainzMbid}`}
+                <ExternalLink size={13} aria-hidden="true" />
+              </a>
+            ) : (
+              <span>No MBID</span>
+            )}
+            <span>{`Method: ${response.matchMethod}`}</span>
+            <span>{`Trust: ${artistLinkLabel}`}</span>
             {response.suspectMapping ? (
               <span>{`${formatNumber(response.cachedNameCount)} cache names / ${formatNumber(response.totalReleaseGroupCount)} release groups`}</span>
             ) : null}
           </div>
 
-          <MusicBrainzReleaseTable rows={rows} onSetReleaseDecision={onSetReleaseDecision} />
+          <div className="musicbrainz-link-review" aria-label="MusicBrainz artist match review">
+            <div className="musicbrainz-link-actions">
+              <button
+                className="primary-button"
+                type="button"
+                disabled={!canVerify || isLoading}
+                onClick={() => onSetArtistLink("verify", response.musicbrainzMbid)}
+              >
+                <Check size={16} />
+                <span>Verify</span>
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                title="Ignore MusicBrainz for this artist"
+                aria-label="Ignore MusicBrainz for this artist"
+                disabled={!canIgnore || isLoading}
+                onClick={() => onSetArtistLink("ignore", response.musicbrainzMbid)}
+              >
+                <Ban size={16} />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                title="Unlink MusicBrainz artist match"
+                aria-label="Unlink MusicBrainz artist match"
+                disabled={!canUnlink || isLoading}
+                onClick={() => onSetArtistLink("unlink")}
+              >
+                <Unlink size={16} />
+              </button>
+            </div>
+            <form className="musicbrainz-manual-link" onSubmit={handleManualMbidSubmit}>
+              <input
+                aria-label="Manual MusicBrainz artist MBID"
+                value={manualMbid}
+                placeholder="Artist MBID"
+                disabled={!artist || isLoading}
+                onChange={(event) => setManualMbid(event.target.value)}
+              />
+              <button
+                className="icon-button"
+                type="submit"
+                title="Set MusicBrainz artist MBID"
+                aria-label="Set MusicBrainz artist MBID"
+                disabled={!canSetManualMbid}
+              >
+                <Save size={16} />
+              </button>
+            </form>
+          </div>
+
+          {response.artistLinkIgnored ? null : (
+            <MusicBrainzReleaseTable rows={rows} onSetReleaseDecision={onSetReleaseDecision} />
+          )}
           <small className="performance-database-path">{response.resolvedPath}</small>
         </>
       )}
@@ -5204,6 +5307,34 @@ export default function App() {
     }
   }
 
+  async function setArtistMusicBrainzLink(
+    action: "verify" | "ignore" | "unlink" | "set",
+    musicbrainzMbid?: string | null,
+  ) {
+    if (!selectedArtist) {
+      return;
+    }
+
+    setIsMusicBrainzArtistLoading(true);
+    setMusicBrainzArtistError(null);
+
+    try {
+      await setMusicBrainzArtistLink({
+        artistKey: selectedArtist.id,
+        artistName: selectedArtist.name,
+        action,
+        musicbrainzMbid: musicbrainzMbid ?? musicBrainzArtistDiscography?.musicbrainzMbid ?? null,
+        canonicalName: musicBrainzArtistDiscography?.matchedCacheName ?? selectedArtist.name,
+      });
+      const result = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
+      setMusicBrainzArtistDiscography(result);
+    } catch (error) {
+      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsMusicBrainzArtistLoading(false);
+    }
+  }
+
   async function runGenreExport(format: string) {
     if (!genreAlbumsRequest) {
       return;
@@ -6612,6 +6743,9 @@ export default function App() {
             isLoading={isMusicBrainzArtistLoading}
             error={musicBrainzArtistError}
             onRefresh={() => void refreshArtistMusicBrainz()}
+            onSetArtistLink={(action, musicbrainzMbid) =>
+              void setArtistMusicBrainzLink(action, musicbrainzMbid)
+            }
             onSetReleaseDecision={(row, decision) => void setArtistMusicBrainzReleaseDecision(row, decision)}
           />
 

@@ -196,13 +196,15 @@ export type MusicBrainzArtistReleaseRow = {
 export type MusicBrainzArtistDiscographyResponse = {
   artistKey: string;
   artistName: string;
-  state: "available" | "warning" | "unavailable" | "invalid" | "notFound";
+  state: "available" | "warning" | "unavailable" | "invalid" | "notFound" | "ignored";
   message: string;
   cachePath: string;
   resolvedPath: string;
   musicbrainzMbid: string | null;
   matchedCacheName: string | null;
   matchMethod: string;
+  artistLinkState: "none" | "unverified" | "verified" | "ignored";
+  artistLinkIgnored: boolean;
   suspectMapping: boolean;
   cachedNameCount: number;
   totalReleaseGroupCount: number;

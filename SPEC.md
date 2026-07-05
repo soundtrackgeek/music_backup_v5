@@ -3,7 +3,7 @@
 Last updated: 2026-07-05
 Status: Living product and implementation contract
 Current implementation: Phase 17 complete
-Current package version: 0.30.3
+Current package version: 0.31.0
 SQLite schema version: 12
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -290,7 +290,7 @@ Core files:
 - `src-tauri/src/main.rs`: app entrypoint.
 - `src-tauri/src/models.rs`: Rust payload models shared by commands, database logic, and import logic.
 - `src-tauri/src/db.rs`: SQLite migrations, search, charts, statistics, discovery, Billboard imports, Music Tools, settings, saved objects, and exports.
-- `src-tauri/src/musicbrainz.rs`: Read-only MusicBrainz cache validation, status reporting, and selected-artist discography comparison against the optional local `musicbrainz_cache.db`.
+- `src-tauri/src/musicbrainz.rs`: Read-only MusicBrainz cache validation, status reporting, selected-artist discography comparison, and app-owned artist/release review decisions against the optional local `musicbrainz_cache.db`.
 - `src-tauri/src/importer.rs`: MusicBee TSV parsing, normalization, import run handling, album aggregation, backup retention, and rating event capture.
 - `src-tauri/src/covers.rs`: cover image import, relinking, embedded-art extraction, and local image serving.
 
@@ -302,6 +302,7 @@ Expected MusicBrainz boundary:
 - Keep MusicBrainz source rows separate from MusicBee source rows and calculated album aggregates.
 - The first implemented slice persists `musicbrainz_cache_path`, opens the cache read-only, validates expected tables, reports cache quality/status, and creates app-owned artist-link/release-decision tables for later matching workflows.
 - The second implemented slice compares the selected Artist workspace artist against pure official MusicBrainz album release groups, using verified artist links first, cache matches second, and deterministic local title matching for owned/missing status.
+- The third implemented slice exposes selected-artist match review controls, persists verify/ignore/unlink/manual MBID decisions in `musicbrainz_artist_links`, lets verified links override raw cache lookup, and suppresses selected-artist results for ignored links.
 - Keep core Artist workspace rendering local and fast; the MusicBrainz Discography panel may verify official release status against MusicBrainz when local status cache rows are missing, using rate-limit-aware requests and app-owned persistence.
 - If a refresh/update path is added, isolate it from read-only lookup code, back up the cache first, and require MusicBrainz user-agent/contact configuration.
 - Reuse the same export, pagination, sorting, and issue-list conventions used by Artists and Music Tools where possible.
@@ -485,11 +486,13 @@ Expected next backend modularization:
 - The desktop backend loads pure official MusicBrainz album release groups only and compares them against the selected local artist's albums.
 - Artist matching checks verified app-owned links first, exact cache-name matches second, and normalized cache-name matches third.
 - Local owned/missing matching is deterministic by normalized album title, with matching year increasing confidence when available.
-- The panel shows cache/artist state, suspect mapping warnings, MBID/cache-name metadata, local album count, pure album count, owned/missing totals, completion percentage, and owned/missing release rows.
+- The panel shows cache/artist state, suspect mapping warnings, cached name, MBID link, match method, artist link review state, local album count, pure album count, owned/missing totals, completion percentage, and owned/missing release rows.
+- Selected-artist MusicBrainz matches can be verified, ignored, unlinked, or corrected by pasting a MusicBrainz artist MBID.
+- Verified artist links override raw cache lookup, and ignored artist links suppress selected-artist MusicBrainz results and future broad reports.
 - Missing release rows can be marked not in scope; filtered rows are hidden from the main owned/missing album list and do not count as missing or lower completion.
 - Cached release groups with no official MusicBrainz releases are automatically excluded when release-status verification has succeeded for the selected artist.
 - Web-only preview mode includes representative owned/missing MusicBrainz artist discographies.
-- Rust tests cover selected-artist owned/missing comparison and suspicious cache mapping warnings.
+- Rust tests cover selected-artist owned/missing comparison, suspicious cache mapping warnings, artist-link override behavior, ignored artist suppression, and manual artist-link decisions.
 
 ## Roadmap
 
@@ -643,6 +646,14 @@ Completed in 0.30.3:
 - Hide excluded MusicBrainz release rows from the selected-artist owned/missing table by default.
 - Rename the selected-artist summary count from `Excluded` to `Filtered`.
 
+Completed in 0.31.0:
+
+- Show the current selected-artist MusicBrainz match with cached name, MBID link, match method, and artist-link review state.
+- Add Verify, Ignore, Unlink, and manual MBID correction actions in the selected-artist MusicBrainz panel.
+- Persist selected-artist match decisions in `musicbrainz_artist_links`.
+- Let verified artist links override raw cache lookup, and suppress selected-artist MusicBrainz rows when an artist link is ignored.
+- Add Rust coverage for ignored artist suppression and manual artist-link decisions.
+
 Remaining candidate work:
 
 - Add matcher availability and cache staleness checks once the matching utilities are wired into the app.
@@ -650,7 +661,7 @@ Remaining candidate work:
 - Add release-type breakdown progress for combined MusicBrainz types.
 - Add optional secondary-type filters and CSV/XLSX export for MusicBrainz release rows.
 - Add a complete discography timeline that shows owned vs missing releases by year and release type.
-- Add optional manual link, unlink, and broader ignore workflows after the selected-artist not-in-scope flow is stable.
+- Add broader artist-link review workflows for collection-wide reports after selected-artist review is stable.
 - Add an explicit "refresh this artist" action after cache-only reads are stable; the action should back up the cache, use MusicBrainz rate limiting, require user-agent/contact configuration, and update only the selected artist.
 - Consider a Music Tool that lists high-confidence missing MusicBrainz albums across favorite or high-coverage artists after artist-link quality gates exist.
 
@@ -672,7 +683,7 @@ Done criteria:
 - `MusicBrainz/` remains ignored by git so large cache databases and backups stay local.
 - Artist lookup returns deterministic owned/missing results for a seeded cache fixture.
 - Tests cover suspicious duplicate-MBID/high-release-count detection.
-- Verified artist links override raw cache mappings, and ignored/suspect mappings are excluded from broad reports.
+- Verified artist links override raw cache mappings; ignored artist links suppress selected-artist results and future broad reports.
 - Missing releases can be filtered, sorted, paginated, and exported.
 - Artist refresh is explicit, backed up, progress-reporting, and rate-limit aware if it is included in the first implementation.
 - Confidence/source fields are visible in the UI and export formats.
