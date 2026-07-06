@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.1] - 2026-07-06
+### Fixed
+- Updated GitHub Actions official action pins to current major versions to avoid deprecated Node.js action runtime warnings.
+
+### Changed
+- Bumped synchronized app metadata to `0.36.1`.
+
 ## [0.36.0] - 2026-07-06
 ### Added
 - Added GitHub Actions CI for pushes and pull requests that runs the release/security guard, frontend build, and Rust tests on Windows.
