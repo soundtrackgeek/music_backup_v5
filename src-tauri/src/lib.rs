@@ -14,10 +14,11 @@ use models::{
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
     MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
-    MusicBrainzArtistExportRequest, MusicBrainzArtistLinkRequest, MusicBrainzCacheStatus,
-    MusicBrainzReleaseDecisionRequest, MusicToolFixRequest, MusicToolFixSummary,
-    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, PerformanceProbeResponse,
-    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
+    MusicBrainzArtistExportRequest, MusicBrainzArtistLinkRequest, MusicBrainzArtistRefreshRequest,
+    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzReleaseDecisionRequest,
+    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
+    MusicToolSummary, PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest, SavedChart,
+    SavedSearch, StatisticsResponse,
 };
 #[cfg(not(test))]
 use models::{ImportRun, ImportSummary, LibraryStatus};
@@ -140,6 +141,20 @@ async fn set_musicbrainz_artist_link(
     })
     .await
     .map_err(|error| format!("MusicBrainz artist link task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn refresh_musicbrainz_artist_releases(
+    app: AppHandle,
+    request: MusicBrainzArtistRefreshRequest,
+) -> Result<MusicBrainzArtistRefreshResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        musicbrainz::refresh_artist_release_groups_for_app(&app, request)
+    })
+    .await
+    .map_err(|error| format!("MusicBrainz artist refresh task failed: {error}"))?
     .map_err(|error| error.to_string())
 }
 
@@ -415,6 +430,7 @@ pub fn run() {
             get_musicbrainz_artist_discography,
             set_musicbrainz_artist_link,
             set_musicbrainz_release_decision,
+            refresh_musicbrainz_artist_releases,
             export_musicbrainz_artist_releases,
             save_settings,
             get_statistics,

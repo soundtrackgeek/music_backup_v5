@@ -38,7 +38,7 @@ type ProgressApp<'a> = &'a ();
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 12;
+const LATEST_SCHEMA_VERSION: i32 = 13;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const MIN_BACKUP_RETENTION: u32 = 1;
@@ -289,7 +289,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_twelve_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_thirteen_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -606,6 +606,25 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_musicbrainz_release_status_cache_checked
             ON musicbrainz_release_status_cache(checked_at);
 
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_release_groups (
+            artist_mbid TEXT NOT NULL,
+            release_mbid TEXT NOT NULL,
+            title TEXT NOT NULL,
+            year INTEGER,
+            type TEXT,
+            secondary_types TEXT NOT NULL DEFAULT '',
+            track_count INTEGER,
+            status TEXT NOT NULL DEFAULT 'Official',
+            source TEXT NOT NULL DEFAULT 'musicbrainz-live',
+            fetched_at TEXT NOT NULL,
+            PRIMARY KEY (artist_mbid, release_mbid)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_release_groups_artist
+            ON musicbrainz_artist_release_groups(artist_mbid);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_release_groups_fetched
+            ON musicbrainz_artist_release_groups(fetched_at);
+
         INSERT OR IGNORE INTO app_settings (
             id, backup_retention, dark_mode, updated_at
         ) VALUES (
@@ -623,9 +642,15 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_app_settings_musicbrainz_columns(conn)?;
     ensure_musicbrainz_decision_tables(conn)?;
     ensure_musicbrainz_release_status_cache(conn)?;
-    conn.execute_batch("PRAGMA user_version = 12;")
+    ensure_musicbrainz_artist_release_groups(conn)?;
+    conn.execute_batch("PRAGMA user_version = 13;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_thirteen_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_twelve_schema_exists(conn)?
+        && schema_table_exists(conn, "musicbrainz_artist_release_groups")?)
 }
 
 fn phase_twelve_schema_exists(conn: &Connection) -> Result<bool> {
@@ -819,6 +844,34 @@ fn ensure_musicbrainz_release_status_cache(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create MusicBrainz release status cache")?;
+
+    Ok(())
+}
+
+fn ensure_musicbrainz_artist_release_groups(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_release_groups (
+            artist_mbid TEXT NOT NULL,
+            release_mbid TEXT NOT NULL,
+            title TEXT NOT NULL,
+            year INTEGER,
+            type TEXT,
+            secondary_types TEXT NOT NULL DEFAULT '',
+            track_count INTEGER,
+            status TEXT NOT NULL DEFAULT 'Official',
+            source TEXT NOT NULL DEFAULT 'musicbrainz-live',
+            fetched_at TEXT NOT NULL,
+            PRIMARY KEY (artist_mbid, release_mbid)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_release_groups_artist
+            ON musicbrainz_artist_release_groups(artist_mbid);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_release_groups_fetched
+            ON musicbrainz_artist_release_groups(fetched_at);
+        ",
+    )
+    .context("Could not create MusicBrainz artist release-group overlay")?;
 
     Ok(())
 }
@@ -8670,7 +8723,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_noop_migration_for_current_phase_twelve_schema() {
+    fn skips_noop_migration_for_current_phase_thirteen_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -8681,7 +8734,7 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_twelve_schema_exists(&conn).expect("phase twelve schema exists"));
+        assert!(phase_thirteen_schema_exists(&conn).expect("phase thirteen schema exists"));
     }
 
     #[test]

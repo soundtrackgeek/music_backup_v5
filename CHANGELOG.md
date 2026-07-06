@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.34.0] - 2026-07-06
+### Added
+- Added a selected-artist MusicBrainz update action that fetches release groups from MusicBrainz by the reviewed MBID and reloads the Artist MusicBrainz panel.
+- Added SQLite schema version 13 with an app-owned `musicbrainz_artist_release_groups` overlay table so refreshed artist release groups do not mutate the recovered `musicbrainz_cache.db`.
+- Added source/timestamp indicators for selected-artist MusicBrainz release groups and Rust coverage for overlay rows overriding stale cache rows.
+
+### Changed
+- Bumped synchronized app metadata to `0.34.0`.
+
 ## [0.33.0] - 2026-07-06
 ### Added
 - Added CSV/XLSX export for the currently visible selected-artist MusicBrainz owned/missing album rows.

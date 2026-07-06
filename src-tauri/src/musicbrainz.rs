@@ -2,8 +2,9 @@ use crate::db;
 use crate::models::{
     ExportResult, MusicBrainzArtistCandidateRow, MusicBrainzArtistDiscographyRequest,
     MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
-    MusicBrainzArtistExportRow, MusicBrainzArtistLinkRequest, MusicBrainzArtistReleaseRow,
-    MusicBrainzCacheStatus, MusicBrainzCacheWarningExample, MusicBrainzReleaseDecisionRequest,
+    MusicBrainzArtistExportRow, MusicBrainzArtistLinkRequest, MusicBrainzArtistRefreshRequest,
+    MusicBrainzArtistRefreshResult, MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus,
+    MusicBrainzCacheWarningExample, MusicBrainzReleaseDecisionRequest,
 };
 use anyhow::{bail, Context, Result};
 #[cfg(not(test))]
@@ -30,7 +31,9 @@ const FUZZY_ARTIST_CANDIDATE_THRESHOLD: f64 = 0.68;
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.33.0 (local desktop app)";
+const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
+#[cfg(not(test))]
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.34.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 #[cfg(not(test))]
@@ -74,6 +77,132 @@ pub fn set_artist_link_for_app(
 ) -> Result<()> {
     let (conn, _) = db::open(app)?;
     set_artist_link_for_connection(&conn, request)
+}
+
+#[cfg(not(test))]
+pub fn refresh_artist_release_groups_for_app(
+    app: &AppHandle,
+    request: MusicBrainzArtistRefreshRequest,
+) -> Result<MusicBrainzArtistRefreshResult> {
+    let (mut conn, _) = db::open(app)?;
+    let artist_name = normalize_display_name(&request.artist_name, &request.artist_key);
+    let artist_key = normalize_local_artist_key(&request.artist_key, &artist_name);
+    let mbid = required_mbid(request.musicbrainz_mbid.as_deref())?;
+    let rows = fetch_artist_release_groups(&mbid)?;
+    let fetched_at = Utc::now().to_rfc3339();
+    let stored_count = save_refreshed_artist_release_groups(&mut conn, &mbid, &rows, &fetched_at)?;
+
+    Ok(MusicBrainzArtistRefreshResult {
+        artist_key,
+        artist_name,
+        musicbrainz_mbid: mbid,
+        fetched_count: rows.len(),
+        stored_count,
+        fetched_at,
+    })
+}
+
+fn save_refreshed_artist_release_groups(
+    conn: &mut Connection,
+    artist_mbid: &str,
+    rows: &[RefreshedReleaseGroup],
+    fetched_at: &str,
+) -> Result<usize> {
+    if !table_exists(conn, "musicbrainz_artist_release_groups")? {
+        bail!("MusicBrainz refreshed release-group table is unavailable");
+    }
+
+    let tx = conn
+        .transaction()
+        .context("Could not start MusicBrainz release-group refresh transaction")?;
+    tx.execute(
+        "
+        DELETE FROM musicbrainz_artist_release_groups
+        WHERE artist_mbid = ?1
+        ",
+        params![artist_mbid],
+    )
+    .context("Could not clear old refreshed MusicBrainz release groups")?;
+
+    for row in rows {
+        tx.execute(
+            "
+            INSERT INTO musicbrainz_artist_release_groups (
+                artist_mbid, release_mbid, title, year, type, secondary_types,
+                track_count, status, source, fetched_at
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'musicbrainz-live', ?9
+            )
+            ",
+            params![
+                artist_mbid,
+                &row.release_mbid,
+                &row.title,
+                row.year,
+                &row.primary_type,
+                &row.secondary_types,
+                row.track_count,
+                &row.status,
+                fetched_at
+            ],
+        )
+        .context("Could not save refreshed MusicBrainz release group")?;
+    }
+
+    tx.commit()
+        .context("Could not commit MusicBrainz release-group refresh")?;
+    Ok(rows.len())
+}
+
+#[cfg(not(test))]
+fn fetch_artist_release_groups(artist_mbid: &str) -> Result<Vec<RefreshedReleaseGroup>> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(30))
+        .build();
+    let mut rows = Vec::new();
+    let mut offset = 0usize;
+
+    loop {
+        let url = format!(
+            "{MUSICBRAINZ_RELEASE_GROUPS_URL}?artist={artist_mbid}&type=album&fmt=json&limit={MUSICBRAINZ_PAGE_LIMIT}&offset={offset}"
+        );
+        let response = agent
+            .get(&url)
+            .set("User-Agent", MUSICBRAINZ_USER_AGENT)
+            .call()
+            .with_context(|| {
+                format!("Could not fetch MusicBrainz release groups for {artist_mbid}")
+            })?;
+        let payload = response
+            .into_json::<MusicBrainzReleaseGroupBrowseResponse>()
+            .context("Could not parse MusicBrainz release-group response")?;
+        let total = payload
+            .release_group_count
+            .unwrap_or(payload.release_groups.len());
+
+        for release_group in payload.release_groups {
+            rows.push(RefreshedReleaseGroup {
+                release_mbid: release_group.id,
+                title: release_group.title,
+                year: release_year_from_date(release_group.first_release_date.as_deref()),
+                primary_type: release_group
+                    .primary_type
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(|| "Album".to_string()),
+                secondary_types: release_group.secondary_types.join(" + "),
+                track_count: None,
+                status: "Official".to_string(),
+            });
+        }
+
+        offset += MUSICBRAINZ_PAGE_LIMIT;
+        if offset >= total {
+            break;
+        }
+        thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
+    }
+
+    Ok(rows)
 }
 
 #[cfg(not(test))]
@@ -388,7 +517,11 @@ pub fn artist_discography_for_connection(
     };
 
     let decisions = release_decisions(app_conn, &artist_key)?;
-    let pure_releases = pure_album_release_groups(&cache_conn, &artist_match.mbid)?;
+    let ReleaseGroupSnapshot {
+        releases: pure_releases,
+        source: release_group_source,
+        updated_at: release_group_updated_at,
+    } = artist_release_group_snapshot(app_conn, &cache_conn, &artist_match.mbid)?;
     let official_statuses =
         official_release_statuses(app_conn, &artist_match.mbid, &pure_releases)?;
     let local_album_count = local_albums.len() as i64;
@@ -457,6 +590,8 @@ pub fn artist_discography_for_connection(
         excluded_count,
         local_album_count,
         completion,
+        release_group_source,
+        release_group_updated_at,
         releases,
         candidates,
     })
@@ -646,6 +781,23 @@ struct MusicBrainzReleaseGroup {
     track_count: Option<i64>,
 }
 
+struct ReleaseGroupSnapshot {
+    releases: Vec<MusicBrainzReleaseGroup>,
+    source: String,
+    updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct RefreshedReleaseGroup {
+    release_mbid: String,
+    title: String,
+    year: Option<i32>,
+    primary_type: String,
+    secondary_types: String,
+    track_count: Option<i64>,
+    status: String,
+}
+
 fn empty_discography_response(
     artist_key: String,
     artist_name: String,
@@ -675,6 +827,8 @@ fn empty_discography_response(
         excluded_count: 0,
         local_album_count,
         completion: None,
+        release_group_source: "cache".to_string(),
+        release_group_updated_at: None,
         releases: Vec::new(),
         candidates: Vec::new(),
     }
@@ -708,6 +862,8 @@ fn ignored_discography_response(
         excluded_count: 0,
         local_album_count,
         completion: None,
+        release_group_source: "cache".to_string(),
+        release_group_updated_at: None,
         releases: Vec::new(),
         candidates: Vec::new(),
     }
@@ -1123,7 +1279,90 @@ fn release_group_count_for_mbid(conn: &Connection, mbid: &str) -> Result<i64> {
     .context("Could not count MusicBrainz artist release groups")
 }
 
-fn pure_album_release_groups(
+fn artist_release_group_snapshot(
+    app_conn: &Connection,
+    cache_conn: &Connection,
+    artist_mbid: &str,
+) -> Result<ReleaseGroupSnapshot> {
+    if let Some(snapshot) = refreshed_artist_release_group_snapshot(app_conn, artist_mbid)? {
+        return Ok(snapshot);
+    }
+
+    Ok(ReleaseGroupSnapshot {
+        releases: cache_pure_album_release_groups(cache_conn, artist_mbid)?,
+        source: "cache".to_string(),
+        updated_at: None,
+    })
+}
+
+fn refreshed_artist_release_group_snapshot(
+    conn: &Connection,
+    artist_mbid: &str,
+) -> Result<Option<ReleaseGroupSnapshot>> {
+    if !table_exists(conn, "musicbrainz_artist_release_groups")? {
+        return Ok(None);
+    }
+
+    let row_count: i64 = conn
+        .query_row(
+            "
+            SELECT COUNT(*)
+            FROM musicbrainz_artist_release_groups
+            WHERE artist_mbid = ?1
+            ",
+            params![artist_mbid],
+            |row| row.get(0),
+        )
+        .context("Could not count refreshed MusicBrainz release groups")?;
+    if row_count == 0 {
+        return Ok(None);
+    }
+
+    let updated_at: Option<String> = conn
+        .query_row(
+            "
+            SELECT MAX(fetched_at)
+            FROM musicbrainz_artist_release_groups
+            WHERE artist_mbid = ?1
+            ",
+            params![artist_mbid],
+            |row| row.get(0),
+        )
+        .context("Could not read refreshed MusicBrainz release-group timestamp")?;
+
+    let mut stmt = conn
+        .prepare(
+            "
+            SELECT release_mbid, title, year, track_count
+            FROM musicbrainz_artist_release_groups
+            WHERE artist_mbid = ?1
+              AND status = 'Official'
+              AND type = 'Album'
+              AND COALESCE(secondary_types, '') = ''
+            ORDER BY COALESCE(year, 9999), LOWER(title), release_mbid
+            ",
+        )
+        .context("Could not prepare refreshed MusicBrainz pure-album lookup")?;
+    let releases = stmt
+        .query_map(params![artist_mbid], |row| {
+            Ok(MusicBrainzReleaseGroup {
+                release_mbid: row.get(0)?,
+                title: row.get(1)?,
+                year: row.get(2)?,
+                track_count: row.get(3)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load refreshed MusicBrainz pure official albums")?;
+
+    Ok(Some(ReleaseGroupSnapshot {
+        releases,
+        source: "refreshed".to_string(),
+        updated_at,
+    }))
+}
+
+fn cache_pure_album_release_groups(
     conn: &Connection,
     artist_mbid: &str,
 ) -> Result<Vec<MusicBrainzReleaseGroup>> {
@@ -1516,6 +1755,24 @@ struct MusicBrainzReleaseResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+struct MusicBrainzReleaseGroupBrowseResponse {
+    release_group_count: Option<usize>,
+    release_groups: Vec<MusicBrainzReleaseGroupPayload>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct MusicBrainzReleaseGroupPayload {
+    id: String,
+    title: String,
+    first_release_date: Option<String>,
+    primary_type: Option<String>,
+    #[serde(default)]
+    secondary_types: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 struct MusicBrainzRelease {
     status: Option<String>,
     release_group: Option<MusicBrainzReleaseGroupSummary>,
@@ -1524,6 +1781,14 @@ struct MusicBrainzRelease {
 #[derive(Debug, Deserialize)]
 struct MusicBrainzReleaseGroupSummary {
     id: String,
+}
+
+fn release_year_from_date(date: Option<&str>) -> Option<i32> {
+    let date = date?.trim();
+    if date.len() < 4 {
+        return None;
+    }
+    date.get(0..4)?.parse::<i32>().ok()
 }
 
 fn release_decisions(conn: &Connection, artist_key: &str) -> Result<HashMap<String, String>> {
@@ -2149,6 +2414,68 @@ mod tests {
     }
 
     #[test]
+    fn refreshed_release_group_overlay_overrides_stale_cache_rows() {
+        let temp_dir = temp_cache_dir("discography-overlay");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_discography_cache(&cache_path, false);
+        let mut app_conn = create_artist_app_db();
+        create_decision_tables(&app_conn);
+
+        save_refreshed_artist_release_groups(
+            &mut app_conn,
+            "mbid-psb",
+            &[
+                RefreshedReleaseGroup {
+                    release_mbid: "release-actually".to_string(),
+                    title: "Actually".to_string(),
+                    year: Some(1987),
+                    primary_type: "Album".to_string(),
+                    secondary_types: String::new(),
+                    track_count: None,
+                    status: "Official".to_string(),
+                },
+                RefreshedReleaseGroup {
+                    release_mbid: "release-nonetheless".to_string(),
+                    title: "Nonetheless".to_string(),
+                    year: Some(2024),
+                    primary_type: "Album".to_string(),
+                    secondary_types: String::new(),
+                    track_count: None,
+                    status: "Official".to_string(),
+                },
+            ],
+            "2026-07-06T12:00:00Z",
+        )
+        .expect("save refreshed rows");
+
+        let response = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            MusicBrainzArtistDiscographyRequest {
+                artist_key: "pet shop boys".to_string(),
+                artist_name: "Pet Shop Boys".to_string(),
+            },
+        )
+        .expect("compare artist discography with refreshed overlay");
+
+        assert_eq!(response.release_group_source, "refreshed");
+        assert_eq!(
+            response.release_group_updated_at.as_deref(),
+            Some("2026-07-06T12:00:00Z")
+        );
+        assert!(response
+            .releases
+            .iter()
+            .any(|release| release.title == "Nonetheless" && release.status == "missing"));
+        assert!(!response
+            .releases
+            .iter()
+            .any(|release| release.title == "Please"));
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
     fn release_decisions_exclude_rows_from_missing_counts() {
         let temp_dir = temp_cache_dir("discography-decision");
         let cache_path = temp_dir.join("musicbrainz_cache.db");
@@ -2632,6 +2959,19 @@ mod tests {
                 release_mbid TEXT NOT NULL,
                 has_official_release INTEGER NOT NULL,
                 checked_at TEXT NOT NULL,
+                PRIMARY KEY (artist_mbid, release_mbid)
+            );
+            CREATE TABLE musicbrainz_artist_release_groups (
+                artist_mbid TEXT NOT NULL,
+                release_mbid TEXT NOT NULL,
+                title TEXT NOT NULL,
+                year INTEGER,
+                type TEXT,
+                secondary_types TEXT NOT NULL DEFAULT '',
+                track_count INTEGER,
+                status TEXT NOT NULL DEFAULT 'Official',
+                source TEXT NOT NULL DEFAULT 'musicbrainz-live',
+                fetched_at TEXT NOT NULL,
                 PRIMARY KEY (artist_mbid, release_mbid)
             );
             ",

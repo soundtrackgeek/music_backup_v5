@@ -40,6 +40,7 @@ import type {
   MusicToolSummary,
   MusicBrainzArtistDiscographyResponse,
   MusicBrainzArtistExportRequest,
+  MusicBrainzArtistRefreshResult,
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
   PerformanceProbeResponse,
@@ -125,6 +126,8 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
     excludedCount: 0,
     localAlbumCount: 1,
     completion: 1 / 3,
+    releaseGroupSource: "cache",
+    releaseGroupUpdatedAt: null,
     candidates: [],
     releases: [
       {
@@ -189,6 +192,8 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
     excludedCount: 0,
     localAlbumCount: 1,
     completion: 0.5,
+    releaseGroupSource: "cache",
+    releaseGroupUpdatedAt: null,
     candidates: [
       {
         name: "The Smiths",
@@ -1899,6 +1904,8 @@ export async function getMusicBrainzArtistDiscography(artistKey: string, artistN
       excludedCount: 0,
       localAlbumCount: 0,
       completion: null,
+      releaseGroupSource: "cache",
+      releaseGroupUpdatedAt: null,
       releases: [],
       candidates: [],
     } satisfies MusicBrainzArtistDiscographyResponse;
@@ -1906,6 +1913,48 @@ export async function getMusicBrainzArtistDiscography(artistKey: string, artistN
 
   return invoke<MusicBrainzArtistDiscographyResponse>("get_musicbrainz_artist_discography", {
     request: { artistKey, artistName },
+  });
+}
+
+export async function refreshMusicBrainzArtistInfo(input: {
+  artistKey: string;
+  artistName: string;
+  musicbrainzMbid: string | null;
+}) {
+  if (!isTauriRuntime()) {
+    const normalizedKey = normalizeArtistKey(input.artistKey || input.artistName);
+    const mockDiscography = mockMusicBrainzDiscographies[normalizedKey];
+    const fetchedAt = new Date().toISOString();
+    if (mockDiscography && !mockDiscography.releases.some((row) => row.releaseMbid === "preview-sandbox")) {
+      mockDiscography.releases.push({
+        releaseMbid: "preview-sandbox",
+        title: "Sandbox",
+        year: 2026,
+        trackCount: null,
+        status: "missing",
+        localAlbumId: null,
+        localAlbumTitle: null,
+        localYear: null,
+        matchMethod: "none",
+        confidence: 0,
+        decision: null,
+      });
+      mockDiscography.releaseGroupSource = "refreshed";
+      mockDiscography.releaseGroupUpdatedAt = fetchedAt;
+      recomputeMockMusicBrainzDiscographyCounts(mockDiscography);
+    }
+    return {
+      artistKey: normalizedKey,
+      artistName: input.artistName || input.artistKey || "Unknown Artist",
+      musicbrainzMbid: input.musicbrainzMbid ?? mockDiscography?.musicbrainzMbid ?? "preview-mbid",
+      fetchedCount: mockDiscography?.releases.length ?? 0,
+      storedCount: mockDiscography?.releases.length ?? 0,
+      fetchedAt,
+    } satisfies MusicBrainzArtistRefreshResult;
+  }
+
+  return invoke<MusicBrainzArtistRefreshResult>("refresh_musicbrainz_artist_releases", {
+    request: input,
   });
 }
 

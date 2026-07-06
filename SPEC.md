@@ -3,8 +3,8 @@
 Last updated: 2026-07-06
 Status: Living product and implementation contract
 Current implementation: Phase 17 complete
-Current package version: 0.33.0
-SQLite schema version: 12
+Current package version: 0.34.0
+SQLite schema version: 13
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
 
@@ -212,7 +212,7 @@ Expected cache behavior:
 
 - The cache is optional and user-configured or discovered locally; it is not committed to git.
 - The local `MusicBrainz/` folder is ignored by git and may hold large cache databases, backups, and generated MusicBrainz artifacts.
-- The cache foundation made zero MusicBrainz network API calls. The selected-artist discography slice may perform a bounded MusicBrainz release-status verification call when the app-owned status cache is missing, then persist the result locally.
+- The cache foundation made zero MusicBrainz network API calls. The selected-artist discography slice may perform bounded MusicBrainz release-status verification when the app-owned status cache is missing, and the explicit selected-artist update action may fetch release groups for the reviewed MBID into an app-owned overlay table.
 - If the cache or matching utilities are unavailable, the app should show a clear unavailable state and all core library features should continue working.
 - Cache status should be inspectable, including path, availability, file size, artist count, distinct MBID count, release count, release year range, cache date range, duplicate-MBID count, suspicious high-release mapping count, and matching capability.
 - Cache counts are dynamic. The v3 reference cache documented roughly 483,675 official releases from 20,208 artists, but v5 should display counts from the actual selected cache.
@@ -242,7 +242,7 @@ Collection comparison rules:
 - Start with local albums where the selected artist is the album artist, then decide whether featured/collaboration albums should participate.
 - Record both owned and missing matches with confidence, local matched album title, MusicBrainz release MBID, year, combined type, track count, and status.
 - Flag suspect artist mappings before comparison when a single MBID is associated with many cached query names, when the artist has an unusually large release count, or when the cached lookup only matched through a weak normalized/fuzzy path.
-- Do not mutate local library data from MusicBrainz matches in the first implementation.
+- Do not mutate local library data or the recovered `musicbrainz_cache.db` from MusicBrainz matches.
 - Treat MusicBrainz as discovery evidence, not source-of-truth replacement metadata.
 - Always expose source, match confidence, and whether a row is exact, fuzzy, missing, or manually linked.
 
@@ -292,7 +292,7 @@ Core files:
 - `src-tauri/src/main.rs`: app entrypoint.
 - `src-tauri/src/models.rs`: Rust payload models shared by commands, database logic, and import logic.
 - `src-tauri/src/db.rs`: SQLite migrations, search, charts, statistics, discovery, Billboard imports, Music Tools, settings, saved objects, and exports.
-- `src-tauri/src/musicbrainz.rs`: Read-only MusicBrainz cache validation, status reporting, selected-artist discography comparison, and app-owned artist/release review decisions against the optional local `musicbrainz_cache.db`.
+- `src-tauri/src/musicbrainz.rs`: Read-only MusicBrainz cache validation, status reporting, selected-artist discography comparison, explicit selected-artist refresh, and app-owned artist/release review decisions against the optional local `musicbrainz_cache.db`.
 - `src-tauri/src/importer.rs`: MusicBee TSV parsing, normalization, import run handling, album aggregation, backup retention, and rating event capture.
 - `src-tauri/src/covers.rs`: cover image import, relinking, embedded-art extraction, and local image serving.
 
@@ -300,13 +300,13 @@ Expected MusicBrainz boundary:
 
 - Keep MusicBrainz cache reads in a dedicated backend module instead of folding them into general search/chart query code.
 - Use a separate read-only SQLite connection for `musicbrainz_cache.db`.
-- Persist only app-owned MusicBrainz settings, artist link decisions, release link/ignore decisions, release-status verification cache, cache quality snapshots, and refresh metadata in the app SQLite database.
+- Persist only app-owned MusicBrainz settings, artist link decisions, release link/ignore decisions, release-status verification cache, refreshed artist release-group overlays, cache quality snapshots, and refresh metadata in the app SQLite database.
 - Keep MusicBrainz source rows separate from MusicBee source rows and calculated album aggregates.
 - The first implemented slice persists `musicbrainz_cache_path`, opens the cache read-only, validates expected tables, reports cache quality/status, and creates app-owned artist-link/release-decision tables for later matching workflows.
 - The second implemented slice compares the selected Artist workspace artist against pure official MusicBrainz album release groups, using verified artist links first, cache matches second, and deterministic local title matching for owned/missing status.
 - The third implemented slice exposes selected-artist match review controls, persists verify/ignore/unlink/manual MBID decisions in `musicbrainz_artist_links`, lets verified links override raw cache lookup, and suppresses selected-artist results for ignored links.
 - Keep core Artist workspace rendering local and fast; the MusicBrainz Discography panel may verify official release status against MusicBrainz when local status cache rows are missing, using rate-limit-aware requests and app-owned persistence.
-- If a refresh/update path is added, isolate it from read-only lookup code, back up the cache first, and require MusicBrainz user-agent/contact configuration.
+- Explicit selected-artist refresh fetches MusicBrainz release groups by reviewed MBID, writes them into the app-owned overlay table, and must not mutate the recovered `musicbrainz_cache.db`.
 - Reuse the same export, pagination, sorting, and issue-list conventions used by Artists and Music Tools where possible.
 - Provide web-preview mock payloads so the Artist workspace can be developed without a local cache.
 
@@ -479,6 +479,7 @@ Expected next backend modularization:
 - Cache status reports file size, artist counts, distinct MBID counts, release counts, pure official album counts, release-year range, cache-date range, duplicate-MBID count, suspicious mapping count, and warning examples.
 - SQLite schema version 11 adds the persisted MusicBrainz cache path plus app-owned artist-link and release-decision tables for future verified/ignored matching.
 - SQLite schema version 12 adds the app-owned MusicBrainz release-status cache used to exclude bootleg-only release groups from selected-artist missing-album counts.
+- SQLite schema version 13 adds the app-owned refreshed artist release-group overlay used by explicit selected-artist MusicBrainz updates.
 - Web-only preview mode includes a mock MusicBrainz cache warning state.
 - The release/security guard verifies that `MusicBrainz/` remains ignored by git.
 
@@ -495,6 +496,7 @@ Expected next backend modularization:
 - Verified artist links override raw cache lookup, and ignored artist links suppress selected-artist MusicBrainz results and future broad reports.
 - Missing release rows can be marked not in scope; filtered rows are hidden from the main owned/missing album list and do not count as missing or lower completion.
 - Cached release groups with no official MusicBrainz releases are automatically excluded when release-status verification has succeeded for the selected artist.
+- Explicit selected-artist MusicBrainz updates fetch release groups from MusicBrainz by reviewed MBID, store them in the app-owned `musicbrainz_artist_release_groups` overlay, and reload the panel from those rows ahead of stale cache rows.
 - The currently visible selected-artist MusicBrainz rows can be exported to CSV/XLSX with owned/missing status, year, MusicBrainz title, local match, confidence, MBID links, match method, and artist-link trust state.
 - Web-only preview mode includes representative owned/missing MusicBrainz artist discographies.
 - Rust tests cover selected-artist owned/missing comparison, suspicious cache mapping warnings, fuzzy artist candidates, artist-link override behavior, ignored artist suppression, manual artist-link decisions, and hidden-row export filtering.
@@ -682,6 +684,14 @@ Completed in 0.33.0:
 - Keep ignored artist mappings and hidden/not-in-scope rows out of selected-artist MusicBrainz exports by default.
 - Add Rust coverage for excluding hidden MusicBrainz rows from selected-artist export tables.
 
+Completed in 0.34.0:
+
+- Add explicit selected-artist MusicBrainz update by reviewed MBID.
+- Store refreshed MusicBrainz release groups in app-owned SQLite schema version 13 instead of mutating `musicbrainz_cache.db`.
+- Prefer refreshed app-owned release-group rows over stale recovered-cache rows for the selected artist.
+- Show selected-artist release-group source/timestamp in the MusicBrainz panel.
+- Add Rust coverage for refreshed release-group overlays overriding stale cache rows.
+
 Remaining candidate work:
 
 - Add matcher availability and cache staleness checks once the matching utilities are wired into the app.
@@ -689,7 +699,6 @@ Remaining candidate work:
 - Add optional secondary-type filters for MusicBrainz release rows.
 - Add a complete discography timeline that shows owned vs missing releases by year and release type.
 - Add broader artist-link review workflows for collection-wide reports after selected-artist review is stable.
-- Add an explicit "refresh this artist" action after cache-only reads are stable; the action should back up the cache, use MusicBrainz rate limiting, require user-agent/contact configuration, and update only the selected artist.
 - Consider a Music Tool that lists high-confidence missing MusicBrainz albums across favorite or high-coverage artists after artist-link quality gates exist.
 
 Constraints:
@@ -697,11 +706,11 @@ Constraints:
 - Never require external lookup for core browsing.
 - Review all enrichment before applying.
 - Keep source and confidence visible.
-- Core browsing must use local data only. Selected-artist MusicBrainz release-status verification may use a bounded MusicBrainz API call when local status cache rows are missing, and must fall back to cache-only rows if the network is unavailable.
+- Core browsing must use local data only. Selected-artist MusicBrainz release-status verification may use a bounded MusicBrainz API call when local status cache rows are missing, and explicit selected-artist update may fetch release groups by reviewed MBID.
 - Batch or collection-wide MusicBrainz reports must hide suspect artist mappings until reviewed or verified.
 - Do not overwrite MusicBee source metadata automatically.
 - Cache data may be stale or incomplete; UI copy and exports should make that visible.
-- Broad live MusicBrainz refreshes must never run during normal page rendering; selected-artist release-status verification is allowed only for missing app-owned status-cache rows.
+- Broad live MusicBrainz refreshes must never run during normal page rendering; selected-artist release-status verification is allowed only for missing app-owned status-cache rows, and selected-artist release-group refresh must require an explicit user action.
 
 Done criteria:
 

@@ -3152,6 +3152,32 @@ button {
   box-shadow: 0 0 0 3px rgba(22, 130, 121, 0.14);
 }
 
+.musicbrainz-update-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 1px solid #cce0da;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #0b625c;
+  background: #eff8f5;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.musicbrainz-update-button:disabled {
+  opacity: 0.52;
+  cursor: default;
+}
+
+.musicbrainz-update-button span {
+  white-space: nowrap;
+}
+
 .musicbrainz-export-controls {
   display: flex;
   align-items: flex-start;
@@ -3792,6 +3818,7 @@ button {
 }
 
 :root[data-theme="dark"] .icon-button,
+:root[data-theme="dark"] .musicbrainz-update-button,
 :root[data-theme="dark"] .search-input,
 :root[data-theme="dark"] .criterion input,
 :root[data-theme="dark"] .criterion select,
@@ -3922,6 +3949,11 @@ button {
 :root[data-theme="dark"] .musicbrainz-status-ignored {
   border-color: #35433e;
   background: #111815;
+}
+
+:root[data-theme="dark"] .musicbrainz-update-button {
+  color: #7dd3c7;
+  background: #16312c;
 }
 
 :root[data-theme="dark"] .musicbrainz-status-strip > span:last-child {

@@ -216,6 +216,15 @@ export type MusicBrainzArtistExportRequest = {
   format: string;
 };
 
+export type MusicBrainzArtistRefreshResult = {
+  artistKey: string;
+  artistName: string;
+  musicbrainzMbid: string;
+  fetchedCount: number;
+  storedCount: number;
+  fetchedAt: string;
+};
+
 export type MusicBrainzArtistCandidateRow = {
   name: string;
   mbid: string;
@@ -247,6 +256,8 @@ export type MusicBrainzArtistDiscographyResponse = {
   excludedCount: number;
   localAlbumCount: number;
   completion: number | null;
+  releaseGroupSource: "cache" | "refreshed";
+  releaseGroupUpdatedAt: string | null;
   releases: MusicBrainzArtistReleaseRow[];
   candidates: MusicBrainzArtistCandidateRow[];
 };

@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  CloudDownload,
   Compass,
   Database,
   Download,
@@ -77,6 +78,7 @@ import {
   saveChart,
   saveSearch,
   saveSettings,
+  refreshMusicBrainzArtistInfo,
   setMusicBrainzArtistLink,
   setMusicBrainzReleaseDecision,
   searchLibrary,
@@ -127,6 +129,7 @@ import type {
   RightSidebarMode,
   MusicToolFixSummary,
   MusicBrainzArtistExportRequest,
+  MusicBrainzArtistRefreshResult,
   MusicToolIssueRequest,
   MusicToolIssueResponse,
   MusicToolIssueRow,
@@ -1389,19 +1392,24 @@ function MusicBrainzArtistDiscographyPanel({
   artist,
   response,
   isLoading,
+  isUpdating,
   error,
   onRefresh,
+  onUpdateInfo,
   onOpenExternalUrl,
   onSetArtistLink,
   onSetReleaseDecision,
   onExport,
   exportResult,
+  refreshResult,
 }: {
   artist: ArtistSummary | null;
   response: MusicBrainzArtistDiscographyResponse | null;
   isLoading: boolean;
+  isUpdating: boolean;
   error: string | null;
   onRefresh: () => void;
+  onUpdateInfo: () => void;
   onOpenExternalUrl: (url: string) => void;
   onSetArtistLink: (
     action: "verify" | "ignore" | "unlink" | "set",
@@ -1411,6 +1419,7 @@ function MusicBrainzArtistDiscographyPanel({
   onSetReleaseDecision: (row: MusicBrainzArtistReleaseRow, decision: "not-in-scope" | "include") => void;
   onExport: (format: "csv" | "xlsx") => void;
   exportResult: ExportResult | null;
+  refreshResult: MusicBrainzArtistRefreshResult | null;
 }) {
   const rows = response?.releases ?? [];
   const visibleRows = rows.filter((row) => row.status !== "excluded");
@@ -1436,6 +1445,7 @@ function MusicBrainzArtistDiscographyPanel({
   const manualMbidValue = manualMbid.trim();
   const canSetManualMbid = Boolean(artist && manualMbidValue && !isLoading);
   const canExport = Boolean(response && !response.artistLinkIgnored && visibleRows.length > 0 && !isLoading);
+  const canUpdateInfo = Boolean(artist && response?.musicbrainzMbid && !response.artistLinkIgnored && !isLoading);
 
   useEffect(() => {
     setManualMbid(response?.musicbrainzMbid ?? "");
@@ -1463,7 +1473,9 @@ function MusicBrainzArtistDiscographyPanel({
           <h2>MusicBrainz Discography</h2>
           <p>
             {isLoading
-              ? "Checking local cache"
+              ? isUpdating
+                ? "Updating MusicBrainz"
+                : "Checking local cache"
               : response
                 ? `${formatNumber(response.ownedCount)} owned / ${formatNumber(response.missingCount)} missing scoped albums`
                 : artist
@@ -1475,6 +1487,17 @@ function MusicBrainzArtistDiscographyPanel({
           <span className={`run-status run-status-${(response?.state ?? "unavailable").toLowerCase()}`}>
             {statusLabel}
           </span>
+          <button
+            className="musicbrainz-update-button"
+            type="button"
+            title="Update MusicBrainz info for this artist"
+            aria-label="Update MusicBrainz info for this artist"
+            disabled={!canUpdateInfo}
+            onClick={onUpdateInfo}
+          >
+            <CloudDownload size={16} />
+            <span>{isUpdating ? "Updating" : "Update"}</span>
+          </button>
           <button
             className="icon-button"
             type="button"
@@ -1554,6 +1577,11 @@ function MusicBrainzArtistDiscographyPanel({
             )}
             <span>{`Method: ${response.matchMethod}`}</span>
             <span>{`Trust: ${artistLinkLabel}`}</span>
+            <span>
+              {response.releaseGroupSource === "refreshed"
+                ? `Source: refreshed${response.releaseGroupUpdatedAt ? ` ${formatDate(response.releaseGroupUpdatedAt)}` : ""}`
+                : "Source: cache"}
+            </span>
             {response.suspectMapping ? (
               <span>{`${formatNumber(response.cachedNameCount)} cache names / ${formatNumber(response.totalReleaseGroupCount)} release groups`}</span>
             ) : null}
@@ -1629,6 +1657,14 @@ function MusicBrainzArtistDiscographyPanel({
                     <Download size={16} />
                     <span>
                       {formatNumber(exportResult.rowCount)} albums to {exportResult.path}
+                    </span>
+                  </div>
+                ) : null}
+                {refreshResult ? (
+                  <div className="export-result musicbrainz-export-result">
+                    <CloudDownload size={16} />
+                    <span>
+                      {formatNumber(refreshResult.storedCount)} release groups refreshed at {formatDate(refreshResult.fetchedAt)}
                     </span>
                   </div>
                 ) : null}
@@ -3963,7 +3999,10 @@ export default function App() {
     useState<MusicBrainzArtistDiscographyResponse | null>(null);
   const [musicBrainzArtistError, setMusicBrainzArtistError] = useState<string | null>(null);
   const [isMusicBrainzArtistLoading, setIsMusicBrainzArtistLoading] = useState(false);
+  const [isMusicBrainzArtistUpdating, setIsMusicBrainzArtistUpdating] = useState(false);
   const [musicBrainzArtistExportResult, setMusicBrainzArtistExportResult] = useState<ExportResult | null>(null);
+  const [musicBrainzArtistRefreshResult, setMusicBrainzArtistRefreshResult] =
+    useState<MusicBrainzArtistRefreshResult | null>(null);
   const [artistIncludeCalculated, setArtistIncludeCalculated] = useState(false);
   const [artistExportResult, setArtistExportResult] = useState<ExportResult | null>(null);
   const [genreRequest, setGenreRequest] = useState<GenreListRequest>(() => createGenreListRequest());
@@ -4464,14 +4503,19 @@ export default function App() {
       setMusicBrainzArtistDiscography(null);
       setMusicBrainzArtistError(null);
       setIsMusicBrainzArtistLoading(false);
+      setIsMusicBrainzArtistUpdating(false);
       setMusicBrainzArtistExportResult(null);
+      setMusicBrainzArtistRefreshResult(null);
       return;
     }
 
     let cancelled = false;
     setIsMusicBrainzArtistLoading(true);
+    setIsMusicBrainzArtistUpdating(false);
     setMusicBrainzArtistError(null);
     setMusicBrainzArtistExportResult(null);
+    setMusicBrainzArtistRefreshResult(null);
+    setMusicBrainzArtistRefreshResult(null);
     void getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name)
       .then((nextResponse) => {
         if (!cancelled) {
@@ -5156,6 +5200,7 @@ export default function App() {
     setArtistAlbumTracksError(null);
     setArtistExportResult(null);
     setMusicBrainzArtistExportResult(null);
+    setMusicBrainzArtistRefreshResult(null);
   }
 
   function selectArtist(artistId: string) {
@@ -5165,6 +5210,7 @@ export default function App() {
     setArtistAlbumTracksError(null);
     setArtistExportResult(null);
     setMusicBrainzArtistExportResult(null);
+    setMusicBrainzArtistRefreshResult(null);
   }
 
   function selectArtistAlbum(albumId: string) {
@@ -5397,8 +5443,10 @@ export default function App() {
     }
 
     setIsMusicBrainzArtistLoading(true);
+    setIsMusicBrainzArtistUpdating(false);
     setMusicBrainzArtistError(null);
     setMusicBrainzArtistExportResult(null);
+    setMusicBrainzArtistRefreshResult(null);
 
     try {
       const result = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
@@ -5420,8 +5468,10 @@ export default function App() {
     }
 
     setIsMusicBrainzArtistLoading(true);
+    setIsMusicBrainzArtistUpdating(false);
     setMusicBrainzArtistError(null);
     setMusicBrainzArtistExportResult(null);
+    setMusicBrainzArtistRefreshResult(null);
 
     try {
       await setMusicBrainzReleaseDecision({
@@ -5451,8 +5501,10 @@ export default function App() {
     }
 
     setIsMusicBrainzArtistLoading(true);
+    setIsMusicBrainzArtistUpdating(false);
     setMusicBrainzArtistError(null);
     setMusicBrainzArtistExportResult(null);
+    setMusicBrainzArtistRefreshResult(null);
 
     try {
       await setMusicBrainzArtistLink({
@@ -5467,6 +5519,34 @@ export default function App() {
     } catch (error) {
       setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
     } finally {
+      setIsMusicBrainzArtistLoading(false);
+    }
+  }
+
+  async function updateArtistMusicBrainzInfo() {
+    if (!selectedArtist || !musicBrainzArtistDiscography?.musicbrainzMbid) {
+      return;
+    }
+
+    setIsMusicBrainzArtistLoading(true);
+    setIsMusicBrainzArtistUpdating(true);
+    setMusicBrainzArtistError(null);
+    setMusicBrainzArtistExportResult(null);
+    setMusicBrainzArtistRefreshResult(null);
+
+    try {
+      const refreshResult = await refreshMusicBrainzArtistInfo({
+        artistKey: selectedArtist.id,
+        artistName: selectedArtist.name,
+        musicbrainzMbid: musicBrainzArtistDiscography.musicbrainzMbid,
+      });
+      const discography = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
+      setMusicBrainzArtistDiscography(discography);
+      setMusicBrainzArtistRefreshResult(refreshResult);
+    } catch (error) {
+      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsMusicBrainzArtistUpdating(false);
       setIsMusicBrainzArtistLoading(false);
     }
   }
@@ -6928,8 +7008,10 @@ export default function App() {
             artist={selectedArtist}
             response={musicBrainzArtistDiscography}
             isLoading={isMusicBrainzArtistLoading}
+            isUpdating={isMusicBrainzArtistUpdating}
             error={musicBrainzArtistError}
             onRefresh={() => void refreshArtistMusicBrainz()}
+            onUpdateInfo={() => void updateArtistMusicBrainzInfo()}
             onOpenExternalUrl={(url) => void openMusicBrainzArtistPage(url)}
             onSetArtistLink={(action, musicbrainzMbid, canonicalName) =>
               void setArtistMusicBrainzLink(action, musicbrainzMbid, canonicalName)
@@ -6937,6 +7019,7 @@ export default function App() {
             onSetReleaseDecision={(row, decision) => void setArtistMusicBrainzReleaseDecision(row, decision)}
             onExport={(format) => void runArtistMusicBrainzExport(format)}
             exportResult={musicBrainzArtistExportResult}
+            refreshResult={musicBrainzArtistRefreshResult}
           />
 
           <section className="table-panel" aria-label="Selected artist cover view">
