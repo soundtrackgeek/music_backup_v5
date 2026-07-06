@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.1] - 2026-07-06
+### Fixed
+- Fixed release asset preparation so installer filenames are normalized before upload and the updater `latest.json` URL matches the published GitHub Release asset.
+
+### Changed
+- Bumped synchronized app metadata to `0.37.1`.
+
 ## [0.37.0] - 2026-07-06
 ### Added
 - Added Tauri in-app update checks on startup, from Settings with a manual Check now button, and on a configurable automatic interval in minutes.

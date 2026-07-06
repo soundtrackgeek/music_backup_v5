@@ -21,9 +21,13 @@ function listFiles(root) {
 }
 
 function copyAsset(sourcePath) {
-  const targetPath = path.join(outputDir, path.basename(sourcePath));
+  const targetPath = path.join(outputDir, releaseAssetName(sourcePath));
   fs.copyFileSync(sourcePath, targetPath);
   return targetPath;
+}
+
+function releaseAssetName(sourcePath) {
+  return path.basename(sourcePath).replace(/\s+/g, ".");
 }
 
 function releaseAssetUrl(fileName) {
@@ -76,7 +80,7 @@ const manifest = {
   platforms: {
     "windows-x86_64": {
       signature: fs.readFileSync(signaturePath, "utf8").trim(),
-      url: releaseAssetUrl(path.basename(updaterAsset)),
+      url: releaseAssetUrl(releaseAssetName(updaterAsset)),
     },
   },
 };
