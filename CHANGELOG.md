@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.3] - 2026-07-06
+### Fixed
+- Fixed desktop startup so the main window restores the last saved position, size, and maximized state when the app is reopened.
+
+### Changed
+- Bumped synchronized app metadata to `0.31.3`.
+
 ## [0.31.2] - 2026-07-06
 ### Fixed
 - Fixed artist grouping so common Unicode dash variants in album artist names collapse to the same artist key, preventing visually identical artists such as The All-American Rejects from splitting in Artists, Search filters, Discovery, Music Tools, and MusicBrainz local-album matching.
