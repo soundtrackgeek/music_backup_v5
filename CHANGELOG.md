@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.1] - 2026-07-06
+### Fixed
+- Fixed selected-artist fuzzy MusicBrainz candidate suggestions so they start at the SPEC-defined 85/100 confidence gate instead of 68/100.
+
+### Changed
+- Bumped synchronized app metadata to `0.39.1`.
+
 ## [0.39.0] - 2026-07-06
 ### Added
 - Added a High-confidence missing MusicBrainz albums validator in Tools that reports collection-wide pure official MusicBrainz album gaps from trusted artist matches.

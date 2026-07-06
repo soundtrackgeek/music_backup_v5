@@ -29,13 +29,13 @@ use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 const DEFAULT_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
 const MAX_ARTIST_CANDIDATES: usize = 8;
-const FUZZY_ARTIST_CANDIDATE_THRESHOLD: f64 = 0.68;
+const FUZZY_ARTIST_CANDIDATE_THRESHOLD: f64 = 0.85;
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.39.0 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.39.1 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 #[cfg(not(test))]
@@ -2667,8 +2667,59 @@ mod tests {
     }
 
     #[test]
-    fn returns_fuzzy_artist_candidates_when_cache_lookup_fails() {
+    fn returns_high_confidence_fuzzy_artist_candidates_when_cache_lookup_fails() {
         let temp_dir = temp_cache_dir("discography-fuzzy-candidates");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_discography_cache(&cache_path, false);
+        let cache_conn = Connection::open(&cache_path).expect("open test cache");
+        cache_conn
+            .execute(
+                "INSERT INTO artist_cache (name, mbid, cached_at) VALUES ('the legendary electronic pet shop boys', 'mbid-long-psb', '2026-02-01 12:07:00')",
+                [],
+            )
+            .expect("insert fuzzy artist candidate");
+        cache_conn
+            .execute(
+                "
+                INSERT INTO release_groups (
+                    artist_mbid, release_mbid, title, year, type, secondary_types,
+                    track_count, status, cached_at
+                ) VALUES ('mbid-long-psb', 'release-long-please', 'Please Again', 1986, 'Album', '', 11, 'Official', '2026-02-01 12:08:00')
+                ",
+                [],
+            )
+            .expect("insert fuzzy artist candidate release");
+        drop(cache_conn);
+        let app_conn = create_artist_app_db();
+
+        let response = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            MusicBrainzArtistDiscographyRequest {
+                artist_key: "legendary electronic pet shop boys".to_string(),
+                artist_name: "Legendary Electronic Pet Shop Boys".to_string(),
+            },
+        )
+        .expect("compare artist discography with fuzzy candidates");
+
+        assert_eq!(response.state, "notFound");
+        assert_eq!(response.musicbrainz_mbid, None);
+        assert!(response.releases.is_empty());
+        let candidate = response
+            .candidates
+            .iter()
+            .find(|candidate| candidate.name == "the legendary electronic pet shop boys")
+            .expect("high-confidence fuzzy candidate");
+        assert_eq!(candidate.mbid, "mbid-long-psb");
+        assert_eq!(candidate.match_method, "fuzzy-name");
+        assert!(candidate.score >= FUZZY_ARTIST_CANDIDATE_THRESHOLD);
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn suppresses_low_confidence_fuzzy_artist_candidates_when_cache_lookup_fails() {
+        let temp_dir = temp_cache_dir("discography-low-fuzzy-candidates");
         let cache_path = temp_dir.join("musicbrainz_cache.db");
         create_discography_cache(&cache_path, false);
         let app_conn = create_artist_app_db();
@@ -2681,19 +2732,12 @@ mod tests {
                 artist_name: "Pet Shop Boyz".to_string(),
             },
         )
-        .expect("compare artist discography with fuzzy candidates");
+        .expect("compare artist discography with low-confidence fuzzy candidates");
 
         assert_eq!(response.state, "notFound");
         assert_eq!(response.musicbrainz_mbid, None);
         assert!(response.releases.is_empty());
-        let candidate = response
-            .candidates
-            .iter()
-            .find(|candidate| candidate.name == "pet shop boys")
-            .expect("pet shop boys fuzzy candidate");
-        assert_eq!(candidate.mbid, "mbid-psb");
-        assert_eq!(candidate.match_method, "fuzzy-name");
-        assert!(candidate.score >= FUZZY_ARTIST_CANDIDATE_THRESHOLD);
+        assert!(response.candidates.is_empty());
 
         fs::remove_dir_all(temp_dir).expect("remove temp dir");
     }
