@@ -38,12 +38,13 @@ type ProgressApp<'a> = &'a ();
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 14;
+const LATEST_SCHEMA_VERSION: i32 = 15;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH: &str =
     r"C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3";
 const MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES: u32 = 1440;
+const MAX_UPDATE_AUTO_CHECK_MINUTES: u32 = 1440;
 const MIN_BACKUP_RETENTION: u32 = 1;
 const MAX_BACKUP_RETENTION: u32 = 50;
 const SCORE_GENRE_GROUP: &[&str] = &[
@@ -292,7 +293,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_fourteen_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_fifteen_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -567,6 +568,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             musicbrainz_cache_path TEXT NOT NULL DEFAULT 'MusicBrainz/musicbrainz_cache.db',
             musicbrainz_overlay_sync_path TEXT NOT NULL DEFAULT 'C:\\Users\\jtill\\OneDrive\\_musicbackup\\musicbrainz-overlay-sync.sqlite3',
             musicbrainz_overlay_auto_sync_minutes INTEGER NOT NULL DEFAULT 0,
+            update_auto_check_minutes INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL
         );
 
@@ -684,14 +686,20 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_billboard_single_chart_entries_table(conn)?;
     ensure_app_settings_musicbrainz_columns(conn)?;
     ensure_app_settings_musicbrainz_sync_columns(conn)?;
+    ensure_app_settings_update_columns(conn)?;
     ensure_musicbrainz_decision_tables(conn)?;
     ensure_musicbrainz_tombstone_tables(conn)?;
     ensure_musicbrainz_overlay_sync_log(conn)?;
     ensure_musicbrainz_release_status_cache(conn)?;
     ensure_musicbrainz_artist_release_groups(conn)?;
-    conn.execute_batch("PRAGMA user_version = 14;")
+    conn.execute_batch("PRAGMA user_version = 15;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_fifteen_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_fourteen_schema_exists(conn)?
+        && schema_column_exists(conn, "app_settings", "update_auto_check_minutes")?)
 }
 
 fn phase_fourteen_schema_exists(conn: &Connection) -> Result<bool> {
@@ -865,6 +873,17 @@ fn ensure_app_settings_musicbrainz_sync_columns(conn: &Connection) -> Result<()>
             "ALTER TABLE app_settings ADD COLUMN musicbrainz_overlay_auto_sync_minutes INTEGER NOT NULL DEFAULT 0;",
         )
         .context("Could not add app_settings.musicbrainz_overlay_auto_sync_minutes")?;
+    }
+
+    Ok(())
+}
+
+fn ensure_app_settings_update_columns(conn: &Connection) -> Result<()> {
+    if !schema_column_exists(conn, "app_settings", "update_auto_check_minutes")? {
+        conn.execute_batch(
+            "ALTER TABLE app_settings ADD COLUMN update_auto_check_minutes INTEGER NOT NULL DEFAULT 0;",
+        )
+        .context("Could not add app_settings.update_auto_check_minutes")?;
     }
 
     Ok(())
@@ -2232,7 +2251,7 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
             "
             SELECT backup_retention, dark_mode, left_sidebar_default, right_sidebar_default,
                    musicbrainz_cache_path, musicbrainz_overlay_sync_path,
-                   musicbrainz_overlay_auto_sync_minutes, updated_at
+                   musicbrainz_overlay_auto_sync_minutes, update_auto_check_minutes, updated_at
             FROM app_settings
             WHERE id = 1
             ",
@@ -2254,6 +2273,7 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
                 musicbrainz_cache_path: DEFAULT_MUSICBRAINZ_CACHE_PATH.to_string(),
                 musicbrainz_overlay_sync_path: DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH.to_string(),
                 musicbrainz_overlay_auto_sync_minutes: 0,
+                update_auto_check_minutes: 0,
                 updated_at: None,
             },
         ),
@@ -2268,9 +2288,9 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
         INSERT INTO app_settings (
             id, backup_retention, dark_mode, left_sidebar_default, right_sidebar_default,
             musicbrainz_cache_path, musicbrainz_overlay_sync_path,
-            musicbrainz_overlay_auto_sync_minutes, updated_at
+            musicbrainz_overlay_auto_sync_minutes, update_auto_check_minutes, updated_at
         )
-        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
         ON CONFLICT(id) DO UPDATE SET
             backup_retention = excluded.backup_retention,
             dark_mode = excluded.dark_mode,
@@ -2279,6 +2299,7 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
             musicbrainz_cache_path = excluded.musicbrainz_cache_path,
             musicbrainz_overlay_sync_path = excluded.musicbrainz_overlay_sync_path,
             musicbrainz_overlay_auto_sync_minutes = excluded.musicbrainz_overlay_auto_sync_minutes,
+            update_auto_check_minutes = excluded.update_auto_check_minutes,
             updated_at = excluded.updated_at
         ",
         params![
@@ -2289,6 +2310,7 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
             settings.musicbrainz_cache_path,
             settings.musicbrainz_overlay_sync_path,
             i64::from(settings.musicbrainz_overlay_auto_sync_minutes),
+            i64::from(settings.update_auto_check_minutes),
             now
         ],
     )
@@ -2308,7 +2330,8 @@ fn settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppSettings> {
         musicbrainz_cache_path: row.get(4)?,
         musicbrainz_overlay_sync_path: row.get(5)?,
         musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(6)?.max(0) as u32,
-        updated_at: row.get(7)?,
+        update_auto_check_minutes: row.get::<_, i64>(7)?.max(0) as u32,
+        updated_at: row.get(8)?,
     })
 }
 
@@ -2326,6 +2349,9 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
     settings.musicbrainz_overlay_auto_sync_minutes = settings
         .musicbrainz_overlay_auto_sync_minutes
         .min(MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES);
+    settings.update_auto_check_minutes = settings
+        .update_auto_check_minutes
+        .min(MAX_UPDATE_AUTO_CHECK_MINUTES);
     settings
 }
 
@@ -8884,7 +8910,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_noop_migration_for_current_phase_fourteen_schema() {
+    fn skips_noop_migration_for_current_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -8895,7 +8921,7 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_fourteen_schema_exists(&conn).expect("phase fourteen schema exists"));
+        assert!(phase_fifteen_schema_exists(&conn).expect("phase fifteen schema exists"));
     }
 
     #[test]
@@ -9021,6 +9047,7 @@ mod tests {
                 musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
                     .to_string(),
                 musicbrainz_overlay_auto_sync_minutes: 2_000,
+                update_auto_check_minutes: 2_000,
                 updated_at: None,
             },
         )
@@ -9039,6 +9066,7 @@ mod tests {
             saved.musicbrainz_overlay_auto_sync_minutes,
             MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES
         );
+        assert_eq!(saved.update_auto_check_minutes, MAX_UPDATE_AUTO_CHECK_MINUTES);
 
         let loaded = settings_for_connection(&conn).expect("load settings");
         assert_eq!(loaded.backup_retention, MAX_BACKUP_RETENTION);
@@ -9054,6 +9082,7 @@ mod tests {
             loaded.musicbrainz_overlay_auto_sync_minutes,
             MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES
         );
+        assert_eq!(loaded.update_auto_check_minutes, MAX_UPDATE_AUTO_CHECK_MINUTES);
         assert!(loaded.updated_at.is_some());
     }
 

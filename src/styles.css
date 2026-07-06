@@ -51,6 +51,14 @@ button {
   --right-sidebar-width: 0px;
 }
 
+.workspace-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -181,6 +189,14 @@ button {
 
 .right-sidebar-hidden .workspace {
   padding-right: 72px;
+}
+
+.left-sidebar-hidden .app-update-banner {
+  margin-left: 72px;
+}
+
+.right-sidebar-hidden .app-update-banner {
+  margin-right: 72px;
 }
 
 .edge-toggle {
@@ -2074,6 +2090,106 @@ button {
   cursor: default;
 }
 
+.secondary-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid #cfdcd7;
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #24413b;
+  background: #ffffff;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.secondary-button span {
+  white-space: nowrap;
+}
+
+.secondary-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.app-update-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 28px 0;
+  border: 1px solid #b9d8d3;
+  border-radius: 8px;
+  background: #eef8f6;
+  padding: 12px;
+}
+
+.app-update-banner-error {
+  border-color: #e9b8b2;
+  background: #fff5f4;
+}
+
+.app-update-banner-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: #0d756d;
+  background: #dff2ef;
+}
+
+.app-update-banner-error .app-update-banner-icon {
+  color: #a23e32;
+  background: #f8ddd9;
+}
+
+.app-update-banner-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.app-update-banner-copy strong {
+  color: #12231f;
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.app-update-banner-copy span {
+  min-width: 0;
+  color: #4e5b57;
+  font-size: 13px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.app-update-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-update-progress {
+  width: min(360px, 100%);
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #cfe4df;
+}
+
+.app-update-progress div {
+  height: 100%;
+  border-radius: inherit;
+  background: #0d766d;
+  transition: width 160ms ease;
+}
+
 .db-path {
   min-width: 0;
   overflow: hidden;
@@ -2976,6 +3092,10 @@ button {
   grid-column: span 2;
 }
 
+.update-settings-panel {
+  grid-column: span 2;
+}
+
 .backup-settings-panel {
   grid-column: span 2;
 }
@@ -3006,6 +3126,27 @@ button {
   justify-content: space-between;
   gap: 12px;
   margin-top: 16px;
+}
+
+.app-update-settings-toolbar {
+  display: grid;
+  grid-template-columns: 128px auto auto;
+  align-items: end;
+  justify-content: start;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.app-update-interval input {
+  width: 100%;
+}
+
+.performance-summary.app-update-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.app-update-progress-settings {
+  margin-top: 12px;
 }
 
 .performance-toolbar > span,
@@ -3680,6 +3821,7 @@ button {
 :root[data-theme="dark"] .sidebar,
 :root[data-theme="dark"] .detail-panel,
 :root[data-theme="dark"] .metric,
+:root[data-theme="dark"] .app-update-banner,
 :root[data-theme="dark"] .query-panel,
 :root[data-theme="dark"] .import-panel,
 :root[data-theme="dark"] .table-panel,
@@ -3879,6 +4021,7 @@ button {
 }
 
 :root[data-theme="dark"] .icon-button,
+:root[data-theme="dark"] .secondary-button,
 :root[data-theme="dark"] .musicbrainz-update-button,
 :root[data-theme="dark"] .search-input,
 :root[data-theme="dark"] .criterion input,
@@ -4024,6 +4167,38 @@ button {
 :root[data-theme="dark"] .musicbrainz-status-ignored {
   border-color: #35433e;
   background: #111815;
+}
+
+:root[data-theme="dark"] .app-update-banner {
+  border-color: #315a53;
+  background: #12231f;
+}
+
+:root[data-theme="dark"] .app-update-banner-error {
+  border-color: #6e3c36;
+  background: #261817;
+}
+
+:root[data-theme="dark"] .app-update-banner-icon {
+  color: #8ee4d8;
+  background: #173c36;
+}
+
+:root[data-theme="dark"] .app-update-banner-error .app-update-banner-icon {
+  color: #f0a39a;
+  background: #3b211e;
+}
+
+:root[data-theme="dark"] .app-update-banner-copy strong {
+  color: #f3f8f6;
+}
+
+:root[data-theme="dark"] .app-update-banner-copy span {
+  color: #a9b7b2;
+}
+
+:root[data-theme="dark"] .app-update-progress {
+  background: #27443e;
 }
 
 :root[data-theme="dark"] .musicbrainz-update-button {
@@ -4265,6 +4440,16 @@ button {
     padding: 20px 16px;
   }
 
+  .app-update-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+    margin: 20px 16px 0;
+  }
+
+  .app-update-banner-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
   .metric-grid,
   .filter-grid,
   .stats-dashboard-grid,
@@ -4287,6 +4472,11 @@ button {
   .action-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .app-update-settings-toolbar {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
   }
 
   .tool-export-controls,
@@ -4445,6 +4635,11 @@ button {
     justify-self: start;
   }
 
+  .app-update-settings-toolbar .primary-button,
+  .app-update-settings-toolbar .secondary-button {
+    justify-self: start;
+  }
+
   .musicbrainz-sync-toolbar .primary-button {
     justify-self: start;
   }
@@ -4512,6 +4707,12 @@ button {
     padding-left: 12px;
   }
 
+  .left-sidebar-hidden .app-update-banner,
+  .right-sidebar-hidden .app-update-banner {
+    margin-right: 12px;
+    margin-left: 12px;
+  }
+
   .metric-grid,
   .filter-grid,
   .stats-dashboard-grid,
@@ -4523,6 +4724,7 @@ button {
   }
 
   .layout-settings-panel,
+  .update-settings-panel,
   .backup-settings-panel,
   .performance-settings-panel,
   .musicbrainz-settings-panel,

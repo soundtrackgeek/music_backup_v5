@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Main window local-only core permissions",
   "windows": ["main"],
-  "permissions": ["core:default", "opener:default"]
+  "permissions": ["core:default", "opener:default", "process:allow-restart", "updater:default"]
 }

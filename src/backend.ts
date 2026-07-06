@@ -2626,6 +2626,7 @@ export function cacheSettings(settings: AppSettings) {
 function normalizeSettings(settings: Partial<AppSettings>): AppSettings {
   const backupRetention = Math.round(Number(settings.backupRetention ?? 3));
   const autoSyncMinutes = Math.round(Number(settings.musicBrainzOverlayAutoSyncMinutes ?? 0));
+  const updateAutoCheckMinutes = Math.round(Number(settings.updateAutoCheckMinutes ?? 0));
   return {
     backupRetention: Math.min(50, Math.max(1, Number.isFinite(backupRetention) ? backupRetention : 3)),
     darkMode: Boolean(settings.darkMode),
@@ -2636,6 +2637,10 @@ function normalizeSettings(settings: Partial<AppSettings>): AppSettings {
     musicBrainzOverlayAutoSyncMinutes: Math.min(
       1440,
       Math.max(0, Number.isFinite(autoSyncMinutes) ? autoSyncMinutes : 0),
+    ),
+    updateAutoCheckMinutes: Math.min(
+      1440,
+      Math.max(0, Number.isFinite(updateAutoCheckMinutes) ? updateAutoCheckMinutes : 0),
     ),
     updatedAt: settings.updatedAt ?? null,
   };
@@ -2650,6 +2655,7 @@ function defaultSettings(): AppSettings {
     musicBrainzCachePath: defaultMusicBrainzCachePath,
     musicBrainzOverlaySyncPath: defaultMusicBrainzOverlaySyncPath,
     musicBrainzOverlayAutoSyncMinutes: 0,
+    updateAutoCheckMinutes: 0,
     updatedAt: null,
   };
 }

@@ -195,6 +195,8 @@ pub struct AppSettings {
     )]
     pub musicbrainz_overlay_auto_sync_minutes: u32,
     #[serde(default)]
+    pub update_auto_check_minutes: u32,
+    #[serde(default)]
     pub updated_at: Option<String>,
 }
 
@@ -1344,6 +1346,7 @@ mod tests {
             musicbrainz_cache_path: r"C:\Sync\musicbrainz_cache.db".to_string(),
             musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3".to_string(),
             musicbrainz_overlay_auto_sync_minutes: 15,
+            update_auto_check_minutes: 30,
             updated_at: None,
         };
         let serialized = serde_json::to_value(&settings).expect("serialize settings");
@@ -1360,6 +1363,7 @@ mod tests {
             serialized.get("musicBrainzOverlayAutoSyncMinutes"),
             Some(&json!(15))
         );
+        assert_eq!(serialized.get("updateAutoCheckMinutes"), Some(&json!(30)));
         assert!(serialized
             .get("musicbrainzOverlayAutoSyncMinutes")
             .is_none());
@@ -1367,15 +1371,18 @@ mod tests {
         let decoded: AppSettings = serde_json::from_value(json!({
             "musicBrainzCachePath": r"C:\Sync\musicbrainz_cache.db",
             "musicBrainzOverlaySyncPath": r"C:\Sync\musicbrainz-overlay-sync.sqlite3",
-            "musicBrainzOverlayAutoSyncMinutes": 15
+            "musicBrainzOverlayAutoSyncMinutes": 15,
+            "updateAutoCheckMinutes": 30
         }))
         .expect("deserialize UI settings");
         assert_eq!(decoded.musicbrainz_overlay_auto_sync_minutes, 15);
+        assert_eq!(decoded.update_auto_check_minutes, 30);
 
         let alias_decoded: AppSettings = serde_json::from_value(json!({
             "musicbrainzCachePath": "legacy-cache.db",
             "musicbrainzOverlaySyncPath": "legacy-sync.sqlite3",
-            "musicbrainzOverlayAutoSyncMinutes": 20
+            "musicbrainzOverlayAutoSyncMinutes": 20,
+            "updateAutoCheckMinutes": 45
         }))
         .expect("deserialize alias settings");
         assert_eq!(alias_decoded.musicbrainz_cache_path, "legacy-cache.db");
@@ -1384,5 +1391,6 @@ mod tests {
             "legacy-sync.sqlite3"
         );
         assert_eq!(alias_decoded.musicbrainz_overlay_auto_sync_minutes, 20);
+        assert_eq!(alias_decoded.update_auto_check_minutes, 45);
     }
 }

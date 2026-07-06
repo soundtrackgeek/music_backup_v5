@@ -147,6 +147,7 @@ export type AppSettings = {
   musicBrainzCachePath: string;
   musicBrainzOverlaySyncPath: string;
   musicBrainzOverlayAutoSyncMinutes: number;
+  updateAutoCheckMinutes: number;
   updatedAt: string | null;
 };
 

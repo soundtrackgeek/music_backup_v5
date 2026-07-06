@@ -212,6 +212,13 @@ import {
 } from "./app/genreSuggestions";
 import { clampBackupRetention, numberValue } from "./app/input";
 import {
+  checkForAppUpdate,
+  installAppUpdate,
+  type AppUpdateCheckResult,
+  type AppUpdateInfo,
+  type AppUpdateInstallProgress,
+} from "./app/updater";
+import {
   chartCompletenessRange,
   chartRequestFromConfig,
   clampCompletenessValue,
@@ -240,6 +247,16 @@ import {
   toCompletenessFilterRange,
   type DiscoverySelection,
 } from "./app/requests";
+
+type AppUpdateStatus =
+  | "idle"
+  | "checking"
+  | "available"
+  | "upToDate"
+  | "downloading"
+  | "installing"
+  | "restarting"
+  | "error";
 
 function createDefaultSettings(): AppSettings {
   return loadCachedSettings();
@@ -395,6 +412,45 @@ function textSettingValue(value: unknown, fallback: string) {
 function overlayAutoSyncMinutesValue(value: unknown) {
   const parsed = Math.round(Number(value ?? 0));
   return Math.min(1440, Math.max(0, Number.isFinite(parsed) ? parsed : 0));
+}
+
+function updateAutoCheckMinutesValue(value: unknown) {
+  const parsed = Math.round(Number(value ?? 0));
+  return Math.min(1440, Math.max(0, Number.isFinite(parsed) ? parsed : 0));
+}
+
+function appUpdateStatusLabel(status: AppUpdateStatus) {
+  switch (status) {
+    case "checking":
+      return "Checking";
+    case "available":
+      return "Available";
+    case "upToDate":
+      return "Current";
+    case "downloading":
+      return "Downloading";
+    case "installing":
+      return "Installing";
+    case "restarting":
+      return "Restarting";
+    case "error":
+      return "Check failed";
+    default:
+      return "Not checked";
+  }
+}
+
+function appUpdateProgressText(progress: AppUpdateInstallProgress | null) {
+  if (!progress) {
+    return "Preparing";
+  }
+  if (progress.phase !== "downloading") {
+    return appUpdateStatusLabel(progress.phase);
+  }
+  if (progress.percent != null) {
+    return `${Math.round(progress.percent)}% / ${formatBytes(progress.downloadedBytes)}`;
+  }
+  return `${formatBytes(progress.downloadedBytes)} downloaded`;
 }
 
 function TextCriterion({
@@ -4086,6 +4142,9 @@ export default function App() {
   const settingsSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const settingsSaveSequenceRef = useRef(0);
   const pendingSettingsSaveCountRef = useRef(0);
+  const appUpdateRef = useRef<AppUpdateCheckResult["update"] | null>(null);
+  const isAppUpdateCheckingRef = useRef(false);
+  const isAppUpdateInstallingRef = useRef(false);
   const [leftSidebarMode, setLeftSidebarMode] = useState<LeftSidebarMode>(() => createDefaultLeftSidebarMode());
   const [rightSidebarMode, setRightSidebarMode] = useState<RightSidebarMode>(() => createDefaultRightSidebarMode());
   const [databaseBackups, setDatabaseBackups] = useState<DatabaseBackup[]>([]);
@@ -4107,6 +4166,15 @@ export default function App() {
   const [musicBrainzOverlayAutoSyncDraft, setMusicBrainzOverlayAutoSyncDraft] = useState(
     String(overlayAutoSyncMinutesValue(settings.musicBrainzOverlayAutoSyncMinutes)),
   );
+  const [appUpdateAutoCheckDraft, setAppUpdateAutoCheckDraft] = useState(
+    String(updateAutoCheckMinutesValue(settings.updateAutoCheckMinutes)),
+  );
+  const [appUpdateStatus, setAppUpdateStatus] = useState<AppUpdateStatus>("idle");
+  const [appUpdateInfo, setAppUpdateInfo] = useState<AppUpdateInfo | null>(null);
+  const [appUpdateError, setAppUpdateError] = useState<string | null>(null);
+  const [appUpdateLastCheckedAt, setAppUpdateLastCheckedAt] = useState<string | null>(null);
+  const [appUpdateProgress, setAppUpdateProgress] = useState<AppUpdateInstallProgress | null>(null);
+  const [isAppUpdateBannerDismissed, setIsAppUpdateBannerDismissed] = useState(false);
   const [musicBrainzOverlaySyncResult, setMusicBrainzOverlaySyncResult] =
     useState<MusicBrainzOverlaySyncResult | null>(null);
   const [musicBrainzOverlaySyncLog, setMusicBrainzOverlaySyncLog] = useState<
@@ -4168,6 +4236,7 @@ export default function App() {
     setMusicBrainzOverlayAutoSyncDraft(
       String(overlayAutoSyncMinutesValue(nextSettings.musicBrainzOverlayAutoSyncMinutes)),
     );
+    setAppUpdateAutoCheckDraft(String(updateAutoCheckMinutesValue(nextSettings.updateAutoCheckMinutes)));
     setMusicBrainzStatus(nextMusicBrainzStatus);
     setMusicBrainzStatusError(null);
     setMusicBrainzOverlaySyncLog(nextMusicBrainzOverlaySyncLog);
@@ -5900,6 +5969,9 @@ export default function App() {
     const overlayAutoSyncMinutes = overlayAutoSyncMinutesValue(
       values.musicBrainzOverlayAutoSyncMinutes ?? baseSettings.musicBrainzOverlayAutoSyncMinutes,
     );
+    const updateAutoCheckMinutes = updateAutoCheckMinutesValue(
+      values.updateAutoCheckMinutes ?? baseSettings.updateAutoCheckMinutes,
+    );
     const nextSettings = {
       ...baseSettings,
       ...values,
@@ -5915,6 +5987,7 @@ export default function App() {
         defaultMusicBrainzOverlaySyncPath,
       ),
       musicBrainzOverlayAutoSyncMinutes: overlayAutoSyncMinutes,
+      updateAutoCheckMinutes,
     };
     const saveSequence = settingsSaveSequenceRef.current + 1;
     settingsSaveSequenceRef.current = saveSequence;
@@ -5936,6 +6009,9 @@ export default function App() {
           setMusicBrainzOverlayAutoSyncDraft(
             String(overlayAutoSyncMinutesValue(saved.musicBrainzOverlayAutoSyncMinutes)),
           );
+        }
+        if (Object.prototype.hasOwnProperty.call(values, "updateAutoCheckMinutes")) {
+          setAppUpdateAutoCheckDraft(String(updateAutoCheckMinutesValue(saved.updateAutoCheckMinutes)));
         }
       }
     });
@@ -6073,6 +6149,114 @@ export default function App() {
     await saveAppSettings({ musicBrainzOverlayAutoSyncMinutes: nextAutoSyncMinutes });
   }
 
+  async function commitAppUpdateAutoCheckMinutes() {
+    const nextAutoCheckMinutes = updateAutoCheckMinutesValue(numberValue(appUpdateAutoCheckDraft));
+    setAppUpdateAutoCheckDraft(String(nextAutoCheckMinutes));
+    await saveAppSettings({ updateAutoCheckMinutes: nextAutoCheckMinutes });
+  }
+
+  const checkAppUpdate = useCallback(
+    async (source: "startup" | "manual" | "auto" = "manual") => {
+      if (!canImport) {
+        if (source === "manual") {
+          setAppUpdateStatus("error");
+          setAppUpdateError("Desktop runtime required.");
+          setIsAppUpdateBannerDismissed(false);
+        }
+        return;
+      }
+
+      if (isAppUpdateCheckingRef.current || isAppUpdateInstallingRef.current) {
+        return;
+      }
+
+      isAppUpdateCheckingRef.current = true;
+      setAppUpdateStatus("checking");
+      setAppUpdateProgress(null);
+      if (source === "manual") {
+        setIsAppUpdateBannerDismissed(false);
+      }
+      setAppUpdateError(null);
+
+      try {
+        const result = await checkForAppUpdate();
+        setAppUpdateLastCheckedAt(new Date().toISOString());
+        if (result) {
+          void appUpdateRef.current?.close().catch(() => undefined);
+          appUpdateRef.current = result.update;
+          setAppUpdateInfo(result.info);
+          setAppUpdateStatus("available");
+          setIsAppUpdateBannerDismissed(false);
+        } else {
+          void appUpdateRef.current?.close().catch(() => undefined);
+          appUpdateRef.current = null;
+          setAppUpdateInfo(null);
+          setAppUpdateStatus("upToDate");
+        }
+      } catch (error) {
+        if (source === "manual") {
+          setAppUpdateLastCheckedAt(new Date().toISOString());
+          setAppUpdateStatus("error");
+          setAppUpdateError(error instanceof Error ? error.message : String(error));
+          setIsAppUpdateBannerDismissed(false);
+        } else {
+          setAppUpdateStatus((currentStatus) => (currentStatus === "checking" ? "idle" : currentStatus));
+        }
+      } finally {
+        isAppUpdateCheckingRef.current = false;
+      }
+    },
+    [canImport],
+  );
+
+  async function runAppUpdateInstall() {
+    if (isAppUpdateInstallingRef.current || !appUpdateRef.current) {
+      return;
+    }
+
+    isAppUpdateInstallingRef.current = true;
+    setAppUpdateStatus("downloading");
+    setAppUpdateProgress(null);
+    setAppUpdateError(null);
+    setIsAppUpdateBannerDismissed(false);
+
+    try {
+      await installAppUpdate(appUpdateRef.current, (progress) => {
+        setAppUpdateProgress(progress);
+        setAppUpdateStatus(progress.phase);
+      });
+    } catch (error) {
+      setAppUpdateStatus("error");
+      setAppUpdateError(error instanceof Error ? error.message : String(error));
+      isAppUpdateInstallingRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (!canImport) {
+      return undefined;
+    }
+
+    void checkAppUpdate("startup");
+
+    return () => {
+      void appUpdateRef.current?.close().catch(() => undefined);
+    };
+  }, [canImport, checkAppUpdate]);
+
+  useEffect(() => {
+    const autoCheckMinutes = updateAutoCheckMinutesValue(settings.updateAutoCheckMinutes);
+    if (!canImport || autoCheckMinutes <= 0) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void checkAppUpdate("auto");
+    }, autoCheckMinutes * 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [canImport, checkAppUpdate, settings.updateAutoCheckMinutes]);
+
   useEffect(() => {
     const autoSyncMinutes = overlayAutoSyncMinutesValue(settings.musicBrainzOverlayAutoSyncMinutes);
     if (!canImport || autoSyncMinutes <= 0) {
@@ -6169,6 +6353,50 @@ export default function App() {
     ? `${musicBrainzStatusLabel} / ${formatNumber(musicBrainzStatus.artistCount)} artists`
     : "Not checked";
   const musicBrainzHasWarnings = (musicBrainzStatus?.suspiciousMappingCount ?? 0) > 0;
+  const appUpdateIsBusy =
+    appUpdateStatus === "checking" ||
+    appUpdateStatus === "downloading" ||
+    appUpdateStatus === "installing" ||
+    appUpdateStatus === "restarting";
+  const appUpdateCanInstall = appUpdateStatus === "available" && appUpdateRef.current != null;
+  const appUpdateProgressLabel = appUpdateProgressText(appUpdateProgress);
+  const appUpdateLastCheckedText = appUpdateLastCheckedAt ? formatDate(appUpdateLastCheckedAt) : "Not checked";
+  const appUpdateAutoCheckMinutes = updateAutoCheckMinutesValue(settings.updateAutoCheckMinutes);
+  const appUpdateMetricValue =
+    appUpdateStatus === "available" && appUpdateInfo
+      ? `v${appUpdateInfo.version}`
+      : appUpdateStatus === "downloading"
+        ? appUpdateProgressLabel
+        : appUpdateStatusLabel(appUpdateStatus);
+  const appUpdatePanelText =
+    appUpdateStatus === "available" && appUpdateInfo
+      ? `Version ${appUpdateInfo.version} is ready`
+      : appUpdateStatus === "downloading" ||
+          appUpdateStatus === "installing" ||
+          appUpdateStatus === "restarting"
+        ? appUpdateProgressLabel
+        : appUpdateStatus === "upToDate"
+          ? `Last checked ${appUpdateLastCheckedText}`
+          : appUpdateStatusLabel(appUpdateStatus);
+  const appUpdateBannerVisible =
+    !isAppUpdateBannerDismissed &&
+    (appUpdateStatus === "available" ||
+      appUpdateStatus === "downloading" ||
+      appUpdateStatus === "installing" ||
+      appUpdateStatus === "restarting" ||
+      appUpdateStatus === "error");
+  const appUpdateBannerTitle =
+    appUpdateStatus === "available" && appUpdateInfo
+      ? `Music Library ${appUpdateInfo.version} is available`
+      : appUpdateStatus === "error"
+        ? "Update check failed"
+        : "Updating Music Library";
+  const appUpdateBannerMessage =
+    appUpdateStatus === "available" && appUpdateInfo
+      ? `Installed version ${appUpdateInfo.currentVersion}.`
+      : appUpdateStatus === "error"
+        ? appUpdateError ?? "Could not check for updates."
+        : appUpdateProgressLabel;
   const leftSidebarClass = leftSidebarMode === "iconOnly" ? "left-sidebar-icon-only" : `left-sidebar-${leftSidebarMode}`;
   const appShellClassName = `app-shell ${leftSidebarClass} right-sidebar-${rightSidebarMode}`;
   const leftIconOnlyToggleLabel =
@@ -6250,6 +6478,51 @@ export default function App() {
           })}
         </nav>
       </aside>
+
+      <div className="workspace-column">
+        {appUpdateBannerVisible ? (
+          <section className={`app-update-banner app-update-banner-${appUpdateStatus}`} aria-live="polite">
+            <div className="app-update-banner-icon" aria-hidden="true">
+              <Download size={18} />
+            </div>
+            <div className="app-update-banner-copy">
+              <strong>{appUpdateBannerTitle}</strong>
+              <span>{appUpdateBannerMessage}</span>
+              {appUpdateStatus === "downloading" && appUpdateProgress?.percent != null ? (
+                <div className="app-update-progress" aria-hidden="true">
+                  <div style={{ width: `${appUpdateProgress.percent}%` }} />
+                </div>
+              ) : null}
+            </div>
+            <div className="app-update-banner-actions">
+              {appUpdateCanInstall ? (
+                <button className="primary-button" type="button" onClick={() => void runAppUpdateInstall()}>
+                  <Download size={16} />
+                  <span>Update now</span>
+                </button>
+              ) : null}
+              {appUpdateStatus === "error" ? (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={appUpdateIsBusy}
+                  onClick={() => void checkAppUpdate("manual")}
+                >
+                  <RotateCcw size={16} />
+                  <span>Check now</span>
+                </button>
+              ) : null}
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Dismiss update message"
+                onClick={() => setIsAppUpdateBannerDismissed(true)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </section>
+        ) : null}
 
       {activeSection === "Imports" ? (
         <section className="workspace">
@@ -8216,11 +8489,92 @@ export default function App() {
             <Metric label="Navigation" value={leftSidebarModeLabels[settings.leftSidebarDefault]} icon={Library} />
             <Metric label="Details" value={rightSidebarModeLabels[settings.rightSidebarDefault]} icon={SlidersHorizontal} />
             <Metric label="MusicBrainz" value={musicBrainzStatusLabel} tone={musicBrainzMetricTone} icon={ShieldCheck} />
+            <Metric label="Updates" value={appUpdateMetricValue} tone="teal" icon={Download} />
           </section>
 
           {settingsError ? <p className="error-message">{settingsError}</p> : null}
 
           <section className="settings-grid" aria-label="Application settings">
+            <section className="settings-panel update-settings-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>App Updates</h2>
+                  <p>{appUpdatePanelText}</p>
+                </div>
+                <Download size={18} />
+              </div>
+
+              <div className="app-update-settings-toolbar">
+                <label className="criterion setting-number app-update-interval">
+                  <span>Auto minutes</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1440}
+                    value={appUpdateAutoCheckDraft}
+                    onChange={(event) => setAppUpdateAutoCheckDraft(event.target.value)}
+                    onBlur={() => void commitAppUpdateAutoCheckMinutes()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.currentTarget.blur();
+                      }
+                    }}
+                  />
+                </label>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={appUpdateIsBusy}
+                  onClick={() => void checkAppUpdate("manual")}
+                >
+                  <RotateCcw size={16} />
+                  <span>{appUpdateStatus === "checking" ? "Checking" : "Check now"}</span>
+                </button>
+                <button
+                  className="primary-button"
+                  type="button"
+                  disabled={!appUpdateCanInstall || appUpdateIsBusy}
+                  onClick={() => void runAppUpdateInstall()}
+                >
+                  <Download size={16} />
+                  <span>
+                    {appUpdateStatus === "downloading" ||
+                    appUpdateStatus === "installing" ||
+                    appUpdateStatus === "restarting"
+                      ? appUpdateStatusLabel(appUpdateStatus)
+                      : "Update now"}
+                  </span>
+                </button>
+              </div>
+
+              {appUpdateError ? <p className="error-message">{appUpdateError}</p> : null}
+
+              <dl className="performance-summary app-update-summary">
+                <div>
+                  <dt>Installed</dt>
+                  <dd>{appUpdateInfo?.currentVersion ?? "Current build"}</dd>
+                </div>
+                <div>
+                  <dt>Available</dt>
+                  <dd>{appUpdateInfo?.version ?? "None"}</dd>
+                </div>
+                <div>
+                  <dt>Last check</dt>
+                  <dd>{appUpdateLastCheckedText}</dd>
+                </div>
+                <div>
+                  <dt>Auto</dt>
+                  <dd>{appUpdateAutoCheckMinutes > 0 ? `${appUpdateAutoCheckMinutes} min` : "Off"}</dd>
+                </div>
+              </dl>
+
+              {appUpdateStatus === "downloading" && appUpdateProgress?.percent != null ? (
+                <div className="app-update-progress app-update-progress-settings" aria-hidden="true">
+                  <div style={{ width: `${appUpdateProgress.percent}%` }} />
+                </div>
+              ) : null}
+            </section>
+
             <section className="settings-panel backup-settings-panel">
               <div className="panel-heading compact">
                 <div>
@@ -9052,6 +9406,7 @@ export default function App() {
           </section>
         </section>
       )}
+      </div>
 
       <section className="detail-column" aria-hidden={isRightSidebarHidden}>
         {activeSection === "Imports" ? (
@@ -9365,6 +9720,10 @@ export default function App() {
               <dd>{rightSidebarModeLabels[settings.rightSidebarDefault]}</dd>
             </div>
             <div>
+              <dt>Updates</dt>
+              <dd>{appUpdateAutoCheckMinutes > 0 ? `${appUpdateAutoCheckMinutes} min` : appUpdateStatusLabel(appUpdateStatus)}</dd>
+            </div>
+            <div>
               <dt>Runtime</dt>
               <dd>{canImport ? "Tauri desktop" : "Web preview"}</dd>
             </div>
@@ -9378,6 +9737,10 @@ export default function App() {
             <div>
               <Moon size={17} />
               <span>{settings.darkMode ? "Dark mode active" : "Light mode active"}</span>
+            </div>
+            <div>
+              <Download size={17} />
+              <span>{appUpdateStatusLabel(appUpdateStatus)}</span>
             </div>
           </section>
         </aside>

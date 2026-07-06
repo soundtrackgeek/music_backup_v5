@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.37.0] - 2026-07-06
+### Added
+- Added Tauri in-app update checks on startup, from Settings with a manual Check now button, and on a configurable automatic interval in minutes.
+- Added an in-app update banner with Update now, signed updater download/install progress, and automatic app relaunch after installation.
+- Added SQLite schema version 15 with persisted app update auto-check settings.
+- Added Tauri updater/process plugins, signed updater artifact generation, GitHub Release `latest.json` manifest preparation, and release workflow signing-secret checks.
+
+### Changed
+- Release automation now uploads installer assets, updater signature assets, and the updater `latest.json` manifest.
+- Bumped synchronized app metadata to `0.37.0`.
+
 ## [0.36.2] - 2026-07-06
 ### Fixed
 - Fixed Windows release builds so launching the installed app opens only the desktop window and no persistent terminal window.

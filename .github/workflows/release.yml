@@ -86,39 +86,32 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Check updater signing secret
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+            throw "Set the TAURI_SIGNING_PRIVATE_KEY repository secret before publishing updater-enabled releases."
+          }
+
       - name: Clear stale release bundles
         shell: pwsh
         run: Remove-Item -Recurse -Force src-tauri/target/release/bundle -ErrorAction SilentlyContinue
 
       - name: Run release gate and package app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run release:check
 
       - name: Extract release notes
         run: node scripts/extract-release-notes.mjs "${{ needs.detect_version.outputs.version }}" release-notes.md
 
-      - name: Collect Windows installer assets
-        shell: pwsh
-        run: |
-          $releaseAssets = "release-assets"
-          New-Item -ItemType Directory -Force -Path $releaseAssets | Out-Null
+      - name: Prepare Windows release and updater assets
+        run: node scripts/prepare-release-assets.mjs "${{ needs.detect_version.outputs.version }}" "${{ needs.detect_version.outputs.tag }}" "${{ github.repository }}" release-notes.md
 
-          $version = "${{ needs.detect_version.outputs.version }}"
-          $bundleRoot = "src-tauri/target/release/bundle"
-          $assets = Get-ChildItem -Path $bundleRoot -Recurse -File |
-            Where-Object { $_.Extension -in ".exe", ".msi" -and $_.Name -like "*$version*" }
-          if (-not $assets) {
-            throw "No Windows installer assets for version $version were found under $bundleRoot."
-          }
-
-          foreach ($asset in $assets) {
-            Copy-Item -LiteralPath $asset.FullName -Destination (Join-Path $releaseAssets $asset.Name) -Force
-          }
-
-          Get-ChildItem -Path $releaseAssets -File | ForEach-Object {
-            Write-Host "Prepared release asset: $($_.Name)"
-          }
-
-      - name: Upload installer artifact
+      - name: Upload release artifact
         uses: actions/upload-artifact@v7
         with:
           name: music-library-windows-${{ needs.detect_version.outputs.version }}
