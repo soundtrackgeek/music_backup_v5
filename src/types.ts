@@ -513,7 +513,7 @@ export type DiscoveryArtistPoint = {
 
 export type MusicToolSeverity = "high" | "medium" | "low";
 
-export type MusicToolScope = "albums" | "tracks";
+export type MusicToolScope = "albums" | "tracks" | "artists";
 
 export type MusicToolSummary = {
   id: string;

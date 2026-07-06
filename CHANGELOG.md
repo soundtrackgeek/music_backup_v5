@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.38.0] - 2026-07-06
+### Added
+- Added an Artists without MusicBrainz data validator in Tools that compares local album artists against the configured `musicbrainz_cache.db` and app-owned verified/refreshed MusicBrainz overlay rows.
+- Added Rust coverage for missing MusicBrainz artist rows, normalized cache-name matches, and verified overlay release-group matches.
+
+### Changed
+- Tools now supports artist-scoped validators with affected-artist labels in the index, issue table, and detail panel.
+- Bumped synchronized app metadata to `0.38.0`.
+
 ## [0.37.2] - 2026-07-06
 ### Added
 - Added a Save paths action in Imports so custom TSV, cover-art, Billboard album, and Billboard singles source paths persist across app restarts.

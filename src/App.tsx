@@ -141,6 +141,7 @@ import type {
   MusicToolIssueResponse,
   MusicToolIssueRow,
   MusicToolProgress,
+  MusicToolScope,
   MusicToolSummary,
   MusicBrainzArtistCandidateRow,
   MusicBrainzArtistDiscographyResponse,
@@ -2503,6 +2504,32 @@ function SeverityBadge({ severity }: { severity: string }) {
   return <span className={`tool-severity tool-severity-${severity}`}>{severityLabel(severity)}</span>;
 }
 
+function musicToolScopeLabel(scope: MusicToolScope) {
+  switch (scope) {
+    case "artists":
+      return "Artists";
+    case "tracks":
+      return "Tracks";
+    default:
+      return "Albums";
+  }
+}
+
+function musicToolAffectedLabel(scope: MusicToolScope) {
+  switch (scope) {
+    case "artists":
+      return "Affected artists";
+    case "tracks":
+      return "Affected tracks";
+    default:
+      return "Affected albums";
+  }
+}
+
+function musicToolAffectedCount(tool: MusicToolSummary) {
+  return tool.scope === "tracks" ? tool.trackCount : tool.albumCount;
+}
+
 function MusicToolIndexTable({
   tools,
   selectedToolId,
@@ -2527,10 +2554,10 @@ function MusicToolIndexTable({
     <div className="result-table tool-index-results" role="table">
       <div className="result-table-head" role="row">
         <span role="columnheader">Tool</span>
+        <span role="columnheader">Scope</span>
         <span role="columnheader">Severity</span>
         <span role="columnheader">Issues</span>
-        <span role="columnheader">Albums</span>
-        <span role="columnheader">Tracks</span>
+        <span role="columnheader">Affected</span>
       </div>
       {tools.map((tool) => {
         const isSelected = tool.id === selectedToolId;
@@ -2554,14 +2581,14 @@ function MusicToolIndexTable({
               <strong>{tool.label}</strong>
               <small>{tool.description}</small>
             </span>
+            <span role="cell">{musicToolScopeLabel(tool.scope)}</span>
             <span role="cell">
               <SeverityBadge severity={tool.severity} />
             </span>
             <span className={selectedProgress ? "tool-count-progress" : undefined} role="cell">
               {selectedProgress ?? formatToolCount(tool.issueCount)}
             </span>
-            <span role="cell">{formatToolCount(tool.albumCount)}</span>
-            <span role="cell">{formatToolCount(tool.trackCount)}</span>
+            <span role="cell">{formatToolCount(musicToolAffectedCount(tool))}</span>
           </div>
         );
       })}
@@ -2602,7 +2629,9 @@ function MusicToolIssueTable({
         ? "No missing Billboard albums. If you expected rows, import the Billboard CSV folder once."
         : response.tool.id === "missing-billboard-singles"
           ? "No missing Billboard singles. If you expected rows, import the Billboard singles CSV folder once."
-        : "No matching issues.";
+          : response.tool.id === "artists-without-musicbrainz-data"
+            ? "Every library artist has a usable MusicBrainz cache or verified overlay match."
+            : "No matching issues.";
 
     return (
       <div className="empty-state large">
@@ -2612,12 +2641,15 @@ function MusicToolIssueTable({
     );
   }
 
+  const primaryHeader = response.tool.scope === "artists" ? "Artist" : "Album";
+  const secondaryHeader = response.tool.scope === "artists" ? "Sample album" : "Track";
+
   return (
     <div className="result-table tool-issue-results" role="table">
       <div className="result-table-head" role="row">
         <span role="columnheader">Issue</span>
-        <span role="columnheader">Album</span>
-        <span role="columnheader">Track</span>
+        <span role="columnheader">{primaryHeader}</span>
+        <span role="columnheader">{secondaryHeader}</span>
         <span role="columnheader">Value</span>
         <span role="columnheader">File</span>
       </div>
@@ -2634,7 +2666,14 @@ function MusicToolIssueTable({
             <small>{[issue.albumArtistDisplay, issue.year].filter(Boolean).join(" / ")}</small>
           </span>
           <span role="cell">
-            <strong>{issue.title ?? (issue.entityType === "albums" ? "Album-level" : "Untitled")}</strong>
+            <strong>
+              {issue.title ??
+                (issue.entityType === "albums"
+                  ? "Album-level"
+                  : issue.entityType === "artists"
+                    ? "Artist-level"
+                    : "Untitled")}
+            </strong>
             <small>{issue.canonicalGenre ?? ""}</small>
           </span>
           <span role="cell">{issue.value ?? ""}</span>
@@ -2781,6 +2820,8 @@ function MusicToolDetailPanel({
 
   const progressText = formatToolProgress(progress);
   const isProgressActive = isMusicToolProgressActive(progress);
+  const affectedLabel = musicToolAffectedLabel(tool.scope);
+  const affectedCount = musicToolAffectedCount(tool);
 
   return (
     <aside className="detail-panel tools-detail" aria-label="Music tools details">
@@ -2789,7 +2830,7 @@ function MusicToolDetailPanel({
         <div>
           <h2>{tool.label}</h2>
           <p>
-            {severityLabel(tool.severity)} / {tool.scope}
+            {severityLabel(tool.severity)} / {musicToolScopeLabel(tool.scope)}
           </p>
         </div>
       </div>
@@ -2800,12 +2841,8 @@ function MusicToolDetailPanel({
           <dd>{isProgressActive && progressText ? progressText : formatToolCount(tool.issueCount)}</dd>
         </div>
         <div>
-          <dt>Affected albums</dt>
-          <dd>{formatToolCount(tool.albumCount)}</dd>
-        </div>
-        <div>
-          <dt>Affected tracks</dt>
-          <dd>{formatToolCount(tool.trackCount)}</dd>
+          <dt>{affectedLabel}</dt>
+          <dd>{formatToolCount(affectedCount)}</dd>
         </div>
         <div>
           <dt>Severity</dt>
