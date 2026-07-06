@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.36.0] - 2026-07-06
+### Added
+- Added GitHub Actions CI for pushes and pull requests that runs the release/security guard, frontend build, and Rust tests on Windows.
+- Added a version-triggered GitHub release workflow that builds Tauri Windows installers when the package version changes on `master`, extracts the matching changelog section, creates a `v<version>` GitHub Release, and uploads `.exe` and `.msi` installer assets.
+- Added release helper scripts for detecting package version changes and extracting release notes from `CHANGELOG.md`.
+
+### Changed
+- Documented the Phase 26 release automation workflow.
+- Bumped synchronized app metadata to `0.36.0`.
+
 ## [0.35.4] - 2026-07-06
 ### Fixed
 - Fixed Settings saves so the MusicBrainz overlay Auto minutes value is preserved after blur or Enter even when another settings save is still finishing.

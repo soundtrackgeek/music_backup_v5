@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  detect_version:
+    name: Detect Version Change
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.version.outputs.changed }}
+      previous_version: ${{ steps.version.outputs.previous_version }}
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Detect package version update
+        id: version
+        env:
+          VERSION_BASE_REF: ${{ github.event.before }}
+        run: node scripts/detect-version-bump.mjs
+
+  build_windows_release:
+    name: Build Windows Release
+    needs: detect_version
+    if: needs.detect_version.outputs.changed == 'true'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check release tag availability
+        shell: pwsh
+        run: |
+          $tag = "${{ needs.detect_version.outputs.tag }}"
+          $existing = git ls-remote --tags origin "refs/tags/$tag"
+          if ($existing) {
+            throw "Release tag $tag already exists. Bump the package version before publishing another release."
+          }
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Clear stale release bundles
+        shell: pwsh
+        run: Remove-Item -Recurse -Force src-tauri/target/release/bundle -ErrorAction SilentlyContinue
+
+      - name: Run release gate and package app
+        run: npm run release:check
+
+      - name: Extract release notes
+        run: node scripts/extract-release-notes.mjs "${{ needs.detect_version.outputs.version }}" release-notes.md
+
+      - name: Collect Windows installer assets
+        shell: pwsh
+        run: |
+          $releaseAssets = "release-assets"
+          New-Item -ItemType Directory -Force -Path $releaseAssets | Out-Null
+
+          $version = "${{ needs.detect_version.outputs.version }}"
+          $bundleRoot = "src-tauri/target/release/bundle"
+          $assets = Get-ChildItem -Path $bundleRoot -Recurse -File |
+            Where-Object { $_.Extension -in ".exe", ".msi" -and $_.Name -like "*$version*" }
+          if (-not $assets) {
+            throw "No Windows installer assets for version $version were found under $bundleRoot."
+          }
+
+          foreach ($asset in $assets) {
+            Copy-Item -LiteralPath $asset.FullName -Destination (Join-Path $releaseAssets $asset.Name) -Force
+          }
+
+          Get-ChildItem -Path $releaseAssets -File | ForEach-Object {
+            Write-Host "Prepared release asset: $($_.Name)"
+          }
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-library-windows-${{ needs.detect_version.outputs.version }}
+          path: release-assets/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ needs.detect_version.outputs.version }}"
+          $tag = "${{ needs.detect_version.outputs.tag }}"
+          $assetPaths = Get-ChildItem -Path "release-assets" -File | ForEach-Object { $_.FullName }
+          if (-not $assetPaths) {
+            throw "No release assets are available to upload."
+          }
+
+          gh release create $tag $assetPaths --target "$env:GITHUB_SHA" --title "Music Library $version" --notes-file release-notes.md

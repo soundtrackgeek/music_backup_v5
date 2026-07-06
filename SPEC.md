@@ -2,8 +2,8 @@
 
 Last updated: 2026-07-06
 Status: Living product and implementation contract
-Current implementation: Phase 18 complete
-Current package version: 0.35.3
+Current implementation: Phase 18 complete; Phase 26 release automation slice complete
+Current package version: 0.36.0
 SQLite schema version: 14
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -319,6 +319,8 @@ Release and security boundary:
 - Local source data, SQLite databases, backup sidecars, cover archives, chart CSV folders, and MusicBrainz cache folders remain ignored by git.
 - App version metadata must stay synchronized across `package.json`, `package-lock.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock`.
 - `npm run security:check` is the fast guard for these invariants; `npm run check` adds frontend build and Rust tests; `npm run release:check` adds Tauri packaging.
+- GitHub Actions CI runs `npm run check` on Windows for pushes, pull requests, and manual dispatches.
+- GitHub Actions Release detects package-version changes on `master`, runs `npm run release:check`, builds Tauri Windows installers, creates a `v<version>` GitHub Release, and uploads `.exe` and `.msi` installer assets.
 
 Important test boundary:
 
@@ -503,6 +505,12 @@ Expected next backend modularization:
 - The currently visible selected-artist MusicBrainz rows can be exported to CSV/XLSX with owned/missing status, year, MusicBrainz title, local match, confidence, MBID links, match method, and artist-link trust state.
 - Web-only preview mode includes representative owned/missing MusicBrainz artist discographies.
 - Rust tests cover selected-artist owned/missing comparison, suspicious cache mapping warnings, fuzzy artist candidates, artist-link override behavior, ignored artist suppression, manual artist-link decisions, and hidden-row export filtering.
+
+### Phase 26: Release Operations Automation
+
+- GitHub Actions CI verifies pushes to `master`, pull requests, and manual dispatches on `windows-latest`.
+- The release workflow detects semantic `package.json` version changes on `master`, verifies the release tag is unused, runs `npm run release:check`, builds the Tauri Windows installers, extracts release notes from `CHANGELOG.md`, creates a `v<version>` GitHub Release, and uploads `.exe` and `.msi` installer assets.
+- Release helper scripts keep version-change detection and changelog note extraction reusable outside the workflow.
 
 ## Roadmap
 
@@ -785,6 +793,7 @@ Expected outcome:
 
 Candidate work:
 
+- Automated unsigned GitHub Releases with Windows installer assets. Implemented in version `0.36.0`.
 - Signed release builds.
 - Installer/update strategy.
 - Import/export troubleshooting guide.
