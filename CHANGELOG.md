@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.37.2] - 2026-07-06
+### Added
+- Added a Save paths action in Imports so custom TSV, cover-art, Billboard album, and Billboard singles source paths persist across app restarts.
+- Added SQLite schema version 16 with persisted Imports workspace source paths.
+
+### Changed
+- Bumped synchronized app metadata to `0.37.2`.
+
 ## [0.37.1] - 2026-07-06
 ### Fixed
 - Fixed release asset preparation so installer filenames are normalized before upload and the updater `latest.json` URL matches the published GitHub Release asset.

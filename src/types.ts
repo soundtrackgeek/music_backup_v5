@@ -144,6 +144,10 @@ export type AppSettings = {
   darkMode: boolean;
   leftSidebarDefault: LeftSidebarMode;
   rightSidebarDefault: RightSidebarMode;
+  importSourcePath: string;
+  coverSourcePath: string;
+  billboardSourcePath: string;
+  billboardSinglesSourcePath: string;
   musicBrainzCachePath: string;
   musicBrainzOverlaySyncPath: string;
   musicBrainzOverlayAutoSyncMinutes: number;

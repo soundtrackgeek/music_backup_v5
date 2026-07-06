@@ -176,6 +176,14 @@ pub struct AppSettings {
     pub left_sidebar_default: String,
     #[serde(default = "default_right_sidebar_default")]
     pub right_sidebar_default: String,
+    #[serde(default = "default_import_source_path")]
+    pub import_source_path: String,
+    #[serde(default = "default_cover_source_path")]
+    pub cover_source_path: String,
+    #[serde(default = "default_billboard_source_path")]
+    pub billboard_source_path: String,
+    #[serde(default = "default_billboard_singles_source_path")]
+    pub billboard_singles_source_path: String,
     #[serde(
         default = "default_musicbrainz_cache_path",
         rename = "musicBrainzCachePath",
@@ -1315,6 +1323,22 @@ fn default_right_sidebar_default() -> String {
     "expanded".to_string()
 }
 
+fn default_import_source_path() -> String {
+    "musicbee-library.tsv".to_string()
+}
+
+fn default_cover_source_path() -> String {
+    "AlbumCovers".to_string()
+}
+
+fn default_billboard_source_path() -> String {
+    "CSV".to_string()
+}
+
+fn default_billboard_singles_source_path() -> String {
+    "CSV_SINGLES".to_string()
+}
+
 fn default_musicbrainz_cache_path() -> String {
     "MusicBrainz/musicbrainz_cache.db".to_string()
 }
@@ -1343,6 +1367,10 @@ mod tests {
             dark_mode: false,
             left_sidebar_default: "expanded".to_string(),
             right_sidebar_default: "expanded".to_string(),
+            import_source_path: r"D:\Exports\library.tsv".to_string(),
+            cover_source_path: r"D:\Covers".to_string(),
+            billboard_source_path: r"D:\Charts\Albums".to_string(),
+            billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
             musicbrainz_cache_path: r"C:\Sync\musicbrainz_cache.db".to_string(),
             musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3".to_string(),
             musicbrainz_overlay_auto_sync_minutes: 15,
@@ -1364,17 +1392,41 @@ mod tests {
             Some(&json!(15))
         );
         assert_eq!(serialized.get("updateAutoCheckMinutes"), Some(&json!(30)));
+        assert_eq!(
+            serialized.get("importSourcePath"),
+            Some(&json!(r"D:\Exports\library.tsv"))
+        );
+        assert_eq!(
+            serialized.get("coverSourcePath"),
+            Some(&json!(r"D:\Covers"))
+        );
+        assert_eq!(
+            serialized.get("billboardSourcePath"),
+            Some(&json!(r"D:\Charts\Albums"))
+        );
+        assert_eq!(
+            serialized.get("billboardSinglesSourcePath"),
+            Some(&json!(r"D:\Charts\Singles"))
+        );
         assert!(serialized
             .get("musicbrainzOverlayAutoSyncMinutes")
             .is_none());
 
         let decoded: AppSettings = serde_json::from_value(json!({
+            "importSourcePath": r"D:\Exports\library.tsv",
+            "coverSourcePath": r"D:\Covers",
+            "billboardSourcePath": r"D:\Charts\Albums",
+            "billboardSinglesSourcePath": r"D:\Charts\Singles",
             "musicBrainzCachePath": r"C:\Sync\musicbrainz_cache.db",
             "musicBrainzOverlaySyncPath": r"C:\Sync\musicbrainz-overlay-sync.sqlite3",
             "musicBrainzOverlayAutoSyncMinutes": 15,
             "updateAutoCheckMinutes": 30
         }))
         .expect("deserialize UI settings");
+        assert_eq!(decoded.import_source_path, r"D:\Exports\library.tsv");
+        assert_eq!(decoded.cover_source_path, r"D:\Covers");
+        assert_eq!(decoded.billboard_source_path, r"D:\Charts\Albums");
+        assert_eq!(decoded.billboard_singles_source_path, r"D:\Charts\Singles");
         assert_eq!(decoded.musicbrainz_overlay_auto_sync_minutes, 15);
         assert_eq!(decoded.update_auto_check_minutes, 30);
 

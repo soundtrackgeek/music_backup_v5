@@ -38,8 +38,12 @@ type ProgressApp<'a> = &'a ();
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 15;
+const LATEST_SCHEMA_VERSION: i32 = 16;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
+const DEFAULT_IMPORT_SOURCE_PATH: &str = "musicbee-library.tsv";
+const DEFAULT_COVER_SOURCE_PATH: &str = "AlbumCovers";
+const DEFAULT_BILLBOARD_SOURCE_PATH: &str = "CSV";
+const DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES";
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH: &str =
     r"C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3";
@@ -293,7 +297,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_fifteen_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_sixteen_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -565,6 +569,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             dark_mode INTEGER NOT NULL DEFAULT 0,
             left_sidebar_default TEXT NOT NULL DEFAULT 'expanded',
             right_sidebar_default TEXT NOT NULL DEFAULT 'expanded',
+            import_source_path TEXT NOT NULL DEFAULT 'musicbee-library.tsv',
+            cover_source_path TEXT NOT NULL DEFAULT 'AlbumCovers',
+            billboard_source_path TEXT NOT NULL DEFAULT 'CSV',
+            billboard_singles_source_path TEXT NOT NULL DEFAULT 'CSV_SINGLES',
             musicbrainz_cache_path TEXT NOT NULL DEFAULT 'MusicBrainz/musicbrainz_cache.db',
             musicbrainz_overlay_sync_path TEXT NOT NULL DEFAULT 'C:\\Users\\jtill\\OneDrive\\_musicbackup\\musicbrainz-overlay-sync.sqlite3',
             musicbrainz_overlay_auto_sync_minutes INTEGER NOT NULL DEFAULT 0,
@@ -680,6 +688,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     .map_err(|error| anyhow!("Could not run SQLite migrations: {error}"))?;
     ensure_import_run_change_columns(conn)?;
     ensure_app_settings_layout_columns(conn)?;
+    ensure_app_settings_import_columns(conn)?;
     ensure_album_billboard_columns(conn)?;
     ensure_billboard_chart_entries_table(conn)?;
     ensure_track_billboard_single_columns(conn)?;
@@ -692,9 +701,17 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_overlay_sync_log(conn)?;
     ensure_musicbrainz_release_status_cache(conn)?;
     ensure_musicbrainz_artist_release_groups(conn)?;
-    conn.execute_batch("PRAGMA user_version = 15;")
+    conn.execute_batch("PRAGMA user_version = 16;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_sixteen_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_fifteen_schema_exists(conn)?
+        && schema_column_exists(conn, "app_settings", "import_source_path")?
+        && schema_column_exists(conn, "app_settings", "cover_source_path")?
+        && schema_column_exists(conn, "app_settings", "billboard_source_path")?
+        && schema_column_exists(conn, "app_settings", "billboard_singles_source_path")?)
 }
 
 fn phase_fifteen_schema_exists(conn: &Connection) -> Result<bool> {
@@ -834,6 +851,29 @@ fn ensure_app_settings_layout_columns(conn: &Connection) -> Result<()> {
     for (name, definition) in [
         ("left_sidebar_default", "TEXT NOT NULL DEFAULT 'expanded'"),
         ("right_sidebar_default", "TEXT NOT NULL DEFAULT 'expanded'"),
+    ] {
+        if !schema_column_exists(conn, "app_settings", name)? {
+            let sql = format!("ALTER TABLE app_settings ADD COLUMN {name} {definition}");
+            conn.execute_batch(&sql)
+                .with_context(|| format!("Could not add app_settings.{name}"))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn ensure_app_settings_import_columns(conn: &Connection) -> Result<()> {
+    for (name, definition) in [
+        (
+            "import_source_path",
+            "TEXT NOT NULL DEFAULT 'musicbee-library.tsv'",
+        ),
+        ("cover_source_path", "TEXT NOT NULL DEFAULT 'AlbumCovers'"),
+        ("billboard_source_path", "TEXT NOT NULL DEFAULT 'CSV'"),
+        (
+            "billboard_singles_source_path",
+            "TEXT NOT NULL DEFAULT 'CSV_SINGLES'",
+        ),
     ] {
         if !schema_column_exists(conn, "app_settings", name)? {
             let sql = format!("ALTER TABLE app_settings ADD COLUMN {name} {definition}");
@@ -2250,8 +2290,10 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
         .query_row(
             "
             SELECT backup_retention, dark_mode, left_sidebar_default, right_sidebar_default,
-                   musicbrainz_cache_path, musicbrainz_overlay_sync_path,
-                   musicbrainz_overlay_auto_sync_minutes, update_auto_check_minutes, updated_at
+                   import_source_path, cover_source_path, billboard_source_path,
+                   billboard_singles_source_path, musicbrainz_cache_path,
+                   musicbrainz_overlay_sync_path, musicbrainz_overlay_auto_sync_minutes,
+                   update_auto_check_minutes, updated_at
             FROM app_settings
             WHERE id = 1
             ",
@@ -2270,6 +2312,10 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
                 dark_mode: false,
                 left_sidebar_default: "expanded".to_string(),
                 right_sidebar_default: "expanded".to_string(),
+                import_source_path: DEFAULT_IMPORT_SOURCE_PATH.to_string(),
+                cover_source_path: DEFAULT_COVER_SOURCE_PATH.to_string(),
+                billboard_source_path: DEFAULT_BILLBOARD_SOURCE_PATH.to_string(),
+                billboard_singles_source_path: DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH.to_string(),
                 musicbrainz_cache_path: DEFAULT_MUSICBRAINZ_CACHE_PATH.to_string(),
                 musicbrainz_overlay_sync_path: DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH.to_string(),
                 musicbrainz_overlay_auto_sync_minutes: 0,
@@ -2287,15 +2333,20 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
         "
         INSERT INTO app_settings (
             id, backup_retention, dark_mode, left_sidebar_default, right_sidebar_default,
-            musicbrainz_cache_path, musicbrainz_overlay_sync_path,
+            import_source_path, cover_source_path, billboard_source_path,
+            billboard_singles_source_path, musicbrainz_cache_path, musicbrainz_overlay_sync_path,
             musicbrainz_overlay_auto_sync_minutes, update_auto_check_minutes, updated_at
         )
-        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
         ON CONFLICT(id) DO UPDATE SET
             backup_retention = excluded.backup_retention,
             dark_mode = excluded.dark_mode,
             left_sidebar_default = excluded.left_sidebar_default,
             right_sidebar_default = excluded.right_sidebar_default,
+            import_source_path = excluded.import_source_path,
+            cover_source_path = excluded.cover_source_path,
+            billboard_source_path = excluded.billboard_source_path,
+            billboard_singles_source_path = excluded.billboard_singles_source_path,
             musicbrainz_cache_path = excluded.musicbrainz_cache_path,
             musicbrainz_overlay_sync_path = excluded.musicbrainz_overlay_sync_path,
             musicbrainz_overlay_auto_sync_minutes = excluded.musicbrainz_overlay_auto_sync_minutes,
@@ -2307,6 +2358,10 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
             if settings.dark_mode { 1 } else { 0 },
             settings.left_sidebar_default,
             settings.right_sidebar_default,
+            settings.import_source_path,
+            settings.cover_source_path,
+            settings.billboard_source_path,
+            settings.billboard_singles_source_path,
             settings.musicbrainz_cache_path,
             settings.musicbrainz_overlay_sync_path,
             i64::from(settings.musicbrainz_overlay_auto_sync_minutes),
@@ -2327,11 +2382,15 @@ fn settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppSettings> {
         dark_mode: dark_mode != 0,
         left_sidebar_default: row.get(2)?,
         right_sidebar_default: row.get(3)?,
-        musicbrainz_cache_path: row.get(4)?,
-        musicbrainz_overlay_sync_path: row.get(5)?,
-        musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(6)?.max(0) as u32,
-        update_auto_check_minutes: row.get::<_, i64>(7)?.max(0) as u32,
-        updated_at: row.get(8)?,
+        import_source_path: row.get(4)?,
+        cover_source_path: row.get(5)?,
+        billboard_source_path: row.get(6)?,
+        billboard_singles_source_path: row.get(7)?,
+        musicbrainz_cache_path: row.get(8)?,
+        musicbrainz_overlay_sync_path: row.get(9)?,
+        musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(10)?.max(0) as u32,
+        update_auto_check_minutes: row.get::<_, i64>(11)?.max(0) as u32,
+        updated_at: row.get(12)?,
     })
 }
 
@@ -2342,6 +2401,18 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
     settings.left_sidebar_default = normalize_left_sidebar_default(&settings.left_sidebar_default);
     settings.right_sidebar_default =
         normalize_right_sidebar_default(&settings.right_sidebar_default);
+    settings.import_source_path =
+        normalize_import_path(&settings.import_source_path, DEFAULT_IMPORT_SOURCE_PATH);
+    settings.cover_source_path =
+        normalize_import_path(&settings.cover_source_path, DEFAULT_COVER_SOURCE_PATH);
+    settings.billboard_source_path = normalize_import_path(
+        &settings.billboard_source_path,
+        DEFAULT_BILLBOARD_SOURCE_PATH,
+    );
+    settings.billboard_singles_source_path = normalize_import_path(
+        &settings.billboard_singles_source_path,
+        DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH,
+    );
     settings.musicbrainz_cache_path =
         normalize_musicbrainz_cache_path(&settings.musicbrainz_cache_path);
     settings.musicbrainz_overlay_sync_path =
@@ -2366,6 +2437,15 @@ fn normalize_right_sidebar_default(value: &str) -> String {
     match value {
         "expanded" | "hidden" => value.to_string(),
         _ => "expanded".to_string(),
+    }
+}
+
+fn normalize_import_path(value: &str, fallback: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        fallback.to_string()
+    } else {
+        trimmed.to_string()
     }
 }
 
@@ -8921,7 +9001,7 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_fifteen_schema_exists(&conn).expect("phase fifteen schema exists"));
+        assert!(phase_sixteen_schema_exists(&conn).expect("phase sixteen schema exists"));
     }
 
     #[test]
@@ -9043,6 +9123,10 @@ mod tests {
                 dark_mode: true,
                 left_sidebar_default: "iconOnly".to_string(),
                 right_sidebar_default: "hidden".to_string(),
+                import_source_path: r"D:\Exports\musicbee-library.tsv".to_string(),
+                cover_source_path: r"D:\Covers".to_string(),
+                billboard_source_path: r"D:\Charts\Albums".to_string(),
+                billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
                 musicbrainz_cache_path: "MusicBrainz/custom-cache.db".to_string(),
                 musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
                     .to_string(),
@@ -9057,6 +9141,10 @@ mod tests {
         assert!(saved.dark_mode);
         assert_eq!(saved.left_sidebar_default, "iconOnly");
         assert_eq!(saved.right_sidebar_default, "hidden");
+        assert_eq!(saved.import_source_path, r"D:\Exports\musicbee-library.tsv");
+        assert_eq!(saved.cover_source_path, r"D:\Covers");
+        assert_eq!(saved.billboard_source_path, r"D:\Charts\Albums");
+        assert_eq!(saved.billboard_singles_source_path, r"D:\Charts\Singles");
         assert_eq!(saved.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
         assert_eq!(
             saved.musicbrainz_overlay_sync_path,
@@ -9066,13 +9154,23 @@ mod tests {
             saved.musicbrainz_overlay_auto_sync_minutes,
             MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES
         );
-        assert_eq!(saved.update_auto_check_minutes, MAX_UPDATE_AUTO_CHECK_MINUTES);
+        assert_eq!(
+            saved.update_auto_check_minutes,
+            MAX_UPDATE_AUTO_CHECK_MINUTES
+        );
 
         let loaded = settings_for_connection(&conn).expect("load settings");
         assert_eq!(loaded.backup_retention, MAX_BACKUP_RETENTION);
         assert!(loaded.dark_mode);
         assert_eq!(loaded.left_sidebar_default, "iconOnly");
         assert_eq!(loaded.right_sidebar_default, "hidden");
+        assert_eq!(
+            loaded.import_source_path,
+            r"D:\Exports\musicbee-library.tsv"
+        );
+        assert_eq!(loaded.cover_source_path, r"D:\Covers");
+        assert_eq!(loaded.billboard_source_path, r"D:\Charts\Albums");
+        assert_eq!(loaded.billboard_singles_source_path, r"D:\Charts\Singles");
         assert_eq!(loaded.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
         assert_eq!(
             loaded.musicbrainz_overlay_sync_path,
@@ -9082,7 +9180,10 @@ mod tests {
             loaded.musicbrainz_overlay_auto_sync_minutes,
             MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES
         );
-        assert_eq!(loaded.update_auto_check_minutes, MAX_UPDATE_AUTO_CHECK_MINUTES);
+        assert_eq!(
+            loaded.update_auto_check_minutes,
+            MAX_UPDATE_AUTO_CHECK_MINUTES
+        );
         assert!(loaded.updated_at.is_some());
     }
 

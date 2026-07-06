@@ -44,6 +44,10 @@ import {
   deleteSavedChart,
   deleteSavedSearch,
   clearCoverImageCache,
+  defaultBillboardSinglesSourcePath,
+  defaultBillboardSourcePath,
+  defaultCoverSourcePath,
+  defaultImportSourcePath,
   defaultMusicBrainzCachePath,
   defaultMusicBrainzOverlaySyncPath,
   exportMusicBrainzArtistReleases,
@@ -260,6 +264,22 @@ type AppUpdateStatus =
 
 function createDefaultSettings(): AppSettings {
   return loadCachedSettings();
+}
+
+function createDefaultImportSourcePath() {
+  return loadCachedSettings().importSourcePath;
+}
+
+function createDefaultCoverSourcePath() {
+  return loadCachedSettings().coverSourcePath;
+}
+
+function createDefaultBillboardSourcePath() {
+  return loadCachedSettings().billboardSourcePath;
+}
+
+function createDefaultBillboardSinglesSourcePath() {
+  return loadCachedSettings().billboardSinglesSourcePath;
 }
 
 function createDefaultLeftSidebarMode(): LeftSidebarMode {
@@ -4024,8 +4044,8 @@ function RatingEventList({ events }: { events: RatingEvent[] }) {
 
 export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
-  const [sourcePath, setSourcePath] = useState("musicbee-library.tsv");
-  const [coverSourcePath, setCoverSourcePath] = useState("AlbumCovers");
+  const [sourcePath, setSourcePath] = useState(() => createDefaultImportSourcePath());
+  const [coverSourcePath, setCoverSourcePath] = useState(() => createDefaultCoverSourcePath());
   const [coverExtractEmbeddedFallback, setCoverExtractEmbeddedFallback] = useState(true);
   const [coverReplaceExisting, setCoverReplaceExisting] = useState(false);
   const [status, setStatus] = useState<LibraryStatus | null>(null);
@@ -4037,11 +4057,13 @@ export default function App() {
   const [importError, setImportError] = useState<string | null>(null);
   const [coverImportError, setCoverImportError] = useState<string | null>(null);
   const [coverImportSummary, setCoverImportSummary] = useState<CoverImportSummary | null>(null);
-  const [billboardSourcePath, setBillboardSourcePath] = useState("CSV");
+  const [billboardSourcePath, setBillboardSourcePath] = useState(() => createDefaultBillboardSourcePath());
   const [isImportingBillboard, setIsImportingBillboard] = useState(false);
   const [billboardImportError, setBillboardImportError] = useState<string | null>(null);
   const [billboardImportSummary, setBillboardImportSummary] = useState<BillboardImportSummary | null>(null);
-  const [billboardSinglesSourcePath, setBillboardSinglesSourcePath] = useState("CSV_SINGLES");
+  const [billboardSinglesSourcePath, setBillboardSinglesSourcePath] = useState(() =>
+    createDefaultBillboardSinglesSourcePath(),
+  );
   const [isImportingBillboardSingles, setIsImportingBillboardSingles] = useState(false);
   const [billboardSinglesImportError, setBillboardSinglesImportError] = useState<string | null>(null);
   const [billboardSinglesImportSummary, setBillboardSinglesImportSummary] =
@@ -4229,6 +4251,12 @@ export default function App() {
     setStatistics(nextStatistics);
     settingsRef.current = nextSettings;
     setSettings(nextSettings);
+    setSourcePath(nextSettings.importSourcePath || defaultImportSourcePath);
+    setCoverSourcePath(nextSettings.coverSourcePath || defaultCoverSourcePath);
+    setBillboardSourcePath(nextSettings.billboardSourcePath || defaultBillboardSourcePath);
+    setBillboardSinglesSourcePath(
+      nextSettings.billboardSinglesSourcePath || defaultBillboardSinglesSourcePath,
+    );
     setMusicBrainzCachePathDraft(nextSettings.musicBrainzCachePath || defaultMusicBrainzCachePath);
     setMusicBrainzOverlaySyncPathDraft(
       nextSettings.musicBrainzOverlaySyncPath || defaultMusicBrainzOverlaySyncPath,
@@ -4992,6 +5020,25 @@ export default function App() {
     if (coverProgress.scannedAlbums === 0) return isImportingCovers ? 4 : 0;
     return Math.min(99, Math.max(1, coverProgress.percent));
   }, [coverProgress.percent, coverProgress.scannedAlbums, coverProgress.status, isImportingCovers]);
+
+  const importPathsDirty = useMemo(
+    () =>
+      textSettingValue(sourcePath, defaultImportSourcePath) !== settings.importSourcePath ||
+      textSettingValue(coverSourcePath, defaultCoverSourcePath) !== settings.coverSourcePath ||
+      textSettingValue(billboardSourcePath, defaultBillboardSourcePath) !== settings.billboardSourcePath ||
+      textSettingValue(billboardSinglesSourcePath, defaultBillboardSinglesSourcePath) !==
+        settings.billboardSinglesSourcePath,
+    [
+      billboardSinglesSourcePath,
+      billboardSourcePath,
+      coverSourcePath,
+      settings.billboardSinglesSourcePath,
+      settings.billboardSourcePath,
+      settings.coverSourcePath,
+      settings.importSourcePath,
+      sourcePath,
+    ],
+  );
 
   const chips = useMemo(() => {
     const nextChips: { key: string; label: string; remove: () => void }[] = [];
@@ -5978,6 +6025,22 @@ export default function App() {
       backupRetention: clampBackupRetention(values.backupRetention ?? baseSettings.backupRetention),
       leftSidebarDefault: values.leftSidebarDefault ?? baseSettings.leftSidebarDefault,
       rightSidebarDefault: values.rightSidebarDefault ?? baseSettings.rightSidebarDefault,
+      importSourcePath: textSettingValue(
+        values.importSourcePath ?? baseSettings.importSourcePath,
+        defaultImportSourcePath,
+      ),
+      coverSourcePath: textSettingValue(
+        values.coverSourcePath ?? baseSettings.coverSourcePath,
+        defaultCoverSourcePath,
+      ),
+      billboardSourcePath: textSettingValue(
+        values.billboardSourcePath ?? baseSettings.billboardSourcePath,
+        defaultBillboardSourcePath,
+      ),
+      billboardSinglesSourcePath: textSettingValue(
+        values.billboardSinglesSourcePath ?? baseSettings.billboardSinglesSourcePath,
+        defaultBillboardSinglesSourcePath,
+      ),
       musicBrainzCachePath: textSettingValue(
         values.musicBrainzCachePath ?? baseSettings.musicBrainzCachePath,
         defaultMusicBrainzCachePath,
@@ -6013,6 +6076,18 @@ export default function App() {
         if (Object.prototype.hasOwnProperty.call(values, "updateAutoCheckMinutes")) {
           setAppUpdateAutoCheckDraft(String(updateAutoCheckMinutesValue(saved.updateAutoCheckMinutes)));
         }
+        if (Object.prototype.hasOwnProperty.call(values, "importSourcePath")) {
+          setSourcePath(saved.importSourcePath);
+        }
+        if (Object.prototype.hasOwnProperty.call(values, "coverSourcePath")) {
+          setCoverSourcePath(saved.coverSourcePath);
+        }
+        if (Object.prototype.hasOwnProperty.call(values, "billboardSourcePath")) {
+          setBillboardSourcePath(saved.billboardSourcePath);
+        }
+        if (Object.prototype.hasOwnProperty.call(values, "billboardSinglesSourcePath")) {
+          setBillboardSinglesSourcePath(saved.billboardSinglesSourcePath);
+        }
       }
     });
     settingsSaveQueueRef.current = saveTask.then(
@@ -6032,6 +6107,15 @@ export default function App() {
         setIsSavingSettings(false);
       }
     }
+  }
+
+  async function saveImportPathSettings() {
+    await saveAppSettings({
+      importSourcePath: sourcePath,
+      coverSourcePath,
+      billboardSourcePath,
+      billboardSinglesSourcePath,
+    });
   }
 
   async function restoreBackup(backup: DatabaseBackup) {
@@ -6531,9 +6615,21 @@ export default function App() {
               <h1>Imports</h1>
               <p>Build the local SQLite database from a MusicBee TSV export.</p>
             </div>
-            <button className="icon-button" type="button" aria-label="Refresh" onClick={() => void loadData()}>
-              <RotateCcw size={18} />
-            </button>
+            <div className="topbar-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={isSavingSettings || !importPathsDirty}
+                onClick={() => void saveImportPathSettings()}
+                title={importPathsDirty ? "Save import paths" : "Import paths are saved"}
+              >
+                <Save size={16} />
+                <span>{isSavingSettings ? "Saving" : importPathsDirty ? "Save paths" : "Paths saved"}</span>
+              </button>
+              <button className="icon-button" type="button" aria-label="Refresh" onClick={() => void loadData()}>
+                <RotateCcw size={18} />
+              </button>
+            </div>
           </header>
 
           <section className="metric-grid" aria-label="Library summary">
@@ -6543,6 +6639,8 @@ export default function App() {
             <Metric label="Import runs" value={formatNumber(status?.importRunCount)} icon={Clock3} />
             <Metric label="Database" value={status?.hasDatabase ? "Ready" : "New"} icon={Database} />
           </section>
+
+          {settingsError ? <p className="error-message">{settingsError}</p> : null}
 
           <section className="import-panel">
             <div className="panel-heading">

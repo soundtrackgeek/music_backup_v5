@@ -49,6 +49,10 @@ import type {
 } from "./types";
 
 export const settingsStorageKey = "musicLibrarySettings:v1";
+export const defaultImportSourcePath = "musicbee-library.tsv";
+export const defaultCoverSourcePath = "AlbumCovers";
+export const defaultBillboardSourcePath = "CSV";
+export const defaultBillboardSinglesSourcePath = "CSV_SINGLES";
 export const defaultMusicBrainzCachePath = "MusicBrainz/musicbrainz_cache.db";
 export const defaultMusicBrainzOverlaySyncPath =
   "C:\\Users\\jtill\\OneDrive\\_musicbackup\\musicbrainz-overlay-sync.sqlite3";
@@ -2632,6 +2636,13 @@ function normalizeSettings(settings: Partial<AppSettings>): AppSettings {
     darkMode: Boolean(settings.darkMode),
     leftSidebarDefault: normalizeLeftSidebarMode(settings.leftSidebarDefault),
     rightSidebarDefault: normalizeRightSidebarMode(settings.rightSidebarDefault),
+    importSourcePath: normalizeImportPath(settings.importSourcePath, defaultImportSourcePath),
+    coverSourcePath: normalizeImportPath(settings.coverSourcePath, defaultCoverSourcePath),
+    billboardSourcePath: normalizeImportPath(settings.billboardSourcePath, defaultBillboardSourcePath),
+    billboardSinglesSourcePath: normalizeImportPath(
+      settings.billboardSinglesSourcePath,
+      defaultBillboardSinglesSourcePath,
+    ),
     musicBrainzCachePath: normalizeMusicBrainzCachePath(settings.musicBrainzCachePath),
     musicBrainzOverlaySyncPath: normalizeMusicBrainzOverlaySyncPath(settings.musicBrainzOverlaySyncPath),
     musicBrainzOverlayAutoSyncMinutes: Math.min(
@@ -2652,6 +2663,10 @@ function defaultSettings(): AppSettings {
     darkMode: false,
     leftSidebarDefault: "expanded",
     rightSidebarDefault: "expanded",
+    importSourcePath: defaultImportSourcePath,
+    coverSourcePath: defaultCoverSourcePath,
+    billboardSourcePath: defaultBillboardSourcePath,
+    billboardSinglesSourcePath: defaultBillboardSinglesSourcePath,
     musicBrainzCachePath: defaultMusicBrainzCachePath,
     musicBrainzOverlaySyncPath: defaultMusicBrainzOverlaySyncPath,
     musicBrainzOverlayAutoSyncMinutes: 0,
@@ -2666,6 +2681,11 @@ function normalizeLeftSidebarMode(value: unknown): LeftSidebarMode {
 
 function normalizeRightSidebarMode(value: unknown): RightSidebarMode {
   return value === "hidden" || value === "expanded" ? value : "expanded";
+}
+
+function normalizeImportPath(value: unknown, fallback: string) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return normalized || fallback;
 }
 
 function normalizeMusicBrainzCachePath(value: unknown) {
