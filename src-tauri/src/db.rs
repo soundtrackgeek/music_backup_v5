@@ -7469,7 +7469,7 @@ fn normalized_artist_sql(field: &str) -> String {
         })
 }
 
-fn safe_file_segment(value: &str) -> String {
+pub(crate) fn safe_file_segment(value: &str) -> String {
     let segment = value
         .chars()
         .map(|character| {
@@ -7570,7 +7570,11 @@ fn write_issue_export_file(path: &PathBuf, format: &str, rows: &[MusicToolIssueR
     Ok(())
 }
 
-fn write_xlsx_file(path: &PathBuf, headers: &[&'static str], rows: &[Vec<String>]) -> Result<()> {
+pub(crate) fn write_xlsx_file(
+    path: &PathBuf,
+    headers: &[&'static str],
+    rows: &[Vec<String>],
+) -> Result<()> {
     let mut workbook = Workbook::new();
     let worksheet = workbook.add_worksheet();
     let header_format = Format::new().set_bold();
@@ -7589,7 +7593,7 @@ fn write_xlsx_file(path: &PathBuf, headers: &[&'static str], rows: &[Vec<String>
     Ok(())
 }
 
-fn write_delimited(
+pub(crate) fn write_delimited(
     file: &mut fs::File,
     delimiter: char,
     headers: &[&'static str],

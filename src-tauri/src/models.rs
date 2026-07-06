@@ -272,6 +272,48 @@ pub struct MusicBrainzArtistReleaseRow {
     pub decision: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistExportRow {
+    #[serde(default)]
+    pub release_mbid: String,
+    #[serde(default)]
+    pub title: String,
+    pub year: Option<i32>,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub local_album_title: Option<String>,
+    pub local_year: Option<i32>,
+    #[serde(default)]
+    pub match_method: String,
+    #[serde(default)]
+    pub confidence: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistExportRequest {
+    #[serde(default)]
+    pub artist_key: String,
+    #[serde(default)]
+    pub artist_name: String,
+    #[serde(default)]
+    pub musicbrainz_mbid: Option<String>,
+    #[serde(default)]
+    pub matched_cache_name: Option<String>,
+    #[serde(default)]
+    pub match_method: String,
+    #[serde(default)]
+    pub artist_link_state: String,
+    #[serde(default)]
+    pub artist_link_ignored: bool,
+    #[serde(default)]
+    pub rows: Vec<MusicBrainzArtistExportRow>,
+    #[serde(default)]
+    pub format: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistCandidateRow {

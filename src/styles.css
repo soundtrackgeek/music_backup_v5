@@ -3152,6 +3152,19 @@ button {
   box-shadow: 0 0 0 3px rgba(22, 130, 121, 0.14);
 }
 
+.musicbrainz-export-controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.musicbrainz-export-result {
+  max-width: min(640px, 100%);
+  padding: 8px 10px;
+}
+
 .musicbrainz-candidate-results {
   margin-top: 14px;
 }
@@ -4169,9 +4182,15 @@ button {
     flex-direction: column;
   }
 
-  .tool-export-controls {
+  .tool-export-controls,
+  .musicbrainz-export-controls {
     justify-items: stretch;
     width: 100%;
+  }
+
+  .musicbrainz-export-controls {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .export-strip {

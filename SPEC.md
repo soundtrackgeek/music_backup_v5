@@ -3,7 +3,7 @@
 Last updated: 2026-07-06
 Status: Living product and implementation contract
 Current implementation: Phase 17 complete
-Current package version: 0.32.0
+Current package version: 0.33.0
 SQLite schema version: 12
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -495,8 +495,9 @@ Expected next backend modularization:
 - Verified artist links override raw cache lookup, and ignored artist links suppress selected-artist MusicBrainz results and future broad reports.
 - Missing release rows can be marked not in scope; filtered rows are hidden from the main owned/missing album list and do not count as missing or lower completion.
 - Cached release groups with no official MusicBrainz releases are automatically excluded when release-status verification has succeeded for the selected artist.
+- The currently visible selected-artist MusicBrainz rows can be exported to CSV/XLSX with owned/missing status, year, MusicBrainz title, local match, confidence, MBID links, match method, and artist-link trust state.
 - Web-only preview mode includes representative owned/missing MusicBrainz artist discographies.
-- Rust tests cover selected-artist owned/missing comparison, suspicious cache mapping warnings, fuzzy artist candidates, artist-link override behavior, ignored artist suppression, and manual artist-link decisions.
+- Rust tests cover selected-artist owned/missing comparison, suspicious cache mapping warnings, fuzzy artist candidates, artist-link override behavior, ignored artist suppression, manual artist-link decisions, and hidden-row export filtering.
 
 ## Roadmap
 
@@ -674,11 +675,18 @@ Completed in 0.32.0:
 - Let selected-artist candidates be saved as verified `musicbrainz_artist_links` rows while keeping manual MBID correction available.
 - Add Rust coverage for fuzzy candidate generation and suspect-match alternate cached-name candidates.
 
+Completed in 0.33.0:
+
+- Add CSV/XLSX export for currently visible selected-artist MusicBrainz owned/missing rows.
+- Include owned/missing status, year, MusicBrainz title, local match, confidence, release/artist MBIDs and links, match method, cached name, and artist-link trust state in selected-artist MusicBrainz exports.
+- Keep ignored artist mappings and hidden/not-in-scope rows out of selected-artist MusicBrainz exports by default.
+- Add Rust coverage for excluding hidden MusicBrainz rows from selected-artist export tables.
+
 Remaining candidate work:
 
 - Add matcher availability and cache staleness checks once the matching utilities are wired into the app.
 - Add release-type breakdown progress for combined MusicBrainz types.
-- Add optional secondary-type filters and CSV/XLSX export for MusicBrainz release rows.
+- Add optional secondary-type filters for MusicBrainz release rows.
 - Add a complete discography timeline that shows owned vs missing releases by year and release type.
 - Add broader artist-link review workflows for collection-wide reports after selected-artist review is stable.
 - Add an explicit "refresh this artist" action after cache-only reads are stable; the action should back up the cache, use MusicBrainz rate limiting, require user-agent/contact configuration, and update only the selected artist.

@@ -39,6 +39,7 @@ import type {
   MusicToolProgress,
   MusicToolSummary,
   MusicBrainzArtistDiscographyResponse,
+  MusicBrainzArtistExportRequest,
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
   PerformanceProbeResponse,
@@ -2441,6 +2442,25 @@ export async function exportMusicToolIssues(request: MusicToolIssueRequest, form
   }
 
   return invoke<ExportResult>("export_music_tool_issues", { input: { request, format } });
+}
+
+export async function exportMusicBrainzArtistReleases(
+  request: Omit<MusicBrainzArtistExportRequest, "format">,
+  format: string,
+) {
+  const visibleRows = request.rows.filter((row) => row.status !== "excluded");
+
+  if (!isTauriRuntime()) {
+    return {
+      path: `Preview runtime MusicBrainz artist export.${format}`,
+      format,
+      rowCount: visibleRows.length,
+    } satisfies ExportResult;
+  }
+
+  return invoke<ExportResult>("export_musicbrainz_artist_releases", {
+    input: { ...request, rows: visibleRows, format },
+  });
 }
 
 export async function listenToImportProgress(handler: (progress: ImportProgress) => void) {

@@ -1,11 +1,13 @@
 use crate::db;
 use crate::models::{
-    MusicBrainzArtistCandidateRow, MusicBrainzArtistDiscographyRequest,
-    MusicBrainzArtistDiscographyResponse, MusicBrainzArtistLinkRequest,
-    MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus, MusicBrainzCacheWarningExample,
-    MusicBrainzReleaseDecisionRequest,
+    ExportResult, MusicBrainzArtistCandidateRow, MusicBrainzArtistDiscographyRequest,
+    MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
+    MusicBrainzArtistExportRow, MusicBrainzArtistLinkRequest, MusicBrainzArtistReleaseRow,
+    MusicBrainzCacheStatus, MusicBrainzCacheWarningExample, MusicBrainzReleaseDecisionRequest,
 };
 use anyhow::{bail, Context, Result};
+#[cfg(not(test))]
+use chrono::Utc;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -18,7 +20,7 @@ use std::thread;
 #[cfg(not(test))]
 use std::time::Duration;
 #[cfg(not(test))]
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DEFAULT_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
@@ -28,7 +30,7 @@ const FUZZY_ARTIST_CANDIDATE_THRESHOLD: f64 = 0.68;
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.32.0 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.33.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 #[cfg(not(test))]
@@ -72,6 +74,69 @@ pub fn set_artist_link_for_app(
 ) -> Result<()> {
     let (conn, _) = db::open(app)?;
     set_artist_link_for_connection(&conn, request)
+}
+
+#[cfg(not(test))]
+pub fn export_artist_releases_for_app(
+    app: &AppHandle,
+    input: MusicBrainzArtistExportRequest,
+) -> Result<ExportResult> {
+    let format = input.format.trim().to_lowercase();
+    if !matches!(format.as_str(), "csv" | "xlsx") {
+        bail!("Unsupported MusicBrainz export format: {}", input.format);
+    }
+    if input.artist_link_ignored {
+        bail!("Ignored MusicBrainz artist matches have no visible rows to export");
+    }
+
+    let visible_rows = visible_musicbrainz_artist_export_rows(&input.rows);
+    let (headers, values) = musicbrainz_artist_export_table(&input, &visible_rows);
+
+    let export_dir = app
+        .path()
+        .app_data_dir()
+        .context("Could not resolve the app data directory")?
+        .join("exports");
+    fs::create_dir_all(&export_dir).context("Could not create export directory")?;
+
+    let artist_segment = db::safe_file_segment(&input.artist_name);
+    let path = export_dir.join(format!(
+        "music-library-musicbrainz-{}-{}.{}",
+        artist_segment,
+        Utc::now().format("%Y%m%d-%H%M%S"),
+        format
+    ));
+
+    if format == "xlsx" {
+        db::write_xlsx_file(&path, &headers, &values)?;
+    } else {
+        let mut file = fs::File::create(&path)?;
+        db::write_delimited(&mut file, ',', &headers, &values)?;
+    }
+
+    let (conn, _) = db::open(app)?;
+    let request_json =
+        serde_json::to_string(&input).context("Could not serialize MusicBrainz export query")?;
+    conn.execute(
+        "
+        INSERT INTO exports (created_at, view, format, row_count, path, request_json)
+        VALUES (?1, 'musicbrainz-artist', ?2, ?3, ?4, ?5)
+        ",
+        params![
+            Utc::now().to_rfc3339(),
+            &format,
+            visible_rows.len() as i64,
+            path.display().to_string(),
+            request_json
+        ],
+    )
+    .context("Could not record MusicBrainz artist export")?;
+
+    Ok(ExportResult {
+        path: path.display().to_string(),
+        format,
+        row_count: visible_rows.len(),
+    })
 }
 
 pub fn cache_status_for_path(cache_path: Option<String>) -> Result<MusicBrainzCacheStatus> {
@@ -395,6 +460,121 @@ pub fn artist_discography_for_connection(
         releases,
         candidates,
     })
+}
+
+fn visible_musicbrainz_artist_export_rows(
+    rows: &[MusicBrainzArtistExportRow],
+) -> Vec<MusicBrainzArtistExportRow> {
+    rows.iter()
+        .filter(|row| row.status != "excluded")
+        .cloned()
+        .collect()
+}
+
+fn musicbrainz_artist_export_table(
+    input: &MusicBrainzArtistExportRequest,
+    rows: &[MusicBrainzArtistExportRow],
+) -> (Vec<&'static str>, Vec<Vec<String>>) {
+    let headers = vec![
+        "Status",
+        "Year",
+        "MusicBrainz Title",
+        "Local Match",
+        "Confidence",
+        "Release Group MBID",
+        "Release Group Link",
+        "Release Match Method",
+        "Artist",
+        "Artist Link Trust",
+        "MusicBrainz Artist MBID",
+        "MusicBrainz Artist Link",
+        "Cached Name",
+        "Artist Match Method",
+    ];
+    let artist_mbid = input.musicbrainz_mbid.as_deref().unwrap_or_default();
+    let artist_url = musicbrainz_artist_url(artist_mbid);
+
+    let values = rows
+        .iter()
+        .map(|row| {
+            let release_url = musicbrainz_release_group_url(&row.release_mbid);
+            vec![
+                status_label(&row.status),
+                row.year.map(|year| year.to_string()).unwrap_or_default(),
+                row.title.clone(),
+                local_match_label(row),
+                confidence_label(row),
+                row.release_mbid.clone(),
+                release_url,
+                row.match_method.clone(),
+                input.artist_name.clone(),
+                artist_link_state_label(&input.artist_link_state),
+                artist_mbid.to_string(),
+                artist_url.clone(),
+                input.matched_cache_name.clone().unwrap_or_default(),
+                input.match_method.clone(),
+            ]
+        })
+        .collect();
+
+    (headers, values)
+}
+
+fn musicbrainz_artist_url(mbid: &str) -> String {
+    if mbid.trim().is_empty() {
+        String::new()
+    } else {
+        format!("https://musicbrainz.org/artist/{}", mbid.trim())
+    }
+}
+
+fn musicbrainz_release_group_url(mbid: &str) -> String {
+    if mbid.trim().is_empty() {
+        String::new()
+    } else {
+        format!("https://musicbrainz.org/release-group/{}", mbid.trim())
+    }
+}
+
+fn local_match_label(row: &MusicBrainzArtistExportRow) -> String {
+    match row
+        .local_album_title
+        .as_deref()
+        .filter(|title| !title.is_empty())
+    {
+        Some(title) => match row.local_year {
+            Some(year) => format!("{title} ({year})"),
+            None => title.to_string(),
+        },
+        None => String::new(),
+    }
+}
+
+fn confidence_label(row: &MusicBrainzArtistExportRow) -> String {
+    if row.status == "owned" {
+        format!("{:.0}%", row.confidence * 100.0)
+    } else {
+        String::new()
+    }
+}
+
+fn status_label(status: &str) -> String {
+    match status {
+        "owned" => "Owned".to_string(),
+        "missing" => "Missing".to_string(),
+        "excluded" => "Excluded".to_string(),
+        value => value.to_string(),
+    }
+}
+
+fn artist_link_state_label(state: &str) -> String {
+    match state {
+        "verified" => "Verified".to_string(),
+        "ignored" => "Ignored".to_string(),
+        "unverified" => "Unverified".to_string(),
+        "none" => "No review".to_string(),
+        value => value.to_string(),
+    }
 }
 
 fn validate_cache_schema(conn: &Connection) -> Result<()> {
@@ -1875,6 +2055,58 @@ mod tests {
         assert!(status.message.contains("missing column"));
 
         fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn musicbrainz_artist_export_table_uses_visible_rows() {
+        let input = MusicBrainzArtistExportRequest {
+            artist_key: "pet shop boys".to_string(),
+            artist_name: "Pet Shop Boys".to_string(),
+            musicbrainz_mbid: Some("mbid-psb".to_string()),
+            matched_cache_name: Some("pet shop boys".to_string()),
+            match_method: "verified-link".to_string(),
+            artist_link_state: "verified".to_string(),
+            artist_link_ignored: false,
+            format: "csv".to_string(),
+            rows: vec![
+                MusicBrainzArtistExportRow {
+                    release_mbid: "rg-owned".to_string(),
+                    title: "Actually".to_string(),
+                    year: Some(1987),
+                    status: "owned".to_string(),
+                    local_album_title: Some("Actually".to_string()),
+                    local_year: Some(1987),
+                    match_method: "exact-title".to_string(),
+                    confidence: 1.0,
+                },
+                MusicBrainzArtistExportRow {
+                    release_mbid: "rg-hidden".to_string(),
+                    title: "Hidden Bootleg".to_string(),
+                    year: Some(1988),
+                    status: "excluded".to_string(),
+                    local_album_title: None,
+                    local_year: None,
+                    match_method: "not-in-scope".to_string(),
+                    confidence: 0.0,
+                },
+            ],
+        };
+
+        let visible_rows = visible_musicbrainz_artist_export_rows(&input.rows);
+        let (headers, values) = musicbrainz_artist_export_table(&input, &visible_rows);
+
+        assert_eq!(visible_rows.len(), 1);
+        assert_eq!(headers[0], "Status");
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0][0], "Owned");
+        assert_eq!(values[0][2], "Actually");
+        assert_eq!(values[0][3], "Actually (1987)");
+        assert_eq!(values[0][4], "100%");
+        assert_eq!(
+            values[0][6],
+            "https://musicbrainz.org/release-group/rg-owned"
+        );
+        assert_eq!(values[0][9], "Verified");
     }
 
     #[test]

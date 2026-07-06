@@ -44,6 +44,7 @@ import {
   deleteSavedSearch,
   clearCoverImageCache,
   defaultMusicBrainzCachePath,
+  exportMusicBrainzArtistReleases,
   exportSearch,
   fixMusicToolIssues,
   cacheSettings,
@@ -125,6 +126,7 @@ import type {
   RatingEvent,
   RightSidebarMode,
   MusicToolFixSummary,
+  MusicBrainzArtistExportRequest,
   MusicToolIssueRequest,
   MusicToolIssueResponse,
   MusicToolIssueRow,
@@ -1392,6 +1394,8 @@ function MusicBrainzArtistDiscographyPanel({
   onOpenExternalUrl,
   onSetArtistLink,
   onSetReleaseDecision,
+  onExport,
+  exportResult,
 }: {
   artist: ArtistSummary | null;
   response: MusicBrainzArtistDiscographyResponse | null;
@@ -1405,8 +1409,11 @@ function MusicBrainzArtistDiscographyPanel({
     canonicalName?: string | null,
   ) => void;
   onSetReleaseDecision: (row: MusicBrainzArtistReleaseRow, decision: "not-in-scope" | "include") => void;
+  onExport: (format: "csv" | "xlsx") => void;
+  exportResult: ExportResult | null;
 }) {
   const rows = response?.releases ?? [];
+  const visibleRows = rows.filter((row) => row.status !== "excluded");
   const candidates = response?.candidates ?? [];
   const statusLabel = musicBrainzStateLabel(response?.state);
   const [manualMbid, setManualMbid] = useState("");
@@ -1428,6 +1435,7 @@ function MusicBrainzArtistDiscographyPanel({
   );
   const manualMbidValue = manualMbid.trim();
   const canSetManualMbid = Boolean(artist && manualMbidValue && !isLoading);
+  const canExport = Boolean(response && !response.artistLinkIgnored && visibleRows.length > 0 && !isLoading);
 
   useEffect(() => {
     setManualMbid(response?.musicbrainzMbid ?? "");
@@ -1605,6 +1613,26 @@ function MusicBrainzArtistDiscographyPanel({
 
           {response.artistLinkIgnored ? null : (
             <>
+              <div className="musicbrainz-export-controls" aria-label="Export selected artist MusicBrainz albums">
+                <div className="export-strip">
+                  <button type="button" disabled={!canExport} onClick={() => onExport("csv")}>
+                    <Download size={15} />
+                    <span>CSV</span>
+                  </button>
+                  <button type="button" disabled={!canExport} onClick={() => onExport("xlsx")}>
+                    <Download size={15} />
+                    <span>XLSX</span>
+                  </button>
+                </div>
+                {exportResult ? (
+                  <div className="export-result musicbrainz-export-result">
+                    <Download size={16} />
+                    <span>
+                      {formatNumber(exportResult.rowCount)} albums to {exportResult.path}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
               <MusicBrainzArtistCandidateTable
                 candidates={candidates}
                 isLoading={isLoading}
@@ -3935,6 +3963,7 @@ export default function App() {
     useState<MusicBrainzArtistDiscographyResponse | null>(null);
   const [musicBrainzArtistError, setMusicBrainzArtistError] = useState<string | null>(null);
   const [isMusicBrainzArtistLoading, setIsMusicBrainzArtistLoading] = useState(false);
+  const [musicBrainzArtistExportResult, setMusicBrainzArtistExportResult] = useState<ExportResult | null>(null);
   const [artistIncludeCalculated, setArtistIncludeCalculated] = useState(false);
   const [artistExportResult, setArtistExportResult] = useState<ExportResult | null>(null);
   const [genreRequest, setGenreRequest] = useState<GenreListRequest>(() => createGenreListRequest());
@@ -4435,12 +4464,14 @@ export default function App() {
       setMusicBrainzArtistDiscography(null);
       setMusicBrainzArtistError(null);
       setIsMusicBrainzArtistLoading(false);
+      setMusicBrainzArtistExportResult(null);
       return;
     }
 
     let cancelled = false;
     setIsMusicBrainzArtistLoading(true);
     setMusicBrainzArtistError(null);
+    setMusicBrainzArtistExportResult(null);
     void getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name)
       .then((nextResponse) => {
         if (!cancelled) {
@@ -5124,6 +5155,7 @@ export default function App() {
     setArtistAlbumTracksResponse(null);
     setArtistAlbumTracksError(null);
     setArtistExportResult(null);
+    setMusicBrainzArtistExportResult(null);
   }
 
   function selectArtist(artistId: string) {
@@ -5132,6 +5164,7 @@ export default function App() {
     setArtistAlbumTracksResponse(null);
     setArtistAlbumTracksError(null);
     setArtistExportResult(null);
+    setMusicBrainzArtistExportResult(null);
   }
 
   function selectArtistAlbum(albumId: string) {
@@ -5365,6 +5398,7 @@ export default function App() {
 
     setIsMusicBrainzArtistLoading(true);
     setMusicBrainzArtistError(null);
+    setMusicBrainzArtistExportResult(null);
 
     try {
       const result = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
@@ -5387,6 +5421,7 @@ export default function App() {
 
     setIsMusicBrainzArtistLoading(true);
     setMusicBrainzArtistError(null);
+    setMusicBrainzArtistExportResult(null);
 
     try {
       await setMusicBrainzReleaseDecision({
@@ -5417,6 +5452,7 @@ export default function App() {
 
     setIsMusicBrainzArtistLoading(true);
     setMusicBrainzArtistError(null);
+    setMusicBrainzArtistExportResult(null);
 
     try {
       await setMusicBrainzArtistLink({
@@ -5432,6 +5468,48 @@ export default function App() {
       setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsMusicBrainzArtistLoading(false);
+    }
+  }
+
+  async function runArtistMusicBrainzExport(format: "csv" | "xlsx") {
+    if (!selectedArtist || !musicBrainzArtistDiscography || musicBrainzArtistDiscography.artistLinkIgnored) {
+      return;
+    }
+
+    const rows = musicBrainzArtistDiscography.releases
+      .filter((row) => row.status !== "excluded")
+      .map((row) => ({
+        releaseMbid: row.releaseMbid,
+        title: row.title,
+        year: row.year,
+        status: row.status,
+        localAlbumTitle: row.localAlbumTitle,
+        localYear: row.localYear,
+        matchMethod: row.matchMethod,
+        confidence: row.confidence,
+      }));
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    const request: Omit<MusicBrainzArtistExportRequest, "format"> = {
+      artistKey: selectedArtist.id,
+      artistName: selectedArtist.name,
+      musicbrainzMbid: musicBrainzArtistDiscography.musicbrainzMbid,
+      matchedCacheName: musicBrainzArtistDiscography.matchedCacheName,
+      matchMethod: musicBrainzArtistDiscography.matchMethod,
+      artistLinkState: musicBrainzArtistDiscography.artistLinkState,
+      artistLinkIgnored: musicBrainzArtistDiscography.artistLinkIgnored,
+      rows,
+    };
+
+    setMusicBrainzArtistError(null);
+    try {
+      const result = await exportMusicBrainzArtistReleases(request, format);
+      setMusicBrainzArtistExportResult(result);
+    } catch (error) {
+      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -6857,6 +6935,8 @@ export default function App() {
               void setArtistMusicBrainzLink(action, musicbrainzMbid, canonicalName)
             }
             onSetReleaseDecision={(row, decision) => void setArtistMusicBrainzReleaseDecision(row, decision)}
+            onExport={(format) => void runArtistMusicBrainzExport(format)}
+            exportResult={musicBrainzArtistExportResult}
           />
 
           <section className="table-panel" aria-label="Selected artist cover view">

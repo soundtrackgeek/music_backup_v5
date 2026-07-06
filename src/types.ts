@@ -193,6 +193,29 @@ export type MusicBrainzArtistReleaseRow = {
   decision: MusicBrainzReleaseDecision;
 };
 
+export type MusicBrainzArtistExportRow = {
+  releaseMbid: string;
+  title: string;
+  year: number | null;
+  status: "owned" | "missing" | "excluded";
+  localAlbumTitle: string | null;
+  localYear: number | null;
+  matchMethod: string;
+  confidence: number;
+};
+
+export type MusicBrainzArtistExportRequest = {
+  artistKey: string;
+  artistName: string;
+  musicbrainzMbid: string | null;
+  matchedCacheName: string | null;
+  matchMethod: string;
+  artistLinkState: "none" | "unverified" | "verified" | "ignored";
+  artistLinkIgnored: boolean;
+  rows: MusicBrainzArtistExportRow[];
+  format: string;
+};
+
 export type MusicBrainzArtistCandidateRow = {
   name: string;
   mbid: string;

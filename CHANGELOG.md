@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.33.0] - 2026-07-06
+### Added
+- Added CSV/XLSX export for the currently visible selected-artist MusicBrainz owned/missing album rows.
+- Added MusicBrainz artist export columns for status, year, MusicBrainz title, local match, confidence, release/artist MBIDs and links, match method, cached name, and artist-link trust state.
+- Added Rust coverage for excluding hidden MusicBrainz rows from selected-artist export tables.
+
+### Changed
+- Bumped synchronized app metadata to `0.33.0`.
+
 ## [0.32.0] - 2026-07-06
 ### Added
 - Added selected-artist MusicBrainz candidate review rows for unmatched artists using fuzzy local `artist_cache` matching.
