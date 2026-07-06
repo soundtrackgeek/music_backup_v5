@@ -36,7 +36,7 @@ npm run tauri:dev
 
 The desktop dev shell loads Vite from `http://127.0.0.1:1420/`, matching the loopback host used by `npm run dev`. Vite ignores the local `musicbee-library.tsv` export, `AlbumCovers/` archive, `CSV/` album chart folder, `CSV_SINGLES/` singles chart folder, and `MusicBrainz/` cache folder during development so large library data cannot stall the dev server watcher. If the Tauri window opens but stays blank, make sure port `1420` is free and restart `npm run tauri:dev`.
 
-The import screen defaults to `musicbee-library.tsv`, `AlbumCovers`, `CSV`, and `CSV_SINGLES`. Relative paths are resolved from the app process directory and its parent, so repo-root source folders work during local development. MusicBee TSV quote characters are treated as literal tag text during import, matching plain TSV exports where titles can contain unpaired quotes. The TSV, local `AlbumCovers/` archive, local `CSV/` chart folder, local `CSV_SINGLES/` chart folder, and local `MusicBrainz/` cache folder are intentionally ignored by git.
+The import screen defaults to `musicbee-library.tsv`, `AlbumCovers`, `CSV`, and `CSV_SINGLES`. Relative paths are resolved from the app process directory and its parent, so repo-root source folders work during local development. MusicBee TSV quote characters are treated as literal tag text during import, matching plain TSV exports where titles can contain unpaired quotes. Date-like MusicBee `Year` and `Release Year` values such as `2019-06-28` are normalized to `2019` during import. The TSV, local `AlbumCovers/` archive, local `CSV/` chart folder, local `CSV_SINGLES/` chart folder, and local `MusicBrainz/` cache folder are intentionally ignored by git.
 
 ## Build
 
@@ -240,8 +240,8 @@ npm run security:check
 
 ## Album Calculation Rules
 
-- `Year` is the canonical year.
-- `Release Year` is stored as secondary metadata.
+- `Year` is the canonical year; MusicBee date-like values such as `2019-06-28` are stored as `2019`.
+- `Release Year` is stored as secondary metadata and uses the same date-like year normalization.
 - `Album Artist (display)` identifies albums.
 - If an album has no `Album Artist (display)` but all tracks share one normalized `Display Artist`, that display artist is used as the album artist; mixed-display-artist albums stay blank.
 - Artist grouping treats common Unicode dash variants as a normal hyphen so visually identical artist names stay together.

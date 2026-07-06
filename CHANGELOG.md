@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.4] - 2026-07-06
+### Fixed
+- Fixed MusicBee TSV imports so date-like `Year` and `Release Year` values such as `2019-06-28` are stored as canonical years such as `2019` instead of empty database years.
+
+### Changed
+- Bumped synchronized app metadata to `0.31.4`.
+
 ## [0.31.3] - 2026-07-06
 ### Fixed
 - Fixed desktop startup so the main window restores the last saved position, size, and maximized state when the app is reopened.

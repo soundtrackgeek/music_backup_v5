@@ -932,8 +932,8 @@ impl TrackRow {
         let album_rating = parse_album_rating(&album_rating_raw);
         let disc_number = parse_whole_number(&disc_number_raw);
         let track_number = parse_whole_number(&track_number_raw);
-        let year = parse_whole_number(&year_raw);
-        let release_year = parse_whole_number(&release_year_raw);
+        let year = parse_year_value(&year_raw);
+        let release_year = parse_year_value(&release_year_raw);
         let time_seconds = parse_time_seconds(&time_raw);
         let album_id = album_identity(
             &album_unique_id,
@@ -1332,6 +1332,48 @@ fn parse_whole_number(value: &str) -> Option<i32> {
     }
 }
 
+fn parse_year_value(value: &str) -> Option<i32> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Some(year) = parse_whole_number(trimmed) {
+        return Some(year);
+    }
+
+    let mut parts = trimmed.split('-');
+    let (Some(year_part), Some(month_part), Some(day_part), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return None;
+    };
+
+    if year_part.len() != 4 || month_part.len() != 2 || day_part.len() != 2 {
+        return None;
+    }
+
+    if !year_part
+        .chars()
+        .all(|character| character.is_ascii_digit())
+        || !month_part
+            .chars()
+            .all(|character| character.is_ascii_digit())
+        || !day_part.chars().all(|character| character.is_ascii_digit())
+    {
+        return None;
+    }
+
+    let year = year_part.parse::<i32>().ok()?;
+    let month = month_part.parse::<i32>().ok()?;
+    let day = day_part.parse::<i32>().ok()?;
+    if (1..=12).contains(&month) && (1..=31).contains(&day) {
+        Some(year)
+    } else {
+        None
+    }
+}
+
 fn parse_track_rating(value: &str) -> Option<i32> {
     let rating = parse_whole_number(value)?;
     if (0..=5).contains(&rating) {
@@ -1449,6 +1491,16 @@ mod tests {
     }
 
     #[test]
+    fn parses_musicbee_year_values() {
+        assert_eq!(parse_year_value("2019"), Some(2019));
+        assert_eq!(parse_year_value("2019.0"), Some(2019));
+        assert_eq!(parse_year_value("2019-06-28"), Some(2019));
+        assert_eq!(parse_year_value("1985-01-31"), Some(1985));
+        assert_eq!(parse_year_value("2019-00-28"), None);
+        assert_eq!(parse_year_value("2019-06"), None);
+    }
+
+    #[test]
     fn treats_musicbee_tsv_quotes_as_literal_text() {
         let tsv = [
             REQUIRED_COLUMNS.join("\t"),
@@ -1516,6 +1568,43 @@ mod tests {
                 .title,
             "Next Track"
         );
+    }
+
+    #[test]
+    fn stores_date_like_musicbee_year_fields_as_canonical_years() {
+        let headers = StringRecord::from(REQUIRED_COLUMNS.to_vec());
+        let header_map = HeaderMap::from_headers(&headers).expect("map headers");
+        let record = StringRecord::from(vec![
+            "Artist",
+            "",
+            "1",
+            "Date Album",
+            "Pop",
+            "",
+            "Publisher",
+            "4",
+            "Date Track",
+            "1",
+            "2019-06-28",
+            "1985-01-31",
+            "",
+            "D:\\Music\\Artist - Date Album",
+            "01 - Date Track.mp3",
+            "Artist",
+            "3:21",
+        ]);
+
+        let track = TrackRow::from_record(&record, &header_map).expect("parse date-like years");
+        assert_eq!(track.year_raw, "2019-06-28");
+        assert_eq!(track.year, Some(2019));
+        assert_eq!(track.release_year, Some(1985));
+        assert!(track.album_id.contains("::2019::"));
+
+        let mut album = AlbumAggregate::new(&track);
+        album.apply(&track);
+        let final_album = album.finalize();
+        assert_eq!(final_album.year, Some(2019));
+        assert_eq!(final_album.release_year, Some(1985));
     }
 
     #[test]
