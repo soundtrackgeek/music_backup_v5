@@ -145,7 +145,34 @@ export type AppSettings = {
   leftSidebarDefault: LeftSidebarMode;
   rightSidebarDefault: RightSidebarMode;
   musicBrainzCachePath: string;
+  musicBrainzOverlaySyncPath: string;
+  musicBrainzOverlayAutoSyncMinutes: number;
   updatedAt: string | null;
+};
+
+export type MusicBrainzOverlaySyncResult = {
+  syncPath: string;
+  syncedAt: string;
+  importedCount: number;
+  exportedCount: number;
+  changedCount: number;
+  summary: string;
+  artistLinksImported: number;
+  artistLinksExported: number;
+  artistUnlinksImported: number;
+  artistUnlinksExported: number;
+  releaseDecisionsImported: number;
+  releaseDecisionsExported: number;
+  releaseDecisionClearsImported: number;
+  releaseDecisionClearsExported: number;
+  releaseStatusesImported: number;
+  releaseStatusesExported: number;
+  releaseGroupsImported: number;
+  releaseGroupsExported: number;
+};
+
+export type MusicBrainzOverlaySyncLogEntry = MusicBrainzOverlaySyncResult & {
+  id: number;
 };
 
 export type MusicBrainzCacheWarningExample = {

@@ -2988,6 +2988,10 @@ button {
   grid-column: span 2;
 }
 
+.musicbrainz-sync-settings-panel {
+  grid-column: span 2;
+}
+
 .backup-settings-toolbar {
   display: flex;
   align-items: flex-end;
@@ -3020,8 +3024,65 @@ button {
   margin-top: 16px;
 }
 
+.musicbrainz-sync-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px auto;
+  align-items: end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 .musicbrainz-cache-path {
   min-width: 0;
+}
+
+.musicbrainz-sync-path {
+  min-width: 0;
+}
+
+.musicbrainz-sync-interval input {
+  width: 100%;
+}
+
+.musicbrainz-sync-result {
+  margin-top: 12px;
+}
+
+.musicbrainz-sync-log {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.musicbrainz-sync-log article {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background: #f8fbfa;
+  padding: 10px 12px;
+}
+
+.musicbrainz-sync-log article > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.musicbrainz-sync-log strong {
+  color: #23312d;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.musicbrainz-sync-log span,
+.musicbrainz-sync-log small {
+  min-width: 0;
+  color: #697671;
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
 }
 
 .musicbrainz-status-strip {
@@ -3946,6 +4007,20 @@ button {
   background: #13241f;
 }
 
+:root[data-theme="dark"] .musicbrainz-sync-log article {
+  border-color: #315a53;
+  background: #13241f;
+}
+
+:root[data-theme="dark"] .musicbrainz-sync-log strong {
+  color: #f0f6f4;
+}
+
+:root[data-theme="dark"] .musicbrainz-sync-log span,
+:root[data-theme="dark"] .musicbrainz-sync-log small {
+  color: #a9b7b2;
+}
+
 :root[data-theme="dark"] .musicbrainz-status-ignored {
   border-color: #35433e;
   background: #111815;
@@ -4362,8 +4437,22 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .musicbrainz-sync-toolbar {
+    grid-template-columns: 1fr;
+  }
+
   .musicbrainz-toolbar .primary-button {
     justify-self: start;
+  }
+
+  .musicbrainz-sync-toolbar .primary-button {
+    justify-self: start;
+  }
+
+  .musicbrainz-sync-log article > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .db-path {
@@ -4436,7 +4525,8 @@ button {
   .layout-settings-panel,
   .backup-settings-panel,
   .performance-settings-panel,
-  .musicbrainz-settings-panel {
+  .musicbrainz-settings-panel,
+  .musicbrainz-sync-settings-panel {
     grid-column: span 1;
   }
 

@@ -2,9 +2,9 @@
 
 Last updated: 2026-07-06
 Status: Living product and implementation contract
-Current implementation: Phase 17 complete
-Current package version: 0.34.0
-SQLite schema version: 13
+Current implementation: Phase 18 complete
+Current package version: 0.35.0
+SQLite schema version: 14
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
 
@@ -293,6 +293,7 @@ Core files:
 - `src-tauri/src/models.rs`: Rust payload models shared by commands, database logic, and import logic.
 - `src-tauri/src/db.rs`: SQLite migrations, search, charts, statistics, discovery, Billboard imports, Music Tools, settings, saved objects, and exports.
 - `src-tauri/src/musicbrainz.rs`: Read-only MusicBrainz cache validation, status reporting, selected-artist discography comparison, explicit selected-artist refresh, and app-owned artist/release review decisions against the optional local `musicbrainz_cache.db`.
+- `src-tauri/src/musicbrainz_sync.rs`: Two-way sync for app-owned MusicBrainz overlay rows through a shared SQLite database, including tombstone handling and local sync-log recording.
 - `src-tauri/src/importer.rs`: MusicBee TSV parsing, normalization, import run handling, album aggregation, backup retention, and rating event capture.
 - `src-tauri/src/covers.rs`: cover image import, relinking, embedded-art extraction, and local image serving.
 
@@ -301,6 +302,7 @@ Expected MusicBrainz boundary:
 - Keep MusicBrainz cache reads in a dedicated backend module instead of folding them into general search/chart query code.
 - Use a separate read-only SQLite connection for `musicbrainz_cache.db`.
 - Persist only app-owned MusicBrainz settings, artist link decisions, release link/ignore decisions, release-status verification cache, refreshed artist release-group overlays, cache quality snapshots, and refresh metadata in the app SQLite database.
+- Sync only app-owned MusicBrainz overlay rows through the configured shared overlay database; do not place the main app database or recovered MusicBrainz cache under cloud-file sync.
 - Keep MusicBrainz source rows separate from MusicBee source rows and calculated album aggregates.
 - The first implemented slice persists `musicbrainz_cache_path`, opens the cache read-only, validates expected tables, reports cache quality/status, and creates app-owned artist-link/release-decision tables for later matching workflows.
 - The second implemented slice compares the selected Artist workspace artist against pure official MusicBrainz album release groups, using verified artist links first, cache matches second, and deterministic local title matching for owned/missing status.
@@ -480,6 +482,7 @@ Expected next backend modularization:
 - SQLite schema version 11 adds the persisted MusicBrainz cache path plus app-owned artist-link and release-decision tables for future verified/ignored matching.
 - SQLite schema version 12 adds the app-owned MusicBrainz release-status cache used to exclude bootleg-only release groups from selected-artist missing-album counts.
 - SQLite schema version 13 adds the app-owned refreshed artist release-group overlay used by explicit selected-artist MusicBrainz updates.
+- SQLite schema version 14 adds MusicBrainz overlay sync settings, artist/release-decision tombstones, and a local sync log for the shared overlay database.
 - Web-only preview mode includes a mock MusicBrainz cache warning state.
 - The release/security guard verifies that `MusicBrainz/` remains ignored by git.
 
@@ -505,7 +508,7 @@ Expected next backend modularization:
 
 ### Now
 
-#### Phase 18: Backend Modularization
+#### Phase 19: Backend Modularization
 
 Problem:
 
@@ -691,6 +694,14 @@ Completed in 0.34.0:
 - Prefer refreshed app-owned release-group rows over stale recovered-cache rows for the selected artist.
 - Show selected-artist release-group source/timestamp in the MusicBrainz panel.
 - Add Rust coverage for refreshed release-group overlays overriding stale cache rows.
+
+Completed in 0.35.0:
+
+- Add a shared MusicBrainz overlay sync database, defaulting to `C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3`.
+- Sync verified/ignored/unlinked artist links, not-in-scope/include release decisions, official-release status cache rows, and refreshed release-group overlays without moving the main app database.
+- Use tombstone rows so artist unlinks and cleared release decisions propagate between machines.
+- Add Settings controls for manual MusicBrainz overlay sync, autosync interval in minutes, and recent sync log entries.
+- Add Rust coverage for copying overlay rows and applying unlink tombstones.
 
 Remaining candidate work:
 

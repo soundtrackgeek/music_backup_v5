@@ -43,11 +43,15 @@ import type {
   MusicBrainzArtistRefreshResult,
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
+  MusicBrainzOverlaySyncLogEntry,
+  MusicBrainzOverlaySyncResult,
   PerformanceProbeResponse,
 } from "./types";
 
 export const settingsStorageKey = "musicLibrarySettings:v1";
 export const defaultMusicBrainzCachePath = "MusicBrainz/musicbrainz_cache.db";
+export const defaultMusicBrainzOverlaySyncPath =
+  "C:\\Users\\jtill\\OneDrive\\_musicbackup\\musicbrainz-overlay-sync.sqlite3";
 
 const scoreGenreGroup = [
   "action",
@@ -857,6 +861,7 @@ let mockMusicToolIssues: MusicToolIssueRow[] = [
 let mockSavedSearches: SavedSearch[] = [];
 let mockSavedCharts: SavedChart[] = [];
 let mockSettings: AppSettings = loadCachedSettings();
+let mockMusicBrainzOverlaySyncLog: MusicBrainzOverlaySyncLogEntry[] = [];
 const coverDataUrlCache = new Map<string, Promise<string | null> | string | null>();
 
 const mockImportRun = {
@@ -2046,6 +2051,49 @@ export async function setMusicBrainzReleaseDecision(input: {
   });
 }
 
+export async function syncMusicBrainzOverlay() {
+  if (!isTauriRuntime()) {
+    const result = createMockMusicBrainzOverlaySyncResult();
+    mockMusicBrainzOverlaySyncLog = [result, ...mockMusicBrainzOverlaySyncLog].slice(0, 12);
+    return result;
+  }
+
+  return invoke<MusicBrainzOverlaySyncResult>("sync_musicbrainz_overlay");
+}
+
+export async function listMusicBrainzOverlaySyncLog(limit = 12) {
+  if (!isTauriRuntime()) {
+    return mockMusicBrainzOverlaySyncLog.slice(0, limit) satisfies MusicBrainzOverlaySyncLogEntry[];
+  }
+
+  return invoke<MusicBrainzOverlaySyncLogEntry[]>("list_musicbrainz_overlay_sync_log", { limit });
+}
+
+function createMockMusicBrainzOverlaySyncResult(): MusicBrainzOverlaySyncLogEntry {
+  const syncedAt = new Date().toISOString();
+  return {
+    id: Date.now(),
+    syncPath: mockSettings.musicBrainzOverlaySyncPath,
+    syncedAt,
+    importedCount: 0,
+    exportedCount: 0,
+    changedCount: 0,
+    summary: "No MusicBrainz overlay changes.",
+    artistLinksImported: 0,
+    artistLinksExported: 0,
+    artistUnlinksImported: 0,
+    artistUnlinksExported: 0,
+    releaseDecisionsImported: 0,
+    releaseDecisionsExported: 0,
+    releaseDecisionClearsImported: 0,
+    releaseDecisionClearsExported: 0,
+    releaseStatusesImported: 0,
+    releaseStatusesExported: 0,
+    releaseGroupsImported: 0,
+    releaseGroupsExported: 0,
+  };
+}
+
 function applyMockMusicBrainzReleaseDecision(
   row: MusicBrainzArtistReleaseRow,
   decision: "not-in-scope" | "ignored" | null,
@@ -2573,12 +2621,18 @@ export function cacheSettings(settings: AppSettings) {
 
 function normalizeSettings(settings: Partial<AppSettings>): AppSettings {
   const backupRetention = Math.round(Number(settings.backupRetention ?? 3));
+  const autoSyncMinutes = Math.round(Number(settings.musicBrainzOverlayAutoSyncMinutes ?? 0));
   return {
     backupRetention: Math.min(50, Math.max(1, Number.isFinite(backupRetention) ? backupRetention : 3)),
     darkMode: Boolean(settings.darkMode),
     leftSidebarDefault: normalizeLeftSidebarMode(settings.leftSidebarDefault),
     rightSidebarDefault: normalizeRightSidebarMode(settings.rightSidebarDefault),
     musicBrainzCachePath: normalizeMusicBrainzCachePath(settings.musicBrainzCachePath),
+    musicBrainzOverlaySyncPath: normalizeMusicBrainzOverlaySyncPath(settings.musicBrainzOverlaySyncPath),
+    musicBrainzOverlayAutoSyncMinutes: Math.min(
+      1440,
+      Math.max(0, Number.isFinite(autoSyncMinutes) ? autoSyncMinutes : 0),
+    ),
     updatedAt: settings.updatedAt ?? null,
   };
 }
@@ -2590,6 +2644,8 @@ function defaultSettings(): AppSettings {
     leftSidebarDefault: "expanded",
     rightSidebarDefault: "expanded",
     musicBrainzCachePath: defaultMusicBrainzCachePath,
+    musicBrainzOverlaySyncPath: defaultMusicBrainzOverlaySyncPath,
+    musicBrainzOverlayAutoSyncMinutes: 0,
     updatedAt: null,
   };
 }
@@ -2605,6 +2661,11 @@ function normalizeRightSidebarMode(value: unknown): RightSidebarMode {
 function normalizeMusicBrainzCachePath(value: unknown) {
   const normalized = typeof value === "string" ? value.trim() : "";
   return normalized || defaultMusicBrainzCachePath;
+}
+
+function normalizeMusicBrainzOverlaySyncPath(value: unknown) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return normalized || defaultMusicBrainzOverlaySyncPath;
 }
 
 function normalizeArtistKey(value: string | null) {

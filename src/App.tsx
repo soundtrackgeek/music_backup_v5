@@ -45,6 +45,7 @@ import {
   deleteSavedSearch,
   clearCoverImageCache,
   defaultMusicBrainzCachePath,
+  defaultMusicBrainzOverlaySyncPath,
   exportMusicBrainzArtistReleases,
   exportSearch,
   fixMusicToolIssues,
@@ -68,6 +69,7 @@ import {
   listMusicToolIssues,
   listMusicTools,
   listImportRuns,
+  listMusicBrainzOverlaySyncLog,
   listSavedCharts,
   listSavedSearches,
   loadCachedSettings,
@@ -81,6 +83,7 @@ import {
   refreshMusicBrainzArtistInfo,
   setMusicBrainzArtistLink,
   setMusicBrainzReleaseDecision,
+  syncMusicBrainzOverlay,
   searchLibrary,
   exportMusicToolIssues,
   restoreDatabaseBackup,
@@ -139,6 +142,8 @@ import type {
   MusicBrainzArtistDiscographyResponse,
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
+  MusicBrainzOverlaySyncLogEntry,
+  MusicBrainzOverlaySyncResult,
   PerformanceProbeResponse,
   SavedChart,
   SavedSearch,
@@ -365,6 +370,21 @@ function musicBrainzCacheDateRange(status: MusicBrainzCacheStatus | null) {
   const dateFrom = status.cacheDateMin.slice(0, 10);
   const dateTo = status.cacheDateMax.slice(0, 10);
   return dateFrom === dateTo ? dateFrom : `${dateFrom}-${dateTo}`;
+}
+
+function musicBrainzOverlaySyncDetails(result: MusicBrainzOverlaySyncResult | MusicBrainzOverlaySyncLogEntry) {
+  const details = [
+    ["artist links", result.artistLinksImported, result.artistLinksExported],
+    ["unlinks", result.artistUnlinksImported, result.artistUnlinksExported],
+    ["release decisions", result.releaseDecisionsImported, result.releaseDecisionsExported],
+    ["decision clears", result.releaseDecisionClearsImported, result.releaseDecisionClearsExported],
+    ["status rows", result.releaseStatusesImported, result.releaseStatusesExported],
+    ["release groups", result.releaseGroupsImported, result.releaseGroupsExported],
+  ]
+    .filter(([, imported, exported]) => Number(imported) + Number(exported) > 0)
+    .map(([label, imported, exported]) => `${label}: ${imported} in / ${exported} out`);
+
+  return details.length > 0 ? details.join("; ") : "No row changes";
 }
 
 function TextCriterion({
@@ -4067,9 +4087,20 @@ export default function App() {
   const [musicBrainzCachePathDraft, setMusicBrainzCachePathDraft] = useState(
     settings.musicBrainzCachePath || defaultMusicBrainzCachePath,
   );
+  const [musicBrainzOverlaySyncPathDraft, setMusicBrainzOverlaySyncPathDraft] = useState(
+    settings.musicBrainzOverlaySyncPath || defaultMusicBrainzOverlaySyncPath,
+  );
+  const [musicBrainzOverlaySyncResult, setMusicBrainzOverlaySyncResult] =
+    useState<MusicBrainzOverlaySyncResult | null>(null);
+  const [musicBrainzOverlaySyncLog, setMusicBrainzOverlaySyncLog] = useState<
+    MusicBrainzOverlaySyncLogEntry[]
+  >([]);
+  const [musicBrainzOverlaySyncError, setMusicBrainzOverlaySyncError] = useState<string | null>(null);
+  const [isMusicBrainzOverlaySyncing, setIsMusicBrainzOverlaySyncing] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const hasAppliedLayoutDefaults = useRef(false);
+  const isMusicBrainzOverlaySyncingRef = useRef(false);
   const canImport = isTauriRuntime();
 
   const refreshGenreSuggestions = useCallback(async () => {
@@ -4087,6 +4118,7 @@ export default function App() {
       nextStatistics,
       nextSettings,
       nextMusicBrainzStatus,
+      nextMusicBrainzOverlaySyncLog,
     ] = await Promise.all([
       getLibraryStatus(),
       listImportRuns(8),
@@ -4096,6 +4128,7 @@ export default function App() {
       getStatistics(),
       getSettings(),
       getMusicBrainzCacheStatus(),
+      listMusicBrainzOverlaySyncLog(12),
     ]);
     setStatus(nextStatus);
     setRuns(nextRuns);
@@ -4111,8 +4144,13 @@ export default function App() {
     setStatistics(nextStatistics);
     setSettings(nextSettings);
     setMusicBrainzCachePathDraft(nextSettings.musicBrainzCachePath || defaultMusicBrainzCachePath);
+    setMusicBrainzOverlaySyncPathDraft(
+      nextSettings.musicBrainzOverlaySyncPath || defaultMusicBrainzOverlaySyncPath,
+    );
     setMusicBrainzStatus(nextMusicBrainzStatus);
     setMusicBrainzStatusError(null);
+    setMusicBrainzOverlaySyncLog(nextMusicBrainzOverlaySyncLog);
+    setMusicBrainzOverlaySyncError(null);
     if (!hasAppliedLayoutDefaults.current) {
       setLeftSidebarMode(nextSettings.leftSidebarDefault);
       setRightSidebarMode(nextSettings.rightSidebarDefault);
@@ -5837,6 +5875,11 @@ export default function App() {
   }
 
   async function saveAppSettings(values: Partial<AppSettings>) {
+    const overlayAutoSyncMinutes = numberValue(
+      String(
+        values.musicBrainzOverlayAutoSyncMinutes ?? settings.musicBrainzOverlayAutoSyncMinutes,
+      ),
+    );
     const nextSettings = {
       ...settings,
       ...values,
@@ -5844,6 +5887,13 @@ export default function App() {
       leftSidebarDefault: values.leftSidebarDefault ?? settings.leftSidebarDefault,
       rightSidebarDefault: values.rightSidebarDefault ?? settings.rightSidebarDefault,
       musicBrainzCachePath: (values.musicBrainzCachePath ?? settings.musicBrainzCachePath).trim() || defaultMusicBrainzCachePath,
+      musicBrainzOverlaySyncPath:
+        (values.musicBrainzOverlaySyncPath ?? settings.musicBrainzOverlaySyncPath).trim() ||
+        defaultMusicBrainzOverlaySyncPath,
+      musicBrainzOverlayAutoSyncMinutes: Math.min(
+        1440,
+        Math.max(0, Math.round(overlayAutoSyncMinutes ?? 0)),
+      ),
     };
     setSettings(nextSettings);
     cacheSettings(nextSettings);
@@ -5928,6 +5978,54 @@ export default function App() {
       setIsMusicBrainzChecking(false);
     }
   }
+
+  async function runMusicBrainzOverlaySync() {
+    if (isMusicBrainzOverlaySyncingRef.current) {
+      return;
+    }
+
+    const syncPath = musicBrainzOverlaySyncPathDraft.trim() || defaultMusicBrainzOverlaySyncPath;
+    isMusicBrainzOverlaySyncingRef.current = true;
+    setIsMusicBrainzOverlaySyncing(true);
+    setMusicBrainzOverlaySyncError(null);
+
+    try {
+      await saveAppSettings({ musicBrainzOverlaySyncPath: syncPath });
+      const result = await syncMusicBrainzOverlay();
+      setMusicBrainzOverlaySyncResult(result);
+      setMusicBrainzOverlaySyncPathDraft(result.syncPath);
+      const log = await listMusicBrainzOverlaySyncLog(12);
+      setMusicBrainzOverlaySyncLog(log);
+      if (selectedArtist) {
+        const discography = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
+        setMusicBrainzArtistDiscography(discography);
+      }
+    } catch (error) {
+      setMusicBrainzOverlaySyncError(error instanceof Error ? error.message : String(error));
+    } finally {
+      isMusicBrainzOverlaySyncingRef.current = false;
+      setIsMusicBrainzOverlaySyncing(false);
+    }
+  }
+
+  useEffect(() => {
+    const autoSyncMinutes = settings.musicBrainzOverlayAutoSyncMinutes;
+    if (!canImport || autoSyncMinutes <= 0) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void runMusicBrainzOverlaySync();
+    }, autoSyncMinutes * 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [
+    canImport,
+    settings.musicBrainzOverlayAutoSyncMinutes,
+    settings.musicBrainzOverlaySyncPath,
+    musicBrainzOverlaySyncPathDraft,
+    selectedArtist?.id,
+  ]);
 
   function saveLeftSidebarDefault(mode: LeftSidebarMode) {
     setLeftSidebarMode(mode);
@@ -8274,6 +8372,93 @@ export default function App() {
                   <span>No MusicBrainz cache check has run yet.</span>
                 </div>
               )}
+            </section>
+
+            <section className="settings-panel musicbrainz-sync-settings-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>MusicBrainz Overlay Sync</h2>
+                  <p>
+                    {musicBrainzOverlaySyncResult
+                      ? musicBrainzOverlaySyncResult.summary
+                      : musicBrainzOverlaySyncLog[0]?.summary ?? "Not synced"}
+                  </p>
+                </div>
+                <CloudDownload size={18} />
+              </div>
+
+              <div className="musicbrainz-sync-toolbar">
+                <label className="criterion musicbrainz-sync-path">
+                  <span>Sync database</span>
+                  <input
+                    type="text"
+                    value={musicBrainzOverlaySyncPathDraft}
+                    onChange={(event) => setMusicBrainzOverlaySyncPathDraft(event.target.value)}
+                    placeholder={defaultMusicBrainzOverlaySyncPath}
+                  />
+                </label>
+                <label className="criterion setting-number musicbrainz-sync-interval">
+                  <span>Auto minutes</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1440}
+                    value={settings.musicBrainzOverlayAutoSyncMinutes}
+                    onChange={(event) =>
+                      void saveAppSettings({
+                        musicBrainzOverlayAutoSyncMinutes: Math.min(
+                          1440,
+                          Math.max(0, Math.round(numberValue(event.target.value) ?? 0)),
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <button
+                  className="primary-button"
+                  type="button"
+                  disabled={isMusicBrainzOverlaySyncing}
+                  onClick={() => void runMusicBrainzOverlaySync()}
+                >
+                  <CloudDownload size={16} />
+                  <span>{isMusicBrainzOverlaySyncing ? "Syncing" : "Sync now"}</span>
+                </button>
+              </div>
+
+              {musicBrainzOverlaySyncError ? (
+                <p className="error-message">{musicBrainzOverlaySyncError}</p>
+              ) : null}
+
+              {musicBrainzOverlaySyncResult ? (
+                <div className="export-result musicbrainz-sync-result">
+                  <Check size={17} />
+                  <span>
+                    {musicBrainzOverlaySyncResult.summary}{" "}
+                    {musicBrainzOverlaySyncDetails(musicBrainzOverlaySyncResult)}.
+                  </span>
+                </div>
+              ) : null}
+
+              {musicBrainzOverlaySyncLog.length > 0 ? (
+                <div className="musicbrainz-sync-log" aria-label="MusicBrainz overlay sync log">
+                  {musicBrainzOverlaySyncLog.map((entry) => (
+                    <article key={entry.id}>
+                      <div>
+                        <strong>{formatDate(entry.syncedAt)}</strong>
+                        <span>{entry.summary}</span>
+                      </div>
+                      <small>{musicBrainzOverlaySyncDetails(entry)}</small>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <Clock3 size={20} />
+                  <span>No overlay sync runs logged yet.</span>
+                </div>
+              )}
+
+              <small className="performance-database-path">{settings.musicBrainzOverlaySyncPath}</small>
             </section>
 
             <section className="settings-panel performance-settings-panel">

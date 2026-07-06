@@ -6,6 +6,8 @@ use crate::models::{
     MusicBrainzArtistRefreshResult, MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus,
     MusicBrainzCacheWarningExample, MusicBrainzReleaseDecisionRequest,
 };
+#[cfg(not(test))]
+use crate::musicbrainz_sync;
 use anyhow::{bail, Context, Result};
 #[cfg(not(test))]
 use chrono::Utc;
@@ -33,7 +35,7 @@ const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.34.0 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.35.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 #[cfg(not(test))]
@@ -67,7 +69,9 @@ pub fn set_release_decision_for_app(
     request: MusicBrainzReleaseDecisionRequest,
 ) -> Result<()> {
     let (conn, _) = db::open(app)?;
-    set_release_decision_for_connection(&conn, request)
+    set_release_decision_for_connection(&conn, request)?;
+    musicbrainz_sync::sync_for_app(app)?;
+    Ok(())
 }
 
 #[cfg(not(test))]
@@ -76,7 +80,9 @@ pub fn set_artist_link_for_app(
     request: MusicBrainzArtistLinkRequest,
 ) -> Result<()> {
     let (conn, _) = db::open(app)?;
-    set_artist_link_for_connection(&conn, request)
+    set_artist_link_for_connection(&conn, request)?;
+    musicbrainz_sync::sync_for_app(app)?;
+    Ok(())
 }
 
 #[cfg(not(test))]
@@ -91,6 +97,7 @@ pub fn refresh_artist_release_groups_for_app(
     let rows = fetch_artist_release_groups(&mbid)?;
     let fetched_at = Utc::now().to_rfc3339();
     let stored_count = save_refreshed_artist_release_groups(&mut conn, &mbid, &rows, &fetched_at)?;
+    musicbrainz_sync::sync_for_app(app)?;
 
     Ok(MusicBrainzArtistRefreshResult {
         artist_key,
@@ -1434,8 +1441,33 @@ pub fn set_release_decision_for_connection(
                 params![artist_key, release_mbid, decision, request.local_album_id],
             )
             .context("Could not save MusicBrainz release decision")?;
+            if table_exists(conn, "musicbrainz_release_decision_tombstones")? {
+                conn.execute(
+                    "
+                    DELETE FROM musicbrainz_release_decision_tombstones
+                    WHERE local_artist_key = ?1 AND release_mbid = ?2
+                    ",
+                    params![artist_key, release_mbid],
+                )
+                .context("Could not clear MusicBrainz release-decision sync marker")?;
+            }
         }
         None => {
+            if table_exists(conn, "musicbrainz_release_decision_tombstones")? {
+                conn.execute(
+                    "
+                    INSERT INTO musicbrainz_release_decision_tombstones (
+                        local_artist_key, release_mbid, updated_at
+                    ) VALUES (
+                        ?1, ?2, datetime('now')
+                    )
+                    ON CONFLICT(local_artist_key, release_mbid) DO UPDATE SET
+                        updated_at = excluded.updated_at
+                    ",
+                    params![artist_key, release_mbid],
+                )
+                .context("Could not record MusicBrainz release-decision clear for sync")?;
+            }
             conn.execute(
                 "
                 DELETE FROM musicbrainz_release_decisions
@@ -1463,6 +1495,22 @@ pub fn set_artist_link_for_connection(
     }
 
     if action == "unlink" {
+        if table_exists(conn, "musicbrainz_artist_link_tombstones")? {
+            conn.execute(
+                "
+                INSERT INTO musicbrainz_artist_link_tombstones (
+                    local_artist_key, display_artist, updated_at
+                ) VALUES (
+                    ?1, ?2, datetime('now')
+                )
+                ON CONFLICT(local_artist_key) DO UPDATE SET
+                    display_artist = excluded.display_artist,
+                    updated_at = excluded.updated_at
+                ",
+                params![artist_key, artist_name],
+            )
+            .context("Could not record MusicBrainz artist unlink for sync")?;
+        }
         conn.execute(
             "
             DELETE FROM musicbrainz_artist_links
@@ -1539,6 +1587,16 @@ pub fn set_artist_link_for_connection(
         ],
     )
     .context("Could not save MusicBrainz artist match decision")?;
+    if table_exists(conn, "musicbrainz_artist_link_tombstones")? {
+        conn.execute(
+            "
+            DELETE FROM musicbrainz_artist_link_tombstones
+            WHERE local_artist_key = ?1
+            ",
+            params![artist_key],
+        )
+        .context("Could not clear MusicBrainz artist unlink sync marker")?;
+    }
 
     Ok(())
 }
@@ -1569,6 +1627,16 @@ fn ensure_artist_link_for_decision(
         params![artist_key, artist_name, mbid],
     )
     .context("Could not ensure MusicBrainz artist link for release decision")?;
+    if table_exists(conn, "musicbrainz_artist_link_tombstones")? {
+        conn.execute(
+            "
+            DELETE FROM musicbrainz_artist_link_tombstones
+            WHERE local_artist_key = ?1
+            ",
+            params![artist_key],
+        )
+        .context("Could not clear MusicBrainz artist unlink marker for release decision")?;
+    }
     Ok(())
 }
 

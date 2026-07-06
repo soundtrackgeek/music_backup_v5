@@ -178,8 +178,59 @@ pub struct AppSettings {
     pub right_sidebar_default: String,
     #[serde(default = "default_musicbrainz_cache_path")]
     pub musicbrainz_cache_path: String,
+    #[serde(default = "default_musicbrainz_overlay_sync_path")]
+    pub musicbrainz_overlay_sync_path: String,
+    #[serde(default)]
+    pub musicbrainz_overlay_auto_sync_minutes: u32,
     #[serde(default)]
     pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzOverlaySyncResult {
+    pub sync_path: String,
+    pub synced_at: String,
+    pub imported_count: usize,
+    pub exported_count: usize,
+    pub changed_count: usize,
+    pub summary: String,
+    pub artist_links_imported: usize,
+    pub artist_links_exported: usize,
+    pub artist_unlinks_imported: usize,
+    pub artist_unlinks_exported: usize,
+    pub release_decisions_imported: usize,
+    pub release_decisions_exported: usize,
+    pub release_decision_clears_imported: usize,
+    pub release_decision_clears_exported: usize,
+    pub release_statuses_imported: usize,
+    pub release_statuses_exported: usize,
+    pub release_groups_imported: usize,
+    pub release_groups_exported: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzOverlaySyncLogEntry {
+    pub id: i64,
+    pub synced_at: String,
+    pub sync_path: String,
+    pub imported_count: usize,
+    pub exported_count: usize,
+    pub changed_count: usize,
+    pub summary: String,
+    pub artist_links_imported: usize,
+    pub artist_links_exported: usize,
+    pub artist_unlinks_imported: usize,
+    pub artist_unlinks_exported: usize,
+    pub release_decisions_imported: usize,
+    pub release_decisions_exported: usize,
+    pub release_decision_clears_imported: usize,
+    pub release_decision_clears_exported: usize,
+    pub release_statuses_imported: usize,
+    pub release_statuses_exported: usize,
+    pub release_groups_imported: usize,
+    pub release_groups_exported: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1252,6 +1303,10 @@ fn default_right_sidebar_default() -> String {
 
 fn default_musicbrainz_cache_path() -> String {
     "MusicBrainz/musicbrainz_cache.db".to_string()
+}
+
+fn default_musicbrainz_overlay_sync_path() -> String {
+    r"C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3".to_string()
 }
 
 fn default_music_tool_id() -> String {

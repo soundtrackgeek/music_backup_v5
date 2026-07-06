@@ -6,6 +6,7 @@ mod db;
 mod importer;
 mod models;
 mod musicbrainz;
+mod musicbrainz_sync;
 
 #[cfg(not(test))]
 use models::{
@@ -15,10 +16,11 @@ use models::{
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
     MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
     MusicBrainzArtistExportRequest, MusicBrainzArtistLinkRequest, MusicBrainzArtistRefreshRequest,
-    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzReleaseDecisionRequest,
-    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
-    MusicToolSummary, PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest, SavedChart,
-    SavedSearch, StatisticsResponse,
+    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzOverlaySyncLogEntry,
+    MusicBrainzOverlaySyncResult, MusicBrainzReleaseDecisionRequest, MusicToolFixRequest,
+    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary,
+    PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch,
+    StatisticsResponse,
 };
 #[cfg(not(test))]
 use models::{ImportRun, ImportSummary, LibraryStatus};
@@ -156,6 +158,27 @@ async fn refresh_musicbrainz_artist_releases(
     .await
     .map_err(|error| format!("MusicBrainz artist refresh task failed: {error}"))?
     .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn sync_musicbrainz_overlay(app: AppHandle) -> Result<MusicBrainzOverlaySyncResult, String> {
+    tauri::async_runtime::spawn_blocking(move || musicbrainz_sync::sync_for_app(&app))
+        .await
+        .map_err(|error| format!("MusicBrainz overlay sync task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn list_musicbrainz_overlay_sync_log(
+    app: AppHandle,
+    limit: Option<u32>,
+) -> Result<Vec<MusicBrainzOverlaySyncLogEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || musicbrainz_sync::sync_log_for_app(&app, limit))
+        .await
+        .map_err(|error| format!("MusicBrainz overlay sync log task failed: {error}"))?
+        .map_err(|error| error.to_string())
 }
 
 #[cfg(not(test))]
@@ -431,6 +454,8 @@ pub fn run() {
             set_musicbrainz_artist_link,
             set_musicbrainz_release_decision,
             refresh_musicbrainz_artist_releases,
+            sync_musicbrainz_overlay,
+            list_musicbrainz_overlay_sync_log,
             export_musicbrainz_artist_releases,
             save_settings,
             get_statistics,

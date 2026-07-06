@@ -38,9 +38,12 @@ type ProgressApp<'a> = &'a ();
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 13;
+const LATEST_SCHEMA_VERSION: i32 = 14;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
+const DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH: &str =
+    r"C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3";
+const MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES: u32 = 1440;
 const MIN_BACKUP_RETENTION: u32 = 1;
 const MAX_BACKUP_RETENTION: u32 = 50;
 const SCORE_GENRE_GROUP: &[&str] = &[
@@ -289,7 +292,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_thirteen_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_fourteen_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -562,6 +565,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             left_sidebar_default TEXT NOT NULL DEFAULT 'expanded',
             right_sidebar_default TEXT NOT NULL DEFAULT 'expanded',
             musicbrainz_cache_path TEXT NOT NULL DEFAULT 'MusicBrainz/musicbrainz_cache.db',
+            musicbrainz_overlay_sync_path TEXT NOT NULL DEFAULT 'C:\\Users\\jtill\\OneDrive\\_musicbackup\\musicbrainz-overlay-sync.sqlite3',
+            musicbrainz_overlay_auto_sync_minutes INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL
         );
 
@@ -594,6 +599,44 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             ON musicbrainz_artist_links(mbid);
         CREATE INDEX IF NOT EXISTS idx_musicbrainz_release_decisions_decision
             ON musicbrainz_release_decisions(decision);
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_link_tombstones (
+            local_artist_key TEXT PRIMARY KEY,
+            display_artist TEXT,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_release_decision_tombstones (
+            local_artist_key TEXT NOT NULL,
+            release_mbid TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (local_artist_key, release_mbid)
+        );
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_overlay_sync_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            synced_at TEXT NOT NULL,
+            sync_path TEXT NOT NULL,
+            imported_count INTEGER NOT NULL DEFAULT 0,
+            exported_count INTEGER NOT NULL DEFAULT 0,
+            changed_count INTEGER NOT NULL DEFAULT 0,
+            summary TEXT NOT NULL,
+            artist_links_imported INTEGER NOT NULL DEFAULT 0,
+            artist_links_exported INTEGER NOT NULL DEFAULT 0,
+            artist_unlinks_imported INTEGER NOT NULL DEFAULT 0,
+            artist_unlinks_exported INTEGER NOT NULL DEFAULT 0,
+            release_decisions_imported INTEGER NOT NULL DEFAULT 0,
+            release_decisions_exported INTEGER NOT NULL DEFAULT 0,
+            release_decision_clears_imported INTEGER NOT NULL DEFAULT 0,
+            release_decision_clears_exported INTEGER NOT NULL DEFAULT 0,
+            release_statuses_imported INTEGER NOT NULL DEFAULT 0,
+            release_statuses_exported INTEGER NOT NULL DEFAULT 0,
+            release_groups_imported INTEGER NOT NULL DEFAULT 0,
+            release_groups_exported INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_overlay_sync_log_synced
+            ON musicbrainz_overlay_sync_log(synced_at);
 
         CREATE TABLE IF NOT EXISTS musicbrainz_release_status_cache (
             artist_mbid TEXT NOT NULL,
@@ -640,12 +683,28 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_track_billboard_single_columns(conn)?;
     ensure_billboard_single_chart_entries_table(conn)?;
     ensure_app_settings_musicbrainz_columns(conn)?;
+    ensure_app_settings_musicbrainz_sync_columns(conn)?;
     ensure_musicbrainz_decision_tables(conn)?;
+    ensure_musicbrainz_tombstone_tables(conn)?;
+    ensure_musicbrainz_overlay_sync_log(conn)?;
     ensure_musicbrainz_release_status_cache(conn)?;
     ensure_musicbrainz_artist_release_groups(conn)?;
-    conn.execute_batch("PRAGMA user_version = 13;")
+    conn.execute_batch("PRAGMA user_version = 14;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_fourteen_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_thirteen_schema_exists(conn)?
+        && schema_column_exists(conn, "app_settings", "musicbrainz_overlay_sync_path")?
+        && schema_column_exists(
+            conn,
+            "app_settings",
+            "musicbrainz_overlay_auto_sync_minutes",
+        )?
+        && schema_table_exists(conn, "musicbrainz_artist_link_tombstones")?
+        && schema_table_exists(conn, "musicbrainz_release_decision_tombstones")?
+        && schema_table_exists(conn, "musicbrainz_overlay_sync_log")?)
 }
 
 fn phase_thirteen_schema_exists(conn: &Connection) -> Result<bool> {
@@ -789,6 +848,28 @@ fn ensure_app_settings_musicbrainz_columns(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn ensure_app_settings_musicbrainz_sync_columns(conn: &Connection) -> Result<()> {
+    if !schema_column_exists(conn, "app_settings", "musicbrainz_overlay_sync_path")? {
+        conn.execute_batch(
+            "ALTER TABLE app_settings ADD COLUMN musicbrainz_overlay_sync_path TEXT NOT NULL DEFAULT 'C:\\Users\\jtill\\OneDrive\\_musicbackup\\musicbrainz-overlay-sync.sqlite3';",
+        )
+        .context("Could not add app_settings.musicbrainz_overlay_sync_path")?;
+    }
+
+    if !schema_column_exists(
+        conn,
+        "app_settings",
+        "musicbrainz_overlay_auto_sync_minutes",
+    )? {
+        conn.execute_batch(
+            "ALTER TABLE app_settings ADD COLUMN musicbrainz_overlay_auto_sync_minutes INTEGER NOT NULL DEFAULT 0;",
+        )
+        .context("Could not add app_settings.musicbrainz_overlay_auto_sync_minutes")?;
+    }
+
+    Ok(())
+}
+
 fn ensure_musicbrainz_decision_tables(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
@@ -824,6 +905,62 @@ fn ensure_musicbrainz_decision_tables(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create MusicBrainz decision tables")?;
+
+    Ok(())
+}
+
+fn ensure_musicbrainz_tombstone_tables(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_link_tombstones (
+            local_artist_key TEXT PRIMARY KEY,
+            display_artist TEXT,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_release_decision_tombstones (
+            local_artist_key TEXT NOT NULL,
+            release_mbid TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (local_artist_key, release_mbid)
+        );
+        ",
+    )
+    .context("Could not create MusicBrainz sync tombstone tables")?;
+
+    Ok(())
+}
+
+fn ensure_musicbrainz_overlay_sync_log(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS musicbrainz_overlay_sync_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            synced_at TEXT NOT NULL,
+            sync_path TEXT NOT NULL,
+            imported_count INTEGER NOT NULL DEFAULT 0,
+            exported_count INTEGER NOT NULL DEFAULT 0,
+            changed_count INTEGER NOT NULL DEFAULT 0,
+            summary TEXT NOT NULL,
+            artist_links_imported INTEGER NOT NULL DEFAULT 0,
+            artist_links_exported INTEGER NOT NULL DEFAULT 0,
+            artist_unlinks_imported INTEGER NOT NULL DEFAULT 0,
+            artist_unlinks_exported INTEGER NOT NULL DEFAULT 0,
+            release_decisions_imported INTEGER NOT NULL DEFAULT 0,
+            release_decisions_exported INTEGER NOT NULL DEFAULT 0,
+            release_decision_clears_imported INTEGER NOT NULL DEFAULT 0,
+            release_decision_clears_exported INTEGER NOT NULL DEFAULT 0,
+            release_statuses_imported INTEGER NOT NULL DEFAULT 0,
+            release_statuses_exported INTEGER NOT NULL DEFAULT 0,
+            release_groups_imported INTEGER NOT NULL DEFAULT 0,
+            release_groups_exported INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_overlay_sync_log_synced
+            ON musicbrainz_overlay_sync_log(synced_at);
+        ",
+    )
+    .context("Could not create MusicBrainz overlay sync log")?;
 
     Ok(())
 }
@@ -2094,7 +2231,8 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
         .query_row(
             "
             SELECT backup_retention, dark_mode, left_sidebar_default, right_sidebar_default,
-                   musicbrainz_cache_path, updated_at
+                   musicbrainz_cache_path, musicbrainz_overlay_sync_path,
+                   musicbrainz_overlay_auto_sync_minutes, updated_at
             FROM app_settings
             WHERE id = 1
             ",
@@ -2114,6 +2252,8 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
                 left_sidebar_default: "expanded".to_string(),
                 right_sidebar_default: "expanded".to_string(),
                 musicbrainz_cache_path: DEFAULT_MUSICBRAINZ_CACHE_PATH.to_string(),
+                musicbrainz_overlay_sync_path: DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH.to_string(),
+                musicbrainz_overlay_auto_sync_minutes: 0,
                 updated_at: None,
             },
         ),
@@ -2127,15 +2267,18 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
         "
         INSERT INTO app_settings (
             id, backup_retention, dark_mode, left_sidebar_default, right_sidebar_default,
-            musicbrainz_cache_path, updated_at
+            musicbrainz_cache_path, musicbrainz_overlay_sync_path,
+            musicbrainz_overlay_auto_sync_minutes, updated_at
         )
-        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)
+        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
         ON CONFLICT(id) DO UPDATE SET
             backup_retention = excluded.backup_retention,
             dark_mode = excluded.dark_mode,
             left_sidebar_default = excluded.left_sidebar_default,
             right_sidebar_default = excluded.right_sidebar_default,
             musicbrainz_cache_path = excluded.musicbrainz_cache_path,
+            musicbrainz_overlay_sync_path = excluded.musicbrainz_overlay_sync_path,
+            musicbrainz_overlay_auto_sync_minutes = excluded.musicbrainz_overlay_auto_sync_minutes,
             updated_at = excluded.updated_at
         ",
         params![
@@ -2144,6 +2287,8 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
             settings.left_sidebar_default,
             settings.right_sidebar_default,
             settings.musicbrainz_cache_path,
+            settings.musicbrainz_overlay_sync_path,
+            i64::from(settings.musicbrainz_overlay_auto_sync_minutes),
             now
         ],
     )
@@ -2161,7 +2306,9 @@ fn settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppSettings> {
         left_sidebar_default: row.get(2)?,
         right_sidebar_default: row.get(3)?,
         musicbrainz_cache_path: row.get(4)?,
-        updated_at: row.get(5)?,
+        musicbrainz_overlay_sync_path: row.get(5)?,
+        musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(6)?.max(0) as u32,
+        updated_at: row.get(7)?,
     })
 }
 
@@ -2174,6 +2321,11 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
         normalize_right_sidebar_default(&settings.right_sidebar_default);
     settings.musicbrainz_cache_path =
         normalize_musicbrainz_cache_path(&settings.musicbrainz_cache_path);
+    settings.musicbrainz_overlay_sync_path =
+        normalize_musicbrainz_overlay_sync_path(&settings.musicbrainz_overlay_sync_path);
+    settings.musicbrainz_overlay_auto_sync_minutes = settings
+        .musicbrainz_overlay_auto_sync_minutes
+        .min(MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES);
     settings
 }
 
@@ -2195,6 +2347,15 @@ fn normalize_musicbrainz_cache_path(value: &str) -> String {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         DEFAULT_MUSICBRAINZ_CACHE_PATH.to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn normalize_musicbrainz_overlay_sync_path(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH.to_string()
     } else {
         trimmed.to_string()
     }
@@ -8723,7 +8884,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_noop_migration_for_current_phase_thirteen_schema() {
+    fn skips_noop_migration_for_current_phase_fourteen_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -8734,7 +8895,7 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_thirteen_schema_exists(&conn).expect("phase thirteen schema exists"));
+        assert!(phase_fourteen_schema_exists(&conn).expect("phase fourteen schema exists"));
     }
 
     #[test]
@@ -8857,6 +9018,9 @@ mod tests {
                 left_sidebar_default: "iconOnly".to_string(),
                 right_sidebar_default: "hidden".to_string(),
                 musicbrainz_cache_path: "MusicBrainz/custom-cache.db".to_string(),
+                musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
+                    .to_string(),
+                musicbrainz_overlay_auto_sync_minutes: 2_000,
                 updated_at: None,
             },
         )
@@ -8867,6 +9031,14 @@ mod tests {
         assert_eq!(saved.left_sidebar_default, "iconOnly");
         assert_eq!(saved.right_sidebar_default, "hidden");
         assert_eq!(saved.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
+        assert_eq!(
+            saved.musicbrainz_overlay_sync_path,
+            r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
+        );
+        assert_eq!(
+            saved.musicbrainz_overlay_auto_sync_minutes,
+            MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES
+        );
 
         let loaded = settings_for_connection(&conn).expect("load settings");
         assert_eq!(loaded.backup_retention, MAX_BACKUP_RETENTION);
@@ -8874,6 +9046,14 @@ mod tests {
         assert_eq!(loaded.left_sidebar_default, "iconOnly");
         assert_eq!(loaded.right_sidebar_default, "hidden");
         assert_eq!(loaded.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
+        assert_eq!(
+            loaded.musicbrainz_overlay_sync_path,
+            r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
+        );
+        assert_eq!(
+            loaded.musicbrainz_overlay_auto_sync_minutes,
+            MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES
+        );
         assert!(loaded.updated_at.is_some());
     }
 

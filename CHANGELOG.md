@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.35.0] - 2026-07-06
+### Added
+- Added MusicBrainz overlay sync through `C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3` so app-owned artist links, release decisions, release-status cache rows, and refreshed release-group overlays can move between machines without syncing the main app database.
+- Added SQLite schema version 14 with MusicBrainz overlay sync settings, artist-link tombstones, release-decision tombstones, and a local sync log.
+- Added Settings controls for manual MusicBrainz overlay sync, autosync interval in minutes, and recent sync log entries with import/export counts.
+- Added Rust coverage for shared overlay row copying and unlink tombstone application.
+
+### Changed
+- MusicBrainz verify, ignore, unlink, not-in-scope/include, and selected-artist refresh actions now run overlay sync after saving local app-owned rows.
+- Bumped synchronized app metadata to `0.35.0`.
+
 ## [0.34.0] - 2026-07-06
 ### Added
 - Added a selected-artist MusicBrainz update action that fetches release groups from MusicBrainz by the reviewed MBID and reloads the Artist MusicBrainz panel.
