@@ -162,11 +162,16 @@ async fn refresh_musicbrainz_artist_releases(
 
 #[cfg(not(test))]
 #[tauri::command]
-async fn sync_musicbrainz_overlay(app: AppHandle) -> Result<MusicBrainzOverlaySyncResult, String> {
-    tauri::async_runtime::spawn_blocking(move || musicbrainz_sync::sync_for_app(&app))
-        .await
-        .map_err(|error| format!("MusicBrainz overlay sync task failed: {error}"))?
-        .map_err(|error| error.to_string())
+async fn sync_musicbrainz_overlay(
+    app: AppHandle,
+    record_noop: Option<bool>,
+) -> Result<MusicBrainzOverlaySyncResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        musicbrainz_sync::sync_for_app_with_options(&app, record_noop.unwrap_or(true))
+    })
+    .await
+    .map_err(|error| format!("MusicBrainz overlay sync task failed: {error}"))?
+    .map_err(|error| error.to_string())
 }
 
 #[cfg(not(test))]

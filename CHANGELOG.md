@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.35.2] - 2026-07-06
+### Fixed
+- Fixed MusicBrainz overlay autosync so missing or invalid autosync settings are treated as disabled instead of creating a zero-delay sync loop.
+- Stopped background autosync from holding the manual Sync button in the syncing state or logging no-op runs.
+
+### Changed
+- Bumped synchronized app metadata to `0.35.2`.
+
 ## [0.35.1] - 2026-07-06
 ### Fixed
 - Fixed Settings MusicBrainz overlay sync saves so older cached settings without the new sync path field fall back to the default path instead of crashing.

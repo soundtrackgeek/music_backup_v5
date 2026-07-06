@@ -13,9 +13,17 @@ const DEFAULT_OVERLAY_SYNC_PATH: &str =
 
 #[cfg(not(test))]
 pub fn sync_for_app(app: &AppHandle) -> Result<MusicBrainzOverlaySyncResult> {
+    sync_for_app_with_options(app, true)
+}
+
+#[cfg(not(test))]
+pub fn sync_for_app_with_options(
+    app: &AppHandle,
+    record_noop: bool,
+) -> Result<MusicBrainzOverlaySyncResult> {
     let (conn, _) = db::open(app)?;
     let settings = db::settings_for_connection(&conn)?;
-    sync_for_connection(&conn, &settings.musicbrainz_overlay_sync_path)
+    sync_for_connection_with_options(&conn, &settings.musicbrainz_overlay_sync_path, record_noop)
 }
 
 #[cfg(not(test))]
@@ -27,9 +35,18 @@ pub fn sync_log_for_app(
     sync_log_for_connection(&conn, limit.unwrap_or(12))
 }
 
+#[cfg(test)]
 pub fn sync_for_connection(
     app_conn: &Connection,
     sync_path: &str,
+) -> Result<MusicBrainzOverlaySyncResult> {
+    sync_for_connection_with_options(app_conn, sync_path, true)
+}
+
+pub fn sync_for_connection_with_options(
+    app_conn: &Connection,
+    sync_path: &str,
+    record_noop: bool,
 ) -> Result<MusicBrainzOverlaySyncResult> {
     ensure_overlay_schema(app_conn)
         .context("Could not prepare local MusicBrainz overlay tables")?;
@@ -95,7 +112,9 @@ pub fn sync_for_connection(
     result.artist_unlinks_exported = copy_artist_link_tombstones(app_conn, &sync_conn)?;
 
     finalize_result(&mut result);
-    record_sync_log(app_conn, &result)?;
+    if record_noop || result.changed_count > 0 {
+        record_sync_log(app_conn, &result)?;
+    }
 
     Ok(result)
 }
@@ -1261,6 +1280,26 @@ mod tests {
             )
             .expect("count artist links");
         assert_eq!(link_count, 0);
+    }
+
+    #[test]
+    fn sync_can_skip_noop_log_entries() {
+        let conn = test_app_connection();
+        let sync_path = temp_sync_path("noop-log");
+
+        let result =
+            sync_for_connection_with_options(&conn, &sync_path.display().to_string(), false)
+                .expect("sync without noop log");
+
+        assert_eq!(result.changed_count, 0);
+        let log_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM musicbrainz_overlay_sync_log",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count sync log rows");
+        assert_eq!(log_count, 0);
     }
 
     fn test_app_connection() -> Connection {

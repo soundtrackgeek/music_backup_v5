@@ -392,6 +392,11 @@ function textSettingValue(value: unknown, fallback: string) {
   return normalized || fallback;
 }
 
+function overlayAutoSyncMinutesValue(value: unknown) {
+  const parsed = Math.round(Number(value ?? 0));
+  return Math.min(1440, Math.max(0, Number.isFinite(parsed) ? parsed : 0));
+}
+
 function TextCriterion({
   label,
   filter,
@@ -5880,10 +5885,8 @@ export default function App() {
   }
 
   async function saveAppSettings(values: Partial<AppSettings>) {
-    const overlayAutoSyncMinutes = numberValue(
-      String(
-        values.musicBrainzOverlayAutoSyncMinutes ?? settings.musicBrainzOverlayAutoSyncMinutes,
-      ),
+    const overlayAutoSyncMinutes = overlayAutoSyncMinutesValue(
+      values.musicBrainzOverlayAutoSyncMinutes ?? settings.musicBrainzOverlayAutoSyncMinutes,
     );
     const nextSettings = {
       ...settings,
@@ -5899,10 +5902,7 @@ export default function App() {
         values.musicBrainzOverlaySyncPath ?? settings.musicBrainzOverlaySyncPath,
         defaultMusicBrainzOverlaySyncPath,
       ),
-      musicBrainzOverlayAutoSyncMinutes: Math.min(
-        1440,
-        Math.max(0, Math.round(overlayAutoSyncMinutes ?? 0)),
-      ),
+      musicBrainzOverlayAutoSyncMinutes: overlayAutoSyncMinutes,
     };
     setSettings(nextSettings);
     cacheSettings(nextSettings);
@@ -5988,43 +5988,54 @@ export default function App() {
     }
   }
 
-  async function runMusicBrainzOverlaySync() {
+  async function runMusicBrainzOverlaySync(options: { source?: "manual" | "auto" } = {}) {
     if (isMusicBrainzOverlaySyncingRef.current) {
       return;
     }
 
+    const isAutoSync = options.source === "auto";
     const syncPath = musicBrainzOverlaySyncPathDraft.trim() || defaultMusicBrainzOverlaySyncPath;
     isMusicBrainzOverlaySyncingRef.current = true;
-    setIsMusicBrainzOverlaySyncing(true);
-    setMusicBrainzOverlaySyncError(null);
+    if (!isAutoSync) {
+      setIsMusicBrainzOverlaySyncing(true);
+      setMusicBrainzOverlaySyncError(null);
+    }
 
     try {
-      await saveAppSettings({ musicBrainzOverlaySyncPath: syncPath });
-      const result = await syncMusicBrainzOverlay();
-      setMusicBrainzOverlaySyncResult(result);
-      setMusicBrainzOverlaySyncPathDraft(result.syncPath);
-      const log = await listMusicBrainzOverlaySyncLog(12);
-      setMusicBrainzOverlaySyncLog(log);
-      if (selectedArtist) {
+      if (!isAutoSync) {
+        await saveAppSettings({ musicBrainzOverlaySyncPath: syncPath });
+      }
+      const result = await syncMusicBrainzOverlay({ recordNoop: !isAutoSync });
+      if (!isAutoSync || result.changedCount > 0) {
+        setMusicBrainzOverlaySyncResult(result);
+        setMusicBrainzOverlaySyncPathDraft(result.syncPath);
+        const log = await listMusicBrainzOverlaySyncLog(12);
+        setMusicBrainzOverlaySyncLog(log);
+      }
+      if (selectedArtist && (!isAutoSync || result.changedCount > 0)) {
         const discography = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
         setMusicBrainzArtistDiscography(discography);
       }
     } catch (error) {
-      setMusicBrainzOverlaySyncError(error instanceof Error ? error.message : String(error));
+      if (!isAutoSync) {
+        setMusicBrainzOverlaySyncError(error instanceof Error ? error.message : String(error));
+      }
     } finally {
       isMusicBrainzOverlaySyncingRef.current = false;
-      setIsMusicBrainzOverlaySyncing(false);
+      if (!isAutoSync) {
+        setIsMusicBrainzOverlaySyncing(false);
+      }
     }
   }
 
   useEffect(() => {
-    const autoSyncMinutes = settings.musicBrainzOverlayAutoSyncMinutes;
+    const autoSyncMinutes = overlayAutoSyncMinutesValue(settings.musicBrainzOverlayAutoSyncMinutes);
     if (!canImport || autoSyncMinutes <= 0) {
       return undefined;
     }
 
     const intervalId = window.setInterval(() => {
-      void runMusicBrainzOverlaySync();
+      void runMusicBrainzOverlaySync({ source: "auto" });
     }, autoSyncMinutes * 60_000);
 
     return () => window.clearInterval(intervalId);
@@ -8412,12 +8423,11 @@ export default function App() {
                     type="number"
                     min={0}
                     max={1440}
-                    value={settings.musicBrainzOverlayAutoSyncMinutes}
+                    value={overlayAutoSyncMinutesValue(settings.musicBrainzOverlayAutoSyncMinutes)}
                     onChange={(event) =>
                       void saveAppSettings({
-                        musicBrainzOverlayAutoSyncMinutes: Math.min(
-                          1440,
-                          Math.max(0, Math.round(numberValue(event.target.value) ?? 0)),
+                        musicBrainzOverlayAutoSyncMinutes: overlayAutoSyncMinutesValue(
+                          numberValue(event.target.value),
                         ),
                       })
                     }

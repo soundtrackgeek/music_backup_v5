@@ -3,7 +3,7 @@
 Last updated: 2026-07-06
 Status: Living product and implementation contract
 Current implementation: Phase 18 complete
-Current package version: 0.35.1
+Current package version: 0.35.2
 SQLite schema version: 14
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.

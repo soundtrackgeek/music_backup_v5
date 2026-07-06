@@ -2051,14 +2051,18 @@ export async function setMusicBrainzReleaseDecision(input: {
   });
 }
 
-export async function syncMusicBrainzOverlay() {
+export async function syncMusicBrainzOverlay(options: { recordNoop?: boolean } = {}) {
   if (!isTauriRuntime()) {
     const result = createMockMusicBrainzOverlaySyncResult();
-    mockMusicBrainzOverlaySyncLog = [result, ...mockMusicBrainzOverlaySyncLog].slice(0, 12);
+    if (options.recordNoop !== false || result.changedCount > 0) {
+      mockMusicBrainzOverlaySyncLog = [result, ...mockMusicBrainzOverlaySyncLog].slice(0, 12);
+    }
     return result;
   }
 
-  return invoke<MusicBrainzOverlaySyncResult>("sync_musicbrainz_overlay");
+  return invoke<MusicBrainzOverlaySyncResult>("sync_musicbrainz_overlay", {
+    recordNoop: options.recordNoop ?? true,
+  });
 }
 
 export async function listMusicBrainzOverlaySyncLog(limit = 12) {
