@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.31.2] - 2026-07-06
+### Fixed
+- Fixed artist grouping so common Unicode dash variants in album artist names collapse to the same artist key, preventing visually identical artists such as The All-American Rejects from splitting in Artists, Search filters, Discovery, Music Tools, and MusicBrainz local-album matching.
+- Inferred Album Artist from Display Artist during import when an album has blank Album Artist values and exactly one normalized Display Artist, while leaving mixed-artist albums uninferred.
+
+### Changed
+- Bumped synchronized app metadata to `0.31.2`.
+
 ## [0.31.1] - 2026-07-06
 ### Fixed
 - Fixed selected-artist MusicBrainz MBID links so they open the matched artist page in the system default web browser from the Tauri desktop app.

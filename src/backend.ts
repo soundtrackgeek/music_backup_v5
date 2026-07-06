@@ -2524,7 +2524,11 @@ function normalizeMusicBrainzCachePath(value: unknown) {
 }
 
 function normalizeArtistKey(value: string | null) {
-  const normalized = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const normalized = (value ?? "")
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, "-")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
   return normalized || "unknown";
 }
 

@@ -3,7 +3,7 @@
 Last updated: 2026-07-06
 Status: Living product and implementation contract
 Current implementation: Phase 17 complete
-Current package version: 0.31.1
+Current package version: 0.31.2
 SQLite schema version: 12
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -79,7 +79,7 @@ Required columns:
 | Column | Meaning |
 | --- | --- |
 | `Display Artist` | Track display artist. Use this for track identity and track browsing. |
-| `Album Artist (display)` | Album artist display value. Use this for album identity and album browsing. |
+| `Album Artist (display)` | Album artist display value. Use this for album identity and album browsing. If missing for an album whose tracks have one normalized `Display Artist`, infer that display artist as the album artist. |
 | `Album` | Album title. |
 | `<Album Unique Id>` | Preferred album identity key. |
 | `Title` | Track title. |
@@ -104,6 +104,8 @@ Preferred identity:
 
 1. `<Album Unique Id>`
 2. Fallback only when missing: normalized album artist + normalized album title + year + file path root
+
+For album artist grouping and artist-key filters, normalize common Unicode dash variants to ASCII `-`. If `Album Artist (display)` is blank across an album and there is exactly one normalized `Display Artist`, use that display artist as the album artist in normalized track and album rows. Do not infer an album artist for mixed-display-artist albums.
 
 Albums with different `<Album Unique Id>` values remain separate albums, even if they look like alternate versions, remasters, or duplicates. Music Tools should flag likely duplicates instead of merging them automatically.
 
@@ -658,6 +660,11 @@ Completed in 0.31.0:
 Fixed in 0.31.1:
 
 - Open the selected-artist MusicBrainz MBID link in the system default web browser from the Tauri desktop app.
+
+Fixed in 0.31.2:
+
+- Infer Album Artist from a single Display Artist when MusicBee exports blank album-artist values for an album.
+- Normalize common dash variants in artist keys so visually identical album artists stay grouped together in Artists, Search filters, Discovery, Music Tools, and MusicBrainz local-album matching.
 
 Remaining candidate work:
 

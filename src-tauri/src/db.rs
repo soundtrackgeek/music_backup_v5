@@ -2221,12 +2221,13 @@ fn statistics(conn: &Connection) -> Result<StatisticsResponse> {
 }
 
 fn library_overview_stats(conn: &Connection) -> Result<LibraryOverviewStats> {
-    conn.query_row(
+    let artist_key_sql = artist_key_sql("album_artist_display");
+    let sql = format!(
         "
         SELECT
             (SELECT COUNT(*) FROM tracks),
             (SELECT COUNT(*) FROM albums),
-            (SELECT COUNT(DISTINCT album_artist_display)
+            (SELECT COUNT(DISTINCT {artist_key_sql})
                 FROM albums
                 WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL),
             (SELECT COUNT(DISTINCT genre_normalized)
@@ -2237,20 +2238,19 @@ fn library_overview_stats(conn: &Connection) -> Result<LibraryOverviewStats> {
                 WHERE year IS NOT NULL),
             COALESCE((SELECT SUM(total_seconds) FROM albums), 0),
             (SELECT AVG(album_score) FROM albums WHERE album_score IS NOT NULL)
-        ",
-        [],
-        |row| {
-            Ok(LibraryOverviewStats {
-                track_count: row.get(0)?,
-                album_count: row.get(1)?,
-                album_artist_count: row.get(2)?,
-                genre_count: row.get(3)?,
-                year_count: row.get(4)?,
-                total_seconds: row.get(5)?,
-                average_album_score: row.get(6)?,
-            })
-        },
-    )
+        "
+    );
+    conn.query_row(&sql, [], |row| {
+        Ok(LibraryOverviewStats {
+            track_count: row.get(0)?,
+            album_count: row.get(1)?,
+            album_artist_count: row.get(2)?,
+            genre_count: row.get(3)?,
+            year_count: row.get(4)?,
+            total_seconds: row.get(5)?,
+            average_album_score: row.get(6)?,
+        })
+    })
     .context("Could not load library overview statistics")
 }
 
@@ -2519,16 +2519,19 @@ fn catalog_concentration_stats(
     conn: &Connection,
     total_albums: i64,
 ) -> Result<CatalogConcentrationStats> {
+    let artist_key_sql = artist_key_sql("album_artist_display");
     let artist_groups = concentration_groups(
         conn,
-        "
+        &format!(
+            "
         SELECT
             COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS label,
             COUNT(*) AS album_count
         FROM albums
-        GROUP BY COALESCE(NULLIF(TRIM(LOWER(album_artist_display)), ''), 'unknown')
+        GROUP BY {artist_key_sql}
         ORDER BY album_count DESC, LOWER(label) ASC
-        ",
+        "
+        ),
     )?;
     let genre_groups = concentration_groups(
         conn,
@@ -4110,12 +4113,14 @@ fn list_artists(
     let limit = request.limit.clamp(1, max_limit);
     let offset = request.offset;
     let (where_sql, values) = artist_search_where(&request.search_text);
+    let album_artist_key_sql = artist_key_sql("album_artist_display");
+    let album_artist_key_sql_a2 = artist_key_sql("a2.album_artist_display");
 
     let count_sql = format!(
         "
         SELECT COUNT(*)
         FROM (
-            SELECT COALESCE(NULLIF(TRIM(LOWER(album_artist_display)), ''), 'unknown') AS artist_key
+            SELECT {album_artist_key_sql} AS artist_key
             FROM albums
             {where_sql}
             GROUP BY artist_key
@@ -4133,7 +4138,7 @@ fn list_artists(
         "
         WITH grouped AS (
             SELECT
-                COALESCE(NULLIF(TRIM(LOWER(album_artist_display)), ''), 'unknown') AS artist_key,
+                {album_artist_key_sql} AS artist_key,
                 COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist_name,
                 COUNT(*) AS album_count,
                 SUM(CASE WHEN rating_completeness >= 1.0 THEN 1 ELSE 0 END) AS rated_album_count,
@@ -4171,7 +4176,7 @@ fn list_artists(
             (
                 SELECT COALESCE(NULLIF(TRIM(a2.canonical_genre), ''), 'Unknown')
                 FROM albums a2
-                WHERE COALESCE(NULLIF(TRIM(LOWER(a2.album_artist_display)), ''), 'unknown') = grouped.artist_key
+                WHERE {album_artist_key_sql_a2} = grouped.artist_key
                 GROUP BY COALESCE(NULLIF(TRIM(LOWER(a2.genre_normalized)), ''), 'unknown')
                 ORDER BY COUNT(*) DESC, LOWER(COALESCE(a2.canonical_genre, '')) ASC
                 LIMIT 1
@@ -4226,9 +4231,12 @@ fn artist_search_where(search_text: &str) -> (String, Vec<Value>) {
         return (String::new(), Vec::new());
     }
 
-    let normalized = search_text.to_lowercase();
+    let normalized = normalize_artist_text(search_text);
+    let artist_text_sql = normalized_artist_sql("album_artist_display");
     (
-        "WHERE LOWER(COALESCE(NULLIF(TRIM(album_artist_display), ''), 'Unknown Artist')) LIKE ? ESCAPE '\\'".to_string(),
+        format!(
+            "WHERE LOWER(COALESCE(NULLIF(TRIM({artist_text_sql}), ''), 'Unknown Artist')) LIKE ? ESCAPE '\\'"
+        ),
         vec![Value::Text(format!("%{}%", escape_like(&normalized)))],
     )
 }
@@ -4284,6 +4292,7 @@ fn list_genres(
         .context("Could not count genre results")?;
 
     let order_sql = genre_order_clause(&request.sort);
+    let album_artist_key_sql_a2 = artist_key_sql("a2.album_artist_display");
     let sql = format!(
         "
         WITH grouped AS (
@@ -4327,7 +4336,7 @@ fn list_genres(
                 SELECT COALESCE(MIN(NULLIF(TRIM(a2.album_artist_display), '')), 'Unknown Artist')
                 FROM albums a2
                 WHERE COALESCE(NULLIF(TRIM(LOWER(a2.genre_normalized)), ''), 'unknown') = grouped.genre_key
-                GROUP BY COALESCE(NULLIF(TRIM(LOWER(a2.album_artist_display)), ''), 'unknown')
+                GROUP BY {album_artist_key_sql_a2}
                 ORDER BY COUNT(*) DESC, LOWER(COALESCE(MIN(NULLIF(TRIM(a2.album_artist_display), '')), 'Unknown Artist')) ASC
                 LIMIT 1
             ) AS top_artist
@@ -4851,9 +4860,11 @@ fn discovery_high_potential_genre_mission(conn: &Connection) -> Result<Option<Di
 }
 
 fn discovery_artist_backlog_mission(conn: &Connection) -> Result<Option<DiscoveryMission>> {
-    let sql = "
+    let album_artist_key_sql = artist_key_sql("album_artist_display");
+    let sql = format!(
+        "
         SELECT
-            COALESCE(NULLIF(TRIM(LOWER(album_artist_display)), ''), 'unknown') AS artist_id,
+            {album_artist_key_sql} AS artist_id,
             COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist,
             COUNT(*),
             COALESCE(SUM(total_tracks), 0),
@@ -4867,9 +4878,10 @@ fn discovery_artist_backlog_mission(conn: &Connection) -> Result<Option<Discover
         HAVING COUNT(*) >= 5
         ORDER BY COUNT(*) DESC, COALESCE(AVG(album_score), 0) DESC
         LIMIT 1
-    ";
+    "
+    );
     let row = conn
-        .query_row(sql, [], discovery_group_mission_row)
+        .query_row(&sql, [], discovery_group_mission_row)
         .optional()
         .context("Could not load artist backlog mission")?;
 
@@ -5059,9 +5071,11 @@ fn discovery_loved_decade_mission(conn: &Connection) -> Result<Option<DiscoveryM
 }
 
 fn discovery_artist_partial_score_mission(conn: &Connection) -> Result<Option<DiscoveryMission>> {
-    let sql = "
+    let album_artist_key_sql = artist_key_sql("album_artist_display");
+    let sql = format!(
+        "
         SELECT
-            COALESCE(NULLIF(TRIM(LOWER(album_artist_display)), ''), 'unknown') AS artist_id,
+            {album_artist_key_sql} AS artist_id,
             COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist,
             COUNT(*),
             COALESCE(SUM(total_tracks), 0),
@@ -5077,9 +5091,10 @@ fn discovery_artist_partial_score_mission(conn: &Connection) -> Result<Option<Di
         HAVING COUNT(*) >= 3
         ORDER BY COALESCE(AVG(album_score), 0) DESC, COUNT(*) DESC
         LIMIT 1
-    ";
+    "
+    );
     let row = conn
-        .query_row(sql, [], discovery_group_mission_row)
+        .query_row(&sql, [], discovery_group_mission_row)
         .optional()
         .context("Could not load artist partial score mission")?;
 
@@ -5277,11 +5292,13 @@ fn discovery_genre_points(conn: &Connection) -> Result<Vec<DiscoveryGenrePoint>>
 }
 
 fn discovery_artist_points(conn: &Connection) -> Result<Vec<DiscoveryArtistPoint>> {
-    let mut stmt = conn.prepare(
+    let album_artist_key_sql = artist_key_sql("album_artist_display");
+    let album_artist_key_sql_a2 = artist_key_sql("a2.album_artist_display");
+    let sql = format!(
         "
         WITH grouped AS (
             SELECT
-                COALESCE(NULLIF(TRIM(LOWER(album_artist_display)), ''), 'unknown') AS artist_id,
+                {album_artist_key_sql} AS artist_id,
                 COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist,
                 COUNT(*) AS album_count,
                 COALESCE(SUM(total_tracks), 0) AS track_count,
@@ -5309,7 +5326,7 @@ fn discovery_artist_points(conn: &Connection) -> Result<Vec<DiscoveryArtistPoint
             (
                 SELECT COALESCE(NULLIF(TRIM(a2.canonical_genre), ''), 'Unknown')
                 FROM albums a2
-                WHERE COALESCE(NULLIF(TRIM(LOWER(a2.album_artist_display)), ''), 'unknown') = grouped.artist_id
+                WHERE {album_artist_key_sql_a2} = grouped.artist_id
                 GROUP BY COALESCE(NULLIF(TRIM(LOWER(a2.genre_normalized)), ''), 'unknown')
                 ORDER BY COUNT(*) DESC, LOWER(COALESCE(a2.canonical_genre, '')) ASC
                 LIMIT 1
@@ -5317,8 +5334,9 @@ fn discovery_artist_points(conn: &Connection) -> Result<Vec<DiscoveryArtistPoint
         FROM grouped
         ORDER BY album_count DESC, loved_tracks DESC, LOWER(artist) ASC
         LIMIT 64
-        ",
-    )?;
+        "
+    );
+    let mut stmt = conn.prepare(&sql)?;
 
     let rows = stmt
         .query_map([], |row| {
@@ -6040,11 +6058,14 @@ fn music_tool_issue_order_clause(sort: &BrowseSort) -> String {
 
 fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
     match tool_id {
-        "duplicate-albums" => Ok(
-            "
+        "duplicate-albums" => {
+            let album_artist_key_sql = artist_key_sql("album_artist_display");
+            let album_artist_key_sql_a = artist_key_sql("a.album_artist_display");
+            Ok(format!(
+                "
             WITH duplicate_groups AS (
                 SELECT
-                    COALESCE(NULLIF(TRIM(LOWER(album_artist_display)), ''), 'unknown') AS artist_key,
+                    {album_artist_key_sql} AS artist_key,
                     COALESCE(NULLIF(TRIM(LOWER(album)), ''), 'unknown') AS album_key,
                     COALESCE(year, -1) AS year_key,
                     COUNT(*) AS version_count
@@ -6070,12 +6091,12 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                 NULL AS file_path
             FROM albums a
             JOIN duplicate_groups g
-              ON COALESCE(NULLIF(TRIM(LOWER(a.album_artist_display)), ''), 'unknown') = g.artist_key
+              ON {album_artist_key_sql_a} = g.artist_key
              AND COALESCE(NULLIF(TRIM(LOWER(a.album)), ''), 'unknown') = g.album_key
              AND COALESCE(a.year, -1) = g.year_key
             "
-            .to_string(),
-        ),
+            ))
+        },
         "albums-without-cover-image" => Ok(
             "
             WITH representative_paths AS (
@@ -6373,15 +6394,20 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             "t.genre",
             "COALESCE(t.genre, '') LIKE '%;%' OR COALESCE(t.genre, '') LIKE '%|%'",
         )),
-        "conflicting-album-artists" => Ok(
-            "
+        "conflicting-album-artists" => {
+            let album_artist_key_sql = format!(
+                "NULLIF(TRIM(LOWER({})), '')",
+                normalized_artist_sql("album_artist_display")
+            );
+            Ok(format!(
+                "
             WITH conflicting AS (
                 SELECT
                     album_id,
-                    COUNT(DISTINCT NULLIF(TRIM(LOWER(album_artist_display)), '')) AS artist_count
+                    COUNT(DISTINCT {album_artist_key_sql}) AS artist_count
                 FROM tracks
                 GROUP BY album_id
-                HAVING COUNT(DISTINCT NULLIF(TRIM(LOWER(album_artist_display)), '')) > 1
+                HAVING COUNT(DISTINCT {album_artist_key_sql}) > 1
             )
             SELECT
                 'conflicting-album-artists:' || a.id AS id,
@@ -6402,8 +6428,8 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             FROM conflicting c
             JOIN albums a ON a.id = c.album_id
             "
-            .to_string(),
-        ),
+            ))
+        },
         "multiple-years-per-album" => Ok(
             "
             WITH multiple_years AS (
@@ -6678,14 +6704,15 @@ fn build_where_clause(
         if is_tracks { "t.album_id" } else { "a.id" },
         &filters.album_ids,
     );
+    let artist_key_field = if is_tracks {
+        artist_key_sql("t.album_artist_display")
+    } else {
+        artist_key_sql("a.album_artist_display")
+    };
     add_artist_key_condition(
         &mut conditions,
         &mut values,
-        if is_tracks {
-            "COALESCE(NULLIF(TRIM(LOWER(t.album_artist_display)), ''), 'unknown')"
-        } else {
-            "COALESCE(NULLIF(TRIM(LOWER(a.album_artist_display)), ''), 'unknown')"
-        },
+        &artist_key_field,
         &filters.artist_keys,
     );
 
@@ -7404,13 +7431,42 @@ fn normalize_text(value: &str) -> String {
         .join(" ")
 }
 
+fn normalize_artist_text(value: &str) -> String {
+    normalize_text(&normalize_artist_dashes(value))
+}
+
 fn normalize_artist_key(value: &str) -> String {
-    let normalized = normalize_text(value);
+    let normalized = normalize_artist_text(value);
     if normalized.is_empty() {
         "unknown".to_string()
     } else {
         normalized
     }
+}
+
+fn normalize_artist_dashes(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| match character {
+            '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2212}' => '-',
+            _ => character,
+        })
+        .collect()
+}
+
+pub(crate) fn artist_key_sql(field: &str) -> String {
+    format!(
+        "COALESCE(NULLIF(TRIM(LOWER({})), ''), 'unknown')",
+        normalized_artist_sql(field)
+    )
+}
+
+fn normalized_artist_sql(field: &str) -> String {
+    [8208, 8209, 8210, 8211, 8212, 8722]
+        .iter()
+        .fold(format!("COALESCE({field}, '')"), |expression, codepoint| {
+            format!("REPLACE({expression}, char({codepoint}), '-')")
+        })
 }
 
 fn safe_file_segment(value: &str) -> String {
@@ -8242,6 +8298,49 @@ mod tests {
             response.rows[0].album_artist_display.as_deref(),
             Some("Pet Shop Boys")
         );
+    }
+
+    #[test]
+    fn normalizes_dash_variants_in_artist_summaries_and_filters() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+            ) VALUES (
+                'mb:rejects-old', 1, 'rejects-old', 'Move Along', 'The All-American Rejects',
+                'Pop Punk', 'pop punk', 'Interscope', 2005, 2005,
+                14, 14, 1.0, 2800, 4, 600, 0.214, 82, 413.0
+            ),
+            (
+                'mb:rejects-new', 1, 'rejects-new', 'Kids in the Street', 'The All\u{2010}American Rejects',
+                'Alternative Rock', 'alternative rock', 'Interscope', 2012, 2012,
+                16, 0, 0.0, 3200, 0, 0, 0.0, NULL, NULL
+            )
+            ",
+            [],
+        )
+        .expect("insert dash variant albums");
+
+        let mut request = ArtistListRequest::default();
+        request.search_text = "All-American".to_string();
+        let artists = list_artists(&conn, request, 50).expect("list normalized artists");
+
+        assert_eq!(artists.total, 1);
+        assert_eq!(artists.rows[0].id, "the all-american rejects");
+        assert_eq!(artists.rows[0].album_count, 2);
+        assert_eq!(artists.rows[0].track_count, 30);
+        assert_eq!(artists.rows[0].first_year, Some(2005));
+        assert_eq!(artists.rows[0].last_year, Some(2012));
+
+        let mut browse = BrowseRequest::default();
+        browse.filters.artist_keys = vec!["The All\u{2010}American Rejects".to_string()];
+        let response = search_library(&conn, browse, 50).expect("search normalized artist albums");
+
+        assert_eq!(response.total, 2);
     }
 
     #[test]

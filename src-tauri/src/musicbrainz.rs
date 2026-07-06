@@ -25,7 +25,7 @@ const SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.31.1 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.31.2 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 #[cfg(not(test))]
@@ -1092,15 +1092,17 @@ fn release_decisions(conn: &Connection, artist_key: &str) -> Result<HashMap<Stri
 }
 
 fn local_artist_albums(conn: &Connection, artist_key: &str) -> Result<Vec<LocalAlbum>> {
-    let mut stmt = conn
-        .prepare(
-            "
+    let album_artist_key_sql = db::artist_key_sql("album_artist_display");
+    let sql = format!(
+        "
             SELECT id, COALESCE(album, 'Untitled'), year
             FROM albums
-            WHERE COALESCE(NULLIF(TRIM(LOWER(album_artist_display)), ''), 'unknown') = ?1
+            WHERE {album_artist_key_sql} = ?1
             ORDER BY COALESCE(year, 9999), LOWER(COALESCE(album, '')), id
-            ",
-        )
+            "
+    );
+    let mut stmt = conn
+        .prepare(&sql)
         .context("Could not prepare local artist album lookup")?;
     let albums = stmt
         .query_map(params![artist_key], |row| {
@@ -1430,27 +1432,32 @@ fn normalize_display_name(artist_name: &str, artist_key: &str) -> String {
 }
 
 fn normalize_local_artist_key(artist_key: &str, artist_name: &str) -> String {
-    let trimmed_key = artist_key
-        .trim()
-        .to_lowercase()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let trimmed_key = normalize_local_artist_text(artist_key);
     if !trimmed_key.is_empty() {
         trimmed_key
     } else {
-        let name_key = artist_name
-            .trim()
-            .to_lowercase()
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
+        let name_key = normalize_local_artist_text(artist_name);
         if name_key.is_empty() {
             "unknown".to_string()
         } else {
             name_key
         }
     }
+}
+
+fn normalize_local_artist_text(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| match character {
+            '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2212}' => '-',
+            _ => character,
+        })
+        .collect::<String>()
+        .trim()
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn musicbrainz_text_key(value: &str) -> String {

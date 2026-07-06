@@ -94,6 +94,9 @@ struct AlbumAggregate {
     album_unique_id: Option<String>,
     album: Option<String>,
     album_artist_display: Option<String>,
+    single_display_artist: Option<String>,
+    single_display_artist_key: Option<String>,
+    has_multiple_display_artists: bool,
     canonical_genre: Option<String>,
     genre_normalized: Option<String>,
     publisher: Option<String>,
@@ -130,6 +133,7 @@ struct FinalAlbum {
     calculated_album_rating: Option<i32>,
     effective_album_rating: Option<i32>,
     album_score: Option<f64>,
+    album_artist_display_inferred: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -447,6 +451,25 @@ fn run_import(
         .map(AlbumAggregate::finalize)
         .collect::<Vec<_>>();
     let mut rating_events = Vec::new();
+
+    {
+        let mut update_inferred_track_album_artist = tx.prepare(
+            "
+            UPDATE tracks
+            SET album_artist_display = ?1
+            WHERE album_id = ?2
+              AND NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NULL
+            ",
+        )?;
+        for final_album in &final_albums {
+            if final_album.album_artist_display_inferred {
+                update_inferred_track_album_artist.execute(params![
+                    &final_album.album_artist_display,
+                    &final_album.album_id,
+                ])?;
+            }
+        }
+    }
 
     {
         let mut insert_album = tx.prepare(
@@ -980,6 +1003,9 @@ impl AlbumAggregate {
             album_unique_id: empty_to_none(&track.album_unique_id).map(str::to_string),
             album: empty_to_none(&track.album).map(str::to_string),
             album_artist_display: empty_to_none(&track.album_artist_display).map(str::to_string),
+            single_display_artist: None,
+            single_display_artist_key: None,
+            has_multiple_display_artists: false,
             canonical_genre: empty_to_none(&track.canonical_genre).map(str::to_string),
             genre_normalized: empty_to_none(&track.genre_normalized).map(str::to_string),
             publisher: empty_to_none(&track.publisher).map(str::to_string),
@@ -1004,6 +1030,19 @@ impl AlbumAggregate {
         if self.album_artist_display.is_none() {
             self.album_artist_display =
                 empty_to_none(&track.album_artist_display).map(str::to_string);
+        }
+        if let Some(display_artist) = empty_to_none(&track.display_artist) {
+            let display_artist_key = normalize_artist_key(display_artist);
+            match &self.single_display_artist_key {
+                Some(existing_key) if existing_key != &display_artist_key => {
+                    self.has_multiple_display_artists = true;
+                }
+                None => {
+                    self.single_display_artist = Some(display_artist.to_string());
+                    self.single_display_artist_key = Some(display_artist_key);
+                }
+                _ => {}
+            }
         }
         if self.canonical_genre.is_none() {
             self.canonical_genre = empty_to_none(&track.canonical_genre).map(str::to_string);
@@ -1067,12 +1106,21 @@ impl AlbumAggregate {
             ((rating as f64 * 0.5) + (ae_ratio * 100.0) + (tmoe_minutes * 0.3)) / 10.0
                 + (f64::from(self.loved_tracks) * 100.0)
         });
+        let inferred_album_artist_display =
+            self.album_artist_display.is_none() && !self.has_multiple_display_artists;
+        let album_artist_display = self.album_artist_display.clone().or_else(|| {
+            if inferred_album_artist_display {
+                self.single_display_artist.clone()
+            } else {
+                None
+            }
+        });
 
         FinalAlbum {
             album_id: self.album_id.clone(),
             album_unique_id: self.album_unique_id.clone(),
             album: self.album.clone(),
-            album_artist_display: self.album_artist_display.clone(),
+            album_artist_display,
             canonical_genre: self.canonical_genre.clone(),
             genre_normalized: self.genre_normalized.clone(),
             publisher: self.publisher.clone(),
@@ -1089,6 +1137,8 @@ impl AlbumAggregate {
             calculated_album_rating,
             effective_album_rating,
             album_score,
+            album_artist_display_inferred: inferred_album_artist_display
+                && self.single_display_artist.is_some(),
         }
     }
 }
@@ -1245,6 +1295,29 @@ fn normalize_text(value: &str) -> String {
         .join(" ")
 }
 
+fn normalize_artist_text(value: &str) -> String {
+    normalize_text(&normalize_artist_dashes(value))
+}
+
+fn normalize_artist_key(value: &str) -> String {
+    let normalized = normalize_artist_text(value);
+    if normalized.is_empty() {
+        "unknown".to_string()
+    } else {
+        normalized
+    }
+}
+
+fn normalize_artist_dashes(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| match character {
+            '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2212}' => '-',
+            _ => character,
+        })
+        .collect()
+}
+
 fn parse_whole_number(value: &str) -> Option<i32> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -1310,7 +1383,7 @@ fn album_identity(
 
     format!(
         "fallback:{}::{}::{}::{}",
-        normalize_text(album_artist),
+        normalize_artist_text(album_artist),
         normalize_text(album),
         year.map(|value| value.to_string()).unwrap_or_default(),
         normalize_text(&path_root(file_path))
@@ -1446,12 +1519,118 @@ mod tests {
     }
 
     #[test]
+    fn infers_album_artist_from_single_display_artist_when_album_artist_is_blank() {
+        let first = TrackRow {
+            display_artist: "The All-American Rejects".to_string(),
+            album_rating_raw: String::new(),
+            disc_number_raw: String::new(),
+            album: "Sandbox".to_string(),
+            genre: "Alternative Rock".to_string(),
+            canonical_genre: "Alternative Rock".to_string(),
+            genre_normalized: "alternative rock".to_string(),
+            love: String::new(),
+            publisher: String::new(),
+            rating_raw: String::new(),
+            title: "Easy Come, Easy Go".to_string(),
+            track_number_raw: "1".to_string(),
+            year_raw: "2026".to_string(),
+            release_year_raw: String::new(),
+            album_unique_id: "sandbox".to_string(),
+            file_path: "D:\\Music\\The All-American Rejects - Sandbox (2026)".to_string(),
+            filename: "01 - Easy Come, Easy Go.mp3".to_string(),
+            album_artist_display: String::new(),
+            time_raw: "2:34".to_string(),
+            normalized_rating: None,
+            track_rating_value: None,
+            album_rating: None,
+            disc_number: None,
+            track_number: Some(1),
+            year: Some(2026),
+            release_year: None,
+            time_seconds: Some(154),
+            album_id: "mb:sandbox".to_string(),
+            row_hash: "hash".to_string(),
+        };
+        let mut second = first.clone();
+        second.display_artist = "The All\u{2010}American Rejects".to_string();
+        second.title = "Get This".to_string();
+        second.track_number_raw = "2".to_string();
+        second.filename = "02 - Get This.mp3".to_string();
+        second.track_number = Some(2);
+        second.time_seconds = Some(199);
+        second.row_hash = "hash-2".to_string();
+
+        let mut album = AlbumAggregate::new(&first);
+        album.apply(&first);
+        album.apply(&second);
+
+        let final_album = album.finalize();
+        assert_eq!(
+            final_album.album_artist_display.as_deref(),
+            Some("The All-American Rejects")
+        );
+        assert!(final_album.album_artist_display_inferred);
+        assert_eq!(final_album.total_tracks, 2);
+    }
+
+    #[test]
+    fn leaves_album_artist_blank_when_blank_album_artist_has_multiple_display_artists() {
+        let first = TrackRow {
+            display_artist: "Artist One".to_string(),
+            album_rating_raw: String::new(),
+            disc_number_raw: String::new(),
+            album: "Compilation".to_string(),
+            genre: "Pop".to_string(),
+            canonical_genre: "Pop".to_string(),
+            genre_normalized: "pop".to_string(),
+            love: String::new(),
+            publisher: String::new(),
+            rating_raw: String::new(),
+            title: "One".to_string(),
+            track_number_raw: "1".to_string(),
+            year_raw: "2026".to_string(),
+            release_year_raw: String::new(),
+            album_unique_id: "compilation".to_string(),
+            file_path: "D:\\Music\\Compilation".to_string(),
+            filename: "01 - One.mp3".to_string(),
+            album_artist_display: String::new(),
+            time_raw: "3:00".to_string(),
+            normalized_rating: None,
+            track_rating_value: None,
+            album_rating: None,
+            disc_number: None,
+            track_number: Some(1),
+            year: Some(2026),
+            release_year: None,
+            time_seconds: Some(180),
+            album_id: "mb:compilation".to_string(),
+            row_hash: "hash".to_string(),
+        };
+        let mut second = first.clone();
+        second.display_artist = "Artist Two".to_string();
+        second.title = "Two".to_string();
+        second.track_number = Some(2);
+        second.row_hash = "hash-2".to_string();
+
+        let mut album = AlbumAggregate::new(&first);
+        album.apply(&first);
+        album.apply(&second);
+
+        let final_album = album.finalize();
+        assert_eq!(final_album.album_artist_display, None);
+        assert!(!final_album.album_artist_display_inferred);
+    }
+
+    #[test]
     fn calculates_album_score_with_spec_formula() {
         let album = AlbumAggregate {
             album_id: "mb:test".to_string(),
             album_unique_id: Some("test".to_string()),
             album: Some("Album".to_string()),
             album_artist_display: Some("Artist".to_string()),
+            single_display_artist: Some("Artist".to_string()),
+            single_display_artist_key: Some("artist".to_string()),
+            has_multiple_display_artists: false,
             canonical_genre: Some("Synthpop".to_string()),
             genre_normalized: Some("synthpop".to_string()),
             publisher: None,
