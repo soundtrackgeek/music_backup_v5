@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.32.0] - 2026-07-06
+### Added
+- Added selected-artist MusicBrainz candidate review rows for unmatched artists using fuzzy local `artist_cache` matching.
+- Added candidate review rows for suspect MusicBrainz cache matches using alternate cached names and fuzzy alternate MBIDs.
+- Added Rust coverage for fuzzy candidate generation and suspect-match alternate cached-name candidates.
+
+### Changed
+- Candidate rows in the Artists MusicBrainz panel can now be saved as verified `musicbrainz_artist_links` rows.
+- Bumped synchronized app metadata to `0.32.0`.
+
 ## [0.31.4] - 2026-07-06
 ### Fixed
 - Fixed MusicBee TSV imports so date-like `Year` and `Release Year` values such as `2019-06-28` are stored as canonical years such as `2019` instead of empty database years.

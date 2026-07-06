@@ -130,6 +130,7 @@ import type {
   MusicToolIssueRow,
   MusicToolProgress,
   MusicToolSummary,
+  MusicBrainzArtistCandidateRow,
   MusicBrainzArtistDiscographyResponse,
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
@@ -1401,10 +1402,12 @@ function MusicBrainzArtistDiscographyPanel({
   onSetArtistLink: (
     action: "verify" | "ignore" | "unlink" | "set",
     musicbrainzMbid?: string | null,
+    canonicalName?: string | null,
   ) => void;
   onSetReleaseDecision: (row: MusicBrainzArtistReleaseRow, decision: "not-in-scope" | "include") => void;
 }) {
   const rows = response?.releases ?? [];
+  const candidates = response?.candidates ?? [];
   const statusLabel = musicBrainzStateLabel(response?.state);
   const [manualMbid, setManualMbid] = useState("");
   const musicBrainzArtistUrl = response?.musicbrainzMbid
@@ -1601,12 +1604,92 @@ function MusicBrainzArtistDiscographyPanel({
           </div>
 
           {response.artistLinkIgnored ? null : (
-            <MusicBrainzReleaseTable rows={rows} onSetReleaseDecision={onSetReleaseDecision} />
+            <>
+              <MusicBrainzArtistCandidateTable
+                candidates={candidates}
+                isLoading={isLoading}
+                onOpenExternalUrl={onOpenExternalUrl}
+                onVerifyCandidate={(candidate) => onSetArtistLink("verify", candidate.mbid, candidate.name)}
+              />
+              <MusicBrainzReleaseTable rows={rows} onSetReleaseDecision={onSetReleaseDecision} />
+            </>
           )}
           <small className="performance-database-path">{response.resolvedPath}</small>
         </>
       )}
     </section>
+  );
+}
+
+function MusicBrainzArtistCandidateTable({
+  candidates,
+  isLoading,
+  onOpenExternalUrl,
+  onVerifyCandidate,
+}: {
+  candidates: MusicBrainzArtistCandidateRow[];
+  isLoading: boolean;
+  onOpenExternalUrl: (url: string) => void;
+  onVerifyCandidate: (candidate: MusicBrainzArtistCandidateRow) => void;
+}) {
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="result-table musicbrainz-candidate-results" role="table" aria-label="MusicBrainz artist candidates">
+      <div className="result-table-head" role="row">
+        <span role="columnheader">Candidate</span>
+        <span role="columnheader">MBID</span>
+        <span role="columnheader">Match</span>
+        <span role="columnheader">Score</span>
+        <span role="columnheader">Cache</span>
+        <span role="columnheader">Review</span>
+      </div>
+      {candidates.map((candidate) => {
+        const candidateUrl = `https://musicbrainz.org/artist/${encodeURIComponent(candidate.mbid)}`;
+        return (
+          <div
+            className={`result-table-row musicbrainz-candidate-row${candidate.suspectMapping ? " suspect" : ""}`}
+            role="row"
+            key={`${candidate.mbid}:${candidate.name}`}
+          >
+            <span role="cell" title={candidate.name}>{candidate.name}</span>
+            <span role="cell">
+              <a
+                href={candidateUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => {
+                  event.preventDefault();
+                  onOpenExternalUrl(candidateUrl);
+                }}
+              >
+                {candidate.mbid}
+                <ExternalLink size={13} aria-hidden="true" />
+              </a>
+            </span>
+            <span role="cell">{candidate.matchMethod}</span>
+            <span role="cell">{formatPercent(candidate.score, 0)}</span>
+            <span role="cell">
+              {`${formatNumber(candidate.cachedNameCount)} names / ${formatNumber(candidate.totalReleaseGroupCount)} groups`}
+            </span>
+            <span role="cell" className="musicbrainz-candidate-action">
+              <button
+                className="icon-button"
+                type="button"
+                title={`Verify ${candidate.name}`}
+                aria-label={`Verify ${candidate.name} as the MusicBrainz artist match`}
+                disabled={isLoading}
+                onClick={() => onVerifyCandidate(candidate)}
+              >
+                <Check size={16} />
+              </button>
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -5326,6 +5409,7 @@ export default function App() {
   async function setArtistMusicBrainzLink(
     action: "verify" | "ignore" | "unlink" | "set",
     musicbrainzMbid?: string | null,
+    canonicalName?: string | null,
   ) {
     if (!selectedArtist) {
       return;
@@ -5340,7 +5424,7 @@ export default function App() {
         artistName: selectedArtist.name,
         action,
         musicbrainzMbid: musicbrainzMbid ?? musicBrainzArtistDiscography?.musicbrainzMbid ?? null,
-        canonicalName: musicBrainzArtistDiscography?.matchedCacheName ?? selectedArtist.name,
+        canonicalName: canonicalName ?? musicBrainzArtistDiscography?.matchedCacheName ?? selectedArtist.name,
       });
       const result = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
       setMusicBrainzArtistDiscography(result);
@@ -6769,8 +6853,8 @@ export default function App() {
             error={musicBrainzArtistError}
             onRefresh={() => void refreshArtistMusicBrainz()}
             onOpenExternalUrl={(url) => void openMusicBrainzArtistPage(url)}
-            onSetArtistLink={(action, musicbrainzMbid) =>
-              void setArtistMusicBrainzLink(action, musicbrainzMbid)
+            onSetArtistLink={(action, musicbrainzMbid, canonicalName) =>
+              void setArtistMusicBrainzLink(action, musicbrainzMbid, canonicalName)
             }
             onSetReleaseDecision={(row, decision) => void setArtistMusicBrainzReleaseDecision(row, decision)}
           />

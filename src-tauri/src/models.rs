@@ -274,6 +274,18 @@ pub struct MusicBrainzArtistReleaseRow {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistCandidateRow {
+    pub name: String,
+    pub mbid: String,
+    pub match_method: String,
+    pub score: f64,
+    pub cached_name_count: i64,
+    pub total_release_group_count: i64,
+    pub suspect_mapping: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistDiscographyResponse {
     pub artist_key: String,
     pub artist_name: String,
@@ -296,6 +308,7 @@ pub struct MusicBrainzArtistDiscographyResponse {
     pub local_album_count: i64,
     pub completion: Option<f64>,
     pub releases: Vec<MusicBrainzArtistReleaseRow>,
+    pub candidates: Vec<MusicBrainzArtistCandidateRow>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

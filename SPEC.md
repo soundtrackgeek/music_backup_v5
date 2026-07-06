@@ -3,7 +3,7 @@
 Last updated: 2026-07-06
 Status: Living product and implementation contract
 Current implementation: Phase 17 complete
-Current package version: 0.31.2
+Current package version: 0.32.0
 SQLite schema version: 12
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -491,11 +491,12 @@ Expected next backend modularization:
 - The panel shows cache/artist state, suspect mapping warnings, cached name, MBID link, match method, artist link review state, local album count, pure album count, owned/missing totals, completion percentage, and owned/missing release rows.
 - The MBID link opens the matched MusicBrainz artist page in the system default web browser from the Tauri desktop app.
 - Selected-artist MusicBrainz matches can be verified, ignored, unlinked, or corrected by pasting a MusicBrainz artist MBID.
+- Unmatched and suspect selected-artist matches show local-cache candidate rows built from fuzzy `artist_cache` matching and alternate cached names/MBIDs.
 - Verified artist links override raw cache lookup, and ignored artist links suppress selected-artist MusicBrainz results and future broad reports.
 - Missing release rows can be marked not in scope; filtered rows are hidden from the main owned/missing album list and do not count as missing or lower completion.
 - Cached release groups with no official MusicBrainz releases are automatically excluded when release-status verification has succeeded for the selected artist.
 - Web-only preview mode includes representative owned/missing MusicBrainz artist discographies.
-- Rust tests cover selected-artist owned/missing comparison, suspicious cache mapping warnings, artist-link override behavior, ignored artist suppression, and manual artist-link decisions.
+- Rust tests cover selected-artist owned/missing comparison, suspicious cache mapping warnings, fuzzy artist candidates, artist-link override behavior, ignored artist suppression, and manual artist-link decisions.
 
 ## Roadmap
 
@@ -666,10 +667,16 @@ Fixed in 0.31.2:
 - Infer Album Artist from a single Display Artist when MusicBee exports blank album-artist values for an album.
 - Normalize common dash variants in artist keys so visually identical album artists stay grouped together in Artists, Search filters, Discovery, Music Tools, and MusicBrainz local-album matching.
 
+Completed in 0.32.0:
+
+- Add selected-artist local-cache candidate rows for unmatched MusicBrainz artist lookups using fuzzy `artist_cache` matching.
+- Add selected-artist candidate rows for suspect cache matches using alternate cached names and fuzzy alternate MBIDs.
+- Let selected-artist candidates be saved as verified `musicbrainz_artist_links` rows while keeping manual MBID correction available.
+- Add Rust coverage for fuzzy candidate generation and suspect-match alternate cached-name candidates.
+
 Remaining candidate work:
 
 - Add matcher availability and cache staleness checks once the matching utilities are wired into the app.
-- Add fuzzy artist matching only as a reviewable candidate.
 - Add release-type breakdown progress for combined MusicBrainz types.
 - Add optional secondary-type filters and CSV/XLSX export for MusicBrainz release rows.
 - Add a complete discography timeline that shows owned vs missing releases by year and release type.

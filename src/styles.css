@@ -3152,6 +3152,57 @@ button {
   box-shadow: 0 0 0 3px rgba(22, 130, 121, 0.14);
 }
 
+.musicbrainz-candidate-results {
+  margin-top: 14px;
+}
+
+.musicbrainz-candidate-results .result-table-head,
+.musicbrainz-candidate-results .result-table-row {
+  grid-template-columns:
+    minmax(180px, 1.45fr)
+    minmax(220px, 1.65fr)
+    minmax(112px, 0.8fr)
+    minmax(68px, 0.45fr)
+    minmax(140px, 1fr)
+    minmax(54px, 0.35fr);
+}
+
+.musicbrainz-candidate-row {
+  background: #fbfcfc;
+}
+
+.musicbrainz-candidate-row.suspect {
+  background: #fffaf0;
+}
+
+.musicbrainz-candidate-row a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: #0b625c;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.musicbrainz-candidate-row a:focus-visible {
+  outline: 2px solid #168279;
+  outline-offset: 2px;
+}
+
+.musicbrainz-candidate-action {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.musicbrainz-candidate-action .icon-button {
+  width: 30px;
+  height: 30px;
+}
+
 .musicbrainz-release-results {
   margin-top: 14px;
 }
@@ -3875,10 +3926,19 @@ button {
 }
 
 :root[data-theme="dark"] .musicbrainz-artist-meta span,
+:root[data-theme="dark"] .musicbrainz-candidate-row,
 :root[data-theme="dark"] .musicbrainz-release-row.owned,
 :root[data-theme="dark"] .musicbrainz-release-row.missing,
 :root[data-theme="dark"] .musicbrainz-release-row.excluded {
   background: #111815;
+}
+
+:root[data-theme="dark"] .musicbrainz-candidate-row.suspect {
+  background: #302814;
+}
+
+:root[data-theme="dark"] .musicbrainz-candidate-row a {
+  color: #8ee4d8;
 }
 
 :root[data-theme="dark"] .musicbrainz-release-row.excluded {
@@ -4153,6 +4213,8 @@ button {
   .tool-index-results .result-table-row,
   .tool-issue-results .result-table-head,
   .tool-issue-results .result-table-row,
+  .musicbrainz-candidate-results .result-table-head,
+  .musicbrainz-candidate-results .result-table-row,
   .musicbrainz-release-results .result-table-head,
   .musicbrainz-release-results .result-table-row,
   .artist-album-results .result-table-head,

@@ -193,6 +193,16 @@ export type MusicBrainzArtistReleaseRow = {
   decision: MusicBrainzReleaseDecision;
 };
 
+export type MusicBrainzArtistCandidateRow = {
+  name: string;
+  mbid: string;
+  matchMethod: string;
+  score: number;
+  cachedNameCount: number;
+  totalReleaseGroupCount: number;
+  suspectMapping: boolean;
+};
+
 export type MusicBrainzArtistDiscographyResponse = {
   artistKey: string;
   artistName: string;
@@ -215,6 +225,7 @@ export type MusicBrainzArtistDiscographyResponse = {
   localAlbumCount: number;
   completion: number | null;
   releases: MusicBrainzArtistReleaseRow[];
+  candidates: MusicBrainzArtistCandidateRow[];
 };
 
 export type BrowseView = "albums" | "tracks";

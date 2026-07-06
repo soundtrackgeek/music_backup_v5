@@ -124,6 +124,7 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
     excludedCount: 0,
     localAlbumCount: 1,
     completion: 1 / 3,
+    candidates: [],
     releases: [
       {
         releaseMbid: "preview-please",
@@ -169,8 +170,8 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
   "the smiths": {
     artistKey: "the smiths",
     artistName: "The Smiths",
-    state: "available",
-    message: "Matched 2 pure official MusicBrainz albums against 1 local album.",
+    state: "warning",
+    message: "Matched through the preview cache, but this artist has alternate cached names. Review before trusting broad reports.",
     cachePath: defaultMusicBrainzCachePath,
     resolvedPath: `Preview runtime / ${defaultMusicBrainzCachePath}`,
     musicbrainzMbid: "preview-smiths",
@@ -178,8 +179,8 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
     matchMethod: "exact-name",
     artistLinkState: "unverified",
     artistLinkIgnored: false,
-    suspectMapping: false,
-    cachedNameCount: 1,
+    suspectMapping: true,
+    cachedNameCount: 2,
     totalReleaseGroupCount: 2,
     pureAlbumCount: 2,
     ownedCount: 1,
@@ -187,6 +188,17 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
     excludedCount: 0,
     localAlbumCount: 1,
     completion: 0.5,
+    candidates: [
+      {
+        name: "The Smiths",
+        mbid: "preview-smiths",
+        matchMethod: "same-mbid-name",
+        score: 0.98,
+        cachedNameCount: 2,
+        totalReleaseGroupCount: 2,
+        suspectMapping: true,
+      },
+    ],
     releases: [
       {
         releaseMbid: "preview-queen-is-dead",
@@ -1887,6 +1899,7 @@ export async function getMusicBrainzArtistDiscography(artistKey: string, artistN
       localAlbumCount: 0,
       completion: null,
       releases: [],
+      candidates: [],
     } satisfies MusicBrainzArtistDiscographyResponse;
   }
 
@@ -1930,6 +1943,7 @@ export async function setMusicBrainzArtistLink(input: {
       mockDiscography.state = "ignored";
       mockDiscography.message = "MusicBrainz is ignored for this local artist.";
       mockDiscography.releases = [];
+      mockDiscography.candidates = [];
       recomputeMockMusicBrainzDiscographyCounts(mockDiscography);
       mockDiscography.message = "MusicBrainz is ignored for this local artist.";
       return;
@@ -1941,6 +1955,7 @@ export async function setMusicBrainzArtistLink(input: {
     mockDiscography.artistLinkState = "verified";
     mockDiscography.artistLinkIgnored = false;
     mockDiscography.state = "available";
+    mockDiscography.candidates = [];
     recomputeMockMusicBrainzDiscographyCounts(mockDiscography);
     return;
   }

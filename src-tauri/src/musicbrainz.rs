@@ -1,8 +1,9 @@
 use crate::db;
 use crate::models::{
-    MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
-    MusicBrainzArtistLinkRequest, MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus,
-    MusicBrainzCacheWarningExample, MusicBrainzReleaseDecisionRequest,
+    MusicBrainzArtistCandidateRow, MusicBrainzArtistDiscographyRequest,
+    MusicBrainzArtistDiscographyResponse, MusicBrainzArtistLinkRequest,
+    MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus, MusicBrainzCacheWarningExample,
+    MusicBrainzReleaseDecisionRequest,
 };
 use anyhow::{bail, Context, Result};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
@@ -22,10 +23,12 @@ use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DEFAULT_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
+const MAX_ARTIST_CANDIDATES: usize = 8;
+const FUZZY_ARTIST_CANDIDATE_THRESHOLD: f64 = 0.68;
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.31.2 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.32.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 #[cfg(not(test))]
@@ -294,15 +297,29 @@ pub fn artist_discography_for_connection(
     let artist_match = match find_artist_match(app_conn, &cache_conn, &artist_key, &artist_name)? {
         Some(artist_match) => artist_match,
         None => {
-            return Ok(empty_discography_response(
+            let candidates = fuzzy_artist_candidates(&cache_conn, &artist_name, None)?;
+            let message = if candidates.is_empty() {
+                "No MusicBrainz artist match was found in the local cache."
+            } else {
+                "No exact MusicBrainz artist match was found in the local cache. Review the local cache candidates."
+            };
+            let mut response = empty_discography_response(
                 artist_key,
                 artist_name,
                 &cache_status,
                 "notFound",
-                "No MusicBrainz artist match was found in the local cache.",
+                message,
                 local_albums.len() as i64,
-            ));
+            );
+            response.candidates = candidates;
+            return Ok(response);
         }
+    };
+    let candidates = if artist_match.suspect_mapping && artist_match.artist_link_state != "verified"
+    {
+        suspect_artist_candidates(&cache_conn, &artist_name, &artist_match)?
+    } else {
+        Vec::new()
     };
 
     let decisions = release_decisions(app_conn, &artist_key)?;
@@ -376,6 +393,7 @@ pub fn artist_discography_for_connection(
         local_album_count,
         completion,
         releases,
+        candidates,
     })
 }
 
@@ -417,6 +435,20 @@ struct ArtistLinkRecord {
     match_method: String,
     verification_state: String,
     ignored: bool,
+}
+
+#[derive(Debug, Clone)]
+struct ArtistCacheEntry {
+    name: String,
+    mbid: String,
+}
+
+#[derive(Debug, Clone)]
+struct ArtistCandidateSeed {
+    name: String,
+    mbid: String,
+    match_method: String,
+    score: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -464,6 +496,7 @@ fn empty_discography_response(
         local_album_count,
         completion: None,
         releases: Vec::new(),
+        candidates: Vec::new(),
     }
 }
 
@@ -496,6 +529,7 @@ fn ignored_discography_response(
         local_album_count,
         completion: None,
         releases: Vec::new(),
+        candidates: Vec::new(),
     }
 }
 
@@ -636,6 +670,251 @@ fn artist_match_from_mbid(
         total_release_group_count,
         suspect_mapping,
     }))
+}
+
+fn fuzzy_artist_candidates(
+    cache_conn: &Connection,
+    artist_name: &str,
+    excluded_mbid: Option<&str>,
+) -> Result<Vec<MusicBrainzArtistCandidateRow>> {
+    let seeds = fuzzy_artist_candidate_seeds(cache_conn, artist_name, excluded_mbid)?;
+    hydrate_artist_candidates(cache_conn, seeds)
+}
+
+fn suspect_artist_candidates(
+    cache_conn: &Connection,
+    artist_name: &str,
+    artist_match: &ArtistMatch,
+) -> Result<Vec<MusicBrainzArtistCandidateRow>> {
+    let mut seeds = same_mbid_artist_candidate_seeds(cache_conn, artist_name, artist_match)?;
+    seeds.extend(fuzzy_artist_candidate_seeds(
+        cache_conn,
+        artist_name,
+        Some(&artist_match.mbid),
+    )?);
+    hydrate_artist_candidates(cache_conn, seeds)
+}
+
+fn same_mbid_artist_candidate_seeds(
+    cache_conn: &Connection,
+    artist_name: &str,
+    artist_match: &ArtistMatch,
+) -> Result<Vec<ArtistCandidateSeed>> {
+    let target_key = musicbrainz_text_key(artist_name);
+    let matched_name_key = artist_match
+        .matched_name
+        .as_deref()
+        .map(musicbrainz_text_key);
+    let mut stmt = cache_conn
+        .prepare(
+            "
+            SELECT DISTINCT name
+            FROM artist_cache
+            WHERE mbid = ?1
+              AND TRIM(name) <> ''
+            ORDER BY LOWER(name)
+            ",
+        )
+        .context("Could not prepare MusicBrainz same-MBID candidate lookup")?;
+    let names = stmt
+        .query_map(params![&artist_match.mbid], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not read MusicBrainz same-MBID candidate names")?;
+
+    let seeds = names
+        .into_iter()
+        .filter_map(|name| {
+            let name_key = musicbrainz_text_key(&name);
+            if matched_name_key.as_deref() == Some(name_key.as_str()) {
+                return None;
+            }
+            let score = artist_name_similarity_from_keys(&target_key, &name_key).max(0.74);
+            Some(ArtistCandidateSeed {
+                name,
+                mbid: artist_match.mbid.clone(),
+                match_method: "same-mbid-name".to_string(),
+                score,
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(seeds)
+}
+
+fn fuzzy_artist_candidate_seeds(
+    cache_conn: &Connection,
+    artist_name: &str,
+    excluded_mbid: Option<&str>,
+) -> Result<Vec<ArtistCandidateSeed>> {
+    let target_key = musicbrainz_text_key(artist_name);
+    if target_key.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut best_by_mbid = HashMap::<String, ArtistCandidateSeed>::new();
+    for entry in artist_cache_entries(cache_conn)? {
+        if excluded_mbid == Some(entry.mbid.as_str()) {
+            continue;
+        }
+
+        let entry_key = musicbrainz_text_key(&entry.name);
+        let score = artist_name_similarity_from_keys(&target_key, &entry_key);
+        if score < FUZZY_ARTIST_CANDIDATE_THRESHOLD {
+            continue;
+        }
+
+        let seed = ArtistCandidateSeed {
+            name: entry.name,
+            mbid: entry.mbid.clone(),
+            match_method: "fuzzy-name".to_string(),
+            score,
+        };
+        best_by_mbid
+            .entry(entry.mbid)
+            .and_modify(|current| {
+                if seed.score > current.score
+                    || (seed.score == current.score && seed.name.len() < current.name.len())
+                {
+                    *current = seed.clone();
+                }
+            })
+            .or_insert(seed);
+    }
+
+    let mut seeds = best_by_mbid.into_values().collect::<Vec<_>>();
+    sort_artist_candidate_seeds(&mut seeds);
+    seeds.truncate(MAX_ARTIST_CANDIDATES);
+    Ok(seeds)
+}
+
+fn artist_cache_entries(cache_conn: &Connection) -> Result<Vec<ArtistCacheEntry>> {
+    let mut stmt = cache_conn
+        .prepare(
+            "
+            SELECT name, mbid
+            FROM artist_cache
+            WHERE mbid IS NOT NULL
+              AND TRIM(mbid) <> ''
+              AND TRIM(name) <> ''
+            ORDER BY LOWER(name)
+            ",
+        )
+        .context("Could not prepare MusicBrainz artist candidate lookup")?;
+    let entries = stmt
+        .query_map([], |row| {
+            Ok(ArtistCacheEntry {
+                name: row.get(0)?,
+                mbid: row.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not read MusicBrainz artist candidate names")?;
+    Ok(entries)
+}
+
+fn hydrate_artist_candidates(
+    cache_conn: &Connection,
+    seeds: Vec<ArtistCandidateSeed>,
+) -> Result<Vec<MusicBrainzArtistCandidateRow>> {
+    let mut seen = HashSet::new();
+    let mut deduped = seeds
+        .into_iter()
+        .filter(|seed| seen.insert(format!("{}\u{0}{}", seed.mbid, seed.name)))
+        .collect::<Vec<_>>();
+    sort_artist_candidate_seeds(&mut deduped);
+    deduped.truncate(MAX_ARTIST_CANDIDATES);
+
+    deduped
+        .into_iter()
+        .map(|seed| {
+            let cached_name_count = cached_name_count(cache_conn, &seed.mbid)?;
+            let total_release_group_count = release_group_count_for_mbid(cache_conn, &seed.mbid)?;
+            Ok(MusicBrainzArtistCandidateRow {
+                name: seed.name,
+                mbid: seed.mbid,
+                match_method: seed.match_method,
+                score: seed.score,
+                cached_name_count,
+                total_release_group_count,
+                suspect_mapping: cached_name_count > 1
+                    || total_release_group_count >= SUSPICIOUS_RELEASE_GROUP_THRESHOLD,
+            })
+        })
+        .collect()
+}
+
+fn sort_artist_candidate_seeds(seeds: &mut [ArtistCandidateSeed]) {
+    seeds.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+            .then_with(|| left.mbid.cmp(&right.mbid))
+    });
+}
+
+fn artist_name_similarity_from_keys(target_key: &str, candidate_key: &str) -> f64 {
+    if target_key.is_empty() || candidate_key.is_empty() {
+        return 0.0;
+    }
+    if target_key == candidate_key {
+        return 1.0;
+    }
+
+    let distance = levenshtein_distance(target_key, candidate_key) as f64;
+    let max_len = target_key
+        .chars()
+        .count()
+        .max(candidate_key.chars().count()) as f64;
+    let edit_score = if max_len > 0.0 {
+        1.0 - (distance / max_len)
+    } else {
+        0.0
+    };
+    let token_score = token_overlap_score(target_key, candidate_key);
+    let substring_bonus =
+        if target_key.contains(candidate_key) || candidate_key.contains(target_key) {
+            0.08
+        } else {
+            0.0
+        };
+
+    ((edit_score * 0.68) + (token_score * 0.32) + substring_bonus).clamp(0.0, 1.0)
+}
+
+fn token_overlap_score(left: &str, right: &str) -> f64 {
+    let left_tokens = left.split_whitespace().collect::<HashSet<_>>();
+    let right_tokens = right.split_whitespace().collect::<HashSet<_>>();
+    if left_tokens.is_empty() || right_tokens.is_empty() {
+        return 0.0;
+    }
+
+    let intersection = left_tokens.intersection(&right_tokens).count() as f64;
+    let union = left_tokens.union(&right_tokens).count() as f64;
+    if union > 0.0 {
+        intersection / union
+    } else {
+        0.0
+    }
+}
+
+fn levenshtein_distance(left: &str, right: &str) -> usize {
+    let right_chars = right.chars().collect::<Vec<_>>();
+    let mut previous = (0..=right_chars.len()).collect::<Vec<_>>();
+    let mut current = vec![0; right_chars.len() + 1];
+
+    for (left_index, left_char) in left.chars().enumerate() {
+        current[0] = left_index + 1;
+        for (right_index, right_char) in right_chars.iter().enumerate() {
+            let substitution_cost = if left_char == *right_char { 0 } else { 1 };
+            current[right_index + 1] = (previous[right_index + 1] + 1)
+                .min(current[right_index] + 1)
+                .min(previous[right_index] + substitution_cost);
+        }
+        std::mem::swap(&mut previous, &mut current);
+    }
+
+    previous[right_chars.len()]
 }
 
 fn cached_name_count(conn: &Connection, mbid: &str) -> Result<i64> {
@@ -1750,6 +2029,44 @@ mod tests {
         assert_eq!(response.state, "warning");
         assert!(response.suspect_mapping);
         assert_eq!(response.cached_name_count, 2);
+        assert!(response
+            .candidates
+            .iter()
+            .any(|candidate| candidate.name == "psb"
+                && candidate.mbid == "mbid-psb"
+                && candidate.match_method == "same-mbid-name"));
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn returns_fuzzy_artist_candidates_when_cache_lookup_fails() {
+        let temp_dir = temp_cache_dir("discography-fuzzy-candidates");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_discography_cache(&cache_path, false);
+        let app_conn = create_artist_app_db();
+
+        let response = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            MusicBrainzArtistDiscographyRequest {
+                artist_key: "pet shop boyz".to_string(),
+                artist_name: "Pet Shop Boyz".to_string(),
+            },
+        )
+        .expect("compare artist discography with fuzzy candidates");
+
+        assert_eq!(response.state, "notFound");
+        assert_eq!(response.musicbrainz_mbid, None);
+        assert!(response.releases.is_empty());
+        let candidate = response
+            .candidates
+            .iter()
+            .find(|candidate| candidate.name == "pet shop boys")
+            .expect("pet shop boys fuzzy candidate");
+        assert_eq!(candidate.mbid, "mbid-psb");
+        assert_eq!(candidate.match_method, "fuzzy-name");
+        assert!(candidate.score >= FUZZY_ARTIST_CANDIDATE_THRESHOLD);
 
         fs::remove_dir_all(temp_dir).expect("remove temp dir");
     }
