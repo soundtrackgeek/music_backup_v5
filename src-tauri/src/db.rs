@@ -47,6 +47,7 @@ const DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES";
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH: &str =
     r"C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3";
+const MUSICBRAINZ_SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
 const MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES: u32 = 1440;
 const MAX_UPDATE_AUTO_CHECK_MINUTES: u32 = 1440;
 const MIN_BACKUP_RETENTION: u32 = 1;
@@ -168,6 +169,14 @@ const MUSIC_TOOLS: &[MusicToolDefinition] = &[
             "Library album artists without a usable MusicBrainz cache or verified overlay match.",
         severity: "medium",
         scope: "artists",
+    },
+    MusicToolDefinition {
+        id: "high-confidence-missing-musicbrainz-albums",
+        label: "High-confidence missing MusicBrainz albums",
+        description:
+            "Collection-wide missing pure official MusicBrainz albums from trusted artist matches.",
+        severity: "low",
+        scope: "albums",
     },
     MusicToolDefinition {
         id: "duplicates-within-album",
@@ -3860,18 +3869,18 @@ fn ensure_music_tool_data_for_request(
             import_billboard_singles(conn, &source_path)
                 .context("Could not prepare Missing Billboard Singles data from CSV_SINGLES")?;
         }
-        "artists-without-musicbrainz-data" => {
+        "artists-without-musicbrainz-data" | "high-confidence-missing-musicbrainz-albums" => {
             emit_music_tool_progress(
                 Some(app),
                 &request.tool_id,
                 &request.request_id,
                 "loading",
                 15,
-                "Preparing MusicBrainz artist cache comparison.",
+                "Preparing MusicBrainz collection comparison.",
             );
             let settings = settings_for_connection(conn)?;
             prepare_missing_musicbrainz_artist_tool(conn, &settings.musicbrainz_cache_path)
-                .context("Could not prepare MusicBrainz artist coverage data")?;
+                .context("Could not prepare MusicBrainz collection coverage data")?;
         }
         _ => {}
     }
@@ -3891,17 +3900,38 @@ struct MissingMusicBrainzLocalArtist {
 }
 
 #[derive(Debug)]
+struct MissingMusicBrainzLocalAlbum {
+    artist_key: String,
+    album_id: String,
+    title: String,
+    year: Option<i32>,
+}
+
+#[derive(Debug)]
 struct MissingMusicBrainzCacheArtist {
     name: String,
     mbid: String,
+    cached_name_count: i64,
     release_group_count: i64,
+}
+
+#[derive(Debug)]
+struct MissingMusicBrainzReleaseGroup {
+    artist_mbid: String,
+    release_mbid: String,
+    title: String,
+    year: Option<i32>,
+    track_count: Option<i64>,
+    source: String,
 }
 
 fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &str) -> Result<()> {
     conn.execute_batch(
         "
         DROP TABLE IF EXISTS temp.musicbrainz_tool_local_artists;
+        DROP TABLE IF EXISTS temp.musicbrainz_tool_local_albums;
         DROP TABLE IF EXISTS temp.musicbrainz_tool_artist_cache;
+        DROP TABLE IF EXISTS temp.musicbrainz_tool_release_groups;
 
         CREATE TEMP TABLE musicbrainz_tool_local_artists (
             artist_key TEXT PRIMARY KEY,
@@ -3914,20 +3944,45 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
             sample_album TEXT
         );
 
+        CREATE TEMP TABLE musicbrainz_tool_local_albums (
+            artist_key TEXT NOT NULL,
+            album_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            title_key TEXT NOT NULL,
+            year INTEGER
+        );
+
         CREATE TEMP TABLE musicbrainz_tool_artist_cache (
             name TEXT NOT NULL,
             mbid TEXT NOT NULL,
             local_name_key TEXT NOT NULL,
             musicbrainz_name_key TEXT NOT NULL,
+            cached_name_count INTEGER NOT NULL,
             release_group_count INTEGER NOT NULL
         );
 
+        CREATE TEMP TABLE musicbrainz_tool_release_groups (
+            artist_mbid TEXT NOT NULL,
+            release_mbid TEXT NOT NULL,
+            title TEXT NOT NULL,
+            title_key TEXT NOT NULL,
+            year INTEGER,
+            track_count INTEGER,
+            source TEXT NOT NULL
+        );
+
+        CREATE INDEX temp.idx_musicbrainz_tool_local_albums_artist_title
+            ON musicbrainz_tool_local_albums(artist_key, title_key);
         CREATE INDEX temp.idx_musicbrainz_tool_artist_cache_local
             ON musicbrainz_tool_artist_cache(local_name_key);
         CREATE INDEX temp.idx_musicbrainz_tool_artist_cache_musicbrainz
             ON musicbrainz_tool_artist_cache(musicbrainz_name_key);
         CREATE INDEX temp.idx_musicbrainz_tool_artist_cache_mbid
             ON musicbrainz_tool_artist_cache(mbid);
+        CREATE INDEX temp.idx_musicbrainz_tool_release_groups_mbid
+            ON musicbrainz_tool_release_groups(artist_mbid);
+        CREATE INDEX temp.idx_musicbrainz_tool_release_groups_title
+            ON musicbrainz_tool_release_groups(artist_mbid, title_key);
         ",
     )
     .context("Could not create MusicBrainz artist tool temp tables")?;
@@ -3960,14 +4015,39 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
         }
     }
 
+    let local_albums = musicbrainz_tool_local_albums(conn)?;
+    {
+        let mut stmt = conn
+            .prepare(
+                "
+                INSERT INTO musicbrainz_tool_local_albums (
+                    artist_key, album_id, title, title_key, year
+                ) VALUES (?1, ?2, ?3, ?4, ?5)
+                ",
+            )
+            .context("Could not prepare local MusicBrainz album temp insert")?;
+        for album in local_albums {
+            let title_key = musicbrainz_text_key(&album.title);
+            stmt.execute(params![
+                album.artist_key,
+                album.album_id,
+                album.title,
+                title_key,
+                album.year,
+            ])
+            .context("Could not insert local MusicBrainz album temp row")?;
+        }
+    }
+
     let cache_artists = musicbrainz_tool_cache_artists(cache_path)?;
     {
         let mut stmt = conn
             .prepare(
                 "
                 INSERT INTO musicbrainz_tool_artist_cache (
-                    name, mbid, local_name_key, musicbrainz_name_key, release_group_count
-                ) VALUES (?1, ?2, ?3, ?4, ?5)
+                    name, mbid, local_name_key, musicbrainz_name_key,
+                    cached_name_count, release_group_count
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                 ",
             )
             .context("Could not prepare MusicBrainz cache artist temp insert")?;
@@ -3979,11 +4059,18 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
                 artist.mbid,
                 local_name_key,
                 musicbrainz_name_key,
+                artist.cached_name_count,
                 artist.release_group_count,
             ])
             .context("Could not insert MusicBrainz cache artist temp row")?;
         }
     }
+
+    let matched_mbids = musicbrainz_tool_matched_mbids(conn)?;
+    let release_groups = musicbrainz_tool_cache_release_groups(cache_path, &matched_mbids)?;
+    insert_musicbrainz_tool_release_groups(conn, release_groups)?;
+    let overlay_release_groups = musicbrainz_tool_overlay_release_groups(conn, &matched_mbids)?;
+    insert_musicbrainz_tool_release_groups(conn, overlay_release_groups)?;
 
     Ok(())
 }
@@ -4050,6 +4137,37 @@ fn musicbrainz_tool_local_artists(conn: &Connection) -> Result<Vec<MissingMusicB
     Ok(rows)
 }
 
+fn musicbrainz_tool_local_albums(conn: &Connection) -> Result<Vec<MissingMusicBrainzLocalAlbum>> {
+    let artist_key_sql = artist_key_sql("album_artist_display");
+    let sql = format!(
+        "
+        SELECT
+            {artist_key_sql} AS artist_key,
+            id,
+            COALESCE(NULLIF(TRIM(album), ''), 'Untitled') AS title,
+            year
+        FROM albums
+        WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL
+          AND NULLIF(TRIM(COALESCE(album, '')), '') IS NOT NULL
+        "
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .context("Could not prepare local MusicBrainz album coverage query")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(MissingMusicBrainzLocalAlbum {
+                artist_key: row.get(0)?,
+                album_id: row.get(1)?,
+                title: row.get(2)?,
+                year: row.get(3)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load local MusicBrainz album coverage rows")?;
+    Ok(rows)
+}
+
 fn musicbrainz_tool_cache_artists(cache_path: &str) -> Result<Vec<MissingMusicBrainzCacheArtist>> {
     let resolved_path = resolve_musicbrainz_cache_path(cache_path)?;
     let metadata = match fs::metadata(&resolved_path) {
@@ -4083,16 +4201,30 @@ fn musicbrainz_tool_cache_artists(cache_path: &str) -> Result<Vec<MissingMusicBr
     let mut stmt = cache_conn
         .prepare(
             "
+            WITH name_stats AS (
+                SELECT mbid, COUNT(DISTINCT name) AS cached_name_count
+                FROM artist_cache
+                WHERE mbid IS NOT NULL
+                  AND TRIM(mbid) <> ''
+                  AND NULLIF(TRIM(name), '') IS NOT NULL
+                GROUP BY mbid
+            ),
+            release_stats AS (
+                SELECT artist_mbid AS mbid, COUNT(release_mbid) AS release_group_count
+                FROM release_groups
+                GROUP BY artist_mbid
+            )
             SELECT
                 ac.name,
                 ac.mbid,
-                COUNT(rg.release_mbid) AS release_group_count
+                COALESCE(ns.cached_name_count, 1) AS cached_name_count,
+                COALESCE(rs.release_group_count, 0) AS release_group_count
             FROM artist_cache ac
-            LEFT JOIN release_groups rg ON rg.artist_mbid = ac.mbid
+            LEFT JOIN name_stats ns ON ns.mbid = ac.mbid
+            LEFT JOIN release_stats rs ON rs.mbid = ac.mbid
             WHERE ac.mbid IS NOT NULL
               AND TRIM(ac.mbid) <> ''
               AND NULLIF(TRIM(ac.name), '') IS NOT NULL
-            GROUP BY ac.name, ac.mbid
             ",
         )
         .context("Could not prepare MusicBrainz cache artist coverage query")?;
@@ -4101,12 +4233,214 @@ fn musicbrainz_tool_cache_artists(cache_path: &str) -> Result<Vec<MissingMusicBr
             Ok(MissingMusicBrainzCacheArtist {
                 name: row.get(0)?,
                 mbid: row.get(1)?,
-                release_group_count: row.get(2)?,
+                cached_name_count: row.get(2)?,
+                release_group_count: row.get(3)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()
         .context("Could not load MusicBrainz cache artist coverage rows")?;
     Ok(rows)
+}
+
+fn musicbrainz_tool_matched_mbids(conn: &Connection) -> Result<Vec<String>> {
+    let mut stmt = conn
+        .prepare(
+            "
+            WITH cache_matches AS (
+                SELECT c.mbid
+                FROM temp.musicbrainz_tool_local_artists l
+                JOIN temp.musicbrainz_tool_artist_cache c
+                  ON c.local_name_key = l.artist_key
+                  OR (
+                        l.musicbrainz_name_key <> ''
+                    AND c.musicbrainz_name_key = l.musicbrainz_name_key
+                  )
+            ),
+            verified_links AS (
+                SELECT link.mbid
+                FROM musicbrainz_artist_links link
+                JOIN temp.musicbrainz_tool_local_artists l
+                  ON l.artist_key = link.local_artist_key
+                WHERE link.verification_state = 'verified'
+                  AND link.ignored = 0
+                  AND link.mbid IS NOT NULL
+                  AND TRIM(link.mbid) <> ''
+            )
+            SELECT DISTINCT LOWER(mbid)
+            FROM (
+                SELECT mbid FROM cache_matches
+                UNION ALL
+                SELECT mbid FROM verified_links
+            )
+            WHERE mbid IS NOT NULL AND TRIM(mbid) <> ''
+            ",
+        )
+        .context("Could not prepare MusicBrainz matched MBID query")?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load MusicBrainz matched MBIDs")?;
+    Ok(rows)
+}
+
+fn musicbrainz_tool_cache_release_groups(
+    cache_path: &str,
+    mbids: &[String],
+) -> Result<Vec<MissingMusicBrainzReleaseGroup>> {
+    if mbids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let resolved_path = resolve_musicbrainz_cache_path(cache_path)?;
+    let metadata = match fs::metadata(&resolved_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(error).with_context(|| {
+                format!(
+                    "Could not inspect MusicBrainz cache at {}",
+                    resolved_path.display()
+                )
+            });
+        }
+    };
+    if !metadata.is_file() {
+        return Ok(Vec::new());
+    }
+
+    let cache_conn = Connection::open_with_flags(
+        &resolved_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .with_context(|| {
+        format!(
+            "Could not open MusicBrainz cache read-only at {}",
+            resolved_path.display()
+        )
+    })?;
+    validate_musicbrainz_tool_cache_schema(&cache_conn)?;
+
+    let mut rows = Vec::new();
+    for chunk in mbids.chunks(300) {
+        let placeholders = std::iter::repeat("?")
+            .take(chunk.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "
+            SELECT artist_mbid, release_mbid, title, year, track_count
+            FROM release_groups
+            WHERE LOWER(artist_mbid) IN ({placeholders})
+              AND status = 'Official'
+              AND type = 'Album'
+              AND COALESCE(secondary_types, '') = ''
+              AND NULLIF(TRIM(release_mbid), '') IS NOT NULL
+              AND NULLIF(TRIM(title), '') IS NOT NULL
+            "
+        );
+        let values = chunk
+            .iter()
+            .map(|mbid| Value::Text(mbid.to_lowercase()))
+            .collect::<Vec<_>>();
+        let mut stmt = cache_conn
+            .prepare(&sql)
+            .context("Could not prepare MusicBrainz cache release-group query")?;
+        let chunk_rows = stmt
+            .query_map(params_from_iter(values.iter()), |row| {
+                Ok(MissingMusicBrainzReleaseGroup {
+                    artist_mbid: row.get(0)?,
+                    release_mbid: row.get(1)?,
+                    title: row.get(2)?,
+                    year: row.get(3)?,
+                    track_count: row.get(4)?,
+                    source: "cache".to_string(),
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .context("Could not load MusicBrainz cache release-group rows")?;
+        rows.extend(chunk_rows);
+    }
+
+    Ok(rows)
+}
+
+fn musicbrainz_tool_overlay_release_groups(
+    conn: &Connection,
+    mbids: &[String],
+) -> Result<Vec<MissingMusicBrainzReleaseGroup>> {
+    if mbids.is_empty() || !schema_table_exists(conn, "musicbrainz_artist_release_groups")? {
+        return Ok(Vec::new());
+    }
+
+    let matched_mbids = mbids
+        .iter()
+        .map(|mbid| mbid.to_lowercase())
+        .collect::<HashSet<_>>();
+    let mut stmt = conn
+        .prepare(
+            "
+            SELECT artist_mbid, release_mbid, title, year, track_count
+            FROM musicbrainz_artist_release_groups
+            WHERE status = 'Official'
+              AND type = 'Album'
+              AND COALESCE(secondary_types, '') = ''
+              AND NULLIF(TRIM(release_mbid), '') IS NOT NULL
+              AND NULLIF(TRIM(title), '') IS NOT NULL
+            ",
+        )
+        .context("Could not prepare refreshed MusicBrainz release-group query")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(MissingMusicBrainzReleaseGroup {
+                artist_mbid: row.get(0)?,
+                release_mbid: row.get(1)?,
+                title: row.get(2)?,
+                year: row.get(3)?,
+                track_count: row.get(4)?,
+                source: "refreshed".to_string(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load refreshed MusicBrainz release-group rows")?;
+
+    Ok(rows
+        .into_iter()
+        .filter(|row| matched_mbids.contains(&row.artist_mbid.to_lowercase()))
+        .collect())
+}
+
+fn insert_musicbrainz_tool_release_groups(
+    conn: &Connection,
+    release_groups: Vec<MissingMusicBrainzReleaseGroup>,
+) -> Result<()> {
+    if release_groups.is_empty() {
+        return Ok(());
+    }
+
+    let mut stmt = conn
+        .prepare(
+            "
+            INSERT INTO musicbrainz_tool_release_groups (
+                artist_mbid, release_mbid, title, title_key, year, track_count, source
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            ",
+        )
+        .context("Could not prepare MusicBrainz release-group temp insert")?;
+    for release_group in release_groups {
+        let title_key = musicbrainz_text_key(&release_group.title);
+        stmt.execute(params![
+            release_group.artist_mbid,
+            release_group.release_mbid,
+            release_group.title,
+            title_key,
+            release_group.year,
+            release_group.track_count,
+            release_group.source,
+        ])
+        .context("Could not insert MusicBrainz release-group temp row")?;
+    }
+
+    Ok(())
 }
 
 fn resolve_musicbrainz_cache_path(cache_path: &str) -> Result<PathBuf> {
@@ -6931,6 +7265,165 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             "
             .to_string(),
         ),
+        "high-confidence-missing-musicbrainz-albums" => Ok(format!(
+            "
+            WITH cache_matches AS (
+                SELECT
+                    l.artist_key,
+                    c.name,
+                    c.mbid,
+                    c.cached_name_count,
+                    c.release_group_count,
+                    CASE
+                        WHEN c.local_name_key = l.artist_key THEN 'cache-name'
+                        ELSE 'normalized-cache-name'
+                    END AS match_method,
+                    COUNT(*) OVER (PARTITION BY l.artist_key) AS candidate_count,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY l.artist_key
+                        ORDER BY
+                            CASE WHEN c.local_name_key = l.artist_key THEN 0 ELSE 1 END,
+                            c.cached_name_count ASC,
+                            c.release_group_count DESC,
+                            LOWER(c.name) ASC
+                    ) AS match_rank
+                FROM temp.musicbrainz_tool_local_artists l
+                JOIN temp.musicbrainz_tool_artist_cache c
+                  ON c.local_name_key = l.artist_key
+                  OR (
+                        l.musicbrainz_name_key <> ''
+                    AND c.musicbrainz_name_key = l.musicbrainz_name_key
+                  )
+            ),
+            best_cache_matches AS (
+                SELECT
+                    artist_key, name, mbid, cached_name_count, release_group_count,
+                    match_method, candidate_count
+                FROM cache_matches
+                WHERE match_rank = 1
+            ),
+            verified_links AS (
+                SELECT
+                    link.local_artist_key AS artist_key,
+                    link.mbid,
+                    COALESCE(NULLIF(TRIM(link.canonical_name), ''), MIN(cache.name)) AS matched_name
+                FROM musicbrainz_artist_links link
+                LEFT JOIN temp.musicbrainz_tool_artist_cache cache
+                  ON LOWER(cache.mbid) = LOWER(link.mbid)
+                WHERE link.verification_state = 'verified'
+                  AND link.ignored = 0
+                  AND link.mbid IS NOT NULL
+                  AND TRIM(link.mbid) <> ''
+                GROUP BY link.local_artist_key, link.mbid, link.canonical_name
+            ),
+            ignored_links AS (
+                SELECT local_artist_key AS artist_key
+                FROM musicbrainz_artist_links
+                WHERE ignored <> 0
+            ),
+            trusted_artists AS (
+                SELECT
+                    l.artist_key,
+                    l.display_artist,
+                    COALESCE(verified.mbid, cache.mbid) AS mbid,
+                    COALESCE(verified.matched_name, cache.name, l.display_artist) AS matched_name,
+                    CASE
+                        WHEN verified.mbid IS NOT NULL THEN 'verified-link'
+                        WHEN cache.mbid IS NOT NULL THEN cache.match_method
+                        ELSE 'none'
+                    END AS match_method,
+                    CASE
+                        WHEN verified.mbid IS NOT NULL THEN 1
+                        WHEN cache.mbid IS NOT NULL
+                         AND cache.candidate_count = 1
+                         AND cache.cached_name_count <= 1
+                         AND cache.release_group_count < {threshold}
+                            THEN 1
+                        ELSE 0
+                    END AS high_confidence
+                FROM temp.musicbrainz_tool_local_artists l
+                LEFT JOIN verified_links verified
+                  ON verified.artist_key = l.artist_key
+                LEFT JOIN best_cache_matches cache
+                  ON cache.artist_key = l.artist_key
+                 AND verified.mbid IS NULL
+                LEFT JOIN ignored_links ignored
+                  ON ignored.artist_key = l.artist_key
+                WHERE ignored.artist_key IS NULL
+            ),
+            overlay_counts AS (
+                SELECT LOWER(artist_mbid) AS mbid, COUNT(*) AS release_group_count
+                FROM temp.musicbrainz_tool_release_groups
+                WHERE source = 'refreshed'
+                GROUP BY LOWER(artist_mbid)
+            ),
+            artist_releases AS (
+                SELECT
+                    artist.artist_key,
+                    artist.display_artist,
+                    artist.mbid,
+                    artist.matched_name,
+                    artist.match_method,
+                    releases.release_mbid,
+                    releases.title,
+                    releases.title_key,
+                    releases.year,
+                    releases.track_count,
+                    releases.source
+                FROM trusted_artists artist
+                JOIN temp.musicbrainz_tool_release_groups releases
+                  ON LOWER(releases.artist_mbid) = LOWER(artist.mbid)
+                LEFT JOIN overlay_counts overlay
+                  ON overlay.mbid = LOWER(artist.mbid)
+                WHERE artist.high_confidence = 1
+                  AND artist.mbid IS NOT NULL
+                  AND releases.title_key <> ''
+                  AND (
+                        releases.source = 'refreshed'
+                     OR COALESCE(overlay.release_group_count, 0) = 0
+                  )
+            )
+            SELECT
+                'high-confidence-missing-musicbrainz-albums:' || ar.artist_key || char(31) || ar.release_mbid AS id,
+                'high-confidence-missing-musicbrainz-albums' AS tool_id,
+                'low' AS severity,
+                'albums' AS entity_type,
+                'musicbrainz:' || ar.artist_key || char(31) || ar.release_mbid AS album_id,
+                NULL AS track_id,
+                ar.title AS album,
+                ar.display_artist AS album_artist_display,
+                NULL AS title,
+                NULL AS canonical_genre,
+                ar.year,
+                'High-confidence MusicBrainz album missing from library' AS detail,
+                printf(
+                    'MBID %s / %s / %s / matched %s',
+                    ar.mbid,
+                    ar.match_method,
+                    ar.source,
+                    ar.matched_name
+                ) AS value,
+                NULL AS filename,
+                NULL AS file_path
+            FROM artist_releases ar
+            LEFT JOIN temp.musicbrainz_tool_local_albums owned
+              ON owned.artist_key = ar.artist_key
+             AND owned.title_key = ar.title_key
+            LEFT JOIN musicbrainz_release_decisions decisions
+              ON decisions.local_artist_key = ar.artist_key
+             AND decisions.release_mbid = ar.release_mbid
+            LEFT JOIN musicbrainz_release_status_cache status
+              ON LOWER(status.artist_mbid) = LOWER(ar.mbid)
+             AND status.release_mbid = ar.release_mbid
+            WHERE owned.album_id IS NULL
+              AND COALESCE(decisions.decision, '') NOT IN ('not-in-scope', 'ignored')
+              AND (
+                    COALESCE(decisions.decision, '') = 'include'
+                 OR COALESCE(status.has_official_release, 1) <> 0
+              )
+            ",
+            threshold = MUSICBRAINZ_SUSPICIOUS_RELEASE_GROUP_THRESHOLD,
+        )),
         "duplicates-within-album" => Ok(
             "
             WITH duplicate_titles AS (
@@ -8637,6 +9130,28 @@ mod tests {
         }
     }
 
+    fn insert_musicbrainz_tool_cache_release(
+        path: &Path,
+        mbid: &str,
+        release_mbid: &str,
+        title: &str,
+        year: i32,
+    ) {
+        let conn = Connection::open(path).expect("open test MusicBrainz cache");
+        conn.execute(
+            "
+            INSERT INTO release_groups (
+                artist_mbid, release_mbid, title, year, type, secondary_types,
+                track_count, status, cached_at
+            ) VALUES (
+                ?1, ?2, ?3, ?4, 'Album', '', 10, 'Official', '2026-02-01 12:03:00'
+            )
+            ",
+            params![mbid, release_mbid, title, year],
+        )
+        .expect("insert MusicBrainz tool cache release");
+    }
+
     fn insert_test_album(
         conn: &Connection,
         album_id: &str,
@@ -8931,6 +9446,165 @@ mod tests {
             .expect("list overlay MusicBrainz artist coverage");
 
         assert_eq!(response.total, 0);
+
+        fs::remove_dir_all(temp_dir).expect("remove MusicBrainz tool temp dir");
+    }
+
+    #[test]
+    fn lists_high_confidence_missing_musicbrainz_albums() {
+        let mut conn = seeded_connection();
+        let temp_dir = temp_test_dir("musicbrainz-tool-missing-albums");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_musicbrainz_tool_cache(&cache_path, &[("Pet Shop Boys", "mbid-psb", 0)]);
+        insert_musicbrainz_tool_cache_release(
+            &cache_path,
+            "mbid-psb",
+            "release-actually",
+            "Actually",
+            1987,
+        );
+        insert_musicbrainz_tool_cache_release(
+            &cache_path,
+            "mbid-psb",
+            "release-please",
+            "Please",
+            1986,
+        );
+        insert_musicbrainz_tool_cache_release(
+            &cache_path,
+            "mbid-psb",
+            "release-demo",
+            "Demo Album",
+            1985,
+        );
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_release_status_cache (
+                artist_mbid, release_mbid, has_official_release, checked_at
+            ) VALUES (
+                'mbid-psb', 'release-demo', 0, '2026-07-06T00:00:00Z'
+            )
+            ",
+            [],
+        )
+        .expect("insert non-official status cache row");
+
+        prepare_missing_musicbrainz_artist_tool(&mut conn, &cache_path.display().to_string())
+            .expect("prepare high-confidence MusicBrainz album coverage");
+        let mut request = MusicToolIssueRequest::default();
+        request.tool_id = "high-confidence-missing-musicbrainz-albums".to_string();
+        let response = list_music_tool_issues(&conn, request, 50, None)
+            .expect("list high-confidence missing MusicBrainz albums");
+
+        assert_eq!(response.tool.scope, "albums");
+        assert_eq!(response.tool.issue_count, 1);
+        assert_eq!(response.tool.album_count, 1);
+        assert_eq!(response.total, 1);
+        assert_eq!(response.rows[0].album.as_deref(), Some("Please"));
+        assert_eq!(
+            response.rows[0].album_artist_display.as_deref(),
+            Some("Pet Shop Boys")
+        );
+        assert_eq!(response.rows[0].year, Some(1986));
+        assert_eq!(
+            response.rows[0].detail.as_str(),
+            "High-confidence MusicBrainz album missing from library"
+        );
+        assert_eq!(
+            response.rows[0].value.as_deref(),
+            Some("MBID mbid-psb / cache-name / cache / matched Pet Shop Boys")
+        );
+
+        fs::remove_dir_all(temp_dir).expect("remove MusicBrainz tool temp dir");
+    }
+
+    #[test]
+    fn high_confidence_missing_musicbrainz_albums_skip_suspect_cache_mappings() {
+        let mut conn = seeded_connection();
+        let temp_dir = temp_test_dir("musicbrainz-tool-suspect-albums");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_musicbrainz_tool_cache(
+            &cache_path,
+            &[("Pet Shop Boys", "mbid-psb", 0), ("PSB", "mbid-psb", 0)],
+        );
+        insert_musicbrainz_tool_cache_release(
+            &cache_path,
+            "mbid-psb",
+            "release-please",
+            "Please",
+            1986,
+        );
+
+        prepare_missing_musicbrainz_artist_tool(&mut conn, &cache_path.display().to_string())
+            .expect("prepare suspect MusicBrainz album coverage");
+        let mut request = MusicToolIssueRequest::default();
+        request.tool_id = "high-confidence-missing-musicbrainz-albums".to_string();
+        let response = list_music_tool_issues(&conn, request, 50, None)
+            .expect("list high-confidence missing MusicBrainz albums");
+
+        assert_eq!(response.total, 0);
+
+        fs::remove_dir_all(temp_dir).expect("remove MusicBrainz tool temp dir");
+    }
+
+    #[test]
+    fn high_confidence_missing_musicbrainz_albums_use_verified_overlay_rows() {
+        let mut conn = seeded_connection();
+        insert_test_album(&conn, "mb:korn", "Korn", "Follow the Leader", 1998, 13);
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_artist_links (
+                local_artist_key, display_artist, mbid, canonical_name, match_method,
+                confidence, verification_state, ignored, created_at, updated_at
+            ) VALUES (
+                'korn', 'Korn', 'mbid-korn', 'Korn', 'manual-mbid',
+                NULL, 'verified', 0, '2026-07-06T00:00:00Z', '2026-07-06T00:00:00Z'
+            )
+            ",
+            [],
+        )
+        .expect("insert verified MusicBrainz artist link");
+        conn.execute_batch(
+            "
+            INSERT INTO musicbrainz_artist_release_groups (
+                artist_mbid, release_mbid, title, year, type, secondary_types,
+                track_count, status, source, fetched_at
+            ) VALUES
+                (
+                    'mbid-korn', 'release-follow-the-leader', 'Follow the Leader',
+                    1998, 'Album', '', 13, 'Official', 'musicbrainz-live',
+                    '2026-07-06T00:00:00Z'
+                ),
+                (
+                    'mbid-korn', 'release-issues', 'Issues',
+                    1999, 'Album', '', 16, 'Official', 'musicbrainz-live',
+                    '2026-07-06T00:00:00Z'
+                );
+            ",
+        )
+        .expect("insert refreshed MusicBrainz release groups");
+        let temp_dir = temp_test_dir("musicbrainz-tool-overlay-albums");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_musicbrainz_tool_cache(&cache_path, &[]);
+
+        prepare_missing_musicbrainz_artist_tool(&mut conn, &cache_path.display().to_string())
+            .expect("prepare overlay MusicBrainz album coverage");
+        let mut request = MusicToolIssueRequest::default();
+        request.tool_id = "high-confidence-missing-musicbrainz-albums".to_string();
+        let response = list_music_tool_issues(&conn, request, 50, None)
+            .expect("list overlay missing MusicBrainz albums");
+
+        assert_eq!(response.total, 1);
+        assert_eq!(response.rows[0].album.as_deref(), Some("Issues"));
+        assert_eq!(
+            response.rows[0].album_artist_display.as_deref(),
+            Some("Korn")
+        );
+        assert_eq!(response.rows[0].year, Some(1999));
+        assert_eq!(
+            response.rows[0].value.as_deref(),
+            Some("MBID mbid-korn / verified-link / refreshed / matched Korn")
+        );
 
         fs::remove_dir_all(temp_dir).expect("remove MusicBrainz tool temp dir");
     }

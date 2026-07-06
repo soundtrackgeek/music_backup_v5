@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.39.0] - 2026-07-06
+### Added
+- Added a High-confidence missing MusicBrainz albums validator in Tools that reports collection-wide pure official MusicBrainz album gaps from trusted artist matches.
+- Added Rust coverage for cache-backed missing albums, suspect cache mapping exclusion, and verified refreshed overlay release groups in the new collection report.
+
+### Changed
+- Bumped synchronized app metadata to `0.39.0`.
+
 ## [0.38.0] - 2026-07-06
 ### Added
 - Added an Artists without MusicBrainz data validator in Tools that compares local album artists against the configured `musicbrainz_cache.db` and app-owned verified/refreshed MusicBrainz overlay rows.

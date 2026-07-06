@@ -2624,14 +2624,16 @@ function MusicToolIssueTable({
   }
 
   if (response.rows.length === 0) {
-    const emptyMessage =
-      response.tool.id === "missing-billboard-albums"
-        ? "No missing Billboard albums. If you expected rows, import the Billboard CSV folder once."
-        : response.tool.id === "missing-billboard-singles"
-          ? "No missing Billboard singles. If you expected rows, import the Billboard singles CSV folder once."
-          : response.tool.id === "artists-without-musicbrainz-data"
-            ? "Every library artist has a usable MusicBrainz cache or verified overlay match."
-            : "No matching issues.";
+    let emptyMessage = "No matching issues.";
+    if (response.tool.id === "missing-billboard-albums") {
+      emptyMessage = "No missing Billboard albums. If you expected rows, import the Billboard CSV folder once.";
+    } else if (response.tool.id === "missing-billboard-singles") {
+      emptyMessage = "No missing Billboard singles. If you expected rows, import the Billboard singles CSV folder once.";
+    } else if (response.tool.id === "artists-without-musicbrainz-data") {
+      emptyMessage = "Every library artist has a usable MusicBrainz cache or verified overlay match.";
+    } else if (response.tool.id === "high-confidence-missing-musicbrainz-albums") {
+      emptyMessage = "No high-confidence missing MusicBrainz albums found.";
+    }
 
     return (
       <div className="empty-state large">
