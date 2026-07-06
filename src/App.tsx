@@ -4100,6 +4100,9 @@ export default function App() {
   const [musicBrainzOverlaySyncPathDraft, setMusicBrainzOverlaySyncPathDraft] = useState(
     settings.musicBrainzOverlaySyncPath || defaultMusicBrainzOverlaySyncPath,
   );
+  const [musicBrainzOverlayAutoSyncDraft, setMusicBrainzOverlayAutoSyncDraft] = useState(
+    String(overlayAutoSyncMinutesValue(settings.musicBrainzOverlayAutoSyncMinutes)),
+  );
   const [musicBrainzOverlaySyncResult, setMusicBrainzOverlaySyncResult] =
     useState<MusicBrainzOverlaySyncResult | null>(null);
   const [musicBrainzOverlaySyncLog, setMusicBrainzOverlaySyncLog] = useState<
@@ -4156,6 +4159,9 @@ export default function App() {
     setMusicBrainzCachePathDraft(nextSettings.musicBrainzCachePath || defaultMusicBrainzCachePath);
     setMusicBrainzOverlaySyncPathDraft(
       nextSettings.musicBrainzOverlaySyncPath || defaultMusicBrainzOverlaySyncPath,
+    );
+    setMusicBrainzOverlayAutoSyncDraft(
+      String(overlayAutoSyncMinutesValue(nextSettings.musicBrainzOverlayAutoSyncMinutes)),
     );
     setMusicBrainzStatus(nextMusicBrainzStatus);
     setMusicBrainzStatusError(null);
@@ -5912,6 +5918,11 @@ export default function App() {
     try {
       const saved = await saveSettings(nextSettings);
       setSettings(saved);
+      if (Object.prototype.hasOwnProperty.call(values, "musicBrainzOverlayAutoSyncMinutes")) {
+        setMusicBrainzOverlayAutoSyncDraft(
+          String(overlayAutoSyncMinutesValue(saved.musicBrainzOverlayAutoSyncMinutes)),
+        );
+      }
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -6026,6 +6037,12 @@ export default function App() {
         setIsMusicBrainzOverlaySyncing(false);
       }
     }
+  }
+
+  async function commitMusicBrainzOverlayAutoSyncMinutes() {
+    const nextAutoSyncMinutes = overlayAutoSyncMinutesValue(numberValue(musicBrainzOverlayAutoSyncDraft));
+    setMusicBrainzOverlayAutoSyncDraft(String(nextAutoSyncMinutes));
+    await saveAppSettings({ musicBrainzOverlayAutoSyncMinutes: nextAutoSyncMinutes });
   }
 
   useEffect(() => {
@@ -8423,14 +8440,14 @@ export default function App() {
                     type="number"
                     min={0}
                     max={1440}
-                    value={overlayAutoSyncMinutesValue(settings.musicBrainzOverlayAutoSyncMinutes)}
-                    onChange={(event) =>
-                      void saveAppSettings({
-                        musicBrainzOverlayAutoSyncMinutes: overlayAutoSyncMinutesValue(
-                          numberValue(event.target.value),
-                        ),
-                      })
-                    }
+                    value={musicBrainzOverlayAutoSyncDraft}
+                    onChange={(event) => setMusicBrainzOverlayAutoSyncDraft(event.target.value)}
+                    onBlur={() => void commitMusicBrainzOverlayAutoSyncMinutes()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.currentTarget.blur();
+                      }
+                    }}
                   />
                 </label>
                 <button

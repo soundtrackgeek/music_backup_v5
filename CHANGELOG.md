@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.35.3] - 2026-07-06
+### Fixed
+- Fixed the Settings MusicBrainz overlay Auto minutes field so typing is not interrupted by saving on every keystroke; the value now saves on blur or Enter.
+
+### Changed
+- Bumped synchronized app metadata to `0.35.3`.
+
 ## [0.35.2] - 2026-07-06
 ### Fixed
 - Fixed MusicBrainz overlay autosync so missing or invalid autosync settings are treated as disabled instead of creating a zero-delay sync loop.
