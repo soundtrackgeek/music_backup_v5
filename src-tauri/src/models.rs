@@ -176,11 +176,23 @@ pub struct AppSettings {
     pub left_sidebar_default: String,
     #[serde(default = "default_right_sidebar_default")]
     pub right_sidebar_default: String,
-    #[serde(default = "default_musicbrainz_cache_path")]
+    #[serde(
+        default = "default_musicbrainz_cache_path",
+        rename = "musicBrainzCachePath",
+        alias = "musicbrainzCachePath"
+    )]
     pub musicbrainz_cache_path: String,
-    #[serde(default = "default_musicbrainz_overlay_sync_path")]
+    #[serde(
+        default = "default_musicbrainz_overlay_sync_path",
+        rename = "musicBrainzOverlaySyncPath",
+        alias = "musicbrainzOverlaySyncPath"
+    )]
     pub musicbrainz_overlay_sync_path: String,
-    #[serde(default)]
+    #[serde(
+        default,
+        rename = "musicBrainzOverlayAutoSyncMinutes",
+        alias = "musicbrainzOverlayAutoSyncMinutes"
+    )]
     pub musicbrainz_overlay_auto_sync_minutes: u32,
     #[serde(default)]
     pub updated_at: Option<String>,
@@ -1315,4 +1327,62 @@ fn default_music_tool_id() -> String {
 
 fn default_request_id() -> String {
     String::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn app_settings_use_ui_musicbrainz_field_casing() {
+        let settings = AppSettings {
+            backup_retention: 3,
+            dark_mode: false,
+            left_sidebar_default: "expanded".to_string(),
+            right_sidebar_default: "expanded".to_string(),
+            musicbrainz_cache_path: r"C:\Sync\musicbrainz_cache.db".to_string(),
+            musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3".to_string(),
+            musicbrainz_overlay_auto_sync_minutes: 15,
+            updated_at: None,
+        };
+        let serialized = serde_json::to_value(&settings).expect("serialize settings");
+
+        assert_eq!(
+            serialized.get("musicBrainzCachePath"),
+            Some(&json!(r"C:\Sync\musicbrainz_cache.db"))
+        );
+        assert_eq!(
+            serialized.get("musicBrainzOverlaySyncPath"),
+            Some(&json!(r"C:\Sync\musicbrainz-overlay-sync.sqlite3"))
+        );
+        assert_eq!(
+            serialized.get("musicBrainzOverlayAutoSyncMinutes"),
+            Some(&json!(15))
+        );
+        assert!(serialized
+            .get("musicbrainzOverlayAutoSyncMinutes")
+            .is_none());
+
+        let decoded: AppSettings = serde_json::from_value(json!({
+            "musicBrainzCachePath": r"C:\Sync\musicbrainz_cache.db",
+            "musicBrainzOverlaySyncPath": r"C:\Sync\musicbrainz-overlay-sync.sqlite3",
+            "musicBrainzOverlayAutoSyncMinutes": 15
+        }))
+        .expect("deserialize UI settings");
+        assert_eq!(decoded.musicbrainz_overlay_auto_sync_minutes, 15);
+
+        let alias_decoded: AppSettings = serde_json::from_value(json!({
+            "musicbrainzCachePath": "legacy-cache.db",
+            "musicbrainzOverlaySyncPath": "legacy-sync.sqlite3",
+            "musicbrainzOverlayAutoSyncMinutes": 20
+        }))
+        .expect("deserialize alias settings");
+        assert_eq!(alias_decoded.musicbrainz_cache_path, "legacy-cache.db");
+        assert_eq!(
+            alias_decoded.musicbrainz_overlay_sync_path,
+            "legacy-sync.sqlite3"
+        );
+        assert_eq!(alias_decoded.musicbrainz_overlay_auto_sync_minutes, 20);
+    }
 }

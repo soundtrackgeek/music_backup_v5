@@ -4082,6 +4082,10 @@ export default function App() {
   const [isDiscoveryAlbumsLoading, setIsDiscoveryAlbumsLoading] = useState(false);
   const [discoverySelection, setDiscoverySelection] = useState<DiscoverySelection | null>(null);
   const [settings, setSettings] = useState<AppSettings>(() => createDefaultSettings());
+  const settingsRef = useRef(settings);
+  const settingsSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const settingsSaveSequenceRef = useRef(0);
+  const pendingSettingsSaveCountRef = useRef(0);
   const [leftSidebarMode, setLeftSidebarMode] = useState<LeftSidebarMode>(() => createDefaultLeftSidebarMode());
   const [rightSidebarMode, setRightSidebarMode] = useState<RightSidebarMode>(() => createDefaultRightSidebarMode());
   const [databaseBackups, setDatabaseBackups] = useState<DatabaseBackup[]>([]);
@@ -4155,6 +4159,7 @@ export default function App() {
       })),
     );
     setStatistics(nextStatistics);
+    settingsRef.current = nextSettings;
     setSettings(nextSettings);
     setMusicBrainzCachePathDraft(nextSettings.musicBrainzCachePath || defaultMusicBrainzCachePath);
     setMusicBrainzOverlaySyncPathDraft(
@@ -5891,42 +5896,65 @@ export default function App() {
   }
 
   async function saveAppSettings(values: Partial<AppSettings>) {
+    const baseSettings = settingsRef.current;
     const overlayAutoSyncMinutes = overlayAutoSyncMinutesValue(
-      values.musicBrainzOverlayAutoSyncMinutes ?? settings.musicBrainzOverlayAutoSyncMinutes,
+      values.musicBrainzOverlayAutoSyncMinutes ?? baseSettings.musicBrainzOverlayAutoSyncMinutes,
     );
     const nextSettings = {
-      ...settings,
+      ...baseSettings,
       ...values,
-      backupRetention: clampBackupRetention(values.backupRetention ?? settings.backupRetention),
-      leftSidebarDefault: values.leftSidebarDefault ?? settings.leftSidebarDefault,
-      rightSidebarDefault: values.rightSidebarDefault ?? settings.rightSidebarDefault,
+      backupRetention: clampBackupRetention(values.backupRetention ?? baseSettings.backupRetention),
+      leftSidebarDefault: values.leftSidebarDefault ?? baseSettings.leftSidebarDefault,
+      rightSidebarDefault: values.rightSidebarDefault ?? baseSettings.rightSidebarDefault,
       musicBrainzCachePath: textSettingValue(
-        values.musicBrainzCachePath ?? settings.musicBrainzCachePath,
+        values.musicBrainzCachePath ?? baseSettings.musicBrainzCachePath,
         defaultMusicBrainzCachePath,
       ),
       musicBrainzOverlaySyncPath: textSettingValue(
-        values.musicBrainzOverlaySyncPath ?? settings.musicBrainzOverlaySyncPath,
+        values.musicBrainzOverlaySyncPath ?? baseSettings.musicBrainzOverlaySyncPath,
         defaultMusicBrainzOverlaySyncPath,
       ),
       musicBrainzOverlayAutoSyncMinutes: overlayAutoSyncMinutes,
     };
+    const saveSequence = settingsSaveSequenceRef.current + 1;
+    settingsSaveSequenceRef.current = saveSequence;
+    pendingSettingsSaveCountRef.current += 1;
+    settingsRef.current = nextSettings;
     setSettings(nextSettings);
     cacheSettings(nextSettings);
     setIsSavingSettings(true);
     setSettingsError(null);
 
-    try {
+    const previousSave = settingsSaveQueueRef.current;
+    const saveTask = previousSave.catch(() => undefined).then(async () => {
       const saved = await saveSettings(nextSettings);
-      setSettings(saved);
-      if (Object.prototype.hasOwnProperty.call(values, "musicBrainzOverlayAutoSyncMinutes")) {
-        setMusicBrainzOverlayAutoSyncDraft(
-          String(overlayAutoSyncMinutesValue(saved.musicBrainzOverlayAutoSyncMinutes)),
-        );
+      if (saveSequence === settingsSaveSequenceRef.current) {
+        settingsRef.current = saved;
+        setSettings(saved);
+        cacheSettings(saved);
+        if (Object.prototype.hasOwnProperty.call(values, "musicBrainzOverlayAutoSyncMinutes")) {
+          setMusicBrainzOverlayAutoSyncDraft(
+            String(overlayAutoSyncMinutesValue(saved.musicBrainzOverlayAutoSyncMinutes)),
+          );
+        }
       }
+    });
+    settingsSaveQueueRef.current = saveTask.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    try {
+      await saveTask;
     } catch (error) {
-      setSettingsError(error instanceof Error ? error.message : String(error));
+      if (saveSequence === settingsSaveSequenceRef.current) {
+        setSettingsError(error instanceof Error ? error.message : String(error));
+      }
     } finally {
-      setIsSavingSettings(false);
+      pendingSettingsSaveCountRef.current = Math.max(0, pendingSettingsSaveCountRef.current - 1);
+      if (pendingSettingsSaveCountRef.current === 0) {
+        setIsSavingSettings(false);
+      }
     }
   }
 

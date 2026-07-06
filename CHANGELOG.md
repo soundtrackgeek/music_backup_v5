@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.35.4] - 2026-07-06
+### Fixed
+- Fixed Settings saves so the MusicBrainz overlay Auto minutes value is preserved after blur or Enter even when another settings save is still finishing.
+
+### Changed
+- Bumped synchronized app metadata to `0.35.4`.
+
 ## [0.35.3] - 2026-07-06
 ### Fixed
 - Fixed the Settings MusicBrainz overlay Auto minutes field so typing is not interrupted by saving on every keystroke; the value now saves on blur or Enter.
