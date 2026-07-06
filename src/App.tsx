@@ -387,6 +387,11 @@ function musicBrainzOverlaySyncDetails(result: MusicBrainzOverlaySyncResult | Mu
   return details.length > 0 ? details.join("; ") : "No row changes";
 }
 
+function textSettingValue(value: unknown, fallback: string) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return normalized || fallback;
+}
+
 function TextCriterion({
   label,
   filter,
@@ -5886,10 +5891,14 @@ export default function App() {
       backupRetention: clampBackupRetention(values.backupRetention ?? settings.backupRetention),
       leftSidebarDefault: values.leftSidebarDefault ?? settings.leftSidebarDefault,
       rightSidebarDefault: values.rightSidebarDefault ?? settings.rightSidebarDefault,
-      musicBrainzCachePath: (values.musicBrainzCachePath ?? settings.musicBrainzCachePath).trim() || defaultMusicBrainzCachePath,
-      musicBrainzOverlaySyncPath:
-        (values.musicBrainzOverlaySyncPath ?? settings.musicBrainzOverlaySyncPath).trim() ||
+      musicBrainzCachePath: textSettingValue(
+        values.musicBrainzCachePath ?? settings.musicBrainzCachePath,
+        defaultMusicBrainzCachePath,
+      ),
+      musicBrainzOverlaySyncPath: textSettingValue(
+        values.musicBrainzOverlaySyncPath ?? settings.musicBrainzOverlaySyncPath,
         defaultMusicBrainzOverlaySyncPath,
+      ),
       musicBrainzOverlayAutoSyncMinutes: Math.min(
         1440,
         Math.max(0, Math.round(overlayAutoSyncMinutes ?? 0)),

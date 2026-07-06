@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.35.1] - 2026-07-06
+### Fixed
+- Fixed Settings MusicBrainz overlay sync saves so older cached settings without the new sync path field fall back to the default path instead of crashing.
+
+### Changed
+- Bumped synchronized app metadata to `0.35.1`.
+
 ## [0.35.0] - 2026-07-06
 ### Added
 - Added MusicBrainz overlay sync through `C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3` so app-owned artist links, release decisions, release-status cache rows, and refreshed release-group overlays can move between machines without syncing the main app database.
