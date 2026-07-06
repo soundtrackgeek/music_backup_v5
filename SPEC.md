@@ -1,9 +1,9 @@
 # Music Library Living Specification and Roadmap
 
-Last updated: 2026-07-05
+Last updated: 2026-07-06
 Status: Living product and implementation contract
 Current implementation: Phase 17 complete
-Current package version: 0.31.0
+Current package version: 0.31.1
 SQLite schema version: 12
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -487,6 +487,7 @@ Expected next backend modularization:
 - Artist matching checks verified app-owned links first, exact cache-name matches second, and normalized cache-name matches third.
 - Local owned/missing matching is deterministic by normalized album title, with matching year increasing confidence when available.
 - The panel shows cache/artist state, suspect mapping warnings, cached name, MBID link, match method, artist link review state, local album count, pure album count, owned/missing totals, completion percentage, and owned/missing release rows.
+- The MBID link opens the matched MusicBrainz artist page in the system default web browser from the Tauri desktop app.
 - Selected-artist MusicBrainz matches can be verified, ignored, unlinked, or corrected by pasting a MusicBrainz artist MBID.
 - Verified artist links override raw cache lookup, and ignored artist links suppress selected-artist MusicBrainz results and future broad reports.
 - Missing release rows can be marked not in scope; filtered rows are hidden from the main owned/missing album list and do not count as missing or lower completion.
@@ -653,6 +654,10 @@ Completed in 0.31.0:
 - Persist selected-artist match decisions in `musicbrainz_artist_links`.
 - Let verified artist links override raw cache lookup, and suppress selected-artist MusicBrainz rows when an artist link is ignored.
 - Add Rust coverage for ignored artist suppression and manual artist-link decisions.
+
+Fixed in 0.31.1:
+
+- Open the selected-artist MusicBrainz MBID link in the system default web browser from the Tauri desktop app.
 
 Remaining candidate work:
 

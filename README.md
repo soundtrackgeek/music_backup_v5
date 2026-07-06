@@ -81,6 +81,7 @@ npm run security:check
 - Artists includes a MusicBrainz Discography panel for the selected album artist.
 - The desktop backend matches the selected local artist to the local MusicBrainz cache by verified link, exact cache name, then normalized cache name.
 - The Artist page shows the current cached MusicBrainz artist match, MBID link, match method, and verification state.
+- The MBID link opens the matched artist page in the system default web browser from the Tauri desktop app.
 - Artist matches can be verified, ignored, unlinked, or corrected by pasting a MusicBrainz artist MBID.
 - Verified artist links override raw cache lookup, while ignored artist links suppress MusicBrainz album rows for that artist.
 - The artist comparison lists pure official MusicBrainz album release groups as owned or missing based on deterministic normalized-title matching against local albums.

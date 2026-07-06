@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type {
   AppSettings,
   ArtistListRequest,
@@ -1718,6 +1719,33 @@ const mockDiscovery: DiscoveryResponse = {
 
 export function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+export async function openExternalUrl(url: string) {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error("Invalid external URL.");
+  }
+
+  const isAllowedMusicBrainzArtistUrl =
+    parsedUrl.protocol === "https:" &&
+    parsedUrl.hostname === "musicbrainz.org" &&
+    parsedUrl.pathname.startsWith("/artist/");
+
+  if (!isAllowedMusicBrainzArtistUrl) {
+    throw new Error("Only MusicBrainz artist URLs can be opened from this view.");
+  }
+
+  const normalizedUrl = parsedUrl.toString();
+
+  if (!isTauriRuntime()) {
+    window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  await openUrl(normalizedUrl);
 }
 
 export async function getLibraryStatus() {

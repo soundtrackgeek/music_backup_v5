@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.1] - 2026-07-06
+### Fixed
+- Fixed selected-artist MusicBrainz MBID links so they open the matched artist page in the system default web browser from the Tauri desktop app.
+
+### Changed
+- Added the Tauri opener plugin with an explicit main-window permission and bumped synchronized app metadata to `0.31.1`.
+
 ## [0.31.0] - 2026-07-05
 ### Added
 - Added MusicBrainz artist match review controls in Artists with Verify, Ignore, Unlink, and manual MBID correction actions.

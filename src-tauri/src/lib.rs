@@ -382,6 +382,7 @@ async fn export_music_tool_issues(
 #[cfg(not(test))]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_library_status,
             run_performance_probe,

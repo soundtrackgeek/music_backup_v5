@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { CSSProperties, FormEvent, KeyboardEvent, PointerEvent, ReactNode } from "react";
+import type { CSSProperties, FormEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import {
   Activity,
   Album,
@@ -72,6 +72,7 @@ import {
   listenToCoverImportProgress,
   listenToImportProgress,
   listenToMusicToolProgress,
+  openExternalUrl,
   saveChart,
   saveSearch,
   saveSettings,
@@ -1387,6 +1388,7 @@ function MusicBrainzArtistDiscographyPanel({
   isLoading,
   error,
   onRefresh,
+  onOpenExternalUrl,
   onSetArtistLink,
   onSetReleaseDecision,
 }: {
@@ -1395,6 +1397,7 @@ function MusicBrainzArtistDiscographyPanel({
   isLoading: boolean;
   error: string | null;
   onRefresh: () => void;
+  onOpenExternalUrl: (url: string) => void;
   onSetArtistLink: (
     action: "verify" | "ignore" | "unlink" | "set",
     musicbrainzMbid?: string | null,
@@ -1432,6 +1435,14 @@ function MusicBrainzArtistDiscographyPanel({
     if (manualMbidValue) {
       onSetArtistLink("set", manualMbidValue);
     }
+  }
+
+  function handleMusicBrainzArtistLinkClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (!musicBrainzArtistUrl) {
+      return;
+    }
+    event.preventDefault();
+    onOpenExternalUrl(musicBrainzArtistUrl);
   }
 
   return (
@@ -1518,7 +1529,12 @@ function MusicBrainzArtistDiscographyPanel({
           <div className="musicbrainz-artist-meta">
             <span>{`Cache: ${response.matchedCacheName ?? "No cache artist"}`}</span>
             {musicBrainzArtistUrl ? (
-              <a href={musicBrainzArtistUrl} target="_blank" rel="noreferrer">
+              <a
+                href={musicBrainzArtistUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={handleMusicBrainzArtistLinkClick}
+              >
                 {`MBID: ${response.musicbrainzMbid}`}
                 <ExternalLink size={13} aria-hidden="true" />
               </a>
@@ -5335,6 +5351,15 @@ export default function App() {
     }
   }
 
+  async function openMusicBrainzArtistPage(url: string) {
+    setMusicBrainzArtistError(null);
+    try {
+      await openExternalUrl(url);
+    } catch (error) {
+      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async function runGenreExport(format: string) {
     if (!genreAlbumsRequest) {
       return;
@@ -6743,6 +6768,7 @@ export default function App() {
             isLoading={isMusicBrainzArtistLoading}
             error={musicBrainzArtistError}
             onRefresh={() => void refreshArtistMusicBrainz()}
+            onOpenExternalUrl={(url) => void openMusicBrainzArtistPage(url)}
             onSetArtistLink={(action, musicbrainzMbid) =>
               void setArtistMusicBrainzLink(action, musicbrainzMbid)
             }
