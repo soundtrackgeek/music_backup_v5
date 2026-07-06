@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.2] - 2026-07-06
+### Fixed
+- Fixed Windows release builds so launching the installed app opens only the desktop window and no persistent terminal window.
+
+### Changed
+- Bumped synchronized app metadata to `0.36.2`.
+
 ## [0.36.1] - 2026-07-06
 ### Fixed
 - Updated GitHub Actions official action pins to current major versions to avoid deprecated Node.js action runtime warnings.

@@ -2087,7 +2087,7 @@ dependencies = [
 
 [[package]]
 name = "music-library"
-version = "0.36.1"
+version = "0.36.2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

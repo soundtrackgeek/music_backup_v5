@@ -98,6 +98,7 @@ npm run security:check
 - GitHub Actions CI runs `npm run check` on Windows for pushes to `master`, pull requests, and manual dispatches.
 - GitHub Actions Release detects package version changes on `master`, runs the full release gate, builds Tauri Windows installers, creates a `v<version>` GitHub Release, and uploads `.exe` and `.msi` installer files.
 - Release notes are extracted from the matching `CHANGELOG.md` version section so published releases stay tied to the local changelog.
+- Windows release builds launch as a desktop GUI app without opening a persistent terminal window.
 
 ## Phase 17 MusicBrainz Artist Features
 
