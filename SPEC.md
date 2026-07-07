@@ -225,6 +225,15 @@ Minimum expected cache tables:
 | `artist_cache` | `name`, `mbid` | Find a MusicBrainz artist candidate for a local album artist. |
 | `release_groups` | `artist_mbid`, `release_mbid`, `title`, `year`, `type`, `secondary_types`, `track_count`, `status` | Load a MusicBrainz artist's release-group discography. |
 
+Origin country enrichment rules:
+
+- Treat MusicBrainz artist `area` and derived artist country as optional enrichment for local album artists, not as source metadata that overwrites MusicBee fields.
+- Store both the raw MusicBrainz area evidence and the derived country-level value so the UI can show provenance when the final `Origin Country` is surprising.
+- Prefer reviewed app-owned artist links before cache-derived MBIDs. Broad import may use high-confidence, non-suspect cache matches, but suspect/ignored artist mappings must be skipped until reviewed.
+- Use an explicit import action to fetch missing artist origin data by MBID. Normal Search, Charts, Artists, and Statistics rendering must never trigger broad MusicBrainz network calls.
+- Prefer a country-level MusicBrainz/ISO value when available. If the artist area is a subdivision such as England, preserve that raw area and derive the country-level value separately when possible.
+- Keep unresolved, ambiguous, historical, worldwide, and multi-area cases reviewable instead of forcing a country.
+
 Discography query rules:
 
 - Match local album artists with app-owned verified links first, then `artist_cache.name`, starting with exact lowercase lookup and then normalized lookup.
@@ -301,7 +310,7 @@ Expected MusicBrainz boundary:
 
 - Keep MusicBrainz cache reads in a dedicated backend module instead of folding them into general search/chart query code.
 - Use a separate read-only SQLite connection for `musicbrainz_cache.db`.
-- Persist only app-owned MusicBrainz settings, artist link decisions, release link/ignore decisions, release-status verification cache, refreshed artist release-group overlays, cache quality snapshots, and refresh metadata in the app SQLite database.
+- Persist only app-owned MusicBrainz settings, artist link decisions, artist origin-country rows and review decisions, release link/ignore decisions, release-status verification cache, refreshed artist release-group overlays, cache quality snapshots, and refresh metadata in the app SQLite database.
 - Sync only app-owned MusicBrainz overlay rows through the configured shared overlay database; do not place the main app database or recovered MusicBrainz cache under cloud-file sync.
 - Keep MusicBrainz source rows separate from MusicBee source rows and calculated album aggregates.
 - The first implemented slice persists `musicbrainz_cache_path`, opens the cache read-only, validates expected tables, reports cache quality/status, and creates app-owned artist-link/release-decision tables for later matching workflows.
@@ -712,6 +721,60 @@ Completed in 0.35.0:
 - Use tombstone rows so artist unlinks and cleared release decisions propagate between machines.
 - Add Settings controls for manual MusicBrainz overlay sync, autosync interval in minutes, and recent sync log entries.
 - Add Rust coverage for copying overlay rows and applying unlink tombstones.
+
+Planned slice: MusicBrainz artist origin countries:
+
+Expected outcome:
+
+- Each local album artist can have an app-owned `Origin Country` derived from MusicBrainz artist area/country data.
+- Search and Charts can filter by `Origin Country` using local SQLite data only.
+- Artists can show origin country with MusicBrainz provenance, review state, and an easy path to fix ambiguous cases.
+
+Proposed data model:
+
+- Add SQLite schema version 17 tables for `musicbrainz_origin_countries`, `musicbrainz_artist_origin_countries`, and `musicbrainz_artist_origin_import_runs`.
+- `musicbrainz_origin_countries` stores the canonical country list used by filters: country code, display name, MusicBrainz area MBID when known, ISO source, historical/special flags, and timestamps.
+- `musicbrainz_artist_origin_countries` stores one row per local album artist key: display artist, MusicBrainz artist MBID, country code/name snapshot, raw area MBID/name/type, begin-area MBID/name/type when returned, derived-from field (`artist-country`, `artist-area`, `area-lookup`, `manual`, or `unresolved`), confidence/review state, source, fetched timestamp, and updated timestamp.
+- `musicbrainz_artist_origin_import_runs` records batch progress, selected scope, fetched/skipped/failed counts, last processed artist key, started/completed timestamps, and error summary so imports can resume cleanly.
+- Add indexes on `musicbrainz_artist_origin_countries(local_artist_key)`, `musicbrainz_artist_origin_countries(country_code)`, and `musicbrainz_artist_origin_countries(mbid)`.
+- Include reviewed/manual origin-country rows in the shared MusicBrainz overlay sync. Imported rows may be refreshed locally, but manual overrides and cleared/ignored decisions need tombstones.
+
+Import workflow:
+
+- Settings gets an explicit `Import Artist Origin Countries` action under MusicBrainz. It first previews eligible local album artists, linked MBIDs, already imported rows, skipped suspect mappings, unresolved artists, and estimated runtime.
+- Eligibility starts from distinct local album artists in the `albums` table, using the same normalized artist key rules as Artists, Search filters, and MusicBrainz discography matching.
+- MBID resolution order is verified app-owned `musicbrainz_artist_links`, then high-confidence non-suspect cache matches. Ignored, suspect, blank, duplicate-heavy, and unlinked mappings are skipped and reported for review.
+- The importer fetches MusicBrainz artist data by reviewed/resolved MBID with a meaningful user agent, one-request-per-second pacing, retry/backoff, cancel support, and resumable checkpoints.
+- Country derivation prefers an explicit artist country code when returned by MusicBrainz. If that is missing, use a country-type artist area with ISO 3166-1 data. If the raw area is a subdivision, preserve the subdivision and derive the parent country from MusicBrainz area data or ISO 3166-2 prefix when reliable. If derivation is not reliable, leave `Origin Country` empty and keep the row reviewable.
+- Store raw JSON-relevant evidence only as structured fields needed for audit and display; do not store broad API response blobs unless a debug setting is added.
+- Manual review can set country, mark unresolved/ignored, clear a bad import row, or re-fetch a single artist by MBID.
+
+Search, Charts, and UI work:
+
+- Add `originCountryCodes` and `missingOriginCountry` to `BrowseFilters`; saved searches and saved charts must preserve these fields.
+- Add an `Origin Country` filter control to Search and Charts with searchable country options, active filter chips, and export support.
+- Browse queries join album and track rows through normalized album-artist key to `musicbrainz_artist_origin_countries`; filters must use indexed local data and work when no country rows exist.
+- Add optional `Origin Country` columns to Search, Charts, Albums, Artists, and exports. Defaults should keep current tables familiar, but saved visible/export column settings should support the new field.
+- The Artists workspace should show origin country in the artist summary, including the raw MusicBrainz area as provenance when different from the derived country.
+- Add Settings status for total album artists, imported origins, verified origins, unresolved origins, skipped suspect mappings, and last import run.
+- Web-preview mocks should include several origin-country states: verified country, subdivision-derived country, unresolved area, skipped suspect match, and no MusicBrainz data.
+
+Edge cases:
+
+- `Various Artists`, soundtrack-style collection artists, blank artists, and ignored MusicBrainz links should default to no origin country unless manually reviewed.
+- Multi-person collaborations and groups should use the MusicBrainz artist MBID's main associated area/country, not the countries of individual members.
+- Country names can change; filters should key by country code or MusicBrainz area MBID and display the latest app-owned country name.
+- Historical countries, worldwide/Europe areas, and non-country regions should remain visible as raw area evidence but should not be forced into normal country filters without manual mapping.
+- Import must not block or mutate library imports, album aggregation, or core browsing.
+
+Done criteria:
+
+- App works normally with no MusicBrainz cache, no origin import, or a partially completed origin import.
+- Origin-country import is explicit, rate-limited, resumable, cancellable, and reports skipped/suspect/unresolved artists.
+- Search and Charts can filter by origin country from local SQLite only, including saved search/chart round trips.
+- Artist, album, search, chart, and export rows can include origin country without changing MusicBee source metadata.
+- Rust tests cover schema migration, country derivation, suspect-link skipping, manual override precedence, browse filtering, saved config serialization, and overlay sync behavior for reviewed origin rows.
+- Frontend/web-preview mocks cover imported, unresolved, skipped, verified, manually overridden, and missing-origin states.
 
 Remaining candidate work:
 
