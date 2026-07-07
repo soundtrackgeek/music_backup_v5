@@ -17,3 +17,7 @@
    - Use `git add` to stage all modified files (README.md, CHANGELOG.md, and code files)
    - Create descriptive commit message following existing style
    - Push to remote repository with `git push`
+
+4. **Clean Rust build artifacts**:
+   - Before finishing any repo work, run `cargo clean` from the `src-tauri` directory
+   - This keeps Tauri/Rust build artifacts from growing too large between work sessions
