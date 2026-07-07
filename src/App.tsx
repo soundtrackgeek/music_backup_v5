@@ -81,6 +81,7 @@ import {
   loadCachedSettings,
   listenToCoverImportProgress,
   listenToImportProgress,
+  listenToMusicBrainzOriginCountryImportProgress,
   listenToMusicToolProgress,
   openExternalUrl,
   saveChart,
@@ -152,6 +153,7 @@ import type {
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
   MusicBrainzOriginCountryOption,
+  MusicBrainzOriginCountryImportProgress,
   MusicBrainzOriginCountryImportSummary,
   MusicBrainzOriginCountryPreview,
   MusicBrainzOriginCountryStatus,
@@ -381,6 +383,35 @@ function Metric({
 
 function RunStatus({ status }: { status: string }) {
   return <span className={`run-status run-status-${status.toLowerCase()}`}>{status}</span>;
+}
+
+function originImportStatusLabel(status: string | null | undefined) {
+  switch (status) {
+    case "preparing":
+      return "Preparing";
+    case "running":
+      return "Running";
+    case "fetching":
+      return "Fetching";
+    case "stored":
+      return "Stored";
+    case "unresolved":
+      return "Unresolved";
+    case "artistFailed":
+      return "Artist failed";
+    case "completed":
+      return "Completed";
+    case "completed_with_errors":
+      return "Completed with errors";
+    case "cancelled":
+      return "Cancelled";
+    case "cancelling":
+      return "Cancelling";
+    case "failed":
+      return "Failed";
+    default:
+      return status || "Idle";
+  }
 }
 
 function musicBrainzStateLabel(
@@ -4317,6 +4348,9 @@ export default function App() {
     useState<MusicBrainzOriginCountryPreview | null>(null);
   const [musicBrainzOriginImportSummary, setMusicBrainzOriginImportSummary] =
     useState<MusicBrainzOriginCountryImportSummary | null>(null);
+  const [musicBrainzOriginProgress, setMusicBrainzOriginProgress] =
+    useState<MusicBrainzOriginCountryImportProgress | null>(null);
+  const [musicBrainzOriginLog, setMusicBrainzOriginLog] = useState<MusicBrainzOriginCountryImportProgress[]>([]);
   const [musicBrainzOriginError, setMusicBrainzOriginError] = useState<string | null>(null);
   const [isMusicBrainzOriginPreviewing, setIsMusicBrainzOriginPreviewing] = useState(false);
   const [isMusicBrainzOriginImporting, setIsMusicBrainzOriginImporting] = useState(false);
@@ -4474,6 +4508,20 @@ export default function App() {
   useEffect(() => {
     let unlisten: (() => void) | null = null;
     void listenToCoverImportProgress(setCoverProgress).then((nextUnlisten) => {
+      unlisten = nextUnlisten;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void listenToMusicBrainzOriginCountryImportProgress((nextProgress) => {
+      setMusicBrainzOriginProgress(nextProgress);
+      setMusicBrainzOriginLog((previous) => [nextProgress, ...previous].slice(0, 80));
+    }).then((nextUnlisten) => {
       unlisten = nextUnlisten;
     });
 
@@ -5173,6 +5221,13 @@ export default function App() {
     if (coverProgress.scannedAlbums === 0) return isImportingCovers ? 4 : 0;
     return Math.min(99, Math.max(1, coverProgress.percent));
   }, [coverProgress.percent, coverProgress.scannedAlbums, coverProgress.status, isImportingCovers]);
+
+  const musicBrainzOriginProgressPercent = useMemo(() => {
+    if (!musicBrainzOriginProgress) {
+      return 0;
+    }
+    return Math.min(100, Math.max(0, musicBrainzOriginProgress.percent));
+  }, [musicBrainzOriginProgress]);
 
   const importPathsDirty = useMemo(
     () =>
@@ -6394,6 +6449,25 @@ export default function App() {
     setIsMusicBrainzOriginImporting(true);
     setMusicBrainzOriginError(null);
     setMusicBrainzOriginImportSummary(null);
+    const startingProgress: MusicBrainzOriginCountryImportProgress = {
+      status: "preparing",
+      totalArtists: musicBrainzOriginStatus?.totalAlbumArtists ?? 0,
+      eligibleCount: 0,
+      processedCount: 0,
+      remainingCount: 0,
+      fetchedCount: 0,
+      storedCount: 0,
+      skippedCount: 0,
+      unresolvedCount: 0,
+      failedCount: 0,
+      percent: 0,
+      currentArtist: null,
+      currentArtistKey: null,
+      currentMbid: null,
+      message: "Preparing MusicBrainz origin-country import.",
+    };
+    setMusicBrainzOriginProgress(startingProgress);
+    setMusicBrainzOriginLog([startingProgress]);
 
     try {
       const result = await importMusicBrainzOriginCountries({});
@@ -6409,7 +6483,27 @@ export default function App() {
       setGenreAlbumsResponse(null);
       setDiscoveryAlbumResponse(null);
     } catch (error) {
-      setMusicBrainzOriginError(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setMusicBrainzOriginError(message);
+      const failedProgress: MusicBrainzOriginCountryImportProgress = {
+        status: "failed",
+        totalArtists: musicBrainzOriginProgress?.totalArtists ?? musicBrainzOriginStatus?.totalAlbumArtists ?? 0,
+        eligibleCount: musicBrainzOriginProgress?.eligibleCount ?? 0,
+        processedCount: musicBrainzOriginProgress?.processedCount ?? 0,
+        remainingCount: musicBrainzOriginProgress?.remainingCount ?? 0,
+        fetchedCount: musicBrainzOriginProgress?.fetchedCount ?? 0,
+        storedCount: musicBrainzOriginProgress?.storedCount ?? 0,
+        skippedCount: musicBrainzOriginProgress?.skippedCount ?? 0,
+        unresolvedCount: musicBrainzOriginProgress?.unresolvedCount ?? 0,
+        failedCount: musicBrainzOriginProgress?.failedCount ?? 1,
+        percent: musicBrainzOriginProgress?.percent ?? 0,
+        currentArtist: musicBrainzOriginProgress?.currentArtist ?? null,
+        currentArtistKey: musicBrainzOriginProgress?.currentArtistKey ?? null,
+        currentMbid: musicBrainzOriginProgress?.currentMbid ?? null,
+        message,
+      };
+      setMusicBrainzOriginProgress(failedProgress);
+      setMusicBrainzOriginLog((previous) => [failedProgress, ...previous].slice(0, 80));
     } finally {
       setIsMusicBrainzOriginImporting(false);
     }
@@ -6417,6 +6511,15 @@ export default function App() {
 
   async function cancelMusicBrainzOriginImport() {
     try {
+      setMusicBrainzOriginProgress((current) =>
+        current
+          ? {
+              ...current,
+              status: "cancelling",
+              message: "Cancellation requested. Waiting for the current MusicBrainz request to finish.",
+            }
+          : current,
+      );
       await cancelMusicBrainzOriginCountryImport();
     } catch (error) {
       setMusicBrainzOriginError(error instanceof Error ? error.message : String(error));
@@ -9182,105 +9285,175 @@ export default function App() {
                 <UsersRound size={18} />
               </div>
 
-              <div className="musicbrainz-toolbar">
-                <button
-                  className="secondary-button"
-                  type="button"
-                  disabled={isMusicBrainzOriginPreviewing || isMusicBrainzOriginImporting}
-                  onClick={() => void previewMusicBrainzOriginCountries()}
-                >
-                  <FileSearch size={16} />
-                  <span>{isMusicBrainzOriginPreviewing ? "Previewing" : "Preview"}</span>
-                </button>
-                <button
-                  className="primary-button"
-                  type="button"
-                  disabled={isMusicBrainzOriginPreviewing || isMusicBrainzOriginImporting}
-                  onClick={() => void runMusicBrainzOriginCountryImport()}
-                >
-                  <CloudDownload size={16} />
-                  <span>{isMusicBrainzOriginImporting ? "Importing" : "Import origins"}</span>
-                </button>
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Cancel MusicBrainz origin import"
-                  disabled={!isMusicBrainzOriginImporting}
-                  onClick={() => void cancelMusicBrainzOriginImport()}
-                >
-                  <X size={18} />
-                </button>
-              </div>
+              <div className="musicbrainz-origin-grid">
+                <div className="musicbrainz-origin-workflow">
+                  <div className="musicbrainz-toolbar">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={isMusicBrainzOriginPreviewing || isMusicBrainzOriginImporting}
+                      onClick={() => void previewMusicBrainzOriginCountries()}
+                    >
+                      <FileSearch size={16} />
+                      <span>{isMusicBrainzOriginPreviewing ? "Previewing" : "Preview"}</span>
+                    </button>
+                    <button
+                      className="primary-button"
+                      type="button"
+                      disabled={isMusicBrainzOriginPreviewing || isMusicBrainzOriginImporting}
+                      onClick={() => void runMusicBrainzOriginCountryImport()}
+                    >
+                      <CloudDownload size={16} />
+                      <span>{isMusicBrainzOriginImporting ? "Importing" : "Import origins"}</span>
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label="Cancel MusicBrainz origin import"
+                      disabled={!isMusicBrainzOriginImporting}
+                      onClick={() => void cancelMusicBrainzOriginImport()}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
 
-              {musicBrainzOriginError ? <p className="error-message">{musicBrainzOriginError}</p> : null}
+                  {musicBrainzOriginError ? <p className="error-message">{musicBrainzOriginError}</p> : null}
 
-              {musicBrainzOriginStatus ? (
-                <dl className="performance-summary musicbrainz-summary">
-                  <div>
-                    <dt>Countries</dt>
-                    <dd>{formatNumber(musicBrainzOriginStatus.countryCount)}</dd>
-                  </div>
-                  <div>
-                    <dt>Manual</dt>
-                    <dd>{formatNumber(musicBrainzOriginStatus.manualOrigins)}</dd>
-                  </div>
-                  <div>
-                    <dt>Unresolved</dt>
-                    <dd>{formatNumber(musicBrainzOriginStatus.unresolvedOrigins)}</dd>
-                  </div>
-                  <div>
-                    <dt>Missing</dt>
-                    <dd>{formatNumber(musicBrainzOriginStatus.missingOrigins)}</dd>
-                  </div>
-                  <div>
-                    <dt>Last run</dt>
-                    <dd>{musicBrainzOriginStatus.lastRun ? formatDate(musicBrainzOriginStatus.lastRun.completedAt) : "Not yet"}</dd>
-                  </div>
-                  <div>
-                    <dt>Status</dt>
-                    <dd>{musicBrainzOriginStatus.lastRun?.status ?? "Idle"}</dd>
-                  </div>
-                </dl>
-              ) : null}
-
-              {musicBrainzOriginImportSummary ? (
-                <div className="export-result">
-                  <Check size={17} />
-                  <span>
-                    {formatNumber(musicBrainzOriginImportSummary.fetchedCount)} fetched /{" "}
-                    {formatNumber(musicBrainzOriginImportSummary.storedCount)} stored /{" "}
-                    {formatNumber(musicBrainzOriginImportSummary.unresolvedCount)} unresolved
-                  </span>
-                </div>
-              ) : null}
-
-              {musicBrainzOriginPreview ? (
-                <div className="musicbrainz-warning-list">
-                  {musicBrainzOriginPreview.rows.slice(0, 8).map((row) => (
-                    <article key={row.localArtistKey}>
+                  {musicBrainzOriginStatus ? (
+                    <dl className="performance-summary musicbrainz-summary">
                       <div>
-                        <strong>{row.displayArtist}</strong>
-                        <span>{row.musicbrainzMbid ?? row.skippedReason ?? "No MBID"}</span>
+                        <dt>Countries</dt>
+                        <dd>{formatNumber(musicBrainzOriginStatus.countryCount)}</dd>
                       </div>
-                      <dl>
-                        <div>
-                          <dt>Status</dt>
-                          <dd>{row.status}</dd>
-                        </div>
-                        <div>
-                          <dt>Country</dt>
-                          <dd>{row.existingCountryName ?? row.existingCountryCode ?? "Missing"}</dd>
-                        </div>
-                      </dl>
-                    </article>
-                  ))}
+                      <div>
+                        <dt>Manual</dt>
+                        <dd>{formatNumber(musicBrainzOriginStatus.manualOrigins)}</dd>
+                      </div>
+                      <div>
+                        <dt>Unresolved</dt>
+                        <dd>{formatNumber(musicBrainzOriginStatus.unresolvedOrigins)}</dd>
+                      </div>
+                      <div>
+                        <dt>Missing</dt>
+                        <dd>{formatNumber(musicBrainzOriginStatus.missingOrigins)}</dd>
+                      </div>
+                      <div>
+                        <dt>Last run</dt>
+                        <dd>
+                          {musicBrainzOriginStatus.lastRun
+                            ? formatDate(musicBrainzOriginStatus.lastRun.completedAt)
+                            : "Not yet"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Status</dt>
+                        <dd>{musicBrainzOriginStatus.lastRun?.status ?? "Idle"}</dd>
+                      </div>
+                    </dl>
+                  ) : null}
+
+                  {musicBrainzOriginImportSummary ? (
+                    <div className="export-result">
+                      <Check size={17} />
+                      <span>
+                        {formatNumber(musicBrainzOriginImportSummary.fetchedCount)} fetched /{" "}
+                        {formatNumber(musicBrainzOriginImportSummary.storedCount)} stored /{" "}
+                        {formatNumber(musicBrainzOriginImportSummary.unresolvedCount)} unresolved
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
-              ) : (
-                <div className="empty-state">
-                  <FileSearch size={20} />
-                  <span>No origin preview yet.</span>
-                </div>
-              )}
+
+                <aside className="musicbrainz-origin-live-panel" aria-live="polite">
+                  <div className="musicbrainz-origin-live-heading">
+                    <div>
+                      <h3>Live import</h3>
+                      <p>{musicBrainzOriginProgress?.message ?? "Idle"}</p>
+                    </div>
+                    <span
+                      className={`run-status run-status-${(musicBrainzOriginProgress?.status ?? "idle").toLowerCase()}`}
+                    >
+                      {originImportStatusLabel(musicBrainzOriginProgress?.status)}
+                    </span>
+                  </div>
+
+                  <div className="progress-block musicbrainz-origin-progress-block">
+                    <div className="progress-row">
+                      <span>
+                        {formatNumber(musicBrainzOriginProgress?.processedCount ?? 0)} done /{" "}
+                        {formatNumber(musicBrainzOriginProgress?.remainingCount ?? 0)} left
+                      </span>
+                      <strong>{formatPercent(musicBrainzOriginProgressPercent / 100, 0) || "0%"}</strong>
+                    </div>
+                    <div className="progress-track">
+                      <div className="progress-fill" style={{ width: `${musicBrainzOriginProgressPercent}%` }} />
+                    </div>
+                    <div className="progress-meta">
+                      <span>{formatNumber(musicBrainzOriginProgress?.eligibleCount ?? 0)} eligible</span>
+                      <span>{formatNumber(musicBrainzOriginProgress?.totalArtists ?? 0)} artists total</span>
+                    </div>
+                  </div>
+
+                  <dl className="musicbrainz-origin-live-stats">
+                    <div>
+                      <dt>Succeeded</dt>
+                      <dd>{formatNumber(musicBrainzOriginProgress?.storedCount ?? 0)}</dd>
+                    </div>
+                    <div>
+                      <dt>Skipped</dt>
+                      <dd>{formatNumber(musicBrainzOriginProgress?.skippedCount ?? 0)}</dd>
+                    </div>
+                    <div>
+                      <dt>Unresolved</dt>
+                      <dd>{formatNumber(musicBrainzOriginProgress?.unresolvedCount ?? 0)}</dd>
+                    </div>
+                    <div>
+                      <dt>Failed</dt>
+                      <dd>{formatNumber(musicBrainzOriginProgress?.failedCount ?? 0)}</dd>
+                    </div>
+                  </dl>
+
+                  {musicBrainzOriginLog.length > 0 ? (
+                    <div className="musicbrainz-origin-log">
+                      {musicBrainzOriginLog.map((entry, index) => (
+                        <article key={`${entry.status}-${entry.processedCount}-${entry.currentArtistKey ?? index}`}>
+                          <div>
+                            <strong>{originImportStatusLabel(entry.status)}</strong>
+                            <span>{entry.currentArtist ?? entry.currentMbid ?? "Origin importer"}</span>
+                          </div>
+                          <small>{entry.message}</small>
+                        </article>
+                      ))}
+                    </div>
+                  ) : musicBrainzOriginPreview ? (
+                    <div className="musicbrainz-warning-list musicbrainz-origin-preview-list">
+                      {musicBrainzOriginPreview.rows.slice(0, 8).map((row) => (
+                        <article key={row.localArtistKey}>
+                          <div>
+                            <strong>{row.displayArtist}</strong>
+                            <span>{row.musicbrainzMbid ?? row.skippedReason ?? "No MBID"}</span>
+                          </div>
+                          <dl>
+                            <div>
+                              <dt>Status</dt>
+                              <dd>{row.status}</dd>
+                            </div>
+                            <div>
+                              <dt>Country</dt>
+                              <dd>{row.existingCountryName ?? row.existingCountryCode ?? "Missing"}</dd>
+                            </div>
+                          </dl>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="empty-state">
+                      <FileSearch size={20} />
+                      <span>No origin preview yet.</span>
+                    </div>
+                  )}
+                </aside>
+              </div>
             </section>
 
             <section className="settings-panel musicbrainz-sync-settings-panel">

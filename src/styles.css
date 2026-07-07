@@ -3111,6 +3111,10 @@ button {
   grid-column: span 2;
 }
 
+.musicbrainz-origin-settings-panel {
+  grid-column: span 2;
+}
+
 .musicbrainz-sync-settings-panel {
   grid-column: span 2;
 }
@@ -3178,6 +3182,144 @@ button {
 
 .musicbrainz-cache-path {
   min-width: 0;
+}
+
+.musicbrainz-origin-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.92fr) minmax(420px, 1.08fr);
+  align-items: start;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.musicbrainz-origin-workflow {
+  min-width: 0;
+}
+
+.musicbrainz-origin-live-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid #d4e4df;
+  border-radius: 8px;
+  background: #f7fbfa;
+  padding: 12px;
+}
+
+.musicbrainz-origin-live-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.musicbrainz-origin-live-heading h3 {
+  margin: 0;
+  color: #16231f;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 780;
+}
+
+.musicbrainz-origin-live-heading p {
+  margin: 3px 0 0;
+  color: #53635e;
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.musicbrainz-origin-progress-block {
+  margin: 0;
+  background: #ffffff;
+}
+
+.musicbrainz-origin-live-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.musicbrainz-origin-live-stats div {
+  min-width: 0;
+  border: 1px solid #dce7e3;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px 10px;
+}
+
+.musicbrainz-origin-live-stats dt {
+  color: #0b625c;
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.musicbrainz-origin-live-stats dd {
+  margin: 3px 0 0;
+  color: #17211e;
+  font-size: 15px;
+  line-height: 19px;
+  font-weight: 780;
+}
+
+.musicbrainz-origin-log {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.musicbrainz-origin-log article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid #dce7e3;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 9px 10px;
+}
+
+.musicbrainz-origin-log article > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.musicbrainz-origin-log strong {
+  color: #0b625c;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 780;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.musicbrainz-origin-log span,
+.musicbrainz-origin-log small {
+  min-width: 0;
+  color: #53635e;
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.musicbrainz-origin-log span {
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.musicbrainz-origin-preview-list {
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .musicbrainz-sync-path {
@@ -3839,6 +3981,10 @@ button {
 :root[data-theme="dark"] .result-table-row,
 :root[data-theme="dark"] .stats-table-row,
 :root[data-theme="dark"] .empty-state,
+:root[data-theme="dark"] .musicbrainz-origin-live-panel,
+:root[data-theme="dark"] .musicbrainz-origin-progress-block,
+:root[data-theme="dark"] .musicbrainz-origin-live-stats div,
+:root[data-theme="dark"] .musicbrainz-origin-log article,
 :root[data-theme="dark"] .saved-search > button:first-child,
 :root[data-theme="dark"] .export-grid button,
 :root[data-theme="dark"] .export-strip button {
@@ -3906,7 +4052,9 @@ button {
 :root[data-theme="dark"] .outlier-stat strong,
 :root[data-theme="dark"] .burndown-summary strong,
 :root[data-theme="dark"] .rank-metric strong,
-:root[data-theme="dark"] .setting-toggle strong {
+:root[data-theme="dark"] .setting-toggle strong,
+:root[data-theme="dark"] .musicbrainz-origin-live-heading h3,
+:root[data-theme="dark"] .musicbrainz-origin-live-stats dd {
   color: #f3f8f6;
 }
 
@@ -3917,7 +4065,10 @@ button {
 :root[data-theme="dark"] .musicbrainz-warning-list,
 :root[data-theme="dark"] .musicbrainz-warning-list article,
 :root[data-theme="dark"] .musicbrainz-artist-meta span,
-:root[data-theme="dark"] .musicbrainz-artist-meta a {
+:root[data-theme="dark"] .musicbrainz-artist-meta a,
+:root[data-theme="dark"] .musicbrainz-origin-preview-list,
+:root[data-theme="dark"] .musicbrainz-origin-log article,
+:root[data-theme="dark"] .musicbrainz-origin-live-stats div {
   border-color: #2f3d38;
 }
 
@@ -3928,12 +4079,14 @@ button {
 :root[data-theme="dark"] .performance-probe-row dd,
 :root[data-theme="dark"] .musicbrainz-quality-grid dd,
 :root[data-theme="dark"] .musicbrainz-warning-list strong,
-:root[data-theme="dark"] .musicbrainz-warning-list dd {
+:root[data-theme="dark"] .musicbrainz-warning-list dd,
+:root[data-theme="dark"] .musicbrainz-origin-log strong {
   color: #eef7f4;
 }
 
 :root[data-theme="dark"] .performance-summary div,
-:root[data-theme="dark"] .musicbrainz-quality-grid div {
+:root[data-theme="dark"] .musicbrainz-quality-grid div,
+:root[data-theme="dark"] .musicbrainz-origin-live-stats div {
   border-color: #35433e;
   background: #111815;
 }
@@ -3948,6 +4101,9 @@ button {
 :root[data-theme="dark"] .layout-setting > span,
 :root[data-theme="dark"] .performance-toolbar > span,
 :root[data-theme="dark"] .performance-database-path,
+:root[data-theme="dark"] .musicbrainz-origin-live-heading p,
+:root[data-theme="dark"] .musicbrainz-origin-log span,
+:root[data-theme="dark"] .musicbrainz-origin-log small,
 :root[data-theme="dark"] .source-input span,
 :root[data-theme="dark"] .chart-template-panel small,
 :root[data-theme="dark"] .chart-list-row p,
@@ -4493,6 +4649,10 @@ button {
     flex-direction: column;
   }
 
+  .musicbrainz-origin-grid {
+    grid-template-columns: 1fr;
+  }
+
   .export-strip {
     justify-content: flex-start;
   }
@@ -4731,12 +4891,17 @@ button {
   .backup-settings-panel,
   .performance-settings-panel,
   .musicbrainz-settings-panel,
+  .musicbrainz-origin-settings-panel,
   .musicbrainz-sync-settings-panel {
     grid-column: span 1;
   }
 
   .stats-panel.wide {
     grid-column: span 1;
+  }
+
+  .musicbrainz-origin-live-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .discovery-panel.wide,

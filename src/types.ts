@@ -287,6 +287,24 @@ export type MusicBrainzOriginCountryImportSummary = {
   rows: MusicBrainzOriginCountryPreviewRow[];
 };
 
+export type MusicBrainzOriginCountryImportProgress = {
+  status: string;
+  totalArtists: number;
+  eligibleCount: number;
+  processedCount: number;
+  remainingCount: number;
+  fetchedCount: number;
+  storedCount: number;
+  skippedCount: number;
+  unresolvedCount: number;
+  failedCount: number;
+  percent: number;
+  currentArtist: string | null;
+  currentArtistKey: string | null;
+  currentMbid: string | null;
+  message: string;
+};
+
 export type MusicBrainzReleaseDecision = "not-in-scope" | "ignored" | "include" | "auto-not-official" | null;
 
 export type MusicBrainzArtistReleaseRow = {

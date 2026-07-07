@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.42.1] - 2026-07-07
+### Added
+- Added live MusicBrainz Origin Countries import progress with done/left/succeeded/skipped/unresolved/failed counters and a recent activity log in Settings.
+- Added a web-preview simulation for the Origin Countries progress stream.
+
+### Changed
+- Bumped synchronized app metadata to `0.42.1`.
+
 ## [0.42.0] - 2026-07-07
 ### Added
 - Added SQLite schema version 17 with app-owned MusicBrainz origin-country tables and import-run logging.

@@ -4,10 +4,10 @@ use crate::models::{
     MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
     MusicBrainzArtistExportRow, MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginImportRun,
     MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzArtistReleaseRow,
-    MusicBrainzCacheStatus, MusicBrainzCacheWarningExample, MusicBrainzOriginCountryImportRequest,
-    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
-    MusicBrainzOriginCountryPreviewRow, MusicBrainzOriginCountryStatus,
-    MusicBrainzReleaseDecisionRequest,
+    MusicBrainzCacheStatus, MusicBrainzCacheWarningExample, MusicBrainzOriginCountryImportProgress,
+    MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
+    MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryPreviewRow,
+    MusicBrainzOriginCountryStatus, MusicBrainzReleaseDecisionRequest,
 };
 #[cfg(not(test))]
 use crate::musicbrainz_sync;
@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 #[cfg(not(test))]
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DEFAULT_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
@@ -38,7 +38,7 @@ const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.42.0 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.42.1 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 const MUSICBRAINZ_RATE_LIMIT_DELAY_MS: u64 = 1100;
@@ -84,18 +84,30 @@ pub fn import_origin_countries_for_app(
     ORIGIN_COUNTRY_IMPORT_CANCELLED.store(false, Ordering::SeqCst);
     let (conn, _) = db::open(app)?;
     let settings = db::settings_for_app(app)?;
+    let progress_callback = |progress: MusicBrainzOriginCountryImportProgress| {
+        emit_origin_country_import_progress(app, progress);
+    };
     let summary = import_origin_countries_for_connection(
         &conn,
         Some(settings.musicbrainz_cache_path),
         request,
         fetch_artist_origin,
         true,
+        Some(&progress_callback),
     )?;
     Ok(summary)
 }
 
 pub fn cancel_origin_country_import() {
     ORIGIN_COUNTRY_IMPORT_CANCELLED.store(true, Ordering::SeqCst);
+}
+
+#[cfg(not(test))]
+fn emit_origin_country_import_progress(
+    app: &AppHandle,
+    progress: MusicBrainzOriginCountryImportProgress,
+) {
+    let _ = app.emit("musicbrainz-origin-country-import-progress", progress);
 }
 
 #[cfg(not(test))]
@@ -622,11 +634,28 @@ fn import_origin_countries_for_connection<F>(
     request: MusicBrainzOriginCountryImportRequest,
     fetcher: F,
     pace_requests: bool,
+    progress_callback: Option<&dyn Fn(MusicBrainzOriginCountryImportProgress)>,
 ) -> Result<MusicBrainzOriginCountryImportSummary>
 where
     F: Fn(&str) -> Result<MusicBrainzArtistLookupResponse>,
 {
     db::ensure_musicbrainz_origin_country_tables(conn)?;
+    emit_origin_country_progress(
+        progress_callback,
+        origin_country_progress(
+            "preparing",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            None,
+            "Preparing MusicBrainz origin-country import.".to_string(),
+        ),
+    );
     let preview = preview_origin_country_import_for_connection(conn, cache_path, &request)?;
     let eligible_rows = preview
         .rows
@@ -649,11 +678,32 @@ where
     let mut fetched_count = 0i64;
     let mut stored_count = 0i64;
     let skipped_count = (preview.rows.len() as i64).saturating_sub(selected_count as i64);
+    let mut processed_count = 0i64;
     let mut unresolved_count = 0i64;
     let mut failed_count = 0i64;
     let mut cancelled = false;
     let mut error_summary: Option<String> = None;
     let now = Utc::now().to_rfc3339();
+
+    emit_origin_country_progress(
+        progress_callback,
+        origin_country_progress(
+            "running",
+            preview.total_album_artists,
+            selected_count as i64,
+            processed_count,
+            fetched_count,
+            stored_count,
+            skipped_count,
+            unresolved_count,
+            failed_count,
+            None,
+            format!(
+                "Ready to fetch {selected_count} eligible artists; {} skipped by preview rules.",
+                skipped_count
+            ),
+        ),
+    );
 
     for (index, row) in eligible_rows.into_iter().take(selected_count).enumerate() {
         if ORIGIN_COUNTRY_IMPORT_CANCELLED.load(Ordering::SeqCst) {
@@ -665,15 +715,51 @@ where
             .musicbrainz_mbid
             .as_deref()
             .context("Eligible origin-country row was missing a MusicBrainz MBID")?;
-        match fetcher(mbid) {
+        emit_origin_country_progress(
+            progress_callback,
+            origin_country_progress(
+                "fetching",
+                preview.total_album_artists,
+                selected_count as i64,
+                processed_count,
+                fetched_count,
+                stored_count,
+                skipped_count,
+                unresolved_count,
+                failed_count,
+                Some(&row),
+                format!("Fetching {} from MusicBrainz.", row.display_artist),
+            ),
+        );
+
+        let (event_status, event_message) = match fetcher(mbid) {
             Ok(payload) => {
                 fetched_count += 1;
                 let evidence = derive_origin_country(&payload);
-                if evidence.country_code.is_some() {
+                let event = if evidence.country_code.is_some() {
                     stored_count += 1;
+                    (
+                        "stored",
+                        format!(
+                            "Stored {} for {}.",
+                            evidence
+                                .country_name
+                                .as_deref()
+                                .or(evidence.country_code.as_deref())
+                                .unwrap_or("origin country"),
+                            row.display_artist
+                        ),
+                    )
                 } else {
                     unresolved_count += 1;
-                }
+                    (
+                        "unresolved",
+                        format!(
+                            "{} did not return a usable country; saved as unresolved.",
+                            row.display_artist
+                        ),
+                    )
+                };
                 save_origin_country_evidence(
                     conn,
                     &row.local_artist_key,
@@ -682,14 +768,18 @@ where
                     &evidence,
                     &now,
                 )?;
+                event
             }
             Err(error) => {
                 failed_count += 1;
+                let event_message = format!("Failed {}: {error}", row.display_artist);
                 if error_summary.is_none() {
                     error_summary = Some(format!("{}: {error}", row.display_artist));
                 }
+                ("artistFailed", event_message)
             }
-        }
+        };
+        processed_count += 1;
 
         update_origin_country_import_run_progress(
             conn,
@@ -700,6 +790,22 @@ where
             failed_count,
             Some(&row.local_artist_key),
         )?;
+        emit_origin_country_progress(
+            progress_callback,
+            origin_country_progress(
+                event_status,
+                preview.total_album_artists,
+                selected_count as i64,
+                processed_count,
+                fetched_count,
+                stored_count,
+                skipped_count,
+                unresolved_count,
+                failed_count,
+                Some(&row),
+                event_message,
+            ),
+        );
 
         if pace_requests && index + 1 < selected_count {
             thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
@@ -723,6 +829,29 @@ where
         failed_count,
         error_summary.as_deref(),
     )?;
+    emit_origin_country_progress(
+        progress_callback,
+        origin_country_progress(
+            status,
+            preview.total_album_artists,
+            selected_count as i64,
+            processed_count,
+            fetched_count,
+            stored_count,
+            skipped_count,
+            unresolved_count,
+            failed_count,
+            None,
+            origin_country_final_progress_message(
+                status,
+                processed_count,
+                stored_count,
+                skipped_count,
+                unresolved_count,
+                failed_count,
+            ),
+        ),
+    );
     let run = last_origin_country_import_run(conn)?
         .context("Completed MusicBrainz origin-country import run was not found")?;
 
@@ -738,6 +867,80 @@ where
         cancelled,
         rows: preview.rows,
     })
+}
+
+fn emit_origin_country_progress(
+    progress_callback: Option<&dyn Fn(MusicBrainzOriginCountryImportProgress)>,
+    progress: MusicBrainzOriginCountryImportProgress,
+) {
+    if let Some(callback) = progress_callback {
+        callback(progress);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn origin_country_progress(
+    status: &str,
+    total_artists: i64,
+    eligible_count: i64,
+    processed_count: i64,
+    fetched_count: i64,
+    stored_count: i64,
+    skipped_count: i64,
+    unresolved_count: i64,
+    failed_count: i64,
+    row: Option<&MusicBrainzOriginCountryPreviewRow>,
+    message: String,
+) -> MusicBrainzOriginCountryImportProgress {
+    let remaining_count = eligible_count.saturating_sub(processed_count);
+    let percent = if eligible_count <= 0 {
+        if matches!(status, "completed" | "completed_with_errors" | "cancelled") {
+            100.0
+        } else {
+            0.0
+        }
+    } else {
+        (processed_count as f64 / eligible_count as f64 * 100.0).clamp(0.0, 100.0)
+    };
+
+    MusicBrainzOriginCountryImportProgress {
+        status: status.to_string(),
+        total_artists,
+        eligible_count,
+        processed_count,
+        remaining_count,
+        fetched_count,
+        stored_count,
+        skipped_count,
+        unresolved_count,
+        failed_count,
+        percent,
+        current_artist: row.map(|value| value.display_artist.clone()),
+        current_artist_key: row.map(|value| value.local_artist_key.clone()),
+        current_mbid: row.and_then(|value| value.musicbrainz_mbid.clone()),
+        message,
+    }
+}
+
+fn origin_country_final_progress_message(
+    status: &str,
+    processed_count: i64,
+    stored_count: i64,
+    skipped_count: i64,
+    unresolved_count: i64,
+    failed_count: i64,
+) -> String {
+    match status {
+        "cancelled" => format!(
+            "Import cancelled after {processed_count} artists; {stored_count} succeeded, {unresolved_count} unresolved, {failed_count} failed, {skipped_count} skipped."
+        ),
+        "completed_with_errors" => format!(
+            "Import completed with {failed_count} failures; {stored_count} succeeded, {unresolved_count} unresolved, {skipped_count} skipped."
+        ),
+        _ => format!(
+            "Import completed: {stored_count} succeeded, {unresolved_count} unresolved, {failed_count} failed, {skipped_count} skipped."
+        ),
+    }
 }
 
 #[cfg(not(test))]

@@ -352,6 +352,26 @@ pub struct MusicBrainzOriginCountryImportSummary {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MusicBrainzOriginCountryImportProgress {
+    pub status: String,
+    pub total_artists: i64,
+    pub eligible_count: i64,
+    pub processed_count: i64,
+    pub remaining_count: i64,
+    pub fetched_count: i64,
+    pub stored_count: i64,
+    pub skipped_count: i64,
+    pub unresolved_count: i64,
+    pub failed_count: i64,
+    pub percent: f64,
+    pub current_artist: Option<String>,
+    pub current_artist_key: Option<String>,
+    pub current_mbid: Option<String>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MusicBrainzCacheWarningExample {
     pub mbid: String,
     pub cached_name_count: i64,

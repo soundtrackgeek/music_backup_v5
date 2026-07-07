@@ -3,7 +3,7 @@
 Last updated: 2026-07-07
 Status: Living product and implementation contract
 Current implementation: Phase 30 MusicBrainz artist origin-country slice complete locally
-Current package version: 0.42.0
+Current package version: 0.42.1
 SQLite schema version: 17
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -728,6 +728,7 @@ Implemented in 0.42.0:
 
 - SQLite schema version 17 adds `musicbrainz_origin_countries`, `musicbrainz_artist_origin_countries`, and `musicbrainz_artist_origin_import_runs` with local artist key, country code, and MBID indexes.
 - Settings exposes MusicBrainz Origin Countries status, preview, import, and cancel actions. The importer resolves verified artist links first, then high-confidence non-suspect cache matches, fetches artist country/area data explicitly, and logs skipped, unresolved, failed, and last-processed rows.
+- Version 0.42.1 adds live Settings import telemetry for done/left/succeeded/skipped/unresolved/failed counts, current artist fetches, terminal status, and a bounded recent activity log.
 - The app stores derived `Origin Country` separately from raw MusicBrainz area and begin-area evidence, preserving manual/reviewed rows during re-import.
 - Search and Charts include `originCountryCodes` and `missingOriginCountry` filters, saved-config serialization defaults, local SQLite joins through normalized album-artist keys, optional chart/search export columns, and web-preview mock states.
 - Search, Albums, Artists, Charts, and the selected-artist MusicBrainz panel can display the derived country with raw-area provenance when available.

@@ -44,8 +44,10 @@ import type {
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
   MusicBrainzOriginCountryImportRequest,
+  MusicBrainzOriginCountryImportProgress,
   MusicBrainzOriginCountryImportSummary,
   MusicBrainzOriginCountryPreview,
+  MusicBrainzOriginCountryPreviewRow,
   MusicBrainzOriginCountryStatus,
   MusicBrainzOverlaySyncLogEntry,
   MusicBrainzOverlaySyncResult,
@@ -238,6 +240,48 @@ const mockMusicBrainzOriginPreviewRows = [
     skippedReason: "No high-confidence MusicBrainz artist match.",
   },
 ] satisfies MusicBrainzOriginCountryPreview["rows"];
+
+const mockOriginProgressHandlers = new Set<(progress: MusicBrainzOriginCountryImportProgress) => void>();
+
+function emitMockMusicBrainzOriginProgress(progress: MusicBrainzOriginCountryImportProgress) {
+  for (const handler of mockOriginProgressHandlers) {
+    handler(progress);
+  }
+}
+
+function mockOriginProgress(
+  status: string,
+  totalArtists: number,
+  eligibleCount: number,
+  processedCount: number,
+  fetchedCount: number,
+  storedCount: number,
+  skippedCount: number,
+  unresolvedCount: number,
+  failedCount: number,
+  row: MusicBrainzOriginCountryPreviewRow | null,
+  message: string,
+): MusicBrainzOriginCountryImportProgress {
+  const remainingCount = Math.max(0, eligibleCount - processedCount);
+  const percent = eligibleCount > 0 ? Math.min(100, Math.max(0, (processedCount / eligibleCount) * 100)) : 0;
+  return {
+    status,
+    totalArtists,
+    eligibleCount,
+    processedCount,
+    remainingCount,
+    fetchedCount,
+    storedCount,
+    skippedCount,
+    unresolvedCount,
+    failedCount,
+    percent,
+    currentArtist: row?.displayArtist ?? null,
+    currentArtistKey: row?.localArtistKey ?? null,
+    currentMbid: row?.musicbrainzMbid ?? null,
+    message,
+  };
+}
 
 const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyResponse> = {
   "pet shop boys": {
@@ -2160,24 +2204,102 @@ export async function previewMusicBrainzOriginCountryImport(request: MusicBrainz
 export async function importMusicBrainzOriginCountries(request: MusicBrainzOriginCountryImportRequest = {}) {
   if (!isTauriRuntime()) {
     const preview = mockOriginPreview(request);
-    const fetchedCount = preview.rows.filter((row) => row.status === "eligible").length;
+    const eligibleRows = preview.rows.filter((row) => row.status === "eligible");
+    const fetchedCount = eligibleRows.length;
+    const skippedCount = Math.max(0, preview.rows.length - eligibleRows.length);
+    let storedCount = 0;
+    let unresolvedCount = 0;
+    emitMockMusicBrainzOriginProgress(
+      mockOriginProgress(
+        "running",
+        preview.totalAlbumArtists,
+        fetchedCount,
+        0,
+        0,
+        0,
+        skippedCount,
+        0,
+        0,
+        null,
+        `Ready to fetch ${fetchedCount} eligible artists; ${skippedCount} skipped by preview rules.`,
+      ),
+    );
+
+    for (const [index, row] of eligibleRows.entries()) {
+      emitMockMusicBrainzOriginProgress(
+        mockOriginProgress(
+          "fetching",
+          preview.totalAlbumArtists,
+          fetchedCount,
+          index,
+          index,
+          storedCount,
+          skippedCount,
+          unresolvedCount,
+          0,
+          row,
+          `Fetching ${row.displayArtist} from MusicBrainz.`,
+        ),
+      );
+      await new Promise((resolve) => window.setTimeout(resolve, 180));
+      const isUnresolved = row.displayArtist === "Dio" && request.refetch;
+      if (isUnresolved) {
+        unresolvedCount += 1;
+      } else {
+        storedCount += 1;
+      }
+      emitMockMusicBrainzOriginProgress(
+        mockOriginProgress(
+          isUnresolved ? "unresolved" : "stored",
+          preview.totalAlbumArtists,
+          fetchedCount,
+          index + 1,
+          index + 1,
+          storedCount,
+          skippedCount,
+          unresolvedCount,
+          0,
+          row,
+          isUnresolved
+            ? `${row.displayArtist} did not return a usable country; saved as unresolved.`
+            : `Stored ${row.existingCountryName ?? "origin country"} for ${row.displayArtist}.`,
+        ),
+      );
+    }
+
+    emitMockMusicBrainzOriginProgress(
+      mockOriginProgress(
+        "completed",
+        preview.totalAlbumArtists,
+        fetchedCount,
+        fetchedCount,
+        fetchedCount,
+        storedCount,
+        skippedCount,
+        unresolvedCount,
+        0,
+        null,
+        `Import completed: ${storedCount} succeeded, ${unresolvedCount} unresolved, 0 failed, ${skippedCount} skipped.`,
+      ),
+    );
+
     return {
       run: {
         ...mockMusicBrainzOriginRun,
         id: mockMusicBrainzOriginRun.id + 1,
         eligibleCount: fetchedCount,
         fetchedCount,
-        skippedCount: preview.skippedCount,
-        unresolvedCount: preview.unresolvedCount,
+        skippedCount,
+        unresolvedCount,
         startedAt: new Date().toISOString(),
         completedAt: new Date().toISOString(),
       },
       totalAlbumArtists: preview.totalAlbumArtists,
       eligibleCount: fetchedCount,
       fetchedCount,
-      storedCount: Math.max(0, fetchedCount - preview.unresolvedCount),
-      skippedCount: preview.skippedCount,
-      unresolvedCount: preview.unresolvedCount,
+      storedCount,
+      skippedCount,
+      unresolvedCount,
       failedCount: 0,
       cancelled: false,
       rows: preview.rows,
@@ -2909,6 +3031,21 @@ export async function listenToCoverImportProgress(handler: (progress: CoverImpor
   }
 
   return listen<CoverImportProgress>("cover-import-progress", (event) => {
+    handler(event.payload);
+  });
+}
+
+export async function listenToMusicBrainzOriginCountryImportProgress(
+  handler: (progress: MusicBrainzOriginCountryImportProgress) => void,
+) {
+  if (!isTauriRuntime()) {
+    mockOriginProgressHandlers.add(handler);
+    return (() => {
+      mockOriginProgressHandlers.delete(handler);
+    }) satisfies UnlistenFn;
+  }
+
+  return listen<MusicBrainzOriginCountryImportProgress>("musicbrainz-origin-country-import-progress", (event) => {
     handler(event.payload);
   });
 }
