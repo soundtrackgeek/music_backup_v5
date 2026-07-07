@@ -2285,6 +2285,16 @@ export async function searchLibrary(request: BrowseRequest) {
     const ratedTracksMax = request.filters.ratedTracksMax;
     const yearFrom = request.filters.yearFrom;
     const yearTo = request.filters.yearTo;
+    const releaseYearFrom = request.filters.releaseYearFrom;
+    const releaseYearTo = request.filters.releaseYearTo;
+    const totalMinutesMin = request.filters.totalMinutesMin;
+    const totalMinutesMax = request.filters.totalMinutesMax;
+    const trackCountMin = request.filters.trackCountMin;
+    const trackCountMax = request.filters.trackCountMax;
+    const albumRatingMin = request.filters.albumRatingMin;
+    const albumRatingMax = request.filters.albumRatingMax;
+    const trackRatingMin = request.filters.trackRatingMin;
+    const trackRatingMax = request.filters.trackRatingMax;
     const billboardRankMin = request.filters.billboardRankMin;
     const billboardRankMax = request.filters.billboardRankMax;
     const billboardSingleRankMin = request.filters.billboardSingleRankMin;
@@ -2299,28 +2309,22 @@ export async function searchLibrary(request: BrowseRequest) {
       const genreKey = normalizeGenreKey(row.canonicalGenre);
       const ratedTracks = row.ratedTracks ?? 0;
       const ratingCompleteness = row.ratingCompleteness ?? 0;
-      const lovedTracks = row.lovedTracks ?? 0;
-      const year = row.year ?? 0;
-      const billboardRank = row.billboardRank ?? 0;
-      const billboardSingleRank = row.billboardSingleRank ?? 0;
+      const lovedTracks = isTracks ? (row.love === "L" ? 1 : 0) : (row.lovedTracks ?? 0);
       return (
         matchesView &&
         (albumIds.size === 0 || albumIds.has(row.albumId)) &&
         (artistKeys.size === 0 || artistKeys.has(artistKey)) &&
         (genreKeys.size === 0 || genreKeys.has(genreKey)) &&
         !excludedGenreKeys.has(genreKey) &&
-        (yearFrom == null || year >= yearFrom) &&
-        (yearTo == null || year <= yearTo) &&
-        (billboardRankMin == null || (row.billboardRank != null && billboardRank >= billboardRankMin)) &&
-        (billboardRankMax == null || (row.billboardRank != null && billboardRank <= billboardRankMax)) &&
-        (!isTracks ||
-          billboardSingleRankMin == null ||
-          (row.billboardSingleRank != null && billboardSingleRank >= billboardSingleRankMin)) &&
-        (!isTracks ||
-          billboardSingleRankMax == null ||
-          (row.billboardSingleRank != null && billboardSingleRank <= billboardSingleRankMax)) &&
-        (ratedTracksMin == null || ratedTracks >= ratedTracksMin) &&
-        (ratedTracksMax == null || ratedTracks <= ratedTracksMax) &&
+        matchesNumberRange(row.year, yearFrom, yearTo) &&
+        matchesNumberRange(row.releaseYear, releaseYearFrom, releaseYearTo) &&
+        matchesMinuteRange(isTracks ? row.trackSeconds : row.totalSeconds, totalMinutesMin, totalMinutesMax) &&
+        matchesNumberRange(row.totalTracks, trackCountMin, trackCountMax) &&
+        matchesNumberRange(ratedTracks, ratedTracksMin, ratedTracksMax) &&
+        matchesNumberRange(row.effectiveAlbumRating, albumRatingMin, albumRatingMax) &&
+        matchesTrackRatingRange(row, isTracks, trackRatingMin, trackRatingMax) &&
+        matchesNumberRange(row.billboardRank, billboardRankMin, billboardRankMax) &&
+        (!isTracks || matchesNumberRange(row.billboardSingleRank, billboardSingleRankMin, billboardSingleRankMax)) &&
         (lovedTracksMin == null || lovedTracks >= lovedTracksMin) &&
         (lovedTracksMax == null || lovedTracks <= lovedTracksMax) &&
         (ratingCompletenessMin == null || ratingCompleteness >= ratingCompletenessMin) &&
@@ -2806,6 +2810,55 @@ function normalizePercentFilter(value: number | null | undefined) {
     return null;
   }
   return value > 1 ? Math.min(1, Math.max(0, value / 100)) : Math.min(1, Math.max(0, value));
+}
+
+function matchesNumberRange(
+  value: number | null | undefined,
+  minimum: number | null | undefined,
+  maximum: number | null | undefined,
+) {
+  if (minimum == null && maximum == null) {
+    return true;
+  }
+  if (value == null || !Number.isFinite(value)) {
+    return false;
+  }
+  return (minimum == null || value >= minimum) && (maximum == null || value <= maximum);
+}
+
+function matchesMinuteRange(
+  seconds: number | null | undefined,
+  minimumMinutes: number | null | undefined,
+  maximumMinutes: number | null | undefined,
+) {
+  return matchesNumberRange(
+    seconds,
+    minimumMinutes == null ? null : Math.round(minimumMinutes * 60),
+    maximumMinutes == null ? null : Math.round(maximumMinutes * 60),
+  );
+}
+
+function matchesTrackRatingRange(
+  row: BrowseRow,
+  isTracks: boolean,
+  minimum: number | null | undefined,
+  maximum: number | null | undefined,
+) {
+  if (minimum == null && maximum == null) {
+    return true;
+  }
+
+  const minimumPoints = minimum == null ? null : minimum * 20;
+  const maximumPoints = maximum == null ? null : maximum * 20;
+  if (isTracks) {
+    return matchesNumberRange(row.normalizedRating, minimumPoints, maximumPoints);
+  }
+
+  const albumTracks = mockRows.filter((track) => track.trackId != null && track.albumId === row.albumId);
+  if (albumTracks.length === 0) {
+    return true;
+  }
+  return albumTracks.some((track) => matchesNumberRange(track.normalizedRating, minimumPoints, maximumPoints));
 }
 
 function matchesMissingFields(row: BrowseRow, isTracks: boolean, fields: string[]) {

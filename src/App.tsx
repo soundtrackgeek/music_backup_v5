@@ -7125,10 +7125,30 @@ export default function App() {
                 onChange={(value) => updateChartFilters({ totalMinutesMax: value })}
               />
               <NumberField
+                label="Album rating min"
+                value={chartConfig.request.filters.albumRatingMin}
+                min={0}
+                max={100}
+                onChange={(value) => updateChartFilters({ albumRatingMin: value })}
+              />
+              <NumberField
+                label="Album rating max"
+                value={chartConfig.request.filters.albumRatingMax}
+                min={0}
+                max={100}
+                onChange={(value) => updateChartFilters({ albumRatingMax: value })}
+              />
+              <NumberField
                 label="Loved min"
                 value={chartConfig.request.filters.lovedTracksMin}
                 min={0}
                 onChange={(value) => updateChartFilters({ lovedTracksMin: value })}
+              />
+              <NumberField
+                label="Loved max"
+                value={chartConfig.request.filters.lovedTracksMax}
+                min={0}
+                onChange={(value) => updateChartFilters({ lovedTracksMax: value })}
               />
               <SelectField
                 label="Ranking"
@@ -9404,6 +9424,12 @@ export default function App() {
                 value={currentFilters.lovedTracksMin}
                 min={0}
                 onChange={(value) => updateFilter("lovedTracksMin", value)}
+              />
+              <NumberField
+                label="Loved max"
+                value={currentFilters.lovedTracksMax}
+                min={0}
+                onChange={(value) => updateFilter("lovedTracksMax", value)}
               />
               <TextCriterion
                 label="File path"

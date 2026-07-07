@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.41.0] - 2026-07-07
+### Added
+- Added Album rating min/max and Loved max filters to Charts.
+- Added a Loved max filter to Search, including exact track loved filtering in web preview mode.
+
+### Changed
+- Bumped synchronized app metadata to `0.41.0`.
+
 ## [0.40.0] - 2026-07-07
 ### Added
 - Added Search export controls for adding IDs, cover metadata, and representative album filename/path columns to exported result files.
