@@ -58,6 +58,7 @@ import {
   getDiscovery,
   getMusicBrainzArtistDiscography,
   getMusicBrainzCacheStatus,
+  getMusicBrainzOriginCountryStatus,
   getSettings,
   getStatistics,
   getLibraryStatus,
@@ -65,6 +66,7 @@ import {
   importBillboardCharts,
   importBillboardSingles,
   importMusicBeeTsv,
+  importMusicBrainzOriginCountries,
   isTauriRuntime,
   listDatabaseBackups,
   listArtists,
@@ -84,10 +86,12 @@ import {
   saveChart,
   saveSearch,
   saveSettings,
+  previewMusicBrainzOriginCountryImport,
   refreshMusicBrainzArtistInfo,
   setMusicBrainzArtistLink,
   setMusicBrainzReleaseDecision,
   syncMusicBrainzOverlay,
+  cancelMusicBrainzOriginCountryImport,
   searchLibrary,
   exportMusicToolIssues,
   restoreDatabaseBackup,
@@ -147,6 +151,10 @@ import type {
   MusicBrainzArtistDiscographyResponse,
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
+  MusicBrainzOriginCountryOption,
+  MusicBrainzOriginCountryImportSummary,
+  MusicBrainzOriginCountryPreview,
+  MusicBrainzOriginCountryStatus,
   MusicBrainzOverlaySyncLogEntry,
   MusicBrainzOverlaySyncResult,
   PerformanceProbeResponse,
@@ -194,6 +202,7 @@ import {
   formatHours,
   formatMinutes,
   formatNumber,
+  formatOriginCountry,
   formatPercent,
   formatSignedNumber,
   formatToolCount,
@@ -666,6 +675,56 @@ function GenreListCriterion({
   );
 }
 
+function CountryListCriterion({
+  label,
+  values,
+  onChange,
+  countryOptions,
+  placeholder = "GB, US",
+}: {
+  label: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+  countryOptions: MusicBrainzOriginCountryOption[];
+  placeholder?: string;
+}) {
+  const inputId = useId();
+  const optionsId = `${inputId}-countries`;
+  const [draftValue, setDraftValue] = useState(() => formatList(values));
+
+  useEffect(() => {
+    if (!listsEqual(parseList(draftValue), values)) {
+      setDraftValue(formatList(values));
+    }
+  }, [draftValue, values]);
+
+  function updateDraft(value: string) {
+    setDraftValue(value);
+    onChange(parseList(value).map((code) => code.toUpperCase()));
+  }
+
+  return (
+    <label className="criterion country-list-criterion" htmlFor={inputId}>
+      <span>{label}</span>
+      <input
+        id={inputId}
+        list={optionsId}
+        value={draftValue}
+        onChange={(event) => updateDraft(event.target.value)}
+        onBlur={(event) => setDraftValue(formatList(parseList(event.currentTarget.value).map((code) => code.toUpperCase())))}
+        placeholder={placeholder}
+      />
+      <datalist id={optionsId}>
+        {countryOptions.map((country) => (
+          <option key={country.code} value={country.code}>
+            {country.name}
+          </option>
+        ))}
+      </datalist>
+    </label>
+  );
+}
+
 function NumberField({
   label,
   value,
@@ -932,6 +991,7 @@ function ResultTable({
         <SortableColumnHeader label="Track" field="title" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Artist" field="displayArtist" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Origin" field="originCountry" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Single" field="billboardSingleRank" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Rating" field="trackRating" sort={sort} onSort={onSort} />
@@ -955,6 +1015,7 @@ function ResultTable({
               <AlbumTitleContents row={row} subtitle={row.albumArtistDisplay ?? row.year?.toString() ?? null} />
             </span>
             <span role="cell">{row.displayArtist ?? row.albumArtistDisplay ?? ""}</span>
+            <span role="cell">{formatOriginCountry(row)}</span>
             <span role="cell">{row.year ?? ""}</span>
             <span role="cell">{singleLabel}</span>
             <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
@@ -970,6 +1031,7 @@ function ResultTable({
       <div className="result-table-head" role="row">
         <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Artist" field="artist" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Origin" field="originCountry" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Genre" field="genre" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Tracks" field="trackCount" sort={sort} onSort={onSort} />
@@ -982,6 +1044,7 @@ function ResultTable({
             <AlbumTitleContents row={row} />
           </span>
           <span role="cell">{row.albumArtistDisplay ?? ""}</span>
+          <span role="cell">{formatOriginCountry(row)}</span>
           <span role="cell">{row.year ?? ""}</span>
           <span role="cell">{row.canonicalGenre ?? ""}</span>
           <span role="cell">{row.totalTracks ?? ""}</span>
@@ -1115,6 +1178,7 @@ function AlbumIndexTable({
       <div className="result-table-head" role="row">
         <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Artist" field="artist" sort={sort} onSort={onSort} />
+        <SortableColumnHeader label="Origin" field="originCountry" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Genre" field="genre" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Tracks" field="trackCount" sort={sort} onSort={onSort} />
@@ -1142,6 +1206,7 @@ function AlbumIndexTable({
               <AlbumTitleContents row={row} />
             </span>
             <span role="cell">{row.albumArtistDisplay ?? ""}</span>
+            <span role="cell">{formatOriginCountry(row)}</span>
             <span role="cell">{row.year ?? ""}</span>
             <span role="cell">{row.canonicalGenre ?? ""}</span>
             <span role="cell">{row.totalTracks ?? ""}</span>
@@ -1297,6 +1362,10 @@ function AlbumDetailPanel({
           <dd>{formatBillboardRank(album)}</dd>
         </div>
         <div>
+          <dt>Origin Country</dt>
+          <dd>{formatOriginCountryProvenance(album)}</dd>
+        </div>
+        <div>
           <dt>Publisher</dt>
           <dd>{album.publisher ?? ""}</dd>
         </div>
@@ -1348,6 +1417,12 @@ function formatYearSpan(firstYear: number | null | undefined, lastYear: number |
   return `${firstYear ?? lastYear}`;
 }
 
+function formatOriginCountryProvenance(
+  value: Pick<BrowseRow, "originCountryCode" | "originCountryName" | "originCountryRawArea">,
+) {
+  return formatOriginCountry(value) || "Not imported";
+}
+
 function ArtistIndexTable({
   response,
   selectedArtistId,
@@ -1379,6 +1454,7 @@ function ArtistIndexTable({
     <div className="result-table artist-index-results" role="table">
       <div className="result-table-head" role="row">
         <span role="columnheader">Artist</span>
+        <span role="columnheader">Origin</span>
         <span role="columnheader">Albums</span>
         <span role="columnheader">Years</span>
         <span role="columnheader">Top genre</span>
@@ -1412,6 +1488,7 @@ function ArtistIndexTable({
                 <small>{formatNumber(artist.trackCount)} tracks</small>
               </span>
             </span>
+            <span role="cell">{formatOriginCountry(artist)}</span>
             <span role="cell">{formatNumber(artist.albumCount)}</span>
             <span role="cell">{formatYearSpan(artist.firstYear, artist.lastYear)}</span>
             <span role="cell">{artist.topGenre ?? ""}</span>
@@ -1665,6 +1742,10 @@ function MusicBrainzArtistDiscographyPanel({
             <div>
               <dt>Match</dt>
               <dd>{response.matchMethod}</dd>
+            </div>
+            <div>
+              <dt>Origin</dt>
+              <dd>{formatOriginCountryProvenance(artist)}</dd>
             </div>
           </dl>
 
@@ -2216,6 +2297,10 @@ function ArtistDetailPanel({
         <div>
           <dt>TMOE</dt>
           <dd>{formatMinutes(artist.tmoeSeconds)}</dd>
+        </div>
+        <div>
+          <dt>Origin Country</dt>
+          <dd>{formatOriginCountryProvenance(artist)}</dd>
         </div>
       </dl>
 
@@ -3011,6 +3096,12 @@ function ChartResults({
     { key: "artist", label: "Artist", sortField: "artist", value: (row: BrowseRow) => row.albumArtistDisplay ?? "" },
     { key: "year", label: "Year", sortField: "year", value: (row: BrowseRow) => row.year?.toString() ?? "" },
     { key: "genre", label: "Genre", sortField: "genre", value: (row: BrowseRow) => row.canonicalGenre ?? "" },
+    {
+      key: "originCountry",
+      label: "Origin",
+      sortField: "originCountry",
+      value: (row: BrowseRow) => formatOriginCountry(row),
+    },
     {
       key: "billboard",
       label: "Billboard",
@@ -4220,6 +4311,15 @@ export default function App() {
   const [musicBrainzStatus, setMusicBrainzStatus] = useState<MusicBrainzCacheStatus | null>(null);
   const [musicBrainzStatusError, setMusicBrainzStatusError] = useState<string | null>(null);
   const [isMusicBrainzChecking, setIsMusicBrainzChecking] = useState(false);
+  const [musicBrainzOriginStatus, setMusicBrainzOriginStatus] =
+    useState<MusicBrainzOriginCountryStatus | null>(null);
+  const [musicBrainzOriginPreview, setMusicBrainzOriginPreview] =
+    useState<MusicBrainzOriginCountryPreview | null>(null);
+  const [musicBrainzOriginImportSummary, setMusicBrainzOriginImportSummary] =
+    useState<MusicBrainzOriginCountryImportSummary | null>(null);
+  const [musicBrainzOriginError, setMusicBrainzOriginError] = useState<string | null>(null);
+  const [isMusicBrainzOriginPreviewing, setIsMusicBrainzOriginPreviewing] = useState(false);
+  const [isMusicBrainzOriginImporting, setIsMusicBrainzOriginImporting] = useState(false);
   const [musicBrainzCachePathDraft, setMusicBrainzCachePathDraft] = useState(
     settings.musicBrainzCachePath || defaultMusicBrainzCachePath,
   );
@@ -4266,6 +4366,7 @@ export default function App() {
       nextStatistics,
       nextSettings,
       nextMusicBrainzStatus,
+      nextMusicBrainzOriginStatus,
       nextMusicBrainzOverlaySyncLog,
     ] = await Promise.all([
       getLibraryStatus(),
@@ -4276,6 +4377,7 @@ export default function App() {
       getStatistics(),
       getSettings(),
       getMusicBrainzCacheStatus(),
+      getMusicBrainzOriginCountryStatus(),
       listMusicBrainzOverlaySyncLog(12),
     ]);
     setStatus(nextStatus);
@@ -4308,6 +4410,8 @@ export default function App() {
     setAppUpdateAutoCheckDraft(String(updateAutoCheckMinutesValue(nextSettings.updateAutoCheckMinutes)));
     setMusicBrainzStatus(nextMusicBrainzStatus);
     setMusicBrainzStatusError(null);
+    setMusicBrainzOriginStatus(nextMusicBrainzOriginStatus);
+    setMusicBrainzOriginError(null);
     setMusicBrainzOverlaySyncLog(nextMusicBrainzOverlaySyncLog);
     setMusicBrainzOverlaySyncError(null);
     if (!hasAppliedLayoutDefaults.current) {
@@ -4410,6 +4514,7 @@ export default function App() {
     () => uniqueGenreSuggestionOptions([...genreSuggestionAliases, ...genreSuggestionNames]),
     [genreSuggestionNames],
   );
+  const originCountryOptions = musicBrainzOriginStatus?.countries ?? [];
   const availableSearchExportColumns = useMemo(
     () =>
       searchExportColumnOptions.filter(
@@ -5136,6 +5241,20 @@ export default function App() {
         key: "excludedGenres",
         label: `Excluding: ${currentFilters.excludedGenres.join(", ")}`,
         remove: () => updateFilter("excludedGenres", []),
+      });
+    }
+    if (currentFilters.originCountryCodes.length) {
+      nextChips.push({
+        key: "originCountryCodes",
+        label: `Origin: ${currentFilters.originCountryCodes.join(", ")}`,
+        remove: () => updateFilter("originCountryCodes", []),
+      });
+    }
+    if (currentFilters.missingOriginCountry) {
+      nextChips.push({
+        key: "missingOriginCountry",
+        label: "Missing origin country",
+        remove: () => updateFilter("missingOriginCountry", false),
       });
     }
 
@@ -5977,7 +6096,12 @@ export default function App() {
   }
 
   async function runChartExport(format: string) {
-    const result = await exportSearch(chartRequest, format, chartConfig.exportColumns.length > 0);
+    const result = await exportSearch(
+      chartRequest,
+      format,
+      chartConfig.exportColumns.includes("calculated"),
+      chartConfig.exportColumns,
+    );
     setChartExportResult(result);
   }
 
@@ -6241,6 +6365,61 @@ export default function App() {
       setMusicBrainzStatusError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsMusicBrainzChecking(false);
+    }
+  }
+
+  async function refreshMusicBrainzOriginCountryStatus() {
+    const result = await getMusicBrainzOriginCountryStatus();
+    setMusicBrainzOriginStatus(result);
+    return result;
+  }
+
+  async function previewMusicBrainzOriginCountries() {
+    setIsMusicBrainzOriginPreviewing(true);
+    setMusicBrainzOriginError(null);
+    setMusicBrainzOriginImportSummary(null);
+
+    try {
+      const result = await previewMusicBrainzOriginCountryImport({});
+      setMusicBrainzOriginPreview(result);
+      await refreshMusicBrainzOriginCountryStatus();
+    } catch (error) {
+      setMusicBrainzOriginError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsMusicBrainzOriginPreviewing(false);
+    }
+  }
+
+  async function runMusicBrainzOriginCountryImport() {
+    setIsMusicBrainzOriginImporting(true);
+    setMusicBrainzOriginError(null);
+    setMusicBrainzOriginImportSummary(null);
+
+    try {
+      const result = await importMusicBrainzOriginCountries({});
+      setMusicBrainzOriginImportSummary(result);
+      const preview = await previewMusicBrainzOriginCountryImport({});
+      setMusicBrainzOriginPreview(preview);
+      await refreshMusicBrainzOriginCountryStatus();
+      setRequest((current) => ({ ...current }));
+      setAlbumRequest((current) => ({ ...current }));
+      setChartConfig((current) => ({ ...current }));
+      setArtistRequest((current) => ({ ...current }));
+      setArtistAlbumsResponse(null);
+      setGenreAlbumsResponse(null);
+      setDiscoveryAlbumResponse(null);
+    } catch (error) {
+      setMusicBrainzOriginError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsMusicBrainzOriginImporting(false);
+    }
+  }
+
+  async function cancelMusicBrainzOriginImport() {
+    try {
+      await cancelMusicBrainzOriginCountryImport();
+    } catch (error) {
+      setMusicBrainzOriginError(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -7097,6 +7276,12 @@ export default function App() {
                 genreOptions={genreSuggestionOptions}
                 onRequestOptions={requestGenreSuggestionRefresh}
               />
+              <CountryListCriterion
+                label="Origin countries"
+                values={chartConfig.request.filters.originCountryCodes}
+                onChange={(originCountryCodes) => updateChartFilters({ originCountryCodes })}
+                countryOptions={originCountryOptions}
+              />
               <TextCriterion
                 label="Album artist"
                 filter={chartConfig.request.filters.albumArtist}
@@ -7222,6 +7407,22 @@ export default function App() {
                   onChange={() => toggleChartColumn("calculated", "exportColumns")}
                 />
                 <span>Calculated export columns</span>
+              </label>
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={chartConfig.request.filters.missingOriginCountry}
+                  onChange={(event) => updateChartFilters({ missingOriginCountry: event.target.checked })}
+                />
+                <span>Missing origin country</span>
+              </label>
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={chartConfig.exportColumns.includes("originCountry")}
+                  onChange={() => toggleChartColumn("originCountry", "exportColumns")}
+                />
+                <span>Origin country export column</span>
               </label>
             </div>
           </section>
@@ -8968,6 +9169,120 @@ export default function App() {
               )}
             </section>
 
+            <section className="settings-panel musicbrainz-origin-settings-panel">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>MusicBrainz Origin Countries</h2>
+                  <p>
+                    {musicBrainzOriginStatus
+                      ? `${formatNumber(musicBrainzOriginStatus.importedOrigins)} imported / ${formatNumber(musicBrainzOriginStatus.totalAlbumArtists)} artists`
+                      : "Not checked"}
+                  </p>
+                </div>
+                <UsersRound size={18} />
+              </div>
+
+              <div className="musicbrainz-toolbar">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={isMusicBrainzOriginPreviewing || isMusicBrainzOriginImporting}
+                  onClick={() => void previewMusicBrainzOriginCountries()}
+                >
+                  <FileSearch size={16} />
+                  <span>{isMusicBrainzOriginPreviewing ? "Previewing" : "Preview"}</span>
+                </button>
+                <button
+                  className="primary-button"
+                  type="button"
+                  disabled={isMusicBrainzOriginPreviewing || isMusicBrainzOriginImporting}
+                  onClick={() => void runMusicBrainzOriginCountryImport()}
+                >
+                  <CloudDownload size={16} />
+                  <span>{isMusicBrainzOriginImporting ? "Importing" : "Import origins"}</span>
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Cancel MusicBrainz origin import"
+                  disabled={!isMusicBrainzOriginImporting}
+                  onClick={() => void cancelMusicBrainzOriginImport()}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {musicBrainzOriginError ? <p className="error-message">{musicBrainzOriginError}</p> : null}
+
+              {musicBrainzOriginStatus ? (
+                <dl className="performance-summary musicbrainz-summary">
+                  <div>
+                    <dt>Countries</dt>
+                    <dd>{formatNumber(musicBrainzOriginStatus.countryCount)}</dd>
+                  </div>
+                  <div>
+                    <dt>Manual</dt>
+                    <dd>{formatNumber(musicBrainzOriginStatus.manualOrigins)}</dd>
+                  </div>
+                  <div>
+                    <dt>Unresolved</dt>
+                    <dd>{formatNumber(musicBrainzOriginStatus.unresolvedOrigins)}</dd>
+                  </div>
+                  <div>
+                    <dt>Missing</dt>
+                    <dd>{formatNumber(musicBrainzOriginStatus.missingOrigins)}</dd>
+                  </div>
+                  <div>
+                    <dt>Last run</dt>
+                    <dd>{musicBrainzOriginStatus.lastRun ? formatDate(musicBrainzOriginStatus.lastRun.completedAt) : "Not yet"}</dd>
+                  </div>
+                  <div>
+                    <dt>Status</dt>
+                    <dd>{musicBrainzOriginStatus.lastRun?.status ?? "Idle"}</dd>
+                  </div>
+                </dl>
+              ) : null}
+
+              {musicBrainzOriginImportSummary ? (
+                <div className="export-result">
+                  <Check size={17} />
+                  <span>
+                    {formatNumber(musicBrainzOriginImportSummary.fetchedCount)} fetched /{" "}
+                    {formatNumber(musicBrainzOriginImportSummary.storedCount)} stored /{" "}
+                    {formatNumber(musicBrainzOriginImportSummary.unresolvedCount)} unresolved
+                  </span>
+                </div>
+              ) : null}
+
+              {musicBrainzOriginPreview ? (
+                <div className="musicbrainz-warning-list">
+                  {musicBrainzOriginPreview.rows.slice(0, 8).map((row) => (
+                    <article key={row.localArtistKey}>
+                      <div>
+                        <strong>{row.displayArtist}</strong>
+                        <span>{row.musicbrainzMbid ?? row.skippedReason ?? "No MBID"}</span>
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>Status</dt>
+                          <dd>{row.status}</dd>
+                        </div>
+                        <div>
+                          <dt>Country</dt>
+                          <dd>{row.existingCountryName ?? row.existingCountryCode ?? "Missing"}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <FileSearch size={20} />
+                  <span>No origin preview yet.</span>
+                </div>
+              )}
+            </section>
+
             <section className="settings-panel musicbrainz-sync-settings-panel">
               <div className="panel-heading compact">
                 <div>
@@ -9296,6 +9611,12 @@ export default function App() {
                 genreOptions={genreSuggestionOptions}
                 onRequestOptions={requestGenreSuggestionRefresh}
               />
+              <CountryListCriterion
+                label="Origin countries"
+                values={currentFilters.originCountryCodes}
+                onChange={(originCountryCodes) => updateFilter("originCountryCodes", originCountryCodes)}
+                countryOptions={originCountryOptions}
+              />
               <TextCriterion
                 label="Publisher"
                 filter={currentFilters.publisher}
@@ -9465,6 +9786,14 @@ export default function App() {
                     </label>
                   );
                 })}
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={currentFilters.missingOriginCountry}
+                    onChange={(event) => updateFilter("missingOriginCountry", event.target.checked)}
+                  />
+                  <span>Origin Country</span>
+                </label>
               </div>
 
               <div className="sort-controls">
@@ -9481,6 +9810,7 @@ export default function App() {
                           { value: "album", label: "Album" },
                           { value: "displayArtist", label: "Display artist" },
                           { value: "year", label: "Year" },
+                          { value: "originCountry", label: "Origin country" },
                           { value: "billboardRank", label: "Album Billboard" },
                           { value: "billboardSingleRank", label: "Single Billboard" },
                           { value: "trackRating", label: "Track rating" },
@@ -9490,6 +9820,7 @@ export default function App() {
                           { value: "album", label: "Album" },
                           { value: "artist", label: "Artist" },
                           { value: "year", label: "Year" },
+                          { value: "originCountry", label: "Origin country" },
                           { value: "billboardRank", label: "Billboard" },
                           { value: "genre", label: "Genre" },
                           { value: "totalMinutes", label: "Minutes" },

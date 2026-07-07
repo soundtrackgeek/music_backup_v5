@@ -59,6 +59,8 @@ export function createFilters(): BrowseFilters {
     ratingCompletenessMax: null,
     lovedTracksMin: null,
     lovedTracksMax: null,
+    originCountryCodes: [],
+    missingOriginCountry: false,
   };
 }
 
@@ -254,6 +256,7 @@ export function chartRequestFromConfig(config: ChartConfig): BrowseRequest {
       direction: config.sortDirection,
     },
     filters: {
+      ...createFilters(),
       ...config.request.filters,
       ...toCompletenessFilterRange(min, max),
     },
@@ -316,8 +319,16 @@ export function chartCompletenessRange(config: ChartConfig) {
 
 export function normalizeChartConfigForClient(config: ChartConfig) {
   const { min, max } = chartCompletenessRange(config);
+  const request = {
+    ...config.request,
+    filters: {
+      ...createFilters(),
+      ...(config.request?.filters ?? {}),
+    },
+  };
   return {
     ...config,
+    request,
     ratingCompletenessMin: min,
     ratingCompletenessMax: max,
     ratingCompletenessThreshold: null,

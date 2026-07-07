@@ -257,6 +257,101 @@ pub struct MusicBrainzOverlaySyncLogEntry {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MusicBrainzOriginCountryOption {
+    pub code: String,
+    pub name: String,
+    pub artist_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistOriginImportRun {
+    pub id: i64,
+    pub scope: String,
+    pub status: String,
+    pub total_artists: i64,
+    pub eligible_count: i64,
+    pub fetched_count: i64,
+    pub skipped_count: i64,
+    pub unresolved_count: i64,
+    pub failed_count: i64,
+    pub last_processed_artist_key: Option<String>,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub error_summary: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzOriginCountryStatus {
+    pub total_album_artists: i64,
+    pub imported_origins: i64,
+    pub country_count: i64,
+    pub manual_origins: i64,
+    pub unresolved_origins: i64,
+    pub missing_origins: i64,
+    pub last_run: Option<MusicBrainzArtistOriginImportRun>,
+    pub countries: Vec<MusicBrainzOriginCountryOption>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzOriginCountryPreviewRow {
+    pub local_artist_key: String,
+    pub display_artist: String,
+    pub album_count: i64,
+    pub musicbrainz_mbid: Option<String>,
+    pub matched_name: Option<String>,
+    pub match_method: String,
+    pub artist_link_state: String,
+    pub suspect_mapping: bool,
+    pub existing_country_code: Option<String>,
+    pub existing_country_name: Option<String>,
+    pub existing_review_state: Option<String>,
+    pub status: String,
+    pub skipped_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzOriginCountryPreview {
+    pub total_album_artists: i64,
+    pub eligible_count: i64,
+    pub already_imported_count: i64,
+    pub skipped_count: i64,
+    pub unresolved_count: i64,
+    pub estimated_seconds: i64,
+    pub rows: Vec<MusicBrainzOriginCountryPreviewRow>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzOriginCountryImportRequest {
+    #[serde(default)]
+    pub artist_keys: Vec<String>,
+    #[serde(default)]
+    pub refetch: bool,
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzOriginCountryImportSummary {
+    pub run: MusicBrainzArtistOriginImportRun,
+    pub total_album_artists: i64,
+    pub eligible_count: i64,
+    pub fetched_count: i64,
+    pub stored_count: i64,
+    pub skipped_count: i64,
+    pub unresolved_count: i64,
+    pub failed_count: i64,
+    pub cancelled: bool,
+    pub rows: Vec<MusicBrainzOriginCountryPreviewRow>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MusicBrainzCacheWarningExample {
     pub mbid: String,
     pub cached_name_count: i64,
@@ -541,6 +636,10 @@ pub struct BrowseFilters {
     pub loved_tracks_min: Option<i64>,
     #[serde(default)]
     pub loved_tracks_max: Option<i64>,
+    #[serde(default)]
+    pub origin_country_codes: Vec<String>,
+    #[serde(default)]
+    pub missing_origin_country: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -607,6 +706,10 @@ pub struct ArtistSummary {
     pub first_year: Option<i32>,
     pub last_year: Option<i32>,
     pub top_genre: Option<String>,
+    pub origin_country_code: Option<String>,
+    pub origin_country_name: Option<String>,
+    pub origin_country_raw_area: Option<String>,
+    pub origin_country_review_state: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -956,6 +1059,10 @@ pub struct BrowseRow {
     pub filename: Option<String>,
     pub cover_path: Option<String>,
     pub cover_mime_type: Option<String>,
+    pub origin_country_code: Option<String>,
+    pub origin_country_name: Option<String>,
+    pub origin_country_raw_area: Option<String>,
+    pub origin_country_review_state: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

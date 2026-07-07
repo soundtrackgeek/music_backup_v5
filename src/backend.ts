@@ -43,6 +43,10 @@ import type {
   MusicBrainzArtistRefreshResult,
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
+  MusicBrainzOriginCountryImportRequest,
+  MusicBrainzOriginCountryImportSummary,
+  MusicBrainzOriginCountryPreview,
+  MusicBrainzOriginCountryStatus,
   MusicBrainzOverlaySyncLogEntry,
   MusicBrainzOverlaySyncResult,
   PerformanceProbeResponse,
@@ -111,6 +115,129 @@ const mockMusicBrainzCacheStatus: MusicBrainzCacheStatus = {
     },
   ],
 };
+
+const mockMusicBrainzOriginRun = {
+  id: 1,
+  scope: "album-artists",
+  status: "completed",
+  totalArtists: 6,
+  eligibleCount: 4,
+  fetchedCount: 4,
+  skippedCount: 1,
+  unresolvedCount: 1,
+  failedCount: 0,
+  lastProcessedArtistKey: "dio",
+  startedAt: "2026-07-07T09:15:00.000Z",
+  completedAt: "2026-07-07T09:15:05.000Z",
+  errorSummary: null,
+};
+
+const mockMusicBrainzOriginCountryStatus: MusicBrainzOriginCountryStatus = {
+  totalAlbumArtists: 6,
+  importedOrigins: 4,
+  countryCount: 2,
+  manualOrigins: 1,
+  unresolvedOrigins: 1,
+  missingOrigins: 1,
+  lastRun: mockMusicBrainzOriginRun,
+  countries: [
+    { code: "GB", name: "United Kingdom", artistCount: 2 },
+    { code: "US", name: "United States", artistCount: 2 },
+  ],
+};
+
+const mockMusicBrainzOriginPreviewRows = [
+  {
+    localArtistKey: "pet shop boys",
+    displayArtist: "Pet Shop Boys",
+    albumCount: 1,
+    musicbrainzMbid: "012151a8-preview-psb",
+    matchedName: "pet shop boys",
+    matchMethod: "verified-link",
+    artistLinkState: "verified",
+    suspectMapping: false,
+    existingCountryCode: "GB",
+    existingCountryName: "United Kingdom",
+    existingReviewState: "imported",
+    status: "alreadyImported",
+    skippedReason: null,
+  },
+  {
+    localArtistKey: "the smiths",
+    displayArtist: "The Smiths",
+    albumCount: 1,
+    musicbrainzMbid: "preview-smiths",
+    matchedName: "the smiths",
+    matchMethod: "manual-mbid",
+    artistLinkState: "verified",
+    suspectMapping: false,
+    existingCountryCode: "GB",
+    existingCountryName: "United Kingdom",
+    existingReviewState: "reviewed",
+    status: "manual",
+    skippedReason: null,
+  },
+  {
+    localArtistKey: "austin wintory",
+    displayArtist: "Austin Wintory",
+    albumCount: 1,
+    musicbrainzMbid: "preview-austin-wintory",
+    matchedName: "Austin Wintory",
+    matchMethod: "exact-name",
+    artistLinkState: "unverified",
+    suspectMapping: false,
+    existingCountryCode: null,
+    existingCountryName: null,
+    existingReviewState: null,
+    status: "eligible",
+    skippedReason: null,
+  },
+  {
+    localArtistKey: "dio",
+    displayArtist: "Dio",
+    albumCount: 1,
+    musicbrainzMbid: "preview-dio",
+    matchedName: "Dio",
+    matchMethod: "exact-name",
+    artistLinkState: "unverified",
+    suspectMapping: false,
+    existingCountryCode: "US",
+    existingCountryName: "United States",
+    existingReviewState: "imported",
+    status: "eligible",
+    skippedReason: null,
+  },
+  {
+    localArtistKey: "korn",
+    displayArtist: "Korn",
+    albumCount: 1,
+    musicbrainzMbid: "preview-shared-mbid",
+    matchedName: "Korn",
+    matchMethod: "exact-name",
+    artistLinkState: "unverified",
+    suspectMapping: true,
+    existingCountryCode: null,
+    existingCountryName: null,
+    existingReviewState: null,
+    status: "skipped",
+    skippedReason: "Skipped suspect or duplicate-heavy cache mapping.",
+  },
+  {
+    localArtistKey: "killswitch engage",
+    displayArtist: "Killswitch Engage",
+    albumCount: 1,
+    musicbrainzMbid: null,
+    matchedName: null,
+    matchMethod: "none",
+    artistLinkState: "none",
+    suspectMapping: false,
+    existingCountryCode: null,
+    existingCountryName: null,
+    existingReviewState: null,
+    status: "unresolved",
+    skippedReason: "No high-confidence MusicBrainz artist match.",
+  },
+] satisfies MusicBrainzOriginCountryPreview["rows"];
 
 const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyResponse> = {
   "pet shop boys": {
@@ -244,7 +371,55 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
   },
 };
 
-const mockRows: BrowseRow[] = [
+type OriginCountryFields = Pick<
+  BrowseRow,
+  "originCountryCode" | "originCountryName" | "originCountryRawArea" | "originCountryReviewState"
+>;
+type BrowseRowWithoutOrigin = Omit<BrowseRow, keyof OriginCountryFields>;
+type ArtistSummaryWithoutOrigin = Omit<ArtistSummary, keyof OriginCountryFields>;
+
+function mockOriginForArtist(artist: string | null | undefined): OriginCountryFields {
+  switch (normalizeArtistKey(artist ?? null)) {
+    case "pet shop boys":
+      return {
+        originCountryCode: "GB",
+        originCountryName: "United Kingdom",
+        originCountryRawArea: "England",
+        originCountryReviewState: "imported",
+      };
+    case "the smiths":
+      return {
+        originCountryCode: "GB",
+        originCountryName: "United Kingdom",
+        originCountryRawArea: "England",
+        originCountryReviewState: "reviewed",
+      };
+    case "austin wintory":
+    case "dio":
+      return {
+        originCountryCode: "US",
+        originCountryName: "United States",
+        originCountryRawArea: "United States",
+        originCountryReviewState: "imported",
+      };
+    default:
+      return {
+        originCountryCode: null,
+        originCountryName: null,
+        originCountryRawArea: null,
+        originCountryReviewState: null,
+      };
+  }
+}
+
+function withMockOrigin(row: BrowseRowWithoutOrigin): BrowseRow {
+  return {
+    ...row,
+    ...mockOriginForArtist(row.albumArtistDisplay),
+  };
+}
+
+const mockRows: BrowseRow[] = ([
   {
     id: "mb:mock-1",
     trackId: null,
@@ -525,9 +700,9 @@ const mockRows: BrowseRow[] = [
     coverPath: null,
     coverMimeType: null,
   },
-];
+  ] satisfies BrowseRowWithoutOrigin[]).map(withMockOrigin);
 
-const mockArtists: ArtistSummary[] = [
+const mockArtists: ArtistSummary[] = ([
   {
     id: "pet shop boys",
     name: "Pet Shop Boys",
@@ -564,7 +739,10 @@ const mockArtists: ArtistSummary[] = [
     lastYear: 1986,
     topGenre: "Post-Punk",
   },
-];
+  ] satisfies ArtistSummaryWithoutOrigin[]).map((artist) => ({
+  ...artist,
+  ...mockOriginForArtist(artist.name),
+}));
 
 const mockGenres: GenreSummary[] = [
   {
@@ -1939,6 +2117,86 @@ export async function getMusicBrainzCacheStatus(cachePath?: string) {
   });
 }
 
+function mockOriginPreview(request: MusicBrainzOriginCountryImportRequest = {}): MusicBrainzOriginCountryPreview {
+  const selectedKeys = new Set((request.artistKeys ?? []).map(normalizeArtistKey).filter(Boolean));
+  const rows = mockMusicBrainzOriginPreviewRows
+    .filter((row) => selectedKeys.size === 0 || selectedKeys.has(row.localArtistKey))
+    .slice(0, request.limit ?? undefined)
+    .map((row) => {
+      if (request.refetch && (row.status === "alreadyImported" || row.status === "manual")) {
+        return { ...row, status: "eligible" };
+      }
+      return row;
+    });
+  return {
+    totalAlbumArtists: mockMusicBrainzOriginCountryStatus.totalAlbumArtists,
+    eligibleCount: rows.filter((row) => row.status === "eligible").length,
+    alreadyImportedCount: rows.filter((row) => row.status === "alreadyImported" || row.status === "manual").length,
+    skippedCount: rows.filter((row) => row.status === "skipped").length,
+    unresolvedCount: rows.filter((row) => row.status === "unresolved").length,
+    estimatedSeconds: rows.filter((row) => row.status === "eligible").length * 2,
+    rows,
+  };
+}
+
+export async function getMusicBrainzOriginCountryStatus() {
+  if (!isTauriRuntime()) {
+    return mockMusicBrainzOriginCountryStatus;
+  }
+
+  return invoke<MusicBrainzOriginCountryStatus>("get_musicbrainz_origin_country_status");
+}
+
+export async function previewMusicBrainzOriginCountryImport(request: MusicBrainzOriginCountryImportRequest = {}) {
+  if (!isTauriRuntime()) {
+    return mockOriginPreview(request);
+  }
+
+  return invoke<MusicBrainzOriginCountryPreview>("preview_musicbrainz_origin_country_import", {
+    request,
+  });
+}
+
+export async function importMusicBrainzOriginCountries(request: MusicBrainzOriginCountryImportRequest = {}) {
+  if (!isTauriRuntime()) {
+    const preview = mockOriginPreview(request);
+    const fetchedCount = preview.rows.filter((row) => row.status === "eligible").length;
+    return {
+      run: {
+        ...mockMusicBrainzOriginRun,
+        id: mockMusicBrainzOriginRun.id + 1,
+        eligibleCount: fetchedCount,
+        fetchedCount,
+        skippedCount: preview.skippedCount,
+        unresolvedCount: preview.unresolvedCount,
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+      },
+      totalAlbumArtists: preview.totalAlbumArtists,
+      eligibleCount: fetchedCount,
+      fetchedCount,
+      storedCount: Math.max(0, fetchedCount - preview.unresolvedCount),
+      skippedCount: preview.skippedCount,
+      unresolvedCount: preview.unresolvedCount,
+      failedCount: 0,
+      cancelled: false,
+      rows: preview.rows,
+    } satisfies MusicBrainzOriginCountryImportSummary;
+  }
+
+  return invoke<MusicBrainzOriginCountryImportSummary>("import_musicbrainz_origin_countries", {
+    request,
+  });
+}
+
+export async function cancelMusicBrainzOriginCountryImport() {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  await invoke<void>("cancel_musicbrainz_origin_country_import");
+}
+
 export async function getMusicBrainzArtistDiscography(artistKey: string, artistName: string) {
   if (!isTauriRuntime()) {
     const normalizedKey = normalizeArtistKey(artistKey || artistName);
@@ -2281,6 +2539,7 @@ export async function searchLibrary(request: BrowseRequest) {
     const artistKeys = new Set(request.filters.artistKeys);
     const genreKeys = new Set(expandGenreFilterKeys(request.filters.genres));
     const excludedGenreKeys = new Set(expandGenreFilterKeys(request.filters.excludedGenres));
+    const originCountryCodes = new Set((request.filters.originCountryCodes ?? []).map((code) => code.trim().toUpperCase()));
     const ratedTracksMin = request.filters.ratedTracksMin;
     const ratedTracksMax = request.filters.ratedTracksMax;
     const yearFrom = request.filters.yearFrom;
@@ -2316,6 +2575,9 @@ export async function searchLibrary(request: BrowseRequest) {
         (artistKeys.size === 0 || artistKeys.has(artistKey)) &&
         (genreKeys.size === 0 || genreKeys.has(genreKey)) &&
         !excludedGenreKeys.has(genreKey) &&
+        (originCountryCodes.size === 0 ||
+          originCountryCodes.has((row.originCountryCode ?? "").trim().toUpperCase())) &&
+        (!request.filters.missingOriginCountry || !row.originCountryCode) &&
         matchesNumberRange(row.year, yearFrom, yearTo) &&
         matchesNumberRange(row.releaseYear, releaseYearFrom, releaseYearTo) &&
         matchesMinuteRange(isTracks ? row.trackSeconds : row.totalSeconds, totalMinutesMin, totalMinutesMax) &&
@@ -2907,6 +3169,8 @@ function browseSortValue(row: BrowseRow, field: string) {
       return row.year;
     case "genre":
       return row.canonicalGenre?.toLowerCase() ?? "";
+    case "originCountry":
+      return (row.originCountryName || row.originCountryCode || "").toLowerCase();
     case "billboardRank":
       return row.billboardRank;
     case "billboardSingleRank":
@@ -2969,6 +3233,8 @@ function artistSortValue(artist: ArtistSummary, field: string) {
       return artist.lastYear;
     case "topGenre":
       return artist.topGenre ?? "";
+    case "originCountry":
+      return (artist.originCountryName || artist.originCountryCode || "").toLowerCase();
     default:
       return artist.name.toLowerCase();
   }

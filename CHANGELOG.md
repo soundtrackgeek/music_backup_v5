@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.42.0] - 2026-07-07
+### Added
+- Added SQLite schema version 17 with app-owned MusicBrainz origin-country tables and import-run logging.
+- Added Settings preview/import/cancel workflow for MusicBrainz artist Origin Country enrichment.
+- Added Search and Charts Origin Country and missing-origin filters, local browse joins, optional columns, and exports.
+- Added origin-country display for Search, Albums, Artists, Charts, and web-preview mock states.
+- Added Rust coverage for schema migration, country derivation, suspect-link skipping, manual override precedence, browse filtering, and filter serialization defaults.
+
+### Changed
+- Bumped synchronized app metadata to `0.42.0`.
+- Documented the remaining sync gap for reviewed/manual Origin Country overlay rows; local import, display, filtering, and export behavior is complete.
+
 ## [0.41.0] - 2026-07-07
 ### Added
 - Added Album rating min/max and Loved max filters to Charts.

@@ -127,6 +127,17 @@ export function formatBillboardSingleRank(row: Pick<BrowseRow, "billboardSingleR
     : `#${row.billboardSingleRank} ${row.billboardSingleYear}`;
 }
 
+export function formatOriginCountry(
+  row: Pick<BrowseRow, "originCountryCode" | "originCountryName" | "originCountryRawArea">,
+) {
+  const name = row.originCountryName || row.originCountryCode || "";
+  if (!name) return "";
+  if (row.originCountryRawArea && row.originCountryRawArea !== name) {
+    return `${name} (${row.originCountryRawArea})`;
+  }
+  return name;
+}
+
 export function formatChartMetric(row: BrowseRow, metric: string) {
   switch (metric) {
     case "billboardRank":
@@ -160,6 +171,8 @@ export function browseRowSortValue(row: BrowseRow, field: string) {
       return row.year;
     case "genre":
       return row.canonicalGenre?.toLowerCase() ?? "";
+    case "originCountry":
+      return (row.originCountryName || row.originCountryCode || "").toLowerCase();
     case "billboardRank":
       return row.billboardRank;
     case "billboardSingleRank":

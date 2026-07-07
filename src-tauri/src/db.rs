@@ -7,9 +7,9 @@ use crate::models::{
     DurationAlbumStat, DurationAnalyticsStats, ExportMusicToolRequest, ExportResult,
     ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressStats, GenreSummary,
     ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus,
-    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicToolFixRequest,
-    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
-    MusicToolProgress, MusicToolSummary, OutlierStat, PerformanceProbeOperation,
+    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption,
+    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
+    MusicToolIssueRow, MusicToolProgress, MusicToolSummary, OutlierStat, PerformanceProbeOperation,
     PerformanceProbeResponse, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
     SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
     YearProgressStats,
@@ -38,7 +38,7 @@ type ProgressApp<'a> = &'a ();
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 16;
+const LATEST_SCHEMA_VERSION: i32 = 17;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const DEFAULT_IMPORT_SOURCE_PATH: &str = "musicbee-library.tsv";
 const DEFAULT_COVER_SOURCE_PATH: &str = "AlbumCovers";
@@ -314,7 +314,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_sixteen_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_seventeen_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -695,6 +695,65 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_release_groups_fetched
             ON musicbrainz_artist_release_groups(fetched_at);
 
+        CREATE TABLE IF NOT EXISTS musicbrainz_origin_countries (
+            country_code TEXT PRIMARY KEY,
+            country_name TEXT NOT NULL,
+            area_mbid TEXT,
+            iso_source TEXT NOT NULL DEFAULT 'musicbrainz',
+            is_historical INTEGER NOT NULL DEFAULT 0,
+            is_special INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_origin_countries (
+            local_artist_key TEXT PRIMARY KEY,
+            display_artist TEXT NOT NULL,
+            mbid TEXT NOT NULL,
+            country_code TEXT,
+            country_name TEXT,
+            raw_area_mbid TEXT,
+            raw_area_name TEXT,
+            raw_area_type TEXT,
+            begin_area_mbid TEXT,
+            begin_area_name TEXT,
+            begin_area_type TEXT,
+            derived_from TEXT NOT NULL DEFAULT 'unresolved',
+            confidence REAL,
+            review_state TEXT NOT NULL DEFAULT 'unresolved',
+            source TEXT NOT NULL DEFAULT 'musicbrainz-live',
+            fetched_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(country_code) REFERENCES musicbrainz_origin_countries(country_code)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_origin_local_artist
+            ON musicbrainz_artist_origin_countries(local_artist_key);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_origin_country
+            ON musicbrainz_artist_origin_countries(country_code);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_origin_mbid
+            ON musicbrainz_artist_origin_countries(mbid);
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_origin_import_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scope TEXT NOT NULL DEFAULT 'eligible',
+            status TEXT NOT NULL,
+            total_artists INTEGER NOT NULL DEFAULT 0,
+            eligible_count INTEGER NOT NULL DEFAULT 0,
+            fetched_count INTEGER NOT NULL DEFAULT 0,
+            skipped_count INTEGER NOT NULL DEFAULT 0,
+            unresolved_count INTEGER NOT NULL DEFAULT 0,
+            failed_count INTEGER NOT NULL DEFAULT 0,
+            last_processed_artist_key TEXT,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            error_summary TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_origin_import_runs_started
+            ON musicbrainz_artist_origin_import_runs(started_at);
+
         INSERT OR IGNORE INTO app_settings (
             id, backup_retention, dark_mode, updated_at
         ) VALUES (
@@ -718,9 +777,17 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_overlay_sync_log(conn)?;
     ensure_musicbrainz_release_status_cache(conn)?;
     ensure_musicbrainz_artist_release_groups(conn)?;
-    conn.execute_batch("PRAGMA user_version = 16;")
+    ensure_musicbrainz_origin_country_tables(conn)?;
+    conn.execute_batch("PRAGMA user_version = 17;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_seventeen_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_sixteen_schema_exists(conn)?
+        && schema_table_exists(conn, "musicbrainz_origin_countries")?
+        && schema_table_exists(conn, "musicbrainz_artist_origin_countries")?
+        && schema_table_exists(conn, "musicbrainz_artist_origin_import_runs")?)
 }
 
 fn phase_sixteen_schema_exists(conn: &Connection) -> Result<bool> {
@@ -1089,6 +1156,74 @@ fn ensure_musicbrainz_artist_release_groups(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+pub fn ensure_musicbrainz_origin_country_tables(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS musicbrainz_origin_countries (
+            country_code TEXT PRIMARY KEY,
+            country_name TEXT NOT NULL,
+            area_mbid TEXT,
+            iso_source TEXT NOT NULL DEFAULT 'musicbrainz',
+            is_historical INTEGER NOT NULL DEFAULT 0,
+            is_special INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_origin_countries (
+            local_artist_key TEXT PRIMARY KEY,
+            display_artist TEXT NOT NULL,
+            mbid TEXT NOT NULL,
+            country_code TEXT,
+            country_name TEXT,
+            raw_area_mbid TEXT,
+            raw_area_name TEXT,
+            raw_area_type TEXT,
+            begin_area_mbid TEXT,
+            begin_area_name TEXT,
+            begin_area_type TEXT,
+            derived_from TEXT NOT NULL DEFAULT 'unresolved',
+            confidence REAL,
+            review_state TEXT NOT NULL DEFAULT 'unresolved',
+            source TEXT NOT NULL DEFAULT 'musicbrainz-live',
+            fetched_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(country_code) REFERENCES musicbrainz_origin_countries(country_code)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_origin_local_artist
+            ON musicbrainz_artist_origin_countries(local_artist_key);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_origin_country
+            ON musicbrainz_artist_origin_countries(country_code);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_origin_mbid
+            ON musicbrainz_artist_origin_countries(mbid);
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_origin_import_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scope TEXT NOT NULL DEFAULT 'eligible',
+            status TEXT NOT NULL,
+            total_artists INTEGER NOT NULL DEFAULT 0,
+            eligible_count INTEGER NOT NULL DEFAULT 0,
+            fetched_count INTEGER NOT NULL DEFAULT 0,
+            skipped_count INTEGER NOT NULL DEFAULT 0,
+            unresolved_count INTEGER NOT NULL DEFAULT 0,
+            failed_count INTEGER NOT NULL DEFAULT 0,
+            last_processed_artist_key TEXT,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            error_summary TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_origin_import_runs_started
+            ON musicbrainz_artist_origin_import_runs(started_at);
+        ",
+    )
+    .context("Could not create MusicBrainz artist origin-country tables")?;
+
+    Ok(())
+}
+
 fn ensure_album_billboard_columns(conn: &Connection) -> Result<()> {
     for (name, definition) in [("billboard_rank", "INTEGER"), ("billboard_year", "INTEGER")] {
         if !schema_column_exists(conn, "albums", name)? {
@@ -1131,6 +1266,45 @@ fn ensure_billboard_chart_entries_table(conn: &Connection) -> Result<()> {
     .context("Could not create Billboard chart entry table")?;
 
     Ok(())
+}
+
+pub fn musicbrainz_origin_country_options(
+    conn: &Connection,
+) -> Result<Vec<MusicBrainzOriginCountryOption>> {
+    if !schema_table_exists(conn, "musicbrainz_origin_countries")?
+        || !schema_table_exists(conn, "musicbrainz_artist_origin_countries")?
+    {
+        return Ok(Vec::new());
+    }
+
+    let mut stmt = conn
+        .prepare(
+            "
+            SELECT
+                countries.country_code,
+                countries.country_name,
+                COUNT(artist.local_artist_key) AS artist_count
+            FROM musicbrainz_origin_countries countries
+            LEFT JOIN musicbrainz_artist_origin_countries artist
+              ON artist.country_code = countries.country_code
+            GROUP BY countries.country_code, countries.country_name
+            HAVING artist_count > 0
+            ORDER BY LOWER(countries.country_name), countries.country_code
+            ",
+        )
+        .context("Could not prepare MusicBrainz origin-country options")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(MusicBrainzOriginCountryOption {
+                code: row.get(0)?,
+                name: row.get(1)?,
+                artist_count: row.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not read MusicBrainz origin-country options")?;
+
+    Ok(rows)
 }
 
 fn ensure_track_billboard_single_columns(conn: &Connection) -> Result<()> {
@@ -5142,8 +5316,14 @@ fn list_artists(
                 GROUP BY COALESCE(NULLIF(TRIM(LOWER(a2.genre_normalized)), ''), 'unknown')
                 ORDER BY COUNT(*) DESC, LOWER(COALESCE(a2.canonical_genre, '')) ASC
                 LIMIT 1
-            ) AS top_genre
+            ) AS top_genre,
+            origin.country_code AS origin_country_code,
+            origin.country_name AS origin_country_name,
+            origin.raw_area_name AS origin_country_raw_area,
+            origin.review_state AS origin_country_review_state
         FROM grouped
+        LEFT JOIN musicbrainz_artist_origin_countries origin
+          ON origin.local_artist_key = grouped.artist_key
         {order_sql}
         LIMIT ? OFFSET ?
         "
@@ -5184,6 +5364,10 @@ fn artist_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArtistSu
         first_year: row.get(13)?,
         last_year: row.get(14)?,
         top_genre: row.get(15)?,
+        origin_country_code: row.get(16)?,
+        origin_country_name: row.get(17)?,
+        origin_country_raw_area: row.get(18)?,
+        origin_country_review_state: row.get(19)?,
     })
 }
 
@@ -7782,7 +7966,11 @@ fn search_library(
             t.file_path,
             t.filename,
             c.cache_path,
-            c.mime_type
+            c.mime_type,
+            origin.country_code,
+            origin.country_name,
+            origin.raw_area_name,
+            origin.review_state
         "
     } else {
         "
@@ -7827,14 +8015,24 @@ fn search_library(
                 WHERE tx.album_id = a.id
             ),
             c.cache_path,
-            c.mime_type
+            c.mime_type,
+            origin.country_code,
+            origin.country_name,
+            origin.raw_area_name,
+            origin.review_state
         "
     };
 
     let from_sql = if is_tracks {
-        "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id LEFT JOIN album_covers c ON c.album_id = t.album_id"
+        let origin_key_sql = artist_key_sql("a.album_artist_display");
+        format!(
+            "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id LEFT JOIN album_covers c ON c.album_id = t.album_id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql}"
+        )
     } else {
-        "FROM albums a LEFT JOIN album_covers c ON c.album_id = a.id"
+        let origin_key_sql = artist_key_sql("a.album_artist_display");
+        format!(
+            "FROM albums a LEFT JOIN album_covers c ON c.album_id = a.id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql}"
+        )
     };
 
     let (where_sql, values) = build_where_clause(is_tracks, &request.search_text, filters);
@@ -7901,6 +8099,10 @@ fn browse_row_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BrowseRow> {
         filename: row.get(30)?,
         cover_path: row.get(31)?,
         cover_mime_type: row.get(32)?,
+        origin_country_code: row.get(33)?,
+        origin_country_name: row.get(34)?,
+        origin_country_raw_area: row.get(35)?,
+        origin_country_review_state: row.get(36)?,
     })
 }
 
@@ -8187,6 +8389,13 @@ fn build_where_clause(
         filters.loved_tracks_max,
     );
 
+    add_origin_country_conditions(
+        &mut conditions,
+        &mut values,
+        &filters.origin_country_codes,
+        filters.missing_origin_country,
+    );
+
     add_missing_field_conditions(
         &mut conditions,
         is_tracks,
@@ -8249,6 +8458,34 @@ fn add_artist_key_condition(
         .join(", ");
     conditions.push(format!("{field} IN ({placeholders})"));
     values.extend(normalized.into_iter().map(Value::Text));
+}
+
+fn add_origin_country_conditions(
+    conditions: &mut Vec<String>,
+    values: &mut Vec<Value>,
+    country_codes: &[String],
+    missing_origin_country: bool,
+) {
+    let normalized = country_codes
+        .iter()
+        .map(|code| normalize_country_code(code))
+        .filter(|code| !code.is_empty())
+        .collect::<Vec<_>>();
+
+    if !normalized.is_empty() {
+        let placeholders = std::iter::repeat("?")
+            .take(normalized.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        conditions.push(format!(
+            "UPPER(COALESCE(origin.country_code, '')) IN ({placeholders})"
+        ));
+        values.extend(normalized.into_iter().map(Value::Text));
+    }
+
+    if missing_origin_country {
+        conditions.push("NULLIF(TRIM(COALESCE(origin.country_code, '')), '') IS NULL".to_string());
+    }
 }
 
 fn add_text_condition(
@@ -8506,6 +8743,7 @@ fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "artist" => "LOWER(COALESCE(t.album_artist_display, ''))",
             "year" => "t.year",
             "genre" => "LOWER(COALESCE(t.genre_normalized, ''))",
+            "originCountry" => "LOWER(COALESCE(origin.country_name, origin.country_code, ''))",
             "billboardRank" => "a.billboard_rank",
             "billboardSingleRank" => "t.billboard_single_rank",
             "trackRating" => "t.normalized_rating",
@@ -8518,6 +8756,7 @@ fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "artist" => "LOWER(COALESCE(a.album_artist_display, ''))",
             "year" => "a.year",
             "genre" => "LOWER(COALESCE(a.genre_normalized, ''))",
+            "originCountry" => "LOWER(COALESCE(origin.country_name, origin.country_code, ''))",
             "billboardRank" => "a.billboard_rank",
             "totalMinutes" => "a.total_seconds",
             "trackCount" => "a.total_tracks",
@@ -8613,10 +8852,9 @@ fn normalize_ranking_metric(metric: &str) -> String {
 
 fn normalize_chart_sort_field(field: Option<&str>, fallback_metric: &str) -> String {
     match field.unwrap_or(fallback_metric) {
-        "album" | "artist" | "year" | "genre" | "albumRating" | "ratingCompleteness"
-        | "lovedTracks" | "ae" | "tmoe" | "totalMinutes" | "albumScore" | "billboardRank" => {
-            field.unwrap_or(fallback_metric).to_string()
-        }
+        "album" | "artist" | "year" | "genre" | "originCountry" | "albumRating"
+        | "ratingCompleteness" | "lovedTracks" | "ae" | "tmoe" | "totalMinutes" | "albumScore"
+        | "billboardRank" => field.unwrap_or(fallback_metric).to_string(),
         _ => fallback_metric.to_string(),
     }
 }
@@ -8666,6 +8904,10 @@ fn normalize_text(value: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn normalize_country_code(value: &str) -> String {
+    value.trim().to_uppercase()
 }
 
 fn normalize_artist_text(value: &str) -> String {
@@ -8913,6 +9155,7 @@ fn export_table(
     let include_filename = !is_tracks && has_export_column(export_columns, "filename");
     let include_file_path = !is_tracks && has_export_column(export_columns, "filePath");
     let include_cover_info = has_export_column(export_columns, "coverInfo");
+    let include_origin_country = has_export_column(export_columns, "originCountry");
     let mut headers = if is_tracks {
         vec![
             "Album Artist",
@@ -8964,6 +9207,10 @@ fn export_table(
 
     if include_cover_info {
         headers.extend(["Cover Path", "Cover MIME"]);
+    }
+
+    if include_origin_country {
+        headers.extend(["Origin Country", "Origin Country Code", "Origin Raw Area"]);
     }
 
     if include_calculated {
@@ -9042,6 +9289,14 @@ fn export_table(
                 values.extend([
                     optional_text(&row.cover_path),
                     optional_text(&row.cover_mime_type),
+                ]);
+            }
+
+            if include_origin_country {
+                values.extend([
+                    optional_text(&row.origin_country_name),
+                    optional_text(&row.origin_country_code),
+                    optional_text(&row.origin_country_raw_area),
                 ]);
             }
 
@@ -10412,7 +10667,88 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_sixteen_schema_exists(&conn).expect("phase sixteen schema exists"));
+        assert!(phase_seventeen_schema_exists(&conn).expect("phase seventeen schema exists"));
+        assert!(schema_table_exists(&conn, "musicbrainz_origin_countries")
+            .expect("origin country table exists"));
+        assert!(
+            schema_table_exists(&conn, "musicbrainz_artist_origin_countries")
+                .expect("artist origin country table exists")
+        );
+        assert!(
+            schema_table_exists(&conn, "musicbrainz_artist_origin_import_runs")
+                .expect("artist origin import run table exists")
+        );
+    }
+
+    #[test]
+    fn filters_browse_rows_by_musicbrainz_origin_country() {
+        let conn = seeded_connection();
+        insert_test_album(&conn, "mb:korn", "Korn", "Issues", 1999, 12);
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_origin_countries (
+                country_code, country_name, area_mbid, iso_source, created_at, updated_at
+            ) VALUES (
+                'GB', 'United Kingdom', 'area-gb', 'artist-country',
+                '2026-07-07T00:00:00Z', '2026-07-07T00:00:00Z'
+            )
+            ",
+            [],
+        )
+        .expect("insert country");
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_artist_origin_countries (
+                local_artist_key, display_artist, mbid, country_code, country_name,
+                raw_area_mbid, raw_area_name, raw_area_type, derived_from, confidence,
+                review_state, source, fetched_at, created_at, updated_at
+            ) VALUES (
+                'pet shop boys', 'Pet Shop Boys',
+                '012151a8-0f9a-44c9-997f-ebd68b5389f9', 'GB',
+                'United Kingdom', 'area-england', 'England', 'Subdivision',
+                'artist-country', 1.0, 'imported', 'musicbrainz-live',
+                '2026-07-07T00:00:00Z', '2026-07-07T00:00:00Z',
+                '2026-07-07T00:00:00Z'
+            )
+            ",
+            [],
+        )
+        .expect("insert artist origin");
+
+        let mut country_request = BrowseRequest::default();
+        country_request.filters.origin_country_codes = vec!["gb".to_string()];
+        let country_response =
+            search_library(&conn, country_request, 50).expect("filter by origin country");
+
+        assert_eq!(country_response.total, 1);
+        assert_eq!(
+            country_response.rows[0].origin_country_name.as_deref(),
+            Some("United Kingdom")
+        );
+        assert_eq!(
+            country_response.rows[0].origin_country_raw_area.as_deref(),
+            Some("England")
+        );
+
+        let mut missing_request = BrowseRequest::default();
+        missing_request.filters.missing_origin_country = true;
+        let missing_response =
+            search_library(&conn, missing_request, 50).expect("filter missing origin country");
+
+        assert_eq!(missing_response.total, 1);
+        assert_eq!(
+            missing_response.rows[0].album_artist_display.as_deref(),
+            Some("Korn")
+        );
+    }
+
+    #[test]
+    fn browse_filter_defaults_deserialize_without_origin_country_fields() {
+        let filters: BrowseFilters =
+            serde_json::from_value(serde_json::json!({})).expect("deserialize filters");
+
+        assert!(filters.origin_country_codes.is_empty());
+        assert!(!filters.missing_origin_country);
     }
 
     #[test]

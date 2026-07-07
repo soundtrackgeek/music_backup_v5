@@ -113,6 +113,7 @@ export const rankingOptions = [
 
 export const chartColumnOptions = [
   { value: "billboard", label: "Billboard" },
+  { value: "originCountry", label: "Origin" },
   { value: "rating", label: "Rating" },
   { value: "complete", label: "Complete" },
   { value: "score", label: "Score" },
@@ -133,6 +134,7 @@ export const searchExportColumnOptions: SearchExportColumnOption[] = [
   { value: "filePath", label: "File path", views: ["albums"] },
   { value: "ids", label: "IDs" },
   { value: "coverInfo", label: "Cover info" },
+  { value: "originCountry", label: "Origin country" },
 ];
 
 export const chartViewModes: { value: ChartViewMode; label: string; icon: LucideIcon }[] = [

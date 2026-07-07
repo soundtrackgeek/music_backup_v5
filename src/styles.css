@@ -801,8 +801,8 @@ button {
 .chart-results .result-table-row {
   grid-template-columns:
     48px minmax(220px, 2fr) minmax(140px, 1.35fr) 64px minmax(104px, 1fr)
-    repeat(8, minmax(72px, 0.8fr));
-  min-width: 1090px;
+    repeat(9, minmax(72px, 0.8fr));
+  min-width: 1180px;
 }
 
 .chart-results .result-table-row span:first-child {
@@ -2288,30 +2288,33 @@ button {
 .album-results .result-table-head,
 .album-results .result-table-row {
   grid-template-columns:
-    minmax(220px, 2fr) minmax(140px, 1.4fr) 64px minmax(104px, 1fr) 64px 84px
-    72px;
+    minmax(220px, 2fr) minmax(140px, 1.35fr) minmax(96px, 0.9fr) 64px
+    minmax(104px, 1fr) 64px 84px 72px;
+  min-width: 940px;
 }
 
 .track-results .result-table-head,
 .track-results .result-table-row {
   grid-template-columns:
-    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(140px, 1.2fr) 64px 72px
-    64px minmax(140px, 1.1fr);
+    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(132px, 1.1fr)
+    minmax(96px, 0.8fr) 64px 72px 64px minmax(140px, 1.1fr);
+  min-width: 1040px;
 }
 
 .album-index-results .result-table-head,
 .album-index-results .result-table-row {
   grid-template-columns:
-    minmax(240px, 2.2fr) minmax(150px, 1.35fr) 64px minmax(104px, 1fr) 64px 84px
-    72px;
-  min-width: 860px;
+    minmax(240px, 2.2fr) minmax(150px, 1.3fr) minmax(96px, 0.85fr) 64px
+    minmax(104px, 1fr) 64px 84px 72px;
+  min-width: 960px;
 }
 
 .artist-index-results .result-table-head,
 .artist-index-results .result-table-row {
   grid-template-columns:
-    minmax(240px, 2.2fr) 72px 88px minmax(112px, 1fr) 88px 88px 72px;
-  min-width: 850px;
+    minmax(240px, 2.2fr) minmax(96px, 0.9fr) 72px 88px minmax(112px, 1fr)
+    88px 88px 72px;
+  min-width: 950px;
 }
 
 .genre-index-results .result-table-head,

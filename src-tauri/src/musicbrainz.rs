@@ -2,14 +2,16 @@ use crate::db;
 use crate::models::{
     ExportResult, MusicBrainzArtistCandidateRow, MusicBrainzArtistDiscographyRequest,
     MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
-    MusicBrainzArtistExportRow, MusicBrainzArtistLinkRequest, MusicBrainzArtistRefreshRequest,
-    MusicBrainzArtistRefreshResult, MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus,
-    MusicBrainzCacheWarningExample, MusicBrainzReleaseDecisionRequest,
+    MusicBrainzArtistExportRow, MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginImportRun,
+    MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzArtistReleaseRow,
+    MusicBrainzCacheStatus, MusicBrainzCacheWarningExample, MusicBrainzOriginCountryImportRequest,
+    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
+    MusicBrainzOriginCountryPreviewRow, MusicBrainzOriginCountryStatus,
+    MusicBrainzReleaseDecisionRequest,
 };
 #[cfg(not(test))]
 use crate::musicbrainz_sync;
 use anyhow::{bail, Context, Result};
-#[cfg(not(test))]
 use chrono::Utc;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::Deserialize;
@@ -18,9 +20,8 @@ use std::fs;
 #[cfg(test)]
 use std::path::Path;
 use std::path::PathBuf;
-#[cfg(not(test))]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
-#[cfg(not(test))]
 use std::time::Duration;
 #[cfg(not(test))]
 use tauri::{AppHandle, Manager};
@@ -31,15 +32,17 @@ const SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
 const MAX_ARTIST_CANDIDATES: usize = 8;
 const FUZZY_ARTIST_CANDIDATE_THRESHOLD: f64 = 0.85;
 #[cfg(not(test))]
+const MUSICBRAINZ_ARTIST_URL: &str = "https://musicbrainz.org/ws/2/artist";
+#[cfg(not(test))]
 const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.39.1 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.42.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
-#[cfg(not(test))]
 const MUSICBRAINZ_RATE_LIMIT_DELAY_MS: u64 = 1100;
+static ORIGIN_COUNTRY_IMPORT_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(not(test))]
 pub fn cache_status_for_app(
@@ -51,6 +54,48 @@ pub fn cache_status_for_app(
         None => db::settings_for_app(app)?.musicbrainz_cache_path,
     };
     cache_status_for_path(Some(path))
+}
+
+#[cfg(not(test))]
+pub fn origin_country_status_for_app(app: &AppHandle) -> Result<MusicBrainzOriginCountryStatus> {
+    let (conn, _) = db::open(app)?;
+    origin_country_status_for_connection(&conn)
+}
+
+#[cfg(not(test))]
+pub fn preview_origin_country_import_for_app(
+    app: &AppHandle,
+    request: MusicBrainzOriginCountryImportRequest,
+) -> Result<MusicBrainzOriginCountryPreview> {
+    let (conn, _) = db::open(app)?;
+    let settings = db::settings_for_app(app)?;
+    preview_origin_country_import_for_connection(
+        &conn,
+        Some(settings.musicbrainz_cache_path),
+        &request,
+    )
+}
+
+#[cfg(not(test))]
+pub fn import_origin_countries_for_app(
+    app: &AppHandle,
+    request: MusicBrainzOriginCountryImportRequest,
+) -> Result<MusicBrainzOriginCountryImportSummary> {
+    ORIGIN_COUNTRY_IMPORT_CANCELLED.store(false, Ordering::SeqCst);
+    let (conn, _) = db::open(app)?;
+    let settings = db::settings_for_app(app)?;
+    let summary = import_origin_countries_for_connection(
+        &conn,
+        Some(settings.musicbrainz_cache_path),
+        request,
+        fetch_artist_origin,
+        true,
+    )?;
+    Ok(summary)
+}
+
+pub fn cancel_origin_country_import() {
+    ORIGIN_COUNTRY_IMPORT_CANCELLED.store(true, Ordering::SeqCst);
 }
 
 #[cfg(not(test))]
@@ -451,6 +496,977 @@ fn read_cache_status(
     })
 }
 
+pub fn origin_country_status_for_connection(
+    conn: &Connection,
+) -> Result<MusicBrainzOriginCountryStatus> {
+    db::ensure_musicbrainz_origin_country_tables(conn)?;
+    let local_artists = local_origin_artists(conn)?;
+    let total_album_artists = local_artists.len() as i64;
+    let imported_origins = conn
+        .query_row(
+            "
+            SELECT COUNT(*)
+            FROM musicbrainz_artist_origin_countries
+            WHERE NULLIF(TRIM(COALESCE(country_code, '')), '') IS NOT NULL
+            ",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .context("Could not count imported MusicBrainz origin countries")?;
+    let country_count = conn
+        .query_row(
+            "
+            SELECT COUNT(DISTINCT UPPER(country_code))
+            FROM musicbrainz_artist_origin_countries
+            WHERE NULLIF(TRIM(COALESCE(country_code, '')), '') IS NOT NULL
+            ",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .context("Could not count distinct MusicBrainz origin countries")?;
+    let manual_origins = conn
+        .query_row(
+            "
+            SELECT COUNT(*)
+            FROM musicbrainz_artist_origin_countries
+            WHERE derived_from = 'manual'
+               OR review_state IN ('manual', 'reviewed')
+            ",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .context("Could not count manual MusicBrainz origin countries")?;
+    let unresolved_origins = conn
+        .query_row(
+            "
+            SELECT COUNT(*)
+            FROM musicbrainz_artist_origin_countries
+            WHERE NULLIF(TRIM(COALESCE(country_code, '')), '') IS NULL
+            ",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .context("Could not count unresolved MusicBrainz origin countries")?;
+    let existing_keys = existing_origin_rows(conn)?
+        .into_keys()
+        .collect::<HashSet<_>>();
+    let missing_origins = local_artists
+        .iter()
+        .filter(|artist| !existing_keys.contains(&artist.local_artist_key))
+        .count() as i64;
+
+    Ok(MusicBrainzOriginCountryStatus {
+        total_album_artists,
+        imported_origins,
+        country_count,
+        manual_origins,
+        unresolved_origins,
+        missing_origins,
+        last_run: last_origin_country_import_run(conn)?,
+        countries: db::musicbrainz_origin_country_options(conn)?,
+    })
+}
+
+pub fn preview_origin_country_import_for_connection(
+    conn: &Connection,
+    cache_path: Option<String>,
+    request: &MusicBrainzOriginCountryImportRequest,
+) -> Result<MusicBrainzOriginCountryPreview> {
+    db::ensure_musicbrainz_origin_country_tables(conn)?;
+    let local_artists = local_origin_artists(conn)?;
+    let selected_artist_keys = selected_origin_artist_keys(request);
+    let existing = existing_origin_rows(conn)?;
+    let cache_conn = origin_cache_connection(cache_path)?;
+    let mut rows = Vec::new();
+
+    for artist in local_artists.iter().filter(|artist| {
+        selected_artist_keys.is_empty() || selected_artist_keys.contains(&artist.local_artist_key)
+    }) {
+        if let Some(limit) = request.limit {
+            if rows.len() >= limit as usize {
+                break;
+            }
+        }
+        let existing_row = existing.get(&artist.local_artist_key);
+        let resolution = resolve_origin_artist_match(conn, cache_conn.as_ref(), artist)?;
+        rows.push(preview_origin_country_row(
+            artist,
+            existing_row,
+            resolution,
+            request.refetch,
+        ));
+    }
+
+    let eligible_count = rows.iter().filter(|row| row.status == "eligible").count() as i64;
+    let already_imported_count = rows
+        .iter()
+        .filter(|row| matches!(row.status.as_str(), "alreadyImported" | "manual"))
+        .count() as i64;
+    let skipped_count = rows.iter().filter(|row| row.status == "skipped").count() as i64;
+    let unresolved_count = rows.iter().filter(|row| row.status == "unresolved").count() as i64;
+
+    Ok(MusicBrainzOriginCountryPreview {
+        total_album_artists: local_artists.len() as i64,
+        eligible_count,
+        already_imported_count,
+        skipped_count,
+        unresolved_count,
+        estimated_seconds: eligible_count * 2,
+        rows,
+    })
+}
+
+fn import_origin_countries_for_connection<F>(
+    conn: &Connection,
+    cache_path: Option<String>,
+    request: MusicBrainzOriginCountryImportRequest,
+    fetcher: F,
+    pace_requests: bool,
+) -> Result<MusicBrainzOriginCountryImportSummary>
+where
+    F: Fn(&str) -> Result<MusicBrainzArtistLookupResponse>,
+{
+    db::ensure_musicbrainz_origin_country_tables(conn)?;
+    let preview = preview_origin_country_import_for_connection(conn, cache_path, &request)?;
+    let eligible_rows = preview
+        .rows
+        .iter()
+        .filter(|row| row.status == "eligible" && row.musicbrainz_mbid.is_some())
+        .cloned()
+        .collect::<Vec<_>>();
+    let selected_count = request
+        .limit
+        .map(|limit| limit as usize)
+        .unwrap_or(eligible_rows.len())
+        .min(eligible_rows.len());
+    let run_id = insert_origin_country_import_run(
+        conn,
+        "album-artists",
+        preview.total_album_artists,
+        selected_count as i64,
+    )?;
+
+    let mut fetched_count = 0i64;
+    let mut stored_count = 0i64;
+    let skipped_count = (preview.rows.len() as i64).saturating_sub(selected_count as i64);
+    let mut unresolved_count = 0i64;
+    let mut failed_count = 0i64;
+    let mut cancelled = false;
+    let mut error_summary: Option<String> = None;
+    let now = Utc::now().to_rfc3339();
+
+    for (index, row) in eligible_rows.into_iter().take(selected_count).enumerate() {
+        if ORIGIN_COUNTRY_IMPORT_CANCELLED.load(Ordering::SeqCst) {
+            cancelled = true;
+            break;
+        }
+
+        let mbid = row
+            .musicbrainz_mbid
+            .as_deref()
+            .context("Eligible origin-country row was missing a MusicBrainz MBID")?;
+        match fetcher(mbid) {
+            Ok(payload) => {
+                fetched_count += 1;
+                let evidence = derive_origin_country(&payload);
+                if evidence.country_code.is_some() {
+                    stored_count += 1;
+                } else {
+                    unresolved_count += 1;
+                }
+                save_origin_country_evidence(
+                    conn,
+                    &row.local_artist_key,
+                    &row.display_artist,
+                    mbid,
+                    &evidence,
+                    &now,
+                )?;
+            }
+            Err(error) => {
+                failed_count += 1;
+                if error_summary.is_none() {
+                    error_summary = Some(format!("{}: {error}", row.display_artist));
+                }
+            }
+        }
+
+        update_origin_country_import_run_progress(
+            conn,
+            run_id,
+            fetched_count,
+            skipped_count,
+            unresolved_count,
+            failed_count,
+            Some(&row.local_artist_key),
+        )?;
+
+        if pace_requests && index + 1 < selected_count {
+            thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
+        }
+    }
+
+    let status = if cancelled {
+        "cancelled"
+    } else if failed_count > 0 {
+        "completed_with_errors"
+    } else {
+        "completed"
+    };
+    finish_origin_country_import_run(
+        conn,
+        run_id,
+        status,
+        fetched_count,
+        skipped_count,
+        unresolved_count,
+        failed_count,
+        error_summary.as_deref(),
+    )?;
+    let run = last_origin_country_import_run(conn)?
+        .context("Completed MusicBrainz origin-country import run was not found")?;
+
+    Ok(MusicBrainzOriginCountryImportSummary {
+        run,
+        total_album_artists: preview.total_album_artists,
+        eligible_count: selected_count as i64,
+        fetched_count,
+        stored_count,
+        skipped_count,
+        unresolved_count,
+        failed_count,
+        cancelled,
+        rows: preview.rows,
+    })
+}
+
+#[cfg(not(test))]
+fn fetch_artist_origin(mbid: &str) -> Result<MusicBrainzArtistLookupResponse> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(30))
+        .build();
+    let url = format!("{MUSICBRAINZ_ARTIST_URL}/{mbid}?fmt=json");
+    let response = agent
+        .get(&url)
+        .set("User-Agent", MUSICBRAINZ_USER_AGENT)
+        .call()
+        .with_context(|| format!("Could not fetch MusicBrainz artist {mbid}"))?;
+    response
+        .into_json::<MusicBrainzArtistLookupResponse>()
+        .context("Could not parse MusicBrainz artist origin response")
+}
+
+fn local_origin_artists(conn: &Connection) -> Result<Vec<OriginLocalArtist>> {
+    let artist_key_sql = db::artist_key_sql("album_artist_display");
+    let sql = format!(
+        "
+        SELECT
+            {artist_key_sql} AS local_artist_key,
+            COALESCE(NULLIF(TRIM(album_artist_display), ''), 'Unknown Artist') AS display_artist,
+            COUNT(*) AS album_count
+        FROM albums
+        WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL
+        GROUP BY local_artist_key, display_artist
+        ORDER BY local_artist_key, album_count DESC, LOWER(display_artist)
+        "
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .context("Could not prepare local album-artist origin lookup")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(OriginLocalArtist {
+                local_artist_key: row.get(0)?,
+                display_artist: row.get(1)?,
+                album_count: row.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load local album artists for MusicBrainz origin import")?;
+
+    let mut by_key: HashMap<String, OriginLocalArtist> = HashMap::new();
+    for row in rows {
+        by_key
+            .entry(row.local_artist_key.clone())
+            .and_modify(|current| current.album_count += row.album_count)
+            .or_insert(row);
+    }
+    let mut artists = by_key.into_values().collect::<Vec<_>>();
+    artists.sort_by(|left, right| {
+        left.display_artist
+            .to_lowercase()
+            .cmp(&right.display_artist.to_lowercase())
+            .then_with(|| left.local_artist_key.cmp(&right.local_artist_key))
+    });
+    Ok(artists)
+}
+
+fn existing_origin_rows(conn: &Connection) -> Result<HashMap<String, ExistingOriginCountryRow>> {
+    if !table_exists(conn, "musicbrainz_artist_origin_countries")? {
+        return Ok(HashMap::new());
+    }
+    let mut stmt = conn
+        .prepare(
+            "
+            SELECT local_artist_key, country_code, country_name, review_state, derived_from
+            FROM musicbrainz_artist_origin_countries
+            ",
+        )
+        .context("Could not prepare existing MusicBrainz origin-country lookup")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                ExistingOriginCountryRow {
+                    country_code: row.get(1)?,
+                    country_name: row.get(2)?,
+                    review_state: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                    derived_from: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
+                },
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load existing MusicBrainz origin-country rows")?;
+    Ok(rows.into_iter().collect())
+}
+
+fn origin_cache_connection(cache_path: Option<String>) -> Result<Option<Connection>> {
+    let cache_status = cache_status_for_path(cache_path)?;
+    if !cache_status.valid {
+        return Ok(None);
+    }
+    let conn = Connection::open_with_flags(
+        &cache_status.resolved_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .with_context(|| {
+        format!(
+            "Could not open MusicBrainz cache read-only at {}",
+            cache_status.resolved_path
+        )
+    })?;
+    validate_cache_schema(&conn)?;
+    Ok(Some(conn))
+}
+
+fn resolve_origin_artist_match(
+    app_conn: &Connection,
+    cache_conn: Option<&Connection>,
+    artist: &OriginLocalArtist,
+) -> Result<OriginArtistResolution> {
+    if let Some(link) = artist_link_record(app_conn, &artist.local_artist_key)? {
+        if link.ignored {
+            return Ok(OriginArtistResolution {
+                mbid: link.mbid,
+                matched_name: link.canonical_name,
+                match_method: link.match_method,
+                artist_link_state: "ignored".to_string(),
+                suspect_mapping: false,
+                skipped_reason: Some("MusicBrainz is ignored for this artist.".to_string()),
+            });
+        }
+        if link.verification_state == "verified" {
+            return match validated_origin_mbid(link.mbid.as_deref()) {
+                Some(mbid) => Ok(OriginArtistResolution {
+                    mbid: Some(mbid),
+                    matched_name: link.canonical_name,
+                    match_method: link.match_method,
+                    artist_link_state: "verified".to_string(),
+                    suspect_mapping: false,
+                    skipped_reason: None,
+                }),
+                None => Ok(OriginArtistResolution {
+                    mbid: link.mbid,
+                    matched_name: link.canonical_name,
+                    match_method: link.match_method,
+                    artist_link_state: "verified".to_string(),
+                    suspect_mapping: false,
+                    skipped_reason: Some("Verified MusicBrainz MBID is invalid.".to_string()),
+                }),
+            };
+        }
+    }
+
+    let Some(cache_conn) = cache_conn else {
+        return Ok(OriginArtistResolution {
+            mbid: None,
+            matched_name: None,
+            match_method: "none".to_string(),
+            artist_link_state: "none".to_string(),
+            suspect_mapping: false,
+            skipped_reason: Some(
+                "No readable MusicBrainz cache or verified artist link.".to_string(),
+            ),
+        });
+    };
+    let Some(artist_match) = find_artist_match(
+        app_conn,
+        cache_conn,
+        &artist.local_artist_key,
+        &artist.display_artist,
+    )?
+    else {
+        return Ok(OriginArtistResolution {
+            mbid: None,
+            matched_name: None,
+            match_method: "none".to_string(),
+            artist_link_state: "none".to_string(),
+            suspect_mapping: false,
+            skipped_reason: Some("No high-confidence MusicBrainz artist match.".to_string()),
+        });
+    };
+    if artist_match.suspect_mapping && artist_match.artist_link_state != "verified" {
+        return Ok(OriginArtistResolution {
+            mbid: Some(artist_match.mbid),
+            matched_name: artist_match.matched_name,
+            match_method: artist_match.match_method,
+            artist_link_state: artist_match.artist_link_state,
+            suspect_mapping: true,
+            skipped_reason: Some("Skipped suspect or duplicate-heavy cache mapping.".to_string()),
+        });
+    }
+
+    match validated_origin_mbid(Some(&artist_match.mbid)) {
+        Some(mbid) => Ok(OriginArtistResolution {
+            mbid: Some(mbid),
+            matched_name: artist_match.matched_name,
+            match_method: artist_match.match_method,
+            artist_link_state: artist_match.artist_link_state,
+            suspect_mapping: false,
+            skipped_reason: None,
+        }),
+        None => Ok(OriginArtistResolution {
+            mbid: Some(artist_match.mbid),
+            matched_name: artist_match.matched_name,
+            match_method: artist_match.match_method,
+            artist_link_state: artist_match.artist_link_state,
+            suspect_mapping: false,
+            skipped_reason: Some("MusicBrainz cache MBID is invalid.".to_string()),
+        }),
+    }
+}
+
+fn selected_origin_artist_keys(request: &MusicBrainzOriginCountryImportRequest) -> HashSet<String> {
+    request
+        .artist_keys
+        .iter()
+        .map(|artist_key| normalize_local_artist_text(artist_key))
+        .filter(|artist_key| !artist_key.is_empty())
+        .collect()
+}
+
+fn preview_origin_country_row(
+    artist: &OriginLocalArtist,
+    existing: Option<&ExistingOriginCountryRow>,
+    resolution: OriginArtistResolution,
+    refetch: bool,
+) -> MusicBrainzOriginCountryPreviewRow {
+    let existing_review_state = existing
+        .map(|row| row.review_state.clone())
+        .filter(|value| !value.is_empty());
+    let existing_country_code = existing.and_then(|row| row.country_code.clone());
+    let existing_country_name = existing.and_then(|row| row.country_name.clone());
+    let manual_or_reviewed = existing.is_some_and(|row| row.is_manual_or_reviewed());
+    let status = if manual_or_reviewed && !refetch {
+        "manual"
+    } else if existing_country_code
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+        && !refetch
+    {
+        "alreadyImported"
+    } else if resolution.skipped_reason.is_some() {
+        "skipped"
+    } else if resolution.mbid.is_some() {
+        "eligible"
+    } else {
+        "unresolved"
+    }
+    .to_string();
+
+    MusicBrainzOriginCountryPreviewRow {
+        local_artist_key: artist.local_artist_key.clone(),
+        display_artist: artist.display_artist.clone(),
+        album_count: artist.album_count,
+        musicbrainz_mbid: resolution.mbid,
+        matched_name: resolution.matched_name,
+        match_method: resolution.match_method,
+        artist_link_state: resolution.artist_link_state,
+        suspect_mapping: resolution.suspect_mapping,
+        existing_country_code,
+        existing_country_name,
+        existing_review_state,
+        status,
+        skipped_reason: resolution.skipped_reason,
+    }
+}
+
+fn validated_origin_mbid(mbid: Option<&str>) -> Option<String> {
+    let value = mbid?.trim().to_lowercase();
+    if is_valid_mbid(&value) {
+        Some(value)
+    } else {
+        None
+    }
+}
+
+fn derive_origin_country(payload: &MusicBrainzArtistLookupResponse) -> OriginCountryEvidence {
+    let raw_area = payload.area.as_ref();
+    let begin_area = payload.begin_area.as_ref();
+    let raw_area_mbid = raw_area.and_then(|area| area.id.as_deref().and_then(non_empty_string));
+    let raw_area_name = raw_area.and_then(|area| area.name.as_deref().and_then(non_empty_string));
+    let raw_area_type =
+        raw_area.and_then(|area| area.area_type.as_deref().and_then(non_empty_string));
+    let begin_area_mbid = begin_area.and_then(|area| area.id.as_deref().and_then(non_empty_string));
+    let begin_area_name =
+        begin_area.and_then(|area| area.name.as_deref().and_then(non_empty_string));
+    let begin_area_type =
+        begin_area.and_then(|area| area.area_type.as_deref().and_then(non_empty_string));
+
+    if let Some(country_code) = payload.country.as_deref().and_then(normalized_country_code) {
+        let country_name = country_name_for_explicit_code(&country_code, raw_area)
+            .or_else(|| country_name_from_code(&country_code).map(ToOwned::to_owned))
+            .unwrap_or_else(|| country_code.clone());
+        return OriginCountryEvidence {
+            country_code: Some(country_code),
+            country_name: Some(country_name),
+            raw_area_mbid,
+            raw_area_name,
+            raw_area_type,
+            begin_area_mbid,
+            begin_area_name,
+            begin_area_type,
+            derived_from: "artist-country".to_string(),
+            confidence: Some(1.0),
+            review_state: "imported".to_string(),
+            area_mbid_for_country: raw_area.and_then(country_area_mbid),
+        };
+    }
+
+    if let Some(area) = raw_area {
+        if area
+            .area_type
+            .as_deref()
+            .is_some_and(|value| value.eq_ignore_ascii_case("country"))
+        {
+            if let Some(country_code) = area
+                .iso_3166_1_codes
+                .iter()
+                .find_map(|code| normalized_country_code(code))
+            {
+                let country_name = area
+                    .name
+                    .as_deref()
+                    .and_then(non_empty_string)
+                    .unwrap_or_else(|| {
+                        country_name_from_code(&country_code)
+                            .unwrap_or(country_code.as_str())
+                            .to_string()
+                    });
+                return OriginCountryEvidence {
+                    country_code: Some(country_code),
+                    country_name: Some(country_name),
+                    raw_area_mbid,
+                    raw_area_name,
+                    raw_area_type,
+                    begin_area_mbid,
+                    begin_area_name,
+                    begin_area_type,
+                    derived_from: "artist-area".to_string(),
+                    confidence: Some(0.95),
+                    review_state: "imported".to_string(),
+                    area_mbid_for_country: area.id.clone(),
+                };
+            }
+        }
+
+        if let Some(country_code) = area
+            .iso_3166_2_codes
+            .iter()
+            .filter_map(|code| code.split_once('-').map(|(prefix, _)| prefix))
+            .find_map(normalized_country_code)
+        {
+            let country_name = country_name_from_code(&country_code)
+                .unwrap_or(country_code.as_str())
+                .to_string();
+            return OriginCountryEvidence {
+                country_code: Some(country_code),
+                country_name: Some(country_name),
+                raw_area_mbid,
+                raw_area_name,
+                raw_area_type,
+                begin_area_mbid,
+                begin_area_name,
+                begin_area_type,
+                derived_from: "area-lookup".to_string(),
+                confidence: Some(0.85),
+                review_state: "imported".to_string(),
+                area_mbid_for_country: None,
+            };
+        }
+    }
+
+    OriginCountryEvidence {
+        country_code: None,
+        country_name: None,
+        raw_area_mbid,
+        raw_area_name,
+        raw_area_type,
+        begin_area_mbid,
+        begin_area_name,
+        begin_area_type,
+        derived_from: "unresolved".to_string(),
+        confidence: None,
+        review_state: "unresolved".to_string(),
+        area_mbid_for_country: None,
+    }
+}
+
+fn country_name_for_explicit_code(
+    country_code: &str,
+    raw_area: Option<&MusicBrainzArea>,
+) -> Option<String> {
+    raw_area
+        .filter(|area| {
+            area.area_type
+                .as_deref()
+                .is_some_and(|value| value.eq_ignore_ascii_case("country"))
+                && area
+                    .iso_3166_1_codes
+                    .iter()
+                    .any(|code| normalized_country_code(code).as_deref() == Some(country_code))
+        })
+        .and_then(|area| area.name.as_deref())
+        .and_then(non_empty_string)
+}
+
+fn country_area_mbid(area: &MusicBrainzArea) -> Option<String> {
+    area.area_type
+        .as_deref()
+        .filter(|value| value.eq_ignore_ascii_case("country"))?;
+    area.id.as_deref().and_then(non_empty_string)
+}
+
+fn normalized_country_code(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.len() == 2
+        && trimmed
+            .chars()
+            .all(|character| character.is_ascii_alphabetic())
+    {
+        Some(trimmed.to_uppercase())
+    } else {
+        None
+    }
+}
+
+fn non_empty_string(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn save_origin_country_evidence(
+    conn: &Connection,
+    local_artist_key: &str,
+    display_artist: &str,
+    mbid: &str,
+    evidence: &OriginCountryEvidence,
+    fetched_at: &str,
+) -> Result<()> {
+    if let Some(country_code) = evidence.country_code.as_deref() {
+        let country_name = evidence
+            .country_name
+            .as_deref()
+            .unwrap_or(country_code)
+            .to_string();
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_origin_countries (
+                country_code, country_name, area_mbid, iso_source, is_historical,
+                is_special, created_at, updated_at
+            ) VALUES (
+                ?1, ?2, ?3, ?4, 0, 0, ?5, ?5
+            )
+            ON CONFLICT(country_code) DO UPDATE SET
+                country_name = excluded.country_name,
+                area_mbid = COALESCE(excluded.area_mbid, musicbrainz_origin_countries.area_mbid),
+                iso_source = excluded.iso_source,
+                updated_at = excluded.updated_at
+            ",
+            params![
+                country_code,
+                country_name,
+                &evidence.area_mbid_for_country,
+                &evidence.derived_from,
+                fetched_at
+            ],
+        )
+        .context("Could not save MusicBrainz origin-country reference row")?;
+    }
+
+    conn.execute(
+        "
+        INSERT INTO musicbrainz_artist_origin_countries (
+            local_artist_key, display_artist, mbid, country_code, country_name,
+            raw_area_mbid, raw_area_name, raw_area_type, begin_area_mbid,
+            begin_area_name, begin_area_type, derived_from, confidence,
+            review_state, source, fetched_at, created_at, updated_at
+        ) VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
+            ?14, 'musicbrainz-live', ?15, ?15, ?15
+        )
+        ON CONFLICT(local_artist_key) DO UPDATE SET
+            display_artist = excluded.display_artist,
+            mbid = excluded.mbid,
+            country_code = CASE
+                WHEN musicbrainz_artist_origin_countries.derived_from = 'manual'
+                  OR musicbrainz_artist_origin_countries.review_state IN ('manual', 'reviewed')
+                THEN musicbrainz_artist_origin_countries.country_code
+                ELSE excluded.country_code
+            END,
+            country_name = CASE
+                WHEN musicbrainz_artist_origin_countries.derived_from = 'manual'
+                  OR musicbrainz_artist_origin_countries.review_state IN ('manual', 'reviewed')
+                THEN musicbrainz_artist_origin_countries.country_name
+                ELSE excluded.country_name
+            END,
+            raw_area_mbid = excluded.raw_area_mbid,
+            raw_area_name = excluded.raw_area_name,
+            raw_area_type = excluded.raw_area_type,
+            begin_area_mbid = excluded.begin_area_mbid,
+            begin_area_name = excluded.begin_area_name,
+            begin_area_type = excluded.begin_area_type,
+            derived_from = CASE
+                WHEN musicbrainz_artist_origin_countries.derived_from = 'manual'
+                  OR musicbrainz_artist_origin_countries.review_state IN ('manual', 'reviewed')
+                THEN musicbrainz_artist_origin_countries.derived_from
+                ELSE excluded.derived_from
+            END,
+            confidence = CASE
+                WHEN musicbrainz_artist_origin_countries.derived_from = 'manual'
+                  OR musicbrainz_artist_origin_countries.review_state IN ('manual', 'reviewed')
+                THEN musicbrainz_artist_origin_countries.confidence
+                ELSE excluded.confidence
+            END,
+            review_state = CASE
+                WHEN musicbrainz_artist_origin_countries.derived_from = 'manual'
+                  OR musicbrainz_artist_origin_countries.review_state IN ('manual', 'reviewed')
+                THEN musicbrainz_artist_origin_countries.review_state
+                ELSE excluded.review_state
+            END,
+            source = excluded.source,
+            fetched_at = excluded.fetched_at,
+            updated_at = excluded.updated_at
+        ",
+        params![
+            local_artist_key,
+            display_artist,
+            mbid,
+            &evidence.country_code,
+            &evidence.country_name,
+            &evidence.raw_area_mbid,
+            &evidence.raw_area_name,
+            &evidence.raw_area_type,
+            &evidence.begin_area_mbid,
+            &evidence.begin_area_name,
+            &evidence.begin_area_type,
+            &evidence.derived_from,
+            evidence.confidence,
+            &evidence.review_state,
+            fetched_at
+        ],
+    )
+    .context("Could not save MusicBrainz artist origin-country row")?;
+
+    Ok(())
+}
+
+fn insert_origin_country_import_run(
+    conn: &Connection,
+    scope: &str,
+    total_artists: i64,
+    eligible_count: i64,
+) -> Result<i64> {
+    conn.execute(
+        "
+        INSERT INTO musicbrainz_artist_origin_import_runs (
+            scope, status, total_artists, eligible_count, started_at
+        ) VALUES (
+            ?1, 'running', ?2, ?3, ?4
+        )
+        ",
+        params![
+            scope,
+            total_artists,
+            eligible_count,
+            Utc::now().to_rfc3339()
+        ],
+    )
+    .context("Could not create MusicBrainz origin-country import run")?;
+    Ok(conn.last_insert_rowid())
+}
+
+fn update_origin_country_import_run_progress(
+    conn: &Connection,
+    run_id: i64,
+    fetched_count: i64,
+    skipped_count: i64,
+    unresolved_count: i64,
+    failed_count: i64,
+    last_processed_artist_key: Option<&str>,
+) -> Result<()> {
+    conn.execute(
+        "
+        UPDATE musicbrainz_artist_origin_import_runs
+        SET fetched_count = ?2,
+            skipped_count = ?3,
+            unresolved_count = ?4,
+            failed_count = ?5,
+            last_processed_artist_key = ?6
+        WHERE id = ?1
+        ",
+        params![
+            run_id,
+            fetched_count,
+            skipped_count,
+            unresolved_count,
+            failed_count,
+            last_processed_artist_key
+        ],
+    )
+    .context("Could not update MusicBrainz origin-country import run")?;
+    Ok(())
+}
+
+fn finish_origin_country_import_run(
+    conn: &Connection,
+    run_id: i64,
+    status: &str,
+    fetched_count: i64,
+    skipped_count: i64,
+    unresolved_count: i64,
+    failed_count: i64,
+    error_summary: Option<&str>,
+) -> Result<()> {
+    conn.execute(
+        "
+        UPDATE musicbrainz_artist_origin_import_runs
+        SET status = ?2,
+            fetched_count = ?3,
+            skipped_count = ?4,
+            unresolved_count = ?5,
+            failed_count = ?6,
+            completed_at = ?7,
+            error_summary = ?8
+        WHERE id = ?1
+        ",
+        params![
+            run_id,
+            status,
+            fetched_count,
+            skipped_count,
+            unresolved_count,
+            failed_count,
+            Utc::now().to_rfc3339(),
+            error_summary
+        ],
+    )
+    .context("Could not finish MusicBrainz origin-country import run")?;
+    Ok(())
+}
+
+fn last_origin_country_import_run(
+    conn: &Connection,
+) -> Result<Option<MusicBrainzArtistOriginImportRun>> {
+    if !table_exists(conn, "musicbrainz_artist_origin_import_runs")? {
+        return Ok(None);
+    }
+    conn.query_row(
+        "
+        SELECT id, scope, status, total_artists, eligible_count, fetched_count,
+               skipped_count, unresolved_count, failed_count,
+               last_processed_artist_key, started_at, completed_at, error_summary
+        FROM musicbrainz_artist_origin_import_runs
+        ORDER BY id DESC
+        LIMIT 1
+        ",
+        [],
+        origin_import_run_from_row,
+    )
+    .optional()
+    .context("Could not read last MusicBrainz origin-country import run")
+}
+
+fn origin_import_run_from_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<MusicBrainzArtistOriginImportRun> {
+    Ok(MusicBrainzArtistOriginImportRun {
+        id: row.get(0)?,
+        scope: row.get(1)?,
+        status: row.get(2)?,
+        total_artists: row.get(3)?,
+        eligible_count: row.get(4)?,
+        fetched_count: row.get(5)?,
+        skipped_count: row.get(6)?,
+        unresolved_count: row.get(7)?,
+        failed_count: row.get(8)?,
+        last_processed_artist_key: row.get(9)?,
+        started_at: row.get(10)?,
+        completed_at: row.get(11)?,
+        error_summary: row.get(12)?,
+    })
+}
+
+fn country_name_from_code(code: &str) -> Option<&'static str> {
+    match code {
+        "AR" => Some("Argentina"),
+        "AT" => Some("Austria"),
+        "AU" => Some("Australia"),
+        "BE" => Some("Belgium"),
+        "BR" => Some("Brazil"),
+        "CA" => Some("Canada"),
+        "CH" => Some("Switzerland"),
+        "CL" => Some("Chile"),
+        "CN" => Some("China"),
+        "CZ" => Some("Czechia"),
+        "DE" => Some("Germany"),
+        "DK" => Some("Denmark"),
+        "ES" => Some("Spain"),
+        "FI" => Some("Finland"),
+        "FR" => Some("France"),
+        "GB" => Some("United Kingdom"),
+        "GR" => Some("Greece"),
+        "IE" => Some("Ireland"),
+        "ID" => Some("Indonesia"),
+        "IN" => Some("India"),
+        "IS" => Some("Iceland"),
+        "IT" => Some("Italy"),
+        "JM" => Some("Jamaica"),
+        "JP" => Some("Japan"),
+        "KR" => Some("South Korea"),
+        "MX" => Some("Mexico"),
+        "NL" => Some("Netherlands"),
+        "NO" => Some("Norway"),
+        "NZ" => Some("New Zealand"),
+        "PH" => Some("Philippines"),
+        "PL" => Some("Poland"),
+        "PT" => Some("Portugal"),
+        "RU" => Some("Russia"),
+        "SE" => Some("Sweden"),
+        "SK" => Some("Slovakia"),
+        "TH" => Some("Thailand"),
+        "TR" => Some("Turkey"),
+        "UA" => Some("Ukraine"),
+        "US" => Some("United States"),
+        "ZA" => Some("South Africa"),
+        _ => None,
+    }
+}
+
 pub fn artist_discography_for_connection(
     app_conn: &Connection,
     cache_path: Option<String>,
@@ -778,6 +1794,53 @@ struct LocalAlbum {
     album_id: String,
     title: String,
     year: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+struct OriginLocalArtist {
+    local_artist_key: String,
+    display_artist: String,
+    album_count: i64,
+}
+
+#[derive(Debug, Clone)]
+struct ExistingOriginCountryRow {
+    country_code: Option<String>,
+    country_name: Option<String>,
+    review_state: String,
+    derived_from: String,
+}
+
+impl ExistingOriginCountryRow {
+    fn is_manual_or_reviewed(&self) -> bool {
+        self.derived_from == "manual" || matches!(self.review_state.as_str(), "manual" | "reviewed")
+    }
+}
+
+#[derive(Debug, Clone)]
+struct OriginArtistResolution {
+    mbid: Option<String>,
+    matched_name: Option<String>,
+    match_method: String,
+    artist_link_state: String,
+    suspect_mapping: bool,
+    skipped_reason: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct OriginCountryEvidence {
+    country_code: Option<String>,
+    country_name: Option<String>,
+    raw_area_mbid: Option<String>,
+    raw_area_name: Option<String>,
+    raw_area_type: Option<String>,
+    begin_area_mbid: Option<String>,
+    begin_area_name: Option<String>,
+    begin_area_type: Option<String>,
+    derived_from: String,
+    confidence: Option<f64>,
+    review_state: String,
+    area_mbid_for_country: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -1821,6 +2884,27 @@ struct MusicBrainzReleaseResponse {
     releases: Vec<MusicBrainzRelease>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct MusicBrainzArtistLookupResponse {
+    country: Option<String>,
+    area: Option<MusicBrainzArea>,
+    #[serde(rename = "begin-area")]
+    begin_area: Option<MusicBrainzArea>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct MusicBrainzArea {
+    id: Option<String>,
+    name: Option<String>,
+    #[serde(rename = "type")]
+    area_type: Option<String>,
+    #[serde(rename = "iso-3166-1-codes", default)]
+    iso_3166_1_codes: Vec<String>,
+    #[serde(rename = "iso-3166-2-codes", default)]
+    iso_3166_2_codes: Vec<String>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct MusicBrainzReleaseGroupBrowseResponse {
@@ -2842,6 +3926,149 @@ mod tests {
     }
 
     #[test]
+    fn derives_origin_country_from_artist_country_and_preserves_raw_area() {
+        let evidence = derive_origin_country(&MusicBrainzArtistLookupResponse {
+            country: Some("GB".to_string()),
+            area: Some(MusicBrainzArea {
+                id: Some("area-england".to_string()),
+                name: Some("England".to_string()),
+                area_type: Some("Subdivision".to_string()),
+                iso_3166_1_codes: Vec::new(),
+                iso_3166_2_codes: vec!["GB-ENG".to_string()],
+            }),
+            begin_area: Some(MusicBrainzArea {
+                id: Some("area-london".to_string()),
+                name: Some("London".to_string()),
+                area_type: Some("City".to_string()),
+                iso_3166_1_codes: Vec::new(),
+                iso_3166_2_codes: Vec::new(),
+            }),
+        });
+
+        assert_eq!(evidence.country_code.as_deref(), Some("GB"));
+        assert_eq!(evidence.country_name.as_deref(), Some("United Kingdom"));
+        assert_eq!(evidence.raw_area_name.as_deref(), Some("England"));
+        assert_eq!(evidence.begin_area_name.as_deref(), Some("London"));
+        assert_eq!(evidence.derived_from, "artist-country");
+        assert_eq!(evidence.review_state, "imported");
+    }
+
+    #[test]
+    fn origin_preview_skips_suspect_cache_mappings() {
+        let temp_dir = temp_cache_dir("origin-suspect");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_origin_cache_with_suspect_artist(
+            &cache_path,
+            "012151a8-0f9a-44c9-997f-ebd68b5389f9",
+        );
+        let app_conn = create_artist_app_db();
+
+        let preview = preview_origin_country_import_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            &MusicBrainzOriginCountryImportRequest {
+                artist_keys: vec!["pet shop boys".to_string()],
+                refetch: false,
+                limit: None,
+            },
+        )
+        .expect("preview origin import");
+        let row = preview.rows.first().expect("preview row");
+
+        assert_eq!(row.status, "skipped");
+        assert!(row.suspect_mapping);
+        assert_eq!(
+            row.skipped_reason.as_deref(),
+            Some("Skipped suspect or duplicate-heavy cache mapping.")
+        );
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn origin_import_preserves_manual_country_override() {
+        let app_conn = create_artist_app_db();
+        db::ensure_musicbrainz_origin_country_tables(&app_conn).expect("create origin tables");
+        app_conn
+            .execute(
+                "
+                INSERT INTO musicbrainz_origin_countries (
+                    country_code, country_name, iso_source, created_at, updated_at
+                ) VALUES (
+                    'US', 'United States', 'manual',
+                    '2026-07-07T00:00:00Z', '2026-07-07T00:00:00Z'
+                )
+                ",
+                [],
+            )
+            .expect("insert manual country");
+        app_conn
+            .execute(
+                "
+                INSERT INTO musicbrainz_artist_origin_countries (
+                    local_artist_key, display_artist, mbid, country_code, country_name,
+                    derived_from, confidence, review_state, source, fetched_at, created_at, updated_at
+                ) VALUES (
+                    'pet shop boys', 'Pet Shop Boys',
+                    '012151a8-0f9a-44c9-997f-ebd68b5389f9', 'US', 'United States',
+                    'manual', 1.0, 'manual', 'manual',
+                    '2026-07-07T00:00:00Z', '2026-07-07T00:00:00Z',
+                    '2026-07-07T00:00:00Z'
+                )
+                ",
+                [],
+            )
+            .expect("insert manual origin row");
+
+        let evidence = derive_origin_country(&MusicBrainzArtistLookupResponse {
+            country: Some("GB".to_string()),
+            area: Some(MusicBrainzArea {
+                id: Some("area-england".to_string()),
+                name: Some("England".to_string()),
+                area_type: Some("Subdivision".to_string()),
+                iso_3166_1_codes: Vec::new(),
+                iso_3166_2_codes: vec!["GB-ENG".to_string()],
+            }),
+            begin_area: None,
+        });
+        save_origin_country_evidence(
+            &app_conn,
+            "pet shop boys",
+            "Pet Shop Boys",
+            "012151a8-0f9a-44c9-997f-ebd68b5389f9",
+            &evidence,
+            "2026-07-07T00:01:00Z",
+        )
+        .expect("save origin evidence");
+
+        let saved = app_conn
+            .query_row(
+                "
+                SELECT country_code, country_name, raw_area_name, derived_from, review_state
+                FROM musicbrainz_artist_origin_countries
+                WHERE local_artist_key = 'pet shop boys'
+                ",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, Option<String>>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                    ))
+                },
+            )
+            .expect("read saved origin");
+
+        assert_eq!(saved.0.as_deref(), Some("US"));
+        assert_eq!(saved.1.as_deref(), Some("United States"));
+        assert_eq!(saved.2.as_deref(), Some("England"));
+        assert_eq!(saved.3, "manual");
+        assert_eq!(saved.4, "manual");
+    }
+
+    #[test]
     fn saves_manual_artist_link_decisions() {
         let app_conn = Connection::open_in_memory().expect("open app db");
         create_decision_tables(&app_conn);
@@ -3018,6 +4245,55 @@ mod tests {
             )
             .expect("insert alias");
         }
+    }
+
+    fn create_origin_cache_with_suspect_artist(path: &Path, mbid: &str) {
+        let conn = Connection::open(path).expect("open test origin cache");
+        conn.execute_batch(
+            "
+            CREATE TABLE artist_cache (
+                name TEXT PRIMARY KEY,
+                mbid TEXT,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE release_groups (
+                artist_mbid TEXT,
+                release_mbid TEXT,
+                title TEXT,
+                year INTEGER,
+                type TEXT,
+                secondary_types TEXT,
+                track_count INTEGER,
+                status TEXT,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (artist_mbid, release_mbid)
+            );
+            ",
+        )
+        .expect("create origin cache schema");
+        conn.execute(
+            "INSERT INTO artist_cache (name, mbid, cached_at) VALUES ('Pet Shop Boys', ?1, '2026-02-01 12:00:00')",
+            params![mbid],
+        )
+        .expect("insert origin cache artist");
+        conn.execute(
+            "INSERT INTO artist_cache (name, mbid, cached_at) VALUES ('PSB', ?1, '2026-02-01 12:01:00')",
+            params![mbid],
+        )
+        .expect("insert origin cache alias");
+        conn.execute(
+            "
+            INSERT INTO release_groups (
+                artist_mbid, release_mbid, title, year, type, secondary_types,
+                track_count, status, cached_at
+            ) VALUES (
+                ?1, 'release-actually', 'Actually', 1987, 'Album', '',
+                10, 'Official', '2026-02-01 12:03:00'
+            )
+            ",
+            params![mbid],
+        )
+        .expect("insert origin cache release");
     }
 
     fn create_artist_app_db() -> Connection {
