@@ -4677,6 +4677,7 @@ pub fn export_search_for_app(app: &AppHandle, input: ExportSearchRequest) -> Res
         &request.view,
         &response.rows,
         input.include_calculated,
+        &input.export_columns,
     )
     .with_context(|| format!("Could not write export {}", path.display()))?;
 
@@ -7815,8 +7816,16 @@ fn search_library(
             NULL,
             NULL,
             NULL,
-            NULL,
-            NULL,
+            (
+                SELECT MIN(NULLIF(TRIM(tx.file_path), ''))
+                FROM tracks tx
+                WHERE tx.album_id = a.id
+            ),
+            (
+                SELECT MIN(NULLIF(TRIM(tx.filename), ''))
+                FROM tracks tx
+                WHERE tx.album_id = a.id
+            ),
             c.cache_path,
             c.mime_type
         "
@@ -8750,8 +8759,9 @@ fn write_export_file(
     view: &str,
     rows: &[BrowseRow],
     include_calculated: bool,
+    export_columns: &[String],
 ) -> Result<()> {
-    let (headers, values) = export_table(view, rows, include_calculated);
+    let (headers, values) = export_table(view, rows, include_calculated, export_columns);
 
     if format == "xlsx" {
         write_xlsx_file(path, &headers, &values)?;
@@ -8895,8 +8905,14 @@ fn export_table(
     view: &str,
     rows: &[BrowseRow],
     include_calculated: bool,
+    export_columns: &[String],
 ) -> (Vec<&'static str>, Vec<Vec<String>>) {
     let is_tracks = normalize_view(view) == "tracks";
+    let include_calculated = include_calculated || has_export_column(export_columns, "calculated");
+    let include_ids = has_export_column(export_columns, "ids");
+    let include_filename = !is_tracks && has_export_column(export_columns, "filename");
+    let include_file_path = !is_tracks && has_export_column(export_columns, "filePath");
+    let include_cover_info = has_export_column(export_columns, "coverInfo");
     let mut headers = if is_tracks {
         vec![
             "Album Artist",
@@ -8930,6 +8946,25 @@ fn export_table(
             "Loved Tracks",
         ]
     };
+
+    if include_ids {
+        headers.push("Album ID");
+        if is_tracks {
+            headers.push("Track ID");
+        }
+    }
+
+    if include_filename {
+        headers.push("Filename");
+    }
+
+    if include_file_path {
+        headers.push("File Path");
+    }
+
+    if include_cover_info {
+        headers.extend(["Cover Path", "Cover MIME"]);
+    }
 
     if include_calculated {
         headers.extend(["TMOE Minutes", "AE Percent", "Album Score"]);
@@ -8984,6 +9019,32 @@ fn export_table(
                 ]
             };
 
+            if include_ids {
+                values.push(row.album_id.clone());
+                if is_tracks {
+                    values.push(
+                        row.track_id
+                            .map(|value| value.to_string())
+                            .unwrap_or_default(),
+                    );
+                }
+            }
+
+            if include_filename {
+                values.push(optional_text(&row.filename));
+            }
+
+            if include_file_path {
+                values.push(optional_text(&row.file_path));
+            }
+
+            if include_cover_info {
+                values.extend([
+                    optional_text(&row.cover_path),
+                    optional_text(&row.cover_mime_type),
+                ]);
+            }
+
             if include_calculated {
                 values.extend([
                     row.tmoe_seconds
@@ -9003,6 +9064,21 @@ fn export_table(
         .collect::<Vec<_>>();
 
     (headers, values)
+}
+
+fn has_export_column(columns: &[String], column: &str) -> bool {
+    let normalized_column = normalize_export_column(column);
+    columns
+        .iter()
+        .any(|value| normalize_export_column(value) == normalized_column)
+}
+
+fn normalize_export_column(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 fn issue_export_table(rows: &[MusicToolIssueRow]) -> (Vec<&'static str>, Vec<Vec<String>>) {
@@ -9891,7 +9967,7 @@ mod tests {
         };
 
         let response = search_library(&conn, request, 50).expect("search album tracks");
-        let (headers, rows) = export_table("tracks", &response.rows, false);
+        let (headers, rows) = export_table("tracks", &response.rows, false, &[]);
         let time_index = headers
             .iter()
             .position(|header| *header == "Time")
@@ -9906,6 +9982,34 @@ mod tests {
             search_library(&conn, missing_request, 50).expect("search missing album");
 
         assert_eq!(missing_response.total, 0);
+    }
+
+    #[test]
+    fn exports_optional_album_file_columns() {
+        let conn = seeded_connection();
+        let response = search_library(&conn, BrowseRequest::default(), 50).expect("search albums");
+        let columns = vec![
+            "filename".to_string(),
+            "filePath".to_string(),
+            "ids".to_string(),
+        ];
+        let (headers, rows) = export_table("albums", &response.rows, false, &columns);
+        let album_id_index = headers
+            .iter()
+            .position(|header| *header == "Album ID")
+            .expect("album id column");
+        let filename_index = headers
+            .iter()
+            .position(|header| *header == "Filename")
+            .expect("filename column");
+        let path_index = headers
+            .iter()
+            .position(|header| *header == "File Path")
+            .expect("file path column");
+
+        assert_eq!(rows[0][album_id_index], "mb:test");
+        assert_eq!(rows[0][filename_index], "02 What Have I Done.mp3");
+        assert_eq!(rows[0][path_index], "D:\\Music\\Pet Shop Boys\\Actually");
     }
 
     #[test]
@@ -10651,7 +10755,7 @@ mod tests {
             Utc::now().timestamp_millis()
         ));
 
-        write_export_file(&path, "xlsx", "albums", &response.rows, true).expect("write xlsx");
+        write_export_file(&path, "xlsx", "albums", &response.rows, true, &[]).expect("write xlsx");
 
         let metadata = fs::metadata(&path).expect("xlsx metadata");
         assert!(metadata.len() > 0);

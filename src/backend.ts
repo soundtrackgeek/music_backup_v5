@@ -2556,7 +2556,12 @@ export async function deleteSavedChart(id: number) {
   return invoke<void>("delete_saved_chart", { id });
 }
 
-export async function exportSearch(request: BrowseRequest, format: string, includeCalculated: boolean) {
+export async function exportSearch(
+  request: BrowseRequest,
+  format: string,
+  includeCalculated: boolean,
+  exportColumns: string[] = [],
+) {
   if (!isTauriRuntime()) {
     return {
       path: `Preview runtime export.${format}`,
@@ -2565,7 +2570,7 @@ export async function exportSearch(request: BrowseRequest, format: string, inclu
     } satisfies ExportResult;
   }
 
-  return invoke<ExportResult>("export_search", { input: { request, format, includeCalculated } });
+  return invoke<ExportResult>("export_search", { input: { request, format, includeCalculated, exportColumns } });
 }
 
 export async function exportMusicToolIssues(request: MusicToolIssueRequest, format: string) {

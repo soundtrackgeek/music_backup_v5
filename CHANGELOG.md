@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.40.0] - 2026-07-07
+### Added
+- Added Search export controls for adding IDs, cover metadata, and representative album filename/path columns to exported result files.
+- Added Rust coverage for optional album file columns in Search exports.
+
+### Changed
+- Bumped synchronized app metadata to `0.40.0`.
+
 ## [0.39.1] - 2026-07-06
 ### Fixed
 - Fixed selected-artist fuzzy MusicBrainz candidate suggestions so they start at the SPEC-defined 85/100 confidence gate instead of 68/100.

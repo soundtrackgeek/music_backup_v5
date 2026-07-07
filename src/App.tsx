@@ -178,6 +178,7 @@ import {
   rankingOptions,
   rightSidebarModeLabels,
   rightSidebarModeOptions,
+  searchExportColumnOptions,
 } from "./app/config";
 import {
   compareBrowseRows,
@@ -4115,6 +4116,7 @@ export default function App() {
   const [browseError, setBrowseError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [includeCalculated, setIncludeCalculated] = useState(false);
+  const [searchExportColumns, setSearchExportColumns] = useState<string[]>([]);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [albumRequest, setAlbumRequest] = useState<BrowseRequest>(() => {
     const request = createRequest("albums");
@@ -4407,6 +4409,13 @@ export default function App() {
   const genreSuggestionOptions = useMemo(
     () => uniqueGenreSuggestionOptions([...genreSuggestionAliases, ...genreSuggestionNames]),
     [genreSuggestionNames],
+  );
+  const availableSearchExportColumns = useMemo(
+    () =>
+      searchExportColumnOptions.filter(
+        (option) => !option.views || option.views.includes(request.view),
+      ),
+    [request.view],
   );
   const requestGenreSuggestionRefresh = useCallback(() => {
     void refreshGenreSuggestions().catch(() => {
@@ -5363,6 +5372,15 @@ export default function App() {
     setExportResult(null);
   }
 
+  function toggleSearchExportColumn(value: string) {
+    setSearchExportColumns((previous) =>
+      previous.includes(value)
+        ? previous.filter((column) => column !== value)
+        : [...previous, value],
+    );
+    setExportResult(null);
+  }
+
   function updateAlbumFilter<K extends keyof BrowseFilters>(key: K, value: BrowseFilters[K]) {
     setAlbumRequest((previous) => ({
       ...previous,
@@ -5627,7 +5645,7 @@ export default function App() {
   }
 
   async function runExport(format: string) {
-    const result = await exportSearch(request, format, includeCalculated);
+    const result = await exportSearch(request, format, includeCalculated, searchExportColumns);
     setExportResult(result);
   }
 
@@ -9939,10 +9957,27 @@ export default function App() {
               <input
                 type="checkbox"
                 checked={includeCalculated}
-                onChange={(event) => setIncludeCalculated(event.target.checked)}
+                onChange={(event) => {
+                  setIncludeCalculated(event.target.checked);
+                  setExportResult(null);
+                }}
               />
               <span>Calculated columns</span>
             </label>
+            {availableSearchExportColumns.length > 0 ? (
+              <div className="missing-flags" aria-label="Optional Search export columns">
+                {availableSearchExportColumns.map((option) => (
+                  <label key={option.value}>
+                    <input
+                      type="checkbox"
+                      checked={searchExportColumns.includes(option.value)}
+                      onChange={() => toggleSearchExportColumn(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
             <div className="export-grid">
               {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
                 <button type="button" key={format} onClick={() => void runExport(format)}>

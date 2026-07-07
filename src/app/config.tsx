@@ -122,6 +122,19 @@ export const chartColumnOptions = [
   { value: "minutes", label: "Minutes" },
 ];
 
+export type SearchExportColumnOption = {
+  value: string;
+  label: string;
+  views?: BrowseView[];
+};
+
+export const searchExportColumnOptions: SearchExportColumnOption[] = [
+  { value: "filename", label: "Filename", views: ["albums"] },
+  { value: "filePath", label: "File path", views: ["albums"] },
+  { value: "ids", label: "IDs" },
+  { value: "coverInfo", label: "Cover info" },
+];
+
 export const chartViewModes: { value: ChartViewMode; label: string; icon: LucideIcon }[] = [
   { value: "table", label: "Table", icon: BarChart3 },
   { value: "compact", label: "List", icon: ListMusic },
@@ -337,4 +350,3 @@ export const musicToolCatalog: MusicToolSummary[] = [
     trackCount: -1,
   },
 ];
-

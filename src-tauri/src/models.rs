@@ -1036,6 +1036,8 @@ pub struct ExportSearchRequest {
     pub format: String,
     #[serde(default)]
     pub include_calculated: bool,
+    #[serde(default)]
+    pub export_columns: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
