@@ -2755,6 +2755,9 @@ export async function searchLibrary(request: BrowseRequest) {
     const genreKeys = new Set(expandGenreFilterKeys(request.filters.genres));
     const excludedGenreKeys = new Set(expandGenreFilterKeys(request.filters.excludedGenres));
     const originCountryCodes = new Set((request.filters.originCountryCodes ?? []).map((code) => code.trim().toUpperCase()));
+    const excludedOriginCountryCodes = new Set(
+      (request.filters.excludedOriginCountryCodes ?? []).map((code) => code.trim().toUpperCase()),
+    );
     const ratedTracksMin = request.filters.ratedTracksMin;
     const ratedTracksMax = request.filters.ratedTracksMax;
     const yearFrom = request.filters.yearFrom;
@@ -2792,6 +2795,7 @@ export async function searchLibrary(request: BrowseRequest) {
         !excludedGenreKeys.has(genreKey) &&
         (originCountryCodes.size === 0 ||
           originCountryCodes.has((row.originCountryCode ?? "").trim().toUpperCase())) &&
+        !excludedOriginCountryCodes.has((row.originCountryCode ?? "").trim().toUpperCase()) &&
         (!request.filters.missingOriginCountry || !row.originCountryCode) &&
         matchesNumberRange(row.year, yearFrom, yearTo) &&
         matchesNumberRange(row.releaseYear, releaseYearFrom, releaseYearTo) &&

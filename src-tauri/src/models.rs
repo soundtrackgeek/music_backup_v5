@@ -687,6 +687,8 @@ pub struct BrowseFilters {
     #[serde(default)]
     pub origin_country_codes: Vec<String>,
     #[serde(default)]
+    pub excluded_origin_country_codes: Vec<String>,
+    #[serde(default)]
     pub missing_origin_country: bool,
 }
 

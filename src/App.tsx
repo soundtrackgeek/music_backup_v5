@@ -813,6 +813,75 @@ function GenreListCriterion({
   );
 }
 
+function normalizeCountryCodes(values: string[]) {
+  return values.map((code) => code.trim().toUpperCase()).filter(Boolean);
+}
+
+function parseCountryList(value: string) {
+  return normalizeCountryCodes(parseList(value));
+}
+
+function normalizeCountrySuggestionText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function countrySuggestionScore(country: MusicBrainzOriginCountryOption, normalizedQuery: string) {
+  const code = country.code.trim().toUpperCase();
+  const normalizedCode = code.toLowerCase();
+  const normalizedName = normalizeCountrySuggestionText(country.name);
+
+  if (!normalizedQuery) {
+    return null;
+  }
+  if (normalizedCode === normalizedQuery || normalizedName === normalizedQuery) {
+    return 0;
+  }
+  if (normalizedCode.startsWith(normalizedQuery)) {
+    return 10 + (normalizedCode.length - normalizedQuery.length) / 100;
+  }
+  if (normalizedName.startsWith(normalizedQuery)) {
+    return 20 + (normalizedName.length - normalizedQuery.length) / 100;
+  }
+
+  const words = normalizedName.split(" ");
+  const wordStartIndex = words.findIndex((word) => word.startsWith(normalizedQuery));
+  if (wordStartIndex >= 0) {
+    const characterIndex = normalizedName.indexOf(words[wordStartIndex]);
+    return 30 + characterIndex + (normalizedName.length - normalizedQuery.length) / 100;
+  }
+
+  const includesIndex = `${normalizedCode} ${normalizedName}`.indexOf(normalizedQuery);
+  if (includesIndex >= 0) {
+    return 50 + includesIndex + normalizedName.length / 100;
+  }
+
+  return null;
+}
+
+function countrySuggestions(countryOptions: MusicBrainzOriginCountryOption[], query: string) {
+  const normalizedQuery = normalizeCountrySuggestionText(query);
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  return countryOptions
+    .map((country) => ({ country, score: countrySuggestionScore(country, normalizedQuery) }))
+    .filter((item): item is { country: MusicBrainzOriginCountryOption; score: number } => item.score !== null)
+    .sort(
+      (left, right) =>
+        left.score - right.score ||
+        left.country.name.localeCompare(right.country.name) ||
+        left.country.code.localeCompare(right.country.code),
+    )
+    .slice(0, 8)
+    .map((item) => item.country);
+}
+
 function CountryListCriterion({
   label,
   values,
@@ -827,39 +896,142 @@ function CountryListCriterion({
   placeholder?: string;
 }) {
   const inputId = useId();
-  const optionsId = `${inputId}-countries`;
-  const [draftValue, setDraftValue] = useState(() => formatList(values));
+  const listboxId = `${inputId}-country-suggestions`;
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const normalizedValues = useMemo(() => normalizeCountryCodes(values), [values]);
+  const [draftValue, setDraftValue] = useState(() => formatList(normalizedValues));
+  const [caretPosition, setCaretPosition] = useState(() => draftValue.length);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
+  const activeToken = useMemo(
+    () => currentGenreToken(draftValue, caretPosition),
+    [caretPosition, draftValue],
+  );
+  const suggestions = useMemo(
+    () => countrySuggestions(countryOptions, activeToken.query),
+    [activeToken.query, countryOptions],
+  );
+  const showSuggestions = isSuggestionOpen && suggestions.length > 0 && activeToken.query.trim().length > 0;
+  const activeSuggestionId = showSuggestions
+    ? `${listboxId}-option-${activeSuggestionIndex}`
+    : undefined;
 
   useEffect(() => {
-    if (!listsEqual(parseList(draftValue), values)) {
-      setDraftValue(formatList(values));
+    if (!listsEqual(parseCountryList(draftValue), normalizedValues)) {
+      const nextValue = formatList(normalizedValues);
+      setDraftValue(nextValue);
+      setCaretPosition(nextValue.length);
     }
-  }, [draftValue, values]);
+  }, [draftValue, normalizedValues]);
+
+  useEffect(() => {
+    setActiveSuggestionIndex(0);
+  }, [activeToken.query, suggestions.length]);
+
+  function syncCaret(input: HTMLInputElement) {
+    setCaretPosition(input.selectionStart ?? input.value.length);
+  }
 
   function updateDraft(value: string) {
     setDraftValue(value);
-    onChange(parseList(value).map((code) => code.toUpperCase()));
+    onChange(parseCountryList(value));
+  }
+
+  function chooseSuggestion(suggestion: MusicBrainzOriginCountryOption | undefined) {
+    if (!suggestion) {
+      return;
+    }
+    const nextDraft = replaceGenreToken(draftValue, caretPosition, suggestion.code.trim().toUpperCase());
+    updateDraft(nextDraft.value);
+    setCaretPosition(nextDraft.caretPosition);
+    setIsSuggestionOpen(false);
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(nextDraft.caretPosition, nextDraft.caretPosition);
+    });
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown" && suggestions.length > 0) {
+      event.preventDefault();
+      setIsSuggestionOpen(true);
+      setActiveSuggestionIndex((current) => (showSuggestions ? (current + 1) % suggestions.length : 0));
+      return;
+    }
+
+    if (event.key === "ArrowUp" && suggestions.length > 0) {
+      event.preventDefault();
+      setIsSuggestionOpen(true);
+      setActiveSuggestionIndex((current) =>
+        showSuggestions ? (current - 1 + suggestions.length) % suggestions.length : suggestions.length - 1,
+      );
+      return;
+    }
+
+    if ((event.key === "Enter" || event.key === "Tab") && showSuggestions) {
+      event.preventDefault();
+      chooseSuggestion(suggestions[activeSuggestionIndex]);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setIsSuggestionOpen(false);
+    }
   }
 
   return (
-    <label className="criterion country-list-criterion" htmlFor={inputId}>
-      <span>{label}</span>
+    <div className="criterion genre-list-criterion country-list-criterion">
+      <span id={`${inputId}-label`}>{label}</span>
       <input
+        ref={inputRef}
         id={inputId}
-        list={optionsId}
+        aria-labelledby={`${inputId}-label`}
+        aria-autocomplete="list"
+        aria-controls={showSuggestions ? listboxId : undefined}
+        aria-expanded={showSuggestions}
+        aria-activedescendant={activeSuggestionId}
         value={draftValue}
-        onChange={(event) => updateDraft(event.target.value)}
-        onBlur={(event) => setDraftValue(formatList(parseList(event.currentTarget.value).map((code) => code.toUpperCase())))}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          syncCaret(event.target);
+          updateDraft(nextValue);
+          setIsSuggestionOpen(true);
+        }}
+        onFocus={(event) => {
+          syncCaret(event.currentTarget);
+          setIsSuggestionOpen(true);
+        }}
+        onKeyDown={handleKeyDown}
+        onKeyUp={(event) => syncCaret(event.currentTarget)}
+        onClick={(event) => syncCaret(event.currentTarget)}
+        onSelect={(event) => syncCaret(event.currentTarget)}
+        onBlur={(event) => {
+          setDraftValue(formatList(parseCountryList(event.currentTarget.value)));
+          setIsSuggestionOpen(false);
+        }}
         placeholder={placeholder}
       />
-      <datalist id={optionsId}>
-        {countryOptions.map((country) => (
-          <option key={country.code} value={country.code}>
-            {country.name}
-          </option>
-        ))}
-      </datalist>
-    </label>
+      {showSuggestions ? (
+        <div className="genre-suggestions" id={listboxId} role="listbox">
+          {suggestions.map((suggestion, index) => (
+            <button
+              className={index === activeSuggestionIndex ? "genre-suggestion active" : "genre-suggestion"}
+              id={`${listboxId}-option-${index}`}
+              key={suggestion.code}
+              type="button"
+              role="option"
+              aria-selected={index === activeSuggestionIndex}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                chooseSuggestion(suggestion);
+              }}
+            >
+              {suggestion.code} - {suggestion.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -5536,6 +5708,13 @@ export default function App() {
         remove: () => updateFilter("originCountryCodes", []),
       });
     }
+    if (currentFilters.excludedOriginCountryCodes.length) {
+      nextChips.push({
+        key: "excludedOriginCountryCodes",
+        label: `Origin excluding: ${currentFilters.excludedOriginCountryCodes.join(", ")}`,
+        remove: () => updateFilter("excludedOriginCountryCodes", []),
+      });
+    }
     if (currentFilters.missingOriginCountry) {
       nextChips.push({
         key: "missingOriginCountry",
@@ -7683,6 +7862,12 @@ export default function App() {
                 label="Origin countries"
                 values={chartConfig.request.filters.originCountryCodes}
                 onChange={(originCountryCodes) => updateChartFilters({ originCountryCodes })}
+                countryOptions={originCountryOptions}
+              />
+              <CountryListCriterion
+                label="Exclude origin countries"
+                values={chartConfig.request.filters.excludedOriginCountryCodes}
+                onChange={(excludedOriginCountryCodes) => updateChartFilters({ excludedOriginCountryCodes })}
                 countryOptions={originCountryOptions}
               />
               <TextCriterion
@@ -10185,6 +10370,12 @@ export default function App() {
                 label="Origin countries"
                 values={currentFilters.originCountryCodes}
                 onChange={(originCountryCodes) => updateFilter("originCountryCodes", originCountryCodes)}
+                countryOptions={originCountryOptions}
+              />
+              <CountryListCriterion
+                label="Exclude origin countries"
+                values={currentFilters.excludedOriginCountryCodes}
+                onChange={(excludedOriginCountryCodes) => updateFilter("excludedOriginCountryCodes", excludedOriginCountryCodes)}
                 countryOptions={originCountryOptions}
               />
               <TextCriterion

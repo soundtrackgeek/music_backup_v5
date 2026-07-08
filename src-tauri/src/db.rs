@@ -8393,6 +8393,7 @@ fn build_where_clause(
         &mut conditions,
         &mut values,
         &filters.origin_country_codes,
+        &filters.excluded_origin_country_codes,
         filters.missing_origin_country,
     );
 
@@ -8464,6 +8465,7 @@ fn add_origin_country_conditions(
     conditions: &mut Vec<String>,
     values: &mut Vec<Value>,
     country_codes: &[String],
+    excluded_country_codes: &[String],
     missing_origin_country: bool,
 ) {
     let normalized = country_codes
@@ -8481,6 +8483,23 @@ fn add_origin_country_conditions(
             "UPPER(COALESCE(origin.country_code, '')) IN ({placeholders})"
         ));
         values.extend(normalized.into_iter().map(Value::Text));
+    }
+
+    let excluded = excluded_country_codes
+        .iter()
+        .map(|code| normalize_country_code(code))
+        .filter(|code| !code.is_empty())
+        .collect::<Vec<_>>();
+
+    if !excluded.is_empty() {
+        let placeholders = std::iter::repeat("?")
+            .take(excluded.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        conditions.push(format!(
+            "UPPER(COALESCE(origin.country_code, '')) NOT IN ({placeholders})"
+        ));
+        values.extend(excluded.into_iter().map(Value::Text));
     }
 
     if missing_origin_country {
@@ -10740,6 +10759,17 @@ mod tests {
             missing_response.rows[0].album_artist_display.as_deref(),
             Some("Korn")
         );
+
+        let mut excluded_request = BrowseRequest::default();
+        excluded_request.filters.excluded_origin_country_codes = vec!["GB".to_string()];
+        let excluded_response =
+            search_library(&conn, excluded_request, 50).expect("exclude origin country");
+
+        assert_eq!(excluded_response.total, 1);
+        assert_eq!(
+            excluded_response.rows[0].album_artist_display.as_deref(),
+            Some("Korn")
+        );
     }
 
     #[test]
@@ -10748,6 +10778,7 @@ mod tests {
             serde_json::from_value(serde_json::json!({})).expect("deserialize filters");
 
         assert!(filters.origin_country_codes.is_empty());
+        assert!(filters.excluded_origin_country_codes.is_empty());
         assert!(!filters.missing_origin_country);
     }
 

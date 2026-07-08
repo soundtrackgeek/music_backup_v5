@@ -60,6 +60,7 @@ export function createFilters(): BrowseFilters {
     lovedTracksMin: null,
     lovedTracksMax: null,
     originCountryCodes: [],
+    excludedOriginCountryCodes: [],
     missingOriginCountry: false,
   };
 }

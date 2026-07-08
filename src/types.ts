@@ -447,6 +447,7 @@ export type BrowseFilters = {
   lovedTracksMin: number | null;
   lovedTracksMax: number | null;
   originCountryCodes: string[];
+  excludedOriginCountryCodes: string[];
   missingOriginCountry: boolean;
 };
 

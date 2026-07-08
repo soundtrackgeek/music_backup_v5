@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.44.0] - 2026-07-08
+### Added
+- Added Search and Charts Exclude origin countries filters backed by the shared browse request model and SQLite country joins.
+- Added token-aware live Origin Country suggestions so comma-separated country filters keep suggesting matches after the first country.
+
+### Changed
+- Bumped synchronized app metadata to `0.44.0`.
+
 ## [0.43.0] - 2026-07-08
 ### Added
 - Added selected-artist Origin Country refresh to the Artist MusicBrainz Update action, saving MusicBrainz artist country/area data into the app-owned origin tables.
