@@ -195,6 +195,7 @@ import {
   rightSidebarModeLabels,
   rightSidebarModeOptions,
   searchExportColumnOptions,
+  searchTableColumnOptions,
 } from "./app/config";
 import {
   compareBrowseRows,
@@ -1459,11 +1460,13 @@ function ResultTable({
   sort,
   onSort,
   countryFlagDisplay,
+  visibleColumns,
 }: {
   response: BrowseResponse | null;
   sort: BrowseSort;
   onSort: (field: string) => void;
   countryFlagDisplay: CountryFlagDisplay;
+  visibleColumns: string[];
 }) {
   if (!response) {
     return (
@@ -1483,14 +1486,20 @@ function ResultTable({
     );
   }
 
+  const visibleColumnSet = new Set(visibleColumns);
+  const showBillboardColumn = visibleColumnSet.has("billboard");
+
   return response.view === "tracks" ? (
-    <div className="result-table track-results" role="table">
+    <div className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}`} role="table">
       <div className="result-table-head" role="row">
         <SortableColumnHeader label="Track" field="title" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Artist" field="displayArtist" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Origin" field="originCountry" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
+        {showBillboardColumn ? (
+          <SortableColumnHeader label="Album Billboard" field="billboardRank" sort={sort} onSort={onSort} />
+        ) : null}
         <SortableColumnHeader label="Single" field="billboardSingleRank" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Rating" field="trackRating" sort={sort} onSort={onSort} />
         <span role="columnheader">File</span>
@@ -1510,13 +1519,18 @@ function ResultTable({
               </small>
             </span>
             <span className="album-title-cell" role="cell">
-              <AlbumTitleContents row={row} subtitle={row.albumArtistDisplay ?? row.year?.toString() ?? null} />
+              <AlbumTitleContents
+                row={row}
+                subtitle={row.albumArtistDisplay ?? row.year?.toString() ?? null}
+                showBillboardBadge={!showBillboardColumn}
+              />
             </span>
             <span role="cell">{row.displayArtist ?? row.albumArtistDisplay ?? ""}</span>
             <span role="cell">
               <CountryDisplay value={row} mode={countryFlagDisplay} />
             </span>
             <span role="cell">{row.year ?? ""}</span>
+            {showBillboardColumn ? <span role="cell">{formatBillboardRank(row)}</span> : null}
             <span role="cell">{singleLabel}</span>
             <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
             <span role="cell" title={row.filePath ?? ""}>
@@ -1527,13 +1541,16 @@ function ResultTable({
       })}
     </div>
   ) : (
-    <div className="result-table album-results" role="table">
+    <div className={`result-table album-results${showBillboardColumn ? " with-billboard" : ""}`} role="table">
       <div className="result-table-head" role="row">
         <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Artist" field="artist" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Origin" field="originCountry" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Genre" field="genre" sort={sort} onSort={onSort} />
+        {showBillboardColumn ? (
+          <SortableColumnHeader label="Billboard" field="billboardRank" sort={sort} onSort={onSort} />
+        ) : null}
         <SortableColumnHeader label="Tracks" field="trackCount" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Complete" field="ratingCompleteness" sort={sort} onSort={onSort} />
         <SortableColumnHeader label="Score" field="albumScore" sort={sort} onSort={onSort} />
@@ -1541,7 +1558,7 @@ function ResultTable({
       {response.rows.map((row) => (
         <div className="result-table-row" role="row" key={row.id}>
           <span className="album-title-cell" role="cell">
-            <AlbumTitleContents row={row} />
+            <AlbumTitleContents row={row} showBillboardBadge={!showBillboardColumn} />
           </span>
           <span role="cell">{row.albumArtistDisplay ?? ""}</span>
           <span role="cell">
@@ -1549,6 +1566,7 @@ function ResultTable({
           </span>
           <span role="cell">{row.year ?? ""}</span>
           <span role="cell">{row.canonicalGenre ?? ""}</span>
+          {showBillboardColumn ? <span role="cell">{formatBillboardRank(row)}</span> : null}
           <span role="cell">{row.totalTracks ?? ""}</span>
           <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
           <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
@@ -1618,9 +1636,11 @@ function AlbumCover({
 function AlbumTitleContents({
   row,
   subtitle = formatMinutes(row.totalSeconds),
+  showBillboardBadge = true,
 }: {
   row: BrowseRow;
   subtitle?: string | null;
+  showBillboardBadge?: boolean;
 }) {
   const billboardLabel = formatBillboardRank(row);
   return (
@@ -1629,7 +1649,7 @@ function AlbumTitleContents({
       <span>
         <strong>
           <span>{row.album ?? "Untitled"}</span>
-          {billboardLabel ? <span className="billboard-badge">{billboardLabel}</span> : null}
+          {showBillboardBadge && billboardLabel ? <span className="billboard-badge">{billboardLabel}</span> : null}
         </strong>
         {subtitle ? <small>{subtitle}</small> : null}
       </span>
@@ -3696,7 +3716,7 @@ function ChartResults({
       label: "Album",
       sortField: "album",
       className: "album-title-cell",
-      value: (row: BrowseRow) => <AlbumTitleContents row={row} />,
+      value: (row: BrowseRow) => <AlbumTitleContents row={row} showBillboardBadge={false} />,
     },
     { key: "artist", label: "Artist", sortField: "artist", value: (row: BrowseRow) => row.albumArtistDisplay ?? "" },
     { key: "year", label: "Year", sortField: "year", value: (row: BrowseRow) => row.year?.toString() ?? "" },
@@ -4812,6 +4832,7 @@ export default function App() {
   const [browseError, setBrowseError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [includeCalculated, setIncludeCalculated] = useState(false);
+  const [searchTableColumns, setSearchTableColumns] = useState<string[]>(["billboard"]);
   const [searchExportColumns, setSearchExportColumns] = useState<string[]>([]);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [albumRequest, setAlbumRequest] = useState<BrowseRequest>(() => {
@@ -6198,6 +6219,14 @@ export default function App() {
         : [...previous, value],
     );
     setExportResult(null);
+  }
+
+  function toggleSearchTableColumn(value: string) {
+    setSearchTableColumns((previous) =>
+      previous.includes(value)
+        ? previous.filter((column) => column !== value)
+        : [...previous, value],
+    );
   }
 
   function updateAlbumFilter<K extends keyof BrowseFilters>(key: K, value: BrowseFilters[K]) {
@@ -8457,6 +8486,7 @@ export default function App() {
                 sort={discoveryAlbumRequest.sort}
                 onSort={sortDiscoveryAlbumsBy}
                 countryFlagDisplay={settings.countryFlagDisplay}
+                visibleColumns={[]}
               />
             </section>
           </section>
@@ -10849,6 +10879,20 @@ export default function App() {
                 </label>
               </div>
 
+              <div className="missing-flags" aria-label="Visible Search columns">
+                <span className="missing-flags-title">Table columns</span>
+                {searchTableColumnOptions.map((option) => (
+                  <label key={option.value}>
+                    <input
+                      type="checkbox"
+                      checked={searchTableColumns.includes(option.value)}
+                      onChange={() => toggleSearchTableColumn(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+
               <div className="sort-controls">
                 <SelectField
                   label="Sort"
@@ -10972,6 +11016,7 @@ export default function App() {
               sort={request.sort}
               onSort={sortSearchBy}
               countryFlagDisplay={settings.countryFlagDisplay}
+              visibleColumns={searchTableColumns}
             />
           </section>
         </section>

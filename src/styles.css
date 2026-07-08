@@ -2342,12 +2342,28 @@ button {
   min-width: 940px;
 }
 
+.album-results.with-billboard .result-table-head,
+.album-results.with-billboard .result-table-row {
+  grid-template-columns:
+    minmax(220px, 2fr) minmax(140px, 1.35fr) minmax(96px, 0.9fr) 64px
+    minmax(104px, 1fr) 82px 64px 84px 72px;
+  min-width: 1020px;
+}
+
 .track-results .result-table-head,
 .track-results .result-table-row {
   grid-template-columns:
     minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(132px, 1.1fr)
     minmax(96px, 0.8fr) 64px 72px 64px minmax(140px, 1.1fr);
   min-width: 1040px;
+}
+
+.track-results.with-billboard .result-table-head,
+.track-results.with-billboard .result-table-row {
+  grid-template-columns:
+    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(132px, 1.1fr)
+    minmax(96px, 0.8fr) 64px 96px 72px 64px minmax(140px, 1.1fr);
+  min-width: 1136px;
 }
 
 .album-index-results .result-table-head,

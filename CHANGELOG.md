@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.46.0] - 2026-07-08
+### Added
+- Added a Billboard table-column option to Search, enabled by default for album and track result tables.
+
+### Changed
+- Changed Charts table rows to use the dedicated Billboard column by default instead of also showing the inline album-title Billboard badge.
+- Bumped synchronized app metadata to `0.46.0`.
+
 ## [0.45.0] - 2026-07-08
 ### Added
 - Added bundled SVG country flags from `flag-icons` for Origin Country displays across Search, Charts, Albums, Artists, MusicBrainz review panels, filter chips, and country suggestions.

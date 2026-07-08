@@ -136,6 +136,10 @@ export const chartColumnOptions = [
   { value: "minutes", label: "Minutes" },
 ];
 
+export const searchTableColumnOptions = [
+  { value: "billboard", label: "Billboard" },
+];
+
 export type SearchExportColumnOption = {
   value: string;
   label: string;
