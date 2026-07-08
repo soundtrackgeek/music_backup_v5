@@ -1088,6 +1088,26 @@ fn resolve_origin_artist_match(
                 }),
             };
         }
+        if link.mbid.is_some() {
+            return match validated_origin_mbid(link.mbid.as_deref()) {
+                Some(mbid) => Ok(OriginArtistResolution {
+                    mbid: Some(mbid),
+                    matched_name: link.canonical_name,
+                    match_method: link.match_method,
+                    artist_link_state: link.verification_state,
+                    suspect_mapping: false,
+                    skipped_reason: None,
+                }),
+                None => Ok(OriginArtistResolution {
+                    mbid: link.mbid,
+                    matched_name: link.canonical_name,
+                    match_method: link.match_method,
+                    artist_link_state: link.verification_state,
+                    suspect_mapping: false,
+                    skipped_reason: Some("MusicBrainz artist-link MBID is invalid.".to_string()),
+                }),
+            };
+        }
     }
 
     let Some(cache_conn) = cache_conn else {
@@ -1118,25 +1138,13 @@ fn resolve_origin_artist_match(
             skipped_reason: Some("No high-confidence MusicBrainz artist match.".to_string()),
         });
     };
-    let duplicate_heavy_cache_mapping = artist_match.cached_name_count > 1;
-    if duplicate_heavy_cache_mapping && artist_match.artist_link_state != "verified" {
-        return Ok(OriginArtistResolution {
-            mbid: Some(artist_match.mbid),
-            matched_name: artist_match.matched_name,
-            match_method: artist_match.match_method,
-            artist_link_state: artist_match.artist_link_state,
-            suspect_mapping: true,
-            skipped_reason: Some("Skipped suspect or duplicate-heavy cache mapping.".to_string()),
-        });
-    }
-
     match validated_origin_mbid(Some(&artist_match.mbid)) {
         Some(mbid) => Ok(OriginArtistResolution {
             mbid: Some(mbid),
             matched_name: artist_match.matched_name,
             match_method: artist_match.match_method,
             artist_link_state: artist_match.artist_link_state,
-            suspect_mapping: duplicate_heavy_cache_mapping,
+            suspect_mapping: artist_match.suspect_mapping,
             skipped_reason: None,
         }),
         None => Ok(OriginArtistResolution {
@@ -4158,7 +4166,7 @@ mod tests {
     }
 
     #[test]
-    fn origin_preview_skips_suspect_cache_mappings() {
+    fn origin_preview_trusts_duplicate_heavy_cache_mbid() {
         let temp_dir = temp_cache_dir("origin-suspect");
         let cache_path = temp_dir.join("musicbrainz_cache.db");
         create_origin_cache_with_suspect_artist(
@@ -4179,14 +4187,55 @@ mod tests {
         .expect("preview origin import");
         let row = preview.rows.first().expect("preview row");
 
-        assert_eq!(row.status, "skipped");
+        assert_eq!(row.status, "eligible");
         assert!(row.suspect_mapping);
-        assert_eq!(
-            row.skipped_reason.as_deref(),
-            Some("Skipped suspect or duplicate-heavy cache mapping.")
-        );
+        assert_eq!(row.skipped_reason, None);
+        assert_eq!(preview.eligible_count, 1);
 
         fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn origin_preview_trusts_unverified_artist_link_mbid() {
+        let app_conn = create_artist_app_db();
+        create_decision_tables(&app_conn);
+        app_conn
+            .execute(
+                "
+                INSERT INTO musicbrainz_artist_links (
+                    local_artist_key, display_artist, mbid, canonical_name, match_method,
+                    confidence, verification_state, ignored, created_at, updated_at
+                ) VALUES (
+                    'pet shop boys', 'Pet Shop Boys',
+                    '012151a8-0f9a-44c9-997f-ebd68b5389f9', 'Pet Shop Boys',
+                    'cache-name', 0.82, 'unverified', 0,
+                    datetime('now'), datetime('now')
+                )
+                ",
+                [],
+            )
+            .expect("seed unverified artist link");
+
+        let preview = preview_origin_country_import_for_connection(
+            &app_conn,
+            None,
+            &MusicBrainzOriginCountryImportRequest {
+                artist_keys: vec!["pet shop boys".to_string()],
+                refetch: false,
+                limit: None,
+            },
+        )
+        .expect("preview origin import");
+        let row = preview.rows.first().expect("preview row");
+
+        assert_eq!(row.status, "eligible");
+        assert_eq!(
+            row.musicbrainz_mbid.as_deref(),
+            Some("012151a8-0f9a-44c9-997f-ebd68b5389f9")
+        );
+        assert_eq!(row.artist_link_state, "unverified");
+        assert_eq!(row.skipped_reason, None);
+        assert_eq!(preview.eligible_count, 1);
     }
 
     #[test]
@@ -4212,7 +4261,7 @@ mod tests {
         let row = preview.rows.first().expect("preview row");
 
         assert_eq!(row.status, "eligible");
-        assert!(!row.suspect_mapping);
+        assert!(row.suspect_mapping);
         assert_eq!(row.skipped_reason, None);
         assert_eq!(preview.eligible_count, 1);
 

@@ -458,8 +458,13 @@ function originPreviewReason(row: MusicBrainzOriginCountryPreviewRow) {
   }
   switch (row.status) {
     case "eligible":
-      return row.suspectMapping ? "Ready after review-safe match." : "Ready for MusicBrainz lookup.";
+      return row.suspectMapping
+        ? "Ready from cached MBID; review on the Artist page if wrong."
+        : "Ready for MusicBrainz lookup.";
     case "alreadyImported":
+      if (row.suspectMapping) {
+        return "Imported from cached MBID; review on the Artist page if wrong.";
+      }
       return row.existingReviewState ? `Saved as ${row.existingReviewState}.` : "Country already saved.";
     case "manual":
       return "Manual or reviewed country is preserved.";

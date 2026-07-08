@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.42.3] - 2026-07-08
+### Changed
+- Origin Countries import now trusts attached or cached MusicBrainz MBIDs even when the cache mapping is duplicate-heavy, leaving later corrections to the Artist review flow.
+- Bumped synchronized app metadata to `0.42.3`.
+
 ## [0.42.2] - 2026-07-08
 ### Added
 - Added a filterable MusicBrainz Origin Countries coverage report in Settings for skipped, unresolved, eligible, imported, and all preview rows.
