@@ -172,6 +172,8 @@ pub struct AppSettings {
     pub backup_retention: u32,
     #[serde(default)]
     pub dark_mode: bool,
+    #[serde(default = "default_country_flag_display")]
+    pub country_flag_display: String,
     #[serde(default = "default_left_sidebar_default")]
     pub left_sidebar_default: String,
     #[serde(default = "default_right_sidebar_default")]
@@ -1514,6 +1516,10 @@ fn default_request_id() -> String {
     String::new()
 }
 
+fn default_country_flag_display() -> String {
+    "flagAndName".to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1524,6 +1530,7 @@ mod tests {
         let settings = AppSettings {
             backup_retention: 3,
             dark_mode: false,
+            country_flag_display: "flagAndName".to_string(),
             left_sidebar_default: "expanded".to_string(),
             right_sidebar_default: "expanded".to_string(),
             import_source_path: r"D:\Exports\library.tsv".to_string(),
@@ -1552,6 +1559,10 @@ mod tests {
         );
         assert_eq!(serialized.get("updateAutoCheckMinutes"), Some(&json!(30)));
         assert_eq!(
+            serialized.get("countryFlagDisplay"),
+            Some(&json!("flagAndName"))
+        );
+        assert_eq!(
             serialized.get("importSourcePath"),
             Some(&json!(r"D:\Exports\library.tsv"))
         );
@@ -1576,6 +1587,7 @@ mod tests {
             "coverSourcePath": r"D:\Covers",
             "billboardSourcePath": r"D:\Charts\Albums",
             "billboardSinglesSourcePath": r"D:\Charts\Singles",
+            "countryFlagDisplay": "flag",
             "musicBrainzCachePath": r"C:\Sync\musicbrainz_cache.db",
             "musicBrainzOverlaySyncPath": r"C:\Sync\musicbrainz-overlay-sync.sqlite3",
             "musicBrainzOverlayAutoSyncMinutes": 15,
@@ -1586,6 +1598,7 @@ mod tests {
         assert_eq!(decoded.cover_source_path, r"D:\Covers");
         assert_eq!(decoded.billboard_source_path, r"D:\Charts\Albums");
         assert_eq!(decoded.billboard_singles_source_path, r"D:\Charts\Singles");
+        assert_eq!(decoded.country_flag_display, "flag");
         assert_eq!(decoded.musicbrainz_overlay_auto_sync_minutes, 15);
         assert_eq!(decoded.update_auto_check_minutes, 30);
 

@@ -38,7 +38,7 @@ type ProgressApp<'a> = &'a ();
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 17;
+const LATEST_SCHEMA_VERSION: i32 = 18;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const DEFAULT_IMPORT_SOURCE_PATH: &str = "musicbee-library.tsv";
 const DEFAULT_COVER_SOURCE_PATH: &str = "AlbumCovers";
@@ -47,6 +47,7 @@ const DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES";
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH: &str =
     r"C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3";
+const DEFAULT_COUNTRY_FLAG_DISPLAY: &str = "flagAndName";
 const MUSICBRAINZ_SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
 const MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES: u32 = 1440;
 const MAX_UPDATE_AUTO_CHECK_MINUTES: u32 = 1440;
@@ -314,7 +315,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_seventeen_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_eighteen_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -584,6 +585,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             id INTEGER PRIMARY KEY CHECK (id = 1),
             backup_retention INTEGER NOT NULL DEFAULT 3,
             dark_mode INTEGER NOT NULL DEFAULT 0,
+            country_flag_display TEXT NOT NULL DEFAULT 'flagAndName',
             left_sidebar_default TEXT NOT NULL DEFAULT 'expanded',
             right_sidebar_default TEXT NOT NULL DEFAULT 'expanded',
             import_source_path TEXT NOT NULL DEFAULT 'musicbee-library.tsv',
@@ -772,15 +774,21 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_app_settings_musicbrainz_columns(conn)?;
     ensure_app_settings_musicbrainz_sync_columns(conn)?;
     ensure_app_settings_update_columns(conn)?;
+    ensure_app_settings_country_flag_display_column(conn)?;
     ensure_musicbrainz_decision_tables(conn)?;
     ensure_musicbrainz_tombstone_tables(conn)?;
     ensure_musicbrainz_overlay_sync_log(conn)?;
     ensure_musicbrainz_release_status_cache(conn)?;
     ensure_musicbrainz_artist_release_groups(conn)?;
     ensure_musicbrainz_origin_country_tables(conn)?;
-    conn.execute_batch("PRAGMA user_version = 17;")
+    conn.execute_batch("PRAGMA user_version = 18;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_eighteen_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_seventeen_schema_exists(conn)?
+        && schema_column_exists(conn, "app_settings", "country_flag_display")?)
 }
 
 fn phase_seventeen_schema_exists(conn: &Connection) -> Result<bool> {
@@ -1008,6 +1016,17 @@ fn ensure_app_settings_update_columns(conn: &Connection) -> Result<()> {
             "ALTER TABLE app_settings ADD COLUMN update_auto_check_minutes INTEGER NOT NULL DEFAULT 0;",
         )
         .context("Could not add app_settings.update_auto_check_minutes")?;
+    }
+
+    Ok(())
+}
+
+fn ensure_app_settings_country_flag_display_column(conn: &Connection) -> Result<()> {
+    if !schema_column_exists(conn, "app_settings", "country_flag_display")? {
+        conn.execute_batch(
+            "ALTER TABLE app_settings ADD COLUMN country_flag_display TEXT NOT NULL DEFAULT 'flagAndName';",
+        )
+        .context("Could not add app_settings.country_flag_display")?;
     }
 
     Ok(())
@@ -2480,7 +2499,8 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
     let settings = conn
         .query_row(
             "
-            SELECT backup_retention, dark_mode, left_sidebar_default, right_sidebar_default,
+            SELECT backup_retention, dark_mode, country_flag_display,
+                   left_sidebar_default, right_sidebar_default,
                    import_source_path, cover_source_path, billboard_source_path,
                    billboard_singles_source_path, musicbrainz_cache_path,
                    musicbrainz_overlay_sync_path, musicbrainz_overlay_auto_sync_minutes,
@@ -2501,6 +2521,7 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
             AppSettings {
                 backup_retention: DEFAULT_BACKUP_RETENTION,
                 dark_mode: false,
+                country_flag_display: DEFAULT_COUNTRY_FLAG_DISPLAY.to_string(),
                 left_sidebar_default: "expanded".to_string(),
                 right_sidebar_default: "expanded".to_string(),
                 import_source_path: DEFAULT_IMPORT_SOURCE_PATH.to_string(),
@@ -2523,15 +2544,16 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
     conn.execute(
         "
         INSERT INTO app_settings (
-            id, backup_retention, dark_mode, left_sidebar_default, right_sidebar_default,
+            id, backup_retention, dark_mode, country_flag_display, left_sidebar_default, right_sidebar_default,
             import_source_path, cover_source_path, billboard_source_path,
             billboard_singles_source_path, musicbrainz_cache_path, musicbrainz_overlay_sync_path,
             musicbrainz_overlay_auto_sync_minutes, update_auto_check_minutes, updated_at
         )
-        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
         ON CONFLICT(id) DO UPDATE SET
             backup_retention = excluded.backup_retention,
             dark_mode = excluded.dark_mode,
+            country_flag_display = excluded.country_flag_display,
             left_sidebar_default = excluded.left_sidebar_default,
             right_sidebar_default = excluded.right_sidebar_default,
             import_source_path = excluded.import_source_path,
@@ -2547,6 +2569,7 @@ fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Res
         params![
             i64::from(settings.backup_retention),
             if settings.dark_mode { 1 } else { 0 },
+            settings.country_flag_display,
             settings.left_sidebar_default,
             settings.right_sidebar_default,
             settings.import_source_path,
@@ -2571,17 +2594,18 @@ fn settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppSettings> {
     Ok(AppSettings {
         backup_retention: backup_retention.max(0) as u32,
         dark_mode: dark_mode != 0,
-        left_sidebar_default: row.get(2)?,
-        right_sidebar_default: row.get(3)?,
-        import_source_path: row.get(4)?,
-        cover_source_path: row.get(5)?,
-        billboard_source_path: row.get(6)?,
-        billboard_singles_source_path: row.get(7)?,
-        musicbrainz_cache_path: row.get(8)?,
-        musicbrainz_overlay_sync_path: row.get(9)?,
-        musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(10)?.max(0) as u32,
-        update_auto_check_minutes: row.get::<_, i64>(11)?.max(0) as u32,
-        updated_at: row.get(12)?,
+        country_flag_display: row.get(2)?,
+        left_sidebar_default: row.get(3)?,
+        right_sidebar_default: row.get(4)?,
+        import_source_path: row.get(5)?,
+        cover_source_path: row.get(6)?,
+        billboard_source_path: row.get(7)?,
+        billboard_singles_source_path: row.get(8)?,
+        musicbrainz_cache_path: row.get(9)?,
+        musicbrainz_overlay_sync_path: row.get(10)?,
+        musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(11)?.max(0) as u32,
+        update_auto_check_minutes: row.get::<_, i64>(12)?.max(0) as u32,
+        updated_at: row.get(13)?,
     })
 }
 
@@ -2589,6 +2613,7 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
     settings.backup_retention = settings
         .backup_retention
         .clamp(MIN_BACKUP_RETENTION, MAX_BACKUP_RETENTION);
+    settings.country_flag_display = normalize_country_flag_display(&settings.country_flag_display);
     settings.left_sidebar_default = normalize_left_sidebar_default(&settings.left_sidebar_default);
     settings.right_sidebar_default =
         normalize_right_sidebar_default(&settings.right_sidebar_default);
@@ -2615,6 +2640,13 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
         .update_auto_check_minutes
         .min(MAX_UPDATE_AUTO_CHECK_MINUTES);
     settings
+}
+
+fn normalize_country_flag_display(value: &str) -> String {
+    match value {
+        "flagAndName" | "name" | "flag" => value.to_string(),
+        _ => DEFAULT_COUNTRY_FLAG_DISPLAY.to_string(),
+    }
 }
 
 fn normalize_left_sidebar_default(value: &str) -> String {
@@ -10686,7 +10718,7 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_seventeen_schema_exists(&conn).expect("phase seventeen schema exists"));
+        assert!(phase_eighteen_schema_exists(&conn).expect("phase eighteen schema exists"));
         assert!(schema_table_exists(&conn, "musicbrainz_origin_countries")
             .expect("origin country table exists"));
         assert!(
@@ -10899,6 +10931,7 @@ mod tests {
             AppSettings {
                 backup_retention: 500,
                 dark_mode: true,
+                country_flag_display: "flag".to_string(),
                 left_sidebar_default: "iconOnly".to_string(),
                 right_sidebar_default: "hidden".to_string(),
                 import_source_path: r"D:\Exports\musicbee-library.tsv".to_string(),
@@ -10917,6 +10950,7 @@ mod tests {
 
         assert_eq!(saved.backup_retention, MAX_BACKUP_RETENTION);
         assert!(saved.dark_mode);
+        assert_eq!(saved.country_flag_display, "flag");
         assert_eq!(saved.left_sidebar_default, "iconOnly");
         assert_eq!(saved.right_sidebar_default, "hidden");
         assert_eq!(saved.import_source_path, r"D:\Exports\musicbee-library.tsv");
@@ -10940,6 +10974,7 @@ mod tests {
         let loaded = settings_for_connection(&conn).expect("load settings");
         assert_eq!(loaded.backup_retention, MAX_BACKUP_RETENTION);
         assert!(loaded.dark_mode);
+        assert_eq!(loaded.country_flag_display, "flag");
         assert_eq!(loaded.left_sidebar_default, "iconOnly");
         assert_eq!(loaded.right_sidebar_default, "hidden");
         assert_eq!(

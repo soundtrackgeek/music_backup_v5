@@ -25,6 +25,7 @@ import type {
   SavedChart,
   SavedSearch,
   ChartConfig,
+  CountryFlagDisplay,
   LeftSidebarMode,
   RightSidebarMode,
   StatisticsResponse,
@@ -3193,6 +3194,7 @@ function normalizeSettings(settings: Partial<AppSettings>): AppSettings {
   return {
     backupRetention: Math.min(50, Math.max(1, Number.isFinite(backupRetention) ? backupRetention : 3)),
     darkMode: Boolean(settings.darkMode),
+    countryFlagDisplay: normalizeCountryFlagDisplay(settings.countryFlagDisplay),
     leftSidebarDefault: normalizeLeftSidebarMode(settings.leftSidebarDefault),
     rightSidebarDefault: normalizeRightSidebarMode(settings.rightSidebarDefault),
     importSourcePath: normalizeImportPath(settings.importSourcePath, defaultImportSourcePath),
@@ -3220,6 +3222,7 @@ function defaultSettings(): AppSettings {
   return {
     backupRetention: 3,
     darkMode: false,
+    countryFlagDisplay: "flagAndName",
     leftSidebarDefault: "expanded",
     rightSidebarDefault: "expanded",
     importSourcePath: defaultImportSourcePath,
@@ -3240,6 +3243,10 @@ function normalizeLeftSidebarMode(value: unknown): LeftSidebarMode {
 
 function normalizeRightSidebarMode(value: unknown): RightSidebarMode {
   return value === "hidden" || value === "expanded" ? value : "expanded";
+}
+
+function normalizeCountryFlagDisplay(value: unknown): CountryFlagDisplay {
+  return value === "flagAndName" || value === "name" || value === "flag" ? value : "flagAndName";
 }
 
 function normalizeImportPath(value: unknown, fallback: string) {

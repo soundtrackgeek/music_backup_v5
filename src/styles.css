@@ -523,6 +523,55 @@ button {
   background: #e7f4f1;
 }
 
+.country-display,
+.country-list-display,
+.chart-list-meta {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.country-display {
+  gap: 6px;
+  vertical-align: middle;
+}
+
+.country-display-flag {
+  gap: 0;
+}
+
+.country-flag {
+  flex: 0 0 auto;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(23, 33, 31, 0.12);
+  font-size: 14px;
+  line-height: 1em;
+}
+
+.country-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.country-list-display {
+  gap: 4px;
+}
+
+.chart-list-meta {
+  gap: 7px;
+}
+
+.country-list-separator {
+  color: #7a8782;
+}
+
+.genre-suggestion .country-display {
+  width: 100%;
+}
+
 .criterion-text div {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
@@ -722,7 +771,7 @@ button {
   cursor: pointer;
 }
 
-.filter-chip span {
+.filter-chip > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4139,6 +4188,11 @@ button {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.country-display-mode-control {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100%, 360px);
+}
+
 :root[data-theme="dark"] {
   color: #e8f0ed;
   background: #101614;
@@ -4435,6 +4489,10 @@ button {
 :root[data-theme="dark"] .genre-suggestion.active {
   color: #8ee4d8;
   background: #173c36;
+}
+
+:root[data-theme="dark"] .country-flag {
+  box-shadow: 0 0 0 1px rgba(232, 240, 237, 0.18);
 }
 
 :root[data-theme="dark"] input,

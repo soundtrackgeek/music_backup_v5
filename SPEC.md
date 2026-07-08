@@ -1,10 +1,10 @@
 # Music Library Living Specification and Roadmap
 
-Last updated: 2026-07-07
+Last updated: 2026-07-08
 Status: Living product and implementation contract
-Current implementation: Phase 30 MusicBrainz artist origin-country slice complete locally
-Current package version: 0.42.1
-SQLite schema version: 17
+Current implementation: MusicBrainz artist origin-country slice complete locally with selectable bundled flag display
+Current package version: 0.45.0
+SQLite schema version: 18
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
 
@@ -59,7 +59,7 @@ Core principles:
 | Genres | Implemented | Canonical-genre index, genre summary stats, album lists, and exports. |
 | Tools | Implemented | Query-backed validation issue lists, severity, progress, pagination, sorting, counts, exports, and guarded whitespace cleanup. |
 | Imports | Implemented | MusicBee TSV import, cover art import, Billboard album CSV import, Billboard singles CSV import, progress, and import history. |
-| Settings | Implemented | Theme, backup retention, backup restore, Performance Proof diagnostics, MusicBrainz cache status, and default left/right sidebar visibility. |
+| Settings | Implemented | Theme, backup retention, backup restore, Performance Proof diagnostics, MusicBrainz cache status, country flag display, and default left/right sidebar visibility. |
 
 The left sidebar supports full, icon-only, and hidden modes. The right detail sidebar supports shown and hidden modes.
 
@@ -310,7 +310,7 @@ Expected MusicBrainz boundary:
 
 - Keep MusicBrainz cache reads in a dedicated backend module instead of folding them into general search/chart query code.
 - Use a separate read-only SQLite connection for `musicbrainz_cache.db`.
-- Persist only app-owned MusicBrainz settings, artist link decisions, artist origin-country rows and review decisions, release link/ignore decisions, release-status verification cache, refreshed artist release-group overlays, cache quality snapshots, and refresh metadata in the app SQLite database.
+- Persist only app-owned MusicBrainz settings, country flag display preference, artist link decisions, artist origin-country rows and review decisions, release link/ignore decisions, release-status verification cache, refreshed artist release-group overlays, cache quality snapshots, and refresh metadata in the app SQLite database.
 - Sync only app-owned MusicBrainz overlay rows through the configured shared overlay database; do not place the main app database or recovered MusicBrainz cache under cloud-file sync.
 - Keep MusicBrainz source rows separate from MusicBee source rows and calculated album aggregates.
 - The first implemented slice persists `musicbrainz_cache_path`, opens the cache read-only, validates expected tables, reports cache quality/status, and creates app-owned artist-link/release-decision tables for later matching workflows.
@@ -727,11 +727,14 @@ Planned slice: MusicBrainz artist origin countries:
 Implemented in 0.42.0:
 
 - SQLite schema version 17 adds `musicbrainz_origin_countries`, `musicbrainz_artist_origin_countries`, and `musicbrainz_artist_origin_import_runs` with local artist key, country code, and MBID indexes.
+- SQLite schema version 18 adds `app_settings.country_flag_display`, defaulting to `flagAndName`, so Origin Country rendering can use flag-plus-name, name-only, or flag-only display across restarts.
 - Settings exposes MusicBrainz Origin Countries status, preview, import, and cancel actions. The importer resolves verified artist links first, then high-confidence non-suspect cache matches, fetches artist country/area data explicitly, and logs skipped, unresolved, failed, and last-processed rows.
 - Version 0.42.1 adds live Settings import telemetry for done/left/succeeded/skipped/unresolved/failed counts, current artist fetches, terminal status, and a bounded recent activity log.
+- Version 0.45.0 bundles MIT-licensed SVG flags through `flag-icons` and applies the country display preference to Search, Charts, Albums, Artists, MusicBrainz review surfaces, filter chips, and country suggestions.
 - The app stores derived `Origin Country` separately from raw MusicBrainz area and begin-area evidence, preserving manual/reviewed rows during re-import.
 - Search and Charts include `originCountryCodes` and `missingOriginCountry` filters, saved-config serialization defaults, local SQLite joins through normalized album-artist keys, optional chart/search export columns, and web-preview mock states.
 - Search, Albums, Artists, Charts, and the selected-artist MusicBrainz panel can display the derived country with raw-area provenance when available.
+- Origin Country UI can render bundled SVG flags with country names, country names only, or flags only without runtime network requests.
 - Reviewed/manual Origin Country overlay sync, tombstones for manual clears, and first-class manual edit/clear UI remain future work. Local import, display, filtering, and export behavior is complete without the sync extension.
 
 Expected outcome:

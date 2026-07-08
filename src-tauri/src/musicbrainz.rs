@@ -40,7 +40,7 @@ const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.42.1 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.45.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 const MUSICBRAINZ_RATE_LIMIT_DELAY_MS: u64 = 1100;

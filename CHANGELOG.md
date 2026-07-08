@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.45.0] - 2026-07-08
+### Added
+- Added bundled SVG country flags from `flag-icons` for Origin Country displays across Search, Charts, Albums, Artists, MusicBrainz review panels, filter chips, and country suggestions.
+- Added a Settings preference to render Origin Countries as flag plus country name, country name only, or flag only.
+- Added SQLite schema version 18 with a persisted `country_flag_display` app setting.
+
+### Changed
+- Bumped synchronized app metadata to `0.45.0`.
+
 ## [0.44.2] - 2026-07-08
 ### Fixed
 - Fixed Origin Countries include/exclude inputs and active filter chips to show known country codes with names, such as `RO - Romania`, while keeping saved filters keyed by two-letter codes.

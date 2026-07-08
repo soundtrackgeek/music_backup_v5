@@ -114,6 +114,7 @@ import type {
   BrowseView,
   ChartConfig,
   ConcentrationPoint,
+  CountryFlagDisplay,
   CoverImportSummary,
   DatabaseBackup,
   DatabaseRestoreSummary,
@@ -177,6 +178,8 @@ import {
   chartGridCoverSize,
   chartViewModes,
   completenessRange,
+  countryFlagDisplayLabels,
+  countryFlagDisplayOptions,
   defaultCoverProgress,
   defaultProgress,
   formatMissingFieldLabels,
@@ -399,6 +402,138 @@ function RunStatus({ status }: { status: string }) {
   return <span className={`run-status run-status-${status.toLowerCase()}`}>{status}</span>;
 }
 
+type OriginCountryValue = {
+  originCountryCode: string | null;
+  originCountryName: string | null;
+  originCountryRawArea?: string | null;
+};
+
+function countryCodeForFlag(code: string | null | undefined) {
+  const normalized = code?.trim().toLowerCase() ?? "";
+  return /^[a-z]{2}$/.test(normalized) ? normalized : "";
+}
+
+function CountryFlag({
+  code,
+  label,
+  decorative = false,
+}: {
+  code: string;
+  label: string;
+  decorative?: boolean;
+}) {
+  return (
+    <span
+      className={`country-flag fi fi-${code}`}
+      aria-hidden={decorative ? "true" : undefined}
+      role={decorative ? undefined : "img"}
+      aria-label={decorative ? undefined : label}
+    />
+  );
+}
+
+function CountryDisplay({
+  value,
+  mode,
+  fallback = "",
+  className = "",
+}: {
+  value: OriginCountryValue;
+  mode: CountryFlagDisplay;
+  fallback?: string;
+  className?: string;
+}) {
+  const normalizedValue = {
+    originCountryCode: value.originCountryCode,
+    originCountryName: value.originCountryName,
+    originCountryRawArea: value.originCountryRawArea ?? null,
+  };
+  const label = formatOriginCountry(normalizedValue);
+  const flagCode = countryCodeForFlag(value.originCountryCode);
+  const showFlag = mode !== "name" && Boolean(flagCode);
+  const showName = mode !== "flag" && Boolean(label);
+
+  if (!label && !flagCode) {
+    return fallback ? <>{fallback}</> : null;
+  }
+
+  if (!showFlag && !showName) {
+    return <>{label || fallback}</>;
+  }
+
+  const title = [value.originCountryCode?.trim().toUpperCase(), label].filter(Boolean).join(" - ");
+  const classes = ["country-display", `country-display-${mode}`, className].filter(Boolean).join(" ");
+
+  return (
+    <span className={classes} title={title || undefined}>
+      {showFlag ? (
+        <CountryFlag
+          code={flagCode}
+          label={label || value.originCountryCode || "Country flag"}
+          decorative={showName}
+        />
+      ) : null}
+      {showName ? <span className="country-name">{label}</span> : null}
+    </span>
+  );
+}
+
+function countryValueFromCode(code: string, countryOptions: MusicBrainzOriginCountryOption[]): OriginCountryValue {
+  const normalizedCode = code.trim().toUpperCase();
+  const option = countryOptionForCode(countryOptions, normalizedCode);
+  return {
+    originCountryCode: normalizedCode,
+    originCountryName: option?.name ?? normalizedCode,
+    originCountryRawArea: null,
+  };
+}
+
+function CountryListDisplay({
+  values,
+  countryOptions,
+  mode,
+}: {
+  values: string[];
+  countryOptions: MusicBrainzOriginCountryOption[];
+  mode: CountryFlagDisplay;
+}) {
+  const codes = normalizeCountryCodes(values);
+  if (codes.length === 0) {
+    return null;
+  }
+
+  return (
+    <span className="country-list-display">
+      {codes.map((code, index) => (
+        <Fragment key={code}>
+          {index > 0 ? <span className="country-list-separator">,</span> : null}
+          <CountryDisplay value={countryValueFromCode(code, countryOptions)} mode={mode} />
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+function CountryOptionDisplay({
+  country,
+  mode,
+}: {
+  country: MusicBrainzOriginCountryOption;
+  mode: CountryFlagDisplay;
+}) {
+  return (
+    <CountryDisplay
+      value={{
+        originCountryCode: countryOptionCode(country),
+        originCountryName: country.name,
+        originCountryRawArea: null,
+      }}
+      mode={mode}
+      fallback={countryOptionLabel(country)}
+    />
+  );
+}
+
 function originImportStatusLabel(status: string | null | undefined) {
   switch (status) {
     case "preparing":
@@ -443,10 +578,6 @@ function originPreviewStatusLabel(status: string | null | undefined) {
     default:
       return status || "Unknown";
   }
-}
-
-function originPreviewCountryLabel(row: MusicBrainzOriginCountryPreviewRow) {
-  return row.existingCountryName ?? row.existingCountryCode ?? "Missing";
 }
 
 function originPreviewMatchLabel(row: MusicBrainzOriginCountryPreviewRow) {
@@ -870,12 +1001,6 @@ function formatCountryList(values: string[], countryOptions: MusicBrainzOriginCo
   return formatList(normalizeCountryCodes(values).map((code) => formatCountryCode(code, countryOptions)));
 }
 
-function formatCountryCodeSummary(values: string[], countryOptions: MusicBrainzOriginCountryOption[]) {
-  return normalizeCountryCodes(values)
-    .map((code) => formatCountryCode(code, countryOptions))
-    .join(", ");
-}
-
 function normalizeCountrySuggestionText(value: string) {
   return value
     .trim()
@@ -942,12 +1067,14 @@ function CountryListCriterion({
   values,
   onChange,
   countryOptions,
+  displayMode,
   placeholder = "GB, US",
 }: {
   label: string;
   values: string[];
   onChange: (values: string[]) => void;
   countryOptions: MusicBrainzOriginCountryOption[];
+  displayMode: CountryFlagDisplay;
   placeholder?: string;
 }) {
   const inputId = useId();
@@ -1085,7 +1212,7 @@ function CountryListCriterion({
                 chooseSuggestion(suggestion);
               }}
             >
-              {countryOptionLabel(suggestion)}
+              <CountryOptionDisplay country={suggestion} mode={displayMode} />
             </button>
           ))}
         </div>
@@ -1331,10 +1458,12 @@ function ResultTable({
   response,
   sort,
   onSort,
+  countryFlagDisplay,
 }: {
   response: BrowseResponse | null;
   sort: BrowseSort;
   onSort: (field: string) => void;
+  countryFlagDisplay: CountryFlagDisplay;
 }) {
   if (!response) {
     return (
@@ -1384,7 +1513,9 @@ function ResultTable({
               <AlbumTitleContents row={row} subtitle={row.albumArtistDisplay ?? row.year?.toString() ?? null} />
             </span>
             <span role="cell">{row.displayArtist ?? row.albumArtistDisplay ?? ""}</span>
-            <span role="cell">{formatOriginCountry(row)}</span>
+            <span role="cell">
+              <CountryDisplay value={row} mode={countryFlagDisplay} />
+            </span>
             <span role="cell">{row.year ?? ""}</span>
             <span role="cell">{singleLabel}</span>
             <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
@@ -1413,7 +1544,9 @@ function ResultTable({
             <AlbumTitleContents row={row} />
           </span>
           <span role="cell">{row.albumArtistDisplay ?? ""}</span>
-          <span role="cell">{formatOriginCountry(row)}</span>
+          <span role="cell">
+            <CountryDisplay value={row} mode={countryFlagDisplay} />
+          </span>
           <span role="cell">{row.year ?? ""}</span>
           <span role="cell">{row.canonicalGenre ?? ""}</span>
           <span role="cell">{row.totalTracks ?? ""}</span>
@@ -1517,12 +1650,14 @@ function AlbumIndexTable({
   onSelect,
   sort,
   onSort,
+  countryFlagDisplay,
 }: {
   response: BrowseResponse | null;
   selectedAlbumId: string | null;
   onSelect: (albumId: string) => void;
   sort: BrowseSort;
   onSort: (field: string) => void;
+  countryFlagDisplay: CountryFlagDisplay;
 }) {
   if (!response) {
     return (
@@ -1575,7 +1710,9 @@ function AlbumIndexTable({
               <AlbumTitleContents row={row} />
             </span>
             <span role="cell">{row.albumArtistDisplay ?? ""}</span>
-            <span role="cell">{formatOriginCountry(row)}</span>
+            <span role="cell">
+              <CountryDisplay value={row} mode={countryFlagDisplay} />
+            </span>
             <span role="cell">{row.year ?? ""}</span>
             <span role="cell">{row.canonicalGenre ?? ""}</span>
             <span role="cell">{row.totalTracks ?? ""}</span>
@@ -1650,6 +1787,7 @@ function AlbumDetailPanel({
   onIncludeCalculatedChange,
   exportResult,
   onExport,
+  countryFlagDisplay,
 }: {
   album: BrowseRow | null;
   tracks: BrowseResponse | null;
@@ -1658,6 +1796,7 @@ function AlbumDetailPanel({
   onIncludeCalculatedChange: (value: boolean) => void;
   exportResult: ExportResult | null;
   onExport: (format: string) => Promise<void>;
+  countryFlagDisplay: CountryFlagDisplay;
 }) {
   if (!album) {
     return (
@@ -1732,7 +1871,9 @@ function AlbumDetailPanel({
         </div>
         <div>
           <dt>Origin Country</dt>
-          <dd>{formatOriginCountryProvenance(album)}</dd>
+          <dd>
+            <CountryDisplay value={album} mode={countryFlagDisplay} fallback="Not imported" />
+          </dd>
         </div>
         <div>
           <dt>Publisher</dt>
@@ -1786,20 +1927,16 @@ function formatYearSpan(firstYear: number | null | undefined, lastYear: number |
   return `${firstYear ?? lastYear}`;
 }
 
-function formatOriginCountryProvenance(
-  value: Pick<BrowseRow, "originCountryCode" | "originCountryName" | "originCountryRawArea">,
-) {
-  return formatOriginCountry(value) || "Not imported";
-}
-
 function ArtistIndexTable({
   response,
   selectedArtistId,
   onSelect,
+  countryFlagDisplay,
 }: {
   response: ArtistListResponse | null;
   selectedArtistId: string | null;
   onSelect: (artistId: string) => void;
+  countryFlagDisplay: CountryFlagDisplay;
 }) {
   if (!response) {
     return (
@@ -1857,7 +1994,9 @@ function ArtistIndexTable({
                 <small>{formatNumber(artist.trackCount)} tracks</small>
               </span>
             </span>
-            <span role="cell">{formatOriginCountry(artist)}</span>
+            <span role="cell">
+              <CountryDisplay value={artist} mode={countryFlagDisplay} />
+            </span>
             <span role="cell">{formatNumber(artist.albumCount)}</span>
             <span role="cell">{formatYearSpan(artist.firstYear, artist.lastYear)}</span>
             <span role="cell">{artist.topGenre ?? ""}</span>
@@ -1959,6 +2098,7 @@ function MusicBrainzArtistDiscographyPanel({
   refreshResult,
   originResult,
   countryOptions,
+  countryFlagDisplay,
 }: {
   artist: ArtistSummary | null;
   response: MusicBrainzArtistDiscographyResponse | null;
@@ -1980,6 +2120,7 @@ function MusicBrainzArtistDiscographyPanel({
   refreshResult: MusicBrainzArtistRefreshResult | null;
   originResult: MusicBrainzArtistOriginCountryUpdate | null;
   countryOptions: MusicBrainzOriginCountryOption[];
+  countryFlagDisplay: CountryFlagDisplay;
 }) {
   const rows = response?.releases ?? [];
   const visibleRows = rows.filter((row) => row.status !== "excluded");
@@ -2015,8 +2156,7 @@ function MusicBrainzArtistDiscographyPanel({
   const canSetManualOrigin = Boolean(artist && /^[A-Z]{2}$/.test(manualOriginCodeValue) && !isLoading);
   const canExport = Boolean(response && !response.artistLinkIgnored && visibleRows.length > 0 && !isLoading);
   const canUpdateInfo = Boolean(artist && response?.musicbrainzMbid && !response.artistLinkIgnored && !isLoading);
-  const refreshedOriginLabel = refreshResult?.origin ? formatOriginCountry(refreshResult.origin) : "";
-  const savedOriginLabel = originResult ? formatOriginCountry(originResult) : "";
+  const refreshedOrigin = refreshResult?.origin ?? null;
 
   useEffect(() => {
     setManualMbid(response?.musicbrainzMbid ?? "");
@@ -2143,7 +2283,9 @@ function MusicBrainzArtistDiscographyPanel({
             </div>
             <div>
               <dt>Origin</dt>
-              <dd>{formatOriginCountryProvenance(artist)}</dd>
+              <dd>
+                <CountryDisplay value={artist} mode={countryFlagDisplay} fallback="Not imported" />
+              </dd>
             </div>
           </dl>
 
@@ -2294,14 +2436,21 @@ function MusicBrainzArtistDiscographyPanel({
                     <CloudDownload size={16} />
                     <span>
                       {formatNumber(refreshResult.storedCount)} release groups refreshed at {formatDate(refreshResult.fetchedAt)}
-                      {refreshedOriginLabel ? ` / Origin ${refreshedOriginLabel}` : ""}
+                      {refreshedOrigin ? (
+                        <>
+                          {" / Origin "}
+                          <CountryDisplay value={refreshedOrigin} mode={countryFlagDisplay} />
+                        </>
+                      ) : null}
                     </span>
                   </div>
                 ) : null}
                 {originResult ? (
                   <div className="export-result musicbrainz-export-result">
                     <Save size={16} />
-                    <span>{`Origin saved as ${savedOriginLabel || "manual"}`}</span>
+                    <span>
+                      Origin saved as <CountryDisplay value={originResult} mode={countryFlagDisplay} fallback="manual" />
+                    </span>
                   </div>
                 ) : null}
               </div>
@@ -2663,12 +2812,14 @@ function ArtistDetailPanel({
   onIncludeCalculatedChange,
   exportResult,
   onExport,
+  countryFlagDisplay,
 }: {
   artist: ArtistSummary | null;
   includeCalculated: boolean;
   onIncludeCalculatedChange: (value: boolean) => void;
   exportResult: ExportResult | null;
   onExport: (format: string) => Promise<void>;
+  countryFlagDisplay: CountryFlagDisplay;
 }) {
   if (!artist) {
     return (
@@ -2747,7 +2898,9 @@ function ArtistDetailPanel({
         </div>
         <div>
           <dt>Origin Country</dt>
-          <dd>{formatOriginCountryProvenance(artist)}</dd>
+          <dd>
+            <CountryDisplay value={artist} mode={countryFlagDisplay} fallback="Not imported" />
+          </dd>
         </div>
       </dl>
 
@@ -3441,11 +3594,13 @@ function ChartResults({
   config,
   displaySort,
   onSort,
+  countryFlagDisplay,
 }: {
   response: BrowseResponse | null;
   config: ChartConfig;
   displaySort: BrowseSort | null;
   onSort: (field: string) => void;
+  countryFlagDisplay: CountryFlagDisplay;
 }) {
   if (!response) {
     return (
@@ -3477,8 +3632,11 @@ function ChartResults({
                 <span>{row.album ?? "Untitled"}</span>
                 {formatBillboardRank(row) ? <span className="billboard-badge">{formatBillboardRank(row)}</span> : null}
               </h3>
-              <p>
-                {[row.albumArtistDisplay, row.year, row.canonicalGenre].filter(Boolean).join(" / ")}
+              <p className="chart-list-meta">
+                {row.albumArtistDisplay ? <span>{row.albumArtistDisplay}</span> : null}
+                {formatOriginCountry(row) ? <CountryDisplay value={row} mode={countryFlagDisplay} /> : null}
+                {row.year ? <span>{row.year}</span> : null}
+                {row.canonicalGenre ? <span>{row.canonicalGenre}</span> : null}
               </p>
             </div>
             <div className="rank-metric">
@@ -3547,7 +3705,7 @@ function ChartResults({
       key: "originCountry",
       label: "Origin",
       sortField: "originCountry",
-      value: (row: BrowseRow) => formatOriginCountry(row),
+      value: (row: BrowseRow) => <CountryDisplay value={row} mode={countryFlagDisplay} />,
     },
     {
       key: "billboard",
@@ -5711,7 +5869,7 @@ export default function App() {
   );
 
   const chips = useMemo(() => {
-    const nextChips: { key: string; label: string; remove: () => void }[] = [];
+    const nextChips: { key: string; label: ReactNode; remove: () => void }[] = [];
     const addTextChip = (key: keyof BrowseFilters, label: string, filter: TextFilter) => {
       const chipLabel = textFilterLabel(label, filter);
       if (chipLabel) {
@@ -5763,17 +5921,32 @@ export default function App() {
     if (currentFilters.originCountryCodes.length) {
       nextChips.push({
         key: "originCountryCodes",
-        label: `Origin: ${formatCountryCodeSummary(currentFilters.originCountryCodes, originCountryOptions)}`,
+        label: (
+          <>
+            Origin:{" "}
+            <CountryListDisplay
+              values={currentFilters.originCountryCodes}
+              countryOptions={originCountryOptions}
+              mode={settings.countryFlagDisplay}
+            />
+          </>
+        ),
         remove: () => updateFilter("originCountryCodes", []),
       });
     }
     if (currentFilters.excludedOriginCountryCodes.length) {
       nextChips.push({
         key: "excludedOriginCountryCodes",
-        label: `Origin excluding: ${formatCountryCodeSummary(
-          currentFilters.excludedOriginCountryCodes,
-          originCountryOptions,
-        )}`,
+        label: (
+          <>
+            Origin excluding:{" "}
+            <CountryListDisplay
+              values={currentFilters.excludedOriginCountryCodes}
+              countryOptions={originCountryOptions}
+              mode={settings.countryFlagDisplay}
+            />
+          </>
+        ),
         remove: () => updateFilter("excludedOriginCountryCodes", []),
       });
     }
@@ -5875,10 +6048,10 @@ export default function App() {
     }
 
     return nextChips;
-  }, [currentFilters, originCountryOptions, request.searchText, request.view]);
+  }, [currentFilters, originCountryOptions, request.searchText, request.view, settings.countryFlagDisplay]);
 
   const albumChips = useMemo(() => {
-    const nextChips: { key: string; label: string; remove: () => void }[] = [];
+    const nextChips: { key: string; label: ReactNode; remove: () => void }[] = [];
     const addTextChip = (key: keyof BrowseFilters, label: string, filter: TextFilter) => {
       const chipLabel = textFilterLabel(label, filter);
       if (chipLabel) {
@@ -7250,6 +7423,10 @@ export default function App() {
     void saveAppSettings({ rightSidebarDefault: mode });
   }
 
+  function saveCountryFlagDisplay(mode: CountryFlagDisplay) {
+    void saveAppSettings({ countryFlagDisplay: mode });
+  }
+
   const total = response?.total ?? 0;
   const pageStart = total === 0 ? 0 : request.offset + 1;
   const pageEnd = Math.min(total, request.offset + request.limit);
@@ -7925,12 +8102,14 @@ export default function App() {
                 values={chartConfig.request.filters.originCountryCodes}
                 onChange={(originCountryCodes) => updateChartFilters({ originCountryCodes })}
                 countryOptions={originCountryOptions}
+                displayMode={settings.countryFlagDisplay}
               />
               <CountryListCriterion
                 label="Exclude origin countries"
                 values={chartConfig.request.filters.excludedOriginCountryCodes}
                 onChange={(excludedOriginCountryCodes) => updateChartFilters({ excludedOriginCountryCodes })}
                 countryOptions={originCountryOptions}
+                displayMode={settings.countryFlagDisplay}
               />
               <TextCriterion
                 label="Album artist"
@@ -8098,6 +8277,7 @@ export default function App() {
               config={chartConfig}
               displaySort={chartTableSort}
               onSort={sortChartBy}
+              countryFlagDisplay={settings.countryFlagDisplay}
             />
           </section>
         </section>
@@ -8276,6 +8456,7 @@ export default function App() {
                 response={discoverySelection ? discoveryAlbumResponse : null}
                 sort={discoveryAlbumRequest.sort}
                 onSort={sortDiscoveryAlbumsBy}
+                countryFlagDisplay={settings.countryFlagDisplay}
               />
             </section>
           </section>
@@ -8442,7 +8623,12 @@ export default function App() {
             </div>
 
             {artistError ? <p className="error-message">{artistError}</p> : null}
-            <ArtistIndexTable response={artistResponse} selectedArtistId={selectedArtistId} onSelect={selectArtist} />
+            <ArtistIndexTable
+              response={artistResponse}
+              selectedArtistId={selectedArtistId}
+              onSelect={selectArtist}
+              countryFlagDisplay={settings.countryFlagDisplay}
+            />
           </section>
 
           <section className="table-panel" aria-label="Selected artist albums">
@@ -8485,6 +8671,7 @@ export default function App() {
             refreshResult={musicBrainzArtistRefreshResult}
             originResult={musicBrainzArtistOriginResult}
             countryOptions={originCountryOptions}
+            countryFlagDisplay={settings.countryFlagDisplay}
           />
 
           <section className="table-panel" aria-label="Selected artist cover view">
@@ -9139,6 +9326,7 @@ export default function App() {
               sort={albumRequest.sort}
               onSort={sortAlbumsBy}
               onSelect={selectAlbum}
+              countryFlagDisplay={settings.countryFlagDisplay}
             />
           </section>
 
@@ -9990,7 +10178,17 @@ export default function App() {
                             </div>
                             <div>
                               <dt>Country</dt>
-                              <dd>{row.existingCountryName ?? row.existingCountryCode ?? "Missing"}</dd>
+                              <dd>
+                                <CountryDisplay
+                                  value={{
+                                    originCountryCode: row.existingCountryCode,
+                                    originCountryName: row.existingCountryName,
+                                    originCountryRawArea: null,
+                                  }}
+                                  mode={settings.countryFlagDisplay}
+                                  fallback="Missing"
+                                />
+                              </dd>
                             </div>
                           </dl>
                         </article>
@@ -10071,7 +10269,17 @@ export default function App() {
                           <span role="cell">
                             <RunStatus status={originPreviewStatusLabel(row.status)} />
                           </span>
-                          <span role="cell">{originPreviewCountryLabel(row)}</span>
+                          <span role="cell">
+                            <CountryDisplay
+                              value={{
+                                originCountryCode: row.existingCountryCode,
+                                originCountryName: row.existingCountryName,
+                                originCountryRawArea: null,
+                              }}
+                              mode={settings.countryFlagDisplay}
+                              fallback="Missing"
+                            />
+                          </span>
                           <span role="cell">
                             <span>{originPreviewMatchLabel(row)}</span>
                             {row.musicbrainzMbid ? (
@@ -10330,6 +10538,26 @@ export default function App() {
                     ))}
                   </div>
                 </div>
+
+                <div className="layout-setting">
+                  <span>Origin country display</span>
+                  <div
+                    className="segmented-control layout-mode-control country-display-mode-control"
+                    role="group"
+                    aria-label="Origin country display"
+                  >
+                    {countryFlagDisplayOptions.map((option) => (
+                      <button
+                        className={settings.countryFlagDisplay === option.value ? "active" : ""}
+                        type="button"
+                        key={option.value}
+                        onClick={() => saveCountryFlagDisplay(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </section>
           </section>
@@ -10433,12 +10661,14 @@ export default function App() {
                 values={currentFilters.originCountryCodes}
                 onChange={(originCountryCodes) => updateFilter("originCountryCodes", originCountryCodes)}
                 countryOptions={originCountryOptions}
+                displayMode={settings.countryFlagDisplay}
               />
               <CountryListCriterion
                 label="Exclude origin countries"
                 values={currentFilters.excludedOriginCountryCodes}
                 onChange={(excludedOriginCountryCodes) => updateFilter("excludedOriginCountryCodes", excludedOriginCountryCodes)}
                 countryOptions={originCountryOptions}
+                displayMode={settings.countryFlagDisplay}
               />
               <TextCriterion
                 label="Publisher"
@@ -10737,7 +10967,12 @@ export default function App() {
             </div>
 
             {browseError ? <p className="error-message">{browseError}</p> : null}
-            <ResultTable response={response} sort={request.sort} onSort={sortSearchBy} />
+            <ResultTable
+              response={response}
+              sort={request.sort}
+              onSort={sortSearchBy}
+              countryFlagDisplay={settings.countryFlagDisplay}
+            />
           </section>
         </section>
       )}
@@ -10922,6 +11157,7 @@ export default function App() {
           onIncludeCalculatedChange={(value) => setArtistIncludeCalculated(value)}
           exportResult={artistExportResult}
           onExport={runArtistExport}
+          countryFlagDisplay={settings.countryFlagDisplay}
         />
       ) : activeSection === "Genres" ? (
         <GenreDetailPanel
@@ -10947,6 +11183,7 @@ export default function App() {
           onIncludeCalculatedChange={(value) => setAlbumIncludeCalculated(value)}
           exportResult={albumExportResult}
           onExport={runAlbumExport}
+          countryFlagDisplay={settings.countryFlagDisplay}
         />
       ) : activeSection === "Statistics" ? (
         <aside className="detail-panel statistics-detail" aria-label="Statistics details">
@@ -11053,6 +11290,10 @@ export default function App() {
             <div>
               <dt>Details</dt>
               <dd>{rightSidebarModeLabels[settings.rightSidebarDefault]}</dd>
+            </div>
+            <div>
+              <dt>Origin display</dt>
+              <dd>{countryFlagDisplayLabels[settings.countryFlagDisplay]}</dd>
             </div>
             <div>
               <dt>Updates</dt>
@@ -11183,7 +11424,7 @@ export default function App() {
 }
 
 function addRangeChip(
-  chips: { key: string; label: string; remove: () => void }[],
+  chips: { key: string; label: ReactNode; remove: () => void }[],
   key: string,
   label: string,
   minimum: number | null,

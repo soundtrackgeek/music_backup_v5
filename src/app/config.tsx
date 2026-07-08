@@ -20,6 +20,7 @@ import {
 import type {
   BrowseView,
   ChartViewMode,
+  CountryFlagDisplay,
   CoverImportProgress,
   ImportProgress,
   LeftSidebarMode,
@@ -54,6 +55,12 @@ export const rightSidebarModeOptions: { value: RightSidebarMode; label: string }
   { value: "hidden", label: "Hidden" },
 ];
 
+export const countryFlagDisplayOptions: { value: CountryFlagDisplay; label: string }[] = [
+  { value: "flagAndName", label: "Flag + name" },
+  { value: "name", label: "Name" },
+  { value: "flag", label: "Flag" },
+];
+
 export const leftSidebarModeLabels: Record<LeftSidebarMode, string> = {
   expanded: "Full",
   iconOnly: "Icons",
@@ -63,6 +70,12 @@ export const leftSidebarModeLabels: Record<LeftSidebarMode, string> = {
 export const rightSidebarModeLabels: Record<RightSidebarMode, string> = {
   expanded: "Shown",
   hidden: "Hidden",
+};
+
+export const countryFlagDisplayLabels: Record<CountryFlagDisplay, string> = {
+  flagAndName: "Flag + name",
+  name: "Name",
+  flag: "Flag",
 };
 
 export const operatorLabels: Record<TextFilterOperator, string> = {

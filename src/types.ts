@@ -139,9 +139,12 @@ export type LeftSidebarMode = "expanded" | "iconOnly" | "hidden";
 
 export type RightSidebarMode = "expanded" | "hidden";
 
+export type CountryFlagDisplay = "flagAndName" | "name" | "flag";
+
 export type AppSettings = {
   backupRetention: number;
   darkMode: boolean;
+  countryFlagDisplay: CountryFlagDisplay;
   leftSidebarDefault: LeftSidebarMode;
   rightSidebarDefault: RightSidebarMode;
   importSourcePath: string;
