@@ -40,6 +40,7 @@ import type {
   MusicToolSummary,
   MusicBrainzArtistDiscographyResponse,
   MusicBrainzArtistExportRequest,
+  MusicBrainzArtistOriginCountryUpdate,
   MusicBrainzArtistRefreshResult,
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
@@ -787,6 +788,60 @@ const mockArtists: ArtistSummary[] = ([
   ...artist,
   ...mockOriginForArtist(artist.name),
 }));
+
+function applyMockArtistOriginCountry(
+  artistKey: string,
+  artistName: string,
+  musicbrainzMbid: string | null | undefined,
+  countryCode: string,
+  countryName: string,
+  reviewState: string,
+): MusicBrainzArtistOriginCountryUpdate {
+  const normalizedKey = normalizeArtistKey(artistKey || artistName);
+  const update = {
+    artistKey: normalizedKey,
+    artistName: artistName || artistKey || "Unknown Artist",
+    musicbrainzMbid: musicbrainzMbid?.trim() || null,
+    originCountryCode: countryCode,
+    originCountryName: countryName,
+    originCountryRawArea: countryName,
+    originCountryReviewState: reviewState,
+  } satisfies MusicBrainzArtistOriginCountryUpdate;
+
+  mockRows.forEach((row) => {
+    if (normalizeArtistKey(row.albumArtistDisplay) === normalizedKey) {
+      row.originCountryCode = update.originCountryCode;
+      row.originCountryName = update.originCountryName;
+      row.originCountryRawArea = update.originCountryRawArea;
+      row.originCountryReviewState = update.originCountryReviewState;
+    }
+  });
+  mockArtists.forEach((artist) => {
+    if (artist.id === normalizedKey) {
+      artist.originCountryCode = update.originCountryCode;
+      artist.originCountryName = update.originCountryName;
+      artist.originCountryRawArea = update.originCountryRawArea;
+      artist.originCountryReviewState = update.originCountryReviewState;
+    }
+  });
+
+  return update;
+}
+
+function mockCountryNameFromCode(countryCode: string) {
+  switch (countryCode) {
+    case "GB":
+      return "United Kingdom";
+    case "NO":
+      return "Norway";
+    case "SE":
+      return "Sweden";
+    case "US":
+      return "United States";
+    default:
+      return countryCode;
+  }
+}
 
 const mockGenres: GenreSummary[] = [
   {
@@ -2386,6 +2441,15 @@ export async function refreshMusicBrainzArtistInfo(input: {
       mockDiscography.releaseGroupUpdatedAt = fetchedAt;
       recomputeMockMusicBrainzDiscographyCounts(mockDiscography);
     }
+    const currentOrigin = mockOriginForArtist(input.artistName || input.artistKey);
+    const origin = applyMockArtistOriginCountry(
+      input.artistKey,
+      input.artistName,
+      input.musicbrainzMbid ?? mockDiscography?.musicbrainzMbid ?? null,
+      currentOrigin.originCountryCode ?? "US",
+      currentOrigin.originCountryName ?? "United States",
+      currentOrigin.originCountryReviewState ?? "imported",
+    );
     return {
       artistKey: normalizedKey,
       artistName: input.artistName || input.artistKey || "Unknown Artist",
@@ -2393,10 +2457,39 @@ export async function refreshMusicBrainzArtistInfo(input: {
       fetchedCount: mockDiscography?.releases.length ?? 0,
       storedCount: mockDiscography?.releases.length ?? 0,
       fetchedAt,
+      origin,
     } satisfies MusicBrainzArtistRefreshResult;
   }
 
   return invoke<MusicBrainzArtistRefreshResult>("refresh_musicbrainz_artist_releases", {
+    request: input,
+  });
+}
+
+export async function setMusicBrainzArtistOriginCountry(input: {
+  artistKey: string;
+  artistName: string;
+  musicbrainzMbid?: string | null;
+  countryCode: string;
+  countryName?: string | null;
+}) {
+  if (!isTauriRuntime()) {
+    const countryCode = input.countryCode.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(countryCode)) {
+      throw new Error("Origin Country must be a two-letter country code.");
+    }
+    const countryName = input.countryName?.trim() || mockCountryNameFromCode(countryCode);
+    return applyMockArtistOriginCountry(
+      input.artistKey,
+      input.artistName,
+      input.musicbrainzMbid,
+      countryCode,
+      countryName,
+      "manual",
+    );
+  }
+
+  return invoke<MusicBrainzArtistOriginCountryUpdate>("set_musicbrainz_artist_origin_country", {
     request: input,
   });
 }

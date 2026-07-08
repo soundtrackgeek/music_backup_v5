@@ -351,6 +351,17 @@ export type MusicBrainzArtistRefreshResult = {
   fetchedCount: number;
   storedCount: number;
   fetchedAt: string;
+  origin: MusicBrainzArtistOriginCountryUpdate | null;
+};
+
+export type MusicBrainzArtistOriginCountryUpdate = {
+  artistKey: string;
+  artistName: string;
+  musicbrainzMbid: string | null;
+  originCountryCode: string | null;
+  originCountryName: string | null;
+  originCountryRawArea: string | null;
+  originCountryReviewState: string | null;
 };
 
 export type MusicBrainzArtistCandidateRow = {

@@ -2,9 +2,11 @@ use crate::db;
 use crate::models::{
     ExportResult, MusicBrainzArtistCandidateRow, MusicBrainzArtistDiscographyRequest,
     MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
-    MusicBrainzArtistExportRow, MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginImportRun,
-    MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzArtistReleaseRow,
-    MusicBrainzCacheStatus, MusicBrainzCacheWarningExample, MusicBrainzOriginCountryImportProgress,
+    MusicBrainzArtistExportRow, MusicBrainzArtistLinkRequest,
+    MusicBrainzArtistOriginCountryRequest, MusicBrainzArtistOriginCountryUpdate,
+    MusicBrainzArtistOriginImportRun, MusicBrainzArtistRefreshRequest,
+    MusicBrainzArtistRefreshResult, MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus,
+    MusicBrainzCacheWarningExample, MusicBrainzOriginCountryImportProgress,
     MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
     MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryPreviewRow,
     MusicBrainzOriginCountryStatus, MusicBrainzReleaseDecisionRequest,
@@ -152,8 +154,18 @@ pub fn refresh_artist_release_groups_for_app(
     let artist_key = normalize_local_artist_key(&request.artist_key, &artist_name);
     let mbid = required_mbid(request.musicbrainz_mbid.as_deref())?;
     let rows = fetch_artist_release_groups(&mbid)?;
+    thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
+    let origin_payload = fetch_artist_origin(&mbid)?;
     let fetched_at = Utc::now().to_rfc3339();
     let stored_count = save_refreshed_artist_release_groups(&mut conn, &mbid, &rows, &fetched_at)?;
+    let origin = save_refreshed_artist_origin_country(
+        &conn,
+        &artist_key,
+        &artist_name,
+        &mbid,
+        &origin_payload,
+        &fetched_at,
+    )?;
     musicbrainz_sync::sync_for_app(app)?;
 
     Ok(MusicBrainzArtistRefreshResult {
@@ -163,7 +175,17 @@ pub fn refresh_artist_release_groups_for_app(
         fetched_count: rows.len(),
         stored_count,
         fetched_at,
+        origin,
     })
+}
+
+#[cfg(not(test))]
+pub fn set_artist_origin_country_for_app(
+    app: &AppHandle,
+    request: MusicBrainzArtistOriginCountryRequest,
+) -> Result<MusicBrainzArtistOriginCountryUpdate> {
+    let (conn, _) = db::open(app)?;
+    set_artist_origin_country_for_connection(&conn, request)
 }
 
 fn save_refreshed_artist_release_groups(
@@ -1495,6 +1517,181 @@ fn save_origin_country_evidence(
     .context("Could not save MusicBrainz artist origin-country row")?;
 
     Ok(())
+}
+
+fn save_refreshed_artist_origin_country(
+    conn: &Connection,
+    artist_key: &str,
+    artist_name: &str,
+    mbid: &str,
+    payload: &MusicBrainzArtistLookupResponse,
+    fetched_at: &str,
+) -> Result<Option<MusicBrainzArtistOriginCountryUpdate>> {
+    db::ensure_musicbrainz_origin_country_tables(conn)?;
+    let evidence = derive_origin_country(payload);
+    save_origin_country_evidence(conn, artist_key, artist_name, mbid, &evidence, fetched_at)?;
+    artist_origin_country_update_for_connection(conn, artist_key, artist_name)
+}
+
+fn set_artist_origin_country_for_connection(
+    conn: &Connection,
+    request: MusicBrainzArtistOriginCountryRequest,
+) -> Result<MusicBrainzArtistOriginCountryUpdate> {
+    db::ensure_musicbrainz_origin_country_tables(conn)?;
+
+    let artist_name = normalize_display_name(&request.artist_name, &request.artist_key);
+    let artist_key = normalize_local_artist_key(&request.artist_key, &artist_name);
+    let country_code = normalized_country_code(&request.country_code)
+        .context("Origin Country must be a two-letter country code")?;
+    let country_name = request
+        .country_name
+        .as_deref()
+        .and_then(non_empty_string)
+        .or_else(|| country_name_from_code(&country_code).map(ToOwned::to_owned))
+        .unwrap_or_else(|| country_code.clone());
+    let mbid = manual_origin_mbid(conn, &artist_key, request.musicbrainz_mbid.as_deref())?
+        .unwrap_or_else(|| "manual".to_string());
+    let saved_at = Utc::now().to_rfc3339();
+
+    conn.execute(
+        "
+        INSERT INTO musicbrainz_origin_countries (
+            country_code, country_name, iso_source, is_historical,
+            is_special, created_at, updated_at
+        ) VALUES (
+            ?1, ?2, 'manual', 0, 0, ?3, ?3
+        )
+        ON CONFLICT(country_code) DO UPDATE SET
+            country_name = excluded.country_name,
+            iso_source = excluded.iso_source,
+            updated_at = excluded.updated_at
+        ",
+        params![country_code, country_name, saved_at],
+    )
+    .context("Could not save manual MusicBrainz origin-country reference row")?;
+
+    conn.execute(
+        "
+        INSERT INTO musicbrainz_artist_origin_countries (
+            local_artist_key, display_artist, mbid, country_code, country_name,
+            raw_area_mbid, raw_area_name, raw_area_type, begin_area_mbid,
+            begin_area_name, begin_area_type, derived_from, confidence,
+            review_state, source, fetched_at, created_at, updated_at
+        ) VALUES (
+            ?1, ?2, ?3, ?4, ?5, NULL, NULL, NULL, NULL, NULL, NULL,
+            'manual', 1.0, 'manual', 'manual', ?6, ?6, ?6
+        )
+        ON CONFLICT(local_artist_key) DO UPDATE SET
+            display_artist = excluded.display_artist,
+            mbid = excluded.mbid,
+            country_code = excluded.country_code,
+            country_name = excluded.country_name,
+            raw_area_mbid = excluded.raw_area_mbid,
+            raw_area_name = excluded.raw_area_name,
+            raw_area_type = excluded.raw_area_type,
+            begin_area_mbid = excluded.begin_area_mbid,
+            begin_area_name = excluded.begin_area_name,
+            begin_area_type = excluded.begin_area_type,
+            derived_from = excluded.derived_from,
+            confidence = excluded.confidence,
+            review_state = excluded.review_state,
+            source = excluded.source,
+            fetched_at = excluded.fetched_at,
+            updated_at = excluded.updated_at
+        ",
+        params![
+            artist_key,
+            artist_name,
+            mbid,
+            country_code,
+            country_name,
+            saved_at
+        ],
+    )
+    .context("Could not save manual MusicBrainz artist origin-country row")?;
+
+    artist_origin_country_update_for_connection(conn, &artist_key, &artist_name)?
+        .context("Saved manual MusicBrainz origin-country row was not found")
+}
+
+fn manual_origin_mbid(
+    conn: &Connection,
+    artist_key: &str,
+    explicit_mbid: Option<&str>,
+) -> Result<Option<String>> {
+    if let Some(mbid) = optional_mbid(explicit_mbid)? {
+        return Ok(Some(mbid));
+    }
+
+    if let Some(link) = artist_link_record(conn, artist_key)? {
+        if let Some(mbid) = link.mbid.as_deref().and_then(non_empty_string) {
+            return Ok(Some(mbid));
+        }
+    }
+
+    if !table_exists(conn, "musicbrainz_artist_origin_countries")? {
+        return Ok(None);
+    }
+
+    conn.query_row(
+        "
+        SELECT mbid
+        FROM musicbrainz_artist_origin_countries
+        WHERE local_artist_key = ?1
+        LIMIT 1
+        ",
+        params![artist_key],
+        |row| row.get::<_, Option<String>>(0),
+    )
+    .optional()
+    .context("Could not read existing MusicBrainz artist origin MBID")
+    .map(|value| value.flatten().and_then(|mbid| non_empty_string(&mbid)))
+}
+
+fn artist_origin_country_update_for_connection(
+    conn: &Connection,
+    artist_key: &str,
+    artist_name: &str,
+) -> Result<Option<MusicBrainzArtistOriginCountryUpdate>> {
+    if !table_exists(conn, "musicbrainz_artist_origin_countries")? {
+        return Ok(None);
+    }
+
+    let local_artist_key = normalize_local_artist_key(artist_key, artist_name);
+    conn.query_row(
+        "
+        SELECT display_artist, mbid, country_code, country_name, raw_area_name, review_state
+        FROM musicbrainz_artist_origin_countries
+        WHERE local_artist_key = ?1
+        LIMIT 1
+        ",
+        params![local_artist_key],
+        |row| {
+            let saved_mbid = row.get::<_, Option<String>>(1)?;
+            Ok(MusicBrainzArtistOriginCountryUpdate {
+                artist_key: local_artist_key.clone(),
+                artist_name: row.get::<_, String>(0)?,
+                musicbrainz_mbid: visible_origin_mbid(saved_mbid),
+                origin_country_code: row.get(2)?,
+                origin_country_name: row.get(3)?,
+                origin_country_raw_area: row.get(4)?,
+                origin_country_review_state: row.get(5)?,
+            })
+        },
+    )
+    .optional()
+    .context("Could not read saved MusicBrainz artist origin-country row")
+}
+
+fn visible_origin_mbid(mbid: Option<String>) -> Option<String> {
+    mbid.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("manual") {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
 }
 
 fn insert_origin_country_import_run(
@@ -4349,6 +4546,51 @@ mod tests {
         assert_eq!(saved.2.as_deref(), Some("England"));
         assert_eq!(saved.3, "manual");
         assert_eq!(saved.4, "manual");
+    }
+
+    #[test]
+    fn saves_manual_artist_origin_country() {
+        let app_conn = create_artist_app_db();
+        let saved = set_artist_origin_country_for_connection(
+            &app_conn,
+            MusicBrainzArtistOriginCountryRequest {
+                artist_key: "the smiths".to_string(),
+                artist_name: "The Smiths".to_string(),
+                musicbrainz_mbid: None,
+                country_code: "gb".to_string(),
+                country_name: None,
+            },
+        )
+        .expect("save manual artist origin");
+
+        assert_eq!(saved.artist_key, "the smiths");
+        assert_eq!(saved.origin_country_code.as_deref(), Some("GB"));
+        assert_eq!(saved.origin_country_name.as_deref(), Some("United Kingdom"));
+        assert_eq!(saved.origin_country_review_state.as_deref(), Some("manual"));
+
+        let stored = app_conn
+            .query_row(
+                "
+                SELECT country_code, country_name, derived_from, review_state
+                FROM musicbrainz_artist_origin_countries
+                WHERE local_artist_key = 'the smiths'
+                ",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, Option<String>>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                },
+            )
+            .expect("read manual artist origin");
+
+        assert_eq!(stored.0.as_deref(), Some("GB"));
+        assert_eq!(stored.1.as_deref(), Some("United Kingdom"));
+        assert_eq!(stored.2, "manual");
+        assert_eq!(stored.3, "manual");
     }
 
     #[test]

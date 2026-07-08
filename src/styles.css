@@ -3562,7 +3562,7 @@ button {
 }
 
 .performance-summary.musicbrainz-artist-summary {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
 }
 
 .musicbrainz-artist-meta {
@@ -3649,6 +3649,45 @@ button {
 .musicbrainz-manual-link input:focus {
   border-color: #168279;
   box-shadow: 0 0 0 3px rgba(22, 130, 121, 0.14);
+}
+
+.musicbrainz-origin-editor {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.35fr) minmax(180px, 1fr) 34px;
+  align-items: end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.musicbrainz-origin-editor label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: #697671;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 700;
+}
+
+.musicbrainz-origin-editor input {
+  width: 100%;
+  height: 34px;
+  border: 1px solid #cfd9d5;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #17211e;
+  background: #fbfcfc;
+  outline: none;
+}
+
+.musicbrainz-origin-editor input:focus {
+  border-color: #168279;
+  box-shadow: 0 0 0 3px rgba(22, 130, 121, 0.14);
+}
+
+.musicbrainz-origin-editor .icon-button {
+  width: 34px;
+  height: 34px;
 }
 
 .musicbrainz-update-button {
@@ -4359,6 +4398,7 @@ button {
 :root[data-theme="dark"] .criterion select,
 :root[data-theme="dark"] .source-input input,
 :root[data-theme="dark"] .musicbrainz-manual-link input,
+:root[data-theme="dark"] .musicbrainz-origin-editor input,
 :root[data-theme="dark"] .slider-criterion > div,
 :root[data-theme="dark"] .segmented-control,
 :root[data-theme="dark"] .progress-block,
@@ -4406,7 +4446,8 @@ button {
 :root[data-theme="dark"] .criterion input,
 :root[data-theme="dark"] .criterion select,
 :root[data-theme="dark"] .source-input input,
-:root[data-theme="dark"] .musicbrainz-manual-link input {
+:root[data-theme="dark"] .musicbrainz-manual-link input,
+:root[data-theme="dark"] .musicbrainz-origin-editor input {
   color: #f0f6f4;
 }
 
@@ -4823,6 +4864,14 @@ button {
 
   .musicbrainz-origin-grid {
     grid-template-columns: 1fr;
+  }
+
+  .musicbrainz-origin-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .musicbrainz-origin-editor .icon-button {
+    justify-self: flex-start;
   }
 
   .musicbrainz-origin-report-heading {

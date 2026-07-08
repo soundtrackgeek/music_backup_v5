@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.43.0] - 2026-07-08
+### Added
+- Added selected-artist Origin Country refresh to the Artist MusicBrainz Update action, saving MusicBrainz artist country/area data into the app-owned origin tables.
+- Added manual Origin Country code/name saves in the Artist MusicBrainz panel, with immediate Artist page refresh and Rust coverage for manual origin persistence.
+
+### Changed
+- Bumped synchronized app metadata to `0.43.0`.
+
 ## [0.42.3] - 2026-07-08
 ### Changed
 - Origin Countries import now trusts attached or cached MusicBrainz MBIDs even when the cache mapping is duplicate-heavy, leaving later corrections to the Artist review flow.

@@ -90,6 +90,7 @@ import {
   previewMusicBrainzOriginCountryImport,
   refreshMusicBrainzArtistInfo,
   setMusicBrainzArtistLink,
+  setMusicBrainzArtistOriginCountry,
   setMusicBrainzReleaseDecision,
   syncMusicBrainzOverlay,
   cancelMusicBrainzOriginCountryImport,
@@ -141,6 +142,7 @@ import type {
   RightSidebarMode,
   MusicToolFixSummary,
   MusicBrainzArtistExportRequest,
+  MusicBrainzArtistOriginCountryUpdate,
   MusicBrainzArtistRefreshResult,
   MusicToolIssueRequest,
   MusicToolIssueResponse,
@@ -1719,10 +1721,13 @@ function MusicBrainzArtistDiscographyPanel({
   onUpdateInfo,
   onOpenExternalUrl,
   onSetArtistLink,
+  onSetOriginCountry,
   onSetReleaseDecision,
   onExport,
   exportResult,
   refreshResult,
+  originResult,
+  countryOptions,
 }: {
   artist: ArtistSummary | null;
   response: MusicBrainzArtistDiscographyResponse | null;
@@ -1737,16 +1742,24 @@ function MusicBrainzArtistDiscographyPanel({
     musicbrainzMbid?: string | null,
     canonicalName?: string | null,
   ) => void;
+  onSetOriginCountry: (countryCode: string, countryName?: string | null) => void;
   onSetReleaseDecision: (row: MusicBrainzArtistReleaseRow, decision: "not-in-scope" | "include") => void;
   onExport: (format: "csv" | "xlsx") => void;
   exportResult: ExportResult | null;
   refreshResult: MusicBrainzArtistRefreshResult | null;
+  originResult: MusicBrainzArtistOriginCountryUpdate | null;
+  countryOptions: MusicBrainzOriginCountryOption[];
 }) {
   const rows = response?.releases ?? [];
   const visibleRows = rows.filter((row) => row.status !== "excluded");
   const candidates = response?.candidates ?? [];
   const statusLabel = musicBrainzStateLabel(response?.state);
   const [manualMbid, setManualMbid] = useState("");
+  const [manualOriginCode, setManualOriginCode] = useState("");
+  const [manualOriginName, setManualOriginName] = useState("");
+  const originInputId = useId();
+  const originNameInputId = useId();
+  const originOptionsId = `${originInputId}-options`;
   const musicBrainzArtistUrl = response?.musicbrainzMbid
     ? `https://musicbrainz.org/artist/${encodeURIComponent(response.musicbrainzMbid)}`
     : null;
@@ -1764,18 +1777,36 @@ function MusicBrainzArtistDiscographyPanel({
     artist && response && (response.artistLinkState === "verified" || response.artistLinkState === "ignored"),
   );
   const manualMbidValue = manualMbid.trim();
+  const manualOriginCodeValue = manualOriginCode.trim().toUpperCase();
+  const selectedOriginOption = countryOptions.find((country) => country.code === manualOriginCodeValue);
+  const manualOriginNameValue = manualOriginName.trim() || selectedOriginOption?.name || null;
   const canSetManualMbid = Boolean(artist && manualMbidValue && !isLoading);
+  const canSetManualOrigin = Boolean(artist && /^[A-Z]{2}$/.test(manualOriginCodeValue) && !isLoading);
   const canExport = Boolean(response && !response.artistLinkIgnored && visibleRows.length > 0 && !isLoading);
   const canUpdateInfo = Boolean(artist && response?.musicbrainzMbid && !response.artistLinkIgnored && !isLoading);
+  const refreshedOriginLabel = refreshResult?.origin ? formatOriginCountry(refreshResult.origin) : "";
+  const savedOriginLabel = originResult ? formatOriginCountry(originResult) : "";
 
   useEffect(() => {
     setManualMbid(response?.musicbrainzMbid ?? "");
   }, [response?.artistKey, response?.musicbrainzMbid]);
 
+  useEffect(() => {
+    setManualOriginCode(artist?.originCountryCode ?? "");
+    setManualOriginName(artist?.originCountryName ?? "");
+  }, [artist?.id, artist?.originCountryCode, artist?.originCountryName]);
+
   function handleManualMbidSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (manualMbidValue) {
       onSetArtistLink("set", manualMbidValue);
+    }
+  }
+
+  function handleManualOriginSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (canSetManualOrigin) {
+      onSetOriginCountry(manualOriginCodeValue, manualOriginNameValue);
     }
   }
 
@@ -1963,6 +1994,48 @@ function MusicBrainzArtistDiscographyPanel({
               </button>
             </form>
           </div>
+          <form className="musicbrainz-origin-editor" onSubmit={handleManualOriginSubmit}>
+            <label htmlFor={originInputId}>
+              <span>Origin Country</span>
+              <input
+                id={originInputId}
+                list={originOptionsId}
+                value={manualOriginCode}
+                placeholder="US"
+                maxLength={2}
+                disabled={!artist || isLoading}
+                onChange={(event) => setManualOriginCode(event.target.value.toUpperCase())}
+                onBlur={(event) => setManualOriginCode(event.currentTarget.value.trim().toUpperCase())}
+              />
+            </label>
+            <label htmlFor={originNameInputId}>
+              <span>Country name</span>
+              <input
+                id={originNameInputId}
+                value={manualOriginName}
+                placeholder={selectedOriginOption?.name ?? "United States"}
+                disabled={!artist || isLoading}
+                onChange={(event) => setManualOriginName(event.target.value)}
+                onBlur={(event) => setManualOriginName(event.currentTarget.value.trim())}
+              />
+            </label>
+            <datalist id={originOptionsId}>
+              {countryOptions.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.name}
+                </option>
+              ))}
+            </datalist>
+            <button
+              className="icon-button"
+              type="submit"
+              title="Save manual origin country"
+              aria-label="Save manual origin country"
+              disabled={!canSetManualOrigin}
+            >
+              <Save size={16} />
+            </button>
+          </form>
 
           {response.artistLinkIgnored ? null : (
             <>
@@ -1990,7 +2063,14 @@ function MusicBrainzArtistDiscographyPanel({
                     <CloudDownload size={16} />
                     <span>
                       {formatNumber(refreshResult.storedCount)} release groups refreshed at {formatDate(refreshResult.fetchedAt)}
+                      {refreshedOriginLabel ? ` / Origin ${refreshedOriginLabel}` : ""}
                     </span>
+                  </div>
+                ) : null}
+                {originResult ? (
+                  <div className="export-result musicbrainz-export-result">
+                    <Save size={16} />
+                    <span>{`Origin saved as ${savedOriginLabel || "manual"}`}</span>
                   </div>
                 ) : null}
               </div>
@@ -4379,6 +4459,8 @@ export default function App() {
   const [musicBrainzArtistExportResult, setMusicBrainzArtistExportResult] = useState<ExportResult | null>(null);
   const [musicBrainzArtistRefreshResult, setMusicBrainzArtistRefreshResult] =
     useState<MusicBrainzArtistRefreshResult | null>(null);
+  const [musicBrainzArtistOriginResult, setMusicBrainzArtistOriginResult] =
+    useState<MusicBrainzArtistOriginCountryUpdate | null>(null);
   const [artistIncludeCalculated, setArtistIncludeCalculated] = useState(false);
   const [artistExportResult, setArtistExportResult] = useState<ExportResult | null>(null);
   const [genreRequest, setGenreRequest] = useState<GenreListRequest>(() => createGenreListRequest());
@@ -4971,6 +5053,7 @@ export default function App() {
       setIsMusicBrainzArtistUpdating(false);
       setMusicBrainzArtistExportResult(null);
       setMusicBrainzArtistRefreshResult(null);
+      setMusicBrainzArtistOriginResult(null);
       return;
     }
 
@@ -4980,7 +5063,7 @@ export default function App() {
     setMusicBrainzArtistError(null);
     setMusicBrainzArtistExportResult(null);
     setMusicBrainzArtistRefreshResult(null);
-    setMusicBrainzArtistRefreshResult(null);
+    setMusicBrainzArtistOriginResult(null);
     void getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name)
       .then((nextResponse) => {
         if (!cancelled) {
@@ -5730,6 +5813,42 @@ export default function App() {
     setAlbumExportResult(null);
   }
 
+  function refreshOriginJoinedViews() {
+    setRequest((current) => ({ ...current }));
+    setAlbumRequest((current) => ({ ...current }));
+    setChartConfig((current) => ({ ...current }));
+    setArtistRequest((current) => ({ ...current }));
+    setArtistAlbumsResponse(null);
+    setGenreAlbumsResponse(null);
+    setDiscoveryAlbumResponse(null);
+  }
+
+  function applyArtistOriginUpdate(update: MusicBrainzArtistOriginCountryUpdate | null) {
+    if (!update) {
+      return;
+    }
+
+    setArtistResponse((current) =>
+      current
+        ? {
+            ...current,
+            rows: current.rows.map((artist) =>
+              artist.id === update.artistKey
+                ? {
+                    ...artist,
+                    originCountryCode: update.originCountryCode,
+                    originCountryName: update.originCountryName,
+                    originCountryRawArea: update.originCountryRawArea,
+                    originCountryReviewState: update.originCountryReviewState,
+                  }
+                : artist,
+            ),
+          }
+        : current,
+    );
+    refreshOriginJoinedViews();
+  }
+
   function clearAlbumQuery() {
     setAlbumRequest((previous) => {
       const nextRequest = createRequest("albums");
@@ -5755,6 +5874,7 @@ export default function App() {
     setArtistExportResult(null);
     setMusicBrainzArtistExportResult(null);
     setMusicBrainzArtistRefreshResult(null);
+    setMusicBrainzArtistOriginResult(null);
   }
 
   function selectArtist(artistId: string) {
@@ -5765,6 +5885,7 @@ export default function App() {
     setArtistExportResult(null);
     setMusicBrainzArtistExportResult(null);
     setMusicBrainzArtistRefreshResult(null);
+    setMusicBrainzArtistOriginResult(null);
   }
 
   function selectArtistAlbum(albumId: string) {
@@ -6001,6 +6122,8 @@ export default function App() {
     setMusicBrainzArtistError(null);
     setMusicBrainzArtistExportResult(null);
     setMusicBrainzArtistRefreshResult(null);
+    setMusicBrainzArtistOriginResult(null);
+    setMusicBrainzArtistOriginResult(null);
 
     try {
       const result = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
@@ -6026,6 +6149,7 @@ export default function App() {
     setMusicBrainzArtistError(null);
     setMusicBrainzArtistExportResult(null);
     setMusicBrainzArtistRefreshResult(null);
+    setMusicBrainzArtistOriginResult(null);
 
     try {
       await setMusicBrainzReleaseDecision({
@@ -6059,6 +6183,7 @@ export default function App() {
     setMusicBrainzArtistError(null);
     setMusicBrainzArtistExportResult(null);
     setMusicBrainzArtistRefreshResult(null);
+    setMusicBrainzArtistOriginResult(null);
 
     try {
       await setMusicBrainzArtistLink({
@@ -6097,10 +6222,43 @@ export default function App() {
       const discography = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
       setMusicBrainzArtistDiscography(discography);
       setMusicBrainzArtistRefreshResult(refreshResult);
+      setMusicBrainzArtistOriginResult(null);
+      applyArtistOriginUpdate(refreshResult.origin);
+      await refreshMusicBrainzOriginCountryStatus();
     } catch (error) {
       setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsMusicBrainzArtistUpdating(false);
+      setIsMusicBrainzArtistLoading(false);
+    }
+  }
+
+  async function saveArtistOriginCountry(countryCode: string, countryName?: string | null) {
+    if (!selectedArtist) {
+      return;
+    }
+
+    setIsMusicBrainzArtistLoading(true);
+    setIsMusicBrainzArtistUpdating(false);
+    setMusicBrainzArtistError(null);
+    setMusicBrainzArtistExportResult(null);
+    setMusicBrainzArtistRefreshResult(null);
+    setMusicBrainzArtistOriginResult(null);
+
+    try {
+      const origin = await setMusicBrainzArtistOriginCountry({
+        artistKey: selectedArtist.id,
+        artistName: selectedArtist.name,
+        musicbrainzMbid: musicBrainzArtistDiscography?.musicbrainzMbid ?? null,
+        countryCode,
+        countryName,
+      });
+      setMusicBrainzArtistOriginResult(origin);
+      applyArtistOriginUpdate(origin);
+      await refreshMusicBrainzOriginCountryStatus();
+    } catch (error) {
+      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+    } finally {
       setIsMusicBrainzArtistLoading(false);
     }
   }
@@ -6623,13 +6781,7 @@ export default function App() {
       const preview = await previewMusicBrainzOriginCountryImport({});
       setMusicBrainzOriginPreview(preview);
       await refreshMusicBrainzOriginCountryStatus();
-      setRequest((current) => ({ ...current }));
-      setAlbumRequest((current) => ({ ...current }));
-      setChartConfig((current) => ({ ...current }));
-      setArtistRequest((current) => ({ ...current }));
-      setArtistAlbumsResponse(null);
-      setGenreAlbumsResponse(null);
-      setDiscoveryAlbumResponse(null);
+      refreshOriginJoinedViews();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setMusicBrainzOriginError(message);
@@ -8079,10 +8231,13 @@ export default function App() {
             onSetArtistLink={(action, musicbrainzMbid, canonicalName) =>
               void setArtistMusicBrainzLink(action, musicbrainzMbid, canonicalName)
             }
+            onSetOriginCountry={(countryCode, countryName) => void saveArtistOriginCountry(countryCode, countryName)}
             onSetReleaseDecision={(row, decision) => void setArtistMusicBrainzReleaseDecision(row, decision)}
             onExport={(format) => void runArtistMusicBrainzExport(format)}
             exportResult={musicBrainzArtistExportResult}
             refreshResult={musicBrainzArtistRefreshResult}
+            originResult={musicBrainzArtistOriginResult}
+            countryOptions={originCountryOptions}
           />
 
           <section className="table-panel" aria-label="Selected artist cover view">

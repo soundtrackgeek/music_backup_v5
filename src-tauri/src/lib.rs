@@ -15,10 +15,12 @@ use models::{
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
     MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
-    MusicBrainzArtistExportRequest, MusicBrainzArtistLinkRequest, MusicBrainzArtistRefreshRequest,
-    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzOriginCountryImportRequest,
-    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
-    MusicBrainzOriginCountryStatus, MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
+    MusicBrainzArtistExportRequest, MusicBrainzArtistLinkRequest,
+    MusicBrainzArtistOriginCountryRequest, MusicBrainzArtistOriginCountryUpdate,
+    MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus,
+    MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
+    MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryStatus,
+    MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
     MusicBrainzReleaseDecisionRequest, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, PerformanceProbeResponse,
     SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
@@ -204,6 +206,20 @@ async fn refresh_musicbrainz_artist_releases(
     })
     .await
     .map_err(|error| format!("MusicBrainz artist refresh task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn set_musicbrainz_artist_origin_country(
+    app: AppHandle,
+    request: MusicBrainzArtistOriginCountryRequest,
+) -> Result<MusicBrainzArtistOriginCountryUpdate, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        musicbrainz::set_artist_origin_country_for_app(&app, request)
+    })
+    .await
+    .map_err(|error| format!("MusicBrainz artist origin-country task failed: {error}"))?
     .map_err(|error| error.to_string())
 }
 
@@ -512,6 +528,7 @@ pub fn run() {
             set_musicbrainz_artist_link,
             set_musicbrainz_release_decision,
             refresh_musicbrainz_artist_releases,
+            set_musicbrainz_artist_origin_country,
             sync_musicbrainz_overlay,
             list_musicbrainz_overlay_sync_log,
             export_musicbrainz_artist_releases,

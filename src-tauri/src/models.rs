@@ -455,6 +455,33 @@ pub struct MusicBrainzArtistRefreshRequest {
     pub musicbrainz_mbid: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistOriginCountryRequest {
+    #[serde(default)]
+    pub artist_key: String,
+    #[serde(default)]
+    pub artist_name: String,
+    #[serde(default)]
+    pub musicbrainz_mbid: Option<String>,
+    #[serde(default)]
+    pub country_code: String,
+    #[serde(default)]
+    pub country_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistOriginCountryUpdate {
+    pub artist_key: String,
+    pub artist_name: String,
+    pub musicbrainz_mbid: Option<String>,
+    pub origin_country_code: Option<String>,
+    pub origin_country_name: Option<String>,
+    pub origin_country_raw_area: Option<String>,
+    pub origin_country_review_state: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistRefreshResult {
@@ -464,6 +491,7 @@ pub struct MusicBrainzArtistRefreshResult {
     pub fetched_count: usize,
     pub stored_count: usize,
     pub fetched_at: String,
+    pub origin: Option<MusicBrainzArtistOriginCountryUpdate>,
 }
 
 #[derive(Debug, Clone, Serialize)]
