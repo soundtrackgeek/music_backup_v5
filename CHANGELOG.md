@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.47.0] - 2026-07-08
+### Added
+- Added global number-key navigation shortcuts: `1` through `9` open Search through Imports in sidebar order, and `0` opens Settings while preserving normal typing in editable controls.
+
+### Changed
+- Bumped synchronized app metadata to `0.47.0`.
+
 ## [0.46.1] - 2026-07-08
 ### Fixed
 - Fixed Artist MusicBrainz Origin Country suggestions so code-only country rows display derived country names, such as `AE - United Arab Emirates`, and choosing a known code auto-fills the matching country name.

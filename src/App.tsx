@@ -190,6 +190,7 @@ import {
   missingFieldOptions,
   musicToolCatalog,
   navigation,
+  navigationShortcutMap,
   operatorLabels,
   rankingOptions,
   rightSidebarModeLabels,
@@ -4846,6 +4847,10 @@ function RatingEventList({ events }: { events: RatingEvent[] }) {
   );
 }
 
+function isEditableShortcutTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, [contenteditable]"));
+}
+
 export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
   const [sourcePath, setSourcePath] = useState(() => createDefaultImportSourcePath());
@@ -5032,6 +5037,33 @@ export default function App() {
   const hasAppliedLayoutDefaults = useRef(false);
   const isMusicBrainzOverlaySyncingRef = useRef(false);
   const canImport = isTauriRuntime();
+
+  useEffect(() => {
+    function handleNavigationShortcut(event: globalThis.KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        event.isComposing ||
+        isEditableShortcutTarget(event.target)
+      ) {
+        return;
+      }
+
+      const shortcut = navigationShortcutMap.get(event.key);
+      if (!shortcut?.enabled) {
+        return;
+      }
+
+      event.preventDefault();
+      setActiveSection(shortcut.label);
+    }
+
+    window.addEventListener("keydown", handleNavigationShortcut);
+    return () => window.removeEventListener("keydown", handleNavigationShortcut);
+  }, []);
 
   const refreshGenreSuggestions = useCallback(async () => {
     const nextGenreNames = await loadGenreSuggestionNames();
@@ -7687,6 +7719,7 @@ export default function App() {
                 type="button"
                 disabled={!item.enabled}
                 onClick={() => item.enabled && setActiveSection(item.label)}
+                aria-keyshortcuts={item.shortcut}
                 title={item.label}
               >
                 <Icon size={17} strokeWidth={2} />

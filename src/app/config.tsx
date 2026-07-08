@@ -31,18 +31,20 @@ import type {
 
 export const EXPORT_FORMATS = ["csv", "tsv", "xlsx", "json", "txt"];
 
-export const navigation: { label: string; icon: LucideIcon; enabled: boolean }[] = [
-  { label: "Search", icon: Search, enabled: true },
-  { label: "Charts", icon: BarChart3, enabled: true },
-  { label: "Discovery", icon: Compass, enabled: true },
-  { label: "Statistics", icon: Activity, enabled: true },
-  { label: "Albums", icon: Album, enabled: true },
-  { label: "Artists", icon: UsersRound, enabled: true },
-  { label: "Genres", icon: Tags, enabled: true },
-  { label: "Tools", icon: Wrench, enabled: true },
-  { label: "Imports", icon: FolderInput, enabled: true },
-  { label: "Settings", icon: Settings, enabled: true },
+export const navigation: { label: string; icon: LucideIcon; enabled: boolean; shortcut: string }[] = [
+  { label: "Search", icon: Search, enabled: true, shortcut: "1" },
+  { label: "Charts", icon: BarChart3, enabled: true, shortcut: "2" },
+  { label: "Discovery", icon: Compass, enabled: true, shortcut: "3" },
+  { label: "Statistics", icon: Activity, enabled: true, shortcut: "4" },
+  { label: "Albums", icon: Album, enabled: true, shortcut: "5" },
+  { label: "Artists", icon: UsersRound, enabled: true, shortcut: "6" },
+  { label: "Genres", icon: Tags, enabled: true, shortcut: "7" },
+  { label: "Tools", icon: Wrench, enabled: true, shortcut: "8" },
+  { label: "Imports", icon: FolderInput, enabled: true, shortcut: "9" },
+  { label: "Settings", icon: Settings, enabled: true, shortcut: "0" },
 ];
+
+export const navigationShortcutMap = new Map(navigation.map((item) => [item.shortcut, item]));
 
 export const leftSidebarModeOptions: { value: LeftSidebarMode; label: string }[] = [
   { value: "expanded", label: "Full" },
