@@ -409,6 +409,17 @@ type OriginCountryValue = {
   originCountryRawArea?: string | null;
 };
 
+type RegionDisplayNames = {
+  of(code: string): string | undefined;
+};
+
+const regionDisplayNames =
+  "DisplayNames" in Intl
+    ? new (Intl as typeof Intl & {
+        DisplayNames: new (locales: string[], options: { type: "region" }) => RegionDisplayNames;
+      }).DisplayNames(["en"], { type: "region" })
+    : null;
+
 function countryCodeForFlag(code: string | null | undefined) {
   const normalized = code?.trim().toLowerCase() ?? "";
   return /^[a-z]{2}$/.test(normalized) ? normalized : "";
@@ -484,7 +495,7 @@ function countryValueFromCode(code: string, countryOptions: MusicBrainzOriginCou
   const option = countryOptionForCode(countryOptions, normalizedCode);
   return {
     originCountryCode: normalizedCode,
-    originCountryName: option?.name ?? normalizedCode,
+    originCountryName: option ? countryOptionName(option) : countryNameFromCode(normalizedCode) ?? normalizedCode,
     originCountryRawArea: null,
   };
 }
@@ -526,7 +537,7 @@ function CountryOptionDisplay({
     <CountryDisplay
       value={{
         originCountryCode: countryOptionCode(country),
-        originCountryName: country.name,
+        originCountryName: countryOptionName(country),
         originCountryRawArea: null,
       }}
       mode={mode}
@@ -953,15 +964,36 @@ function countryOptionCode(country: MusicBrainzOriginCountryOption) {
   return country.code.trim().toUpperCase();
 }
 
-function countryOptionLabel(country: MusicBrainzOriginCountryOption) {
+function countryNameFromCode(code: string) {
+  const normalizedCode = code.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(normalizedCode)) {
+    return null;
+  }
+  const displayName = regionDisplayNames?.of(normalizedCode)?.trim();
+  return displayName && displayName.toUpperCase() !== normalizedCode ? displayName : null;
+}
+
+function countryOptionName(country: MusicBrainzOriginCountryOption) {
   const code = countryOptionCode(country);
   const name = country.name.trim();
+  return name && name.toUpperCase() !== code ? name : countryNameFromCode(code) ?? name;
+}
+
+function countryOptionLabel(country: MusicBrainzOriginCountryOption) {
+  const code = countryOptionCode(country);
+  const name = countryOptionName(country);
   return name && name.toUpperCase() !== code ? `${code} - ${name}` : code;
 }
 
 function countryOptionForCode(countryOptions: MusicBrainzOriginCountryOption[], code: string) {
   const normalizedCode = code.trim().toUpperCase();
   return countryOptions.find((country) => countryOptionCode(country) === normalizedCode);
+}
+
+function countryOptionNameForCode(countryOptions: MusicBrainzOriginCountryOption[], code: string) {
+  const normalizedCode = code.trim().toUpperCase();
+  const option = countryOptionForCode(countryOptions, normalizedCode);
+  return option ? countryOptionName(option) : countryNameFromCode(normalizedCode);
 }
 
 function parseCountryToken(value: string, countryOptions: MusicBrainzOriginCountryOption[]) {
@@ -980,7 +1012,7 @@ function parseCountryToken(value: string, countryOptions: MusicBrainzOriginCount
     const code = countryOptionCode(country);
     return (
       code.toLowerCase() === normalizedToken ||
-      normalizeCountrySuggestionText(country.name) === normalizedToken ||
+      normalizeCountrySuggestionText(countryOptionName(country)) === normalizedToken ||
       normalizeCountrySuggestionText(countryOptionLabel(country)) === normalizedToken
     );
   });
@@ -994,8 +1026,8 @@ function parseCountryList(value: string, countryOptions: MusicBrainzOriginCountr
 
 function formatCountryCode(code: string, countryOptions: MusicBrainzOriginCountryOption[]) {
   const normalizedCode = code.trim().toUpperCase();
-  const option = countryOptionForCode(countryOptions, normalizedCode);
-  return option ? countryOptionLabel(option) : normalizedCode;
+  const name = countryOptionNameForCode(countryOptions, normalizedCode);
+  return name && name.toUpperCase() !== normalizedCode ? `${normalizedCode} - ${name}` : normalizedCode;
 }
 
 function formatCountryList(values: string[], countryOptions: MusicBrainzOriginCountryOption[]) {
@@ -1014,7 +1046,7 @@ function normalizeCountrySuggestionText(value: string) {
 function countrySuggestionScore(country: MusicBrainzOriginCountryOption, normalizedQuery: string) {
   const code = country.code.trim().toUpperCase();
   const normalizedCode = code.toLowerCase();
-  const normalizedName = normalizeCountrySuggestionText(country.name);
+  const normalizedName = normalizeCountrySuggestionText(countryOptionName(country));
 
   if (!normalizedQuery) {
     return null;
@@ -1056,7 +1088,7 @@ function countrySuggestions(countryOptions: MusicBrainzOriginCountryOption[], qu
     .sort(
       (left, right) =>
         left.score - right.score ||
-        left.country.name.localeCompare(right.country.name) ||
+        countryOptionName(left.country).localeCompare(countryOptionName(right.country)) ||
         left.country.code.localeCompare(right.country.code),
     )
     .slice(0, 8)
@@ -2170,8 +2202,8 @@ function MusicBrainzArtistDiscographyPanel({
   );
   const manualMbidValue = manualMbid.trim();
   const manualOriginCodeValue = manualOriginCode.trim().toUpperCase();
-  const selectedOriginOption = countryOptions.find((country) => country.code === manualOriginCodeValue);
-  const manualOriginNameValue = manualOriginName.trim() || selectedOriginOption?.name || null;
+  const selectedOriginName = countryOptionNameForCode(countryOptions, manualOriginCodeValue);
+  const manualOriginNameValue = manualOriginName.trim() || selectedOriginName || null;
   const canSetManualMbid = Boolean(artist && manualMbidValue && !isLoading);
   const canSetManualOrigin = Boolean(artist && /^[A-Z]{2}$/.test(manualOriginCodeValue) && !isLoading);
   const canExport = Boolean(response && !response.artistLinkIgnored && visibleRows.length > 0 && !isLoading);
@@ -2198,6 +2230,22 @@ function MusicBrainzArtistDiscographyPanel({
     event.preventDefault();
     if (canSetManualOrigin) {
       onSetOriginCountry(manualOriginCodeValue, manualOriginNameValue);
+    }
+  }
+
+  function handleManualOriginCodeChange(value: string) {
+    const nextCode = value.toUpperCase();
+    const currentName = manualOriginName.trim();
+    const previousName = countryOptionNameForCode(countryOptions, manualOriginCode);
+    const nextName = countryOptionNameForCode(countryOptions, nextCode);
+    const artistOriginName = artist?.originCountryName?.trim() ?? "";
+    setManualOriginCode(nextCode);
+    if (
+      /^[A-Z]{2}$/.test(nextCode) &&
+      nextName &&
+      (!currentName || currentName === previousName || currentName === artistOriginName)
+    ) {
+      setManualOriginName(nextName);
     }
   }
 
@@ -2397,7 +2445,7 @@ function MusicBrainzArtistDiscographyPanel({
                 placeholder="US"
                 maxLength={2}
                 disabled={!artist || isLoading}
-                onChange={(event) => setManualOriginCode(event.target.value.toUpperCase())}
+                onChange={(event) => handleManualOriginCodeChange(event.target.value)}
                 onBlur={(event) => setManualOriginCode(event.currentTarget.value.trim().toUpperCase())}
               />
             </label>
@@ -2406,7 +2454,7 @@ function MusicBrainzArtistDiscographyPanel({
               <input
                 id={originNameInputId}
                 value={manualOriginName}
-                placeholder={selectedOriginOption?.name ?? "United States"}
+                placeholder={selectedOriginName ?? "United States"}
                 disabled={!artist || isLoading}
                 onChange={(event) => setManualOriginName(event.target.value)}
                 onBlur={(event) => setManualOriginName(event.currentTarget.value.trim())}

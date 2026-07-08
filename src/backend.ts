@@ -138,13 +138,14 @@ const mockMusicBrainzOriginRun = {
 
 const mockMusicBrainzOriginCountryStatus: MusicBrainzOriginCountryStatus = {
   totalAlbumArtists: 6,
-  importedOrigins: 4,
-  countryCount: 2,
+  importedOrigins: 5,
+  countryCount: 3,
   manualOrigins: 1,
   unresolvedOrigins: 1,
   missingOrigins: 1,
   lastRun: mockMusicBrainzOriginRun,
   countries: [
+    { code: "AE", name: "AE", artistCount: 1 },
     { code: "GB", name: "United Kingdom", artistCount: 2 },
     { code: "US", name: "United States", artistCount: 2 },
   ],

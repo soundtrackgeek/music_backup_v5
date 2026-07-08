@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.46.1] - 2026-07-08
+### Fixed
+- Fixed Artist MusicBrainz Origin Country suggestions so code-only country rows display derived country names, such as `AE - United Arab Emirates`, and choosing a known code auto-fills the matching country name.
+
+### Changed
+- Bumped synchronized app metadata to `0.46.1`.
+
 ## [0.46.0] - 2026-07-08
 ### Added
 - Added a Billboard table-column option to Search, enabled by default for album and track result tables.
