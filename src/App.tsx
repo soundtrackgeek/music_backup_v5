@@ -817,8 +817,63 @@ function normalizeCountryCodes(values: string[]) {
   return values.map((code) => code.trim().toUpperCase()).filter(Boolean);
 }
 
-function parseCountryList(value: string) {
-  return normalizeCountryCodes(parseList(value));
+function countryOptionCode(country: MusicBrainzOriginCountryOption) {
+  return country.code.trim().toUpperCase();
+}
+
+function countryOptionLabel(country: MusicBrainzOriginCountryOption) {
+  const code = countryOptionCode(country);
+  const name = country.name.trim();
+  return name && name.toUpperCase() !== code ? `${code} - ${name}` : code;
+}
+
+function countryOptionForCode(countryOptions: MusicBrainzOriginCountryOption[], code: string) {
+  const normalizedCode = code.trim().toUpperCase();
+  return countryOptions.find((country) => countryOptionCode(country) === normalizedCode);
+}
+
+function parseCountryToken(value: string, countryOptions: MusicBrainzOriginCountryOption[]) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const leadingCode = trimmed.match(/^([a-z]{2})(?=$|\s|[-:])/i)?.[1]?.toUpperCase();
+  if (leadingCode) {
+    return leadingCode;
+  }
+
+  const normalizedToken = normalizeCountrySuggestionText(trimmed);
+  const matchedOption = countryOptions.find((country) => {
+    const code = countryOptionCode(country);
+    return (
+      code.toLowerCase() === normalizedToken ||
+      normalizeCountrySuggestionText(country.name) === normalizedToken ||
+      normalizeCountrySuggestionText(countryOptionLabel(country)) === normalizedToken
+    );
+  });
+
+  return matchedOption ? countryOptionCode(matchedOption) : trimmed.toUpperCase();
+}
+
+function parseCountryList(value: string, countryOptions: MusicBrainzOriginCountryOption[] = []) {
+  return normalizeCountryCodes(parseList(value).map((item) => parseCountryToken(item, countryOptions)));
+}
+
+function formatCountryCode(code: string, countryOptions: MusicBrainzOriginCountryOption[]) {
+  const normalizedCode = code.trim().toUpperCase();
+  const option = countryOptionForCode(countryOptions, normalizedCode);
+  return option ? countryOptionLabel(option) : normalizedCode;
+}
+
+function formatCountryList(values: string[], countryOptions: MusicBrainzOriginCountryOption[]) {
+  return formatList(normalizeCountryCodes(values).map((code) => formatCountryCode(code, countryOptions)));
+}
+
+function formatCountryCodeSummary(values: string[], countryOptions: MusicBrainzOriginCountryOption[]) {
+  return normalizeCountryCodes(values)
+    .map((code) => formatCountryCode(code, countryOptions))
+    .join(", ");
 }
 
 function normalizeCountrySuggestionText(value: string) {
@@ -899,7 +954,11 @@ function CountryListCriterion({
   const listboxId = `${inputId}-country-suggestions`;
   const inputRef = useRef<HTMLInputElement | null>(null);
   const normalizedValues = useMemo(() => normalizeCountryCodes(values), [values]);
-  const [draftValue, setDraftValue] = useState(() => formatList(normalizedValues));
+  const formattedValues = useMemo(
+    () => formatCountryList(normalizedValues, countryOptions),
+    [countryOptions, normalizedValues],
+  );
+  const [draftValue, setDraftValue] = useState(() => formattedValues);
   const [caretPosition, setCaretPosition] = useState(() => draftValue.length);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
@@ -917,12 +976,12 @@ function CountryListCriterion({
     : undefined;
 
   useEffect(() => {
-    if (!listsEqual(parseCountryList(draftValue), normalizedValues)) {
-      const nextValue = formatList(normalizedValues);
-      setDraftValue(nextValue);
-      setCaretPosition(nextValue.length);
+    const parsedDraft = parseCountryList(draftValue, countryOptions);
+    if (!listsEqual(parsedDraft, normalizedValues) || draftValue === formatList(normalizedValues)) {
+      setDraftValue(formattedValues);
+      setCaretPosition(formattedValues.length);
     }
-  }, [draftValue, normalizedValues]);
+  }, [countryOptions, draftValue, formattedValues, normalizedValues]);
 
   useEffect(() => {
     setActiveSuggestionIndex(0);
@@ -934,14 +993,14 @@ function CountryListCriterion({
 
   function updateDraft(value: string) {
     setDraftValue(value);
-    onChange(parseCountryList(value));
+    onChange(parseCountryList(value, countryOptions));
   }
 
   function chooseSuggestion(suggestion: MusicBrainzOriginCountryOption | undefined) {
     if (!suggestion) {
       return;
     }
-    const nextDraft = replaceGenreToken(draftValue, caretPosition, suggestion.code.trim().toUpperCase());
+    const nextDraft = replaceGenreToken(draftValue, caretPosition, countryOptionLabel(suggestion));
     updateDraft(nextDraft.value);
     setCaretPosition(nextDraft.caretPosition);
     setIsSuggestionOpen(false);
@@ -1006,7 +1065,7 @@ function CountryListCriterion({
         onClick={(event) => syncCaret(event.currentTarget)}
         onSelect={(event) => syncCaret(event.currentTarget)}
         onBlur={(event) => {
-          setDraftValue(formatList(parseCountryList(event.currentTarget.value)));
+          setDraftValue(formatCountryList(parseCountryList(event.currentTarget.value, countryOptions), countryOptions));
           setIsSuggestionOpen(false);
         }}
         placeholder={placeholder}
@@ -1026,7 +1085,7 @@ function CountryListCriterion({
                 chooseSuggestion(suggestion);
               }}
             >
-              {suggestion.code} - {suggestion.name}
+              {countryOptionLabel(suggestion)}
             </button>
           ))}
         </div>
@@ -2193,8 +2252,8 @@ function MusicBrainzArtistDiscographyPanel({
             </label>
             <datalist id={originOptionsId}>
               {countryOptions.map((country) => (
-                <option key={country.code} value={country.code}>
-                  {country.name}
+                <option key={country.code} value={countryOptionCode(country)} label={countryOptionLabel(country)}>
+                  {countryOptionLabel(country)}
                 </option>
               ))}
             </datalist>
@@ -5704,14 +5763,17 @@ export default function App() {
     if (currentFilters.originCountryCodes.length) {
       nextChips.push({
         key: "originCountryCodes",
-        label: `Origin: ${currentFilters.originCountryCodes.join(", ")}`,
+        label: `Origin: ${formatCountryCodeSummary(currentFilters.originCountryCodes, originCountryOptions)}`,
         remove: () => updateFilter("originCountryCodes", []),
       });
     }
     if (currentFilters.excludedOriginCountryCodes.length) {
       nextChips.push({
         key: "excludedOriginCountryCodes",
-        label: `Origin excluding: ${currentFilters.excludedOriginCountryCodes.join(", ")}`,
+        label: `Origin excluding: ${formatCountryCodeSummary(
+          currentFilters.excludedOriginCountryCodes,
+          originCountryOptions,
+        )}`,
         remove: () => updateFilter("excludedOriginCountryCodes", []),
       });
     }
@@ -5813,7 +5875,7 @@ export default function App() {
     }
 
     return nextChips;
-  }, [currentFilters, request.searchText, request.view]);
+  }, [currentFilters, originCountryOptions, request.searchText, request.view]);
 
   const albumChips = useMemo(() => {
     const nextChips: { key: string; label: string; remove: () => void }[] = [];
