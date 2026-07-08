@@ -1291,7 +1291,7 @@ fn derive_origin_country(payload: &MusicBrainzArtistLookupResponse) -> OriginCou
                 let country_name = area
                     .name
                     .as_deref()
-                    .and_then(non_empty_string)
+                    .and_then(country_level_name)
                     .unwrap_or_else(|| {
                         country_name_from_code(&country_code)
                             .unwrap_or(country_code.as_str())
@@ -1371,7 +1371,7 @@ fn country_name_for_explicit_code(
                     .any(|code| normalized_country_code(code).as_deref() == Some(country_code))
         })
         .and_then(|area| area.name.as_deref())
-        .and_then(non_empty_string)
+        .and_then(country_level_name)
 }
 
 fn country_area_mbid(area: &MusicBrainzArea) -> Option<String> {
@@ -1391,6 +1391,40 @@ fn normalized_country_code(value: &str) -> Option<String> {
         Some(trimmed.to_uppercase())
     } else {
         None
+    }
+}
+
+fn country_level_name(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let country_name = strip_trailing_area_parenthetical(trimmed).trim();
+    if country_name.is_empty() {
+        None
+    } else {
+        Some(country_name.to_string())
+    }
+}
+
+fn strip_trailing_area_parenthetical(value: &str) -> &str {
+    if !value.ends_with(')') {
+        return value;
+    }
+
+    let Some(open_index) = value.rfind(" (") else {
+        return value;
+    };
+    if open_index == 0 {
+        return value;
+    }
+
+    let parenthetical = &value[open_index + 2..value.len() - 1];
+    if parenthetical.trim().is_empty() {
+        value
+    } else {
+        &value[..open_index]
     }
 }
 
@@ -1415,8 +1449,8 @@ fn save_origin_country_evidence(
         let country_name = evidence
             .country_name
             .as_deref()
-            .unwrap_or(country_code)
-            .to_string();
+            .and_then(country_level_name)
+            .unwrap_or_else(|| country_code.to_string());
         conn.execute(
             "
             INSERT INTO musicbrainz_origin_countries (
@@ -1546,7 +1580,7 @@ fn set_artist_origin_country_for_connection(
     let country_name = request
         .country_name
         .as_deref()
-        .and_then(non_empty_string)
+        .and_then(country_level_name)
         .or_else(|| country_name_from_code(&country_code).map(ToOwned::to_owned))
         .unwrap_or_else(|| country_code.clone());
     let mbid = manual_origin_mbid(conn, &artist_key, request.musicbrainz_mbid.as_deref())?
@@ -1668,12 +1702,15 @@ fn artist_origin_country_update_for_connection(
         params![local_artist_key],
         |row| {
             let saved_mbid = row.get::<_, Option<String>>(1)?;
+            let country_name = row
+                .get::<_, Option<String>>(3)?
+                .and_then(|value| country_level_name(&value));
             Ok(MusicBrainzArtistOriginCountryUpdate {
                 artist_key: local_artist_key.clone(),
                 artist_name: row.get::<_, String>(0)?,
                 musicbrainz_mbid: visible_origin_mbid(saved_mbid),
                 origin_country_code: row.get(2)?,
-                origin_country_name: row.get(3)?,
+                origin_country_name: country_name,
                 origin_country_raw_area: row.get(4)?,
                 origin_country_review_state: row.get(5)?,
             })
@@ -4360,6 +4397,67 @@ mod tests {
         assert_eq!(evidence.begin_area_name.as_deref(), Some("London"));
         assert_eq!(evidence.derived_from, "artist-country");
         assert_eq!(evidence.review_state, "imported");
+    }
+
+    #[test]
+    fn strips_area_parenthetical_from_origin_country_names() {
+        assert_eq!(
+            country_level_name("Indonesia (Jakarta)").as_deref(),
+            Some("Indonesia")
+        );
+        assert_eq!(
+            country_level_name(" Norway (Oslo) ").as_deref(),
+            Some("Norway")
+        );
+        assert_eq!(
+            country_level_name("United States").as_deref(),
+            Some("United States")
+        );
+    }
+
+    #[test]
+    fn refreshed_artist_origin_country_saves_country_level_name() {
+        let app_conn = create_artist_app_db();
+        let updated = save_refreshed_artist_origin_country(
+            &app_conn,
+            "jakarta artist",
+            "Jakarta Artist",
+            "mbid-jakarta-artist",
+            &MusicBrainzArtistLookupResponse {
+                country: Some("ID".to_string()),
+                area: Some(MusicBrainzArea {
+                    id: Some("area-indonesia".to_string()),
+                    name: Some("Indonesia (Jakarta)".to_string()),
+                    area_type: Some("Country".to_string()),
+                    iso_3166_1_codes: vec!["ID".to_string()],
+                    iso_3166_2_codes: Vec::new(),
+                }),
+                begin_area: None,
+            },
+            "2026-07-08T12:00:00Z",
+        )
+        .expect("save refreshed artist origin")
+        .expect("origin update");
+
+        assert_eq!(updated.origin_country_code.as_deref(), Some("ID"));
+        assert_eq!(updated.origin_country_name.as_deref(), Some("Indonesia"));
+
+        let stored = app_conn
+            .query_row(
+                "
+                SELECT artist.country_name, countries.country_name
+                FROM musicbrainz_artist_origin_countries artist
+                JOIN musicbrainz_origin_countries countries
+                  ON countries.country_code = artist.country_code
+                WHERE artist.local_artist_key = 'jakarta artist'
+                ",
+                [],
+                |row| Ok((row.get::<_, Option<String>>(0)?, row.get::<_, String>(1)?)),
+            )
+            .expect("read stored country names");
+
+        assert_eq!(stored.0.as_deref(), Some("Indonesia"));
+        assert_eq!(stored.1, "Indonesia");
     }
 
     #[test]

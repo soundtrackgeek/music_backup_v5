@@ -94,7 +94,7 @@ npm run security:check
 - Origin-country import trusts verified or unverified attached MusicBrainz MBIDs first, then cache MBIDs; duplicate-heavy cache mappings are imported and can be corrected later from the Artist page.
 - The Artist MusicBrainz Update action refreshes selected-artist Origin Country from MusicBrainz, and the Artist page includes manual Origin Country code/name saves.
 - Search and Charts support Origin Country include/exclude and missing-origin filters using local SQLite joins, token-aware live country suggestions for comma-separated lists, plus optional Origin Country exports and chart columns.
-- Artists, Albums, Search results, and web-preview mocks show imported, reviewed/manual, skipped, unresolved, and missing origin states.
+- Artists, Albums, Search results, and web-preview mocks show country-level imported, reviewed/manual, skipped, unresolved, and missing origin states without appending town/raw-area parentheticals to the country label.
 - Reviewed/manual origin-country overlay sync is not included yet; local import, display, filtering, and exports are complete.
 
 ## Phase 29 MusicBrainz Collection Missing Album Tool Features

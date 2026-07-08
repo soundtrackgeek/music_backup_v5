@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.44.1] - 2026-07-08
+### Fixed
+- Fixed Origin Country labels so MusicBrainz city/raw-area details such as `Indonesia (Jakarta)` and `Norway (Oslo)` display and update as country names only.
+- Fixed MusicBrainz artist origin-country saves to strip trailing town parentheticals from stored country names.
+
+### Changed
+- Bumped synchronized app metadata to `0.44.1`.
+
 ## [0.44.0] - 2026-07-08
 ### Added
 - Added Search and Charts Exclude origin countries filters backed by the shared browse request model and SQLite country joins.

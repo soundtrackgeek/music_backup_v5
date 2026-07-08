@@ -130,12 +130,20 @@ export function formatBillboardSingleRank(row: Pick<BrowseRow, "billboardSingleR
 export function formatOriginCountry(
   row: Pick<BrowseRow, "originCountryCode" | "originCountryName" | "originCountryRawArea">,
 ) {
-  const name = row.originCountryName || row.originCountryCode || "";
-  if (!name) return "";
-  if (row.originCountryRawArea && row.originCountryRawArea !== name) {
-    return `${name} (${row.originCountryRawArea})`;
-  }
+  const name = stripOriginCountryArea(row.originCountryName) || row.originCountryCode || "";
   return name;
+}
+
+function stripOriginCountryArea(value: string | null | undefined) {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed.endsWith(")")) {
+    return trimmed;
+  }
+  const openIndex = trimmed.lastIndexOf(" (");
+  if (openIndex <= 0) {
+    return trimmed;
+  }
+  return trimmed.slice(0, openIndex).trim();
 }
 
 export function formatChartMetric(row: BrowseRow, metric: string) {
