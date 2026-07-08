@@ -1118,7 +1118,8 @@ fn resolve_origin_artist_match(
             skipped_reason: Some("No high-confidence MusicBrainz artist match.".to_string()),
         });
     };
-    if artist_match.suspect_mapping && artist_match.artist_link_state != "verified" {
+    let duplicate_heavy_cache_mapping = artist_match.cached_name_count > 1;
+    if duplicate_heavy_cache_mapping && artist_match.artist_link_state != "verified" {
         return Ok(OriginArtistResolution {
             mbid: Some(artist_match.mbid),
             matched_name: artist_match.matched_name,
@@ -1135,7 +1136,7 @@ fn resolve_origin_artist_match(
             matched_name: artist_match.matched_name,
             match_method: artist_match.match_method,
             artist_link_state: artist_match.artist_link_state,
-            suspect_mapping: false,
+            suspect_mapping: duplicate_heavy_cache_mapping,
             skipped_reason: None,
         }),
         None => Ok(OriginArtistResolution {
@@ -4189,6 +4190,36 @@ mod tests {
     }
 
     #[test]
+    fn origin_preview_allows_large_exact_cache_mappings() {
+        let temp_dir = temp_cache_dir("origin-large-exact");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_origin_cache_with_large_exact_artist(
+            &cache_path,
+            "012151a8-0f9a-44c9-997f-ebd68b5389f9",
+        );
+        let app_conn = create_artist_app_db();
+
+        let preview = preview_origin_country_import_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            &MusicBrainzOriginCountryImportRequest {
+                artist_keys: vec!["pet shop boys".to_string()],
+                refetch: false,
+                limit: None,
+            },
+        )
+        .expect("preview origin import");
+        let row = preview.rows.first().expect("preview row");
+
+        assert_eq!(row.status, "eligible");
+        assert!(!row.suspect_mapping);
+        assert_eq!(row.skipped_reason, None);
+        assert_eq!(preview.eligible_count, 1);
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
     fn origin_import_preserves_manual_country_override() {
         let app_conn = create_artist_app_db();
         db::ensure_musicbrainz_origin_country_tables(&app_conn).expect("create origin tables");
@@ -4497,6 +4528,56 @@ mod tests {
             params![mbid],
         )
         .expect("insert origin cache release");
+    }
+
+    fn create_origin_cache_with_large_exact_artist(path: &Path, mbid: &str) {
+        let conn = Connection::open(path).expect("open test large origin cache");
+        conn.execute_batch(
+            "
+            CREATE TABLE artist_cache (
+                name TEXT PRIMARY KEY,
+                mbid TEXT,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE release_groups (
+                artist_mbid TEXT,
+                release_mbid TEXT,
+                title TEXT,
+                year INTEGER,
+                type TEXT,
+                secondary_types TEXT,
+                track_count INTEGER,
+                status TEXT,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (artist_mbid, release_mbid)
+            );
+            ",
+        )
+        .expect("create large origin cache schema");
+        conn.execute(
+            "INSERT INTO artist_cache (name, mbid, cached_at) VALUES ('Pet Shop Boys', ?1, '2026-02-01 12:00:00')",
+            params![mbid],
+        )
+        .expect("insert exact origin cache artist");
+        for index in 0..SUSPICIOUS_RELEASE_GROUP_THRESHOLD {
+            conn.execute(
+                "
+                INSERT INTO release_groups (
+                    artist_mbid, release_mbid, title, year, type, secondary_types,
+                    track_count, status, cached_at
+                ) VALUES (
+                    ?1, ?2, ?3, 1987, 'Album', '',
+                    10, 'Official', '2026-02-01 12:03:00'
+                )
+                ",
+                params![
+                    mbid,
+                    format!("release-large-{index}"),
+                    format!("Large Catalog {index}")
+                ],
+            )
+            .expect("insert large origin cache release");
+        }
     }
 
     fn create_artist_app_db() -> Connection {

@@ -3322,6 +3322,158 @@ button {
   padding-right: 2px;
 }
 
+.musicbrainz-origin-report {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  min-width: 0;
+  border-top: 1px solid #d8e4e0;
+  padding-top: 16px;
+}
+
+.musicbrainz-origin-report-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  align-items: end;
+  gap: 12px;
+}
+
+.musicbrainz-origin-report-heading h3 {
+  margin: 0;
+  color: #16231f;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 780;
+}
+
+.musicbrainz-origin-report-heading p {
+  margin: 3px 0 0;
+  color: #53635e;
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 650;
+}
+
+.musicbrainz-origin-report-search input {
+  width: 100%;
+}
+
+.musicbrainz-origin-report-tabs {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.musicbrainz-origin-report-tabs button {
+  gap: 5px;
+  min-width: 0;
+}
+
+.musicbrainz-origin-report-tabs span {
+  color: inherit;
+  font-size: 11px;
+  line-height: 14px;
+  opacity: 0.72;
+}
+
+.musicbrainz-origin-report-table {
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid #dce7e3;
+  border-radius: 8px;
+}
+
+.musicbrainz-origin-report-head,
+.musicbrainz-origin-report-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.15fr) 116px minmax(110px, 0.6fr) minmax(230px, 1.25fr) minmax(220px, 1.3fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 980px;
+}
+
+.musicbrainz-origin-report-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid #dce7e3;
+  background: #f2f7f5;
+  padding: 9px 12px;
+}
+
+.musicbrainz-origin-report-head span {
+  color: #53635e;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.musicbrainz-origin-report-row {
+  border-bottom: 1px solid #e5eeeb;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.musicbrainz-origin-report-row:last-child {
+  border-bottom: 0;
+}
+
+.musicbrainz-origin-report-row > span {
+  min-width: 0;
+  color: #27332f;
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.musicbrainz-origin-report-row > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.musicbrainz-origin-report-row strong {
+  color: #16231f;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 780;
+}
+
+.musicbrainz-origin-report-row small {
+  color: #6a7772;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.musicbrainz-origin-report-row > span:nth-child(4) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.musicbrainz-origin-report-row > span:nth-child(4) > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.musicbrainz-origin-report-link {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+}
+
+.musicbrainz-origin-report-empty {
+  border: 0;
+  border-radius: 0;
+}
+
+.musicbrainz-origin-report-limit {
+  color: #53635e;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 650;
+}
+
 .musicbrainz-sync-path {
   min-width: 0;
 }
@@ -3985,6 +4137,8 @@ button {
 :root[data-theme="dark"] .musicbrainz-origin-progress-block,
 :root[data-theme="dark"] .musicbrainz-origin-live-stats div,
 :root[data-theme="dark"] .musicbrainz-origin-log article,
+:root[data-theme="dark"] .musicbrainz-origin-report-table,
+:root[data-theme="dark"] .musicbrainz-origin-report-row,
 :root[data-theme="dark"] .saved-search > button:first-child,
 :root[data-theme="dark"] .export-grid button,
 :root[data-theme="dark"] .export-strip button {
@@ -4067,6 +4221,10 @@ button {
 :root[data-theme="dark"] .musicbrainz-artist-meta span,
 :root[data-theme="dark"] .musicbrainz-artist-meta a,
 :root[data-theme="dark"] .musicbrainz-origin-preview-list,
+:root[data-theme="dark"] .musicbrainz-origin-report,
+:root[data-theme="dark"] .musicbrainz-origin-report-head,
+:root[data-theme="dark"] .musicbrainz-origin-report-table,
+:root[data-theme="dark"] .musicbrainz-origin-report-row,
 :root[data-theme="dark"] .musicbrainz-origin-log article,
 :root[data-theme="dark"] .musicbrainz-origin-live-stats div {
   border-color: #2f3d38;
@@ -4080,7 +4238,9 @@ button {
 :root[data-theme="dark"] .musicbrainz-quality-grid dd,
 :root[data-theme="dark"] .musicbrainz-warning-list strong,
 :root[data-theme="dark"] .musicbrainz-warning-list dd,
-:root[data-theme="dark"] .musicbrainz-origin-log strong {
+:root[data-theme="dark"] .musicbrainz-origin-log strong,
+:root[data-theme="dark"] .musicbrainz-origin-report-heading h3,
+:root[data-theme="dark"] .musicbrainz-origin-report-row strong {
   color: #eef7f4;
 }
 
@@ -4101,6 +4261,10 @@ button {
 :root[data-theme="dark"] .layout-setting > span,
 :root[data-theme="dark"] .performance-toolbar > span,
 :root[data-theme="dark"] .performance-database-path,
+:root[data-theme="dark"] .musicbrainz-origin-report-heading p,
+:root[data-theme="dark"] .musicbrainz-origin-report-head span,
+:root[data-theme="dark"] .musicbrainz-origin-report-row small,
+:root[data-theme="dark"] .musicbrainz-origin-report-limit,
 :root[data-theme="dark"] .musicbrainz-origin-live-heading p,
 :root[data-theme="dark"] .musicbrainz-origin-log span,
 :root[data-theme="dark"] .musicbrainz-origin-log small,
@@ -4160,6 +4324,14 @@ button {
 
 :root[data-theme="dark"] .run-details dd {
   color: #eef7f4;
+}
+
+:root[data-theme="dark"] .musicbrainz-origin-report-head {
+  background: #111815;
+}
+
+:root[data-theme="dark"] .musicbrainz-origin-report-row > span {
+  color: #dce7e3;
 }
 
 :root[data-theme="dark"] .range-slider .range-track {
@@ -4653,6 +4825,14 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .musicbrainz-origin-report-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .musicbrainz-origin-report-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .export-strip {
     justify-content: flex-start;
   }
@@ -4901,6 +5081,10 @@ button {
   }
 
   .musicbrainz-origin-live-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .musicbrainz-origin-report-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

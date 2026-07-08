@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.42.2] - 2026-07-08
+### Added
+- Added a filterable MusicBrainz Origin Countries coverage report in Settings for skipped, unresolved, eligible, imported, and all preview rows.
+
+### Fixed
+- Fixed Origin Countries preview/import eligibility so exact cache matches with large release-group counts are no longer skipped solely for having broad discographies.
+
+### Changed
+- Bumped synchronized app metadata to `0.42.2`.
+
 ## [0.42.1] - 2026-07-07
 ### Added
 - Added live MusicBrainz Origin Countries import progress with done/left/succeeded/skipped/unresolved/failed counters and a recent activity log in Settings.

@@ -156,6 +156,7 @@ import type {
   MusicBrainzOriginCountryImportProgress,
   MusicBrainzOriginCountryImportSummary,
   MusicBrainzOriginCountryPreview,
+  MusicBrainzOriginCountryPreviewRow,
   MusicBrainzOriginCountryStatus,
   MusicBrainzOverlaySyncLogEntry,
   MusicBrainzOverlaySyncResult,
@@ -274,6 +275,17 @@ type AppUpdateStatus =
   | "installing"
   | "restarting"
   | "error";
+
+type OriginReportFilter = "needsAttention" | "skipped" | "unresolved" | "eligible" | "imported" | "all";
+
+const originReportFilterOptions: Array<{ value: OriginReportFilter; label: string }> = [
+  { value: "needsAttention", label: "Needs attention" },
+  { value: "skipped", label: "Skipped" },
+  { value: "unresolved", label: "Unresolved" },
+  { value: "eligible", label: "Eligible" },
+  { value: "imported", label: "Imported" },
+  { value: "all", label: "All" },
+];
 
 function createDefaultSettings(): AppSettings {
   return loadCachedSettings();
@@ -412,6 +424,94 @@ function originImportStatusLabel(status: string | null | undefined) {
     default:
       return status || "Idle";
   }
+}
+
+function originPreviewStatusLabel(status: string | null | undefined) {
+  switch (status) {
+    case "eligible":
+      return "Eligible";
+    case "alreadyImported":
+      return "Imported";
+    case "manual":
+      return "Manual";
+    case "skipped":
+      return "Skipped";
+    case "unresolved":
+      return "Unresolved";
+    default:
+      return status || "Unknown";
+  }
+}
+
+function originPreviewCountryLabel(row: MusicBrainzOriginCountryPreviewRow) {
+  return row.existingCountryName ?? row.existingCountryCode ?? "Missing";
+}
+
+function originPreviewMatchLabel(row: MusicBrainzOriginCountryPreviewRow) {
+  const matchName = row.matchedName ?? row.musicbrainzMbid ?? "No MBID";
+  return [matchName, row.matchMethod].filter(Boolean).join(" / ");
+}
+
+function originPreviewReason(row: MusicBrainzOriginCountryPreviewRow) {
+  if (row.skippedReason) {
+    return row.skippedReason;
+  }
+  switch (row.status) {
+    case "eligible":
+      return row.suspectMapping ? "Ready after review-safe match." : "Ready for MusicBrainz lookup.";
+    case "alreadyImported":
+      return row.existingReviewState ? `Saved as ${row.existingReviewState}.` : "Country already saved.";
+    case "manual":
+      return "Manual or reviewed country is preserved.";
+    case "unresolved":
+      return "No usable MusicBrainz artist match.";
+    default:
+      return row.artistLinkState ? `Artist link: ${row.artistLinkState}.` : "";
+  }
+}
+
+function originPreviewMatchesFilter(row: MusicBrainzOriginCountryPreviewRow, filter: OriginReportFilter) {
+  switch (filter) {
+    case "needsAttention":
+      return row.status === "skipped" || row.status === "unresolved";
+    case "skipped":
+      return row.status === "skipped";
+    case "unresolved":
+      return row.status === "unresolved";
+    case "eligible":
+      return row.status === "eligible";
+    case "imported":
+      return row.status === "alreadyImported" || row.status === "manual";
+    case "all":
+      return true;
+    default:
+      return true;
+  }
+}
+
+function originPreviewMatchesSearch(row: MusicBrainzOriginCountryPreviewRow, query: string) {
+  if (!query) {
+    return true;
+  }
+  const haystack = [
+    row.displayArtist,
+    row.localArtistKey,
+    row.musicbrainzMbid,
+    row.matchedName,
+    row.existingCountryName,
+    row.existingCountryCode,
+    row.matchMethod,
+    row.artistLinkState,
+    row.skippedReason,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
+function musicBrainzArtistUrl(mbid: string) {
+  return `https://musicbrainz.org/artist/${mbid}`;
 }
 
 function musicBrainzStateLabel(
@@ -4352,6 +4452,9 @@ export default function App() {
     useState<MusicBrainzOriginCountryImportProgress | null>(null);
   const [musicBrainzOriginLog, setMusicBrainzOriginLog] = useState<MusicBrainzOriginCountryImportProgress[]>([]);
   const [musicBrainzOriginError, setMusicBrainzOriginError] = useState<string | null>(null);
+  const [musicBrainzOriginReportFilter, setMusicBrainzOriginReportFilter] =
+    useState<OriginReportFilter>("needsAttention");
+  const [musicBrainzOriginReportSearch, setMusicBrainzOriginReportSearch] = useState("");
   const [isMusicBrainzOriginPreviewing, setIsMusicBrainzOriginPreviewing] = useState(false);
   const [isMusicBrainzOriginImporting, setIsMusicBrainzOriginImporting] = useState(false);
   const [musicBrainzCachePathDraft, setMusicBrainzCachePathDraft] = useState(
@@ -5228,6 +5331,46 @@ export default function App() {
     }
     return Math.min(100, Math.max(0, musicBrainzOriginProgress.percent));
   }, [musicBrainzOriginProgress]);
+
+  const musicBrainzOriginReportQuery = musicBrainzOriginReportSearch.trim().toLowerCase();
+  const musicBrainzOriginReportRows = useMemo(() => {
+    const rows = musicBrainzOriginPreview?.rows ?? [];
+    return rows.filter(
+      (row) =>
+        originPreviewMatchesFilter(row, musicBrainzOriginReportFilter) &&
+        originPreviewMatchesSearch(row, musicBrainzOriginReportQuery),
+    );
+  }, [musicBrainzOriginPreview, musicBrainzOriginReportFilter, musicBrainzOriginReportQuery]);
+  const musicBrainzOriginVisibleReportRows = musicBrainzOriginReportRows.slice(0, 250);
+  const musicBrainzOriginReportCounts = useMemo(() => {
+    const rows = musicBrainzOriginPreview?.rows ?? [];
+    return rows.reduce(
+      (counts, row) => {
+        counts.all += 1;
+        if (row.status === "skipped" || row.status === "unresolved") {
+          counts.needsAttention += 1;
+        }
+        if (row.status === "skipped") {
+          counts.skipped += 1;
+        } else if (row.status === "unresolved") {
+          counts.unresolved += 1;
+        } else if (row.status === "eligible") {
+          counts.eligible += 1;
+        } else if (row.status === "alreadyImported" || row.status === "manual") {
+          counts.imported += 1;
+        }
+        return counts;
+      },
+      {
+        needsAttention: 0,
+        skipped: 0,
+        unresolved: 0,
+        eligible: 0,
+        imported: 0,
+        all: 0,
+      } satisfies Record<OriginReportFilter, number>,
+    );
+  }, [musicBrainzOriginPreview]);
 
   const importPathsDirty = useMemo(
     () =>
@@ -9454,6 +9597,100 @@ export default function App() {
                   )}
                 </aside>
               </div>
+
+              {musicBrainzOriginPreview ? (
+                <section className="musicbrainz-origin-report" aria-label="MusicBrainz origin coverage report">
+                  <div className="musicbrainz-origin-report-heading">
+                    <div>
+                      <h3>Origin coverage report</h3>
+                      <p>
+                        {formatNumber(musicBrainzOriginReportRows.length)} matching /{" "}
+                        {formatNumber(musicBrainzOriginPreview.rows.length)} previewed
+                      </p>
+                    </div>
+                    <label className="criterion musicbrainz-origin-report-search">
+                      <span>Find artist</span>
+                      <input
+                        type="search"
+                        value={musicBrainzOriginReportSearch}
+                        onChange={(event) => setMusicBrainzOriginReportSearch(event.target.value)}
+                        placeholder="Beastie Boys"
+                      />
+                    </label>
+                  </div>
+
+                  <div
+                    className="segmented-control musicbrainz-origin-report-tabs"
+                    role="group"
+                    aria-label="Origin report filter"
+                  >
+                    {originReportFilterOptions.map((option) => (
+                      <button
+                        className={musicBrainzOriginReportFilter === option.value ? "active" : ""}
+                        type="button"
+                        key={option.value}
+                        onClick={() => setMusicBrainzOriginReportFilter(option.value)}
+                      >
+                        {option.label}
+                        <span>{formatNumber(musicBrainzOriginReportCounts[option.value])}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="musicbrainz-origin-report-table" role="table">
+                    <div className="musicbrainz-origin-report-head" role="row">
+                      <span role="columnheader">Artist</span>
+                      <span role="columnheader">Status</span>
+                      <span role="columnheader">Country</span>
+                      <span role="columnheader">Match</span>
+                      <span role="columnheader">Reason</span>
+                    </div>
+                    {musicBrainzOriginVisibleReportRows.length === 0 ? (
+                      <div className="empty-state musicbrainz-origin-report-empty">
+                        <FileSearch size={20} />
+                        <span>No matching origin rows.</span>
+                      </div>
+                    ) : (
+                      musicBrainzOriginVisibleReportRows.map((row) => (
+                        <div
+                          className={`musicbrainz-origin-report-row origin-report-status-${row.status.toLowerCase()}`}
+                          role="row"
+                          key={row.localArtistKey}
+                        >
+                          <span role="cell">
+                            <strong>{row.displayArtist}</strong>
+                            <small>{formatNumber(row.albumCount)} albums</small>
+                          </span>
+                          <span role="cell">
+                            <RunStatus status={originPreviewStatusLabel(row.status)} />
+                          </span>
+                          <span role="cell">{originPreviewCountryLabel(row)}</span>
+                          <span role="cell">
+                            <span>{originPreviewMatchLabel(row)}</span>
+                            {row.musicbrainzMbid ? (
+                              <button
+                                className="icon-button musicbrainz-origin-report-link"
+                                type="button"
+                                aria-label={`Open ${row.displayArtist} in MusicBrainz`}
+                                onClick={() => void openExternalUrl(musicBrainzArtistUrl(row.musicbrainzMbid!))}
+                              >
+                                <ExternalLink size={14} />
+                              </button>
+                            ) : null}
+                          </span>
+                          <span role="cell">{originPreviewReason(row)}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {musicBrainzOriginReportRows.length > musicBrainzOriginVisibleReportRows.length ? (
+                    <small className="musicbrainz-origin-report-limit">
+                      Showing {formatNumber(musicBrainzOriginVisibleReportRows.length)} of{" "}
+                      {formatNumber(musicBrainzOriginReportRows.length)} matching rows.
+                    </small>
+                  ) : null}
+                </section>
+              ) : null}
             </section>
 
             <section className="settings-panel musicbrainz-sync-settings-panel">
