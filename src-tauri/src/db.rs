@@ -38,7 +38,7 @@ type ProgressApp<'a> = &'a ();
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 18;
+const LATEST_SCHEMA_VERSION: i32 = 19;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const DEFAULT_IMPORT_SOURCE_PATH: &str = "musicbee-library.tsv";
 const DEFAULT_COVER_SOURCE_PATH: &str = "AlbumCovers";
@@ -315,7 +315,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_eighteen_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && phase_nineteen_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -756,6 +756,64 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_origin_import_runs_started
             ON musicbrainz_artist_origin_import_runs(started_at);
 
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_infos (
+            local_artist_key TEXT PRIMARY KEY,
+            display_artist TEXT NOT NULL,
+            mbid TEXT NOT NULL,
+            sort_name TEXT,
+            artist_type TEXT,
+            gender TEXT,
+            life_begin_date TEXT,
+            life_begin_year INTEGER,
+            life_end_date TEXT,
+            life_end_year INTEGER,
+            life_ended INTEGER,
+            area_mbid TEXT,
+            area_name TEXT,
+            area_type TEXT,
+            begin_area_mbid TEXT,
+            begin_area_name TEXT,
+            begin_area_type TEXT,
+            end_area_mbid TEXT,
+            end_area_name TEXT,
+            end_area_type TEXT,
+            review_state TEXT NOT NULL DEFAULT 'unresolved',
+            source TEXT NOT NULL DEFAULT 'musicbrainz-live',
+            fetched_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_infos_mbid
+            ON musicbrainz_artist_infos(mbid);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_infos_type
+            ON musicbrainz_artist_infos(artist_type);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_infos_gender
+            ON musicbrainz_artist_infos(gender);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_infos_begin_year
+            ON musicbrainz_artist_infos(life_begin_year);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_infos_end_year
+            ON musicbrainz_artist_infos(life_end_year);
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_info_import_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scope TEXT NOT NULL DEFAULT 'eligible',
+            status TEXT NOT NULL,
+            total_artists INTEGER NOT NULL DEFAULT 0,
+            eligible_count INTEGER NOT NULL DEFAULT 0,
+            fetched_count INTEGER NOT NULL DEFAULT 0,
+            skipped_count INTEGER NOT NULL DEFAULT 0,
+            unresolved_count INTEGER NOT NULL DEFAULT 0,
+            failed_count INTEGER NOT NULL DEFAULT 0,
+            last_processed_artist_key TEXT,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            error_summary TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_info_import_runs_started
+            ON musicbrainz_artist_info_import_runs(started_at);
+
         INSERT OR IGNORE INTO app_settings (
             id, backup_retention, dark_mode, updated_at
         ) VALUES (
@@ -781,9 +839,16 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_release_status_cache(conn)?;
     ensure_musicbrainz_artist_release_groups(conn)?;
     ensure_musicbrainz_origin_country_tables(conn)?;
-    conn.execute_batch("PRAGMA user_version = 18;")
+    ensure_musicbrainz_artist_info_tables(conn)?;
+    conn.execute_batch("PRAGMA user_version = 19;")
         .context("Could not update SQLite schema version")?;
     Ok(())
+}
+
+fn phase_nineteen_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_eighteen_schema_exists(conn)?
+        && schema_table_exists(conn, "musicbrainz_artist_infos")?
+        && schema_table_exists(conn, "musicbrainz_artist_info_import_runs")?)
 }
 
 fn phase_eighteen_schema_exists(conn: &Connection) -> Result<bool> {
@@ -1239,6 +1304,73 @@ pub fn ensure_musicbrainz_origin_country_tables(conn: &Connection) -> Result<()>
         ",
     )
     .context("Could not create MusicBrainz artist origin-country tables")?;
+
+    Ok(())
+}
+
+pub fn ensure_musicbrainz_artist_info_tables(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_infos (
+            local_artist_key TEXT PRIMARY KEY,
+            display_artist TEXT NOT NULL,
+            mbid TEXT NOT NULL,
+            sort_name TEXT,
+            artist_type TEXT,
+            gender TEXT,
+            life_begin_date TEXT,
+            life_begin_year INTEGER,
+            life_end_date TEXT,
+            life_end_year INTEGER,
+            life_ended INTEGER,
+            area_mbid TEXT,
+            area_name TEXT,
+            area_type TEXT,
+            begin_area_mbid TEXT,
+            begin_area_name TEXT,
+            begin_area_type TEXT,
+            end_area_mbid TEXT,
+            end_area_name TEXT,
+            end_area_type TEXT,
+            review_state TEXT NOT NULL DEFAULT 'unresolved',
+            source TEXT NOT NULL DEFAULT 'musicbrainz-live',
+            fetched_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_infos_mbid
+            ON musicbrainz_artist_infos(mbid);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_infos_type
+            ON musicbrainz_artist_infos(artist_type);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_infos_gender
+            ON musicbrainz_artist_infos(gender);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_infos_begin_year
+            ON musicbrainz_artist_infos(life_begin_year);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_infos_end_year
+            ON musicbrainz_artist_infos(life_end_year);
+
+        CREATE TABLE IF NOT EXISTS musicbrainz_artist_info_import_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scope TEXT NOT NULL DEFAULT 'eligible',
+            status TEXT NOT NULL,
+            total_artists INTEGER NOT NULL DEFAULT 0,
+            eligible_count INTEGER NOT NULL DEFAULT 0,
+            fetched_count INTEGER NOT NULL DEFAULT 0,
+            skipped_count INTEGER NOT NULL DEFAULT 0,
+            unresolved_count INTEGER NOT NULL DEFAULT 0,
+            failed_count INTEGER NOT NULL DEFAULT 0,
+            last_processed_artist_key TEXT,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            error_summary TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_info_import_runs_started
+            ON musicbrainz_artist_info_import_runs(started_at);
+        ",
+    )
+    .context("Could not create MusicBrainz artist-info tables")?;
 
     Ok(())
 }
@@ -10718,7 +10850,7 @@ mod tests {
             .expect("read user version");
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
-        assert!(phase_eighteen_schema_exists(&conn).expect("phase eighteen schema exists"));
+        assert!(phase_nineteen_schema_exists(&conn).expect("phase nineteen schema exists"));
         assert!(schema_table_exists(&conn, "musicbrainz_origin_countries")
             .expect("origin country table exists"));
         assert!(
@@ -10728,6 +10860,12 @@ mod tests {
         assert!(
             schema_table_exists(&conn, "musicbrainz_artist_origin_import_runs")
                 .expect("artist origin import run table exists")
+        );
+        assert!(schema_table_exists(&conn, "musicbrainz_artist_infos")
+            .expect("artist info table exists"));
+        assert!(
+            schema_table_exists(&conn, "musicbrainz_artist_info_import_runs")
+                .expect("artist info import run table exists")
         );
     }
 

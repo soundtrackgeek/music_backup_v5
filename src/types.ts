@@ -257,7 +257,13 @@ export type MusicBrainzOriginCountryPreviewRow = {
   existingCountryCode: string | null;
   existingCountryName: string | null;
   existingReviewState: string | null;
-  status: "eligible" | "alreadyImported" | "manual" | "skipped" | "unresolved" | string;
+  status:
+    | "eligible"
+    | "alreadyImported"
+    | "manual"
+    | "skipped"
+    | "unresolved"
+    | string;
   skippedReason: string | null;
 };
 
@@ -308,7 +314,109 @@ export type MusicBrainzOriginCountryImportProgress = {
   message: string;
 };
 
-export type MusicBrainzReleaseDecision = "not-in-scope" | "ignored" | "include" | "auto-not-official" | null;
+export type MusicBrainzArtistInfoImportRun = {
+  id: number;
+  scope: string;
+  status: string;
+  totalArtists: number;
+  eligibleCount: number;
+  fetchedCount: number;
+  skippedCount: number;
+  unresolvedCount: number;
+  failedCount: number;
+  lastProcessedArtistKey: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  errorSummary: string | null;
+};
+
+export type MusicBrainzArtistInfoStatus = {
+  totalAlbumArtists: number;
+  importedInfos: number;
+  personArtists: number;
+  groupArtists: number;
+  genderedArtists: number;
+  bornArtists: number;
+  diedArtists: number;
+  foundedArtists: number;
+  dissolvedArtists: number;
+  missingInfos: number;
+  lastRun: MusicBrainzArtistInfoImportRun | null;
+};
+
+export type MusicBrainzArtistInfoPreviewRow = {
+  localArtistKey: string;
+  displayArtist: string;
+  albumCount: number;
+  musicbrainzMbid: string | null;
+  matchedName: string | null;
+  matchMethod: string;
+  artistLinkState: "none" | "unverified" | "verified" | "ignored" | string;
+  suspectMapping: boolean;
+  existingSortName: string | null;
+  existingArtistType: string | null;
+  existingGender: string | null;
+  existingBeginDate: string | null;
+  existingBeginYear: number | null;
+  existingEndDate: string | null;
+  existingEndYear: number | null;
+  existingEnded: boolean | null;
+  existingBeginAreaName: string | null;
+  existingEndAreaName: string | null;
+  existingReviewState: string | null;
+  status: "eligible" | "alreadyImported" | "skipped" | "unresolved" | string;
+  skippedReason: string | null;
+};
+
+export type MusicBrainzArtistInfoPreview = {
+  totalAlbumArtists: number;
+  eligibleCount: number;
+  alreadyImportedCount: number;
+  skippedCount: number;
+  unresolvedCount: number;
+  estimatedSeconds: number;
+  rows: MusicBrainzArtistInfoPreviewRow[];
+};
+
+export type MusicBrainzArtistInfoImportRequest = {
+  artistKeys?: string[];
+  refetch?: boolean;
+  limit?: number | null;
+};
+
+export type MusicBrainzArtistInfoImportSummary = {
+  run: MusicBrainzArtistInfoImportRun;
+  totalAlbumArtists: number;
+  eligibleCount: number;
+  fetchedCount: number;
+  storedCount: number;
+  skippedCount: number;
+  unresolvedCount: number;
+  failedCount: number;
+  cancelled: boolean;
+  rows: MusicBrainzArtistInfoPreviewRow[];
+};
+
+export type MusicBrainzArtistInfoImportProgress = {
+  status: string;
+  totalArtists: number;
+  eligibleCount: number;
+  processedCount: number;
+  remainingCount: number;
+  fetchedCount: number;
+  storedCount: number;
+  skippedCount: number;
+  unresolvedCount: number;
+  failedCount: number;
+  percent: number;
+  currentArtist: string | null;
+  currentArtistKey: string | null;
+  currentMbid: string | null;
+  message: string;
+};
+
+export type MusicBrainzReleaseDecision =
+  "not-in-scope" | "ignored" | "include" | "auto-not-official" | null;
 
 export type MusicBrainzArtistReleaseRow = {
   releaseMbid: string;
@@ -380,7 +488,13 @@ export type MusicBrainzArtistCandidateRow = {
 export type MusicBrainzArtistDiscographyResponse = {
   artistKey: string;
   artistName: string;
-  state: "available" | "warning" | "unavailable" | "invalid" | "notFound" | "ignored";
+  state:
+    | "available"
+    | "warning"
+    | "unavailable"
+    | "invalid"
+    | "notFound"
+    | "ignored";
   message: string;
   cachePath: string;
   resolvedPath: string;

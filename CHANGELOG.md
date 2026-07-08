@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.48.0] - 2026-07-08
+### Added
+- Added a Settings MusicBrainz Artist Information import tool with preview, import, cancel/resume behavior, live progress counters, recent activity, and a searchable report for artist type, gender, born/founded, and died/dissolved data.
+- Added SQLite schema version 19 with app-owned MusicBrainz artist-info rows and artist-info import-run logging.
+- Added web-preview mock artist-info rows for David Bowie, The Chordettes, Def Leppard, and Madonna.
+- Added Rust coverage for MusicBrainz artist-info life-span extraction and verified-link artist-info imports.
+
+### Changed
+- Bumped synchronized app metadata to `0.48.0`.
+
 ## [0.47.0] - 2026-07-08
 ### Added
 - Added global number-key navigation shortcuts: `1` through `9` open Search through Imports in sidebar order, and `0` opens Settings while preserving normal typing in editable controls.

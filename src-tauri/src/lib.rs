@@ -15,12 +15,13 @@ use models::{
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
     MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
-    MusicBrainzArtistExportRequest, MusicBrainzArtistLinkRequest,
-    MusicBrainzArtistOriginCountryRequest, MusicBrainzArtistOriginCountryUpdate,
-    MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus,
-    MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
-    MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryStatus,
-    MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
+    MusicBrainzArtistExportRequest, MusicBrainzArtistInfoImportRequest,
+    MusicBrainzArtistInfoImportSummary, MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus,
+    MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginCountryRequest,
+    MusicBrainzArtistOriginCountryUpdate, MusicBrainzArtistRefreshRequest,
+    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzOriginCountryImportRequest,
+    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
+    MusicBrainzOriginCountryStatus, MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
     MusicBrainzReleaseDecisionRequest, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, PerformanceProbeResponse,
     SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
@@ -150,6 +151,52 @@ async fn import_musicbrainz_origin_countries(
 #[tauri::command]
 async fn cancel_musicbrainz_origin_country_import() -> Result<(), String> {
     musicbrainz::cancel_origin_country_import();
+    Ok(())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_musicbrainz_artist_info_status(
+    app: AppHandle,
+) -> Result<MusicBrainzArtistInfoStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || musicbrainz::artist_info_status_for_app(&app))
+        .await
+        .map_err(|error| format!("MusicBrainz artist-info status task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn preview_musicbrainz_artist_info_import(
+    app: AppHandle,
+    request: MusicBrainzArtistInfoImportRequest,
+) -> Result<MusicBrainzArtistInfoPreview, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        musicbrainz::preview_artist_info_import_for_app(&app, request)
+    })
+    .await
+    .map_err(|error| format!("MusicBrainz artist-info preview task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn import_musicbrainz_artist_infos(
+    app: AppHandle,
+    request: MusicBrainzArtistInfoImportRequest,
+) -> Result<MusicBrainzArtistInfoImportSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        musicbrainz::import_artist_infos_for_app(&app, request)
+    })
+    .await
+    .map_err(|error| format!("MusicBrainz artist-info import task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn cancel_musicbrainz_artist_info_import() -> Result<(), String> {
+    musicbrainz::cancel_artist_info_import();
     Ok(())
 }
 
@@ -524,6 +571,10 @@ pub fn run() {
             preview_musicbrainz_origin_country_import,
             import_musicbrainz_origin_countries,
             cancel_musicbrainz_origin_country_import,
+            get_musicbrainz_artist_info_status,
+            preview_musicbrainz_artist_info_import,
+            import_musicbrainz_artist_infos,
+            cancel_musicbrainz_artist_info_import,
             get_musicbrainz_artist_discography,
             set_musicbrainz_artist_link,
             set_musicbrainz_release_decision,

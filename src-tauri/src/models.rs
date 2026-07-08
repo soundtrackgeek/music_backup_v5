@@ -374,6 +374,124 @@ pub struct MusicBrainzOriginCountryImportProgress {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistInfoImportRun {
+    pub id: i64,
+    pub scope: String,
+    pub status: String,
+    pub total_artists: i64,
+    pub eligible_count: i64,
+    pub fetched_count: i64,
+    pub skipped_count: i64,
+    pub unresolved_count: i64,
+    pub failed_count: i64,
+    pub last_processed_artist_key: Option<String>,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub error_summary: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistInfoStatus {
+    pub total_album_artists: i64,
+    pub imported_infos: i64,
+    pub person_artists: i64,
+    pub group_artists: i64,
+    pub gendered_artists: i64,
+    pub born_artists: i64,
+    pub died_artists: i64,
+    pub founded_artists: i64,
+    pub dissolved_artists: i64,
+    pub missing_infos: i64,
+    pub last_run: Option<MusicBrainzArtistInfoImportRun>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistInfoPreviewRow {
+    pub local_artist_key: String,
+    pub display_artist: String,
+    pub album_count: i64,
+    pub musicbrainz_mbid: Option<String>,
+    pub matched_name: Option<String>,
+    pub match_method: String,
+    pub artist_link_state: String,
+    pub suspect_mapping: bool,
+    pub existing_sort_name: Option<String>,
+    pub existing_artist_type: Option<String>,
+    pub existing_gender: Option<String>,
+    pub existing_begin_date: Option<String>,
+    pub existing_begin_year: Option<i32>,
+    pub existing_end_date: Option<String>,
+    pub existing_end_year: Option<i32>,
+    pub existing_ended: Option<bool>,
+    pub existing_begin_area_name: Option<String>,
+    pub existing_end_area_name: Option<String>,
+    pub existing_review_state: Option<String>,
+    pub status: String,
+    pub skipped_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistInfoPreview {
+    pub total_album_artists: i64,
+    pub eligible_count: i64,
+    pub already_imported_count: i64,
+    pub skipped_count: i64,
+    pub unresolved_count: i64,
+    pub estimated_seconds: i64,
+    pub rows: Vec<MusicBrainzArtistInfoPreviewRow>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistInfoImportRequest {
+    #[serde(default)]
+    pub artist_keys: Vec<String>,
+    #[serde(default)]
+    pub refetch: bool,
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistInfoImportSummary {
+    pub run: MusicBrainzArtistInfoImportRun,
+    pub total_album_artists: i64,
+    pub eligible_count: i64,
+    pub fetched_count: i64,
+    pub stored_count: i64,
+    pub skipped_count: i64,
+    pub unresolved_count: i64,
+    pub failed_count: i64,
+    pub cancelled: bool,
+    pub rows: Vec<MusicBrainzArtistInfoPreviewRow>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrainzArtistInfoImportProgress {
+    pub status: String,
+    pub total_artists: i64,
+    pub eligible_count: i64,
+    pub processed_count: i64,
+    pub remaining_count: i64,
+    pub fetched_count: i64,
+    pub stored_count: i64,
+    pub skipped_count: i64,
+    pub unresolved_count: i64,
+    pub failed_count: i64,
+    pub percent: f64,
+    pub current_artist: Option<String>,
+    pub current_artist_key: Option<String>,
+    pub current_mbid: Option<String>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MusicBrainzCacheWarningExample {
     pub mbid: String,
     pub cached_name_count: i64,

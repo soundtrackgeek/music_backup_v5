@@ -2,7 +2,10 @@ use crate::db;
 use crate::models::{
     ExportResult, MusicBrainzArtistCandidateRow, MusicBrainzArtistDiscographyRequest,
     MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
-    MusicBrainzArtistExportRow, MusicBrainzArtistLinkRequest,
+    MusicBrainzArtistExportRow, MusicBrainzArtistInfoImportProgress,
+    MusicBrainzArtistInfoImportRequest, MusicBrainzArtistInfoImportRun,
+    MusicBrainzArtistInfoImportSummary, MusicBrainzArtistInfoPreview,
+    MusicBrainzArtistInfoPreviewRow, MusicBrainzArtistInfoStatus, MusicBrainzArtistLinkRequest,
     MusicBrainzArtistOriginCountryRequest, MusicBrainzArtistOriginCountryUpdate,
     MusicBrainzArtistOriginImportRun, MusicBrainzArtistRefreshRequest,
     MusicBrainzArtistRefreshResult, MusicBrainzArtistReleaseRow, MusicBrainzCacheStatus,
@@ -45,6 +48,7 @@ const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.45.0 (local desktop app)
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 const MUSICBRAINZ_RATE_LIMIT_DELAY_MS: u64 = 1100;
 static ORIGIN_COUNTRY_IMPORT_CANCELLED: AtomicBool = AtomicBool::new(false);
+static ARTIST_INFO_IMPORT_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(not(test))]
 pub fn cache_status_for_app(
@@ -110,6 +114,60 @@ fn emit_origin_country_import_progress(
     progress: MusicBrainzOriginCountryImportProgress,
 ) {
     let _ = app.emit("musicbrainz-origin-country-import-progress", progress);
+}
+
+#[cfg(not(test))]
+pub fn artist_info_status_for_app(app: &AppHandle) -> Result<MusicBrainzArtistInfoStatus> {
+    let (conn, _) = db::open(app)?;
+    artist_info_status_for_connection(&conn)
+}
+
+#[cfg(not(test))]
+pub fn preview_artist_info_import_for_app(
+    app: &AppHandle,
+    request: MusicBrainzArtistInfoImportRequest,
+) -> Result<MusicBrainzArtistInfoPreview> {
+    let (conn, _) = db::open(app)?;
+    let settings = db::settings_for_app(app)?;
+    preview_artist_info_import_for_connection(
+        &conn,
+        Some(settings.musicbrainz_cache_path),
+        &request,
+    )
+}
+
+#[cfg(not(test))]
+pub fn import_artist_infos_for_app(
+    app: &AppHandle,
+    request: MusicBrainzArtistInfoImportRequest,
+) -> Result<MusicBrainzArtistInfoImportSummary> {
+    ARTIST_INFO_IMPORT_CANCELLED.store(false, Ordering::SeqCst);
+    let (conn, _) = db::open(app)?;
+    let settings = db::settings_for_app(app)?;
+    let progress_callback = |progress: MusicBrainzArtistInfoImportProgress| {
+        emit_artist_info_import_progress(app, progress);
+    };
+    let summary = import_artist_infos_for_connection(
+        &conn,
+        Some(settings.musicbrainz_cache_path),
+        request,
+        fetch_artist_origin,
+        true,
+        Some(&progress_callback),
+    )?;
+    Ok(summary)
+}
+
+pub fn cancel_artist_info_import() {
+    ARTIST_INFO_IMPORT_CANCELLED.store(true, Ordering::SeqCst);
+}
+
+#[cfg(not(test))]
+fn emit_artist_info_import_progress(
+    app: &AppHandle,
+    progress: MusicBrainzArtistInfoImportProgress,
+) {
+    let _ = app.emit("musicbrainz-artist-info-import-progress", progress);
 }
 
 #[cfg(not(test))]
@@ -965,6 +1023,440 @@ fn origin_country_final_progress_message(
     }
 }
 
+pub fn artist_info_status_for_connection(conn: &Connection) -> Result<MusicBrainzArtistInfoStatus> {
+    db::ensure_musicbrainz_artist_info_tables(conn)?;
+    let local_artists = local_origin_artists(conn)?;
+    let total_album_artists = local_artists.len() as i64;
+    let imported_infos = count_artist_infos_where(
+        conn,
+        "NULLIF(TRIM(COALESCE(artist_type, '')), '') IS NOT NULL
+          OR NULLIF(TRIM(COALESCE(gender, '')), '') IS NOT NULL
+          OR life_begin_year IS NOT NULL
+          OR life_end_year IS NOT NULL",
+    )?;
+    let person_artists =
+        count_artist_infos_where(conn, "LOWER(COALESCE(artist_type, '')) = 'person'")?;
+    let group_artists =
+        count_artist_infos_where(conn, "LOWER(COALESCE(artist_type, '')) = 'group'")?;
+    let gendered_artists =
+        count_artist_infos_where(conn, "NULLIF(TRIM(COALESCE(gender, '')), '') IS NOT NULL")?;
+    let born_artists = count_artist_infos_where(
+        conn,
+        "LOWER(COALESCE(artist_type, '')) = 'person' AND life_begin_year IS NOT NULL",
+    )?;
+    let died_artists = count_artist_infos_where(
+        conn,
+        "LOWER(COALESCE(artist_type, '')) = 'person' AND life_end_year IS NOT NULL",
+    )?;
+    let founded_artists = count_artist_infos_where(
+        conn,
+        "LOWER(COALESCE(artist_type, '')) = 'group' AND life_begin_year IS NOT NULL",
+    )?;
+    let dissolved_artists = count_artist_infos_where(
+        conn,
+        "LOWER(COALESCE(artist_type, '')) = 'group' AND life_end_year IS NOT NULL",
+    )?;
+    let existing = existing_artist_info_rows(conn)?;
+    let missing_infos = local_artists
+        .iter()
+        .filter(|artist| {
+            existing
+                .get(&artist.local_artist_key)
+                .map(|row| !row.has_core_info())
+                .unwrap_or(true)
+        })
+        .count() as i64;
+
+    Ok(MusicBrainzArtistInfoStatus {
+        total_album_artists,
+        imported_infos,
+        person_artists,
+        group_artists,
+        gendered_artists,
+        born_artists,
+        died_artists,
+        founded_artists,
+        dissolved_artists,
+        missing_infos,
+        last_run: last_artist_info_import_run(conn)?,
+    })
+}
+
+fn count_artist_infos_where(conn: &Connection, condition: &str) -> Result<i64> {
+    let sql = format!(
+        "
+        SELECT COUNT(*)
+        FROM musicbrainz_artist_infos
+        WHERE {condition}
+        "
+    );
+    conn.query_row(&sql, [], |row| row.get::<_, i64>(0))
+        .context("Could not count MusicBrainz artist-info rows")
+}
+
+pub fn preview_artist_info_import_for_connection(
+    conn: &Connection,
+    cache_path: Option<String>,
+    request: &MusicBrainzArtistInfoImportRequest,
+) -> Result<MusicBrainzArtistInfoPreview> {
+    db::ensure_musicbrainz_artist_info_tables(conn)?;
+    let local_artists = local_origin_artists(conn)?;
+    let selected_artist_keys = selected_artist_info_keys(request);
+    let existing = existing_artist_info_rows(conn)?;
+    let cache_conn = origin_cache_connection(cache_path)?;
+    let mut rows = Vec::new();
+
+    for artist in local_artists.iter().filter(|artist| {
+        selected_artist_keys.is_empty() || selected_artist_keys.contains(&artist.local_artist_key)
+    }) {
+        if let Some(limit) = request.limit {
+            if rows.len() >= limit as usize {
+                break;
+            }
+        }
+        let existing_row = existing.get(&artist.local_artist_key);
+        let resolution = resolve_origin_artist_match(conn, cache_conn.as_ref(), artist)?;
+        rows.push(preview_artist_info_row(
+            artist,
+            existing_row,
+            resolution,
+            request.refetch,
+        ));
+    }
+
+    let eligible_count = rows.iter().filter(|row| row.status == "eligible").count() as i64;
+    let already_imported_count = rows
+        .iter()
+        .filter(|row| row.status == "alreadyImported")
+        .count() as i64;
+    let skipped_count = rows.iter().filter(|row| row.status == "skipped").count() as i64;
+    let unresolved_count = rows.iter().filter(|row| row.status == "unresolved").count() as i64;
+
+    Ok(MusicBrainzArtistInfoPreview {
+        total_album_artists: local_artists.len() as i64,
+        eligible_count,
+        already_imported_count,
+        skipped_count,
+        unresolved_count,
+        estimated_seconds: eligible_count * 2,
+        rows,
+    })
+}
+
+fn import_artist_infos_for_connection<F>(
+    conn: &Connection,
+    cache_path: Option<String>,
+    request: MusicBrainzArtistInfoImportRequest,
+    fetcher: F,
+    pace_requests: bool,
+    progress_callback: Option<&dyn Fn(MusicBrainzArtistInfoImportProgress)>,
+) -> Result<MusicBrainzArtistInfoImportSummary>
+where
+    F: Fn(&str) -> Result<MusicBrainzArtistLookupResponse>,
+{
+    db::ensure_musicbrainz_artist_info_tables(conn)?;
+    emit_artist_info_progress(
+        progress_callback,
+        artist_info_progress(
+            "preparing",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            None,
+            "Preparing MusicBrainz artist-info import.".to_string(),
+        ),
+    );
+    let preview = preview_artist_info_import_for_connection(conn, cache_path, &request)?;
+    let eligible_rows = preview
+        .rows
+        .iter()
+        .filter(|row| row.status == "eligible" && row.musicbrainz_mbid.is_some())
+        .cloned()
+        .collect::<Vec<_>>();
+    let selected_count = request
+        .limit
+        .map(|limit| limit as usize)
+        .unwrap_or(eligible_rows.len())
+        .min(eligible_rows.len());
+    let run_id = insert_artist_info_import_run(
+        conn,
+        "album-artists",
+        preview.total_album_artists,
+        selected_count as i64,
+    )?;
+
+    let mut fetched_count = 0i64;
+    let mut stored_count = 0i64;
+    let skipped_count = (preview.rows.len() as i64).saturating_sub(selected_count as i64);
+    let mut processed_count = 0i64;
+    let mut unresolved_count = 0i64;
+    let mut failed_count = 0i64;
+    let mut cancelled = false;
+    let mut error_summary: Option<String> = None;
+
+    emit_artist_info_progress(
+        progress_callback,
+        artist_info_progress(
+            "running",
+            preview.total_album_artists,
+            selected_count as i64,
+            processed_count,
+            fetched_count,
+            stored_count,
+            skipped_count,
+            unresolved_count,
+            failed_count,
+            None,
+            format!(
+                "Ready to fetch {selected_count} eligible artists; {} skipped by preview rules.",
+                skipped_count
+            ),
+        ),
+    );
+
+    for (index, row) in eligible_rows.into_iter().take(selected_count).enumerate() {
+        if ARTIST_INFO_IMPORT_CANCELLED.load(Ordering::SeqCst) {
+            cancelled = true;
+            break;
+        }
+
+        let mbid = row
+            .musicbrainz_mbid
+            .as_deref()
+            .context("Eligible artist-info row was missing a MusicBrainz MBID")?;
+        emit_artist_info_progress(
+            progress_callback,
+            artist_info_progress(
+                "fetching",
+                preview.total_album_artists,
+                selected_count as i64,
+                processed_count,
+                fetched_count,
+                stored_count,
+                skipped_count,
+                unresolved_count,
+                failed_count,
+                Some(&row),
+                format!(
+                    "Fetching artist info for {} from MusicBrainz.",
+                    row.display_artist
+                ),
+            ),
+        );
+
+        let fetched_at = Utc::now().to_rfc3339();
+        let (event_status, event_message) = match fetcher(mbid) {
+            Ok(payload) => {
+                fetched_count += 1;
+                let evidence = derive_artist_info(&payload);
+                let event = if evidence.has_core_info() {
+                    stored_count += 1;
+                    (
+                        "stored",
+                        format!(
+                            "Stored {} info for {}.",
+                            artist_info_kind_label(evidence.artist_type.as_deref()),
+                            row.display_artist
+                        ),
+                    )
+                } else {
+                    unresolved_count += 1;
+                    (
+                        "unresolved",
+                        format!(
+                            "{} did not return type, gender, or life-span data; saved as unresolved.",
+                            row.display_artist
+                        ),
+                    )
+                };
+                save_artist_info_evidence(
+                    conn,
+                    &row.local_artist_key,
+                    &row.display_artist,
+                    mbid,
+                    &evidence,
+                    &fetched_at,
+                )?;
+                event
+            }
+            Err(error) => {
+                failed_count += 1;
+                let event_message = format!("Failed {}: {error}", row.display_artist);
+                if error_summary.is_none() {
+                    error_summary = Some(format!("{}: {error}", row.display_artist));
+                }
+                ("artistFailed", event_message)
+            }
+        };
+        processed_count += 1;
+
+        update_artist_info_import_run_progress(
+            conn,
+            run_id,
+            fetched_count,
+            skipped_count,
+            unresolved_count,
+            failed_count,
+            Some(&row.local_artist_key),
+        )?;
+        emit_artist_info_progress(
+            progress_callback,
+            artist_info_progress(
+                event_status,
+                preview.total_album_artists,
+                selected_count as i64,
+                processed_count,
+                fetched_count,
+                stored_count,
+                skipped_count,
+                unresolved_count,
+                failed_count,
+                Some(&row),
+                event_message,
+            ),
+        );
+
+        if pace_requests && index + 1 < selected_count {
+            thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
+        }
+    }
+
+    let status = if cancelled {
+        "cancelled"
+    } else if failed_count > 0 {
+        "completed_with_errors"
+    } else {
+        "completed"
+    };
+    finish_artist_info_import_run(
+        conn,
+        run_id,
+        status,
+        fetched_count,
+        skipped_count,
+        unresolved_count,
+        failed_count,
+        error_summary.as_deref(),
+    )?;
+    emit_artist_info_progress(
+        progress_callback,
+        artist_info_progress(
+            status,
+            preview.total_album_artists,
+            selected_count as i64,
+            processed_count,
+            fetched_count,
+            stored_count,
+            skipped_count,
+            unresolved_count,
+            failed_count,
+            None,
+            artist_info_final_progress_message(
+                status,
+                processed_count,
+                stored_count,
+                skipped_count,
+                unresolved_count,
+                failed_count,
+            ),
+        ),
+    );
+    let run = last_artist_info_import_run(conn)?
+        .context("Completed MusicBrainz artist-info import run was not found")?;
+
+    Ok(MusicBrainzArtistInfoImportSummary {
+        run,
+        total_album_artists: preview.total_album_artists,
+        eligible_count: selected_count as i64,
+        fetched_count,
+        stored_count,
+        skipped_count,
+        unresolved_count,
+        failed_count,
+        cancelled,
+        rows: preview.rows,
+    })
+}
+
+fn emit_artist_info_progress(
+    progress_callback: Option<&dyn Fn(MusicBrainzArtistInfoImportProgress)>,
+    progress: MusicBrainzArtistInfoImportProgress,
+) {
+    if let Some(callback) = progress_callback {
+        callback(progress);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn artist_info_progress(
+    status: &str,
+    total_artists: i64,
+    eligible_count: i64,
+    processed_count: i64,
+    fetched_count: i64,
+    stored_count: i64,
+    skipped_count: i64,
+    unresolved_count: i64,
+    failed_count: i64,
+    row: Option<&MusicBrainzArtistInfoPreviewRow>,
+    message: String,
+) -> MusicBrainzArtistInfoImportProgress {
+    let remaining_count = eligible_count.saturating_sub(processed_count);
+    let percent = if eligible_count <= 0 {
+        if matches!(status, "completed" | "completed_with_errors" | "cancelled") {
+            100.0
+        } else {
+            0.0
+        }
+    } else {
+        (processed_count as f64 / eligible_count as f64 * 100.0).clamp(0.0, 100.0)
+    };
+
+    MusicBrainzArtistInfoImportProgress {
+        status: status.to_string(),
+        total_artists,
+        eligible_count,
+        processed_count,
+        remaining_count,
+        fetched_count,
+        stored_count,
+        skipped_count,
+        unresolved_count,
+        failed_count,
+        percent,
+        current_artist: row.map(|value| value.display_artist.clone()),
+        current_artist_key: row.map(|value| value.local_artist_key.clone()),
+        current_mbid: row.and_then(|value| value.musicbrainz_mbid.clone()),
+        message,
+    }
+}
+
+fn artist_info_final_progress_message(
+    status: &str,
+    processed_count: i64,
+    stored_count: i64,
+    skipped_count: i64,
+    unresolved_count: i64,
+    failed_count: i64,
+) -> String {
+    match status {
+        "cancelled" => format!(
+            "Import cancelled after {processed_count} artists; {stored_count} succeeded, {unresolved_count} unresolved, {failed_count} failed, {skipped_count} skipped."
+        ),
+        "completed_with_errors" => format!(
+            "Import completed with {failed_count} failures; {stored_count} succeeded, {unresolved_count} unresolved, {skipped_count} skipped."
+        ),
+        _ => format!(
+            "Import completed: {stored_count} succeeded, {unresolved_count} unresolved, {failed_count} failed, {skipped_count} skipped."
+        ),
+    }
+}
+
 #[cfg(not(test))]
 fn fetch_artist_origin(mbid: &str) -> Result<MusicBrainzArtistLookupResponse> {
     let agent = ureq::AgentBuilder::new()
@@ -1052,6 +1544,45 @@ fn existing_origin_rows(conn: &Connection) -> Result<HashMap<String, ExistingOri
         })?
         .collect::<rusqlite::Result<Vec<_>>>()
         .context("Could not load existing MusicBrainz origin-country rows")?;
+    Ok(rows.into_iter().collect())
+}
+
+fn existing_artist_info_rows(conn: &Connection) -> Result<HashMap<String, ExistingArtistInfoRow>> {
+    if !table_exists(conn, "musicbrainz_artist_infos")? {
+        return Ok(HashMap::new());
+    }
+    let mut stmt = conn
+        .prepare(
+            "
+            SELECT local_artist_key, sort_name, artist_type, gender,
+                   life_begin_date, life_begin_year, life_end_date, life_end_year,
+                   life_ended, begin_area_name, end_area_name, review_state
+            FROM musicbrainz_artist_infos
+            ",
+        )
+        .context("Could not prepare existing MusicBrainz artist-info lookup")?;
+    let rows = stmt
+        .query_map([], |row| {
+            let ended = row.get::<_, Option<i64>>(8)?.map(|value| value != 0);
+            Ok((
+                row.get::<_, String>(0)?,
+                ExistingArtistInfoRow {
+                    sort_name: row.get(1)?,
+                    artist_type: row.get(2)?,
+                    gender: row.get(3)?,
+                    begin_date: row.get(4)?,
+                    begin_year: row.get(5)?,
+                    end_date: row.get(6)?,
+                    end_year: row.get(7)?,
+                    ended,
+                    begin_area_name: row.get(9)?,
+                    end_area_name: row.get(10)?,
+                    review_state: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
+                },
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load existing MusicBrainz artist-info rows")?;
     Ok(rows.into_iter().collect())
 }
 
@@ -1189,6 +1720,15 @@ fn selected_origin_artist_keys(request: &MusicBrainzOriginCountryImportRequest) 
         .collect()
 }
 
+fn selected_artist_info_keys(request: &MusicBrainzArtistInfoImportRequest) -> HashSet<String> {
+    request
+        .artist_keys
+        .iter()
+        .map(|artist_key| normalize_local_artist_text(artist_key))
+        .filter(|artist_key| !artist_key.is_empty())
+        .collect()
+}
+
 fn preview_origin_country_row(
     artist: &OriginLocalArtist,
     existing: Option<&ExistingOriginCountryRow>,
@@ -1229,6 +1769,52 @@ fn preview_origin_country_row(
         suspect_mapping: resolution.suspect_mapping,
         existing_country_code,
         existing_country_name,
+        existing_review_state,
+        status,
+        skipped_reason: resolution.skipped_reason,
+    }
+}
+
+fn preview_artist_info_row(
+    artist: &OriginLocalArtist,
+    existing: Option<&ExistingArtistInfoRow>,
+    resolution: OriginArtistResolution,
+    refetch: bool,
+) -> MusicBrainzArtistInfoPreviewRow {
+    let existing_review_state = existing
+        .map(|row| row.review_state.clone())
+        .filter(|value| !value.is_empty());
+    let existing_has_info = existing.is_some_and(ExistingArtistInfoRow::has_core_info);
+    let status = if existing_has_info && !refetch {
+        "alreadyImported"
+    } else if resolution.skipped_reason.is_some() {
+        "skipped"
+    } else if resolution.mbid.is_some() {
+        "eligible"
+    } else {
+        "unresolved"
+    }
+    .to_string();
+
+    MusicBrainzArtistInfoPreviewRow {
+        local_artist_key: artist.local_artist_key.clone(),
+        display_artist: artist.display_artist.clone(),
+        album_count: artist.album_count,
+        musicbrainz_mbid: resolution.mbid,
+        matched_name: resolution.matched_name,
+        match_method: resolution.match_method,
+        artist_link_state: resolution.artist_link_state,
+        suspect_mapping: resolution.suspect_mapping,
+        existing_sort_name: existing.and_then(|row| row.sort_name.clone()),
+        existing_artist_type: existing.and_then(|row| row.artist_type.clone()),
+        existing_gender: existing.and_then(|row| row.gender.clone()),
+        existing_begin_date: existing.and_then(|row| row.begin_date.clone()),
+        existing_begin_year: existing.and_then(|row| row.begin_year),
+        existing_end_date: existing.and_then(|row| row.end_date.clone()),
+        existing_end_year: existing.and_then(|row| row.end_year),
+        existing_ended: existing.and_then(|row| row.ended),
+        existing_begin_area_name: existing.and_then(|row| row.begin_area_name.clone()),
+        existing_end_area_name: existing.and_then(|row| row.end_area_name.clone()),
         existing_review_state,
         status,
         skipped_reason: resolution.skipped_reason,
@@ -1356,6 +1942,51 @@ fn derive_origin_country(payload: &MusicBrainzArtistLookupResponse) -> OriginCou
     }
 }
 
+fn derive_artist_info(payload: &MusicBrainzArtistLookupResponse) -> ArtistInfoEvidence {
+    let life_span = payload.life_span.as_ref();
+    let raw_area = payload.area.as_ref();
+    let begin_area = payload.begin_area.as_ref();
+    let end_area = payload.end_area.as_ref();
+    let begin_date = life_span.and_then(|value| value.begin.as_deref().and_then(non_empty_string));
+    let end_date = life_span.and_then(|value| value.end.as_deref().and_then(non_empty_string));
+
+    let mut evidence = ArtistInfoEvidence {
+        sort_name: payload.sort_name.as_deref().and_then(non_empty_string),
+        artist_type: payload.artist_type.as_deref().and_then(non_empty_string),
+        gender: payload.gender.as_deref().and_then(non_empty_string),
+        begin_date,
+        begin_year: None,
+        end_date,
+        end_year: None,
+        ended: life_span.and_then(|value| value.ended),
+        area_mbid: raw_area.and_then(|area| area.id.as_deref().and_then(non_empty_string)),
+        area_name: raw_area.and_then(|area| area.name.as_deref().and_then(non_empty_string)),
+        area_type: raw_area.and_then(|area| area.area_type.as_deref().and_then(non_empty_string)),
+        begin_area_mbid: begin_area.and_then(|area| area.id.as_deref().and_then(non_empty_string)),
+        begin_area_name: begin_area
+            .and_then(|area| area.name.as_deref().and_then(non_empty_string)),
+        begin_area_type: begin_area
+            .and_then(|area| area.area_type.as_deref().and_then(non_empty_string)),
+        end_area_mbid: end_area.and_then(|area| area.id.as_deref().and_then(non_empty_string)),
+        end_area_name: end_area.and_then(|area| area.name.as_deref().and_then(non_empty_string)),
+        end_area_type: end_area
+            .and_then(|area| area.area_type.as_deref().and_then(non_empty_string)),
+        review_state: "unresolved".to_string(),
+    };
+    evidence.begin_year = evidence
+        .begin_date
+        .as_deref()
+        .and_then(year_from_musicbrainz_date);
+    evidence.end_year = evidence
+        .end_date
+        .as_deref()
+        .and_then(year_from_musicbrainz_date);
+    if evidence.has_core_info() {
+        evidence.review_state = "imported".to_string();
+    }
+    evidence
+}
+
 fn country_name_for_explicit_code(
     country_code: &str,
     raw_area: Option<&MusicBrainzArea>,
@@ -1434,6 +2065,23 @@ fn non_empty_string(value: &str) -> Option<String> {
         None
     } else {
         Some(trimmed.to_string())
+    }
+}
+
+fn year_from_musicbrainz_date(value: &str) -> Option<i32> {
+    let trimmed = value.trim();
+    if trimmed.len() < 4 {
+        return None;
+    }
+    trimmed.get(0..4)?.parse::<i32>().ok()
+}
+
+fn artist_info_kind_label(artist_type: Option<&str>) -> &str {
+    match artist_type {
+        Some(value) if value.eq_ignore_ascii_case("group") => "group",
+        Some(value) if value.eq_ignore_ascii_case("person") => "person",
+        Some(_) => "artist",
+        None => "artist",
     }
 }
 
@@ -1549,6 +2197,83 @@ fn save_origin_country_evidence(
         ],
     )
     .context("Could not save MusicBrainz artist origin-country row")?;
+
+    Ok(())
+}
+
+fn save_artist_info_evidence(
+    conn: &Connection,
+    local_artist_key: &str,
+    display_artist: &str,
+    mbid: &str,
+    evidence: &ArtistInfoEvidence,
+    fetched_at: &str,
+) -> Result<()> {
+    let ended = evidence.ended.map(|value| if value { 1i64 } else { 0i64 });
+    conn.execute(
+        "
+        INSERT INTO musicbrainz_artist_infos (
+            local_artist_key, display_artist, mbid, sort_name, artist_type, gender,
+            life_begin_date, life_begin_year, life_end_date, life_end_year, life_ended,
+            area_mbid, area_name, area_type, begin_area_mbid, begin_area_name,
+            begin_area_type, end_area_mbid, end_area_name, end_area_type,
+            review_state, source, fetched_at, created_at, updated_at
+        ) VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
+            ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20,
+            ?21, 'musicbrainz-live', ?22, ?22, ?22
+        )
+        ON CONFLICT(local_artist_key) DO UPDATE SET
+            display_artist = excluded.display_artist,
+            mbid = excluded.mbid,
+            sort_name = excluded.sort_name,
+            artist_type = excluded.artist_type,
+            gender = excluded.gender,
+            life_begin_date = excluded.life_begin_date,
+            life_begin_year = excluded.life_begin_year,
+            life_end_date = excluded.life_end_date,
+            life_end_year = excluded.life_end_year,
+            life_ended = excluded.life_ended,
+            area_mbid = excluded.area_mbid,
+            area_name = excluded.area_name,
+            area_type = excluded.area_type,
+            begin_area_mbid = excluded.begin_area_mbid,
+            begin_area_name = excluded.begin_area_name,
+            begin_area_type = excluded.begin_area_type,
+            end_area_mbid = excluded.end_area_mbid,
+            end_area_name = excluded.end_area_name,
+            end_area_type = excluded.end_area_type,
+            review_state = excluded.review_state,
+            source = excluded.source,
+            fetched_at = excluded.fetched_at,
+            updated_at = excluded.updated_at
+        ",
+        params![
+            local_artist_key,
+            display_artist,
+            mbid,
+            &evidence.sort_name,
+            &evidence.artist_type,
+            &evidence.gender,
+            &evidence.begin_date,
+            evidence.begin_year,
+            &evidence.end_date,
+            evidence.end_year,
+            ended,
+            &evidence.area_mbid,
+            &evidence.area_name,
+            &evidence.area_type,
+            &evidence.begin_area_mbid,
+            &evidence.begin_area_name,
+            &evidence.begin_area_type,
+            &evidence.end_area_mbid,
+            &evidence.end_area_name,
+            &evidence.end_area_type,
+            &evidence.review_state,
+            fetched_at
+        ],
+    )
+    .context("Could not save MusicBrainz artist-info row")?;
 
     Ok(())
 }
@@ -1851,6 +2576,142 @@ fn origin_import_run_from_row(
     row: &rusqlite::Row<'_>,
 ) -> rusqlite::Result<MusicBrainzArtistOriginImportRun> {
     Ok(MusicBrainzArtistOriginImportRun {
+        id: row.get(0)?,
+        scope: row.get(1)?,
+        status: row.get(2)?,
+        total_artists: row.get(3)?,
+        eligible_count: row.get(4)?,
+        fetched_count: row.get(5)?,
+        skipped_count: row.get(6)?,
+        unresolved_count: row.get(7)?,
+        failed_count: row.get(8)?,
+        last_processed_artist_key: row.get(9)?,
+        started_at: row.get(10)?,
+        completed_at: row.get(11)?,
+        error_summary: row.get(12)?,
+    })
+}
+
+fn insert_artist_info_import_run(
+    conn: &Connection,
+    scope: &str,
+    total_artists: i64,
+    eligible_count: i64,
+) -> Result<i64> {
+    conn.execute(
+        "
+        INSERT INTO musicbrainz_artist_info_import_runs (
+            scope, status, total_artists, eligible_count, started_at
+        ) VALUES (
+            ?1, 'running', ?2, ?3, ?4
+        )
+        ",
+        params![
+            scope,
+            total_artists,
+            eligible_count,
+            Utc::now().to_rfc3339()
+        ],
+    )
+    .context("Could not create MusicBrainz artist-info import run")?;
+    Ok(conn.last_insert_rowid())
+}
+
+fn update_artist_info_import_run_progress(
+    conn: &Connection,
+    run_id: i64,
+    fetched_count: i64,
+    skipped_count: i64,
+    unresolved_count: i64,
+    failed_count: i64,
+    last_processed_artist_key: Option<&str>,
+) -> Result<()> {
+    conn.execute(
+        "
+        UPDATE musicbrainz_artist_info_import_runs
+        SET fetched_count = ?2,
+            skipped_count = ?3,
+            unresolved_count = ?4,
+            failed_count = ?5,
+            last_processed_artist_key = ?6
+        WHERE id = ?1
+        ",
+        params![
+            run_id,
+            fetched_count,
+            skipped_count,
+            unresolved_count,
+            failed_count,
+            last_processed_artist_key
+        ],
+    )
+    .context("Could not update MusicBrainz artist-info import run")?;
+    Ok(())
+}
+
+fn finish_artist_info_import_run(
+    conn: &Connection,
+    run_id: i64,
+    status: &str,
+    fetched_count: i64,
+    skipped_count: i64,
+    unresolved_count: i64,
+    failed_count: i64,
+    error_summary: Option<&str>,
+) -> Result<()> {
+    conn.execute(
+        "
+        UPDATE musicbrainz_artist_info_import_runs
+        SET status = ?2,
+            fetched_count = ?3,
+            skipped_count = ?4,
+            unresolved_count = ?5,
+            failed_count = ?6,
+            completed_at = ?7,
+            error_summary = ?8
+        WHERE id = ?1
+        ",
+        params![
+            run_id,
+            status,
+            fetched_count,
+            skipped_count,
+            unresolved_count,
+            failed_count,
+            Utc::now().to_rfc3339(),
+            error_summary
+        ],
+    )
+    .context("Could not finish MusicBrainz artist-info import run")?;
+    Ok(())
+}
+
+fn last_artist_info_import_run(
+    conn: &Connection,
+) -> Result<Option<MusicBrainzArtistInfoImportRun>> {
+    if !table_exists(conn, "musicbrainz_artist_info_import_runs")? {
+        return Ok(None);
+    }
+    conn.query_row(
+        "
+        SELECT id, scope, status, total_artists, eligible_count, fetched_count,
+               skipped_count, unresolved_count, failed_count, last_processed_artist_key,
+               started_at, completed_at, error_summary
+        FROM musicbrainz_artist_info_import_runs
+        ORDER BY id DESC
+        LIMIT 1
+        ",
+        [],
+        artist_info_import_run_from_row,
+    )
+    .optional()
+    .context("Could not read last MusicBrainz artist-info import run")
+}
+
+fn artist_info_import_run_from_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<MusicBrainzArtistInfoImportRun> {
+    Ok(MusicBrainzArtistInfoImportRun {
         id: row.get(0)?,
         scope: row.get(1)?,
         status: row.get(2)?,
@@ -2264,6 +3125,35 @@ impl ExistingOriginCountryRow {
 }
 
 #[derive(Debug, Clone)]
+struct ExistingArtistInfoRow {
+    sort_name: Option<String>,
+    artist_type: Option<String>,
+    gender: Option<String>,
+    begin_date: Option<String>,
+    begin_year: Option<i32>,
+    end_date: Option<String>,
+    end_year: Option<i32>,
+    ended: Option<bool>,
+    begin_area_name: Option<String>,
+    end_area_name: Option<String>,
+    review_state: String,
+}
+
+impl ExistingArtistInfoRow {
+    fn has_core_info(&self) -> bool {
+        self.artist_type
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+            || self
+                .gender
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
+            || self.begin_year.is_some()
+            || self.end_year.is_some()
+    }
+}
+
+#[derive(Debug, Clone)]
 struct OriginArtistResolution {
     mbid: Option<String>,
     matched_name: Option<String>,
@@ -2287,6 +3177,42 @@ struct OriginCountryEvidence {
     confidence: Option<f64>,
     review_state: String,
     area_mbid_for_country: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ArtistInfoEvidence {
+    sort_name: Option<String>,
+    artist_type: Option<String>,
+    gender: Option<String>,
+    begin_date: Option<String>,
+    begin_year: Option<i32>,
+    end_date: Option<String>,
+    end_year: Option<i32>,
+    ended: Option<bool>,
+    area_mbid: Option<String>,
+    area_name: Option<String>,
+    area_type: Option<String>,
+    begin_area_mbid: Option<String>,
+    begin_area_name: Option<String>,
+    begin_area_type: Option<String>,
+    end_area_mbid: Option<String>,
+    end_area_name: Option<String>,
+    end_area_type: Option<String>,
+    review_state: String,
+}
+
+impl ArtistInfoEvidence {
+    fn has_core_info(&self) -> bool {
+        self.artist_type
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+            || self
+                .gender
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
+            || self.begin_year.is_some()
+            || self.end_year.is_some()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -3333,10 +4259,27 @@ struct MusicBrainzReleaseResponse {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct MusicBrainzArtistLookupResponse {
+    #[serde(rename = "sort-name")]
+    sort_name: Option<String>,
+    #[serde(rename = "type")]
+    artist_type: Option<String>,
+    gender: Option<String>,
     country: Option<String>,
+    #[serde(rename = "life-span")]
+    life_span: Option<MusicBrainzLifeSpan>,
     area: Option<MusicBrainzArea>,
     #[serde(rename = "begin-area")]
     begin_area: Option<MusicBrainzArea>,
+    #[serde(rename = "end-area")]
+    end_area: Option<MusicBrainzArea>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct MusicBrainzLifeSpan {
+    begin: Option<String>,
+    end: Option<String>,
+    ended: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -4374,7 +5317,15 @@ mod tests {
     #[test]
     fn derives_origin_country_from_artist_country_and_preserves_raw_area() {
         let evidence = derive_origin_country(&MusicBrainzArtistLookupResponse {
+            sort_name: Some("Bowie, David".to_string()),
+            artist_type: Some("Person".to_string()),
+            gender: Some("Male".to_string()),
             country: Some("GB".to_string()),
+            life_span: Some(MusicBrainzLifeSpan {
+                begin: Some("1947-01-08".to_string()),
+                end: Some("2016-01-10".to_string()),
+                ended: Some(true),
+            }),
             area: Some(MusicBrainzArea {
                 id: Some("area-england".to_string()),
                 name: Some("England".to_string()),
@@ -4389,6 +5340,7 @@ mod tests {
                 iso_3166_1_codes: Vec::new(),
                 iso_3166_2_codes: Vec::new(),
             }),
+            end_area: None,
         });
 
         assert_eq!(evidence.country_code.as_deref(), Some("GB"));
@@ -4416,6 +5368,165 @@ mod tests {
     }
 
     #[test]
+    fn derives_artist_info_person_and_group_life_spans() {
+        let person = derive_artist_info(&MusicBrainzArtistLookupResponse {
+            sort_name: Some("Bowie, David".to_string()),
+            artist_type: Some("Person".to_string()),
+            gender: Some("Male".to_string()),
+            country: Some("GB".to_string()),
+            life_span: Some(MusicBrainzLifeSpan {
+                begin: Some("1947-01-08".to_string()),
+                end: Some("2016-01-10".to_string()),
+                ended: Some(true),
+            }),
+            area: None,
+            begin_area: Some(MusicBrainzArea {
+                id: Some("area-brixton".to_string()),
+                name: Some("Brixton, Lambeth, London".to_string()),
+                area_type: Some("City".to_string()),
+                iso_3166_1_codes: Vec::new(),
+                iso_3166_2_codes: Vec::new(),
+            }),
+            end_area: Some(MusicBrainzArea {
+                id: Some("area-nyc".to_string()),
+                name: Some("New York, New York".to_string()),
+                area_type: Some("City".to_string()),
+                iso_3166_1_codes: Vec::new(),
+                iso_3166_2_codes: Vec::new(),
+            }),
+        });
+
+        assert_eq!(person.artist_type.as_deref(), Some("Person"));
+        assert_eq!(person.gender.as_deref(), Some("Male"));
+        assert_eq!(person.begin_year, Some(1947));
+        assert_eq!(person.end_year, Some(2016));
+        assert_eq!(person.ended, Some(true));
+        assert_eq!(
+            person.begin_area_name.as_deref(),
+            Some("Brixton, Lambeth, London")
+        );
+        assert!(person.has_core_info());
+
+        let group = derive_artist_info(&MusicBrainzArtistLookupResponse {
+            sort_name: Some("Def Leppard".to_string()),
+            artist_type: Some("Group".to_string()),
+            gender: None,
+            country: Some("GB".to_string()),
+            life_span: Some(MusicBrainzLifeSpan {
+                begin: Some("1977".to_string()),
+                end: None,
+                ended: Some(false),
+            }),
+            area: None,
+            begin_area: Some(MusicBrainzArea {
+                id: Some("area-sheffield".to_string()),
+                name: Some("Sheffield, South Yorkshire, England".to_string()),
+                area_type: Some("City".to_string()),
+                iso_3166_1_codes: Vec::new(),
+                iso_3166_2_codes: Vec::new(),
+            }),
+            end_area: None,
+        });
+
+        assert_eq!(group.artist_type.as_deref(), Some("Group"));
+        assert_eq!(group.begin_year, Some(1977));
+        assert_eq!(group.end_year, None);
+        assert_eq!(group.ended, Some(false));
+        assert!(group.has_core_info());
+    }
+
+    #[test]
+    fn artist_info_import_saves_verified_artist_metadata() {
+        let app_conn = create_artist_app_db();
+        create_decision_tables(&app_conn);
+        db::ensure_musicbrainz_artist_info_tables(&app_conn).expect("create artist-info tables");
+        app_conn
+            .execute(
+                "
+                INSERT INTO musicbrainz_artist_links (
+                    local_artist_key, display_artist, mbid, canonical_name, match_method,
+                    confidence, verification_state, ignored, created_at, updated_at
+                ) VALUES (
+                    'pet shop boys', 'Pet Shop Boys',
+                    '012151a8-0f9a-44c9-997f-ebd68b5389f9', 'Pet Shop Boys',
+                    'manual-mbid', 1.0, 'verified', 0,
+                    '2026-07-08T00:00:00Z', '2026-07-08T00:00:00Z'
+                )
+                ",
+                [],
+            )
+            .expect("seed verified artist link");
+
+        let summary = import_artist_infos_for_connection(
+            &app_conn,
+            None,
+            MusicBrainzArtistInfoImportRequest {
+                artist_keys: vec!["pet shop boys".to_string()],
+                refetch: false,
+                limit: None,
+            },
+            |_mbid| {
+                Ok(MusicBrainzArtistLookupResponse {
+                    sort_name: Some("Pet Shop Boys".to_string()),
+                    artist_type: Some("Group".to_string()),
+                    gender: None,
+                    country: Some("GB".to_string()),
+                    life_span: Some(MusicBrainzLifeSpan {
+                        begin: Some("1981".to_string()),
+                        end: None,
+                        ended: Some(false),
+                    }),
+                    area: None,
+                    begin_area: None,
+                    end_area: None,
+                })
+            },
+            false,
+            None,
+        )
+        .expect("import artist info");
+
+        assert_eq!(summary.stored_count, 1);
+        assert_eq!(summary.unresolved_count, 0);
+        let stored = app_conn
+            .query_row(
+                "
+                SELECT artist_type, life_begin_year, life_ended, review_state
+                FROM musicbrainz_artist_infos
+                WHERE local_artist_key = 'pet shop boys'
+                ",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, i32>(1)?,
+                        row.get::<_, i64>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                },
+            )
+            .expect("read imported artist info");
+
+        assert_eq!(stored.0, "Group");
+        assert_eq!(stored.1, 1981);
+        assert_eq!(stored.2, 0);
+        assert_eq!(stored.3, "imported");
+
+        let preview = preview_artist_info_import_for_connection(
+            &app_conn,
+            None,
+            &MusicBrainzArtistInfoImportRequest {
+                artist_keys: vec!["pet shop boys".to_string()],
+                refetch: false,
+                limit: None,
+            },
+        )
+        .expect("preview imported artist info");
+        assert_eq!(preview.already_imported_count, 1);
+        assert_eq!(preview.eligible_count, 0);
+    }
+
+    #[test]
     fn refreshed_artist_origin_country_saves_country_level_name() {
         let app_conn = create_artist_app_db();
         let updated = save_refreshed_artist_origin_country(
@@ -4424,7 +5535,11 @@ mod tests {
             "Jakarta Artist",
             "mbid-jakarta-artist",
             &MusicBrainzArtistLookupResponse {
+                sort_name: Some("Jakarta Artist".to_string()),
+                artist_type: Some("Person".to_string()),
+                gender: None,
                 country: Some("ID".to_string()),
+                life_span: None,
                 area: Some(MusicBrainzArea {
                     id: Some("area-indonesia".to_string()),
                     name: Some("Indonesia (Jakarta)".to_string()),
@@ -4433,6 +5548,7 @@ mod tests {
                     iso_3166_2_codes: Vec::new(),
                 }),
                 begin_area: None,
+                end_area: None,
             },
             "2026-07-08T12:00:00Z",
         )
@@ -4599,7 +5715,15 @@ mod tests {
             .expect("insert manual origin row");
 
         let evidence = derive_origin_country(&MusicBrainzArtistLookupResponse {
+            sort_name: Some("Pet Shop Boys".to_string()),
+            artist_type: Some("Group".to_string()),
+            gender: None,
             country: Some("GB".to_string()),
+            life_span: Some(MusicBrainzLifeSpan {
+                begin: Some("1981".to_string()),
+                end: None,
+                ended: Some(false),
+            }),
             area: Some(MusicBrainzArea {
                 id: Some("area-england".to_string()),
                 name: Some("England".to_string()),
@@ -4608,6 +5732,7 @@ mod tests {
                 iso_3166_2_codes: vec!["GB-ENG".to_string()],
             }),
             begin_area: None,
+            end_area: None,
         });
         save_origin_country_evidence(
             &app_conn,

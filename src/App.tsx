@@ -1,5 +1,20 @@
-import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { CSSProperties, FormEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type {
+  CSSProperties,
+  FormEvent,
+  KeyboardEvent,
+  MouseEvent,
+  PointerEvent,
+  ReactNode,
+} from "react";
 import {
   Activity,
   Album,
@@ -57,6 +72,7 @@ import {
   getAlbumCoverDataUrl,
   getDiscovery,
   getMusicBrainzArtistDiscography,
+  getMusicBrainzArtistInfoStatus,
   getMusicBrainzCacheStatus,
   getMusicBrainzOriginCountryStatus,
   getSettings,
@@ -66,6 +82,7 @@ import {
   importBillboardCharts,
   importBillboardSingles,
   importMusicBeeTsv,
+  importMusicBrainzArtistInfos,
   importMusicBrainzOriginCountries,
   isTauriRuntime,
   listDatabaseBackups,
@@ -81,18 +98,21 @@ import {
   loadCachedSettings,
   listenToCoverImportProgress,
   listenToImportProgress,
+  listenToMusicBrainzArtistInfoImportProgress,
   listenToMusicBrainzOriginCountryImportProgress,
   listenToMusicToolProgress,
   openExternalUrl,
   saveChart,
   saveSearch,
   saveSettings,
+  previewMusicBrainzArtistInfoImport,
   previewMusicBrainzOriginCountryImport,
   refreshMusicBrainzArtistInfo,
   setMusicBrainzArtistLink,
   setMusicBrainzArtistOriginCountry,
   setMusicBrainzReleaseDecision,
   syncMusicBrainzOverlay,
+  cancelMusicBrainzArtistInfoImport,
   cancelMusicBrainzOriginCountryImport,
   searchLibrary,
   exportMusicToolIssues,
@@ -153,6 +173,11 @@ import type {
   MusicToolSummary,
   MusicBrainzArtistCandidateRow,
   MusicBrainzArtistDiscographyResponse,
+  MusicBrainzArtistInfoImportProgress,
+  MusicBrainzArtistInfoImportSummary,
+  MusicBrainzArtistInfoPreview,
+  MusicBrainzArtistInfoPreviewRow,
+  MusicBrainzArtistInfoStatus,
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
   MusicBrainzOriginCountryOption,
@@ -283,14 +308,33 @@ type AppUpdateStatus =
   | "restarting"
   | "error";
 
-type OriginReportFilter = "needsAttention" | "skipped" | "unresolved" | "eligible" | "imported" | "all";
+type OriginReportFilter =
+  "needsAttention" | "skipped" | "unresolved" | "eligible" | "imported" | "all";
 
-const originReportFilterOptions: Array<{ value: OriginReportFilter; label: string }> = [
+const originReportFilterOptions: Array<{
+  value: OriginReportFilter;
+  label: string;
+}> = [
   { value: "needsAttention", label: "Needs attention" },
   { value: "skipped", label: "Skipped" },
   { value: "unresolved", label: "Unresolved" },
   { value: "eligible", label: "Eligible" },
   { value: "imported", label: "Imported" },
+  { value: "all", label: "All" },
+];
+
+type ArtistInfoReportFilter =
+  "needsAttention" | "eligible" | "imported" | "person" | "group" | "all";
+
+const artistInfoReportFilterOptions: Array<{
+  value: ArtistInfoReportFilter;
+  label: string;
+}> = [
+  { value: "needsAttention", label: "Needs attention" },
+  { value: "eligible", label: "Eligible" },
+  { value: "imported", label: "Imported" },
+  { value: "person", label: "People" },
+  { value: "group", label: "Groups" },
   { value: "all", label: "All" },
 ];
 
@@ -361,7 +405,10 @@ function RatingStars({
   const ratingLabel = formatTrackRating(value);
 
   return (
-    <span className="rating-stars" aria-label={ratingLabel ? `${label} ${ratingLabel}` : `${label} unrated`}>
+    <span
+      className="rating-stars"
+      aria-label={ratingLabel ? `${label} ${ratingLabel}` : `${label} unrated`}
+    >
       {Array.from({ length: 5 }, (_, index) => (
         <Star
           key={index}
@@ -401,7 +448,11 @@ function Metric({
 }
 
 function RunStatus({ status }: { status: string }) {
-  return <span className={`run-status run-status-${status.toLowerCase()}`}>{status}</span>;
+  return (
+    <span className={`run-status run-status-${status.toLowerCase()}`}>
+      {status}
+    </span>
+  );
 }
 
 type OriginCountryValue = {
@@ -416,9 +467,14 @@ type RegionDisplayNames = {
 
 const regionDisplayNames =
   "DisplayNames" in Intl
-    ? new (Intl as typeof Intl & {
-        DisplayNames: new (locales: string[], options: { type: "region" }) => RegionDisplayNames;
-      }).DisplayNames(["en"], { type: "region" })
+    ? new (
+        Intl as typeof Intl & {
+          DisplayNames: new (
+            locales: string[],
+            options: { type: "region" },
+          ) => RegionDisplayNames;
+        }
+      ).DisplayNames(["en"], { type: "region" })
     : null;
 
 function countryCodeForFlag(code: string | null | undefined) {
@@ -474,8 +530,12 @@ function CountryDisplay({
     return <>{label || fallback}</>;
   }
 
-  const title = [value.originCountryCode?.trim().toUpperCase(), label].filter(Boolean).join(" - ");
-  const classes = ["country-display", `country-display-${mode}`, className].filter(Boolean).join(" ");
+  const title = [value.originCountryCode?.trim().toUpperCase(), label]
+    .filter(Boolean)
+    .join(" - ");
+  const classes = ["country-display", `country-display-${mode}`, className]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <span className={classes} title={title || undefined}>
@@ -491,12 +551,17 @@ function CountryDisplay({
   );
 }
 
-function countryValueFromCode(code: string, countryOptions: MusicBrainzOriginCountryOption[]): OriginCountryValue {
+function countryValueFromCode(
+  code: string,
+  countryOptions: MusicBrainzOriginCountryOption[],
+): OriginCountryValue {
   const normalizedCode = code.trim().toUpperCase();
   const option = countryOptionForCode(countryOptions, normalizedCode);
   return {
     originCountryCode: normalizedCode,
-    originCountryName: option ? countryOptionName(option) : countryNameFromCode(normalizedCode) ?? normalizedCode,
+    originCountryName: option
+      ? countryOptionName(option)
+      : (countryNameFromCode(normalizedCode) ?? normalizedCode),
     originCountryRawArea: null,
   };
 }
@@ -520,7 +585,10 @@ function CountryListDisplay({
       {codes.map((code, index) => (
         <Fragment key={code}>
           {index > 0 ? <span className="country-list-separator">,</span> : null}
-          <CountryDisplay value={countryValueFromCode(code, countryOptions)} mode={mode} />
+          <CountryDisplay
+            value={countryValueFromCode(code, countryOptions)}
+            mode={mode}
+          />
         </Fragment>
       ))}
     </span>
@@ -611,7 +679,9 @@ function originPreviewReason(row: MusicBrainzOriginCountryPreviewRow) {
       if (row.suspectMapping) {
         return "Imported from cached MBID; review on the Artist page if wrong.";
       }
-      return row.existingReviewState ? `Saved as ${row.existingReviewState}.` : "Country already saved.";
+      return row.existingReviewState
+        ? `Saved as ${row.existingReviewState}.`
+        : "Country already saved.";
     case "manual":
       return "Manual or reviewed country is preserved.";
     case "unresolved":
@@ -621,7 +691,10 @@ function originPreviewReason(row: MusicBrainzOriginCountryPreviewRow) {
   }
 }
 
-function originPreviewMatchesFilter(row: MusicBrainzOriginCountryPreviewRow, filter: OriginReportFilter) {
+function originPreviewMatchesFilter(
+  row: MusicBrainzOriginCountryPreviewRow,
+  filter: OriginReportFilter,
+) {
   switch (filter) {
     case "needsAttention":
       return row.status === "skipped" || row.status === "unresolved";
@@ -640,7 +713,10 @@ function originPreviewMatchesFilter(row: MusicBrainzOriginCountryPreviewRow, fil
   }
 }
 
-function originPreviewMatchesSearch(row: MusicBrainzOriginCountryPreviewRow, query: string) {
+function originPreviewMatchesSearch(
+  row: MusicBrainzOriginCountryPreviewRow,
+  query: string,
+) {
   if (!query) {
     return true;
   }
@@ -661,12 +737,130 @@ function originPreviewMatchesSearch(row: MusicBrainzOriginCountryPreviewRow, que
   return haystack.includes(query);
 }
 
+function artistInfoPreviewStatusLabel(status: string | null | undefined) {
+  switch (status) {
+    case "eligible":
+      return "Eligible";
+    case "alreadyImported":
+      return "Imported";
+    case "skipped":
+      return "Skipped";
+    case "unresolved":
+      return "Unresolved";
+    default:
+      return status || "Unknown";
+  }
+}
+
+function artistInfoPreviewMatchLabel(row: MusicBrainzArtistInfoPreviewRow) {
+  const matchName = row.matchedName ?? row.musicbrainzMbid ?? "No MBID";
+  return [matchName, row.matchMethod].filter(Boolean).join(" / ");
+}
+
+function artistInfoPreviewReason(row: MusicBrainzArtistInfoPreviewRow) {
+  if (row.skippedReason) {
+    return row.skippedReason;
+  }
+  switch (row.status) {
+    case "eligible":
+      return row.suspectMapping
+        ? "Ready from cached MBID; review on the Artist page if wrong."
+        : "Ready for MusicBrainz artist lookup.";
+    case "alreadyImported":
+      return row.existingReviewState
+        ? `Saved as ${row.existingReviewState}.`
+        : "Artist info already saved.";
+    case "unresolved":
+      return "No usable MusicBrainz artist match.";
+    default:
+      return row.artistLinkState ? `Artist link: ${row.artistLinkState}.` : "";
+  }
+}
+
+function artistInfoPreviewMatchesFilter(
+  row: MusicBrainzArtistInfoPreviewRow,
+  filter: ArtistInfoReportFilter,
+) {
+  const artistType = row.existingArtistType?.trim().toLowerCase();
+  switch (filter) {
+    case "needsAttention":
+      return row.status === "skipped" || row.status === "unresolved";
+    case "eligible":
+      return row.status === "eligible";
+    case "imported":
+      return row.status === "alreadyImported";
+    case "person":
+      return artistType === "person";
+    case "group":
+      return artistType === "group";
+    case "all":
+      return true;
+    default:
+      return true;
+  }
+}
+
+function artistInfoPreviewMatchesSearch(
+  row: MusicBrainzArtistInfoPreviewRow,
+  query: string,
+) {
+  if (!query) {
+    return true;
+  }
+  const haystack = [
+    row.displayArtist,
+    row.localArtistKey,
+    row.musicbrainzMbid,
+    row.matchedName,
+    row.existingSortName,
+    row.existingArtistType,
+    row.existingGender,
+    row.existingBeginDate,
+    row.existingEndDate,
+    row.existingBeginAreaName,
+    row.existingEndAreaName,
+    row.matchMethod,
+    row.artistLinkState,
+    row.skippedReason,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
+function artistInfoLifeStartLabel(row: MusicBrainzArtistInfoPreviewRow) {
+  return row.existingArtistType?.toLowerCase() === "group" ? "Founded" : "Born";
+}
+
+function artistInfoLifeEndLabel(row: MusicBrainzArtistInfoPreviewRow) {
+  return row.existingArtistType?.toLowerCase() === "group"
+    ? "Dissolved"
+    : "Died";
+}
+
+function artistInfoDateLabel(
+  date: string | null,
+  year: number | null,
+  area: string | null,
+) {
+  const value = date || (year == null ? null : String(year));
+  if (!value && !area) {
+    return "Missing";
+  }
+  return [value, area].filter(Boolean).join(" / ");
+}
+
 function musicBrainzArtistUrl(mbid: string) {
   return `https://musicbrainz.org/artist/${mbid}`;
 }
 
 function musicBrainzStateLabel(
-  state: MusicBrainzCacheStatus["state"] | MusicBrainzArtistDiscographyResponse["state"] | null | undefined,
+  state:
+    | MusicBrainzCacheStatus["state"]
+    | MusicBrainzArtistDiscographyResponse["state"]
+    | null
+    | undefined,
 ) {
   switch (state) {
     case "available":
@@ -702,17 +896,38 @@ function musicBrainzCacheDateRange(status: MusicBrainzCacheStatus | null) {
   return dateFrom === dateTo ? dateFrom : `${dateFrom}-${dateTo}`;
 }
 
-function musicBrainzOverlaySyncDetails(result: MusicBrainzOverlaySyncResult | MusicBrainzOverlaySyncLogEntry) {
+function musicBrainzOverlaySyncDetails(
+  result: MusicBrainzOverlaySyncResult | MusicBrainzOverlaySyncLogEntry,
+) {
   const details = [
     ["artist links", result.artistLinksImported, result.artistLinksExported],
     ["unlinks", result.artistUnlinksImported, result.artistUnlinksExported],
-    ["release decisions", result.releaseDecisionsImported, result.releaseDecisionsExported],
-    ["decision clears", result.releaseDecisionClearsImported, result.releaseDecisionClearsExported],
-    ["status rows", result.releaseStatusesImported, result.releaseStatusesExported],
-    ["release groups", result.releaseGroupsImported, result.releaseGroupsExported],
+    [
+      "release decisions",
+      result.releaseDecisionsImported,
+      result.releaseDecisionsExported,
+    ],
+    [
+      "decision clears",
+      result.releaseDecisionClearsImported,
+      result.releaseDecisionClearsExported,
+    ],
+    [
+      "status rows",
+      result.releaseStatusesImported,
+      result.releaseStatusesExported,
+    ],
+    [
+      "release groups",
+      result.releaseGroupsImported,
+      result.releaseGroupsExported,
+    ],
   ]
     .filter(([, imported, exported]) => Number(imported) + Number(exported) > 0)
-    .map(([label, imported, exported]) => `${label}: ${imported} in / ${exported} out`);
+    .map(
+      ([label, imported, exported]) =>
+        `${label}: ${imported} in / ${exported} out`,
+    );
 
   return details.length > 0 ? details.join("; ") : "No row changes";
 }
@@ -784,7 +999,10 @@ function TextCriterion({
         <select
           value={filter.operator}
           onChange={(event) =>
-            onChange({ ...filter, operator: event.target.value as TextFilterOperator })
+            onChange({
+              ...filter,
+              operator: event.target.value as TextFilterOperator,
+            })
           }
         >
           {Object.entries(operatorLabels).map(([value, optionLabel]) => (
@@ -795,7 +1013,9 @@ function TextCriterion({
         </select>
         <input
           value={filter.value}
-          onChange={(event) => onChange({ ...filter, value: event.target.value })}
+          onChange={(event) =>
+            onChange({ ...filter, value: event.target.value })
+          }
           placeholder={placeholder}
         />
       </div>
@@ -833,7 +1053,10 @@ function GenreListCriterion({
     () => genreSuggestions(genreOptions, activeToken.query),
     [activeToken.query, genreOptions],
   );
-  const showSuggestions = isSuggestionOpen && suggestions.length > 0 && activeToken.query.trim().length > 0;
+  const showSuggestions =
+    isSuggestionOpen &&
+    suggestions.length > 0 &&
+    activeToken.query.trim().length > 0;
   const activeSuggestionId = showSuggestions
     ? `${listboxId}-option-${activeSuggestionIndex}`
     : undefined;
@@ -866,7 +1089,10 @@ function GenreListCriterion({
     setIsSuggestionOpen(false);
     window.requestAnimationFrame(() => {
       inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(nextDraft.caretPosition, nextDraft.caretPosition);
+      inputRef.current?.setSelectionRange(
+        nextDraft.caretPosition,
+        nextDraft.caretPosition,
+      );
     });
   }
 
@@ -874,7 +1100,9 @@ function GenreListCriterion({
     if (event.key === "ArrowDown" && suggestions.length > 0) {
       event.preventDefault();
       setIsSuggestionOpen(true);
-      setActiveSuggestionIndex((current) => (showSuggestions ? (current + 1) % suggestions.length : 0));
+      setActiveSuggestionIndex((current) =>
+        showSuggestions ? (current + 1) % suggestions.length : 0,
+      );
       return;
     }
 
@@ -882,7 +1110,9 @@ function GenreListCriterion({
       event.preventDefault();
       setIsSuggestionOpen(true);
       setActiveSuggestionIndex((current) =>
-        showSuggestions ? (current - 1 + suggestions.length) % suggestions.length : suggestions.length - 1,
+        showSuggestions
+          ? (current - 1 + suggestions.length) % suggestions.length
+          : suggestions.length - 1,
       );
       return;
     }
@@ -937,7 +1167,11 @@ function GenreListCriterion({
         <div className="genre-suggestions" id={listboxId} role="listbox">
           {suggestions.map((suggestion, index) => (
             <button
-              className={index === activeSuggestionIndex ? "genre-suggestion active" : "genre-suggestion"}
+              className={
+                index === activeSuggestionIndex
+                  ? "genre-suggestion active"
+                  : "genre-suggestion"
+              }
               id={`${listboxId}-option-${index}`}
               key={suggestion}
               type="button"
@@ -971,13 +1205,17 @@ function countryNameFromCode(code: string) {
     return null;
   }
   const displayName = regionDisplayNames?.of(normalizedCode)?.trim();
-  return displayName && displayName.toUpperCase() !== normalizedCode ? displayName : null;
+  return displayName && displayName.toUpperCase() !== normalizedCode
+    ? displayName
+    : null;
 }
 
 function countryOptionName(country: MusicBrainzOriginCountryOption) {
   const code = countryOptionCode(country);
   const name = country.name.trim();
-  return name && name.toUpperCase() !== code ? name : countryNameFromCode(code) ?? name;
+  return name && name.toUpperCase() !== code
+    ? name
+    : (countryNameFromCode(code) ?? name);
 }
 
 function countryOptionLabel(country: MusicBrainzOriginCountryOption) {
@@ -986,24 +1224,39 @@ function countryOptionLabel(country: MusicBrainzOriginCountryOption) {
   return name && name.toUpperCase() !== code ? `${code} - ${name}` : code;
 }
 
-function countryOptionForCode(countryOptions: MusicBrainzOriginCountryOption[], code: string) {
+function countryOptionForCode(
+  countryOptions: MusicBrainzOriginCountryOption[],
+  code: string,
+) {
   const normalizedCode = code.trim().toUpperCase();
-  return countryOptions.find((country) => countryOptionCode(country) === normalizedCode);
+  return countryOptions.find(
+    (country) => countryOptionCode(country) === normalizedCode,
+  );
 }
 
-function countryOptionNameForCode(countryOptions: MusicBrainzOriginCountryOption[], code: string) {
+function countryOptionNameForCode(
+  countryOptions: MusicBrainzOriginCountryOption[],
+  code: string,
+) {
   const normalizedCode = code.trim().toUpperCase();
   const option = countryOptionForCode(countryOptions, normalizedCode);
-  return option ? countryOptionName(option) : countryNameFromCode(normalizedCode);
+  return option
+    ? countryOptionName(option)
+    : countryNameFromCode(normalizedCode);
 }
 
-function parseCountryToken(value: string, countryOptions: MusicBrainzOriginCountryOption[]) {
+function parseCountryToken(
+  value: string,
+  countryOptions: MusicBrainzOriginCountryOption[],
+) {
   const trimmed = value.trim();
   if (!trimmed) {
     return "";
   }
 
-  const leadingCode = trimmed.match(/^([a-z]{2})(?=$|\s|[-:])/i)?.[1]?.toUpperCase();
+  const leadingCode = trimmed
+    .match(/^([a-z]{2})(?=$|\s|[-:])/i)?.[1]
+    ?.toUpperCase();
   if (leadingCode) {
     return leadingCode;
   }
@@ -1013,26 +1266,47 @@ function parseCountryToken(value: string, countryOptions: MusicBrainzOriginCount
     const code = countryOptionCode(country);
     return (
       code.toLowerCase() === normalizedToken ||
-      normalizeCountrySuggestionText(countryOptionName(country)) === normalizedToken ||
-      normalizeCountrySuggestionText(countryOptionLabel(country)) === normalizedToken
+      normalizeCountrySuggestionText(countryOptionName(country)) ===
+        normalizedToken ||
+      normalizeCountrySuggestionText(countryOptionLabel(country)) ===
+        normalizedToken
     );
   });
 
-  return matchedOption ? countryOptionCode(matchedOption) : trimmed.toUpperCase();
+  return matchedOption
+    ? countryOptionCode(matchedOption)
+    : trimmed.toUpperCase();
 }
 
-function parseCountryList(value: string, countryOptions: MusicBrainzOriginCountryOption[] = []) {
-  return normalizeCountryCodes(parseList(value).map((item) => parseCountryToken(item, countryOptions)));
+function parseCountryList(
+  value: string,
+  countryOptions: MusicBrainzOriginCountryOption[] = [],
+) {
+  return normalizeCountryCodes(
+    parseList(value).map((item) => parseCountryToken(item, countryOptions)),
+  );
 }
 
-function formatCountryCode(code: string, countryOptions: MusicBrainzOriginCountryOption[]) {
+function formatCountryCode(
+  code: string,
+  countryOptions: MusicBrainzOriginCountryOption[],
+) {
   const normalizedCode = code.trim().toUpperCase();
   const name = countryOptionNameForCode(countryOptions, normalizedCode);
-  return name && name.toUpperCase() !== normalizedCode ? `${normalizedCode} - ${name}` : normalizedCode;
+  return name && name.toUpperCase() !== normalizedCode
+    ? `${normalizedCode} - ${name}`
+    : normalizedCode;
 }
 
-function formatCountryList(values: string[], countryOptions: MusicBrainzOriginCountryOption[]) {
-  return formatList(normalizeCountryCodes(values).map((code) => formatCountryCode(code, countryOptions)));
+function formatCountryList(
+  values: string[],
+  countryOptions: MusicBrainzOriginCountryOption[],
+) {
+  return formatList(
+    normalizeCountryCodes(values).map((code) =>
+      formatCountryCode(code, countryOptions),
+    ),
+  );
 }
 
 function normalizeCountrySuggestionText(value: string) {
@@ -1044,15 +1318,23 @@ function normalizeCountrySuggestionText(value: string) {
     .trim();
 }
 
-function countrySuggestionScore(country: MusicBrainzOriginCountryOption, normalizedQuery: string) {
+function countrySuggestionScore(
+  country: MusicBrainzOriginCountryOption,
+  normalizedQuery: string,
+) {
   const code = country.code.trim().toUpperCase();
   const normalizedCode = code.toLowerCase();
-  const normalizedName = normalizeCountrySuggestionText(countryOptionName(country));
+  const normalizedName = normalizeCountrySuggestionText(
+    countryOptionName(country),
+  );
 
   if (!normalizedQuery) {
     return null;
   }
-  if (normalizedCode === normalizedQuery || normalizedName === normalizedQuery) {
+  if (
+    normalizedCode === normalizedQuery ||
+    normalizedName === normalizedQuery
+  ) {
     return 0;
   }
   if (normalizedCode.startsWith(normalizedQuery)) {
@@ -1063,13 +1345,21 @@ function countrySuggestionScore(country: MusicBrainzOriginCountryOption, normali
   }
 
   const words = normalizedName.split(" ");
-  const wordStartIndex = words.findIndex((word) => word.startsWith(normalizedQuery));
+  const wordStartIndex = words.findIndex((word) =>
+    word.startsWith(normalizedQuery),
+  );
   if (wordStartIndex >= 0) {
     const characterIndex = normalizedName.indexOf(words[wordStartIndex]);
-    return 30 + characterIndex + (normalizedName.length - normalizedQuery.length) / 100;
+    return (
+      30 +
+      characterIndex +
+      (normalizedName.length - normalizedQuery.length) / 100
+    );
   }
 
-  const includesIndex = `${normalizedCode} ${normalizedName}`.indexOf(normalizedQuery);
+  const includesIndex = `${normalizedCode} ${normalizedName}`.indexOf(
+    normalizedQuery,
+  );
   if (includesIndex >= 0) {
     return 50 + includesIndex + normalizedName.length / 100;
   }
@@ -1077,19 +1367,32 @@ function countrySuggestionScore(country: MusicBrainzOriginCountryOption, normali
   return null;
 }
 
-function countrySuggestions(countryOptions: MusicBrainzOriginCountryOption[], query: string) {
+function countrySuggestions(
+  countryOptions: MusicBrainzOriginCountryOption[],
+  query: string,
+) {
   const normalizedQuery = normalizeCountrySuggestionText(query);
   if (!normalizedQuery) {
     return [];
   }
 
   return countryOptions
-    .map((country) => ({ country, score: countrySuggestionScore(country, normalizedQuery) }))
-    .filter((item): item is { country: MusicBrainzOriginCountryOption; score: number } => item.score !== null)
+    .map((country) => ({
+      country,
+      score: countrySuggestionScore(country, normalizedQuery),
+    }))
+    .filter(
+      (
+        item,
+      ): item is { country: MusicBrainzOriginCountryOption; score: number } =>
+        item.score !== null,
+    )
     .sort(
       (left, right) =>
         left.score - right.score ||
-        countryOptionName(left.country).localeCompare(countryOptionName(right.country)) ||
+        countryOptionName(left.country).localeCompare(
+          countryOptionName(right.country),
+        ) ||
         left.country.code.localeCompare(right.country.code),
     )
     .slice(0, 8)
@@ -1114,7 +1417,10 @@ function CountryListCriterion({
   const inputId = useId();
   const listboxId = `${inputId}-country-suggestions`;
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const normalizedValues = useMemo(() => normalizeCountryCodes(values), [values]);
+  const normalizedValues = useMemo(
+    () => normalizeCountryCodes(values),
+    [values],
+  );
   const formattedValues = useMemo(
     () => formatCountryList(normalizedValues, countryOptions),
     [countryOptions, normalizedValues],
@@ -1131,14 +1437,20 @@ function CountryListCriterion({
     () => countrySuggestions(countryOptions, activeToken.query),
     [activeToken.query, countryOptions],
   );
-  const showSuggestions = isSuggestionOpen && suggestions.length > 0 && activeToken.query.trim().length > 0;
+  const showSuggestions =
+    isSuggestionOpen &&
+    suggestions.length > 0 &&
+    activeToken.query.trim().length > 0;
   const activeSuggestionId = showSuggestions
     ? `${listboxId}-option-${activeSuggestionIndex}`
     : undefined;
 
   useEffect(() => {
     const parsedDraft = parseCountryList(draftValue, countryOptions);
-    if (!listsEqual(parsedDraft, normalizedValues) || draftValue === formatList(normalizedValues)) {
+    if (
+      !listsEqual(parsedDraft, normalizedValues) ||
+      draftValue === formatList(normalizedValues)
+    ) {
       setDraftValue(formattedValues);
       setCaretPosition(formattedValues.length);
     }
@@ -1157,17 +1469,26 @@ function CountryListCriterion({
     onChange(parseCountryList(value, countryOptions));
   }
 
-  function chooseSuggestion(suggestion: MusicBrainzOriginCountryOption | undefined) {
+  function chooseSuggestion(
+    suggestion: MusicBrainzOriginCountryOption | undefined,
+  ) {
     if (!suggestion) {
       return;
     }
-    const nextDraft = replaceGenreToken(draftValue, caretPosition, countryOptionLabel(suggestion));
+    const nextDraft = replaceGenreToken(
+      draftValue,
+      caretPosition,
+      countryOptionLabel(suggestion),
+    );
     updateDraft(nextDraft.value);
     setCaretPosition(nextDraft.caretPosition);
     setIsSuggestionOpen(false);
     window.requestAnimationFrame(() => {
       inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(nextDraft.caretPosition, nextDraft.caretPosition);
+      inputRef.current?.setSelectionRange(
+        nextDraft.caretPosition,
+        nextDraft.caretPosition,
+      );
     });
   }
 
@@ -1175,7 +1496,9 @@ function CountryListCriterion({
     if (event.key === "ArrowDown" && suggestions.length > 0) {
       event.preventDefault();
       setIsSuggestionOpen(true);
-      setActiveSuggestionIndex((current) => (showSuggestions ? (current + 1) % suggestions.length : 0));
+      setActiveSuggestionIndex((current) =>
+        showSuggestions ? (current + 1) % suggestions.length : 0,
+      );
       return;
     }
 
@@ -1183,7 +1506,9 @@ function CountryListCriterion({
       event.preventDefault();
       setIsSuggestionOpen(true);
       setActiveSuggestionIndex((current) =>
-        showSuggestions ? (current - 1 + suggestions.length) % suggestions.length : suggestions.length - 1,
+        showSuggestions
+          ? (current - 1 + suggestions.length) % suggestions.length
+          : suggestions.length - 1,
       );
       return;
     }
@@ -1226,7 +1551,12 @@ function CountryListCriterion({
         onClick={(event) => syncCaret(event.currentTarget)}
         onSelect={(event) => syncCaret(event.currentTarget)}
         onBlur={(event) => {
-          setDraftValue(formatCountryList(parseCountryList(event.currentTarget.value, countryOptions), countryOptions));
+          setDraftValue(
+            formatCountryList(
+              parseCountryList(event.currentTarget.value, countryOptions),
+              countryOptions,
+            ),
+          );
           setIsSuggestionOpen(false);
         }}
         placeholder={placeholder}
@@ -1235,7 +1565,11 @@ function CountryListCriterion({
         <div className="genre-suggestions" id={listboxId} role="listbox">
           {suggestions.map((suggestion, index) => (
             <button
-              className={index === activeSuggestionIndex ? "genre-suggestion active" : "genre-suggestion"}
+              className={
+                index === activeSuggestionIndex
+                  ? "genre-suggestion active"
+                  : "genre-suggestion"
+              }
               id={`${listboxId}-option-${index}`}
               key={suggestion.code}
               type="button"
@@ -1319,7 +1653,9 @@ function CompletenessRangeCriterion({
   function valueFromPointer(clientX: number) {
     const rect = controlRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return completenessRange.min;
-    return clampCompletenessValue(((clientX - rect.left) / rect.width) * completenessRange.max);
+    return clampCompletenessValue(
+      ((clientX - rect.left) / rect.width) * completenessRange.max,
+    );
   }
 
   function updateHandle(handle: "min" | "max", value: number) {
@@ -1330,13 +1666,19 @@ function CompletenessRangeCriterion({
     }
   }
 
-  function handlePointerDown(event: PointerEvent<HTMLButtonElement>, handle: "min" | "max") {
+  function handlePointerDown(
+    event: PointerEvent<HTMLButtonElement>,
+    handle: "min" | "max",
+  ) {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     updateHandle(handle, valueFromPointer(event.clientX));
   }
 
-  function handlePointerMove(event: PointerEvent<HTMLButtonElement>, handle: "min" | "max") {
+  function handlePointerMove(
+    event: PointerEvent<HTMLButtonElement>,
+    handle: "min" | "max",
+  ) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       updateHandle(handle, valueFromPointer(event.clientX));
     }
@@ -1348,7 +1690,10 @@ function CompletenessRangeCriterion({
     }
   }
 
-  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, handle: "min" | "max") {
+  function handleKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    handle: "min" | "max",
+  ) {
     const current = handle === "min" ? min : max;
     const step = event.shiftKey ? 10 : completenessRange.step;
     let nextValue: number | null = null;
@@ -1385,7 +1730,9 @@ function CompletenessRangeCriterion({
   }
 
   return (
-    <div className={`criterion slider-criterion completeness-range-criterion ${className}`.trim()}>
+    <div
+      className={`criterion slider-criterion completeness-range-criterion ${className}`.trim()}
+    >
       <span>Completeness</span>
       <div className="range-slider" style={style}>
         <div className="range-control" ref={controlRef}>
@@ -1470,11 +1817,25 @@ function SortableColumnHeader({
   onSort: (field: string) => void;
 }) {
   const isActive = sort.field === field;
-  const Icon = isActive ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
-  const nextDirection = isActive && sort.direction === "asc" ? "descending" : "ascending";
+  const Icon = isActive
+    ? sort.direction === "asc"
+      ? ArrowUp
+      : ArrowDown
+    : ArrowUpDown;
+  const nextDirection =
+    isActive && sort.direction === "asc" ? "descending" : "ascending";
 
   return (
-    <span role="columnheader" aria-sort={isActive ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+    <span
+      role="columnheader"
+      aria-sort={
+        isActive
+          ? sort.direction === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
+    >
       <button
         className={`table-sort-button${isActive ? " active" : ""}`}
         type="button"
@@ -1523,18 +1884,61 @@ function ResultTable({
   const showBillboardColumn = visibleColumnSet.has("billboard");
 
   return response.view === "tracks" ? (
-    <div className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}`} role="table">
+    <div
+      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}`}
+      role="table"
+    >
       <div className="result-table-head" role="row">
-        <SortableColumnHeader label="Track" field="title" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Artist" field="displayArtist" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Origin" field="originCountry" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
+        <SortableColumnHeader
+          label="Track"
+          field="title"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Album"
+          field="album"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Artist"
+          field="displayArtist"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Origin"
+          field="originCountry"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Year"
+          field="year"
+          sort={sort}
+          onSort={onSort}
+        />
         {showBillboardColumn ? (
-          <SortableColumnHeader label="Album Billboard" field="billboardRank" sort={sort} onSort={onSort} />
+          <SortableColumnHeader
+            label="Album Billboard"
+            field="billboardRank"
+            sort={sort}
+            onSort={onSort}
+          />
         ) : null}
-        <SortableColumnHeader label="Single" field="billboardSingleRank" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Rating" field="trackRating" sort={sort} onSort={onSort} />
+        <SortableColumnHeader
+          label="Single"
+          field="billboardSingleRank"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Rating"
+          field="trackRating"
+          sort={sort}
+          onSort={onSort}
+        />
         <span role="columnheader">File</span>
       </div>
       {response.rows.map((row) => {
@@ -1544,26 +1948,36 @@ function ResultTable({
             <span role="cell">
               <strong>
                 <span>{row.title ?? "Untitled"}</span>
-                {singleLabel ? <span className="billboard-badge">{singleLabel}</span> : null}
+                {singleLabel ? (
+                  <span className="billboard-badge">{singleLabel}</span>
+                ) : null}
               </strong>
               <small>
-                {[row.discNumber, row.trackNumber].filter((value) => value != null).join(".")}
+                {[row.discNumber, row.trackNumber]
+                  .filter((value) => value != null)
+                  .join(".")}
                 {row.love === "L" ? "  Loved" : ""}
               </small>
             </span>
             <span className="album-title-cell" role="cell">
               <AlbumTitleContents
                 row={row}
-                subtitle={row.albumArtistDisplay ?? row.year?.toString() ?? null}
+                subtitle={
+                  row.albumArtistDisplay ?? row.year?.toString() ?? null
+                }
                 showBillboardBadge={!showBillboardColumn}
               />
             </span>
-            <span role="cell">{row.displayArtist ?? row.albumArtistDisplay ?? ""}</span>
+            <span role="cell">
+              {row.displayArtist ?? row.albumArtistDisplay ?? ""}
+            </span>
             <span role="cell">
               <CountryDisplay value={row} mode={countryFlagDisplay} />
             </span>
             <span role="cell">{row.year ?? ""}</span>
-            {showBillboardColumn ? <span role="cell">{formatBillboardRank(row)}</span> : null}
+            {showBillboardColumn ? (
+              <span role="cell">{formatBillboardRank(row)}</span>
+            ) : null}
             <span role="cell">{singleLabel}</span>
             <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
             <span role="cell" title={row.filePath ?? ""}>
@@ -1574,24 +1988,75 @@ function ResultTable({
       })}
     </div>
   ) : (
-    <div className={`result-table album-results${showBillboardColumn ? " with-billboard" : ""}`} role="table">
+    <div
+      className={`result-table album-results${showBillboardColumn ? " with-billboard" : ""}`}
+      role="table"
+    >
       <div className="result-table-head" role="row">
-        <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Artist" field="artist" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Origin" field="originCountry" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Genre" field="genre" sort={sort} onSort={onSort} />
+        <SortableColumnHeader
+          label="Album"
+          field="album"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Artist"
+          field="artist"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Origin"
+          field="originCountry"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Year"
+          field="year"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Genre"
+          field="genre"
+          sort={sort}
+          onSort={onSort}
+        />
         {showBillboardColumn ? (
-          <SortableColumnHeader label="Billboard" field="billboardRank" sort={sort} onSort={onSort} />
+          <SortableColumnHeader
+            label="Billboard"
+            field="billboardRank"
+            sort={sort}
+            onSort={onSort}
+          />
         ) : null}
-        <SortableColumnHeader label="Tracks" field="trackCount" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Complete" field="ratingCompleteness" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Score" field="albumScore" sort={sort} onSort={onSort} />
+        <SortableColumnHeader
+          label="Tracks"
+          field="trackCount"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Complete"
+          field="ratingCompleteness"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Score"
+          field="albumScore"
+          sort={sort}
+          onSort={onSort}
+        />
       </div>
       {response.rows.map((row) => (
         <div className="result-table-row" role="row" key={row.id}>
           <span className="album-title-cell" role="cell">
-            <AlbumTitleContents row={row} showBillboardBadge={!showBillboardColumn} />
+            <AlbumTitleContents
+              row={row}
+              showBillboardBadge={!showBillboardColumn}
+            />
           </span>
           <span role="cell">{row.albumArtistDisplay ?? ""}</span>
           <span role="cell">
@@ -1599,7 +2064,9 @@ function ResultTable({
           </span>
           <span role="cell">{row.year ?? ""}</span>
           <span role="cell">{row.canonicalGenre ?? ""}</span>
-          {showBillboardColumn ? <span role="cell">{formatBillboardRank(row)}</span> : null}
+          {showBillboardColumn ? (
+            <span role="cell">{formatBillboardRank(row)}</span>
+          ) : null}
           <span role="cell">{row.totalTracks ?? ""}</span>
           <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
           <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
@@ -1648,7 +2115,13 @@ function AlbumCover({
 
   const displayImageUrl = imageFailed ? null : imageUrl;
   const label = row?.album ? `${row.album} cover` : "Album cover";
-  const classes = ["cover-placeholder", displayImageUrl ? "cover-image" : "", className].filter(Boolean).join(" ");
+  const classes = [
+    "cover-placeholder",
+    displayImageUrl ? "cover-image" : "",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <span className={classes} aria-hidden={decorative ? "true" : undefined}>
@@ -1682,7 +2155,9 @@ function AlbumTitleContents({
       <span>
         <strong>
           <span>{row.album ?? "Untitled"}</span>
-          {showBillboardBadge && billboardLabel ? <span className="billboard-badge">{billboardLabel}</span> : null}
+          {showBillboardBadge && billboardLabel ? (
+            <span className="billboard-badge">{billboardLabel}</span>
+          ) : null}
         </strong>
         {subtitle ? <small>{subtitle}</small> : null}
       </span>
@@ -1733,14 +2208,54 @@ function AlbumIndexTable({
   return (
     <div className="result-table album-index-results" role="table">
       <div className="result-table-head" role="row">
-        <SortableColumnHeader label="Album" field="album" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Artist" field="artist" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Origin" field="originCountry" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Year" field="year" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Genre" field="genre" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Tracks" field="trackCount" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Complete" field="ratingCompleteness" sort={sort} onSort={onSort} />
-        <SortableColumnHeader label="Score" field="albumScore" sort={sort} onSort={onSort} />
+        <SortableColumnHeader
+          label="Album"
+          field="album"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Artist"
+          field="artist"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Origin"
+          field="originCountry"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Year"
+          field="year"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Genre"
+          field="genre"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Tracks"
+          field="trackCount"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Complete"
+          field="ratingCompleteness"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
+          label="Score"
+          field="albumScore"
+          sort={sort}
+          onSort={onSort}
+        />
       </div>
       {response.rows.map((row) => {
         const isSelected = row.albumId === selectedAlbumId;
@@ -1818,9 +2333,13 @@ function AlbumTrackTable({
           <span role="cell">{formatTrackPosition(row)}</span>
           <span role="cell">
             <strong>{row.title ?? "Untitled"}</strong>
-            <small>{row.love === "L" ? "Loved" : row.canonicalGenre ?? ""}</small>
+            <small>
+              {row.love === "L" ? "Loved" : (row.canonicalGenre ?? "")}
+            </small>
           </span>
-          <span role="cell">{row.displayArtist ?? row.albumArtistDisplay ?? ""}</span>
+          <span role="cell">
+            {row.displayArtist ?? row.albumArtistDisplay ?? ""}
+          </span>
           <span role="cell">{formatMinutes(row.trackSeconds)}</span>
           <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
           <span role="cell" title={row.filePath ?? ""}>
@@ -1875,18 +2394,30 @@ function AlbumDetailPanel({
         <Album size={20} />
         <div>
           <h2>{album.album ?? "Untitled"}</h2>
-          <p>{[album.albumArtistDisplay, album.year, album.canonicalGenre].filter(Boolean).join(" / ")}</p>
+          <p>
+            {[album.albumArtistDisplay, album.year, album.canonicalGenre]
+              .filter(Boolean)
+              .join(" / ")}
+          </p>
         </div>
       </div>
 
-      <AlbumCover row={album} className="album-cover-large" decorative={false} />
+      <AlbumCover
+        row={album}
+        className="album-cover-large"
+        decorative={false}
+      />
 
       <dl className="run-details album-detail-stats">
         <div>
           <dt>Tracks</dt>
           <dd>
-            {album.ratedTracks != null ? formatNumber(album.ratedTracks) : formatNumber(album.totalTracks)}
-            {album.ratedTracks != null ? ` / ${formatNumber(album.totalTracks)} rated` : ""}
+            {album.ratedTracks != null
+              ? formatNumber(album.ratedTracks)
+              : formatNumber(album.totalTracks)}
+            {album.ratedTracks != null
+              ? ` / ${formatNumber(album.totalTracks)} rated`
+              : ""}
             {isLoading ? " / loading" : ""}
           </dd>
         </div>
@@ -1925,7 +2456,11 @@ function AlbumDetailPanel({
         <div>
           <dt>Origin Country</dt>
           <dd>
-            <CountryDisplay value={album} mode={countryFlagDisplay} fallback="Not imported" />
+            <CountryDisplay
+              value={album}
+              mode={countryFlagDisplay}
+              fallback="Not imported"
+            />
           </dd>
         </div>
         <div>
@@ -1943,13 +2478,19 @@ function AlbumDetailPanel({
           <input
             type="checkbox"
             checked={includeCalculated}
-            onChange={(event) => onIncludeCalculatedChange(event.target.checked)}
+            onChange={(event) =>
+              onIncludeCalculatedChange(event.target.checked)
+            }
           />
           <span>Calculated columns</span>
         </label>
         <div className="export-grid">
           {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
-            <button type="button" key={format} onClick={() => void onExport(format)}>
+            <button
+              type="button"
+              key={format}
+              onClick={() => void onExport(format)}
+            >
               <Download size={16} />
               <span>{format.toUpperCase()}</span>
             </button>
@@ -1959,7 +2500,8 @@ function AlbumDetailPanel({
           <div className="export-result">
             <Check size={17} />
             <span>
-              {formatNumber(exportResult.rowCount)} tracks to {exportResult.path}
+              {formatNumber(exportResult.rowCount)} tracks to{" "}
+              {exportResult.path}
             </span>
           </div>
         ) : null}
@@ -1972,7 +2514,10 @@ function artistInitial(artist: ArtistSummary | null) {
   return artist?.name.trim().slice(0, 1).toUpperCase() || "A";
 }
 
-function formatYearSpan(firstYear: number | null | undefined, lastYear: number | null | undefined) {
+function formatYearSpan(
+  firstYear: number | null | undefined,
+  lastYear: number | null | undefined,
+) {
   if (firstYear == null && lastYear == null) return "";
   if (firstYear != null && lastYear != null && firstYear !== lastYear) {
     return `${firstYear}-${lastYear}`;
@@ -2039,7 +2584,10 @@ function ArtistIndexTable({
             }}
           >
             <span className="album-index-title" role="cell">
-              <span className="cover-placeholder cover-mini artist-mini" aria-hidden="true">
+              <span
+                className="cover-placeholder cover-mini artist-mini"
+                aria-hidden="true"
+              >
                 <span>{artistInitial(artist)}</span>
               </span>
               <span>
@@ -2051,10 +2599,16 @@ function ArtistIndexTable({
               <CountryDisplay value={artist} mode={countryFlagDisplay} />
             </span>
             <span role="cell">{formatNumber(artist.albumCount)}</span>
-            <span role="cell">{formatYearSpan(artist.firstYear, artist.lastYear)}</span>
+            <span role="cell">
+              {formatYearSpan(artist.firstYear, artist.lastYear)}
+            </span>
             <span role="cell">{artist.topGenre ?? ""}</span>
-            <span role="cell">{formatPercent(artist.averageRatingCompleteness)}</span>
-            <span role="cell">{formatAverage(artist.averageAlbumScore, 2)}</span>
+            <span role="cell">
+              {formatPercent(artist.averageRatingCompleteness)}
+            </span>
+            <span role="cell">
+              {formatAverage(artist.averageAlbumScore, 2)}
+            </span>
             <span role="cell">{formatNumber(artist.lovedTracks)}</span>
           </div>
         );
@@ -2166,8 +2720,14 @@ function MusicBrainzArtistDiscographyPanel({
     musicbrainzMbid?: string | null,
     canonicalName?: string | null,
   ) => void;
-  onSetOriginCountry: (countryCode: string, countryName?: string | null) => void;
-  onSetReleaseDecision: (row: MusicBrainzArtistReleaseRow, decision: "not-in-scope" | "include") => void;
+  onSetOriginCountry: (
+    countryCode: string,
+    countryName?: string | null,
+  ) => void;
+  onSetReleaseDecision: (
+    row: MusicBrainzArtistReleaseRow,
+    decision: "not-in-scope" | "include",
+  ) => void;
   onExport: (format: "csv" | "xlsx") => void;
   exportResult: ExportResult | null;
   refreshResult: MusicBrainzArtistRefreshResult | null;
@@ -2196,19 +2756,42 @@ function MusicBrainzArtistDiscographyPanel({
         : response?.artistLinkState === "unverified"
           ? "Unverified"
           : "No review";
-  const canVerify = Boolean(artist && response?.musicbrainzMbid && response.artistLinkState !== "verified");
+  const canVerify = Boolean(
+    artist &&
+    response?.musicbrainzMbid &&
+    response.artistLinkState !== "verified",
+  );
   const canIgnore = Boolean(artist && response && !response.artistLinkIgnored);
   const canUnlink = Boolean(
-    artist && response && (response.artistLinkState === "verified" || response.artistLinkState === "ignored"),
+    artist &&
+    response &&
+    (response.artistLinkState === "verified" ||
+      response.artistLinkState === "ignored"),
   );
   const manualMbidValue = manualMbid.trim();
   const manualOriginCodeValue = manualOriginCode.trim().toUpperCase();
-  const selectedOriginName = countryOptionNameForCode(countryOptions, manualOriginCodeValue);
-  const manualOriginNameValue = manualOriginName.trim() || selectedOriginName || null;
+  const selectedOriginName = countryOptionNameForCode(
+    countryOptions,
+    manualOriginCodeValue,
+  );
+  const manualOriginNameValue =
+    manualOriginName.trim() || selectedOriginName || null;
   const canSetManualMbid = Boolean(artist && manualMbidValue && !isLoading);
-  const canSetManualOrigin = Boolean(artist && /^[A-Z]{2}$/.test(manualOriginCodeValue) && !isLoading);
-  const canExport = Boolean(response && !response.artistLinkIgnored && visibleRows.length > 0 && !isLoading);
-  const canUpdateInfo = Boolean(artist && response?.musicbrainzMbid && !response.artistLinkIgnored && !isLoading);
+  const canSetManualOrigin = Boolean(
+    artist && /^[A-Z]{2}$/.test(manualOriginCodeValue) && !isLoading,
+  );
+  const canExport = Boolean(
+    response &&
+    !response.artistLinkIgnored &&
+    visibleRows.length > 0 &&
+    !isLoading,
+  );
+  const canUpdateInfo = Boolean(
+    artist &&
+    response?.musicbrainzMbid &&
+    !response.artistLinkIgnored &&
+    !isLoading,
+  );
   const refreshedOrigin = refreshResult?.origin ?? null;
 
   useEffect(() => {
@@ -2237,20 +2820,27 @@ function MusicBrainzArtistDiscographyPanel({
   function handleManualOriginCodeChange(value: string) {
     const nextCode = value.toUpperCase();
     const currentName = manualOriginName.trim();
-    const previousName = countryOptionNameForCode(countryOptions, manualOriginCode);
+    const previousName = countryOptionNameForCode(
+      countryOptions,
+      manualOriginCode,
+    );
     const nextName = countryOptionNameForCode(countryOptions, nextCode);
     const artistOriginName = artist?.originCountryName?.trim() ?? "";
     setManualOriginCode(nextCode);
     if (
       /^[A-Z]{2}$/.test(nextCode) &&
       nextName &&
-      (!currentName || currentName === previousName || currentName === artistOriginName)
+      (!currentName ||
+        currentName === previousName ||
+        currentName === artistOriginName)
     ) {
       setManualOriginName(nextName);
     }
   }
 
-  function handleMusicBrainzArtistLinkClick(event: MouseEvent<HTMLAnchorElement>) {
+  function handleMusicBrainzArtistLinkClick(
+    event: MouseEvent<HTMLAnchorElement>,
+  ) {
     if (!musicBrainzArtistUrl) {
       return;
     }
@@ -2259,7 +2849,10 @@ function MusicBrainzArtistDiscographyPanel({
   }
 
   return (
-    <section className="table-panel musicbrainz-artist-panel" aria-label="MusicBrainz artist discography">
+    <section
+      className="table-panel musicbrainz-artist-panel"
+      aria-label="MusicBrainz artist discography"
+    >
       <div className="panel-heading compact">
         <div>
           <h2>MusicBrainz Discography</h2>
@@ -2276,7 +2869,9 @@ function MusicBrainzArtistDiscographyPanel({
           </p>
         </div>
         <div className="panel-actions">
-          <span className={`run-status run-status-${(response?.state ?? "unavailable").toLowerCase()}`}>
+          <span
+            className={`run-status run-status-${(response?.state ?? "unavailable").toLowerCase()}`}
+          >
             {statusLabel}
           </span>
           <button
@@ -2312,19 +2907,33 @@ function MusicBrainzArtistDiscographyPanel({
       ) : !response ? (
         <div className="empty-state large">
           <ShieldCheck size={20} />
-          <span>{isLoading ? "Checking MusicBrainz cache." : "No MusicBrainz result yet."}</span>
+          <span>
+            {isLoading
+              ? "Checking MusicBrainz cache."
+              : "No MusicBrainz result yet."}
+          </span>
         </div>
       ) : (
         <>
-          <div className={`musicbrainz-status-strip musicbrainz-status-${response.state}`}>
-            <span className={`run-status run-status-${response.state.toLowerCase()}`}>{statusLabel}</span>
+          <div
+            className={`musicbrainz-status-strip musicbrainz-status-${response.state}`}
+          >
+            <span
+              className={`run-status run-status-${response.state.toLowerCase()}`}
+            >
+              {statusLabel}
+            </span>
             <span>{response.message}</span>
           </div>
 
           <dl className="performance-summary musicbrainz-artist-summary">
             <div>
               <dt>Completion</dt>
-              <dd>{response.completion == null ? "n/a" : formatPercent(response.completion, 0)}</dd>
+              <dd>
+                {response.completion == null
+                  ? "n/a"
+                  : formatPercent(response.completion, 0)}
+              </dd>
             </div>
             <div>
               <dt>Owned</dt>
@@ -2353,7 +2962,11 @@ function MusicBrainzArtistDiscographyPanel({
             <div>
               <dt>Origin</dt>
               <dd>
-                <CountryDisplay value={artist} mode={countryFlagDisplay} fallback="Not imported" />
+                <CountryDisplay
+                  value={artist}
+                  mode={countryFlagDisplay}
+                  fallback="Not imported"
+                />
               </dd>
             </div>
           </dl>
@@ -2385,13 +2998,18 @@ function MusicBrainzArtistDiscographyPanel({
             ) : null}
           </div>
 
-          <div className="musicbrainz-link-review" aria-label="MusicBrainz artist match review">
+          <div
+            className="musicbrainz-link-review"
+            aria-label="MusicBrainz artist match review"
+          >
             <div className="musicbrainz-link-actions">
               <button
                 className="primary-button"
                 type="button"
                 disabled={!canVerify || isLoading}
-                onClick={() => onSetArtistLink("verify", response.musicbrainzMbid)}
+                onClick={() =>
+                  onSetArtistLink("verify", response.musicbrainzMbid)
+                }
               >
                 <Check size={16} />
                 <span>Verify</span>
@@ -2402,7 +3020,9 @@ function MusicBrainzArtistDiscographyPanel({
                 title="Ignore MusicBrainz for this artist"
                 aria-label="Ignore MusicBrainz for this artist"
                 disabled={!canIgnore || isLoading}
-                onClick={() => onSetArtistLink("ignore", response.musicbrainzMbid)}
+                onClick={() =>
+                  onSetArtistLink("ignore", response.musicbrainzMbid)
+                }
               >
                 <Ban size={16} />
               </button>
@@ -2417,7 +3037,10 @@ function MusicBrainzArtistDiscographyPanel({
                 <Unlink size={16} />
               </button>
             </div>
-            <form className="musicbrainz-manual-link" onSubmit={handleManualMbidSubmit}>
+            <form
+              className="musicbrainz-manual-link"
+              onSubmit={handleManualMbidSubmit}
+            >
               <input
                 aria-label="Manual MusicBrainz artist MBID"
                 value={manualMbid}
@@ -2436,7 +3059,10 @@ function MusicBrainzArtistDiscographyPanel({
               </button>
             </form>
           </div>
-          <form className="musicbrainz-origin-editor" onSubmit={handleManualOriginSubmit}>
+          <form
+            className="musicbrainz-origin-editor"
+            onSubmit={handleManualOriginSubmit}
+          >
             <label htmlFor={originInputId}>
               <span>Origin Country</span>
               <input
@@ -2446,8 +3072,14 @@ function MusicBrainzArtistDiscographyPanel({
                 placeholder="US"
                 maxLength={2}
                 disabled={!artist || isLoading}
-                onChange={(event) => handleManualOriginCodeChange(event.target.value)}
-                onBlur={(event) => setManualOriginCode(event.currentTarget.value.trim().toUpperCase())}
+                onChange={(event) =>
+                  handleManualOriginCodeChange(event.target.value)
+                }
+                onBlur={(event) =>
+                  setManualOriginCode(
+                    event.currentTarget.value.trim().toUpperCase(),
+                  )
+                }
               />
             </label>
             <label htmlFor={originNameInputId}>
@@ -2458,12 +3090,18 @@ function MusicBrainzArtistDiscographyPanel({
                 placeholder={selectedOriginName ?? "United States"}
                 disabled={!artist || isLoading}
                 onChange={(event) => setManualOriginName(event.target.value)}
-                onBlur={(event) => setManualOriginName(event.currentTarget.value.trim())}
+                onBlur={(event) =>
+                  setManualOriginName(event.currentTarget.value.trim())
+                }
               />
             </label>
             <datalist id={originOptionsId}>
               {countryOptions.map((country) => (
-                <option key={country.code} value={countryOptionCode(country)} label={countryOptionLabel(country)}>
+                <option
+                  key={country.code}
+                  value={countryOptionCode(country)}
+                  label={countryOptionLabel(country)}
+                >
                   {countryOptionLabel(country)}
                 </option>
               ))}
@@ -2481,13 +3119,24 @@ function MusicBrainzArtistDiscographyPanel({
 
           {response.artistLinkIgnored ? null : (
             <>
-              <div className="musicbrainz-export-controls" aria-label="Export selected artist MusicBrainz albums">
+              <div
+                className="musicbrainz-export-controls"
+                aria-label="Export selected artist MusicBrainz albums"
+              >
                 <div className="export-strip">
-                  <button type="button" disabled={!canExport} onClick={() => onExport("csv")}>
+                  <button
+                    type="button"
+                    disabled={!canExport}
+                    onClick={() => onExport("csv")}
+                  >
                     <Download size={15} />
                     <span>CSV</span>
                   </button>
-                  <button type="button" disabled={!canExport} onClick={() => onExport("xlsx")}>
+                  <button
+                    type="button"
+                    disabled={!canExport}
+                    onClick={() => onExport("xlsx")}
+                  >
                     <Download size={15} />
                     <span>XLSX</span>
                   </button>
@@ -2496,7 +3145,8 @@ function MusicBrainzArtistDiscographyPanel({
                   <div className="export-result musicbrainz-export-result">
                     <Download size={16} />
                     <span>
-                      {formatNumber(exportResult.rowCount)} albums to {exportResult.path}
+                      {formatNumber(exportResult.rowCount)} albums to{" "}
+                      {exportResult.path}
                     </span>
                   </div>
                 ) : null}
@@ -2504,11 +3154,15 @@ function MusicBrainzArtistDiscographyPanel({
                   <div className="export-result musicbrainz-export-result">
                     <CloudDownload size={16} />
                     <span>
-                      {formatNumber(refreshResult.storedCount)} release groups refreshed at {formatDate(refreshResult.fetchedAt)}
+                      {formatNumber(refreshResult.storedCount)} release groups
+                      refreshed at {formatDate(refreshResult.fetchedAt)}
                       {refreshedOrigin ? (
                         <>
                           {" / Origin "}
-                          <CountryDisplay value={refreshedOrigin} mode={countryFlagDisplay} />
+                          <CountryDisplay
+                            value={refreshedOrigin}
+                            mode={countryFlagDisplay}
+                          />
                         </>
                       ) : null}
                     </span>
@@ -2518,7 +3172,12 @@ function MusicBrainzArtistDiscographyPanel({
                   <div className="export-result musicbrainz-export-result">
                     <Save size={16} />
                     <span>
-                      Origin saved as <CountryDisplay value={originResult} mode={countryFlagDisplay} fallback="manual" />
+                      Origin saved as{" "}
+                      <CountryDisplay
+                        value={originResult}
+                        mode={countryFlagDisplay}
+                        fallback="manual"
+                      />
                     </span>
                   </div>
                 ) : null}
@@ -2527,12 +3186,19 @@ function MusicBrainzArtistDiscographyPanel({
                 candidates={candidates}
                 isLoading={isLoading}
                 onOpenExternalUrl={onOpenExternalUrl}
-                onVerifyCandidate={(candidate) => onSetArtistLink("verify", candidate.mbid, candidate.name)}
+                onVerifyCandidate={(candidate) =>
+                  onSetArtistLink("verify", candidate.mbid, candidate.name)
+                }
               />
-              <MusicBrainzReleaseTable rows={rows} onSetReleaseDecision={onSetReleaseDecision} />
+              <MusicBrainzReleaseTable
+                rows={rows}
+                onSetReleaseDecision={onSetReleaseDecision}
+              />
             </>
           )}
-          <small className="performance-database-path">{response.resolvedPath}</small>
+          <small className="performance-database-path">
+            {response.resolvedPath}
+          </small>
         </>
       )}
     </section>
@@ -2555,7 +3221,11 @@ function MusicBrainzArtistCandidateTable({
   }
 
   return (
-    <div className="result-table musicbrainz-candidate-results" role="table" aria-label="MusicBrainz artist candidates">
+    <div
+      className="result-table musicbrainz-candidate-results"
+      role="table"
+      aria-label="MusicBrainz artist candidates"
+    >
       <div className="result-table-head" role="row">
         <span role="columnheader">Candidate</span>
         <span role="columnheader">MBID</span>
@@ -2572,7 +3242,9 @@ function MusicBrainzArtistCandidateTable({
             role="row"
             key={`${candidate.mbid}:${candidate.name}`}
           >
-            <span role="cell" title={candidate.name}>{candidate.name}</span>
+            <span role="cell" title={candidate.name}>
+              {candidate.name}
+            </span>
             <span role="cell">
               <a
                 href={candidateUrl}
@@ -2589,9 +3261,7 @@ function MusicBrainzArtistCandidateTable({
             </span>
             <span role="cell">{candidate.matchMethod}</span>
             <span role="cell">{formatPercent(candidate.score, 0)}</span>
-            <span role="cell">
-              {`${formatNumber(candidate.cachedNameCount)} names / ${formatNumber(candidate.totalReleaseGroupCount)} groups`}
-            </span>
+            <span role="cell">{`${formatNumber(candidate.cachedNameCount)} names / ${formatNumber(candidate.totalReleaseGroupCount)} groups`}</span>
             <span role="cell" className="musicbrainz-candidate-action">
               <button
                 className="icon-button"
@@ -2616,7 +3286,10 @@ function MusicBrainzReleaseTable({
   onSetReleaseDecision,
 }: {
   rows: MusicBrainzArtistReleaseRow[];
-  onSetReleaseDecision: (row: MusicBrainzArtistReleaseRow, decision: "not-in-scope" | "include") => void;
+  onSetReleaseDecision: (
+    row: MusicBrainzArtistReleaseRow,
+    decision: "not-in-scope" | "include",
+  ) => void;
 }) {
   const visibleRows = rows.filter((row) => row.status !== "excluded");
 
@@ -2640,16 +3313,26 @@ function MusicBrainzReleaseTable({
         <span role="columnheader">Scope</span>
       </div>
       {visibleRows.map((row) => (
-        <div className={`result-table-row musicbrainz-release-row ${row.status}`} role="row" key={row.releaseMbid}>
-          <span role="cell" title={row.title}>{row.title}</span>
+        <div
+          className={`result-table-row musicbrainz-release-row ${row.status}`}
+          role="row"
+          key={row.releaseMbid}
+        >
+          <span role="cell" title={row.title}>
+            {row.title}
+          </span>
           <span role="cell">{row.year ?? ""}</span>
           <span role="cell">
             <RunStatus status={row.status} />
           </span>
           <span role="cell" title={row.localAlbumTitle ?? ""}>
-            {row.localAlbumTitle ? `${row.localAlbumTitle}${row.localYear ? ` (${row.localYear})` : ""}` : ""}
+            {row.localAlbumTitle
+              ? `${row.localAlbumTitle}${row.localYear ? ` (${row.localYear})` : ""}`
+              : ""}
           </span>
-          <span role="cell">{row.status === "owned" ? formatPercent(row.confidence, 0) : ""}</span>
+          <span role="cell">
+            {row.status === "owned" ? formatPercent(row.confidence, 0) : ""}
+          </span>
           <span role="cell" className="musicbrainz-scope-action">
             {row.status === "excluded" ? (
               <button
@@ -2703,14 +3386,23 @@ function ArtistAlbumCoverCard({
       <span className="artist-album-cover-overlay">
         <strong>
           <span>{title}</span>
-          {billboardLabel ? <span className="billboard-badge">{billboardLabel}</span> : null}
+          {billboardLabel ? (
+            <span className="billboard-badge">{billboardLabel}</span>
+          ) : null}
         </strong>
         <span>{row.albumArtistDisplay ?? ""}</span>
         <span>{row.canonicalGenre ?? ""}</span>
         <span className="artist-album-card-meta">
-          <RatingStars value={row.effectiveAlbumRating} label="Album rating" showValue={false} />
+          <RatingStars
+            value={row.effectiveAlbumRating}
+            label="Album rating"
+            showValue={false}
+          />
           {row.lovedTracks ? (
-            <span className="artist-album-love-count" aria-label={`${formatNumber(row.lovedTracks)} loved tracks`}>
+            <span
+              className="artist-album-love-count"
+              aria-label={`${formatNumber(row.lovedTracks)} loved tracks`}
+            >
               <Heart size={13} fill="currentColor" aria-hidden="true" />
               {formatNumber(row.lovedTracks)}
             </span>
@@ -2747,7 +3439,11 @@ function ArtistAlbumTrackList({
   }
 
   return (
-    <div className="artist-album-track-list" role="table" aria-label="Selected artist album tracks">
+    <div
+      className="artist-album-track-list"
+      role="table"
+      aria-label="Selected artist album tracks"
+    >
       {response.rows.map((row) => {
         const isLoved = row.love === "L";
         return (
@@ -2759,8 +3455,14 @@ function ArtistAlbumTrackList({
               {row.title ?? "Untitled"}
             </strong>
             <RatingStars value={row.normalizedRating} label="Track rating" />
-            <span className={`artist-track-love${isLoved ? " active" : ""}`} role="cell" aria-label={isLoved ? "Loved" : "Not loved"}>
-              {isLoved ? <Heart size={15} fill="currentColor" aria-hidden="true" /> : null}
+            <span
+              className={`artist-track-love${isLoved ? " active" : ""}`}
+              role="cell"
+              aria-label={isLoved ? "Loved" : "Not loved"}
+            >
+              {isLoved ? (
+                <Heart size={15} fill="currentColor" aria-hidden="true" />
+              ) : null}
             </span>
             <time role="cell">{formatClockTime(row.trackSeconds)}</time>
           </div>
@@ -2783,9 +3485,16 @@ function ArtistAlbumExpandedPanel({
 }) {
   const billboardLabel = formatBillboardRank(album);
   return (
-    <section className="artist-album-expanded" aria-label={`${album.album ?? "Selected album"} tracks`}>
+    <section
+      className="artist-album-expanded"
+      aria-label={`${album.album ?? "Selected album"} tracks`}
+    >
       <div className="artist-album-expanded-cover">
-        <AlbumCover row={album} className="artist-album-expanded-art" decorative={false} />
+        <AlbumCover
+          row={album}
+          className="artist-album-expanded-art"
+          decorative={false}
+        />
       </div>
       <div className="artist-album-expanded-content">
         <div className="artist-album-expanded-header">
@@ -2793,18 +3502,32 @@ function ArtistAlbumExpandedPanel({
             <div className="artist-album-expanded-title">
               <h3>
                 <span>{album.album ?? "Untitled"}</span>
-                {billboardLabel ? <span className="billboard-badge">{billboardLabel}</span> : null}
+                {billboardLabel ? (
+                  <span className="billboard-badge">{billboardLabel}</span>
+                ) : null}
               </h3>
               <Play size={17} aria-hidden="true" />
             </div>
-            <p>{[album.albumArtistDisplay, album.year, album.canonicalGenre].filter(Boolean).join(" / ")}</p>
+            <p>
+              {[album.albumArtistDisplay, album.year, album.canonicalGenre]
+                .filter(Boolean)
+                .join(" / ")}
+            </p>
             <span className="artist-album-expanded-meta">
-              <RatingStars value={album.effectiveAlbumRating} label="Album rating" />
+              <RatingStars
+                value={album.effectiveAlbumRating}
+                label="Album rating"
+              />
               <span>{formatNumber(album.totalTracks)} tracks</span>
               <span>{formatMinutes(album.totalSeconds)}</span>
             </span>
           </div>
-          <button className="artist-album-close" type="button" aria-label="Close album tracks" onClick={onClose}>
+          <button
+            className="artist-album-close"
+            type="button"
+            aria-label="Close album tracks"
+            onClick={onClose}
+          >
             <X size={17} />
           </button>
         </div>
@@ -2850,16 +3573,27 @@ function ArtistAlbumCoverBoard({
     );
   }
 
-  const selectedIndex = response.rows.findIndex((row) => row.albumId === selectedAlbumId);
+  const selectedIndex = response.rows.findIndex(
+    (row) => row.albumId === selectedAlbumId,
+  );
   const insertAfterIndex =
-    selectedIndex >= 0 ? Math.min(response.rows.length - 1, Math.floor(selectedIndex / 3) * 3 + 2) : -1;
+    selectedIndex >= 0
+      ? Math.min(
+          response.rows.length - 1,
+          Math.floor(selectedIndex / 3) * 3 + 2,
+        )
+      : -1;
 
   return (
     <div className="artist-album-board">
       <div className="artist-album-cover-grid">
         {response.rows.map((row, index) => (
           <Fragment key={row.id}>
-            <ArtistAlbumCoverCard row={row} isSelected={row.albumId === selectedAlbumId} onSelect={onSelect} />
+            <ArtistAlbumCoverCard
+              row={row}
+              isSelected={row.albumId === selectedAlbumId}
+              onSelect={onSelect}
+            />
             {selectedAlbum && index === insertAfterIndex ? (
               <ArtistAlbumExpandedPanel
                 album={selectedAlbum}
@@ -2914,20 +3648,28 @@ function ArtistDetailPanel({
         <UsersRound size={20} />
         <div>
           <h2>{artist.name}</h2>
-          <p>{[formatYearSpan(artist.firstYear, artist.lastYear), artist.topGenre].filter(Boolean).join(" / ")}</p>
+          <p>
+            {[
+              formatYearSpan(artist.firstYear, artist.lastYear),
+              artist.topGenre,
+            ]
+              .filter(Boolean)
+              .join(" / ")}
+          </p>
         </div>
       </div>
 
-      <div className="cover-placeholder album-cover-large artist-cover-large" aria-hidden="true">
+      <div
+        className="cover-placeholder album-cover-large artist-cover-large"
+        aria-hidden="true"
+      >
         <span>{artistInitial(artist)}</span>
       </div>
 
       <dl className="run-details artist-detail-stats">
         <div>
           <dt>Albums</dt>
-          <dd>
-            {`${formatNumber(artist.ratedAlbumCount)} / ${formatNumber(artist.albumCount)} fully rated`}
-          </dd>
+          <dd>{`${formatNumber(artist.ratedAlbumCount)} / ${formatNumber(artist.albumCount)} fully rated`}</dd>
         </div>
         <div>
           <dt>Partial albums</dt>
@@ -2968,7 +3710,11 @@ function ArtistDetailPanel({
         <div>
           <dt>Origin Country</dt>
           <dd>
-            <CountryDisplay value={artist} mode={countryFlagDisplay} fallback="Not imported" />
+            <CountryDisplay
+              value={artist}
+              mode={countryFlagDisplay}
+              fallback="Not imported"
+            />
           </dd>
         </div>
       </dl>
@@ -2978,13 +3724,19 @@ function ArtistDetailPanel({
           <input
             type="checkbox"
             checked={includeCalculated}
-            onChange={(event) => onIncludeCalculatedChange(event.target.checked)}
+            onChange={(event) =>
+              onIncludeCalculatedChange(event.target.checked)
+            }
           />
           <span>Calculated columns</span>
         </label>
         <div className="export-grid">
           {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
-            <button type="button" key={format} onClick={() => void onExport(format)}>
+            <button
+              type="button"
+              key={format}
+              onClick={() => void onExport(format)}
+            >
               <Download size={16} />
               <span>{format.toUpperCase()}</span>
             </button>
@@ -2994,7 +3746,8 @@ function ArtistDetailPanel({
           <div className="export-result">
             <Check size={17} />
             <span>
-              {formatNumber(exportResult.rowCount)} albums to {exportResult.path}
+              {formatNumber(exportResult.rowCount)} albums to{" "}
+              {exportResult.path}
             </span>
           </div>
         ) : null}
@@ -3063,7 +3816,10 @@ function GenreIndexTable({
             }}
           >
             <span className="album-index-title" role="cell">
-              <span className="cover-placeholder cover-mini genre-mini" aria-hidden="true">
+              <span
+                className="cover-placeholder cover-mini genre-mini"
+                aria-hidden="true"
+              >
                 <span>{genreInitial(genre)}</span>
               </span>
               <span>
@@ -3072,9 +3828,13 @@ function GenreIndexTable({
               </span>
             </span>
             <span role="cell">{formatNumber(genre.albumCount)}</span>
-            <span role="cell">{formatYearSpan(genre.firstYear, genre.lastYear)}</span>
+            <span role="cell">
+              {formatYearSpan(genre.firstYear, genre.lastYear)}
+            </span>
             <span role="cell">{genre.topArtist ?? ""}</span>
-            <span role="cell">{formatPercent(genre.averageRatingCompleteness)}</span>
+            <span role="cell">
+              {formatPercent(genre.averageRatingCompleteness)}
+            </span>
             <span role="cell">{formatAverage(genre.averageAlbumScore, 2)}</span>
             <span role="cell">{formatNumber(genre.lovedTracks)}</span>
           </div>
@@ -3168,20 +3928,25 @@ function GenreDetailPanel({
         <Tags size={20} />
         <div>
           <h2>{genre.name}</h2>
-          <p>{[formatYearSpan(genre.firstYear, genre.lastYear), genre.topArtist].filter(Boolean).join(" / ")}</p>
+          <p>
+            {[formatYearSpan(genre.firstYear, genre.lastYear), genre.topArtist]
+              .filter(Boolean)
+              .join(" / ")}
+          </p>
         </div>
       </div>
 
-      <div className="cover-placeholder album-cover-large genre-cover-large" aria-hidden="true">
+      <div
+        className="cover-placeholder album-cover-large genre-cover-large"
+        aria-hidden="true"
+      >
         <span>{genreInitial(genre)}</span>
       </div>
 
       <dl className="run-details genre-detail-stats">
         <div>
           <dt>Albums</dt>
-          <dd>
-            {`${formatNumber(genre.ratedAlbumCount)} / ${formatNumber(genre.albumCount)} fully rated`}
-          </dd>
+          <dd>{`${formatNumber(genre.ratedAlbumCount)} / ${formatNumber(genre.albumCount)} fully rated`}</dd>
         </div>
         <div>
           <dt>Partial albums</dt>
@@ -3230,13 +3995,19 @@ function GenreDetailPanel({
           <input
             type="checkbox"
             checked={includeCalculated}
-            onChange={(event) => onIncludeCalculatedChange(event.target.checked)}
+            onChange={(event) =>
+              onIncludeCalculatedChange(event.target.checked)
+            }
           />
           <span>Calculated columns</span>
         </label>
         <div className="export-grid">
           {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
-            <button type="button" key={format} onClick={() => void onExport(format)}>
+            <button
+              type="button"
+              key={format}
+              onClick={() => void onExport(format)}
+            >
               <Download size={16} />
               <span>{format.toUpperCase()}</span>
             </button>
@@ -3246,7 +4017,8 @@ function GenreDetailPanel({
           <div className="export-result">
             <Check size={17} />
             <span>
-              {formatNumber(exportResult.rowCount)} albums to {exportResult.path}
+              {formatNumber(exportResult.rowCount)} albums to{" "}
+              {exportResult.path}
             </span>
           </div>
         ) : null}
@@ -3256,7 +4028,11 @@ function GenreDetailPanel({
 }
 
 function SeverityBadge({ severity }: { severity: string }) {
-  return <span className={`tool-severity tool-severity-${severity}`}>{severityLabel(severity)}</span>;
+  return (
+    <span className={`tool-severity tool-severity-${severity}`}>
+      {severityLabel(severity)}
+    </span>
+  );
 }
 
 function musicToolScopeLabel(scope: MusicToolScope) {
@@ -3316,7 +4092,10 @@ function MusicToolIndexTable({
       </div>
       {tools.map((tool) => {
         const isSelected = tool.id === selectedToolId;
-        const selectedProgress = isSelected && isMusicToolProgressActive(progress) ? formatToolProgress(progress) : null;
+        const selectedProgress =
+          isSelected && isMusicToolProgressActive(progress)
+            ? formatToolProgress(progress)
+            : null;
         return (
           <div
             className={`result-table-row selectable${isSelected ? " selected" : ""}`}
@@ -3340,10 +4119,15 @@ function MusicToolIndexTable({
             <span role="cell">
               <SeverityBadge severity={tool.severity} />
             </span>
-            <span className={selectedProgress ? "tool-count-progress" : undefined} role="cell">
+            <span
+              className={selectedProgress ? "tool-count-progress" : undefined}
+              role="cell"
+            >
               {selectedProgress ?? formatToolCount(tool.issueCount)}
             </span>
-            <span role="cell">{formatToolCount(musicToolAffectedCount(tool))}</span>
+            <span role="cell">
+              {formatToolCount(musicToolAffectedCount(tool))}
+            </span>
           </div>
         );
       })}
@@ -3364,7 +4148,8 @@ function MusicToolIssueTable({
         <div className="empty-state large">
           <Wrench size={20} />
           <span>
-            {progress?.message ?? "Counting selected tool."} {formatToolProgress(progress)}
+            {progress?.message ?? "Counting selected tool."}{" "}
+            {formatToolProgress(progress)}
           </span>
         </div>
       );
@@ -3381,12 +4166,17 @@ function MusicToolIssueTable({
   if (response.rows.length === 0) {
     let emptyMessage = "No matching issues.";
     if (response.tool.id === "missing-billboard-albums") {
-      emptyMessage = "No missing Billboard albums. If you expected rows, import the Billboard CSV folder once.";
+      emptyMessage =
+        "No missing Billboard albums. If you expected rows, import the Billboard CSV folder once.";
     } else if (response.tool.id === "missing-billboard-singles") {
-      emptyMessage = "No missing Billboard singles. If you expected rows, import the Billboard singles CSV folder once.";
+      emptyMessage =
+        "No missing Billboard singles. If you expected rows, import the Billboard singles CSV folder once.";
     } else if (response.tool.id === "artists-without-musicbrainz-data") {
-      emptyMessage = "Every library artist has a usable MusicBrainz cache or verified overlay match.";
-    } else if (response.tool.id === "high-confidence-missing-musicbrainz-albums") {
+      emptyMessage =
+        "Every library artist has a usable MusicBrainz cache or verified overlay match.";
+    } else if (
+      response.tool.id === "high-confidence-missing-musicbrainz-albums"
+    ) {
       emptyMessage = "No high-confidence missing MusicBrainz albums found.";
     }
 
@@ -3399,7 +4189,8 @@ function MusicToolIssueTable({
   }
 
   const primaryHeader = response.tool.scope === "artists" ? "Artist" : "Album";
-  const secondaryHeader = response.tool.scope === "artists" ? "Sample album" : "Track";
+  const secondaryHeader =
+    response.tool.scope === "artists" ? "Sample album" : "Track";
 
   return (
     <div className="result-table tool-issue-results" role="table">
@@ -3420,7 +4211,11 @@ function MusicToolIssueTable({
           </span>
           <span role="cell">
             <strong>{issue.album ?? "Untitled"}</strong>
-            <small>{[issue.albumArtistDisplay, issue.year].filter(Boolean).join(" / ")}</small>
+            <small>
+              {[issue.albumArtistDisplay, issue.year]
+                .filter(Boolean)
+                .join(" / ")}
+            </small>
           </span>
           <span role="cell">
             <strong>
@@ -3511,7 +4306,10 @@ function MusicToolFixControls({
   const matchingSummary = fixSummary?.toolId === tool?.id ? fixSummary : null;
 
   return (
-    <div className="tool-fix-controls" aria-label="Fix visible validation issues">
+    <div
+      className="tool-fix-controls"
+      aria-label="Fix visible validation issues"
+    >
       <div className="export-strip">
         <button
           type="button"
@@ -3537,11 +4335,15 @@ function MusicToolFixControls({
           <Check size={17} />
           <span>
             {matchingSummary.message}
-            {matchingSummary.backupPath ? ` Backup: ${matchingSummary.backupPath}` : ""}
+            {matchingSummary.backupPath
+              ? ` Backup: ${matchingSummary.backupPath}`
+              : ""}
           </span>
         </div>
       ) : null}
-      {fixError ? <p className="error-message tool-fix-error">{fixError}</p> : null}
+      {fixError ? (
+        <p className="error-message tool-fix-error">{fixError}</p>
+      ) : null}
     </div>
   );
 }
@@ -3559,7 +4361,10 @@ function MusicToolDetailPanel({
 }) {
   if (!tool) {
     return (
-      <aside className="detail-panel tools-detail" aria-label="Music tools details">
+      <aside
+        className="detail-panel tools-detail"
+        aria-label="Music tools details"
+      >
         <div className="detail-header">
           <Wrench size={20} />
           <div>
@@ -3581,7 +4386,10 @@ function MusicToolDetailPanel({
   const affectedCount = musicToolAffectedCount(tool);
 
   return (
-    <aside className="detail-panel tools-detail" aria-label="Music tools details">
+    <aside
+      className="detail-panel tools-detail"
+      aria-label="Music tools details"
+    >
       <div className="detail-header">
         <Wrench size={20} />
         <div>
@@ -3595,7 +4403,11 @@ function MusicToolDetailPanel({
       <dl className="run-details tool-detail-stats">
         <div>
           <dt>Issue rows</dt>
-          <dd>{isProgressActive && progressText ? progressText : formatToolCount(tool.issueCount)}</dd>
+          <dd>
+            {isProgressActive && progressText
+              ? progressText
+              : formatToolCount(tool.issueCount)}
+          </dd>
         </div>
         <div>
           <dt>{affectedLabel}</dt>
@@ -3608,13 +4420,21 @@ function MusicToolDetailPanel({
       </dl>
 
       {progress ? (
-        <section className="progress-block tool-progress-block" aria-live="polite">
+        <section
+          className="progress-block tool-progress-block"
+          aria-live="polite"
+        >
           <div className="progress-row">
             <span>{progress.message}</span>
             <strong>{progressText}</strong>
           </div>
           <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${Math.min(100, Math.max(0, progress.percent))}%` }} />
+            <div
+              className="progress-fill"
+              style={{
+                width: `${Math.min(100, Math.max(0, progress.percent))}%`,
+              }}
+            />
           </div>
           <div className="progress-meta">
             <span>{progress.status}</span>
@@ -3631,7 +4451,9 @@ function MusicToolDetailPanel({
         <div>
           <ShieldCheck size={17} />
           <span>
-            {tool.id === "whitespace-anomalies" ? "Whitespace rows can be compacted" : "Issue rows are read-only"}
+            {tool.id === "whitespace-anomalies"
+              ? "Whitespace rows can be compacted"
+              : "Issue rows are read-only"}
           </span>
         </div>
       </section>
@@ -3639,7 +4461,11 @@ function MusicToolDetailPanel({
       <section className="export-box">
         <div className="export-grid">
           {EXPORT_FORMATS.map((format) => (
-            <button type="button" key={format} onClick={() => void onExport(format)}>
+            <button
+              type="button"
+              key={format}
+              onClick={() => void onExport(format)}
+            >
               <Download size={16} />
               <span>{format.toUpperCase()}</span>
             </button>
@@ -3649,7 +4475,8 @@ function MusicToolDetailPanel({
           <div className="export-result">
             <Check size={17} />
             <span>
-              {formatNumber(exportResult.rowCount)} issues to {exportResult.path}
+              {formatNumber(exportResult.rowCount)} issues to{" "}
+              {exportResult.path}
             </span>
           </div>
         ) : null}
@@ -3699,11 +4526,19 @@ function ChartResults({
             <div>
               <h3>
                 <span>{row.album ?? "Untitled"}</span>
-                {formatBillboardRank(row) ? <span className="billboard-badge">{formatBillboardRank(row)}</span> : null}
+                {formatBillboardRank(row) ? (
+                  <span className="billboard-badge">
+                    {formatBillboardRank(row)}
+                  </span>
+                ) : null}
               </h3>
               <p className="chart-list-meta">
-                {row.albumArtistDisplay ? <span>{row.albumArtistDisplay}</span> : null}
-                {formatOriginCountry(row) ? <CountryDisplay value={row} mode={countryFlagDisplay} /> : null}
+                {row.albumArtistDisplay ? (
+                  <span>{row.albumArtistDisplay}</span>
+                ) : null}
+                {formatOriginCountry(row) ? (
+                  <CountryDisplay value={row} mode={countryFlagDisplay} />
+                ) : null}
                 {row.year ? <span>{row.year}</span> : null}
                 {row.canonicalGenre ? <span>{row.canonicalGenre}</span> : null}
               </p>
@@ -3738,11 +4573,20 @@ function ChartResults({
                 <h3 className="chart-grid-title" title={albumTitle}>
                   {albumTitle}
                 </h3>
-                <p className="chart-grid-artist" title={row.albumArtistDisplay ?? ""}>
+                <p
+                  className="chart-grid-artist"
+                  title={row.albumArtistDisplay ?? ""}
+                >
                   {row.albumArtistDisplay ?? ""}
                 </p>
-                {billboardLabel ? <span className="billboard-badge chart-grid-billboard">{billboardLabel}</span> : null}
-                <span className="chart-grid-score">{formatChartMetric(row, config.rankingMetric)}</span>
+                {billboardLabel ? (
+                  <span className="billboard-badge chart-grid-billboard">
+                    {billboardLabel}
+                  </span>
+                ) : null}
+                <span className="chart-grid-score">
+                  {formatChartMetric(row, config.rankingMetric)}
+                </span>
               </div>
             </article>
           );
@@ -3759,22 +4603,45 @@ function ChartResults({
     className?: string;
     value: (row: BrowseRow, index: number) => ReactNode;
   }[] = [
-    { key: "rank", label: "#", value: (_row: BrowseRow, rank: number) => `${rank}` },
+    {
+      key: "rank",
+      label: "#",
+      value: (_row: BrowseRow, rank: number) => `${rank}`,
+    },
     {
       key: "album",
       label: "Album",
       sortField: "album",
       className: "album-title-cell",
-      value: (row: BrowseRow) => <AlbumTitleContents row={row} showBillboardBadge={false} />,
+      value: (row: BrowseRow) => (
+        <AlbumTitleContents row={row} showBillboardBadge={false} />
+      ),
     },
-    { key: "artist", label: "Artist", sortField: "artist", value: (row: BrowseRow) => row.albumArtistDisplay ?? "" },
-    { key: "year", label: "Year", sortField: "year", value: (row: BrowseRow) => row.year?.toString() ?? "" },
-    { key: "genre", label: "Genre", sortField: "genre", value: (row: BrowseRow) => row.canonicalGenre ?? "" },
+    {
+      key: "artist",
+      label: "Artist",
+      sortField: "artist",
+      value: (row: BrowseRow) => row.albumArtistDisplay ?? "",
+    },
+    {
+      key: "year",
+      label: "Year",
+      sortField: "year",
+      value: (row: BrowseRow) => row.year?.toString() ?? "",
+    },
+    {
+      key: "genre",
+      label: "Genre",
+      sortField: "genre",
+      value: (row: BrowseRow) => row.canonicalGenre ?? "",
+    },
     {
       key: "originCountry",
       label: "Origin",
       sortField: "originCountry",
-      value: (row: BrowseRow) => <CountryDisplay value={row} mode={countryFlagDisplay} />,
+      value: (row: BrowseRow) => (
+        <CountryDisplay value={row} mode={countryFlagDisplay} />
+      ),
     },
     {
       key: "billboard",
@@ -3806,23 +4673,44 @@ function ChartResults({
       sortField: "lovedTracks",
       value: (row: BrowseRow) => row.lovedTracks?.toString() ?? "0",
     },
-    { key: "ae", label: "AE", sortField: "ae", value: (row: BrowseRow) => formatPercent(row.aeRatio, 2) },
-    { key: "tmoe", label: "TMOE", sortField: "tmoe", value: (row: BrowseRow) => formatMinutes(row.tmoeSeconds) },
+    {
+      key: "ae",
+      label: "AE",
+      sortField: "ae",
+      value: (row: BrowseRow) => formatPercent(row.aeRatio, 2),
+    },
+    {
+      key: "tmoe",
+      label: "TMOE",
+      sortField: "tmoe",
+      value: (row: BrowseRow) => formatMinutes(row.tmoeSeconds),
+    },
     {
       key: "minutes",
       label: "Minutes",
       sortField: "totalMinutes",
       value: (row: BrowseRow) => formatMinutes(row.totalSeconds),
     },
-  ].filter((column) => ["rank", "album", "artist", "year", "genre"].includes(column.key) || visibleColumns.has(column.key));
+  ].filter(
+    (column) =>
+      ["rank", "album", "artist", "year", "genre"].includes(column.key) ||
+      visibleColumns.has(column.key),
+  );
   const activeSort: BrowseSort = displaySort ?? {
     field: config.rankingMetric,
     direction: config.sortDirection,
   };
-  const displayRows = response.rows.map((row, index) => ({ row, rank: index + 1 }));
+  const displayRows = response.rows.map((row, index) => ({
+    row,
+    rank: index + 1,
+  }));
   if (displaySort) {
     displayRows.sort((left, right) => {
-      const comparison = compareBrowseRows(left.row, right.row, displaySort.field);
+      const comparison = compareBrowseRows(
+        left.row,
+        right.row,
+        displaySort.field,
+      );
       return displaySort.direction === "desc" ? -comparison : comparison;
     });
   }
@@ -3830,7 +4718,7 @@ function ChartResults({
   return (
     <div className="result-table chart-results" role="table">
       <div className="result-table-head" role="row">
-        {columns.map((column) => (
+        {columns.map((column) =>
           column.sortField ? (
             <SortableColumnHeader
               label={column.label}
@@ -3843,8 +4731,8 @@ function ChartResults({
             <span role="columnheader" key={column.key}>
               {column.label}
             </span>
-          )
-        ))}
+          ),
+        )}
       </div>
       {displayRows.map(({ row, rank }) => (
         <div className="result-table-row" role="row" key={row.id}>
@@ -3877,7 +4765,10 @@ function Meter({
         <strong>{formatNumber(value)}</strong>
       </div>
       <div className="meter-track" aria-hidden="true">
-        <div className="meter-fill" style={{ width: `${percentOf(value, total)}%` }} />
+        <div
+          className="meter-fill"
+          style={{ width: `${percentOf(value, total)}%` }}
+        />
       </div>
       <small>{detail}</small>
     </div>
@@ -3892,7 +4783,10 @@ function DistributionBars({ buckets }: { buckets: RatingBucket[] }) {
         <div className="distribution-row" key={bucket.label}>
           <span>{bucket.label}</span>
           <div className="meter-track" aria-hidden="true">
-            <div className="meter-fill" style={{ width: `${percentOf(bucket.count, maxCount)}` + "%" }} />
+            <div
+              className="meter-fill"
+              style={{ width: `${percentOf(bucket.count, maxCount)}` + "%" }}
+            />
           </div>
           <strong>{formatNumber(bucket.count)}</strong>
         </div>
@@ -3901,7 +4795,11 @@ function DistributionBars({ buckets }: { buckets: RatingBucket[] }) {
   );
 }
 
-function LibraryHealthScorePanel({ statistics }: { statistics: StatisticsResponse | null }) {
+function LibraryHealthScorePanel({
+  statistics,
+}: {
+  statistics: StatisticsResponse | null;
+}) {
   if (!statistics) {
     return (
       <div className="empty-state">
@@ -3926,7 +4824,11 @@ function LibraryHealthScorePanel({ statistics }: { statistics: StatisticsRespons
 
   return (
     <div className="health-score-panel">
-      <div className="health-score-ring" style={ringStyle} aria-label={`Library health score ${score} of 100`}>
+      <div
+        className="health-score-ring"
+        style={ringStyle}
+        aria-label={`Library health score ${score} of 100`}
+      >
         <strong>{score}</strong>
         <span>/100</span>
       </div>
@@ -3938,7 +4840,10 @@ function LibraryHealthScorePanel({ statistics }: { statistics: StatisticsRespons
               <strong>{formatPercent(component.value, 0)}</strong>
             </div>
             <div className="meter-track" aria-hidden="true">
-              <div className="meter-fill" style={{ width: `${component.value * 100}%` }} />
+              <div
+                className="meter-fill"
+                style={{ width: `${component.value * 100}%` }}
+              />
             </div>
           </div>
         ))}
@@ -3958,7 +4863,11 @@ function nextMilestone(ratedTracks: number, totalTracks: number) {
   };
 }
 
-function RatingCompletionBurndown({ statistics }: { statistics: StatisticsResponse | null }) {
+function RatingCompletionBurndown({
+  statistics,
+}: {
+  statistics: StatisticsResponse | null;
+}) {
   const points = (statistics?.ratingHistory ?? []).slice(-10);
   if (!statistics || points.length === 0) {
     return (
@@ -3972,7 +4881,8 @@ function RatingCompletionBurndown({ statistics }: { statistics: StatisticsRespon
   const maxUnrated = Math.max(1, ...points.map((point) => point.unratedTracks));
   const path = points
     .map((point, index) => {
-      const x = 42 + (points.length === 1 ? 0.5 : index / (points.length - 1)) * 320;
+      const x =
+        42 + (points.length === 1 ? 0.5 : index / (points.length - 1)) * 320;
       const y = 194 - (point.unratedTracks / maxUnrated) * 152;
       return `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
     })
@@ -3983,7 +4893,12 @@ function RatingCompletionBurndown({ statistics }: { statistics: StatisticsRespon
 
   return (
     <div className="burndown-panel">
-      <svg className="burndown-chart" viewBox="0 0 400 230" role="img" aria-label="Unrated tracks over rating history">
+      <svg
+        className="burndown-chart"
+        viewBox="0 0 400 230"
+        role="img"
+        aria-label="Unrated tracks over rating history"
+      >
         <line x1="42" y1="194" x2="372" y2="194" />
         <line x1="42" y1="34" x2="42" y2="194" />
         <text x="42" y="218">
@@ -3997,12 +4912,15 @@ function RatingCompletionBurndown({ statistics }: { statistics: StatisticsRespon
         </text>
         <path d={path} />
         {points.map((point, index) => {
-          const x = 42 + (points.length === 1 ? 0.5 : index / (points.length - 1)) * 320;
+          const x =
+            42 +
+            (points.length === 1 ? 0.5 : index / (points.length - 1)) * 320;
           const y = 194 - (point.unratedTracks / maxUnrated) * 152;
           return (
             <circle key={point.importRunId} cx={x} cy={y} r={5}>
               <title>
-                {formatDate(point.createdAt)}: {formatNumber(point.unratedTracks)} unrated tracks
+                {formatDate(point.createdAt)}:{" "}
+                {formatNumber(point.unratedTracks)} unrated tracks
               </title>
             </circle>
           );
@@ -4011,7 +4929,9 @@ function RatingCompletionBurndown({ statistics }: { statistics: StatisticsRespon
       <div className="burndown-summary">
         <div>
           <span>Rated now</span>
-          <strong>{formatPercent(ratioOf(latest.ratedTracks, totalTracks))}</strong>
+          <strong>
+            {formatPercent(ratioOf(latest.ratedTracks, totalTracks))}
+          </strong>
         </div>
         <div>
           <span>Remaining</span>
@@ -4019,7 +4939,11 @@ function RatingCompletionBurndown({ statistics }: { statistics: StatisticsRespon
         </div>
         <div>
           <span>Next milestone</span>
-          <strong>{milestone ? `${formatNumber(milestone.remaining)} to ${milestone.label}` : "Complete"}</strong>
+          <strong>
+            {milestone
+              ? `${formatNumber(milestone.remaining)} to ${milestone.label}`
+              : "Complete"}
+          </strong>
         </div>
       </div>
     </div>
@@ -4042,15 +4966,37 @@ function DecadeProgressTimeline({ rows }: { rows: DecadeProgressStats[] }) {
         <div className="decade-row" key={row.decade}>
           <div>
             <strong>{row.decade}s</strong>
-            <span>{formatNumber(row.albumCount)} albums / {formatHours(row.totalSeconds)}</span>
+            <span>
+              {formatNumber(row.albumCount)} albums /{" "}
+              {formatHours(row.totalSeconds)}
+            </span>
           </div>
-          <div className="stacked-track" aria-label={`${row.decade}s rating progress`}>
-            <span className="segment rated" style={{ width: `${percentOf(row.ratedAlbumCount, row.albumCount)}%` }} />
-            <span className="segment partial" style={{ width: `${percentOf(row.partialAlbumCount, row.albumCount)}%` }} />
-            <span className="segment unrated" style={{ width: `${percentOf(row.unratedAlbumCount, row.albumCount)}%` }} />
+          <div
+            className="stacked-track"
+            aria-label={`${row.decade}s rating progress`}
+          >
+            <span
+              className="segment rated"
+              style={{
+                width: `${percentOf(row.ratedAlbumCount, row.albumCount)}%`,
+              }}
+            />
+            <span
+              className="segment partial"
+              style={{
+                width: `${percentOf(row.partialAlbumCount, row.albumCount)}%`,
+              }}
+            />
+            <span
+              className="segment unrated"
+              style={{
+                width: `${percentOf(row.unratedAlbumCount, row.albumCount)}%`,
+              }}
+            />
           </div>
           <small>
-            {formatNumber(row.ratedAlbumCount)} rated / {formatNumber(row.partialAlbumCount)} partial /{" "}
+            {formatNumber(row.ratedAlbumCount)} rated /{" "}
+            {formatNumber(row.partialAlbumCount)} partial /{" "}
             {formatNumber(row.unratedAlbumCount)} open
           </small>
         </div>
@@ -4061,7 +5007,13 @@ function DecadeProgressTimeline({ rows }: { rows: DecadeProgressStats[] }) {
 
 function genreCompletionRatio(row: GenreProgressStats) {
   if (row.albumCount <= 0) return 0;
-  return Math.max(0, Math.min(1, (row.ratedAlbumCount + row.partialAlbumCount * 0.5) / row.albumCount));
+  return Math.max(
+    0,
+    Math.min(
+      1,
+      (row.ratedAlbumCount + row.partialAlbumCount * 0.5) / row.albumCount,
+    ),
+  );
 }
 
 function GenrePortfolioMatrix({ rows }: { rows: GenreProgressStats[] }) {
@@ -4079,7 +5031,12 @@ function GenrePortfolioMatrix({ rows }: { rows: GenreProgressStats[] }) {
   const albumExtent = numericExtent(points, (row) => row.albumCount);
 
   return (
-    <svg className="genre-portfolio-chart" viewBox="0 0 430 250" role="img" aria-label="Genre size, score, and completion matrix">
+    <svg
+      className="genre-portfolio-chart"
+      viewBox="0 0 430 250"
+      role="img"
+      aria-label="Genre size, score, and completion matrix"
+    >
       <line x1="44" y1="204" x2="398" y2="204" />
       <line x1="44" y1="34" x2="44" y2="204" />
       <text x="302" y="232">
@@ -4092,15 +5049,28 @@ function GenrePortfolioMatrix({ rows }: { rows: GenreProgressStats[] }) {
       <line className="matrix-guide" x1="221" y1="34" x2="221" y2="204" />
       {points.map((row, index) => {
         const completion = genreCompletionRatio(row);
-        const x = 44 + normalizedValue(row.averageAlbumScore, scoreExtent.min, scoreExtent.max) * 354;
+        const x =
+          44 +
+          normalizedValue(
+            row.averageAlbumScore,
+            scoreExtent.min,
+            scoreExtent.max,
+          ) *
+            354;
         const y = 204 - completion * 170;
-        const radius = 7 + Math.sqrt(normalizedValue(row.albumCount, albumExtent.min, albumExtent.max)) * 17;
+        const radius =
+          7 +
+          Math.sqrt(
+            normalizedValue(row.albumCount, albumExtent.min, albumExtent.max),
+          ) *
+            17;
         const fill = `hsl(${185 - completion * 40} 62% ${72 - completion * 18}%)`;
         return (
           <g className="genre-portfolio-point" key={row.genre}>
             <circle cx={x} cy={y} r={radius} style={{ fill }}>
               <title>
-                {row.genre}: {formatNumber(row.albumCount)} albums / {formatPercent(completion)} complete /{" "}
+                {row.genre}: {formatNumber(row.albumCount)} albums /{" "}
+                {formatPercent(completion)} complete /{" "}
                 {formatAverage(row.averageAlbumScore, 1)} score
               </title>
             </circle>
@@ -4129,27 +5099,44 @@ function ImportDeltaTimeline({ runs }: { runs: ImportRun[] }) {
 
   const maxDelta = Math.max(
     1,
-    ...rows.map((run) => run.addedTracks + run.changedTracks + run.removedTracks),
+    ...rows.map(
+      (run) => run.addedTracks + run.changedTracks + run.removedTracks,
+    ),
   );
 
   return (
     <div className="import-delta-timeline">
       {rows.map((run) => {
-        const totalDelta = run.addedTracks + run.changedTracks + run.removedTracks;
+        const totalDelta =
+          run.addedTracks + run.changedTracks + run.removedTracks;
         return (
           <div className="import-delta-row" key={run.id}>
             <div>
               <strong>{formatDate(run.completedAt)}</strong>
               <span>{formatNumber(run.ratingEventsCount)} rating events</span>
             </div>
-            <div className="delta-track" aria-label={`Import ${run.id} track deltas`}>
-              <span className="delta added" style={{ width: `${percentOf(run.addedTracks, maxDelta)}%` }} />
-              <span className="delta changed" style={{ width: `${percentOf(run.changedTracks, maxDelta)}%` }} />
-              <span className="delta removed" style={{ width: `${percentOf(run.removedTracks, maxDelta)}%` }} />
+            <div
+              className="delta-track"
+              aria-label={`Import ${run.id} track deltas`}
+            >
+              <span
+                className="delta added"
+                style={{ width: `${percentOf(run.addedTracks, maxDelta)}%` }}
+              />
+              <span
+                className="delta changed"
+                style={{ width: `${percentOf(run.changedTracks, maxDelta)}%` }}
+              />
+              <span
+                className="delta removed"
+                style={{ width: `${percentOf(run.removedTracks, maxDelta)}%` }}
+              />
             </div>
             <small>
-              {formatSignedNumber(run.addedTracks)} added / {formatNumber(run.changedTracks)} changed /{" "}
-              {formatNumber(run.removedTracks)} removed / {formatNumber(totalDelta)} touched
+              {formatSignedNumber(run.addedTracks)} added /{" "}
+              {formatNumber(run.changedTracks)} changed /{" "}
+              {formatNumber(run.removedTracks)} removed /{" "}
+              {formatNumber(totalDelta)} touched
             </small>
           </div>
         );
@@ -4158,7 +5145,11 @@ function ImportDeltaTimeline({ runs }: { runs: ImportRun[] }) {
   );
 }
 
-function MetadataCoveragePanel({ metrics }: { metrics: MetadataCoverageMetric[] }) {
+function MetadataCoveragePanel({
+  metrics,
+}: {
+  metrics: MetadataCoverageMetric[];
+}) {
   if (metrics.length === 0) {
     return (
       <div className="empty-state">
@@ -4179,10 +5170,14 @@ function MetadataCoveragePanel({ metrics }: { metrics: MetadataCoverageMetric[] 
               <span>{metric.scope}</span>
             </div>
             <div className="meter-track" aria-hidden="true">
-              <div className="meter-fill" style={{ width: `${coverage * 100}%` }} />
+              <div
+                className="meter-fill"
+                style={{ width: `${coverage * 100}%` }}
+              />
             </div>
             <small>
-              {formatPercent(coverage, 0)} / {formatNumber(metric.coveredCount)} of {formatNumber(metric.totalCount)}
+              {formatPercent(coverage, 0)} / {formatNumber(metric.coveredCount)}{" "}
+              of {formatNumber(metric.totalCount)}
             </small>
           </div>
         );
@@ -4191,7 +5186,11 @@ function MetadataCoveragePanel({ metrics }: { metrics: MetadataCoverageMetric[] 
   );
 }
 
-function LibraryShapeByTime({ statistics }: { statistics: StatisticsResponse | null }) {
+function LibraryShapeByTime({
+  statistics,
+}: {
+  statistics: StatisticsResponse | null;
+}) {
   const rows = statistics?.decadeProgress ?? [];
   if (!statistics || rows.length === 0) {
     return (
@@ -4225,7 +5224,9 @@ function LibraryShapeByTime({ statistics }: { statistics: StatisticsResponse | n
         <div>
           <span>Peak release year</span>
           <strong>
-            {shape.peakYear == null ? "Unknown" : `${shape.peakYear} / ${formatNumber(shape.peakYearAlbums)}`}
+            {shape.peakYear == null
+              ? "Unknown"
+              : `${shape.peakYear} / ${formatNumber(shape.peakYearAlbums)}`}
           </strong>
         </div>
       </div>
@@ -4236,19 +5237,30 @@ function LibraryShapeByTime({ statistics }: { statistics: StatisticsResponse | n
             <div>
               <span>Albums</span>
               <div className="meter-track" aria-hidden="true">
-                <div className="meter-fill" style={{ width: `${percentOf(row.albumCount, maxAlbums)}%` }} />
+                <div
+                  className="meter-fill"
+                  style={{ width: `${percentOf(row.albumCount, maxAlbums)}%` }}
+                />
               </div>
             </div>
             <div>
               <span>Tracks</span>
               <div className="meter-track" aria-hidden="true">
-                <div className="meter-fill secondary" style={{ width: `${percentOf(row.trackCount, maxTracks)}%` }} />
+                <div
+                  className="meter-fill secondary"
+                  style={{ width: `${percentOf(row.trackCount, maxTracks)}%` }}
+                />
               </div>
             </div>
             <div>
               <span>Hours</span>
               <div className="meter-track" aria-hidden="true">
-                <div className="meter-fill warm" style={{ width: `${percentOf(row.totalSeconds, maxSeconds)}%` }} />
+                <div
+                  className="meter-fill warm"
+                  style={{
+                    width: `${percentOf(row.totalSeconds, maxSeconds)}%`,
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -4278,10 +5290,16 @@ function LovedDensityPanel({ rows }: { rows: LovedDensityStat[] }) {
             <span>{row.scope}</span>
           </div>
           <div className="meter-track" aria-hidden="true">
-            <div className="meter-fill" style={{ width: `${percentOf(row.lovedPer100Tracks, maxDensity)}%` }} />
+            <div
+              className="meter-fill"
+              style={{
+                width: `${percentOf(row.lovedPer100Tracks, maxDensity)}%`,
+              }}
+            />
           </div>
           <small>
-            {row.lovedPer100Tracks.toFixed(2)} / 100 / {formatNumber(row.lovedTracks)} loved
+            {row.lovedPer100Tracks.toFixed(2)} / 100 /{" "}
+            {formatNumber(row.lovedTracks)} loved
           </small>
         </div>
       ))}
@@ -4293,7 +5311,13 @@ function concentrationLabel(scope: string, point: ConcentrationPoint) {
   return `Top ${point.topN} ${scope}`;
 }
 
-function ConcentrationBars({ scope, points }: { scope: string; points: ConcentrationPoint[] }) {
+function ConcentrationBars({
+  scope,
+  points,
+}: {
+  scope: string;
+  points: ConcentrationPoint[];
+}) {
   return (
     <div className="concentration-bars">
       {points.map((point) => (
@@ -4303,7 +5327,10 @@ function ConcentrationBars({ scope, points }: { scope: string; points: Concentra
             <span>{formatNumber(point.albumCount)} albums</span>
           </div>
           <div className="meter-track" aria-hidden="true">
-            <div className="meter-fill" style={{ width: `${point.share * 100}%` }} />
+            <div
+              className="meter-fill"
+              style={{ width: `${point.share * 100}%` }}
+            />
           </div>
           <small>{formatPercent(point.share, 1)}</small>
         </div>
@@ -4312,7 +5339,11 @@ function ConcentrationBars({ scope, points }: { scope: string; points: Concentra
   );
 }
 
-function CatalogConcentrationPanel({ statistics }: { statistics: StatisticsResponse | null }) {
+function CatalogConcentrationPanel({
+  statistics,
+}: {
+  statistics: StatisticsResponse | null;
+}) {
   if (!statistics) {
     return (
       <div className="empty-state">
@@ -4329,7 +5360,9 @@ function CatalogConcentrationPanel({ statistics }: { statistics: StatisticsRespo
         <div>
           <span>Top artist</span>
           <strong>{concentration.topArtist ?? "Unknown"}</strong>
-          <small>{formatNumber(concentration.topArtistAlbumCount)} albums</small>
+          <small>
+            {formatNumber(concentration.topArtistAlbumCount)} albums
+          </small>
         </div>
         <div>
           <span>Top genre</span>
@@ -4344,10 +5377,18 @@ function CatalogConcentrationPanel({ statistics }: { statistics: StatisticsRespo
 }
 
 function durationAlbumLabel(album: DurationAlbumStat) {
-  return [album.albumArtistDisplay, album.album, album.year].filter(Boolean).join(" / ");
+  return [album.albumArtistDisplay, album.album, album.year]
+    .filter(Boolean)
+    .join(" / ");
 }
 
-function DurationAlbumList({ title, albums }: { title: string; albums: DurationAlbumStat[] }) {
+function DurationAlbumList({
+  title,
+  albums,
+}: {
+  title: string;
+  albums: DurationAlbumStat[];
+}) {
   return (
     <div className="duration-album-list">
       <span>{title}</span>
@@ -4355,7 +5396,8 @@ function DurationAlbumList({ title, albums }: { title: string; albums: DurationA
         <div className="duration-album-row" key={album.albumId}>
           <strong>{durationAlbumLabel(album) || "Untitled"}</strong>
           <small>
-            {formatHours(album.totalSeconds)} / {formatNumber(album.totalTracks)} tracks /{" "}
+            {formatHours(album.totalSeconds)} /{" "}
+            {formatNumber(album.totalTracks)} tracks /{" "}
             {formatPercent(album.ratingCompleteness, 0)} complete
           </small>
         </div>
@@ -4364,7 +5406,11 @@ function DurationAlbumList({ title, albums }: { title: string; albums: DurationA
   );
 }
 
-function DurationAnalyticsPanel({ statistics }: { statistics: StatisticsResponse | null }) {
+function DurationAnalyticsPanel({
+  statistics,
+}: {
+  statistics: StatisticsResponse | null;
+}) {
   if (!statistics) {
     return (
       <div className="empty-state">
@@ -4388,8 +5434,14 @@ function DurationAnalyticsPanel({ statistics }: { statistics: StatisticsResponse
         </div>
       </div>
       <DistributionBars buckets={analytics.trackCountBuckets} />
-      <DurationAlbumList title="Longest albums" albums={analytics.longestAlbums} />
-      <DurationAlbumList title="Shortest albums" albums={analytics.shortestAlbums} />
+      <DurationAlbumList
+        title="Longest albums"
+        albums={analytics.longestAlbums}
+      />
+      <DurationAlbumList
+        title="Shortest albums"
+        albums={analytics.shortestAlbums}
+      />
     </div>
   );
 }
@@ -4422,12 +5474,19 @@ function clampRatio(value: number | null | undefined) {
   return Math.min(1, Math.max(0, value));
 }
 
-function normalizedValue(value: number | null | undefined, min: number, max: number) {
+function normalizedValue(
+  value: number | null | undefined,
+  min: number,
+  max: number,
+) {
   if (value == null || !Number.isFinite(value) || max <= min) return 0.5;
   return Math.min(1, Math.max(0, (value - min) / (max - min)));
 }
 
-function numericExtent<T>(rows: T[], value: (row: T) => number | null | undefined) {
+function numericExtent<T>(
+  rows: T[],
+  value: (row: T) => number | null | undefined,
+) {
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
   rows.forEach((row) => {
@@ -4436,7 +5495,9 @@ function numericExtent<T>(rows: T[], value: (row: T) => number | null | undefine
     min = Math.min(min, nextValue);
     max = Math.max(max, nextValue);
   });
-  return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : { min: 0, max: 1 };
+  return Number.isFinite(min) && Number.isFinite(max)
+    ? { min, max }
+    : { min: 0, max: 1 };
 }
 
 function heatmapColor(value: number | null | undefined) {
@@ -4473,7 +5534,12 @@ function DiscoveryMissionGrid({
   return (
     <div className="discovery-mission-grid">
       {missions.map((mission) => (
-        <button className="discovery-mission" type="button" key={mission.id} onClick={() => onOpen(mission)}>
+        <button
+          className="discovery-mission"
+          type="button"
+          key={mission.id}
+          onClick={() => onOpen(mission)}
+        >
           <span>{mission.actionLabel}</span>
           <strong>{mission.title}</strong>
           <small>{mission.description}</small>
@@ -4507,7 +5573,10 @@ function CompletionHeatmap({
   onOpen: (cell: DiscoveryHeatmapCell) => void;
 }) {
   const years = useMemo(
-    () => Array.from(new Set(cells.map((cell) => cell.year))).sort((left, right) => left - right),
+    () =>
+      Array.from(new Set(cells.map((cell) => cell.year))).sort(
+        (left, right) => left - right,
+      ),
     [cells],
   );
   const genres = useMemo(() => {
@@ -4517,13 +5586,15 @@ function CompletionHeatmap({
         seen.set(cell.genreId, cell.genre);
       }
     });
-    return Array.from(seen, ([genreId, genre]) => ({ genreId, genre })).sort((left, right) =>
-      left.genre.localeCompare(right.genre),
+    return Array.from(seen, ([genreId, genre]) => ({ genreId, genre })).sort(
+      (left, right) => left.genre.localeCompare(right.genre),
     );
   }, [cells]);
   const cellLookup = useMemo(() => {
     const nextLookup = new Map<string, DiscoveryHeatmapCell>();
-    cells.forEach((cell) => nextLookup.set(`${cell.genreId}:${cell.year}`, cell));
+    cells.forEach((cell) =>
+      nextLookup.set(`${cell.genreId}:${cell.year}`, cell),
+    );
     return nextLookup;
   }, [cells]);
   const gridStyle = {
@@ -4587,7 +5658,10 @@ function LoveRatingScatter({
   emptyLabel?: string;
   onOpen: (point: DiscoveryAlbumPoint) => void;
 }) {
-  const scoreExtent = numericExtent(points, (point) => point.albumScore ?? point.effectiveAlbumRating);
+  const scoreExtent = numericExtent(
+    points,
+    (point) => point.albumScore ?? point.effectiveAlbumRating,
+  );
   const lovedExtent = numericExtent(points, (point) => point.lovedTracks);
   const maxLoved = Math.max(1, lovedExtent.max);
 
@@ -4602,7 +5676,12 @@ function LoveRatingScatter({
 
   return (
     <div className="scatter-shell">
-      <svg className="discovery-scatter" viewBox="0 0 340 220" role="img" aria-label="Loved tracks by album score">
+      <svg
+        className="discovery-scatter"
+        viewBox="0 0 340 220"
+        role="img"
+        aria-label="Loved tracks by album score"
+      >
         <line x1="38" y1="178" x2="316" y2="178" />
         <line x1="38" y1="178" x2="38" y2="22" />
         <text x="318" y="198">
@@ -4614,8 +5693,10 @@ function LoveRatingScatter({
         <line className="scatter-guide" x1="38" y1="100" x2="316" y2="100" />
         <line className="scatter-guide" x1="177" y1="22" x2="177" y2="178" />
         {points.map((point) => {
-          const score = point.albumScore ?? point.effectiveAlbumRating ?? scoreExtent.min;
-          const x = 38 + normalizedValue(score, scoreExtent.min, scoreExtent.max) * 278;
+          const score =
+            point.albumScore ?? point.effectiveAlbumRating ?? scoreExtent.min;
+          const x =
+            38 + normalizedValue(score, scoreExtent.min, scoreExtent.max) * 278;
           const y = 178 - normalizedValue(point.lovedTracks, 0, maxLoved) * 156;
           const radius = 5 + clampRatio(point.ratingCompleteness) * 5;
           const label = `${point.album ?? "Untitled"} / ${point.albumArtistDisplay ?? ""}`;
@@ -4630,10 +5711,13 @@ function LoveRatingScatter({
               r={radius}
               aria-label={`Open ${label}`}
               onClick={() => onOpen(point)}
-              onKeyDown={(event) => discoveryKeyOpen(event, () => onOpen(point))}
+              onKeyDown={(event) =>
+                discoveryKeyOpen(event, () => onOpen(point))
+              }
             >
               <title>
-                {label}: {formatNumber(point.lovedTracks)} loved / {formatAverage(point.albumScore, 1)} score
+                {label}: {formatNumber(point.lovedTracks)} loved /{" "}
+                {formatAverage(point.albumScore, 1)} score
               </title>
             </circle>
           );
@@ -4669,8 +5753,20 @@ function GenreUniverse({
       <span className="plot-axis plot-axis-x">Average score</span>
       <span className="plot-axis plot-axis-y">Completeness</span>
       {points.map((point) => {
-        const size = 58 + Math.sqrt(normalizedValue(point.albumCount, albumExtent.min, albumExtent.max)) * 74;
-        const x = 10 + normalizedValue(point.averageAlbumScore, scoreExtent.min, scoreExtent.max) * 80;
+        const size =
+          58 +
+          Math.sqrt(
+            normalizedValue(point.albumCount, albumExtent.min, albumExtent.max),
+          ) *
+            74;
+        const x =
+          10 +
+          normalizedValue(
+            point.averageAlbumScore,
+            scoreExtent.min,
+            scoreExtent.max,
+          ) *
+            80;
         const y = 10 + clampRatio(point.averageRatingCompleteness) * 78;
         const style = {
           left: `${x}%`,
@@ -4680,7 +5776,13 @@ function GenreUniverse({
           "--bubble-strength": clampRatio(point.averageRatingCompleteness),
         } as CSSProperties & Record<"--bubble-strength", number>;
         return (
-          <button className="bubble-point" type="button" key={point.genreId} style={style} onClick={() => onOpen(point)}>
+          <button
+            className="bubble-point"
+            type="button"
+            key={point.genreId}
+            style={style}
+            onClick={() => onOpen(point)}
+          >
             <strong>{point.genre}</strong>
             <span>{formatNumber(point.albumCount)}</span>
           </button>
@@ -4713,13 +5815,35 @@ function ArtistConstellation({
   }
 
   return (
-    <div className="bubble-plot artist-constellation" aria-label="Artist constellation">
+    <div
+      className="bubble-plot artist-constellation"
+      aria-label="Artist constellation"
+    >
       <span className="plot-axis plot-axis-x">Catalog depth</span>
       <span className="plot-axis plot-axis-y">Average score</span>
       {points.map((point) => {
-        const size = 58 + Math.sqrt(normalizedValue(point.lovedTracks, lovedExtent.min, lovedExtent.max)) * 68;
-        const x = 10 + normalizedValue(point.albumCount, albumExtent.min, albumExtent.max) * 80;
-        const y = 10 + normalizedValue(point.averageAlbumScore, scoreExtent.min, scoreExtent.max) * 78;
+        const size =
+          58 +
+          Math.sqrt(
+            normalizedValue(
+              point.lovedTracks,
+              lovedExtent.min,
+              lovedExtent.max,
+            ),
+          ) *
+            68;
+        const x =
+          10 +
+          normalizedValue(point.albumCount, albumExtent.min, albumExtent.max) *
+            80;
+        const y =
+          10 +
+          normalizedValue(
+            point.averageAlbumScore,
+            scoreExtent.min,
+            scoreExtent.max,
+          ) *
+            78;
         const style = {
           left: `${x}%`,
           bottom: `${y}%`,
@@ -4728,7 +5852,13 @@ function ArtistConstellation({
           "--bubble-strength": clampRatio(point.averageRatingCompleteness),
         } as CSSProperties & Record<"--bubble-strength", number>;
         return (
-          <button className="bubble-point artist" type="button" key={point.artistId} style={style} onClick={() => onOpen(point)}>
+          <button
+            className="bubble-point artist"
+            type="button"
+            key={point.artistId}
+            style={style}
+            onClick={() => onOpen(point)}
+          >
             <strong>{point.artist}</strong>
             <span>{formatNumber(point.albumCount)} albums</span>
           </button>
@@ -4835,7 +5965,11 @@ function RatingEventList({ events }: { events: RatingEvent[] }) {
       {events.slice(0, 8).map((event) => (
         <article className="rating-event" key={event.id}>
           <strong>{eventLabel(event.eventType)}</strong>
-          <span>{[event.albumArtistDisplay, event.album, event.year].filter(Boolean).join(" / ")}</span>
+          <span>
+            {[event.albumArtistDisplay, event.album, event.year]
+              .filter(Boolean)
+              .join(" / ")}
+          </span>
           <small>
             {formatPercent(event.previousRatingCompleteness, 0) || "New"}
             {" -> "}
@@ -4848,14 +5982,22 @@ function RatingEventList({ events }: { events: RatingEvent[] }) {
 }
 
 function isEditableShortcutTarget(target: EventTarget | null) {
-  return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, [contenteditable]"));
+  return (
+    target instanceof HTMLElement &&
+    Boolean(target.closest("input, textarea, select, [contenteditable]"))
+  );
 }
 
 export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
-  const [sourcePath, setSourcePath] = useState(() => createDefaultImportSourcePath());
-  const [coverSourcePath, setCoverSourcePath] = useState(() => createDefaultCoverSourcePath());
-  const [coverExtractEmbeddedFallback, setCoverExtractEmbeddedFallback] = useState(true);
+  const [sourcePath, setSourcePath] = useState(() =>
+    createDefaultImportSourcePath(),
+  );
+  const [coverSourcePath, setCoverSourcePath] = useState(() =>
+    createDefaultCoverSourcePath(),
+  );
+  const [coverExtractEmbeddedFallback, setCoverExtractEmbeddedFallback] =
+    useState(true);
   const [coverReplaceExisting, setCoverReplaceExisting] = useState(false);
   const [status, setStatus] = useState<LibraryStatus | null>(null);
   const [runs, setRuns] = useState<ImportRun[]>([]);
@@ -4865,19 +6007,29 @@ export default function App() {
   const [isImportingCovers, setIsImportingCovers] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [coverImportError, setCoverImportError] = useState<string | null>(null);
-  const [coverImportSummary, setCoverImportSummary] = useState<CoverImportSummary | null>(null);
-  const [billboardSourcePath, setBillboardSourcePath] = useState(() => createDefaultBillboardSourcePath());
-  const [isImportingBillboard, setIsImportingBillboard] = useState(false);
-  const [billboardImportError, setBillboardImportError] = useState<string | null>(null);
-  const [billboardImportSummary, setBillboardImportSummary] = useState<BillboardImportSummary | null>(null);
-  const [billboardSinglesSourcePath, setBillboardSinglesSourcePath] = useState(() =>
-    createDefaultBillboardSinglesSourcePath(),
+  const [coverImportSummary, setCoverImportSummary] =
+    useState<CoverImportSummary | null>(null);
+  const [billboardSourcePath, setBillboardSourcePath] = useState(() =>
+    createDefaultBillboardSourcePath(),
   );
-  const [isImportingBillboardSingles, setIsImportingBillboardSingles] = useState(false);
-  const [billboardSinglesImportError, setBillboardSinglesImportError] = useState<string | null>(null);
+  const [isImportingBillboard, setIsImportingBillboard] = useState(false);
+  const [billboardImportError, setBillboardImportError] = useState<
+    string | null
+  >(null);
+  const [billboardImportSummary, setBillboardImportSummary] =
+    useState<BillboardImportSummary | null>(null);
+  const [billboardSinglesSourcePath, setBillboardSinglesSourcePath] = useState(
+    () => createDefaultBillboardSinglesSourcePath(),
+  );
+  const [isImportingBillboardSingles, setIsImportingBillboardSingles] =
+    useState(false);
+  const [billboardSinglesImportError, setBillboardSinglesImportError] =
+    useState<string | null>(null);
   const [billboardSinglesImportSummary, setBillboardSinglesImportSummary] =
     useState<BillboardSinglesImportSummary | null>(null);
-  const [request, setRequest] = useState<BrowseRequest>(() => createRequest("albums"));
+  const [request, setRequest] = useState<BrowseRequest>(() =>
+    createRequest("albums"),
+  );
   const [response, setResponse] = useState<BrowseResponse | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [savedCharts, setSavedCharts] = useState<SavedChart[]>([]);
@@ -4885,7 +6037,9 @@ export default function App() {
   const [browseError, setBrowseError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [includeCalculated, setIncludeCalculated] = useState(false);
-  const [searchTableColumns, setSearchTableColumns] = useState<string[]>(["billboard"]);
+  const [searchTableColumns, setSearchTableColumns] = useState<string[]>([
+    "billboard",
+  ]);
   const [searchExportColumns, setSearchExportColumns] = useState<string[]>([]);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [albumRequest, setAlbumRequest] = useState<BrowseRequest>(() => {
@@ -4893,86 +6047,142 @@ export default function App() {
     request.limit = 25;
     return request;
   });
-  const [albumResponse, setAlbumResponse] = useState<BrowseResponse | null>(null);
+  const [albumResponse, setAlbumResponse] = useState<BrowseResponse | null>(
+    null,
+  );
   const [albumError, setAlbumError] = useState<string | null>(null);
   const [isAlbumLoading, setIsAlbumLoading] = useState(false);
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
-  const [albumTracksResponse, setAlbumTracksResponse] = useState<BrowseResponse | null>(null);
+  const [albumTracksResponse, setAlbumTracksResponse] =
+    useState<BrowseResponse | null>(null);
   const [albumTracksError, setAlbumTracksError] = useState<string | null>(null);
   const [isAlbumTracksLoading, setIsAlbumTracksLoading] = useState(false);
   const [albumIncludeCalculated, setAlbumIncludeCalculated] = useState(false);
-  const [albumExportResult, setAlbumExportResult] = useState<ExportResult | null>(null);
-  const [artistRequest, setArtistRequest] = useState<ArtistListRequest>(() => createArtistListRequest());
-  const [artistResponse, setArtistResponse] = useState<ArtistListResponse | null>(null);
+  const [albumExportResult, setAlbumExportResult] =
+    useState<ExportResult | null>(null);
+  const [artistRequest, setArtistRequest] = useState<ArtistListRequest>(() =>
+    createArtistListRequest(),
+  );
+  const [artistResponse, setArtistResponse] =
+    useState<ArtistListResponse | null>(null);
   const [artistError, setArtistError] = useState<string | null>(null);
   const [isArtistLoading, setIsArtistLoading] = useState(false);
   const [selectedArtistId, setSelectedArtistId] = useState<string | null>(null);
-  const [artistAlbumsResponse, setArtistAlbumsResponse] = useState<BrowseResponse | null>(null);
-  const [artistAlbumsError, setArtistAlbumsError] = useState<string | null>(null);
+  const [artistAlbumsResponse, setArtistAlbumsResponse] =
+    useState<BrowseResponse | null>(null);
+  const [artistAlbumsError, setArtistAlbumsError] = useState<string | null>(
+    null,
+  );
   const [isArtistAlbumsLoading, setIsArtistAlbumsLoading] = useState(false);
-  const [selectedArtistAlbumId, setSelectedArtistAlbumId] = useState<string | null>(null);
-  const [artistAlbumTracksResponse, setArtistAlbumTracksResponse] = useState<BrowseResponse | null>(null);
-  const [artistAlbumTracksError, setArtistAlbumTracksError] = useState<string | null>(null);
-  const [isArtistAlbumTracksLoading, setIsArtistAlbumTracksLoading] = useState(false);
+  const [selectedArtistAlbumId, setSelectedArtistAlbumId] = useState<
+    string | null
+  >(null);
+  const [artistAlbumTracksResponse, setArtistAlbumTracksResponse] =
+    useState<BrowseResponse | null>(null);
+  const [artistAlbumTracksError, setArtistAlbumTracksError] = useState<
+    string | null
+  >(null);
+  const [isArtistAlbumTracksLoading, setIsArtistAlbumTracksLoading] =
+    useState(false);
   const [musicBrainzArtistDiscography, setMusicBrainzArtistDiscography] =
     useState<MusicBrainzArtistDiscographyResponse | null>(null);
-  const [musicBrainzArtistError, setMusicBrainzArtistError] = useState<string | null>(null);
-  const [isMusicBrainzArtistLoading, setIsMusicBrainzArtistLoading] = useState(false);
-  const [isMusicBrainzArtistUpdating, setIsMusicBrainzArtistUpdating] = useState(false);
-  const [musicBrainzArtistExportResult, setMusicBrainzArtistExportResult] = useState<ExportResult | null>(null);
+  const [musicBrainzArtistError, setMusicBrainzArtistError] = useState<
+    string | null
+  >(null);
+  const [isMusicBrainzArtistLoading, setIsMusicBrainzArtistLoading] =
+    useState(false);
+  const [isMusicBrainzArtistUpdating, setIsMusicBrainzArtistUpdating] =
+    useState(false);
+  const [musicBrainzArtistExportResult, setMusicBrainzArtistExportResult] =
+    useState<ExportResult | null>(null);
   const [musicBrainzArtistRefreshResult, setMusicBrainzArtistRefreshResult] =
     useState<MusicBrainzArtistRefreshResult | null>(null);
   const [musicBrainzArtistOriginResult, setMusicBrainzArtistOriginResult] =
     useState<MusicBrainzArtistOriginCountryUpdate | null>(null);
   const [artistIncludeCalculated, setArtistIncludeCalculated] = useState(false);
-  const [artistExportResult, setArtistExportResult] = useState<ExportResult | null>(null);
-  const [genreRequest, setGenreRequest] = useState<GenreListRequest>(() => createGenreListRequest());
-  const [genreResponse, setGenreResponse] = useState<GenreListResponse | null>(null);
+  const [artistExportResult, setArtistExportResult] =
+    useState<ExportResult | null>(null);
+  const [genreRequest, setGenreRequest] = useState<GenreListRequest>(() =>
+    createGenreListRequest(),
+  );
+  const [genreResponse, setGenreResponse] = useState<GenreListResponse | null>(
+    null,
+  );
   const [genreError, setGenreError] = useState<string | null>(null);
   const [isGenreLoading, setIsGenreLoading] = useState(false);
   const [selectedGenreId, setSelectedGenreId] = useState<string | null>(null);
-  const [genreAlbumsResponse, setGenreAlbumsResponse] = useState<BrowseResponse | null>(null);
+  const [genreAlbumsResponse, setGenreAlbumsResponse] =
+    useState<BrowseResponse | null>(null);
   const [genreAlbumsError, setGenreAlbumsError] = useState<string | null>(null);
   const [isGenreAlbumsLoading, setIsGenreAlbumsLoading] = useState(false);
   const [genreIncludeCalculated, setGenreIncludeCalculated] = useState(false);
-  const [genreExportResult, setGenreExportResult] = useState<ExportResult | null>(null);
-  const [genreSuggestionNames, setGenreSuggestionNames] = useState<string[]>([]);
-  const [musicTools, setMusicTools] = useState<MusicToolSummary[]>(() => musicToolCatalog);
+  const [genreExportResult, setGenreExportResult] =
+    useState<ExportResult | null>(null);
+  const [genreSuggestionNames, setGenreSuggestionNames] = useState<string[]>(
+    [],
+  );
+  const [musicTools, setMusicTools] = useState<MusicToolSummary[]>(
+    () => musicToolCatalog,
+  );
   const [toolsError, setToolsError] = useState<string | null>(null);
   const [isToolsLoading, setIsToolsLoading] = useState(false);
-  const [selectedToolId, setSelectedToolId] = useState<string | null>(musicToolCatalog[0]?.id ?? null);
-  const [toolIssueRequest, setToolIssueRequest] = useState<MusicToolIssueRequest>(() =>
-    createMusicToolIssueRequest(),
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(
+    musicToolCatalog[0]?.id ?? null,
   );
-  const [toolIssueResponse, setToolIssueResponse] = useState<MusicToolIssueResponse | null>(null);
+  const [toolIssueRequest, setToolIssueRequest] =
+    useState<MusicToolIssueRequest>(() => createMusicToolIssueRequest());
+  const [toolIssueResponse, setToolIssueResponse] =
+    useState<MusicToolIssueResponse | null>(null);
   const [toolIssueError, setToolIssueError] = useState<string | null>(null);
   const [isToolIssuesLoading, setIsToolIssuesLoading] = useState(false);
-  const [toolProgress, setToolProgress] = useState<MusicToolProgress | null>(null);
-  const [toolExportResult, setToolExportResult] = useState<ExportResult | null>(null);
-  const [toolFixSummary, setToolFixSummary] = useState<MusicToolFixSummary | null>(null);
+  const [toolProgress, setToolProgress] = useState<MusicToolProgress | null>(
+    null,
+  );
+  const [toolExportResult, setToolExportResult] = useState<ExportResult | null>(
+    null,
+  );
+  const [toolFixSummary, setToolFixSummary] =
+    useState<MusicToolFixSummary | null>(null);
   const [toolFixError, setToolFixError] = useState<string | null>(null);
   const [isToolFixing, setIsToolFixing] = useState(false);
-  const [chartConfig, setChartConfig] = useState<ChartConfig>(() => createChartConfig());
+  const [chartConfig, setChartConfig] = useState<ChartConfig>(() =>
+    createChartConfig(),
+  );
   const [chartTableSort, setChartTableSort] = useState<BrowseSort | null>(null);
-  const [chartResponse, setChartResponse] = useState<BrowseResponse | null>(null);
+  const [chartResponse, setChartResponse] = useState<BrowseResponse | null>(
+    null,
+  );
   const [chartName, setChartName] = useState("");
   const [chartError, setChartError] = useState<string | null>(null);
   const [isChartLoading, setIsChartLoading] = useState(false);
-  const [chartExportResult, setChartExportResult] = useState<ExportResult | null>(null);
+  const [chartExportResult, setChartExportResult] =
+    useState<ExportResult | null>(null);
   const [statistics, setStatistics] = useState<StatisticsResponse | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [isStatsLoading, setIsStatsLoading] = useState(false);
   const [discovery, setDiscovery] = useState<DiscoveryResponse | null>(null);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(true);
-  const [discoveryAlbumRequest, setDiscoveryAlbumRequest] = useState<BrowseRequest>(() =>
-    createDiscoveryAlbumRequest({}, { field: "albumScore", direction: "desc" }, 30),
+  const [discoveryAlbumRequest, setDiscoveryAlbumRequest] =
+    useState<BrowseRequest>(() =>
+      createDiscoveryAlbumRequest(
+        {},
+        { field: "albumScore", direction: "desc" },
+        30,
+      ),
+    );
+  const [discoveryAlbumResponse, setDiscoveryAlbumResponse] =
+    useState<BrowseResponse | null>(null);
+  const [discoveryAlbumError, setDiscoveryAlbumError] = useState<string | null>(
+    null,
   );
-  const [discoveryAlbumResponse, setDiscoveryAlbumResponse] = useState<BrowseResponse | null>(null);
-  const [discoveryAlbumError, setDiscoveryAlbumError] = useState<string | null>(null);
-  const [isDiscoveryAlbumsLoading, setIsDiscoveryAlbumsLoading] = useState(false);
-  const [discoverySelection, setDiscoverySelection] = useState<DiscoverySelection | null>(null);
-  const [settings, setSettings] = useState<AppSettings>(() => createDefaultSettings());
+  const [isDiscoveryAlbumsLoading, setIsDiscoveryAlbumsLoading] =
+    useState(false);
+  const [discoverySelection, setDiscoverySelection] =
+    useState<DiscoverySelection | null>(null);
+  const [settings, setSettings] = useState<AppSettings>(() =>
+    createDefaultSettings(),
+  );
   const settingsRef = useRef(settings);
   const settingsSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const settingsSaveSequenceRef = useRef(0);
@@ -4980,17 +6190,29 @@ export default function App() {
   const appUpdateRef = useRef<AppUpdateCheckResult["update"] | null>(null);
   const isAppUpdateCheckingRef = useRef(false);
   const isAppUpdateInstallingRef = useRef(false);
-  const [leftSidebarMode, setLeftSidebarMode] = useState<LeftSidebarMode>(() => createDefaultLeftSidebarMode());
-  const [rightSidebarMode, setRightSidebarMode] = useState<RightSidebarMode>(() => createDefaultRightSidebarMode());
+  const [leftSidebarMode, setLeftSidebarMode] = useState<LeftSidebarMode>(() =>
+    createDefaultLeftSidebarMode(),
+  );
+  const [rightSidebarMode, setRightSidebarMode] = useState<RightSidebarMode>(
+    () => createDefaultRightSidebarMode(),
+  );
   const [databaseBackups, setDatabaseBackups] = useState<DatabaseBackup[]>([]);
   const [backupError, setBackupError] = useState<string | null>(null);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
-  const [restoreSummary, setRestoreSummary] = useState<DatabaseRestoreSummary | null>(null);
-  const [performanceProbe, setPerformanceProbe] = useState<PerformanceProbeResponse | null>(null);
-  const [performanceProbeError, setPerformanceProbeError] = useState<string | null>(null);
-  const [isPerformanceProbeRunning, setIsPerformanceProbeRunning] = useState(false);
-  const [musicBrainzStatus, setMusicBrainzStatus] = useState<MusicBrainzCacheStatus | null>(null);
-  const [musicBrainzStatusError, setMusicBrainzStatusError] = useState<string | null>(null);
+  const [restoreSummary, setRestoreSummary] =
+    useState<DatabaseRestoreSummary | null>(null);
+  const [performanceProbe, setPerformanceProbe] =
+    useState<PerformanceProbeResponse | null>(null);
+  const [performanceProbeError, setPerformanceProbeError] = useState<
+    string | null
+  >(null);
+  const [isPerformanceProbeRunning, setIsPerformanceProbeRunning] =
+    useState(false);
+  const [musicBrainzStatus, setMusicBrainzStatus] =
+    useState<MusicBrainzCacheStatus | null>(null);
+  const [musicBrainzStatusError, setMusicBrainzStatusError] = useState<
+    string | null
+  >(null);
   const [isMusicBrainzChecking, setIsMusicBrainzChecking] = useState(false);
   const [musicBrainzOriginStatus, setMusicBrainzOriginStatus] =
     useState<MusicBrainzOriginCountryStatus | null>(null);
@@ -5000,38 +6222,90 @@ export default function App() {
     useState<MusicBrainzOriginCountryImportSummary | null>(null);
   const [musicBrainzOriginProgress, setMusicBrainzOriginProgress] =
     useState<MusicBrainzOriginCountryImportProgress | null>(null);
-  const [musicBrainzOriginLog, setMusicBrainzOriginLog] = useState<MusicBrainzOriginCountryImportProgress[]>([]);
-  const [musicBrainzOriginError, setMusicBrainzOriginError] = useState<string | null>(null);
+  const [musicBrainzOriginLog, setMusicBrainzOriginLog] = useState<
+    MusicBrainzOriginCountryImportProgress[]
+  >([]);
+  const [musicBrainzOriginError, setMusicBrainzOriginError] = useState<
+    string | null
+  >(null);
   const [musicBrainzOriginReportFilter, setMusicBrainzOriginReportFilter] =
     useState<OriginReportFilter>("needsAttention");
-  const [musicBrainzOriginReportSearch, setMusicBrainzOriginReportSearch] = useState("");
-  const [isMusicBrainzOriginPreviewing, setIsMusicBrainzOriginPreviewing] = useState(false);
-  const [isMusicBrainzOriginImporting, setIsMusicBrainzOriginImporting] = useState(false);
+  const [musicBrainzOriginReportSearch, setMusicBrainzOriginReportSearch] =
+    useState("");
+  const [isMusicBrainzOriginPreviewing, setIsMusicBrainzOriginPreviewing] =
+    useState(false);
+  const [isMusicBrainzOriginImporting, setIsMusicBrainzOriginImporting] =
+    useState(false);
+  const [musicBrainzArtistInfoStatus, setMusicBrainzArtistInfoStatus] =
+    useState<MusicBrainzArtistInfoStatus | null>(null);
+  const [musicBrainzArtistInfoPreview, setMusicBrainzArtistInfoPreview] =
+    useState<MusicBrainzArtistInfoPreview | null>(null);
+  const [
+    musicBrainzArtistInfoImportSummary,
+    setMusicBrainzArtistInfoImportSummary,
+  ] = useState<MusicBrainzArtistInfoImportSummary | null>(null);
+  const [musicBrainzArtistInfoProgress, setMusicBrainzArtistInfoProgress] =
+    useState<MusicBrainzArtistInfoImportProgress | null>(null);
+  const [musicBrainzArtistInfoLog, setMusicBrainzArtistInfoLog] = useState<
+    MusicBrainzArtistInfoImportProgress[]
+  >([]);
+  const [musicBrainzArtistInfoError, setMusicBrainzArtistInfoError] = useState<
+    string | null
+  >(null);
+  const [
+    musicBrainzArtistInfoReportFilter,
+    setMusicBrainzArtistInfoReportFilter,
+  ] = useState<ArtistInfoReportFilter>("needsAttention");
+  const [
+    musicBrainzArtistInfoReportSearch,
+    setMusicBrainzArtistInfoReportSearch,
+  ] = useState("");
+  const [
+    isMusicBrainzArtistInfoPreviewing,
+    setIsMusicBrainzArtistInfoPreviewing,
+  ] = useState(false);
+  const [
+    isMusicBrainzArtistInfoImporting,
+    setIsMusicBrainzArtistInfoImporting,
+  ] = useState(false);
   const [musicBrainzCachePathDraft, setMusicBrainzCachePathDraft] = useState(
     settings.musicBrainzCachePath || defaultMusicBrainzCachePath,
   );
-  const [musicBrainzOverlaySyncPathDraft, setMusicBrainzOverlaySyncPathDraft] = useState(
-    settings.musicBrainzOverlaySyncPath || defaultMusicBrainzOverlaySyncPath,
-  );
-  const [musicBrainzOverlayAutoSyncDraft, setMusicBrainzOverlayAutoSyncDraft] = useState(
-    String(overlayAutoSyncMinutesValue(settings.musicBrainzOverlayAutoSyncMinutes)),
-  );
+  const [musicBrainzOverlaySyncPathDraft, setMusicBrainzOverlaySyncPathDraft] =
+    useState(
+      settings.musicBrainzOverlaySyncPath || defaultMusicBrainzOverlaySyncPath,
+    );
+  const [musicBrainzOverlayAutoSyncDraft, setMusicBrainzOverlayAutoSyncDraft] =
+    useState(
+      String(
+        overlayAutoSyncMinutesValue(settings.musicBrainzOverlayAutoSyncMinutes),
+      ),
+    );
   const [appUpdateAutoCheckDraft, setAppUpdateAutoCheckDraft] = useState(
     String(updateAutoCheckMinutesValue(settings.updateAutoCheckMinutes)),
   );
-  const [appUpdateStatus, setAppUpdateStatus] = useState<AppUpdateStatus>("idle");
-  const [appUpdateInfo, setAppUpdateInfo] = useState<AppUpdateInfo | null>(null);
+  const [appUpdateStatus, setAppUpdateStatus] =
+    useState<AppUpdateStatus>("idle");
+  const [appUpdateInfo, setAppUpdateInfo] = useState<AppUpdateInfo | null>(
+    null,
+  );
   const [appUpdateError, setAppUpdateError] = useState<string | null>(null);
-  const [appUpdateLastCheckedAt, setAppUpdateLastCheckedAt] = useState<string | null>(null);
-  const [appUpdateProgress, setAppUpdateProgress] = useState<AppUpdateInstallProgress | null>(null);
-  const [isAppUpdateBannerDismissed, setIsAppUpdateBannerDismissed] = useState(false);
+  const [appUpdateLastCheckedAt, setAppUpdateLastCheckedAt] = useState<
+    string | null
+  >(null);
+  const [appUpdateProgress, setAppUpdateProgress] =
+    useState<AppUpdateInstallProgress | null>(null);
+  const [isAppUpdateBannerDismissed, setIsAppUpdateBannerDismissed] =
+    useState(false);
   const [musicBrainzOverlaySyncResult, setMusicBrainzOverlaySyncResult] =
     useState<MusicBrainzOverlaySyncResult | null>(null);
   const [musicBrainzOverlaySyncLog, setMusicBrainzOverlaySyncLog] = useState<
     MusicBrainzOverlaySyncLogEntry[]
   >([]);
-  const [musicBrainzOverlaySyncError, setMusicBrainzOverlaySyncError] = useState<string | null>(null);
-  const [isMusicBrainzOverlaySyncing, setIsMusicBrainzOverlaySyncing] = useState(false);
+  const [musicBrainzOverlaySyncError, setMusicBrainzOverlaySyncError] =
+    useState<string | null>(null);
+  const [isMusicBrainzOverlaySyncing, setIsMusicBrainzOverlaySyncing] =
+    useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const hasAppliedLayoutDefaults = useRef(false);
@@ -5062,7 +6336,8 @@ export default function App() {
     }
 
     window.addEventListener("keydown", handleNavigationShortcut);
-    return () => window.removeEventListener("keydown", handleNavigationShortcut);
+    return () =>
+      window.removeEventListener("keydown", handleNavigationShortcut);
   }, []);
 
   const refreshGenreSuggestions = useCallback(async () => {
@@ -5081,6 +6356,7 @@ export default function App() {
       nextSettings,
       nextMusicBrainzStatus,
       nextMusicBrainzOriginStatus,
+      nextMusicBrainzArtistInfoStatus,
       nextMusicBrainzOverlaySyncLog,
     ] = await Promise.all([
       getLibraryStatus(),
@@ -5092,6 +6368,7 @@ export default function App() {
       getSettings(),
       getMusicBrainzCacheStatus(),
       getMusicBrainzOriginCountryStatus(),
+      getMusicBrainzArtistInfoStatus(),
       listMusicBrainzOverlaySyncLog(12),
     ]);
     setStatus(nextStatus);
@@ -5110,22 +6387,36 @@ export default function App() {
     setSettings(nextSettings);
     setSourcePath(nextSettings.importSourcePath || defaultImportSourcePath);
     setCoverSourcePath(nextSettings.coverSourcePath || defaultCoverSourcePath);
-    setBillboardSourcePath(nextSettings.billboardSourcePath || defaultBillboardSourcePath);
-    setBillboardSinglesSourcePath(
-      nextSettings.billboardSinglesSourcePath || defaultBillboardSinglesSourcePath,
+    setBillboardSourcePath(
+      nextSettings.billboardSourcePath || defaultBillboardSourcePath,
     );
-    setMusicBrainzCachePathDraft(nextSettings.musicBrainzCachePath || defaultMusicBrainzCachePath);
+    setBillboardSinglesSourcePath(
+      nextSettings.billboardSinglesSourcePath ||
+        defaultBillboardSinglesSourcePath,
+    );
+    setMusicBrainzCachePathDraft(
+      nextSettings.musicBrainzCachePath || defaultMusicBrainzCachePath,
+    );
     setMusicBrainzOverlaySyncPathDraft(
-      nextSettings.musicBrainzOverlaySyncPath || defaultMusicBrainzOverlaySyncPath,
+      nextSettings.musicBrainzOverlaySyncPath ||
+        defaultMusicBrainzOverlaySyncPath,
     );
     setMusicBrainzOverlayAutoSyncDraft(
-      String(overlayAutoSyncMinutesValue(nextSettings.musicBrainzOverlayAutoSyncMinutes)),
+      String(
+        overlayAutoSyncMinutesValue(
+          nextSettings.musicBrainzOverlayAutoSyncMinutes,
+        ),
+      ),
     );
-    setAppUpdateAutoCheckDraft(String(updateAutoCheckMinutesValue(nextSettings.updateAutoCheckMinutes)));
+    setAppUpdateAutoCheckDraft(
+      String(updateAutoCheckMinutesValue(nextSettings.updateAutoCheckMinutes)),
+    );
     setMusicBrainzStatus(nextMusicBrainzStatus);
     setMusicBrainzStatusError(null);
     setMusicBrainzOriginStatus(nextMusicBrainzOriginStatus);
     setMusicBrainzOriginError(null);
+    setMusicBrainzArtistInfoStatus(nextMusicBrainzArtistInfoStatus);
+    setMusicBrainzArtistInfoError(null);
     setMusicBrainzOverlaySyncLog(nextMusicBrainzOverlaySyncLog);
     setMusicBrainzOverlaySyncError(null);
     if (!hasAppliedLayoutDefaults.current) {
@@ -5148,10 +6439,14 @@ export default function App() {
 
   useEffect(() => {
     void loadData().catch((loadError) => {
-      setImportError(loadError instanceof Error ? loadError.message : String(loadError));
+      setImportError(
+        loadError instanceof Error ? loadError.message : String(loadError),
+      );
     });
     void loadDiscoveryData().catch((loadError) => {
-      setDiscoveryError(loadError instanceof Error ? loadError.message : String(loadError));
+      setDiscoveryError(
+        loadError instanceof Error ? loadError.message : String(loadError),
+      );
       setIsDiscoveryLoading(false);
     });
   }, [loadData, loadDiscoveryData]);
@@ -5200,7 +6495,25 @@ export default function App() {
     let unlisten: (() => void) | null = null;
     void listenToMusicBrainzOriginCountryImportProgress((nextProgress) => {
       setMusicBrainzOriginProgress(nextProgress);
-      setMusicBrainzOriginLog((previous) => [nextProgress, ...previous].slice(0, 80));
+      setMusicBrainzOriginLog((previous) =>
+        [nextProgress, ...previous].slice(0, 80),
+      );
+    }).then((nextUnlisten) => {
+      unlisten = nextUnlisten;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void listenToMusicBrainzArtistInfoImportProgress((nextProgress) => {
+      setMusicBrainzArtistInfoProgress(nextProgress);
+      setMusicBrainzArtistInfoLog((previous) =>
+        [nextProgress, ...previous].slice(0, 80),
+      );
     }).then((nextUnlisten) => {
       unlisten = nextUnlisten;
     });
@@ -5218,7 +6531,8 @@ export default function App() {
     let unlisten: (() => void) | null = null;
     void listenToMusicToolProgress((nextProgress) => {
       setToolProgress((previous) =>
-        nextProgress.toolId === selectedToolId && nextProgress.requestId === toolIssueRequest.requestId
+        nextProgress.toolId === selectedToolId &&
+        nextProgress.requestId === toolIssueRequest.requestId
           ? nextProgress
           : previous,
       );
@@ -5232,14 +6546,20 @@ export default function App() {
   }, [activeSection, selectedToolId, toolIssueRequest.requestId]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = settings.darkMode ? "dark" : "light";
+    document.documentElement.dataset.theme = settings.darkMode
+      ? "dark"
+      : "light";
   }, [settings.darkMode]);
 
   const lastRun = runs[0] ?? status?.lastImport ?? null;
   const currentFilters = request.filters;
   const albumFilters = albumRequest.filters;
   const genreSuggestionOptions = useMemo(
-    () => uniqueGenreSuggestionOptions([...genreSuggestionAliases, ...genreSuggestionNames]),
+    () =>
+      uniqueGenreSuggestionOptions([
+        ...genreSuggestionAliases,
+        ...genreSuggestionNames,
+      ]),
     [genreSuggestionNames],
   );
   const originCountryOptions = musicBrainzOriginStatus?.countries ?? [];
@@ -5255,21 +6575,30 @@ export default function App() {
       // Field focus can retry again; keep the existing option list.
     });
   }, [refreshGenreSuggestions]);
-  const chartRequest = useMemo(() => chartRequestFromConfig(chartConfig), [chartConfig]);
+  const chartRequest = useMemo(
+    () => chartRequestFromConfig(chartConfig),
+    [chartConfig],
+  );
   const albumTracksRequest = useMemo(
     () => (selectedAlbumId ? createAlbumTracksRequest(selectedAlbumId) : null),
     [selectedAlbumId],
   );
   const selectedArtist =
-    artistResponse?.rows.find((artist) => artist.id === selectedArtistId) ?? null;
+    artistResponse?.rows.find((artist) => artist.id === selectedArtistId) ??
+    null;
   const artistAlbumsRequest = useMemo(
     () => (selectedArtist ? createArtistAlbumsRequest(selectedArtist) : null),
     [selectedArtist],
   );
   const selectedArtistAlbum =
-    artistAlbumsResponse?.rows.find((row) => row.albumId === selectedArtistAlbumId) ?? null;
+    artistAlbumsResponse?.rows.find(
+      (row) => row.albumId === selectedArtistAlbumId,
+    ) ?? null;
   const artistAlbumTracksRequest = useMemo(
-    () => (selectedArtistAlbumId ? createAlbumTracksRequest(selectedArtistAlbumId) : null),
+    () =>
+      selectedArtistAlbumId
+        ? createAlbumTracksRequest(selectedArtistAlbumId)
+        : null,
     [selectedArtistAlbumId],
   );
   const selectedGenre =
@@ -5278,16 +6607,20 @@ export default function App() {
     () => (selectedGenre ? createGenreAlbumsRequest(selectedGenre) : null),
     [selectedGenre],
   );
-  const selectedCatalogTool = musicTools.find((tool) => tool.id === selectedToolId) ?? null;
-  const currentToolIssueResponse = toolIssueResponse?.tool.id === selectedToolId ? toolIssueResponse : null;
+  const selectedCatalogTool =
+    musicTools.find((tool) => tool.id === selectedToolId) ?? null;
+  const currentToolIssueResponse =
+    toolIssueResponse?.tool.id === selectedToolId ? toolIssueResponse : null;
   const selectedTool = currentToolIssueResponse?.tool ?? selectedCatalogTool;
   const activeToolProgress =
-    toolProgress?.toolId === selectedToolId && toolProgress.requestId === toolIssueRequest.requestId
+    toolProgress?.toolId === selectedToolId &&
+    toolProgress.requestId === toolIssueRequest.requestId
       ? toolProgress
       : null;
   const activeToolProgressText = formatToolProgress(activeToolProgress);
   const isToolProgressActive = isMusicToolProgressActive(activeToolProgress);
-  const isToolRunPending = isToolIssuesLoading || isToolProgressActive || isToolFixing;
+  const isToolRunPending =
+    isToolIssuesLoading || isToolProgressActive || isToolFixing;
 
   useEffect(() => {
     if (activeSection !== "Search") {
@@ -5306,7 +6639,11 @@ export default function App() {
         })
         .catch((searchError) => {
           if (!cancelled) {
-            setBrowseError(searchError instanceof Error ? searchError.message : String(searchError));
+            setBrowseError(
+              searchError instanceof Error
+                ? searchError.message
+                : String(searchError),
+            );
             setResponse(null);
           }
         })
@@ -5340,7 +6677,11 @@ export default function App() {
         })
         .catch((searchError) => {
           if (!cancelled) {
-            setAlbumError(searchError instanceof Error ? searchError.message : String(searchError));
+            setAlbumError(
+              searchError instanceof Error
+                ? searchError.message
+                : String(searchError),
+            );
             setAlbumResponse(null);
           }
         })
@@ -5369,7 +6710,9 @@ export default function App() {
     }
 
     setSelectedAlbumId((previous) =>
-      previous && rows.some((row) => row.albumId === previous) ? previous : rows[0].albumId,
+      previous && rows.some((row) => row.albumId === previous)
+        ? previous
+        : rows[0].albumId,
     );
   }, [activeSection, albumResponse]);
 
@@ -5390,7 +6733,11 @@ export default function App() {
       })
       .catch((searchError) => {
         if (!cancelled) {
-          setAlbumTracksError(searchError instanceof Error ? searchError.message : String(searchError));
+          setAlbumTracksError(
+            searchError instanceof Error
+              ? searchError.message
+              : String(searchError),
+          );
           setAlbumTracksResponse(null);
         }
       })
@@ -5422,7 +6769,11 @@ export default function App() {
         })
         .catch((searchError) => {
           if (!cancelled) {
-            setArtistError(searchError instanceof Error ? searchError.message : String(searchError));
+            setArtistError(
+              searchError instanceof Error
+                ? searchError.message
+                : String(searchError),
+            );
             setArtistResponse(null);
           }
         })
@@ -5451,7 +6802,9 @@ export default function App() {
     }
 
     setSelectedArtistId((previous) =>
-      previous && rows.some((artist) => artist.id === previous) ? previous : rows[0].id,
+      previous && rows.some((artist) => artist.id === previous)
+        ? previous
+        : rows[0].id,
     );
   }, [activeSection, artistResponse]);
 
@@ -5472,7 +6825,11 @@ export default function App() {
       })
       .catch((searchError) => {
         if (!cancelled) {
-          setArtistAlbumsError(searchError instanceof Error ? searchError.message : String(searchError));
+          setArtistAlbumsError(
+            searchError instanceof Error
+              ? searchError.message
+              : String(searchError),
+          );
           setArtistAlbumsResponse(null);
         }
       })
@@ -5499,7 +6856,9 @@ export default function App() {
     }
 
     setSelectedArtistAlbumId((previous) =>
-      previous && rows.some((row) => row.albumId === previous) ? previous : rows[0].albumId,
+      previous && rows.some((row) => row.albumId === previous)
+        ? previous
+        : rows[0].albumId,
     );
   }, [activeSection, artistAlbumsResponse]);
 
@@ -5520,7 +6879,11 @@ export default function App() {
       })
       .catch((searchError) => {
         if (!cancelled) {
-          setArtistAlbumTracksError(searchError instanceof Error ? searchError.message : String(searchError));
+          setArtistAlbumTracksError(
+            searchError instanceof Error
+              ? searchError.message
+              : String(searchError),
+          );
           setArtistAlbumTracksResponse(null);
         }
       })
@@ -5563,7 +6926,9 @@ export default function App() {
       .catch((discographyError) => {
         if (!cancelled) {
           setMusicBrainzArtistError(
-            discographyError instanceof Error ? discographyError.message : String(discographyError),
+            discographyError instanceof Error
+              ? discographyError.message
+              : String(discographyError),
           );
           setMusicBrainzArtistDiscography(null);
         }
@@ -5596,7 +6961,11 @@ export default function App() {
         })
         .catch((searchError) => {
           if (!cancelled) {
-            setGenreError(searchError instanceof Error ? searchError.message : String(searchError));
+            setGenreError(
+              searchError instanceof Error
+                ? searchError.message
+                : String(searchError),
+            );
             setGenreResponse(null);
           }
         })
@@ -5614,7 +6983,8 @@ export default function App() {
   }, [activeSection, genreRequest]);
 
   useEffect(() => {
-    const visibleGenreNames = genreResponse?.rows.map((genre) => genre.name) ?? [];
+    const visibleGenreNames =
+      genreResponse?.rows.map((genre) => genre.name) ?? [];
     if (visibleGenreNames.length === 0) {
       return;
     }
@@ -5636,7 +7006,9 @@ export default function App() {
     }
 
     setSelectedGenreId((previous) =>
-      previous && rows.some((genre) => genre.id === previous) ? previous : rows[0].id,
+      previous && rows.some((genre) => genre.id === previous)
+        ? previous
+        : rows[0].id,
     );
   }, [activeSection, genreResponse]);
 
@@ -5657,7 +7029,11 @@ export default function App() {
       })
       .catch((searchError) => {
         if (!cancelled) {
-          setGenreAlbumsError(searchError instanceof Error ? searchError.message : String(searchError));
+          setGenreAlbumsError(
+            searchError instanceof Error
+              ? searchError.message
+              : String(searchError),
+          );
           setGenreAlbumsResponse(null);
         }
       })
@@ -5687,7 +7063,9 @@ export default function App() {
             nextTools.length === 0
               ? previous
               : nextTools.map((nextTool) => {
-                  const previousTool = previous.find((tool) => tool.id === nextTool.id);
+                  const previousTool = previous.find(
+                    (tool) => tool.id === nextTool.id,
+                  );
                   return previousTool && previousTool.issueCount >= 0
                     ? {
                         ...nextTool,
@@ -5702,7 +7080,11 @@ export default function App() {
       })
       .catch((searchError) => {
         if (!cancelled) {
-          setToolsError(searchError instanceof Error ? searchError.message : String(searchError));
+          setToolsError(
+            searchError instanceof Error
+              ? searchError.message
+              : String(searchError),
+          );
         }
       })
       .finally(() => {
@@ -5728,7 +7110,9 @@ export default function App() {
     }
 
     setSelectedToolId((previous) =>
-      previous && musicTools.some((tool) => tool.id === previous) ? previous : musicTools[0].id,
+      previous && musicTools.some((tool) => tool.id === previous)
+        ? previous
+        : musicTools[0].id,
     );
   }, [activeSection, musicTools]);
 
@@ -5748,7 +7132,11 @@ export default function App() {
   }, [activeSection, selectedToolId]);
 
   useEffect(() => {
-    if (activeSection !== "Tools" || !selectedToolId || toolIssueRequest.toolId !== selectedToolId) {
+    if (
+      activeSection !== "Tools" ||
+      !selectedToolId ||
+      toolIssueRequest.toolId !== selectedToolId
+    ) {
       return;
     }
 
@@ -5778,7 +7166,11 @@ export default function App() {
         })
         .catch((searchError) => {
           if (!cancelled) {
-            setToolIssueError(searchError instanceof Error ? searchError.message : String(searchError));
+            setToolIssueError(
+              searchError instanceof Error
+                ? searchError.message
+                : String(searchError),
+            );
             setToolIssueResponse(null);
             setToolProgress({
               toolId: toolIssueRequest.toolId,
@@ -5808,7 +7200,9 @@ export default function App() {
     }
 
     setMusicTools((previous) =>
-      previous.map((tool) => (tool.id === toolIssueResponse.tool.id ? toolIssueResponse.tool : tool)),
+      previous.map((tool) =>
+        tool.id === toolIssueResponse.tool.id ? toolIssueResponse.tool : tool,
+      ),
     );
   }, [toolIssueResponse]);
 
@@ -5840,7 +7234,11 @@ export default function App() {
         })
         .catch((searchError) => {
           if (!cancelled) {
-            setChartError(searchError instanceof Error ? searchError.message : String(searchError));
+            setChartError(
+              searchError instanceof Error
+                ? searchError.message
+                : String(searchError),
+            );
             setChartResponse(null);
           }
         })
@@ -5874,7 +7272,11 @@ export default function App() {
         })
         .catch((searchError) => {
           if (!cancelled) {
-            setDiscoveryAlbumError(searchError instanceof Error ? searchError.message : String(searchError));
+            setDiscoveryAlbumError(
+              searchError instanceof Error
+                ? searchError.message
+                : String(searchError),
+            );
             setDiscoveryAlbumResponse(null);
           }
         })
@@ -5894,14 +7296,22 @@ export default function App() {
   const progressPercent = useMemo(() => {
     if (progress.status === "completed") return 100;
     if (progress.processedRows === 0) return isImporting ? 6 : 0;
-    return Math.min(96, Math.max(8, (progress.processedRows / 1_130_882) * 100));
+    return Math.min(
+      96,
+      Math.max(8, (progress.processedRows / 1_130_882) * 100),
+    );
   }, [isImporting, progress.processedRows, progress.status]);
 
   const coverProgressPercent = useMemo(() => {
     if (coverProgress.status === "completed") return 100;
     if (coverProgress.scannedAlbums === 0) return isImportingCovers ? 4 : 0;
     return Math.min(99, Math.max(1, coverProgress.percent));
-  }, [coverProgress.percent, coverProgress.scannedAlbums, coverProgress.status, isImportingCovers]);
+  }, [
+    coverProgress.percent,
+    coverProgress.scannedAlbums,
+    coverProgress.status,
+    isImportingCovers,
+  ]);
 
   const musicBrainzOriginProgressPercent = useMemo(() => {
     if (!musicBrainzOriginProgress) {
@@ -5910,7 +7320,9 @@ export default function App() {
     return Math.min(100, Math.max(0, musicBrainzOriginProgress.percent));
   }, [musicBrainzOriginProgress]);
 
-  const musicBrainzOriginReportQuery = musicBrainzOriginReportSearch.trim().toLowerCase();
+  const musicBrainzOriginReportQuery = musicBrainzOriginReportSearch
+    .trim()
+    .toLowerCase();
   const musicBrainzOriginReportRows = useMemo(() => {
     const rows = musicBrainzOriginPreview?.rows ?? [];
     return rows.filter(
@@ -5918,8 +7330,15 @@ export default function App() {
         originPreviewMatchesFilter(row, musicBrainzOriginReportFilter) &&
         originPreviewMatchesSearch(row, musicBrainzOriginReportQuery),
     );
-  }, [musicBrainzOriginPreview, musicBrainzOriginReportFilter, musicBrainzOriginReportQuery]);
-  const musicBrainzOriginVisibleReportRows = musicBrainzOriginReportRows.slice(0, 250);
+  }, [
+    musicBrainzOriginPreview,
+    musicBrainzOriginReportFilter,
+    musicBrainzOriginReportQuery,
+  ]);
+  const musicBrainzOriginVisibleReportRows = musicBrainzOriginReportRows.slice(
+    0,
+    250,
+  );
   const musicBrainzOriginReportCounts = useMemo(() => {
     const rows = musicBrainzOriginPreview?.rows ?? [];
     return rows.reduce(
@@ -5934,7 +7353,10 @@ export default function App() {
           counts.unresolved += 1;
         } else if (row.status === "eligible") {
           counts.eligible += 1;
-        } else if (row.status === "alreadyImported" || row.status === "manual") {
+        } else if (
+          row.status === "alreadyImported" ||
+          row.status === "manual"
+        ) {
           counts.imported += 1;
         }
         return counts;
@@ -5950,13 +7372,77 @@ export default function App() {
     );
   }, [musicBrainzOriginPreview]);
 
+  const musicBrainzArtistInfoProgressPercent = useMemo(() => {
+    if (!musicBrainzArtistInfoProgress) {
+      return 0;
+    }
+    return Math.min(100, Math.max(0, musicBrainzArtistInfoProgress.percent));
+  }, [musicBrainzArtistInfoProgress]);
+
+  const musicBrainzArtistInfoReportQuery = musicBrainzArtistInfoReportSearch
+    .trim()
+    .toLowerCase();
+  const musicBrainzArtistInfoReportRows = useMemo(() => {
+    const rows = musicBrainzArtistInfoPreview?.rows ?? [];
+    return rows.filter(
+      (row) =>
+        artistInfoPreviewMatchesFilter(
+          row,
+          musicBrainzArtistInfoReportFilter,
+        ) &&
+        artistInfoPreviewMatchesSearch(row, musicBrainzArtistInfoReportQuery),
+    );
+  }, [
+    musicBrainzArtistInfoPreview,
+    musicBrainzArtistInfoReportFilter,
+    musicBrainzArtistInfoReportQuery,
+  ]);
+  const musicBrainzArtistInfoVisibleReportRows =
+    musicBrainzArtistInfoReportRows.slice(0, 250);
+  const musicBrainzArtistInfoReportCounts = useMemo(() => {
+    const rows = musicBrainzArtistInfoPreview?.rows ?? [];
+    return rows.reduce(
+      (counts, row) => {
+        counts.all += 1;
+        const artistType = row.existingArtistType?.trim().toLowerCase();
+        if (row.status === "skipped" || row.status === "unresolved") {
+          counts.needsAttention += 1;
+        }
+        if (row.status === "eligible") {
+          counts.eligible += 1;
+        } else if (row.status === "alreadyImported") {
+          counts.imported += 1;
+        }
+        if (artistType === "person") {
+          counts.person += 1;
+        } else if (artistType === "group") {
+          counts.group += 1;
+        }
+        return counts;
+      },
+      {
+        needsAttention: 0,
+        eligible: 0,
+        imported: 0,
+        person: 0,
+        group: 0,
+        all: 0,
+      } satisfies Record<ArtistInfoReportFilter, number>,
+    );
+  }, [musicBrainzArtistInfoPreview]);
+
   const importPathsDirty = useMemo(
     () =>
-      textSettingValue(sourcePath, defaultImportSourcePath) !== settings.importSourcePath ||
-      textSettingValue(coverSourcePath, defaultCoverSourcePath) !== settings.coverSourcePath ||
-      textSettingValue(billboardSourcePath, defaultBillboardSourcePath) !== settings.billboardSourcePath ||
-      textSettingValue(billboardSinglesSourcePath, defaultBillboardSinglesSourcePath) !==
-        settings.billboardSinglesSourcePath,
+      textSettingValue(sourcePath, defaultImportSourcePath) !==
+        settings.importSourcePath ||
+      textSettingValue(coverSourcePath, defaultCoverSourcePath) !==
+        settings.coverSourcePath ||
+      textSettingValue(billboardSourcePath, defaultBillboardSourcePath) !==
+        settings.billboardSourcePath ||
+      textSettingValue(
+        billboardSinglesSourcePath,
+        defaultBillboardSinglesSourcePath,
+      ) !== settings.billboardSinglesSourcePath,
     [
       billboardSinglesSourcePath,
       billboardSourcePath,
@@ -5970,8 +7456,13 @@ export default function App() {
   );
 
   const chips = useMemo(() => {
-    const nextChips: { key: string; label: ReactNode; remove: () => void }[] = [];
-    const addTextChip = (key: keyof BrowseFilters, label: string, filter: TextFilter) => {
+    const nextChips: { key: string; label: ReactNode; remove: () => void }[] =
+      [];
+    const addTextChip = (
+      key: keyof BrowseFilters,
+      label: string,
+      filter: TextFilter,
+    ) => {
       const chipLabel = textFilterLabel(label, filter);
       if (chipLabel) {
         nextChips.push({
@@ -5986,14 +7477,23 @@ export default function App() {
       nextChips.push({
         key: "searchText",
         label: `Search "${request.searchText.trim()}"`,
-        remove: () => setRequest((previous) => ({ ...previous, searchText: "", offset: 0 })),
+        remove: () =>
+          setRequest((previous) => ({
+            ...previous,
+            searchText: "",
+            offset: 0,
+          })),
       });
     }
 
     addTextChip("albumTitle", "Album", currentFilters.albumTitle);
     addTextChip("trackTitle", "Track", currentFilters.trackTitle);
     addTextChip("albumArtist", "Album artist", currentFilters.albumArtist);
-    addTextChip("displayArtist", "Display artist", currentFilters.displayArtist);
+    addTextChip(
+      "displayArtist",
+      "Display artist",
+      currentFilters.displayArtist,
+    );
     addTextChip("publisher", "Publisher", currentFilters.publisher);
     addTextChip("filePath", "Path", currentFilters.filePath);
     addTextChip("filename", "Filename", currentFilters.filename);
@@ -6059,9 +7559,16 @@ export default function App() {
       });
     }
 
-    addRangeChip(nextChips, "year", "Year", currentFilters.yearFrom, currentFilters.yearTo, () => {
-      updateFilters({ yearFrom: null, yearTo: null });
-    });
+    addRangeChip(
+      nextChips,
+      "year",
+      "Year",
+      currentFilters.yearFrom,
+      currentFilters.yearTo,
+      () => {
+        updateFilters({ yearFrom: null, yearTo: null });
+      },
+    );
     addRangeChip(
       nextChips,
       "billboard",
@@ -6077,7 +7584,11 @@ export default function App() {
         "Single Billboard",
         currentFilters.billboardSingleRankMin,
         currentFilters.billboardSingleRankMax,
-        () => updateFilters({ billboardSingleRankMin: null, billboardSingleRankMax: null }),
+        () =>
+          updateFilters({
+            billboardSingleRankMin: null,
+            billboardSingleRankMax: null,
+          }),
       );
     }
     addRangeChip(
@@ -6127,10 +7638,17 @@ export default function App() {
       "Complete",
       currentFilters.ratingCompletenessMin,
       currentFilters.ratingCompletenessMax,
-      () => updateFilters({ ratingCompletenessMin: null, ratingCompletenessMax: null }),
+      () =>
+        updateFilters({
+          ratingCompletenessMin: null,
+          ratingCompletenessMax: null,
+        }),
       "%",
     );
-    if (currentFilters.lovedTracksMin != null || currentFilters.lovedTracksMax != null) {
+    if (
+      currentFilters.lovedTracksMin != null ||
+      currentFilters.lovedTracksMax != null
+    ) {
       addRangeChip(
         nextChips,
         "lovedTracks",
@@ -6149,11 +7667,22 @@ export default function App() {
     }
 
     return nextChips;
-  }, [currentFilters, originCountryOptions, request.searchText, request.view, settings.countryFlagDisplay]);
+  }, [
+    currentFilters,
+    originCountryOptions,
+    request.searchText,
+    request.view,
+    settings.countryFlagDisplay,
+  ]);
 
   const albumChips = useMemo(() => {
-    const nextChips: { key: string; label: ReactNode; remove: () => void }[] = [];
-    const addTextChip = (key: keyof BrowseFilters, label: string, filter: TextFilter) => {
+    const nextChips: { key: string; label: ReactNode; remove: () => void }[] =
+      [];
+    const addTextChip = (
+      key: keyof BrowseFilters,
+      label: string,
+      filter: TextFilter,
+    ) => {
       const chipLabel = textFilterLabel(label, filter);
       if (chipLabel) {
         nextChips.push({
@@ -6168,7 +7697,12 @@ export default function App() {
       nextChips.push({
         key: "searchText",
         label: `Search "${albumRequest.searchText.trim()}"`,
-        remove: () => setAlbumRequest((previous) => ({ ...previous, searchText: "", offset: 0 })),
+        remove: () =>
+          setAlbumRequest((previous) => ({
+            ...previous,
+            searchText: "",
+            offset: 0,
+          })),
       });
     }
 
@@ -6191,16 +7725,24 @@ export default function App() {
       });
     }
 
-    addRangeChip(nextChips, "year", "Year", albumFilters.yearFrom, albumFilters.yearTo, () => {
-      updateAlbumFilters({ yearFrom: null, yearTo: null });
-    });
+    addRangeChip(
+      nextChips,
+      "year",
+      "Year",
+      albumFilters.yearFrom,
+      albumFilters.yearTo,
+      () => {
+        updateAlbumFilters({ yearFrom: null, yearTo: null });
+      },
+    );
     addRangeChip(
       nextChips,
       "billboard",
       "Billboard",
       albumFilters.billboardRankMin,
       albumFilters.billboardRankMax,
-      () => updateAlbumFilters({ billboardRankMin: null, billboardRankMax: null }),
+      () =>
+        updateAlbumFilters({ billboardRankMin: null, billboardRankMax: null }),
     );
     addRangeChip(
       nextChips,
@@ -6208,7 +7750,8 @@ export default function App() {
       "Minutes",
       albumFilters.totalMinutesMin,
       albumFilters.totalMinutesMax,
-      () => updateAlbumFilters({ totalMinutesMin: null, totalMinutesMax: null }),
+      () =>
+        updateAlbumFilters({ totalMinutesMin: null, totalMinutesMax: null }),
     );
     addRangeChip(
       nextChips,
@@ -6233,24 +7776,35 @@ export default function App() {
       "Complete",
       albumFilters.ratingCompletenessMin,
       albumFilters.ratingCompletenessMax,
-      () => updateAlbumFilters({ ratingCompletenessMin: null, ratingCompletenessMax: null }),
+      () =>
+        updateAlbumFilters({
+          ratingCompletenessMin: null,
+          ratingCompletenessMax: null,
+        }),
       "%",
     );
-    if (albumFilters.lovedTracksMin != null || albumFilters.lovedTracksMax != null) {
+    if (
+      albumFilters.lovedTracksMin != null ||
+      albumFilters.lovedTracksMax != null
+    ) {
       addRangeChip(
         nextChips,
         "lovedTracks",
         "Loved",
         albumFilters.lovedTracksMin,
         albumFilters.lovedTracksMax,
-        () => updateAlbumFilters({ lovedTracksMin: null, lovedTracksMax: null }),
+        () =>
+          updateAlbumFilters({ lovedTracksMin: null, lovedTracksMax: null }),
       );
     }
 
     return nextChips;
   }, [albumFilters, albumRequest.searchText]);
 
-  function updateFilter<K extends keyof BrowseFilters>(key: K, value: BrowseFilters[K]) {
+  function updateFilter<K extends keyof BrowseFilters>(
+    key: K,
+    value: BrowseFilters[K],
+  ) {
     setRequest((previous) => ({
       ...previous,
       filters: { ...previous.filters, [key]: value },
@@ -6309,7 +7863,10 @@ export default function App() {
     );
   }
 
-  function updateAlbumFilter<K extends keyof BrowseFilters>(key: K, value: BrowseFilters[K]) {
+  function updateAlbumFilter<K extends keyof BrowseFilters>(
+    key: K,
+    value: BrowseFilters[K],
+  ) {
     setAlbumRequest((previous) => ({
       ...previous,
       filters: { ...previous.filters, [key]: value },
@@ -6346,7 +7903,9 @@ export default function App() {
     setDiscoveryAlbumResponse(null);
   }
 
-  function applyArtistOriginUpdate(update: MusicBrainzArtistOriginCountryUpdate | null) {
+  function applyArtistOriginUpdate(
+    update: MusicBrainzArtistOriginCountryUpdate | null,
+  ) {
     if (!update) {
       return;
     }
@@ -6570,7 +8129,9 @@ export default function App() {
       setGenreAlbumsResponse(null);
       setDiscoveryAlbumResponse(null);
     } catch (error) {
-      setBillboardImportError(error instanceof Error ? error.message : String(error));
+      setBillboardImportError(
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       setIsImportingBillboard(false);
     }
@@ -6591,7 +8152,9 @@ export default function App() {
       setGenreAlbumsResponse(null);
       setDiscoveryAlbumResponse(null);
     } catch (error) {
-      setBillboardSinglesImportError(error instanceof Error ? error.message : String(error));
+      setBillboardSinglesImportError(
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       setIsImportingBillboardSingles(false);
     }
@@ -6599,19 +8162,30 @@ export default function App() {
 
   async function saveCurrentSearch() {
     const fallbackName =
-      request.searchText.trim() || `${request.view === "albums" ? "Album" : "Track"} search`;
+      request.searchText.trim() ||
+      `${request.view === "albums" ? "Album" : "Track"} search`;
     const saved = await saveSearch(saveName.trim() || fallbackName, request);
-    setSavedSearches((previous) => [saved, ...previous.filter((search) => search.id !== saved.id)]);
+    setSavedSearches((previous) => [
+      saved,
+      ...previous.filter((search) => search.id !== saved.id),
+    ]);
     setSaveName("");
   }
 
   async function removeSavedSearch(id: number) {
     await deleteSavedSearch(id);
-    setSavedSearches((previous) => previous.filter((search) => search.id !== id));
+    setSavedSearches((previous) =>
+      previous.filter((search) => search.id !== id),
+    );
   }
 
   async function runExport(format: string) {
-    const result = await exportSearch(request, format, includeCalculated, searchExportColumns);
+    const result = await exportSearch(
+      request,
+      format,
+      includeCalculated,
+      searchExportColumns,
+    );
     setExportResult(result);
   }
 
@@ -6631,7 +8205,11 @@ export default function App() {
     if (!artistAlbumsRequest) {
       return;
     }
-    const result = await exportSearch(artistAlbumsRequest, format, artistIncludeCalculated);
+    const result = await exportSearch(
+      artistAlbumsRequest,
+      format,
+      artistIncludeCalculated,
+    );
     setArtistExportResult(result);
   }
 
@@ -6649,10 +8227,15 @@ export default function App() {
     setMusicBrainzArtistOriginResult(null);
 
     try {
-      const result = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
+      const result = await getMusicBrainzArtistDiscography(
+        selectedArtist.id,
+        selectedArtist.name,
+      );
       setMusicBrainzArtistDiscography(result);
     } catch (error) {
-      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+      setMusicBrainzArtistError(
+        error instanceof Error ? error.message : String(error),
+      );
       setMusicBrainzArtistDiscography(null);
     } finally {
       setIsMusicBrainzArtistLoading(false);
@@ -6683,10 +8266,15 @@ export default function App() {
         decision,
         localAlbumId: row.localAlbumId,
       });
-      const result = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
+      const result = await getMusicBrainzArtistDiscography(
+        selectedArtist.id,
+        selectedArtist.name,
+      );
       setMusicBrainzArtistDiscography(result);
     } catch (error) {
-      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+      setMusicBrainzArtistError(
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       setIsMusicBrainzArtistLoading(false);
     }
@@ -6713,13 +8301,24 @@ export default function App() {
         artistKey: selectedArtist.id,
         artistName: selectedArtist.name,
         action,
-        musicbrainzMbid: musicbrainzMbid ?? musicBrainzArtistDiscography?.musicbrainzMbid ?? null,
-        canonicalName: canonicalName ?? musicBrainzArtistDiscography?.matchedCacheName ?? selectedArtist.name,
+        musicbrainzMbid:
+          musicbrainzMbid ??
+          musicBrainzArtistDiscography?.musicbrainzMbid ??
+          null,
+        canonicalName:
+          canonicalName ??
+          musicBrainzArtistDiscography?.matchedCacheName ??
+          selectedArtist.name,
       });
-      const result = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
+      const result = await getMusicBrainzArtistDiscography(
+        selectedArtist.id,
+        selectedArtist.name,
+      );
       setMusicBrainzArtistDiscography(result);
     } catch (error) {
-      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+      setMusicBrainzArtistError(
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       setIsMusicBrainzArtistLoading(false);
     }
@@ -6742,21 +8341,29 @@ export default function App() {
         artistName: selectedArtist.name,
         musicbrainzMbid: musicBrainzArtistDiscography.musicbrainzMbid,
       });
-      const discography = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
+      const discography = await getMusicBrainzArtistDiscography(
+        selectedArtist.id,
+        selectedArtist.name,
+      );
       setMusicBrainzArtistDiscography(discography);
       setMusicBrainzArtistRefreshResult(refreshResult);
       setMusicBrainzArtistOriginResult(null);
       applyArtistOriginUpdate(refreshResult.origin);
       await refreshMusicBrainzOriginCountryStatus();
     } catch (error) {
-      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+      setMusicBrainzArtistError(
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       setIsMusicBrainzArtistUpdating(false);
       setIsMusicBrainzArtistLoading(false);
     }
   }
 
-  async function saveArtistOriginCountry(countryCode: string, countryName?: string | null) {
+  async function saveArtistOriginCountry(
+    countryCode: string,
+    countryName?: string | null,
+  ) {
     if (!selectedArtist) {
       return;
     }
@@ -6780,14 +8387,20 @@ export default function App() {
       applyArtistOriginUpdate(origin);
       await refreshMusicBrainzOriginCountryStatus();
     } catch (error) {
-      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+      setMusicBrainzArtistError(
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       setIsMusicBrainzArtistLoading(false);
     }
   }
 
   async function runArtistMusicBrainzExport(format: "csv" | "xlsx") {
-    if (!selectedArtist || !musicBrainzArtistDiscography || musicBrainzArtistDiscography.artistLinkIgnored) {
+    if (
+      !selectedArtist ||
+      !musicBrainzArtistDiscography ||
+      musicBrainzArtistDiscography.artistLinkIgnored
+    ) {
       return;
     }
 
@@ -6824,7 +8437,9 @@ export default function App() {
       const result = await exportMusicBrainzArtistReleases(request, format);
       setMusicBrainzArtistExportResult(result);
     } catch (error) {
-      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+      setMusicBrainzArtistError(
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
@@ -6833,7 +8448,9 @@ export default function App() {
     try {
       await openExternalUrl(url);
     } catch (error) {
-      setMusicBrainzArtistError(error instanceof Error ? error.message : String(error));
+      setMusicBrainzArtistError(
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
@@ -6841,7 +8458,11 @@ export default function App() {
     if (!genreAlbumsRequest) {
       return;
     }
-    const result = await exportSearch(genreAlbumsRequest, format, genreIncludeCalculated);
+    const result = await exportSearch(
+      genreAlbumsRequest,
+      format,
+      genreIncludeCalculated,
+    );
     setGenreExportResult(result);
   }
 
@@ -6907,11 +8528,15 @@ export default function App() {
       const nextConfig = {
         ...previous,
         ...values,
-        sortField: values.sortField ?? (values.rankingMetric ? values.rankingMetric : previous.sortField),
+        sortField:
+          values.sortField ??
+          (values.rankingMetric ? values.rankingMetric : previous.sortField),
         request: values.request ?? previous.request,
       };
       if (values.gridCoverSize != null) {
-        nextConfig.gridCoverSize = normalizeChartGridCoverSize(values.gridCoverSize);
+        nextConfig.gridCoverSize = normalizeChartGridCoverSize(
+          values.gridCoverSize,
+        );
       }
       return nextConfig;
     });
@@ -6941,7 +8566,10 @@ export default function App() {
     setChartTableSort((previous) => nextSort(previous ?? defaultSort, field));
   }
 
-  function toggleChartColumn(value: string, key: "visibleColumns" | "exportColumns") {
+  function toggleChartColumn(
+    value: string,
+    key: "visibleColumns" | "exportColumns",
+  ) {
     setChartConfig((previous) => {
       const current = previous[key];
       const nextValues = current.includes(value)
@@ -7011,7 +8639,10 @@ export default function App() {
     }
   }
 
-  function openDiscoveryAlbums(selection: DiscoverySelection, nextRequest: BrowseRequest) {
+  function openDiscoveryAlbums(
+    selection: DiscoverySelection,
+    nextRequest: BrowseRequest,
+  ) {
     setDiscoverySelection(selection);
     setDiscoveryAlbumRequest(nextRequest);
     setDiscoveryAlbumResponse(null);
@@ -7042,7 +8673,9 @@ export default function App() {
     openDiscoveryAlbums(
       {
         title: point.album ?? "Untitled album",
-        caption: [point.albumArtistDisplay, point.year, point.genre].filter(Boolean).join(" / "),
+        caption: [point.albumArtistDisplay, point.year, point.genre]
+          .filter(Boolean)
+          .join(" / "),
       },
       createDiscoveryAlbumPointRequest(point),
     );
@@ -7062,7 +8695,9 @@ export default function App() {
     openDiscoveryAlbums(
       {
         title: point.artist,
-        caption: [formatNumber(point.albumCount), "albums", point.topGenre].filter(Boolean).join(" / "),
+        caption: [formatNumber(point.albumCount), "albums", point.topGenre]
+          .filter(Boolean)
+          .join(" / "),
       },
       createDiscoveryArtistRequest(point),
     );
@@ -7079,7 +8714,8 @@ export default function App() {
   async function saveAppSettings(values: Partial<AppSettings>) {
     const baseSettings = settingsRef.current;
     const overlayAutoSyncMinutes = overlayAutoSyncMinutesValue(
-      values.musicBrainzOverlayAutoSyncMinutes ?? baseSettings.musicBrainzOverlayAutoSyncMinutes,
+      values.musicBrainzOverlayAutoSyncMinutes ??
+        baseSettings.musicBrainzOverlayAutoSyncMinutes,
     );
     const updateAutoCheckMinutes = updateAutoCheckMinutesValue(
       values.updateAutoCheckMinutes ?? baseSettings.updateAutoCheckMinutes,
@@ -7087,9 +8723,13 @@ export default function App() {
     const nextSettings = {
       ...baseSettings,
       ...values,
-      backupRetention: clampBackupRetention(values.backupRetention ?? baseSettings.backupRetention),
-      leftSidebarDefault: values.leftSidebarDefault ?? baseSettings.leftSidebarDefault,
-      rightSidebarDefault: values.rightSidebarDefault ?? baseSettings.rightSidebarDefault,
+      backupRetention: clampBackupRetention(
+        values.backupRetention ?? baseSettings.backupRetention,
+      ),
+      leftSidebarDefault:
+        values.leftSidebarDefault ?? baseSettings.leftSidebarDefault,
+      rightSidebarDefault:
+        values.rightSidebarDefault ?? baseSettings.rightSidebarDefault,
       importSourcePath: textSettingValue(
         values.importSourcePath ?? baseSettings.importSourcePath,
         defaultImportSourcePath,
@@ -7103,7 +8743,8 @@ export default function App() {
         defaultBillboardSourcePath,
       ),
       billboardSinglesSourcePath: textSettingValue(
-        values.billboardSinglesSourcePath ?? baseSettings.billboardSinglesSourcePath,
+        values.billboardSinglesSourcePath ??
+          baseSettings.billboardSinglesSourcePath,
         defaultBillboardSinglesSourcePath,
       ),
       musicBrainzCachePath: textSettingValue(
@@ -7111,7 +8752,8 @@ export default function App() {
         defaultMusicBrainzCachePath,
       ),
       musicBrainzOverlaySyncPath: textSettingValue(
-        values.musicBrainzOverlaySyncPath ?? baseSettings.musicBrainzOverlaySyncPath,
+        values.musicBrainzOverlaySyncPath ??
+          baseSettings.musicBrainzOverlaySyncPath,
         defaultMusicBrainzOverlaySyncPath,
       ),
       musicBrainzOverlayAutoSyncMinutes: overlayAutoSyncMinutes,
@@ -7127,34 +8769,61 @@ export default function App() {
     setSettingsError(null);
 
     const previousSave = settingsSaveQueueRef.current;
-    const saveTask = previousSave.catch(() => undefined).then(async () => {
-      const saved = await saveSettings(nextSettings);
-      if (saveSequence === settingsSaveSequenceRef.current) {
-        settingsRef.current = saved;
-        setSettings(saved);
-        cacheSettings(saved);
-        if (Object.prototype.hasOwnProperty.call(values, "musicBrainzOverlayAutoSyncMinutes")) {
-          setMusicBrainzOverlayAutoSyncDraft(
-            String(overlayAutoSyncMinutesValue(saved.musicBrainzOverlayAutoSyncMinutes)),
-          );
+    const saveTask = previousSave
+      .catch(() => undefined)
+      .then(async () => {
+        const saved = await saveSettings(nextSettings);
+        if (saveSequence === settingsSaveSequenceRef.current) {
+          settingsRef.current = saved;
+          setSettings(saved);
+          cacheSettings(saved);
+          if (
+            Object.prototype.hasOwnProperty.call(
+              values,
+              "musicBrainzOverlayAutoSyncMinutes",
+            )
+          ) {
+            setMusicBrainzOverlayAutoSyncDraft(
+              String(
+                overlayAutoSyncMinutesValue(
+                  saved.musicBrainzOverlayAutoSyncMinutes,
+                ),
+              ),
+            );
+          }
+          if (
+            Object.prototype.hasOwnProperty.call(
+              values,
+              "updateAutoCheckMinutes",
+            )
+          ) {
+            setAppUpdateAutoCheckDraft(
+              String(updateAutoCheckMinutesValue(saved.updateAutoCheckMinutes)),
+            );
+          }
+          if (
+            Object.prototype.hasOwnProperty.call(values, "importSourcePath")
+          ) {
+            setSourcePath(saved.importSourcePath);
+          }
+          if (Object.prototype.hasOwnProperty.call(values, "coverSourcePath")) {
+            setCoverSourcePath(saved.coverSourcePath);
+          }
+          if (
+            Object.prototype.hasOwnProperty.call(values, "billboardSourcePath")
+          ) {
+            setBillboardSourcePath(saved.billboardSourcePath);
+          }
+          if (
+            Object.prototype.hasOwnProperty.call(
+              values,
+              "billboardSinglesSourcePath",
+            )
+          ) {
+            setBillboardSinglesSourcePath(saved.billboardSinglesSourcePath);
+          }
         }
-        if (Object.prototype.hasOwnProperty.call(values, "updateAutoCheckMinutes")) {
-          setAppUpdateAutoCheckDraft(String(updateAutoCheckMinutesValue(saved.updateAutoCheckMinutes)));
-        }
-        if (Object.prototype.hasOwnProperty.call(values, "importSourcePath")) {
-          setSourcePath(saved.importSourcePath);
-        }
-        if (Object.prototype.hasOwnProperty.call(values, "coverSourcePath")) {
-          setCoverSourcePath(saved.coverSourcePath);
-        }
-        if (Object.prototype.hasOwnProperty.call(values, "billboardSourcePath")) {
-          setBillboardSourcePath(saved.billboardSourcePath);
-        }
-        if (Object.prototype.hasOwnProperty.call(values, "billboardSinglesSourcePath")) {
-          setBillboardSinglesSourcePath(saved.billboardSinglesSourcePath);
-        }
-      }
-    });
+      });
     settingsSaveQueueRef.current = saveTask.then(
       () => undefined,
       () => undefined,
@@ -7164,10 +8833,15 @@ export default function App() {
       await saveTask;
     } catch (error) {
       if (saveSequence === settingsSaveSequenceRef.current) {
-        setSettingsError(error instanceof Error ? error.message : String(error));
+        setSettingsError(
+          error instanceof Error ? error.message : String(error),
+        );
       }
     } finally {
-      pendingSettingsSaveCountRef.current = Math.max(0, pendingSettingsSaveCountRef.current - 1);
+      pendingSettingsSaveCountRef.current = Math.max(
+        0,
+        pendingSettingsSaveCountRef.current - 1,
+      );
       if (pendingSettingsSaveCountRef.current === 0) {
         setIsSavingSettings(false);
       }
@@ -7211,7 +8885,9 @@ export default function App() {
       setRestoreSummary(summary);
       await loadData();
       await loadDiscoveryData().catch((error) => {
-        setDiscoveryError(error instanceof Error ? error.message : String(error));
+        setDiscoveryError(
+          error instanceof Error ? error.message : String(error),
+        );
         setIsDiscoveryLoading(false);
       });
     } catch (error) {
@@ -7229,14 +8905,17 @@ export default function App() {
       const result = await runPerformanceProbe();
       setPerformanceProbe(result);
     } catch (error) {
-      setPerformanceProbeError(error instanceof Error ? error.message : String(error));
+      setPerformanceProbeError(
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       setIsPerformanceProbeRunning(false);
     }
   }
 
   async function checkMusicBrainzCache() {
-    const cachePath = musicBrainzCachePathDraft.trim() || defaultMusicBrainzCachePath;
+    const cachePath =
+      musicBrainzCachePathDraft.trim() || defaultMusicBrainzCachePath;
     setIsMusicBrainzChecking(true);
     setMusicBrainzStatusError(null);
 
@@ -7246,7 +8925,9 @@ export default function App() {
       setMusicBrainzStatus(result);
       setMusicBrainzCachePathDraft(result.cachePath);
     } catch (error) {
-      setMusicBrainzStatusError(error instanceof Error ? error.message : String(error));
+      setMusicBrainzStatusError(
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       setIsMusicBrainzChecking(false);
     }
@@ -7268,7 +8949,9 @@ export default function App() {
       setMusicBrainzOriginPreview(result);
       await refreshMusicBrainzOriginCountryStatus();
     } catch (error) {
-      setMusicBrainzOriginError(error instanceof Error ? error.message : String(error));
+      setMusicBrainzOriginError(
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       setIsMusicBrainzOriginPreviewing(false);
     }
@@ -7310,7 +8993,10 @@ export default function App() {
       setMusicBrainzOriginError(message);
       const failedProgress: MusicBrainzOriginCountryImportProgress = {
         status: "failed",
-        totalArtists: musicBrainzOriginProgress?.totalArtists ?? musicBrainzOriginStatus?.totalAlbumArtists ?? 0,
+        totalArtists:
+          musicBrainzOriginProgress?.totalArtists ??
+          musicBrainzOriginStatus?.totalAlbumArtists ??
+          0,
         eligibleCount: musicBrainzOriginProgress?.eligibleCount ?? 0,
         processedCount: musicBrainzOriginProgress?.processedCount ?? 0,
         remainingCount: musicBrainzOriginProgress?.remainingCount ?? 0,
@@ -7326,7 +9012,9 @@ export default function App() {
         message,
       };
       setMusicBrainzOriginProgress(failedProgress);
-      setMusicBrainzOriginLog((previous) => [failedProgress, ...previous].slice(0, 80));
+      setMusicBrainzOriginLog((previous) =>
+        [failedProgress, ...previous].slice(0, 80),
+      );
     } finally {
       setIsMusicBrainzOriginImporting(false);
     }
@@ -7339,23 +9027,137 @@ export default function App() {
           ? {
               ...current,
               status: "cancelling",
-              message: "Cancellation requested. Waiting for the current MusicBrainz request to finish.",
+              message:
+                "Cancellation requested. Waiting for the current MusicBrainz request to finish.",
             }
           : current,
       );
       await cancelMusicBrainzOriginCountryImport();
     } catch (error) {
-      setMusicBrainzOriginError(error instanceof Error ? error.message : String(error));
+      setMusicBrainzOriginError(
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
-  async function runMusicBrainzOverlaySync(options: { source?: "manual" | "auto" } = {}) {
+  async function refreshMusicBrainzArtistInfoStatus() {
+    const result = await getMusicBrainzArtistInfoStatus();
+    setMusicBrainzArtistInfoStatus(result);
+    return result;
+  }
+
+  async function previewMusicBrainzArtistInfos() {
+    setIsMusicBrainzArtistInfoPreviewing(true);
+    setMusicBrainzArtistInfoError(null);
+    setMusicBrainzArtistInfoImportSummary(null);
+
+    try {
+      const result = await previewMusicBrainzArtistInfoImport({});
+      setMusicBrainzArtistInfoPreview(result);
+      await refreshMusicBrainzArtistInfoStatus();
+    } catch (error) {
+      setMusicBrainzArtistInfoError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setIsMusicBrainzArtistInfoPreviewing(false);
+    }
+  }
+
+  async function runMusicBrainzArtistInfoImport() {
+    setIsMusicBrainzArtistInfoImporting(true);
+    setMusicBrainzArtistInfoError(null);
+    setMusicBrainzArtistInfoImportSummary(null);
+    const startingProgress: MusicBrainzArtistInfoImportProgress = {
+      status: "preparing",
+      totalArtists: musicBrainzArtistInfoStatus?.totalAlbumArtists ?? 0,
+      eligibleCount: 0,
+      processedCount: 0,
+      remainingCount: 0,
+      fetchedCount: 0,
+      storedCount: 0,
+      skippedCount: 0,
+      unresolvedCount: 0,
+      failedCount: 0,
+      percent: 0,
+      currentArtist: null,
+      currentArtistKey: null,
+      currentMbid: null,
+      message: "Preparing MusicBrainz artist-info import.",
+    };
+    setMusicBrainzArtistInfoProgress(startingProgress);
+    setMusicBrainzArtistInfoLog([startingProgress]);
+
+    try {
+      const result = await importMusicBrainzArtistInfos({});
+      setMusicBrainzArtistInfoImportSummary(result);
+      const preview = await previewMusicBrainzArtistInfoImport({});
+      setMusicBrainzArtistInfoPreview(preview);
+      await refreshMusicBrainzArtistInfoStatus();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMusicBrainzArtistInfoError(message);
+      const failedProgress: MusicBrainzArtistInfoImportProgress = {
+        status: "failed",
+        totalArtists:
+          musicBrainzArtistInfoProgress?.totalArtists ??
+          musicBrainzArtistInfoStatus?.totalAlbumArtists ??
+          0,
+        eligibleCount: musicBrainzArtistInfoProgress?.eligibleCount ?? 0,
+        processedCount: musicBrainzArtistInfoProgress?.processedCount ?? 0,
+        remainingCount: musicBrainzArtistInfoProgress?.remainingCount ?? 0,
+        fetchedCount: musicBrainzArtistInfoProgress?.fetchedCount ?? 0,
+        storedCount: musicBrainzArtistInfoProgress?.storedCount ?? 0,
+        skippedCount: musicBrainzArtistInfoProgress?.skippedCount ?? 0,
+        unresolvedCount: musicBrainzArtistInfoProgress?.unresolvedCount ?? 0,
+        failedCount: musicBrainzArtistInfoProgress?.failedCount ?? 1,
+        percent: musicBrainzArtistInfoProgress?.percent ?? 0,
+        currentArtist: musicBrainzArtistInfoProgress?.currentArtist ?? null,
+        currentArtistKey:
+          musicBrainzArtistInfoProgress?.currentArtistKey ?? null,
+        currentMbid: musicBrainzArtistInfoProgress?.currentMbid ?? null,
+        message,
+      };
+      setMusicBrainzArtistInfoProgress(failedProgress);
+      setMusicBrainzArtistInfoLog((previous) =>
+        [failedProgress, ...previous].slice(0, 80),
+      );
+    } finally {
+      setIsMusicBrainzArtistInfoImporting(false);
+    }
+  }
+
+  async function cancelMusicBrainzArtistInfoImportRun() {
+    try {
+      setMusicBrainzArtistInfoProgress((current) =>
+        current
+          ? {
+              ...current,
+              status: "cancelling",
+              message:
+                "Cancellation requested. Waiting for the current MusicBrainz request to finish.",
+            }
+          : current,
+      );
+      await cancelMusicBrainzArtistInfoImport();
+    } catch (error) {
+      setMusicBrainzArtistInfoError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  async function runMusicBrainzOverlaySync(
+    options: { source?: "manual" | "auto" } = {},
+  ) {
     if (isMusicBrainzOverlaySyncingRef.current) {
       return;
     }
 
     const isAutoSync = options.source === "auto";
-    const syncPath = musicBrainzOverlaySyncPathDraft.trim() || defaultMusicBrainzOverlaySyncPath;
+    const syncPath =
+      musicBrainzOverlaySyncPathDraft.trim() ||
+      defaultMusicBrainzOverlaySyncPath;
     isMusicBrainzOverlaySyncingRef.current = true;
     if (!isAutoSync) {
       setIsMusicBrainzOverlaySyncing(true);
@@ -7374,12 +9176,17 @@ export default function App() {
         setMusicBrainzOverlaySyncLog(log);
       }
       if (selectedArtist && (!isAutoSync || result.changedCount > 0)) {
-        const discography = await getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name);
+        const discography = await getMusicBrainzArtistDiscography(
+          selectedArtist.id,
+          selectedArtist.name,
+        );
         setMusicBrainzArtistDiscography(discography);
       }
     } catch (error) {
       if (!isAutoSync) {
-        setMusicBrainzOverlaySyncError(error instanceof Error ? error.message : String(error));
+        setMusicBrainzOverlaySyncError(
+          error instanceof Error ? error.message : String(error),
+        );
       }
     } finally {
       isMusicBrainzOverlaySyncingRef.current = false;
@@ -7390,13 +9197,19 @@ export default function App() {
   }
 
   async function commitMusicBrainzOverlayAutoSyncMinutes() {
-    const nextAutoSyncMinutes = overlayAutoSyncMinutesValue(numberValue(musicBrainzOverlayAutoSyncDraft));
+    const nextAutoSyncMinutes = overlayAutoSyncMinutesValue(
+      numberValue(musicBrainzOverlayAutoSyncDraft),
+    );
     setMusicBrainzOverlayAutoSyncDraft(String(nextAutoSyncMinutes));
-    await saveAppSettings({ musicBrainzOverlayAutoSyncMinutes: nextAutoSyncMinutes });
+    await saveAppSettings({
+      musicBrainzOverlayAutoSyncMinutes: nextAutoSyncMinutes,
+    });
   }
 
   async function commitAppUpdateAutoCheckMinutes() {
-    const nextAutoCheckMinutes = updateAutoCheckMinutesValue(numberValue(appUpdateAutoCheckDraft));
+    const nextAutoCheckMinutes = updateAutoCheckMinutesValue(
+      numberValue(appUpdateAutoCheckDraft),
+    );
     setAppUpdateAutoCheckDraft(String(nextAutoCheckMinutes));
     await saveAppSettings({ updateAutoCheckMinutes: nextAutoCheckMinutes });
   }
@@ -7443,10 +9256,14 @@ export default function App() {
         if (source === "manual") {
           setAppUpdateLastCheckedAt(new Date().toISOString());
           setAppUpdateStatus("error");
-          setAppUpdateError(error instanceof Error ? error.message : String(error));
+          setAppUpdateError(
+            error instanceof Error ? error.message : String(error),
+          );
           setIsAppUpdateBannerDismissed(false);
         } else {
-          setAppUpdateStatus((currentStatus) => (currentStatus === "checking" ? "idle" : currentStatus));
+          setAppUpdateStatus((currentStatus) =>
+            currentStatus === "checking" ? "idle" : currentStatus,
+          );
         }
       } finally {
         isAppUpdateCheckingRef.current = false;
@@ -7491,7 +9308,9 @@ export default function App() {
   }, [canImport, checkAppUpdate]);
 
   useEffect(() => {
-    const autoCheckMinutes = updateAutoCheckMinutesValue(settings.updateAutoCheckMinutes);
+    const autoCheckMinutes = updateAutoCheckMinutesValue(
+      settings.updateAutoCheckMinutes,
+    );
     if (!canImport || autoCheckMinutes <= 0) {
       return undefined;
     }
@@ -7504,7 +9323,9 @@ export default function App() {
   }, [canImport, checkAppUpdate, settings.updateAutoCheckMinutes]);
 
   useEffect(() => {
-    const autoSyncMinutes = overlayAutoSyncMinutesValue(settings.musicBrainzOverlayAutoSyncMinutes);
+    const autoSyncMinutes = overlayAutoSyncMinutesValue(
+      settings.musicBrainzOverlayAutoSyncMinutes,
+    );
     if (!canImport || autoSyncMinutes <= 0) {
       return undefined;
     }
@@ -7541,23 +9362,39 @@ export default function App() {
   const pageEnd = Math.min(total, request.offset + request.limit);
   const albumTotal = albumResponse?.total ?? 0;
   const albumPageStart = albumTotal === 0 ? 0 : albumRequest.offset + 1;
-  const albumPageEnd = Math.min(albumTotal, albumRequest.offset + albumRequest.limit);
+  const albumPageEnd = Math.min(
+    albumTotal,
+    albumRequest.offset + albumRequest.limit,
+  );
   const selectedAlbum =
     albumResponse?.rows.find((row) => row.albumId === selectedAlbumId) ?? null;
-  const selectedAlbumTrackCount = selectedAlbum?.totalTracks ?? albumTracksResponse?.total ?? 0;
+  const selectedAlbumTrackCount =
+    selectedAlbum?.totalTracks ?? albumTracksResponse?.total ?? 0;
   const artistTotal = artistResponse?.total ?? 0;
   const artistPageStart = artistTotal === 0 ? 0 : artistRequest.offset + 1;
-  const artistPageEnd = Math.min(artistTotal, artistRequest.offset + artistRequest.limit);
-  const selectedArtistAlbumCount = selectedArtist?.albumCount ?? artistAlbumsResponse?.total ?? 0;
+  const artistPageEnd = Math.min(
+    artistTotal,
+    artistRequest.offset + artistRequest.limit,
+  );
+  const selectedArtistAlbumCount =
+    selectedArtist?.albumCount ?? artistAlbumsResponse?.total ?? 0;
   const selectedArtistAlbumTrackCount =
     selectedArtistAlbum?.totalTracks ?? artistAlbumTracksResponse?.total ?? 0;
   const genreTotal = genreResponse?.total ?? 0;
   const genrePageStart = genreTotal === 0 ? 0 : genreRequest.offset + 1;
-  const genrePageEnd = Math.min(genreTotal, genreRequest.offset + genreRequest.limit);
-  const selectedGenreAlbumCount = selectedGenre?.albumCount ?? genreAlbumsResponse?.total ?? 0;
+  const genrePageEnd = Math.min(
+    genreTotal,
+    genreRequest.offset + genreRequest.limit,
+  );
+  const selectedGenreAlbumCount =
+    selectedGenre?.albumCount ?? genreAlbumsResponse?.total ?? 0;
   const toolIssueTotal = currentToolIssueResponse?.total ?? 0;
-  const toolIssuePageStart = toolIssueTotal === 0 ? 0 : toolIssueRequest.offset + 1;
-  const toolIssuePageEnd = Math.min(toolIssueTotal, toolIssueRequest.offset + toolIssueRequest.limit);
+  const toolIssuePageStart =
+    toolIssueTotal === 0 ? 0 : toolIssueRequest.offset + 1;
+  const toolIssuePageEnd = Math.min(
+    toolIssueTotal,
+    toolIssueRequest.offset + toolIssueRequest.limit,
+  );
   const totalToolIssues = musicTools.every((tool) => tool.issueCount >= 0)
     ? musicTools.reduce((sum, tool) => sum + tool.issueCount, 0)
     : null;
@@ -7572,46 +9409,77 @@ export default function App() {
       : `${formatNumber(toolIssuePageStart)}-${formatNumber(toolIssuePageEnd)} of ${formatNumber(toolIssueTotal)}`;
   const chartTotal = chartResponse?.total ?? 0;
   const chartRows = chartResponse?.rows.length ?? 0;
-  const currentChartGridCoverSize = normalizeChartGridCoverSize(chartConfig.gridCoverSize);
+  const currentChartGridCoverSize = normalizeChartGridCoverSize(
+    chartConfig.gridCoverSize,
+  );
   const currentChartCompletenessRange = chartCompletenessRange(chartConfig);
-  const discoveryMissionTotal = (discovery?.backlogMissions.length ?? 0) + (discovery?.smartMissions.length ?? 0);
+  const discoveryMissionTotal =
+    (discovery?.backlogMissions.length ?? 0) +
+    (discovery?.smartMissions.length ?? 0);
   const discoveryMetricValue = (value: number | null | undefined) =>
     isDiscoveryLoading && !discovery ? "Loading" : formatNumber(value);
-  const discoveryHeatmapEmptyLabel = isDiscoveryLoading ? "Loading heatmap cells." : "No heatmap cells yet.";
-  const discoveryBacklogEmptyLabel = isDiscoveryLoading ? "Loading backlog missions." : "No backlog missions yet.";
-  const discoverySmartMissionEmptyLabel = isDiscoveryLoading ? "Loading smart missions." : "No smart missions yet.";
+  const discoveryHeatmapEmptyLabel = isDiscoveryLoading
+    ? "Loading heatmap cells."
+    : "No heatmap cells yet.";
+  const discoveryBacklogEmptyLabel = isDiscoveryLoading
+    ? "Loading backlog missions."
+    : "No backlog missions yet.";
+  const discoverySmartMissionEmptyLabel = isDiscoveryLoading
+    ? "Loading smart missions."
+    : "No smart missions yet.";
   const discoveryOutlierEmptyLabel = isDiscoveryLoading
     ? "Loading loved/rating outliers."
     : "No loved/rating outliers yet.";
-  const discoveryGenreEmptyLabel = isDiscoveryLoading ? "Loading genre universe." : "No genre universe yet.";
-  const discoveryArtistEmptyLabel = isDiscoveryLoading ? "Loading artist constellation." : "No artist constellation yet.";
+  const discoveryGenreEmptyLabel = isDiscoveryLoading
+    ? "Loading genre universe."
+    : "No genre universe yet.";
+  const discoveryArtistEmptyLabel = isDiscoveryLoading
+    ? "Loading artist constellation."
+    : "No artist constellation yet.";
   const discoveryAlbumTotal = discoveryAlbumResponse?.total ?? 0;
-  const discoveryAlbumPageStart = discoveryAlbumTotal === 0 ? 0 : discoveryAlbumRequest.offset + 1;
-  const discoveryAlbumPageEnd = Math.min(discoveryAlbumTotal, discoveryAlbumRequest.offset + discoveryAlbumRequest.limit);
+  const discoveryAlbumPageStart =
+    discoveryAlbumTotal === 0 ? 0 : discoveryAlbumRequest.offset + 1;
+  const discoveryAlbumPageEnd = Math.min(
+    discoveryAlbumTotal,
+    discoveryAlbumRequest.offset + discoveryAlbumRequest.limit,
+  );
   const ratingAlbumTotal =
     (statistics?.ratingProgress.fullyRatedAlbums ?? 0) +
     (statistics?.ratingProgress.partiallyRatedAlbums ?? 0) +
     (statistics?.ratingProgress.unratedAlbums ?? 0);
   const ratingTrackTotal =
-    (statistics?.ratingProgress.ratedTracks ?? 0) + (statistics?.ratingProgress.unratedTracks ?? 0);
+    (statistics?.ratingProgress.ratedTracks ?? 0) +
+    (statistics?.ratingProgress.unratedTracks ?? 0);
   const isLeftSidebarHidden = leftSidebarMode === "hidden";
   const isRightSidebarHidden = rightSidebarMode === "hidden";
   const musicBrainzMetricTone =
-    musicBrainzStatus?.state === "available" ? "teal" : musicBrainzStatus?.state === "warning" ? "amber" : "neutral";
-  const musicBrainzStatusLabel = musicBrainzStateLabel(musicBrainzStatus?.state);
+    musicBrainzStatus?.state === "available"
+      ? "teal"
+      : musicBrainzStatus?.state === "warning"
+        ? "amber"
+        : "neutral";
+  const musicBrainzStatusLabel = musicBrainzStateLabel(
+    musicBrainzStatus?.state,
+  );
   const musicBrainzStatusText = musicBrainzStatus
     ? `${musicBrainzStatusLabel} / ${formatNumber(musicBrainzStatus.artistCount)} artists`
     : "Not checked";
-  const musicBrainzHasWarnings = (musicBrainzStatus?.suspiciousMappingCount ?? 0) > 0;
+  const musicBrainzHasWarnings =
+    (musicBrainzStatus?.suspiciousMappingCount ?? 0) > 0;
   const appUpdateIsBusy =
     appUpdateStatus === "checking" ||
     appUpdateStatus === "downloading" ||
     appUpdateStatus === "installing" ||
     appUpdateStatus === "restarting";
-  const appUpdateCanInstall = appUpdateStatus === "available" && appUpdateRef.current != null;
+  const appUpdateCanInstall =
+    appUpdateStatus === "available" && appUpdateRef.current != null;
   const appUpdateProgressLabel = appUpdateProgressText(appUpdateProgress);
-  const appUpdateLastCheckedText = appUpdateLastCheckedAt ? formatDate(appUpdateLastCheckedAt) : "Not checked";
-  const appUpdateAutoCheckMinutes = updateAutoCheckMinutesValue(settings.updateAutoCheckMinutes);
+  const appUpdateLastCheckedText = appUpdateLastCheckedAt
+    ? formatDate(appUpdateLastCheckedAt)
+    : "Not checked";
+  const appUpdateAutoCheckMinutes = updateAutoCheckMinutesValue(
+    settings.updateAutoCheckMinutes,
+  );
   const appUpdateMetricValue =
     appUpdateStatus === "available" && appUpdateInfo
       ? `v${appUpdateInfo.version}`
@@ -7645,12 +9513,17 @@ export default function App() {
     appUpdateStatus === "available" && appUpdateInfo
       ? `Installed version ${appUpdateInfo.currentVersion}.`
       : appUpdateStatus === "error"
-        ? appUpdateError ?? "Could not check for updates."
+        ? (appUpdateError ?? "Could not check for updates.")
         : appUpdateProgressLabel;
-  const leftSidebarClass = leftSidebarMode === "iconOnly" ? "left-sidebar-icon-only" : `left-sidebar-${leftSidebarMode}`;
+  const leftSidebarClass =
+    leftSidebarMode === "iconOnly"
+      ? "left-sidebar-icon-only"
+      : `left-sidebar-${leftSidebarMode}`;
   const appShellClassName = `app-shell ${leftSidebarClass} right-sidebar-${rightSidebarMode}`;
   const leftIconOnlyToggleLabel =
-    leftSidebarMode === "iconOnly" ? "Show navigation labels" : "Show navigation icons only";
+    leftSidebarMode === "iconOnly"
+      ? "Show navigation labels"
+      : "Show navigation icons only";
 
   return (
     <main className={appShellClassName}>
@@ -7668,13 +9541,27 @@ export default function App() {
       <button
         className="icon-button edge-toggle right-sidebar-toggle"
         type="button"
-        aria-label={isRightSidebarHidden ? "Show details sidebar" : "Hide details sidebar"}
-        title={isRightSidebarHidden ? "Show details sidebar" : "Hide details sidebar"}
-        onClick={() => setRightSidebarMode(isRightSidebarHidden ? "expanded" : "hidden")}
+        aria-label={
+          isRightSidebarHidden ? "Show details sidebar" : "Hide details sidebar"
+        }
+        title={
+          isRightSidebarHidden ? "Show details sidebar" : "Hide details sidebar"
+        }
+        onClick={() =>
+          setRightSidebarMode(isRightSidebarHidden ? "expanded" : "hidden")
+        }
       >
-        {isRightSidebarHidden ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+        {isRightSidebarHidden ? (
+          <ChevronLeft size={18} />
+        ) : (
+          <ChevronRight size={18} />
+        )}
       </button>
-      <aside className="sidebar" aria-label="Main navigation" aria-hidden={isLeftSidebarHidden}>
+      <aside
+        className="sidebar"
+        aria-label="Main navigation"
+        aria-hidden={isLeftSidebarHidden}
+      >
         <div className="sidebar-header">
           <div className="brand">
             <div className="brand-mark" aria-hidden="true">
@@ -7692,7 +9579,11 @@ export default function App() {
               type="button"
               aria-label={leftIconOnlyToggleLabel}
               title={leftIconOnlyToggleLabel}
-              onClick={() => setLeftSidebarMode(leftSidebarMode === "iconOnly" ? "expanded" : "iconOnly")}
+              onClick={() =>
+                setLeftSidebarMode(
+                  leftSidebarMode === "iconOnly" ? "expanded" : "iconOnly",
+                )
+              }
             >
               <ListMusic size={16} />
             </button>
@@ -7732,14 +9623,18 @@ export default function App() {
 
       <div className="workspace-column">
         {appUpdateBannerVisible ? (
-          <section className={`app-update-banner app-update-banner-${appUpdateStatus}`} aria-live="polite">
+          <section
+            className={`app-update-banner app-update-banner-${appUpdateStatus}`}
+            aria-live="polite"
+          >
             <div className="app-update-banner-icon" aria-hidden="true">
               <Download size={18} />
             </div>
             <div className="app-update-banner-copy">
               <strong>{appUpdateBannerTitle}</strong>
               <span>{appUpdateBannerMessage}</span>
-              {appUpdateStatus === "downloading" && appUpdateProgress?.percent != null ? (
+              {appUpdateStatus === "downloading" &&
+              appUpdateProgress?.percent != null ? (
                 <div className="app-update-progress" aria-hidden="true">
                   <div style={{ width: `${appUpdateProgress.percent}%` }} />
                 </div>
@@ -7747,7 +9642,11 @@ export default function App() {
             </div>
             <div className="app-update-banner-actions">
               {appUpdateCanInstall ? (
-                <button className="primary-button" type="button" onClick={() => void runAppUpdateInstall()}>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => void runAppUpdateInstall()}
+                >
                   <Download size={16} />
                   <span>Update now</span>
                 </button>
@@ -7775,768 +9674,1282 @@ export default function App() {
           </section>
         ) : null}
 
-      {activeSection === "Imports" ? (
-        <section className="workspace">
-          <header className="topbar">
-            <div>
-              <h1>Imports</h1>
-              <p>Build the local SQLite database from a MusicBee TSV export.</p>
-            </div>
-            <div className="topbar-actions">
-              <button
-                className="secondary-button"
-                type="button"
-                disabled={isSavingSettings || !importPathsDirty}
-                onClick={() => void saveImportPathSettings()}
-                title={importPathsDirty ? "Save import paths" : "Import paths are saved"}
-              >
-                <Save size={16} />
-                <span>{isSavingSettings ? "Saving" : importPathsDirty ? "Save paths" : "Paths saved"}</span>
-              </button>
-              <button className="icon-button" type="button" aria-label="Refresh" onClick={() => void loadData()}>
-                <RotateCcw size={18} />
-              </button>
-            </div>
-          </header>
-
-          <section className="metric-grid" aria-label="Library summary">
-            <Metric label="Raw tracks" value={formatNumber(status?.trackCount)} tone="teal" icon={ListMusic} />
-            <Metric label="Album aggregates" value={formatNumber(status?.albumCount)} tone="amber" icon={Album} />
-            <Metric label="Cover images" value={formatNumber(status?.coverCount)} icon={Album} />
-            <Metric label="Import runs" value={formatNumber(status?.importRunCount)} icon={Clock3} />
-            <Metric label="Database" value={status?.hasDatabase ? "Ready" : "New"} icon={Database} />
-          </section>
-
-          {settingsError ? <p className="error-message">{settingsError}</p> : null}
-
-          <section className="import-panel">
-            <div className="panel-heading">
+        {activeSection === "Imports" ? (
+          <section className="workspace">
+            <header className="topbar">
               <div>
-                <h2>musicbee-library.tsv</h2>
-                <p>Streaming import validates headers and refreshes calculated album fields.</p>
-              </div>
-              <RunStatus status={progress.status} />
-            </div>
-
-            <label className="source-input">
-              <span>TSV source path</span>
-              <input
-                value={sourcePath}
-                onChange={(event) => setSourcePath(event.target.value)}
-                placeholder="C:\\Music\\musicbee-library.tsv"
-                disabled={isImporting}
-              />
-            </label>
-
-            <div className="progress-block" aria-live="polite">
-              <div className="progress-row">
-                <span>{progress.message}</span>
-                <strong>{formatNumber(progress.processedRows)} rows</strong>
-              </div>
-              <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
-              </div>
-              <div className="progress-meta">
-                <span>{formatNumber(progress.albumCount)} album keys observed</span>
-                <span>Backup ready before data replacement</span>
-              </div>
-            </div>
-
-            {importError ? <p className="error-message">{importError}</p> : null}
-
-            <div className="action-row">
-              <button
-                className="primary-button"
-                type="button"
-                onClick={startImport}
-                disabled={isImporting || !sourcePath.trim() || !canImport}
-                title={canImport ? "Start import" : "Open the Tauri desktop app to import"}
-              >
-                <Play size={17} fill="currentColor" />
-                <span>{isImporting ? "Importing" : "Start import"}</span>
-              </button>
-              <span className="db-path">{status?.dbPath ?? "Database path will appear after initialization."}</span>
-            </div>
-          </section>
-
-          <section className="import-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>Cover art</h2>
-                <p>Scan folder-named image files, link archive matches, and optionally extract embedded MP3 artwork into the cover archive.</p>
-              </div>
-              <RunStatus status={coverProgress.status} />
-            </div>
-
-            <label className="source-input">
-              <span>Cover source folder</span>
-              <input
-                value={coverSourcePath}
-                onChange={(event) => setCoverSourcePath(event.target.value)}
-                placeholder="C:\\Music\\AlbumCovers"
-                disabled={isImportingCovers}
-              />
-            </label>
-
-            <div className="toggle-row cover-options">
-              <label className="toggle-row">
-                <input
-                  type="checkbox"
-                  checked={coverExtractEmbeddedFallback}
-                  onChange={(event) => setCoverExtractEmbeddedFallback(event.target.checked)}
-                  disabled={isImportingCovers}
-                />
-                <span>Extract missing embedded MP3 covers into AlbumCovers</span>
-              </label>
-              <label className="toggle-row">
-                <input
-                  type="checkbox"
-                  checked={coverReplaceExisting}
-                  onChange={(event) => setCoverReplaceExisting(event.target.checked)}
-                  disabled={isImportingCovers}
-                />
-                <span>Replace existing covers</span>
-              </label>
-            </div>
-
-            <div className="progress-block cover-progress-block" aria-live="polite">
-              <div className="progress-row">
-                <span>{coverProgress.message}</span>
-                <strong>{Math.round(coverProgressPercent)}%</strong>
-              </div>
-              <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${coverProgressPercent}%` }} />
-              </div>
-              <div className="progress-meta">
-                <span>
-                  {formatNumber(coverProgress.scannedAlbums)} of {formatNumber(coverProgress.totalAlbums)} albums scanned
-                </span>
-                <span>{formatNumber(coverProgress.newCoversFound)} new covers found or extracted</span>
-              </div>
-              <div className="progress-meta">
-                <span>{formatNumber(coverProgress.importedCovers)} imported</span>
-                <span>{formatNumber(coverProgress.relinkedCovers)} relinked</span>
-                <span>{formatNumber(coverProgress.skippedExisting)} already had covers</span>
-                <span>{formatNumber(coverProgress.missingCovers)} missing</span>
-              </div>
-            </div>
-
-            {coverImportError ? <p className="error-message">{coverImportError}</p> : null}
-            {coverImportSummary ? (
-              <p className="success-message">
-                Linked or imported {formatNumber(coverImportSummary.importedCovers)} covers from{" "}
-                {formatNumber(coverImportSummary.newCoversFound)} newly found or extracted covers and{" "}
-                {formatNumber(coverImportSummary.relinkedCovers)} existing cover entries.
-              </p>
-            ) : null}
-
-            <div className="action-row">
-              <button
-                className="primary-button"
-                type="button"
-                onClick={startCoverImport}
-                disabled={isImportingCovers || !coverSourcePath.trim() || !canImport || (status?.albumCount ?? 0) === 0}
-                title={canImport ? "Start cover import" : "Open the Tauri desktop app to import covers"}
-              >
-                <Play size={17} fill="currentColor" />
-                <span>{isImportingCovers ? "Scanning" : "Import covers"}</span>
-              </button>
-              <span className="db-path">
-                Archive matches are linked directly; missing embedded art is saved into AlbumCovers.
-              </span>
-            </div>
-          </section>
-
-          <section className="import-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>Billboard year-end charts</h2>
-                <p>Import album ranks from yearly CSV files and annotate matching library albums.</p>
-              </div>
-              <RunStatus
-                status={isImportingBillboard ? "running" : billboardImportSummary ? "completed" : "idle"}
-              />
-            </div>
-
-            <label className="source-input">
-              <span>Chart CSV folder</span>
-              <input
-                value={billboardSourcePath}
-                onChange={(event) => setBillboardSourcePath(event.target.value)}
-                placeholder="CSV"
-                disabled={isImportingBillboard}
-              />
-            </label>
-
-            {billboardImportError ? <p className="error-message">{billboardImportError}</p> : null}
-            {billboardImportSummary ? (
-              <p className="success-message">
-                Matched {formatNumber(billboardImportSummary.matchedAlbums)} albums from{" "}
-                {formatNumber(billboardImportSummary.chartEntries)} chart rows across{" "}
-                {formatNumber(billboardImportSummary.filesScanned)} files.
-              </p>
-            ) : null}
-
-            <div className="action-row">
-              <button
-                className="primary-button"
-                type="button"
-                onClick={startBillboardImport}
-                disabled={isImportingBillboard || !billboardSourcePath.trim() || !canImport || (status?.albumCount ?? 0) === 0}
-                title={canImport ? "Import Billboard charts" : "Open the Tauri desktop app to import Billboard charts"}
-              >
-                <BarChart3 size={17} />
-                <span>{isImportingBillboard ? "Importing" : "Import Billboard"}</span>
-              </button>
-              <span className="db-path">
-                Best rank wins when an album appears in more than one year-end chart.
-              </span>
-            </div>
-          </section>
-
-          <section className="import-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>Billboard year-end singles</h2>
-                <p>Import single ranks from yearly CSV files and annotate matching library tracks.</p>
-              </div>
-              <RunStatus
-                status={
-                  isImportingBillboardSingles ? "running" : billboardSinglesImportSummary ? "completed" : "idle"
-                }
-              />
-            </div>
-
-            <label className="source-input">
-              <span>Singles CSV folder</span>
-              <input
-                value={billboardSinglesSourcePath}
-                onChange={(event) => setBillboardSinglesSourcePath(event.target.value)}
-                placeholder="CSV_SINGLES"
-                disabled={isImportingBillboardSingles}
-              />
-            </label>
-
-            {billboardSinglesImportError ? <p className="error-message">{billboardSinglesImportError}</p> : null}
-            {billboardSinglesImportSummary ? (
-              <p className="success-message">
-                Matched {formatNumber(billboardSinglesImportSummary.matchedTracks)} tracks from{" "}
-                {formatNumber(billboardSinglesImportSummary.chartEntries)} singles rows across{" "}
-                {formatNumber(billboardSinglesImportSummary.filesScanned)} files.
-              </p>
-            ) : null}
-
-            <div className="action-row">
-              <button
-                className="primary-button"
-                type="button"
-                onClick={startBillboardSinglesImport}
-                disabled={
-                  isImportingBillboardSingles ||
-                  !billboardSinglesSourcePath.trim() ||
-                  !canImport ||
-                  (status?.trackCount ?? 0) === 0
-                }
-                title={
-                  canImport
-                    ? "Import Billboard singles"
-                    : "Open the Tauri desktop app to import Billboard singles"
-                }
-              >
-                <ListMusic size={17} />
-                <span>{isImportingBillboardSingles ? "Importing" : "Import singles"}</span>
-              </button>
-              <span className="db-path">
-                Matches use Display Artist and Track; best rank wins across repeated years.
-              </span>
-            </div>
-          </section>
-
-          <section className="table-panel" aria-label="Import history">
-            <div className="panel-heading compact">
-              <div>
-                <h2>Last run</h2>
-                <p>Recent imports and their database refresh results.</p>
-              </div>
-            </div>
-
-            <div className="run-table" role="table">
-              <div className="run-table-head" role="row">
-                <span role="columnheader">Status</span>
-                <span role="columnheader">Started</span>
-                <span role="columnheader">Tracks</span>
-                <span role="columnheader">Albums</span>
-                <span role="columnheader">Duration</span>
-              </div>
-              {runs.length === 0 ? (
-                <div className="empty-state">
-                  <FileSearch size={20} />
-                  <span>No imports yet.</span>
-                </div>
-              ) : (
-                runs.map((run) => (
-                  <div className="run-table-row" role="row" key={run.id}>
-                    <span role="cell">
-                      <RunStatus status={run.status} />
-                    </span>
-                    <span role="cell">{formatDate(run.startedAt)}</span>
-                    <span role="cell">{formatNumber(run.trackRows)}</span>
-                    <span role="cell">{formatNumber(run.albumCount)}</span>
-                    <span role="cell">{formatDuration(run.durationMs)}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-        </section>
-      ) : activeSection === "Charts" ? (
-        <section className="workspace charts-workspace">
-          <header className="topbar">
-            <div>
-              <h1>Charts</h1>
-              <p>Rank album lists from saved filters, Album Score, loved tracks, AE, and TMOE.</p>
-            </div>
-            <div className="topbar-actions">
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="Reset chart"
-                onClick={() => {
-                  setChartConfig(createChartConfig());
-                  setChartTableSort(null);
-                }}
-              >
-                <RotateCcw size={18} />
-              </button>
-              <button className="icon-button" type="button" aria-label="Refresh" onClick={() => void loadData()}>
-                <Database size={18} />
-              </button>
-            </div>
-          </header>
-
-          <section className="metric-grid" aria-label="Chart summary">
-            <Metric label="Albums" value={formatNumber(status?.albumCount)} tone="teal" icon={Album} />
-            <Metric label="Ranked" value={formatNumber(chartTotal)} tone="amber" icon={BarChart3} />
-            <Metric label="Showing" value={formatNumber(chartRows)} icon={ListMusic} />
-            <Metric label="Saved" value={formatNumber(savedCharts.length)} icon={Save} />
-          </section>
-
-          <section className="chart-template-panel" aria-label="Built-in charts">
-            {chartTemplates.map((template) => {
-              const Icon = template.icon;
-              return (
-                <button type="button" key={template.id} onClick={() => applyChartTemplate(template)}>
-                  <Icon size={17} />
-                  <span>
-                    <strong>{template.label}</strong>
-                    <small>{template.description}</small>
-                  </span>
-                </button>
-              );
-            })}
-          </section>
-
-          <section className="query-panel chart-builder">
-            <div className="search-row">
-              <div className="search-input">
-                <Search size={18} />
-                <input
-                  value={chartConfig.request.searchText}
-                  onChange={(event) =>
-                    updateChartConfig({
-                      request: { ...chartConfig.request, searchText: event.target.value, offset: 0 },
-                    })
-                  }
-                  placeholder="Search within chart albums, artists, genres, publishers"
-                />
-              </div>
-
-              <div className="segmented-control" aria-label="Chart view mode">
-                {chartViewModes.map((mode) => {
-                  const Icon = mode.icon;
-                  return (
-                    <button
-                      className={chartConfig.viewMode === mode.value ? "active" : ""}
-                      type="button"
-                      key={mode.value}
-                      onClick={() => updateChartConfig({ viewMode: mode.value })}
-                    >
-                      <Icon size={16} />
-                      <span>{mode.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="filter-grid">
-              <NumberField
-                label="Year from"
-                value={chartConfig.request.filters.yearFrom}
-                onChange={(value) => updateChartFilters({ yearFrom: value })}
-              />
-              <NumberField
-                label="Year to"
-                value={chartConfig.request.filters.yearTo}
-                onChange={(value) => updateChartFilters({ yearTo: value })}
-              />
-              <NumberField
-                label="Billboard min"
-                value={chartConfig.request.filters.billboardRankMin}
-                min={1}
-                onChange={(value) => updateChartFilters({ billboardRankMin: value })}
-              />
-              <NumberField
-                label="Billboard max"
-                value={chartConfig.request.filters.billboardRankMax}
-                min={1}
-                onChange={(value) => updateChartFilters({ billboardRankMax: value })}
-              />
-              <GenreListCriterion
-                label="Genres"
-                values={chartConfig.request.filters.genres}
-                onChange={(genres) => updateChartFilters({ genres })}
-                genreOptions={genreSuggestionOptions}
-                onRequestOptions={requestGenreSuggestionRefresh}
-                placeholder="Synthpop, AOR"
-              />
-              <GenreListCriterion
-                label="Exclude genres"
-                values={chartConfig.request.filters.excludedGenres}
-                onChange={(excludedGenres) => updateChartFilters({ excludedGenres })}
-                genreOptions={genreSuggestionOptions}
-                onRequestOptions={requestGenreSuggestionRefresh}
-              />
-              <CountryListCriterion
-                label="Origin countries"
-                values={chartConfig.request.filters.originCountryCodes}
-                onChange={(originCountryCodes) => updateChartFilters({ originCountryCodes })}
-                countryOptions={originCountryOptions}
-                displayMode={settings.countryFlagDisplay}
-              />
-              <CountryListCriterion
-                label="Exclude origin countries"
-                values={chartConfig.request.filters.excludedOriginCountryCodes}
-                onChange={(excludedOriginCountryCodes) => updateChartFilters({ excludedOriginCountryCodes })}
-                countryOptions={originCountryOptions}
-                displayMode={settings.countryFlagDisplay}
-              />
-              <TextCriterion
-                label="Album artist"
-                filter={chartConfig.request.filters.albumArtist}
-                onChange={(filter) => updateChartFilters({ albumArtist: filter })}
-              />
-              <TextCriterion
-                label="Album title"
-                filter={chartConfig.request.filters.albumTitle}
-                onChange={(filter) => updateChartFilters({ albumTitle: filter })}
-              />
-              <TextCriterion
-                label="Publisher"
-                filter={chartConfig.request.filters.publisher}
-                onChange={(filter) => updateChartFilters({ publisher: filter })}
-              />
-              <NumberField
-                label="Minutes min"
-                value={chartConfig.request.filters.totalMinutesMin}
-                step={0.5}
-                onChange={(value) => updateChartFilters({ totalMinutesMin: value })}
-              />
-              <NumberField
-                label="Minutes max"
-                value={chartConfig.request.filters.totalMinutesMax}
-                step={0.5}
-                onChange={(value) => updateChartFilters({ totalMinutesMax: value })}
-              />
-              <NumberField
-                label="Album rating min"
-                value={chartConfig.request.filters.albumRatingMin}
-                min={0}
-                max={100}
-                onChange={(value) => updateChartFilters({ albumRatingMin: value })}
-              />
-              <NumberField
-                label="Album rating max"
-                value={chartConfig.request.filters.albumRatingMax}
-                min={0}
-                max={100}
-                onChange={(value) => updateChartFilters({ albumRatingMax: value })}
-              />
-              <NumberField
-                label="Loved min"
-                value={chartConfig.request.filters.lovedTracksMin}
-                min={0}
-                onChange={(value) => updateChartFilters({ lovedTracksMin: value })}
-              />
-              <NumberField
-                label="Loved max"
-                value={chartConfig.request.filters.lovedTracksMax}
-                min={0}
-                onChange={(value) => updateChartFilters({ lovedTracksMax: value })}
-              />
-              <SelectField
-                label="Ranking"
-                value={chartConfig.rankingMetric}
-                onChange={(rankingMetric) => updateChartConfig({ rankingMetric })}
-                options={rankingOptions}
-              />
-              <SelectField
-                label="Direction"
-                value={chartConfig.sortDirection}
-                onChange={(sortDirection) => updateChartConfig({ sortDirection: sortDirection as "asc" | "desc" })}
-                options={[
-                  { value: "desc", label: "Descending" },
-                  { value: "asc", label: "Ascending" },
-                ]}
-              />
-              <NumberField
-                label="Limit"
-                value={chartConfig.resultLimit}
-                min={10}
-                max={500}
-                onChange={(value) => updateChartConfig({ resultLimit: value ?? 50 })}
-              />
-              <CompletenessRangeCriterion
-                minValue={currentChartCompletenessRange.min}
-                maxValue={currentChartCompletenessRange.max}
-                className="chart-slider"
-                onChange={(range) =>
-                  updateChartConfig({
-                    ratingCompletenessMin: range.min,
-                    ratingCompletenessMax: range.max,
-                    ratingCompletenessThreshold: null,
-                  })
-                }
-              />
-              {chartConfig.viewMode === "grid" ? (
-                <label className="criterion slider-criterion chart-slider">
-                  <span>Cover size</span>
-                  <div>
-                    <input
-                      type="range"
-                      min={chartGridCoverSize.min}
-                      max={chartGridCoverSize.max}
-                      step={chartGridCoverSize.step}
-                      value={currentChartGridCoverSize}
-                      onChange={(event) => updateChartConfig({ gridCoverSize: Number(event.target.value) })}
-                    />
-                    <strong>{currentChartGridCoverSize}px</strong>
-                  </div>
-                </label>
-              ) : null}
-            </div>
-
-            <div className="query-footer chart-options">
-              <div className="missing-flags" aria-label="Visible chart columns">
-                {chartColumnOptions.map((option) => (
-                  <label key={option.value}>
-                    <input
-                      type="checkbox"
-                      checked={chartConfig.visibleColumns.includes(option.value)}
-                      onChange={() => toggleChartColumn(option.value, "visibleColumns")}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
-              <label className="toggle-row">
-                <input
-                  type="checkbox"
-                  checked={chartConfig.exportColumns.includes("calculated")}
-                  onChange={() => toggleChartColumn("calculated", "exportColumns")}
-                />
-                <span>Calculated export columns</span>
-              </label>
-              <label className="toggle-row">
-                <input
-                  type="checkbox"
-                  checked={chartConfig.request.filters.missingOriginCountry}
-                  onChange={(event) => updateChartFilters({ missingOriginCountry: event.target.checked })}
-                />
-                <span>Missing origin country</span>
-              </label>
-              <label className="toggle-row">
-                <input
-                  type="checkbox"
-                  checked={chartConfig.exportColumns.includes("originCountry")}
-                  onChange={() => toggleChartColumn("originCountry", "exportColumns")}
-                />
-                <span>Origin country export column</span>
-              </label>
-            </div>
-          </section>
-
-          <section className="table-panel" aria-label="Chart results">
-            <div className="panel-heading compact">
-              <div>
-                <h2>{rankingLabel(chartConfig.rankingMetric)} chart</h2>
+                <h1>Imports</h1>
                 <p>
-                  {isChartLoading
-                    ? "Ranking"
-                    : `${formatNumber(chartRows)} shown from ${formatNumber(chartTotal)} matches`}
+                  Build the local SQLite database from a MusicBee TSV export.
                 </p>
               </div>
-              <span className="run-status">
-                {formatCompletenessRange(currentChartCompletenessRange.min, currentChartCompletenessRange.max)} complete
-              </span>
-            </div>
+              <div className="topbar-actions">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={isSavingSettings || !importPathsDirty}
+                  onClick={() => void saveImportPathSettings()}
+                  title={
+                    importPathsDirty
+                      ? "Save import paths"
+                      : "Import paths are saved"
+                  }
+                >
+                  <Save size={16} />
+                  <span>
+                    {isSavingSettings
+                      ? "Saving"
+                      : importPathsDirty
+                        ? "Save paths"
+                        : "Paths saved"}
+                  </span>
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Refresh"
+                  onClick={() => void loadData()}
+                >
+                  <RotateCcw size={18} />
+                </button>
+              </div>
+            </header>
 
-            {chartError ? <p className="error-message">{chartError}</p> : null}
-            <ChartResults
-              response={chartResponse}
-              config={chartConfig}
-              displaySort={chartTableSort}
-              onSort={sortChartBy}
-              countryFlagDisplay={settings.countryFlagDisplay}
-            />
-          </section>
-        </section>
-      ) : activeSection === "Discovery" ? (
-        <section className="workspace discovery-workspace">
-          <header className="topbar">
-            <div>
-              <h1>Discovery</h1>
-              <p>Explore rating backlogs, loved outliers, genre clusters, and artist catalog pockets.</p>
-            </div>
-            <div className="topbar-actions">
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="Refresh discovery"
-                onClick={() => void refreshDiscovery()}
-              >
-                <RotateCcw size={18} />
-              </button>
-              <button className="icon-button" type="button" aria-label="Refresh library data" onClick={() => void loadData()}>
-                <Database size={18} />
-              </button>
-            </div>
-          </header>
+            <section className="metric-grid" aria-label="Library summary">
+              <Metric
+                label="Raw tracks"
+                value={formatNumber(status?.trackCount)}
+                tone="teal"
+                icon={ListMusic}
+              />
+              <Metric
+                label="Album aggregates"
+                value={formatNumber(status?.albumCount)}
+                tone="amber"
+                icon={Album}
+              />
+              <Metric
+                label="Cover images"
+                value={formatNumber(status?.coverCount)}
+                icon={Album}
+              />
+              <Metric
+                label="Import runs"
+                value={formatNumber(status?.importRunCount)}
+                icon={Clock3}
+              />
+              <Metric
+                label="Database"
+                value={status?.hasDatabase ? "Ready" : "New"}
+                icon={Database}
+              />
+            </section>
 
-          <section className="metric-grid" aria-label="Discovery summary">
-            <Metric label="Missions" value={discoveryMetricValue(discoveryMissionTotal)} tone="teal" icon={Compass} />
-            <Metric label="Heatmap cells" value={discoveryMetricValue(discovery?.heatmap.length)} tone="amber" icon={Gauge} />
-            <Metric label="Genre bubbles" value={discoveryMetricValue(discovery?.genrePoints.length)} icon={Tags} />
-            <Metric label="Outliers" value={discoveryMetricValue(discovery?.loveRatingPoints.length)} icon={Heart} />
-          </section>
+            {settingsError ? (
+              <p className="error-message">{settingsError}</p>
+            ) : null}
 
-          {discoveryError ? <p className="error-message">{discoveryError}</p> : null}
-
-          <section className="discovery-dashboard-grid" aria-label="Discovery charts">
-            <section className="discovery-panel wide">
-              <div className="panel-heading compact">
+            <section className="import-panel">
+              <div className="panel-heading">
                 <div>
-                  <h2>Completion heatmap</h2>
+                  <h2>musicbee-library.tsv</h2>
                   <p>
-                    {isDiscoveryLoading
-                      ? "Loading"
-                      : `${formatNumber(discovery?.heatmap.length)} genre/year intersections`}
+                    Streaming import validates headers and refreshes calculated
+                    album fields.
                   </p>
                 </div>
-                <Gauge size={18} />
+                <RunStatus status={progress.status} />
               </div>
-              <CompletionHeatmap
-                cells={discovery?.heatmap ?? []}
-                emptyLabel={discoveryHeatmapEmptyLabel}
-                onOpen={openDiscoveryHeatmapCell}
-              />
-            </section>
 
-            <section className="discovery-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Backlog quest board</h2>
-                  <p>Rating paths with the strongest payoff signals.</p>
+              <label className="source-input">
+                <span>TSV source path</span>
+                <input
+                  value={sourcePath}
+                  onChange={(event) => setSourcePath(event.target.value)}
+                  placeholder="C:\\Music\\musicbee-library.tsv"
+                  disabled={isImporting}
+                />
+              </label>
+
+              <div className="progress-block" aria-live="polite">
+                <div className="progress-row">
+                  <span>{progress.message}</span>
+                  <strong>{formatNumber(progress.processedRows)} rows</strong>
                 </div>
-                <Compass size={18} />
-              </div>
-              <DiscoveryMissionGrid
-                missions={discovery?.backlogMissions ?? []}
-                emptyLabel={discoveryBacklogEmptyLabel}
-                onOpen={openDiscoveryMission}
-              />
-            </section>
-
-            <section className="discovery-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Smart missions</h2>
-                  <p>Generated shortcuts into focused album sets.</p>
+                <div className="progress-track">
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${progressPercent}%` }}
+                  />
                 </div>
-                <Sparkles size={18} />
-              </div>
-              <DiscoveryMissionGrid
-                missions={discovery?.smartMissions ?? []}
-                emptyLabel={discoverySmartMissionEmptyLabel}
-                onOpen={openDiscoveryMission}
-              />
-            </section>
-
-            <section className="discovery-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Love vs rating scatter</h2>
-                  <p>Click a point to inspect the album behind an outlier.</p>
+                <div className="progress-meta">
+                  <span>
+                    {formatNumber(progress.albumCount)} album keys observed
+                  </span>
+                  <span>Backup ready before data replacement</span>
                 </div>
-                <Heart size={18} />
               </div>
-              <LoveRatingScatter
-                points={discovery?.loveRatingPoints ?? []}
-                emptyLabel={discoveryOutlierEmptyLabel}
-                onOpen={openDiscoveryAlbumPoint}
-              />
+
+              {importError ? (
+                <p className="error-message">{importError}</p>
+              ) : null}
+
+              <div className="action-row">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={startImport}
+                  disabled={isImporting || !sourcePath.trim() || !canImport}
+                  title={
+                    canImport
+                      ? "Start import"
+                      : "Open the Tauri desktop app to import"
+                  }
+                >
+                  <Play size={17} fill="currentColor" />
+                  <span>{isImporting ? "Importing" : "Start import"}</span>
+                </button>
+                <span className="db-path">
+                  {status?.dbPath ??
+                    "Database path will appear after initialization."}
+                </span>
+              </div>
             </section>
 
-            <section className="discovery-panel">
-              <div className="panel-heading compact">
+            <section className="import-panel">
+              <div className="panel-heading">
                 <div>
-                  <h2>Genre universe</h2>
-                  <p>Bubble size is catalog depth; height is completion.</p>
-                </div>
-                <Tags size={18} />
-              </div>
-              <GenreUniverse
-                points={discovery?.genrePoints ?? []}
-                emptyLabel={discoveryGenreEmptyLabel}
-                onOpen={openDiscoveryGenre}
-              />
-            </section>
-
-            <section className="discovery-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Artist constellation</h2>
-                  <p>Find deep catalogs, favorites, and neglected artists.</p>
-                </div>
-                <UsersRound size={18} />
-              </div>
-              <ArtistConstellation
-                points={discovery?.artistPoints ?? []}
-                emptyLabel={discoveryArtistEmptyLabel}
-                onOpen={openDiscoveryArtist}
-              />
-            </section>
-
-            <section className="table-panel discovery-results-panel" aria-label="Discovery album results">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>{discoverySelection?.title ?? "Discovery albums"}</h2>
+                  <h2>Cover art</h2>
                   <p>
-                    {!discoverySelection
-                      ? "Click a chart item or mission to open matching albums."
-                      : isDiscoveryAlbumsLoading
+                    Scan folder-named image files, link archive matches, and
+                    optionally extract embedded MP3 artwork into the cover
+                    archive.
+                  </p>
+                </div>
+                <RunStatus status={coverProgress.status} />
+              </div>
+
+              <label className="source-input">
+                <span>Cover source folder</span>
+                <input
+                  value={coverSourcePath}
+                  onChange={(event) => setCoverSourcePath(event.target.value)}
+                  placeholder="C:\\Music\\AlbumCovers"
+                  disabled={isImportingCovers}
+                />
+              </label>
+
+              <div className="toggle-row cover-options">
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={coverExtractEmbeddedFallback}
+                    onChange={(event) =>
+                      setCoverExtractEmbeddedFallback(event.target.checked)
+                    }
+                    disabled={isImportingCovers}
+                  />
+                  <span>
+                    Extract missing embedded MP3 covers into AlbumCovers
+                  </span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={coverReplaceExisting}
+                    onChange={(event) =>
+                      setCoverReplaceExisting(event.target.checked)
+                    }
+                    disabled={isImportingCovers}
+                  />
+                  <span>Replace existing covers</span>
+                </label>
+              </div>
+
+              <div
+                className="progress-block cover-progress-block"
+                aria-live="polite"
+              >
+                <div className="progress-row">
+                  <span>{coverProgress.message}</span>
+                  <strong>{Math.round(coverProgressPercent)}%</strong>
+                </div>
+                <div className="progress-track">
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${coverProgressPercent}%` }}
+                  />
+                </div>
+                <div className="progress-meta">
+                  <span>
+                    {formatNumber(coverProgress.scannedAlbums)} of{" "}
+                    {formatNumber(coverProgress.totalAlbums)} albums scanned
+                  </span>
+                  <span>
+                    {formatNumber(coverProgress.newCoversFound)} new covers
+                    found or extracted
+                  </span>
+                </div>
+                <div className="progress-meta">
+                  <span>
+                    {formatNumber(coverProgress.importedCovers)} imported
+                  </span>
+                  <span>
+                    {formatNumber(coverProgress.relinkedCovers)} relinked
+                  </span>
+                  <span>
+                    {formatNumber(coverProgress.skippedExisting)} already had
+                    covers
+                  </span>
+                  <span>
+                    {formatNumber(coverProgress.missingCovers)} missing
+                  </span>
+                </div>
+              </div>
+
+              {coverImportError ? (
+                <p className="error-message">{coverImportError}</p>
+              ) : null}
+              {coverImportSummary ? (
+                <p className="success-message">
+                  Linked or imported{" "}
+                  {formatNumber(coverImportSummary.importedCovers)} covers from{" "}
+                  {formatNumber(coverImportSummary.newCoversFound)} newly found
+                  or extracted covers and{" "}
+                  {formatNumber(coverImportSummary.relinkedCovers)} existing
+                  cover entries.
+                </p>
+              ) : null}
+
+              <div className="action-row">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={startCoverImport}
+                  disabled={
+                    isImportingCovers ||
+                    !coverSourcePath.trim() ||
+                    !canImport ||
+                    (status?.albumCount ?? 0) === 0
+                  }
+                  title={
+                    canImport
+                      ? "Start cover import"
+                      : "Open the Tauri desktop app to import covers"
+                  }
+                >
+                  <Play size={17} fill="currentColor" />
+                  <span>
+                    {isImportingCovers ? "Scanning" : "Import covers"}
+                  </span>
+                </button>
+                <span className="db-path">
+                  Archive matches are linked directly; missing embedded art is
+                  saved into AlbumCovers.
+                </span>
+              </div>
+            </section>
+
+            <section className="import-panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Billboard year-end charts</h2>
+                  <p>
+                    Import album ranks from yearly CSV files and annotate
+                    matching library albums.
+                  </p>
+                </div>
+                <RunStatus
+                  status={
+                    isImportingBillboard
+                      ? "running"
+                      : billboardImportSummary
+                        ? "completed"
+                        : "idle"
+                  }
+                />
+              </div>
+
+              <label className="source-input">
+                <span>Chart CSV folder</span>
+                <input
+                  value={billboardSourcePath}
+                  onChange={(event) =>
+                    setBillboardSourcePath(event.target.value)
+                  }
+                  placeholder="CSV"
+                  disabled={isImportingBillboard}
+                />
+              </label>
+
+              {billboardImportError ? (
+                <p className="error-message">{billboardImportError}</p>
+              ) : null}
+              {billboardImportSummary ? (
+                <p className="success-message">
+                  Matched {formatNumber(billboardImportSummary.matchedAlbums)}{" "}
+                  albums from{" "}
+                  {formatNumber(billboardImportSummary.chartEntries)} chart rows
+                  across {formatNumber(billboardImportSummary.filesScanned)}{" "}
+                  files.
+                </p>
+              ) : null}
+
+              <div className="action-row">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={startBillboardImport}
+                  disabled={
+                    isImportingBillboard ||
+                    !billboardSourcePath.trim() ||
+                    !canImport ||
+                    (status?.albumCount ?? 0) === 0
+                  }
+                  title={
+                    canImport
+                      ? "Import Billboard charts"
+                      : "Open the Tauri desktop app to import Billboard charts"
+                  }
+                >
+                  <BarChart3 size={17} />
+                  <span>
+                    {isImportingBillboard ? "Importing" : "Import Billboard"}
+                  </span>
+                </button>
+                <span className="db-path">
+                  Best rank wins when an album appears in more than one year-end
+                  chart.
+                </span>
+              </div>
+            </section>
+
+            <section className="import-panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Billboard year-end singles</h2>
+                  <p>
+                    Import single ranks from yearly CSV files and annotate
+                    matching library tracks.
+                  </p>
+                </div>
+                <RunStatus
+                  status={
+                    isImportingBillboardSingles
+                      ? "running"
+                      : billboardSinglesImportSummary
+                        ? "completed"
+                        : "idle"
+                  }
+                />
+              </div>
+
+              <label className="source-input">
+                <span>Singles CSV folder</span>
+                <input
+                  value={billboardSinglesSourcePath}
+                  onChange={(event) =>
+                    setBillboardSinglesSourcePath(event.target.value)
+                  }
+                  placeholder="CSV_SINGLES"
+                  disabled={isImportingBillboardSingles}
+                />
+              </label>
+
+              {billboardSinglesImportError ? (
+                <p className="error-message">{billboardSinglesImportError}</p>
+              ) : null}
+              {billboardSinglesImportSummary ? (
+                <p className="success-message">
+                  Matched{" "}
+                  {formatNumber(billboardSinglesImportSummary.matchedTracks)}{" "}
+                  tracks from{" "}
+                  {formatNumber(billboardSinglesImportSummary.chartEntries)}{" "}
+                  singles rows across{" "}
+                  {formatNumber(billboardSinglesImportSummary.filesScanned)}{" "}
+                  files.
+                </p>
+              ) : null}
+
+              <div className="action-row">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={startBillboardSinglesImport}
+                  disabled={
+                    isImportingBillboardSingles ||
+                    !billboardSinglesSourcePath.trim() ||
+                    !canImport ||
+                    (status?.trackCount ?? 0) === 0
+                  }
+                  title={
+                    canImport
+                      ? "Import Billboard singles"
+                      : "Open the Tauri desktop app to import Billboard singles"
+                  }
+                >
+                  <ListMusic size={17} />
+                  <span>
+                    {isImportingBillboardSingles
+                      ? "Importing"
+                      : "Import singles"}
+                  </span>
+                </button>
+                <span className="db-path">
+                  Matches use Display Artist and Track; best rank wins across
+                  repeated years.
+                </span>
+              </div>
+            </section>
+
+            <section className="table-panel" aria-label="Import history">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Last run</h2>
+                  <p>Recent imports and their database refresh results.</p>
+                </div>
+              </div>
+
+              <div className="run-table" role="table">
+                <div className="run-table-head" role="row">
+                  <span role="columnheader">Status</span>
+                  <span role="columnheader">Started</span>
+                  <span role="columnheader">Tracks</span>
+                  <span role="columnheader">Albums</span>
+                  <span role="columnheader">Duration</span>
+                </div>
+                {runs.length === 0 ? (
+                  <div className="empty-state">
+                    <FileSearch size={20} />
+                    <span>No imports yet.</span>
+                  </div>
+                ) : (
+                  runs.map((run) => (
+                    <div className="run-table-row" role="row" key={run.id}>
+                      <span role="cell">
+                        <RunStatus status={run.status} />
+                      </span>
+                      <span role="cell">{formatDate(run.startedAt)}</span>
+                      <span role="cell">{formatNumber(run.trackRows)}</span>
+                      <span role="cell">{formatNumber(run.albumCount)}</span>
+                      <span role="cell">{formatDuration(run.durationMs)}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+          </section>
+        ) : activeSection === "Charts" ? (
+          <section className="workspace charts-workspace">
+            <header className="topbar">
+              <div>
+                <h1>Charts</h1>
+                <p>
+                  Rank album lists from saved filters, Album Score, loved
+                  tracks, AE, and TMOE.
+                </p>
+              </div>
+              <div className="topbar-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Reset chart"
+                  onClick={() => {
+                    setChartConfig(createChartConfig());
+                    setChartTableSort(null);
+                  }}
+                >
+                  <RotateCcw size={18} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Refresh"
+                  onClick={() => void loadData()}
+                >
+                  <Database size={18} />
+                </button>
+              </div>
+            </header>
+
+            <section className="metric-grid" aria-label="Chart summary">
+              <Metric
+                label="Albums"
+                value={formatNumber(status?.albumCount)}
+                tone="teal"
+                icon={Album}
+              />
+              <Metric
+                label="Ranked"
+                value={formatNumber(chartTotal)}
+                tone="amber"
+                icon={BarChart3}
+              />
+              <Metric
+                label="Showing"
+                value={formatNumber(chartRows)}
+                icon={ListMusic}
+              />
+              <Metric
+                label="Saved"
+                value={formatNumber(savedCharts.length)}
+                icon={Save}
+              />
+            </section>
+
+            <section
+              className="chart-template-panel"
+              aria-label="Built-in charts"
+            >
+              {chartTemplates.map((template) => {
+                const Icon = template.icon;
+                return (
+                  <button
+                    type="button"
+                    key={template.id}
+                    onClick={() => applyChartTemplate(template)}
+                  >
+                    <Icon size={17} />
+                    <span>
+                      <strong>{template.label}</strong>
+                      <small>{template.description}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </section>
+
+            <section className="query-panel chart-builder">
+              <div className="search-row">
+                <div className="search-input">
+                  <Search size={18} />
+                  <input
+                    value={chartConfig.request.searchText}
+                    onChange={(event) =>
+                      updateChartConfig({
+                        request: {
+                          ...chartConfig.request,
+                          searchText: event.target.value,
+                          offset: 0,
+                        },
+                      })
+                    }
+                    placeholder="Search within chart albums, artists, genres, publishers"
+                  />
+                </div>
+
+                <div className="segmented-control" aria-label="Chart view mode">
+                  {chartViewModes.map((mode) => {
+                    const Icon = mode.icon;
+                    return (
+                      <button
+                        className={
+                          chartConfig.viewMode === mode.value ? "active" : ""
+                        }
+                        type="button"
+                        key={mode.value}
+                        onClick={() =>
+                          updateChartConfig({ viewMode: mode.value })
+                        }
+                      >
+                        <Icon size={16} />
+                        <span>{mode.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="filter-grid">
+                <NumberField
+                  label="Year from"
+                  value={chartConfig.request.filters.yearFrom}
+                  onChange={(value) => updateChartFilters({ yearFrom: value })}
+                />
+                <NumberField
+                  label="Year to"
+                  value={chartConfig.request.filters.yearTo}
+                  onChange={(value) => updateChartFilters({ yearTo: value })}
+                />
+                <NumberField
+                  label="Billboard min"
+                  value={chartConfig.request.filters.billboardRankMin}
+                  min={1}
+                  onChange={(value) =>
+                    updateChartFilters({ billboardRankMin: value })
+                  }
+                />
+                <NumberField
+                  label="Billboard max"
+                  value={chartConfig.request.filters.billboardRankMax}
+                  min={1}
+                  onChange={(value) =>
+                    updateChartFilters({ billboardRankMax: value })
+                  }
+                />
+                <GenreListCriterion
+                  label="Genres"
+                  values={chartConfig.request.filters.genres}
+                  onChange={(genres) => updateChartFilters({ genres })}
+                  genreOptions={genreSuggestionOptions}
+                  onRequestOptions={requestGenreSuggestionRefresh}
+                  placeholder="Synthpop, AOR"
+                />
+                <GenreListCriterion
+                  label="Exclude genres"
+                  values={chartConfig.request.filters.excludedGenres}
+                  onChange={(excludedGenres) =>
+                    updateChartFilters({ excludedGenres })
+                  }
+                  genreOptions={genreSuggestionOptions}
+                  onRequestOptions={requestGenreSuggestionRefresh}
+                />
+                <CountryListCriterion
+                  label="Origin countries"
+                  values={chartConfig.request.filters.originCountryCodes}
+                  onChange={(originCountryCodes) =>
+                    updateChartFilters({ originCountryCodes })
+                  }
+                  countryOptions={originCountryOptions}
+                  displayMode={settings.countryFlagDisplay}
+                />
+                <CountryListCriterion
+                  label="Exclude origin countries"
+                  values={
+                    chartConfig.request.filters.excludedOriginCountryCodes
+                  }
+                  onChange={(excludedOriginCountryCodes) =>
+                    updateChartFilters({ excludedOriginCountryCodes })
+                  }
+                  countryOptions={originCountryOptions}
+                  displayMode={settings.countryFlagDisplay}
+                />
+                <TextCriterion
+                  label="Album artist"
+                  filter={chartConfig.request.filters.albumArtist}
+                  onChange={(filter) =>
+                    updateChartFilters({ albumArtist: filter })
+                  }
+                />
+                <TextCriterion
+                  label="Album title"
+                  filter={chartConfig.request.filters.albumTitle}
+                  onChange={(filter) =>
+                    updateChartFilters({ albumTitle: filter })
+                  }
+                />
+                <TextCriterion
+                  label="Publisher"
+                  filter={chartConfig.request.filters.publisher}
+                  onChange={(filter) =>
+                    updateChartFilters({ publisher: filter })
+                  }
+                />
+                <NumberField
+                  label="Minutes min"
+                  value={chartConfig.request.filters.totalMinutesMin}
+                  step={0.5}
+                  onChange={(value) =>
+                    updateChartFilters({ totalMinutesMin: value })
+                  }
+                />
+                <NumberField
+                  label="Minutes max"
+                  value={chartConfig.request.filters.totalMinutesMax}
+                  step={0.5}
+                  onChange={(value) =>
+                    updateChartFilters({ totalMinutesMax: value })
+                  }
+                />
+                <NumberField
+                  label="Album rating min"
+                  value={chartConfig.request.filters.albumRatingMin}
+                  min={0}
+                  max={100}
+                  onChange={(value) =>
+                    updateChartFilters({ albumRatingMin: value })
+                  }
+                />
+                <NumberField
+                  label="Album rating max"
+                  value={chartConfig.request.filters.albumRatingMax}
+                  min={0}
+                  max={100}
+                  onChange={(value) =>
+                    updateChartFilters({ albumRatingMax: value })
+                  }
+                />
+                <NumberField
+                  label="Loved min"
+                  value={chartConfig.request.filters.lovedTracksMin}
+                  min={0}
+                  onChange={(value) =>
+                    updateChartFilters({ lovedTracksMin: value })
+                  }
+                />
+                <NumberField
+                  label="Loved max"
+                  value={chartConfig.request.filters.lovedTracksMax}
+                  min={0}
+                  onChange={(value) =>
+                    updateChartFilters({ lovedTracksMax: value })
+                  }
+                />
+                <SelectField
+                  label="Ranking"
+                  value={chartConfig.rankingMetric}
+                  onChange={(rankingMetric) =>
+                    updateChartConfig({ rankingMetric })
+                  }
+                  options={rankingOptions}
+                />
+                <SelectField
+                  label="Direction"
+                  value={chartConfig.sortDirection}
+                  onChange={(sortDirection) =>
+                    updateChartConfig({
+                      sortDirection: sortDirection as "asc" | "desc",
+                    })
+                  }
+                  options={[
+                    { value: "desc", label: "Descending" },
+                    { value: "asc", label: "Ascending" },
+                  ]}
+                />
+                <NumberField
+                  label="Limit"
+                  value={chartConfig.resultLimit}
+                  min={10}
+                  max={500}
+                  onChange={(value) =>
+                    updateChartConfig({ resultLimit: value ?? 50 })
+                  }
+                />
+                <CompletenessRangeCriterion
+                  minValue={currentChartCompletenessRange.min}
+                  maxValue={currentChartCompletenessRange.max}
+                  className="chart-slider"
+                  onChange={(range) =>
+                    updateChartConfig({
+                      ratingCompletenessMin: range.min,
+                      ratingCompletenessMax: range.max,
+                      ratingCompletenessThreshold: null,
+                    })
+                  }
+                />
+                {chartConfig.viewMode === "grid" ? (
+                  <label className="criterion slider-criterion chart-slider">
+                    <span>Cover size</span>
+                    <div>
+                      <input
+                        type="range"
+                        min={chartGridCoverSize.min}
+                        max={chartGridCoverSize.max}
+                        step={chartGridCoverSize.step}
+                        value={currentChartGridCoverSize}
+                        onChange={(event) =>
+                          updateChartConfig({
+                            gridCoverSize: Number(event.target.value),
+                          })
+                        }
+                      />
+                      <strong>{currentChartGridCoverSize}px</strong>
+                    </div>
+                  </label>
+                ) : null}
+              </div>
+
+              <div className="query-footer chart-options">
+                <div
+                  className="missing-flags"
+                  aria-label="Visible chart columns"
+                >
+                  {chartColumnOptions.map((option) => (
+                    <label key={option.value}>
+                      <input
+                        type="checkbox"
+                        checked={chartConfig.visibleColumns.includes(
+                          option.value,
+                        )}
+                        onChange={() =>
+                          toggleChartColumn(option.value, "visibleColumns")
+                        }
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={chartConfig.exportColumns.includes("calculated")}
+                    onChange={() =>
+                      toggleChartColumn("calculated", "exportColumns")
+                    }
+                  />
+                  <span>Calculated export columns</span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={chartConfig.request.filters.missingOriginCountry}
+                    onChange={(event) =>
+                      updateChartFilters({
+                        missingOriginCountry: event.target.checked,
+                      })
+                    }
+                  />
+                  <span>Missing origin country</span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={chartConfig.exportColumns.includes(
+                      "originCountry",
+                    )}
+                    onChange={() =>
+                      toggleChartColumn("originCountry", "exportColumns")
+                    }
+                  />
+                  <span>Origin country export column</span>
+                </label>
+              </div>
+            </section>
+
+            <section className="table-panel" aria-label="Chart results">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>{rankingLabel(chartConfig.rankingMetric)} chart</h2>
+                  <p>
+                    {isChartLoading
+                      ? "Ranking"
+                      : `${formatNumber(chartRows)} shown from ${formatNumber(chartTotal)} matches`}
+                  </p>
+                </div>
+                <span className="run-status">
+                  {formatCompletenessRange(
+                    currentChartCompletenessRange.min,
+                    currentChartCompletenessRange.max,
+                  )}{" "}
+                  complete
+                </span>
+              </div>
+
+              {chartError ? (
+                <p className="error-message">{chartError}</p>
+              ) : null}
+              <ChartResults
+                response={chartResponse}
+                config={chartConfig}
+                displaySort={chartTableSort}
+                onSort={sortChartBy}
+                countryFlagDisplay={settings.countryFlagDisplay}
+              />
+            </section>
+          </section>
+        ) : activeSection === "Discovery" ? (
+          <section className="workspace discovery-workspace">
+            <header className="topbar">
+              <div>
+                <h1>Discovery</h1>
+                <p>
+                  Explore rating backlogs, loved outliers, genre clusters, and
+                  artist catalog pockets.
+                </p>
+              </div>
+              <div className="topbar-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Refresh discovery"
+                  onClick={() => void refreshDiscovery()}
+                >
+                  <RotateCcw size={18} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Refresh library data"
+                  onClick={() => void loadData()}
+                >
+                  <Database size={18} />
+                </button>
+              </div>
+            </header>
+
+            <section className="metric-grid" aria-label="Discovery summary">
+              <Metric
+                label="Missions"
+                value={discoveryMetricValue(discoveryMissionTotal)}
+                tone="teal"
+                icon={Compass}
+              />
+              <Metric
+                label="Heatmap cells"
+                value={discoveryMetricValue(discovery?.heatmap.length)}
+                tone="amber"
+                icon={Gauge}
+              />
+              <Metric
+                label="Genre bubbles"
+                value={discoveryMetricValue(discovery?.genrePoints.length)}
+                icon={Tags}
+              />
+              <Metric
+                label="Outliers"
+                value={discoveryMetricValue(discovery?.loveRatingPoints.length)}
+                icon={Heart}
+              />
+            </section>
+
+            {discoveryError ? (
+              <p className="error-message">{discoveryError}</p>
+            ) : null}
+
+            <section
+              className="discovery-dashboard-grid"
+              aria-label="Discovery charts"
+            >
+              <section className="discovery-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Completion heatmap</h2>
+                    <p>
+                      {isDiscoveryLoading
                         ? "Loading"
-                        : `${formatNumber(discoveryAlbumPageStart)}-${formatNumber(discoveryAlbumPageEnd)} of ${formatNumber(discoveryAlbumTotal)} / ${discoverySelection.caption}`}
+                        : `${formatNumber(discovery?.heatmap.length)} genre/year intersections`}
+                    </p>
+                  </div>
+                  <Gauge size={18} />
+                </div>
+                <CompletionHeatmap
+                  cells={discovery?.heatmap ?? []}
+                  emptyLabel={discoveryHeatmapEmptyLabel}
+                  onOpen={openDiscoveryHeatmapCell}
+                />
+              </section>
+
+              <section className="discovery-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Backlog quest board</h2>
+                    <p>Rating paths with the strongest payoff signals.</p>
+                  </div>
+                  <Compass size={18} />
+                </div>
+                <DiscoveryMissionGrid
+                  missions={discovery?.backlogMissions ?? []}
+                  emptyLabel={discoveryBacklogEmptyLabel}
+                  onOpen={openDiscoveryMission}
+                />
+              </section>
+
+              <section className="discovery-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Smart missions</h2>
+                    <p>Generated shortcuts into focused album sets.</p>
+                  </div>
+                  <Sparkles size={18} />
+                </div>
+                <DiscoveryMissionGrid
+                  missions={discovery?.smartMissions ?? []}
+                  emptyLabel={discoverySmartMissionEmptyLabel}
+                  onOpen={openDiscoveryMission}
+                />
+              </section>
+
+              <section className="discovery-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Love vs rating scatter</h2>
+                    <p>Click a point to inspect the album behind an outlier.</p>
+                  </div>
+                  <Heart size={18} />
+                </div>
+                <LoveRatingScatter
+                  points={discovery?.loveRatingPoints ?? []}
+                  emptyLabel={discoveryOutlierEmptyLabel}
+                  onOpen={openDiscoveryAlbumPoint}
+                />
+              </section>
+
+              <section className="discovery-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Genre universe</h2>
+                    <p>Bubble size is catalog depth; height is completion.</p>
+                  </div>
+                  <Tags size={18} />
+                </div>
+                <GenreUniverse
+                  points={discovery?.genrePoints ?? []}
+                  emptyLabel={discoveryGenreEmptyLabel}
+                  onOpen={openDiscoveryGenre}
+                />
+              </section>
+
+              <section className="discovery-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Artist constellation</h2>
+                    <p>Find deep catalogs, favorites, and neglected artists.</p>
+                  </div>
+                  <UsersRound size={18} />
+                </div>
+                <ArtistConstellation
+                  points={discovery?.artistPoints ?? []}
+                  emptyLabel={discoveryArtistEmptyLabel}
+                  onOpen={openDiscoveryArtist}
+                />
+              </section>
+
+              <section
+                className="table-panel discovery-results-panel"
+                aria-label="Discovery album results"
+              >
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>{discoverySelection?.title ?? "Discovery albums"}</h2>
+                    <p>
+                      {!discoverySelection
+                        ? "Click a chart item or mission to open matching albums."
+                        : isDiscoveryAlbumsLoading
+                          ? "Loading"
+                          : `${formatNumber(discoveryAlbumPageStart)}-${formatNumber(discoveryAlbumPageEnd)} of ${formatNumber(discoveryAlbumTotal)} / ${discoverySelection.caption}`}
+                    </p>
+                  </div>
+                  <div className="pager">
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label="Previous discovery page"
+                      disabled={
+                        !discoverySelection ||
+                        discoveryAlbumRequest.offset === 0
+                      }
+                      onClick={() =>
+                        setDiscoveryAlbumRequest((previous) => ({
+                          ...previous,
+                          offset: Math.max(0, previous.offset - previous.limit),
+                        }))
+                      }
+                    >
+                      <ChevronLeft size={17} />
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label="Next discovery page"
+                      disabled={
+                        !discoverySelection ||
+                        discoveryAlbumRequest.offset +
+                          discoveryAlbumRequest.limit >=
+                          discoveryAlbumTotal
+                      }
+                      onClick={() =>
+                        setDiscoveryAlbumRequest((previous) => ({
+                          ...previous,
+                          offset: previous.offset + previous.limit,
+                        }))
+                      }
+                    >
+                      <ChevronRight size={17} />
+                    </button>
+                  </div>
+                </div>
+
+                {discoveryAlbumError ? (
+                  <p className="error-message">{discoveryAlbumError}</p>
+                ) : null}
+                <ResultTable
+                  response={discoverySelection ? discoveryAlbumResponse : null}
+                  sort={discoveryAlbumRequest.sort}
+                  onSort={sortDiscoveryAlbumsBy}
+                  countryFlagDisplay={settings.countryFlagDisplay}
+                  visibleColumns={[]}
+                />
+              </section>
+            </section>
+          </section>
+        ) : activeSection === "Artists" ? (
+          <section className="workspace artists-workspace">
+            <header className="topbar">
+              <div>
+                <h1>Artists</h1>
+                <p>
+                  Album-artist index, selected artist album lists, and
+                  artist-level summary stats.
+                </p>
+              </div>
+              <div className="topbar-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Clear artist filters"
+                  onClick={clearArtistQuery}
+                >
+                  <RotateCcw size={18} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Refresh artists"
+                  onClick={() => {
+                    void loadData();
+                    setArtistRequest((previous) => ({ ...previous }));
+                  }}
+                >
+                  <Database size={18} />
+                </button>
+              </div>
+            </header>
+
+            <section className="metric-grid" aria-label="Artist summary">
+              <Metric
+                label="Album artists"
+                value={formatNumber(statistics?.overview.albumArtistCount)}
+                tone="teal"
+                icon={UsersRound}
+              />
+              <Metric
+                label="Matches"
+                value={formatNumber(artistTotal)}
+                tone="amber"
+                icon={Search}
+              />
+              <Metric
+                label="Artist albums"
+                value={formatNumber(selectedArtistAlbumCount)}
+                icon={Album}
+              />
+              <Metric
+                label="Loved tracks"
+                value={formatNumber(selectedArtist?.lovedTracks)}
+                icon={Heart}
+              />
+            </section>
+
+            <section className="query-panel artist-query-panel">
+              <div className="search-row artist-search-row">
+                <div className="search-input">
+                  <Search size={18} />
+                  <input
+                    value={artistRequest.searchText}
+                    onChange={(event) =>
+                      setArtistRequest((previous) => ({
+                        ...previous,
+                        searchText: event.target.value,
+                        offset: 0,
+                      }))
+                    }
+                    placeholder="Search album artists"
+                  />
+                </div>
+                <SelectField
+                  label="Sort"
+                  value={artistRequest.sort.field}
+                  onChange={(field) =>
+                    setArtistRequest((previous) => ({
+                      ...previous,
+                      sort: { ...previous.sort, field },
+                      offset: 0,
+                    }))
+                  }
+                  options={[
+                    { value: "name", label: "Artist" },
+                    { value: "albumCount", label: "Albums" },
+                    { value: "trackCount", label: "Tracks" },
+                    { value: "lovedTracks", label: "Loved tracks" },
+                    { value: "averageCompleteness", label: "Completeness" },
+                    { value: "averageRating", label: "Average rating" },
+                    { value: "averageScore", label: "Average score" },
+                    { value: "firstYear", label: "First year" },
+                    { value: "lastYear", label: "Last year" },
+                    { value: "topGenre", label: "Top genre" },
+                  ]}
+                />
+              </div>
+
+              <div className="query-footer">
+                <div
+                  className="chip-row inline"
+                  aria-label="Active artist filters"
+                >
+                  {artistRequest.searchText.trim() ? (
+                    <button
+                      className="filter-chip"
+                      type="button"
+                      onClick={() =>
+                        setArtistRequest((previous) => ({
+                          ...previous,
+                          searchText: "",
+                          offset: 0,
+                        }))
+                      }
+                    >
+                      <span>Search "{artistRequest.searchText.trim()}"</span>
+                      <X size={14} />
+                    </button>
+                  ) : (
+                    <span className="chip-empty">No active filters</span>
+                  )}
+                </div>
+
+                <div className="sort-controls">
+                  <SelectField
+                    label="Direction"
+                    value={artistRequest.sort.direction}
+                    onChange={(direction) =>
+                      setArtistRequest((previous) => ({
+                        ...previous,
+                        sort: {
+                          ...previous.sort,
+                          direction: direction as "asc" | "desc",
+                        },
+                        offset: 0,
+                      }))
+                    }
+                    options={[
+                      { value: "asc", label: "Ascending" },
+                      { value: "desc", label: "Descending" },
+                    ]}
+                  />
+                  <NumberField
+                    label="Rows"
+                    value={artistRequest.limit}
+                    min={10}
+                    max={500}
+                    onChange={(value) =>
+                      setArtistRequest((previous) => ({
+                        ...previous,
+                        limit: value ?? 50,
+                        offset: 0,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="table-panel" aria-label="Artist index">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Artist index</h2>
+                  <p>
+                    {isArtistLoading
+                      ? "Loading artists"
+                      : `${formatNumber(artistPageStart)}-${formatNumber(artistPageEnd)} of ${formatNumber(artistTotal)}`}
                   </p>
                 </div>
                 <div className="pager">
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label="Previous discovery page"
-                    disabled={!discoverySelection || discoveryAlbumRequest.offset === 0}
+                    aria-label="Previous artist page"
+                    disabled={artistRequest.offset === 0}
                     onClick={() =>
-                      setDiscoveryAlbumRequest((previous) => ({
+                      setArtistRequest((previous) => ({
                         ...previous,
                         offset: Math.max(0, previous.offset - previous.limit),
                       }))
@@ -8547,10 +10960,12 @@ export default function App() {
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label="Next discovery page"
-                    disabled={!discoverySelection || discoveryAlbumRequest.offset + discoveryAlbumRequest.limit >= discoveryAlbumTotal}
+                    aria-label="Next artist page"
+                    disabled={
+                      artistRequest.offset + artistRequest.limit >= artistTotal
+                    }
                     onClick={() =>
-                      setDiscoveryAlbumRequest((previous) => ({
+                      setArtistRequest((previous) => ({
                         ...previous,
                         offset: previous.offset + previous.limit,
                       }))
@@ -8561,611 +10976,288 @@ export default function App() {
                 </div>
               </div>
 
-              {discoveryAlbumError ? <p className="error-message">{discoveryAlbumError}</p> : null}
-              <ResultTable
-                response={discoverySelection ? discoveryAlbumResponse : null}
-                sort={discoveryAlbumRequest.sort}
-                onSort={sortDiscoveryAlbumsBy}
+              {artistError ? (
+                <p className="error-message">{artistError}</p>
+              ) : null}
+              <ArtistIndexTable
+                response={artistResponse}
+                selectedArtistId={selectedArtistId}
+                onSelect={selectArtist}
                 countryFlagDisplay={settings.countryFlagDisplay}
-                visibleColumns={[]}
+              />
+            </section>
+
+            <section
+              className="table-panel"
+              aria-label="Selected artist albums"
+            >
+              <div className="panel-heading compact">
+                <div>
+                  <h2>{selectedArtist?.name ?? "Artist albums"}</h2>
+                  <p>
+                    {isArtistAlbumsLoading
+                      ? "Loading albums"
+                      : `${formatNumber(artistAlbumsResponse?.rows.length ?? 0)} of ${formatNumber(selectedArtistAlbumCount)} albums`}
+                  </p>
+                </div>
+                <span className="run-status">
+                  {selectedArtist?.topGenre ?? "Artist"}
+                </span>
+              </div>
+
+              {artistAlbumsError ? (
+                <p className="error-message">{artistAlbumsError}</p>
+              ) : null}
+              <ArtistAlbumTable
+                response={artistAlbumsResponse}
+                selectedAlbumId={selectedArtistAlbumId}
+                onSelect={selectArtistAlbum}
+              />
+            </section>
+
+            <MusicBrainzArtistDiscographyPanel
+              artist={selectedArtist}
+              response={musicBrainzArtistDiscography}
+              isLoading={isMusicBrainzArtistLoading}
+              isUpdating={isMusicBrainzArtistUpdating}
+              error={musicBrainzArtistError}
+              onRefresh={() => void refreshArtistMusicBrainz()}
+              onUpdateInfo={() => void updateArtistMusicBrainzInfo()}
+              onOpenExternalUrl={(url) => void openMusicBrainzArtistPage(url)}
+              onSetArtistLink={(action, musicbrainzMbid, canonicalName) =>
+                void setArtistMusicBrainzLink(
+                  action,
+                  musicbrainzMbid,
+                  canonicalName,
+                )
+              }
+              onSetOriginCountry={(countryCode, countryName) =>
+                void saveArtistOriginCountry(countryCode, countryName)
+              }
+              onSetReleaseDecision={(row, decision) =>
+                void setArtistMusicBrainzReleaseDecision(row, decision)
+              }
+              onExport={(format) => void runArtistMusicBrainzExport(format)}
+              exportResult={musicBrainzArtistExportResult}
+              refreshResult={musicBrainzArtistRefreshResult}
+              originResult={musicBrainzArtistOriginResult}
+              countryOptions={originCountryOptions}
+              countryFlagDisplay={settings.countryFlagDisplay}
+            />
+
+            <section
+              className="table-panel"
+              aria-label="Selected artist cover view"
+            >
+              <div className="artist-album-board-heading">
+                <div>
+                  <h3>Cover view</h3>
+                  <p>
+                    {isArtistAlbumTracksLoading
+                      ? "Loading tracks"
+                      : `${formatNumber(artistAlbumTracksResponse?.rows.length ?? 0)} of ${formatNumber(selectedArtistAlbumTrackCount)} tracks`}
+                  </p>
+                </div>
+                <span className="run-status">
+                  {selectedArtistAlbum?.year ?? "Album"}
+                </span>
+              </div>
+
+              {artistAlbumTracksError ? (
+                <p className="error-message">{artistAlbumTracksError}</p>
+              ) : null}
+              <ArtistAlbumCoverBoard
+                response={artistAlbumsResponse}
+                selectedAlbumId={selectedArtistAlbumId}
+                selectedAlbum={selectedArtistAlbum}
+                tracks={artistAlbumTracksResponse}
+                isLoading={isArtistAlbumTracksLoading}
+                onSelect={selectArtistAlbum}
+                onClose={clearSelectedArtistAlbum}
               />
             </section>
           </section>
-        </section>
-      ) : activeSection === "Artists" ? (
-        <section className="workspace artists-workspace">
-          <header className="topbar">
-            <div>
-              <h1>Artists</h1>
-              <p>Album-artist index, selected artist album lists, and artist-level summary stats.</p>
-            </div>
-            <div className="topbar-actions">
-              <button className="icon-button" type="button" aria-label="Clear artist filters" onClick={clearArtistQuery}>
-                <RotateCcw size={18} />
-              </button>
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="Refresh artists"
-                onClick={() => {
-                  void loadData();
-                  setArtistRequest((previous) => ({ ...previous }));
-                }}
-              >
-                <Database size={18} />
-              </button>
-            </div>
-          </header>
-
-          <section className="metric-grid" aria-label="Artist summary">
-            <Metric
-              label="Album artists"
-              value={formatNumber(statistics?.overview.albumArtistCount)}
-              tone="teal"
-              icon={UsersRound}
-            />
-            <Metric label="Matches" value={formatNumber(artistTotal)} tone="amber" icon={Search} />
-            <Metric label="Artist albums" value={formatNumber(selectedArtistAlbumCount)} icon={Album} />
-            <Metric label="Loved tracks" value={formatNumber(selectedArtist?.lovedTracks)} icon={Heart} />
-          </section>
-
-          <section className="query-panel artist-query-panel">
-            <div className="search-row artist-search-row">
-              <div className="search-input">
-                <Search size={18} />
-                <input
-                  value={artistRequest.searchText}
-                  onChange={(event) =>
-                    setArtistRequest((previous) => ({ ...previous, searchText: event.target.value, offset: 0 }))
-                  }
-                  placeholder="Search album artists"
-                />
+        ) : activeSection === "Genres" ? (
+          <section className="workspace genres-workspace">
+            <header className="topbar">
+              <div>
+                <h1>Genres</h1>
+                <p>
+                  Canonical-genre index, selected genre album lists, and
+                  genre-level summary stats.
+                </p>
               </div>
-              <SelectField
-                label="Sort"
-                value={artistRequest.sort.field}
-                onChange={(field) =>
-                  setArtistRequest((previous) => ({
-                    ...previous,
-                    sort: { ...previous.sort, field },
-                    offset: 0,
-                  }))
-                }
-                options={[
-                  { value: "name", label: "Artist" },
-                  { value: "albumCount", label: "Albums" },
-                  { value: "trackCount", label: "Tracks" },
-                  { value: "lovedTracks", label: "Loved tracks" },
-                  { value: "averageCompleteness", label: "Completeness" },
-                  { value: "averageRating", label: "Average rating" },
-                  { value: "averageScore", label: "Average score" },
-                  { value: "firstYear", label: "First year" },
-                  { value: "lastYear", label: "Last year" },
-                  { value: "topGenre", label: "Top genre" },
-                ]}
+              <div className="topbar-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Clear genre filters"
+                  onClick={clearGenreQuery}
+                >
+                  <RotateCcw size={18} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Refresh genres"
+                  onClick={() => {
+                    void loadData();
+                    setGenreRequest((previous) => ({ ...previous }));
+                  }}
+                >
+                  <Database size={18} />
+                </button>
+              </div>
+            </header>
+
+            <section className="metric-grid" aria-label="Genre summary">
+              <Metric
+                label="Canonical genres"
+                value={formatNumber(statistics?.overview.genreCount)}
+                tone="teal"
+                icon={Tags}
               />
-            </div>
-
-            <div className="query-footer">
-              <div className="chip-row inline" aria-label="Active artist filters">
-                {artistRequest.searchText.trim() ? (
-                  <button
-                    className="filter-chip"
-                    type="button"
-                    onClick={() => setArtistRequest((previous) => ({ ...previous, searchText: "", offset: 0 }))}
-                  >
-                    <span>Search "{artistRequest.searchText.trim()}"</span>
-                    <X size={14} />
-                  </button>
-                ) : (
-                  <span className="chip-empty">No active filters</span>
-                )}
-              </div>
-
-              <div className="sort-controls">
-                <SelectField
-                  label="Direction"
-                  value={artistRequest.sort.direction}
-                  onChange={(direction) =>
-                    setArtistRequest((previous) => ({
-                      ...previous,
-                      sort: { ...previous.sort, direction: direction as "asc" | "desc" },
-                      offset: 0,
-                    }))
-                  }
-                  options={[
-                    { value: "asc", label: "Ascending" },
-                    { value: "desc", label: "Descending" },
-                  ]}
-                />
-                <NumberField
-                  label="Rows"
-                  value={artistRequest.limit}
-                  min={10}
-                  max={500}
-                  onChange={(value) =>
-                    setArtistRequest((previous) => ({ ...previous, limit: value ?? 50, offset: 0 }))
-                  }
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="table-panel" aria-label="Artist index">
-            <div className="panel-heading compact">
-              <div>
-                <h2>Artist index</h2>
-                <p>
-                  {isArtistLoading
-                    ? "Loading artists"
-                    : `${formatNumber(artistPageStart)}-${formatNumber(artistPageEnd)} of ${formatNumber(artistTotal)}`}
-                </p>
-              </div>
-              <div className="pager">
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Previous artist page"
-                  disabled={artistRequest.offset === 0}
-                  onClick={() =>
-                    setArtistRequest((previous) => ({
-                      ...previous,
-                      offset: Math.max(0, previous.offset - previous.limit),
-                    }))
-                  }
-                >
-                  <ChevronLeft size={17} />
-                </button>
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Next artist page"
-                  disabled={artistRequest.offset + artistRequest.limit >= artistTotal}
-                  onClick={() =>
-                    setArtistRequest((previous) => ({
-                      ...previous,
-                      offset: previous.offset + previous.limit,
-                    }))
-                  }
-                >
-                  <ChevronRight size={17} />
-                </button>
-              </div>
-            </div>
-
-            {artistError ? <p className="error-message">{artistError}</p> : null}
-            <ArtistIndexTable
-              response={artistResponse}
-              selectedArtistId={selectedArtistId}
-              onSelect={selectArtist}
-              countryFlagDisplay={settings.countryFlagDisplay}
-            />
-          </section>
-
-          <section className="table-panel" aria-label="Selected artist albums">
-            <div className="panel-heading compact">
-              <div>
-                <h2>{selectedArtist?.name ?? "Artist albums"}</h2>
-                <p>
-                  {isArtistAlbumsLoading
-                    ? "Loading albums"
-                    : `${formatNumber(artistAlbumsResponse?.rows.length ?? 0)} of ${formatNumber(selectedArtistAlbumCount)} albums`}
-                </p>
-              </div>
-              <span className="run-status">{selectedArtist?.topGenre ?? "Artist"}</span>
-            </div>
-
-            {artistAlbumsError ? <p className="error-message">{artistAlbumsError}</p> : null}
-            <ArtistAlbumTable
-              response={artistAlbumsResponse}
-              selectedAlbumId={selectedArtistAlbumId}
-              onSelect={selectArtistAlbum}
-            />
-          </section>
-
-          <MusicBrainzArtistDiscographyPanel
-            artist={selectedArtist}
-            response={musicBrainzArtistDiscography}
-            isLoading={isMusicBrainzArtistLoading}
-            isUpdating={isMusicBrainzArtistUpdating}
-            error={musicBrainzArtistError}
-            onRefresh={() => void refreshArtistMusicBrainz()}
-            onUpdateInfo={() => void updateArtistMusicBrainzInfo()}
-            onOpenExternalUrl={(url) => void openMusicBrainzArtistPage(url)}
-            onSetArtistLink={(action, musicbrainzMbid, canonicalName) =>
-              void setArtistMusicBrainzLink(action, musicbrainzMbid, canonicalName)
-            }
-            onSetOriginCountry={(countryCode, countryName) => void saveArtistOriginCountry(countryCode, countryName)}
-            onSetReleaseDecision={(row, decision) => void setArtistMusicBrainzReleaseDecision(row, decision)}
-            onExport={(format) => void runArtistMusicBrainzExport(format)}
-            exportResult={musicBrainzArtistExportResult}
-            refreshResult={musicBrainzArtistRefreshResult}
-            originResult={musicBrainzArtistOriginResult}
-            countryOptions={originCountryOptions}
-            countryFlagDisplay={settings.countryFlagDisplay}
-          />
-
-          <section className="table-panel" aria-label="Selected artist cover view">
-            <div className="artist-album-board-heading">
-              <div>
-                <h3>Cover view</h3>
-                <p>
-                  {isArtistAlbumTracksLoading
-                    ? "Loading tracks"
-                    : `${formatNumber(artistAlbumTracksResponse?.rows.length ?? 0)} of ${formatNumber(selectedArtistAlbumTrackCount)} tracks`}
-                </p>
-              </div>
-              <span className="run-status">{selectedArtistAlbum?.year ?? "Album"}</span>
-            </div>
-
-            {artistAlbumTracksError ? <p className="error-message">{artistAlbumTracksError}</p> : null}
-            <ArtistAlbumCoverBoard
-              response={artistAlbumsResponse}
-              selectedAlbumId={selectedArtistAlbumId}
-              selectedAlbum={selectedArtistAlbum}
-              tracks={artistAlbumTracksResponse}
-              isLoading={isArtistAlbumTracksLoading}
-              onSelect={selectArtistAlbum}
-              onClose={clearSelectedArtistAlbum}
-            />
-          </section>
-        </section>
-      ) : activeSection === "Genres" ? (
-        <section className="workspace genres-workspace">
-          <header className="topbar">
-            <div>
-              <h1>Genres</h1>
-              <p>Canonical-genre index, selected genre album lists, and genre-level summary stats.</p>
-            </div>
-            <div className="topbar-actions">
-              <button className="icon-button" type="button" aria-label="Clear genre filters" onClick={clearGenreQuery}>
-                <RotateCcw size={18} />
-              </button>
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="Refresh genres"
-                onClick={() => {
-                  void loadData();
-                  setGenreRequest((previous) => ({ ...previous }));
-                }}
-              >
-                <Database size={18} />
-              </button>
-            </div>
-          </header>
-
-          <section className="metric-grid" aria-label="Genre summary">
-            <Metric label="Canonical genres" value={formatNumber(statistics?.overview.genreCount)} tone="teal" icon={Tags} />
-            <Metric label="Matches" value={formatNumber(genreTotal)} tone="amber" icon={Search} />
-            <Metric label="Genre albums" value={formatNumber(selectedGenreAlbumCount)} icon={Album} />
-            <Metric label="Loved tracks" value={formatNumber(selectedGenre?.lovedTracks)} icon={Heart} />
-          </section>
-
-          <section className="query-panel genre-query-panel">
-            <div className="search-row genre-search-row">
-              <div className="search-input">
-                <Search size={18} />
-                <input
-                  value={genreRequest.searchText}
-                  onChange={(event) =>
-                    setGenreRequest((previous) => ({ ...previous, searchText: event.target.value, offset: 0 }))
-                  }
-                  placeholder="Search canonical genres"
-                />
-              </div>
-              <SelectField
-                label="Sort"
-                value={genreRequest.sort.field}
-                onChange={(field) =>
-                  setGenreRequest((previous) => ({
-                    ...previous,
-                    sort: { ...previous.sort, field },
-                    offset: 0,
-                  }))
-                }
-                options={[
-                  { value: "name", label: "Genre" },
-                  { value: "albumCount", label: "Albums" },
-                  { value: "trackCount", label: "Tracks" },
-                  { value: "lovedTracks", label: "Loved tracks" },
-                  { value: "averageCompleteness", label: "Completeness" },
-                  { value: "averageRating", label: "Average rating" },
-                  { value: "averageScore", label: "Average score" },
-                  { value: "firstYear", label: "First year" },
-                  { value: "lastYear", label: "Last year" },
-                  { value: "topArtist", label: "Top artist" },
-                ]}
+              <Metric
+                label="Matches"
+                value={formatNumber(genreTotal)}
+                tone="amber"
+                icon={Search}
               />
-            </div>
+              <Metric
+                label="Genre albums"
+                value={formatNumber(selectedGenreAlbumCount)}
+                icon={Album}
+              />
+              <Metric
+                label="Loved tracks"
+                value={formatNumber(selectedGenre?.lovedTracks)}
+                icon={Heart}
+              />
+            </section>
 
-            <div className="query-footer">
-              <div className="chip-row inline" aria-label="Active genre filters">
-                {genreRequest.searchText.trim() ? (
-                  <button
-                    className="filter-chip"
-                    type="button"
-                    onClick={() => setGenreRequest((previous) => ({ ...previous, searchText: "", offset: 0 }))}
-                  >
-                    <span>Search "{genreRequest.searchText.trim()}"</span>
-                    <X size={14} />
-                  </button>
-                ) : (
-                  <span className="chip-empty">No active filters</span>
-                )}
-              </div>
-
-              <div className="sort-controls">
-                <SelectField
-                  label="Direction"
-                  value={genreRequest.sort.direction}
-                  onChange={(direction) =>
-                    setGenreRequest((previous) => ({
-                      ...previous,
-                      sort: { ...previous.sort, direction: direction as "asc" | "desc" },
-                      offset: 0,
-                    }))
-                  }
-                  options={[
-                    { value: "asc", label: "Ascending" },
-                    { value: "desc", label: "Descending" },
-                  ]}
-                />
-                <NumberField
-                  label="Rows"
-                  value={genreRequest.limit}
-                  min={10}
-                  max={500}
-                  onChange={(value) =>
-                    setGenreRequest((previous) => ({ ...previous, limit: value ?? 50, offset: 0 }))
-                  }
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="table-panel" aria-label="Genre index">
-            <div className="panel-heading compact">
-              <div>
-                <h2>Genre index</h2>
-                <p>
-                  {isGenreLoading
-                    ? "Loading genres"
-                    : `${formatNumber(genrePageStart)}-${formatNumber(genrePageEnd)} of ${formatNumber(genreTotal)}`}
-                </p>
-              </div>
-              <div className="pager">
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Previous genre page"
-                  disabled={genreRequest.offset === 0}
-                  onClick={() =>
-                    setGenreRequest((previous) => ({
-                      ...previous,
-                      offset: Math.max(0, previous.offset - previous.limit),
-                    }))
-                  }
-                >
-                  <ChevronLeft size={17} />
-                </button>
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Next genre page"
-                  disabled={genreRequest.offset + genreRequest.limit >= genreTotal}
-                  onClick={() =>
-                    setGenreRequest((previous) => ({
-                      ...previous,
-                      offset: previous.offset + previous.limit,
-                    }))
-                  }
-                >
-                  <ChevronRight size={17} />
-                </button>
-              </div>
-            </div>
-
-            {genreError ? <p className="error-message">{genreError}</p> : null}
-            <GenreIndexTable response={genreResponse} selectedGenreId={selectedGenreId} onSelect={selectGenre} />
-          </section>
-
-          <section className="table-panel" aria-label="Selected genre albums">
-            <div className="panel-heading compact">
-              <div>
-                <h2>{selectedGenre?.name ?? "Genre albums"}</h2>
-                <p>
-                  {isGenreAlbumsLoading
-                    ? "Loading albums"
-                    : `${formatNumber(genreAlbumsResponse?.rows.length ?? 0)} of ${formatNumber(selectedGenreAlbumCount)} albums`}
-                </p>
-              </div>
-              <span className="run-status">{selectedGenre?.topArtist ?? "Genre"}</span>
-            </div>
-
-            {genreAlbumsError ? <p className="error-message">{genreAlbumsError}</p> : null}
-            <GenreAlbumTable response={genreAlbumsResponse} />
-          </section>
-        </section>
-      ) : activeSection === "Tools" ? (
-        <section className="workspace tools-workspace">
-          <header className="topbar">
-            <div>
-              <h1>Tools</h1>
-              <p>Validation issue lists for library cleanup checks.</p>
-            </div>
-            <div className="topbar-actions">
-              <button className="icon-button" type="button" aria-label="Clear tool filters" onClick={clearToolQuery}>
-                <RotateCcw size={18} />
-              </button>
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="Refresh tools"
-                onClick={() => void refreshMusicTools()}
-              >
-                <Database size={18} />
-              </button>
-            </div>
-          </header>
-
-          <section className="metric-grid" aria-label="Tools summary">
-            <Metric label="Validators" value={formatNumber(musicTools.length)} tone="teal" icon={Wrench} />
-            <Metric label="Issue rows" value={formatToolCount(totalToolIssues)} tone="amber" icon={FileSearch} />
-            <Metric label="Selected" value={selectedToolIssueValue} icon={ListMusic} />
-            <Metric label="Severity" value={severityLabel(selectedTool?.severity) || "Select"} icon={ShieldCheck} />
-          </section>
-
-          <section className="query-panel tool-query-panel">
-            <div className="search-row tool-search-row">
-              <div className="search-input">
-                <Search size={18} />
-                <input
-                  value={toolIssueRequest.searchText}
-                  onChange={(event) =>
-                    setToolIssueRequest((previous) =>
-                      renewMusicToolIssueRequest(previous, {
+            <section className="query-panel genre-query-panel">
+              <div className="search-row genre-search-row">
+                <div className="search-input">
+                  <Search size={18} />
+                  <input
+                    value={genreRequest.searchText}
+                    onChange={(event) =>
+                      setGenreRequest((previous) => ({
+                        ...previous,
                         searchText: event.target.value,
                         offset: 0,
-                      }),
-                    )
-                  }
-                  placeholder="Filter affected albums, tracks, files, and issue values"
-                />
-              </div>
-              <SelectField
-                label="Sort"
-                value={toolIssueRequest.sort.field}
-                onChange={(field) =>
-                  setToolIssueRequest((previous) =>
-                    renewMusicToolIssueRequest(previous, {
+                      }))
+                    }
+                    placeholder="Search canonical genres"
+                  />
+                </div>
+                <SelectField
+                  label="Sort"
+                  value={genreRequest.sort.field}
+                  onChange={(field) =>
+                    setGenreRequest((previous) => ({
+                      ...previous,
                       sort: { ...previous.sort, field },
                       offset: 0,
-                    }),
-                  )
-                }
-                options={[
-                  { value: "album", label: "Album" },
-                  { value: "artist", label: "Artist" },
-                  { value: "year", label: "Year" },
-                  { value: "title", label: "Track" },
-                  { value: "detail", label: "Issue" },
-                  { value: "value", label: "Value" },
-                  { value: "filename", label: "Filename" },
-                  { value: "severity", label: "Severity" },
-                ]}
-              />
-            </div>
-
-            <div className="query-footer">
-              <div className="chip-row inline" aria-label="Active tool filters">
-                {toolIssueRequest.searchText.trim() ? (
-                  <button
-                    className="filter-chip"
-                    type="button"
-                    onClick={() =>
-                      setToolIssueRequest((previous) =>
-                        renewMusicToolIssueRequest(previous, {
-                          searchText: "",
-                          offset: 0,
-                        }),
-                      )
-                    }
-                  >
-                    <span>Filter "{toolIssueRequest.searchText.trim()}"</span>
-                    <X size={14} />
-                  </button>
-                ) : (
-                  <span className="chip-empty">No active filters</span>
-                )}
-              </div>
-
-              <div className="sort-controls">
-                <SelectField
-                  label="Direction"
-                  value={toolIssueRequest.sort.direction}
-                  onChange={(direction) =>
-                    setToolIssueRequest((previous) =>
-                      renewMusicToolIssueRequest(previous, {
-                        sort: { ...previous.sort, direction: direction as "asc" | "desc" },
-                        offset: 0,
-                      }),
-                    )
+                    }))
                   }
                   options={[
-                    { value: "asc", label: "Ascending" },
-                    { value: "desc", label: "Descending" },
+                    { value: "name", label: "Genre" },
+                    { value: "albumCount", label: "Albums" },
+                    { value: "trackCount", label: "Tracks" },
+                    { value: "lovedTracks", label: "Loved tracks" },
+                    { value: "averageCompleteness", label: "Completeness" },
+                    { value: "averageRating", label: "Average rating" },
+                    { value: "averageScore", label: "Average score" },
+                    { value: "firstYear", label: "First year" },
+                    { value: "lastYear", label: "Last year" },
+                    { value: "topArtist", label: "Top artist" },
                   ]}
                 />
-                <NumberField
-                  label="Rows"
-                  value={toolIssueRequest.limit}
-                  min={10}
-                  max={500}
-                  onChange={(value) =>
-                    setToolIssueRequest((previous) =>
-                      renewMusicToolIssueRequest(previous, { limit: value ?? 50, offset: 0 }),
-                    )
-                  }
-                />
               </div>
-            </div>
-          </section>
 
-          <section className="table-panel" aria-label="Validation tool index">
-            <div className="panel-heading compact">
-              <div>
-                <h2>Validation suite</h2>
-                <p>{isToolsLoading ? "Loading tools" : `${formatNumber(musicTools.length)} tools`}</p>
+              <div className="query-footer">
+                <div
+                  className="chip-row inline"
+                  aria-label="Active genre filters"
+                >
+                  {genreRequest.searchText.trim() ? (
+                    <button
+                      className="filter-chip"
+                      type="button"
+                      onClick={() =>
+                        setGenreRequest((previous) => ({
+                          ...previous,
+                          searchText: "",
+                          offset: 0,
+                        }))
+                      }
+                    >
+                      <span>Search "{genreRequest.searchText.trim()}"</span>
+                      <X size={14} />
+                    </button>
+                  ) : (
+                    <span className="chip-empty">No active filters</span>
+                  )}
+                </div>
+
+                <div className="sort-controls">
+                  <SelectField
+                    label="Direction"
+                    value={genreRequest.sort.direction}
+                    onChange={(direction) =>
+                      setGenreRequest((previous) => ({
+                        ...previous,
+                        sort: {
+                          ...previous.sort,
+                          direction: direction as "asc" | "desc",
+                        },
+                        offset: 0,
+                      }))
+                    }
+                    options={[
+                      { value: "asc", label: "Ascending" },
+                      { value: "desc", label: "Descending" },
+                    ]}
+                  />
+                  <NumberField
+                    label="Rows"
+                    value={genreRequest.limit}
+                    min={10}
+                    max={500}
+                    onChange={(value) =>
+                      setGenreRequest((previous) => ({
+                        ...previous,
+                        limit: value ?? 50,
+                        offset: 0,
+                      }))
+                    }
+                  />
+                </div>
               </div>
-              <span className="run-status">
-                {totalToolIssues == null ? "Counts on select" : `${formatNumber(totalToolIssues)} issues`}
-              </span>
-            </div>
+            </section>
 
-            {toolsError ? <p className="error-message">{toolsError}</p> : null}
-            <MusicToolIndexTable
-              tools={musicTools}
-              selectedToolId={selectedToolId}
-              progress={activeToolProgress}
-              onSelect={selectMusicTool}
-            />
-          </section>
-
-          <section className="table-panel" aria-label="Validation issues">
-            <div className="panel-heading compact">
-              <div>
-                <h2>{selectedTool?.label ?? "Issue list"}</h2>
-                <p>{toolIssuePanelCaption}</p>
-              </div>
-              <div className="panel-actions">
-                <MusicToolFixControls
-                  tool={selectedTool}
-                  response={currentToolIssueResponse}
-                  isPending={isToolRunPending}
-                  fixSummary={toolFixSummary}
-                  fixError={toolFixError}
-                  onPreview={() => runToolFix(false)}
-                  onApply={() => runToolFix(true)}
-                />
-                <MusicToolExportControls
-                  tool={selectedTool}
-                  isPending={isToolRunPending}
-                  exportResult={toolExportResult}
-                  onExport={runToolExport}
-                />
+            <section className="table-panel" aria-label="Genre index">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Genre index</h2>
+                  <p>
+                    {isGenreLoading
+                      ? "Loading genres"
+                      : `${formatNumber(genrePageStart)}-${formatNumber(genrePageEnd)} of ${formatNumber(genreTotal)}`}
+                  </p>
+                </div>
                 <div className="pager">
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label="Previous issue page"
-                    disabled={toolIssueRequest.offset === 0}
+                    aria-label="Previous genre page"
+                    disabled={genreRequest.offset === 0}
                     onClick={() =>
-                      setToolIssueRequest((previous) =>
-                        renewMusicToolIssueRequest(previous, {
-                          offset: Math.max(0, previous.offset - previous.limit),
-                        }),
-                      )
+                      setGenreRequest((previous) => ({
+                        ...previous,
+                        offset: Math.max(0, previous.offset - previous.limit),
+                      }))
                     }
                   >
                     <ChevronLeft size={17} />
@@ -9173,2377 +11265,3903 @@ export default function App() {
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label="Next issue page"
-                    disabled={toolIssueRequest.offset + toolIssueRequest.limit >= toolIssueTotal}
+                    aria-label="Next genre page"
+                    disabled={
+                      genreRequest.offset + genreRequest.limit >= genreTotal
+                    }
                     onClick={() =>
-                      setToolIssueRequest((previous) =>
-                        renewMusicToolIssueRequest(previous, {
-                          offset: previous.offset + previous.limit,
-                        }),
-                      )
+                      setGenreRequest((previous) => ({
+                        ...previous,
+                        offset: previous.offset + previous.limit,
+                      }))
                     }
                   >
                     <ChevronRight size={17} />
                   </button>
                 </div>
               </div>
-            </div>
 
-            {toolIssueError ? <p className="error-message">{toolIssueError}</p> : null}
-            <MusicToolIssueTable
-              response={isToolProgressActive ? null : currentToolIssueResponse}
-              progress={activeToolProgress}
-            />
+              {genreError ? (
+                <p className="error-message">{genreError}</p>
+              ) : null}
+              <GenreIndexTable
+                response={genreResponse}
+                selectedGenreId={selectedGenreId}
+                onSelect={selectGenre}
+              />
+            </section>
+
+            <section className="table-panel" aria-label="Selected genre albums">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>{selectedGenre?.name ?? "Genre albums"}</h2>
+                  <p>
+                    {isGenreAlbumsLoading
+                      ? "Loading albums"
+                      : `${formatNumber(genreAlbumsResponse?.rows.length ?? 0)} of ${formatNumber(selectedGenreAlbumCount)} albums`}
+                  </p>
+                </div>
+                <span className="run-status">
+                  {selectedGenre?.topArtist ?? "Genre"}
+                </span>
+              </div>
+
+              {genreAlbumsError ? (
+                <p className="error-message">{genreAlbumsError}</p>
+              ) : null}
+              <GenreAlbumTable response={genreAlbumsResponse} />
+            </section>
           </section>
-        </section>
-      ) : activeSection === "Albums" ? (
-        <section className="workspace albums-workspace">
-          <header className="topbar">
-            <div>
-              <h1>Albums</h1>
-              <p>Dedicated album index, drill-down calculations, ordered tracks, and album export.</p>
-            </div>
-            <div className="topbar-actions">
-              <button className="icon-button" type="button" aria-label="Clear album filters" onClick={clearAlbumQuery}>
-                <RotateCcw size={18} />
-              </button>
-              <button className="icon-button" type="button" aria-label="Refresh albums" onClick={() => void loadData()}>
-                <Database size={18} />
-              </button>
-            </div>
-          </header>
+        ) : activeSection === "Tools" ? (
+          <section className="workspace tools-workspace">
+            <header className="topbar">
+              <div>
+                <h1>Tools</h1>
+                <p>Validation issue lists for library cleanup checks.</p>
+              </div>
+              <div className="topbar-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Clear tool filters"
+                  onClick={clearToolQuery}
+                >
+                  <RotateCcw size={18} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Refresh tools"
+                  onClick={() => void refreshMusicTools()}
+                >
+                  <Database size={18} />
+                </button>
+              </div>
+            </header>
 
-          <section className="metric-grid" aria-label="Album summary">
-            <Metric label="Library albums" value={formatNumber(status?.albumCount)} tone="teal" icon={Album} />
-            <Metric label="Matches" value={formatNumber(albumTotal)} tone="amber" icon={Search} />
-            <Metric label="Tracks" value={formatNumber(selectedAlbumTrackCount)} icon={ListMusic} />
-            <Metric
-              label="Complete"
-              value={selectedAlbum ? formatPercent(selectedAlbum.ratingCompleteness) : "Select"}
-              icon={Gauge}
-            />
-          </section>
+            <section className="metric-grid" aria-label="Tools summary">
+              <Metric
+                label="Validators"
+                value={formatNumber(musicTools.length)}
+                tone="teal"
+                icon={Wrench}
+              />
+              <Metric
+                label="Issue rows"
+                value={formatToolCount(totalToolIssues)}
+                tone="amber"
+                icon={FileSearch}
+              />
+              <Metric
+                label="Selected"
+                value={selectedToolIssueValue}
+                icon={ListMusic}
+              />
+              <Metric
+                label="Severity"
+                value={severityLabel(selectedTool?.severity) || "Select"}
+                icon={ShieldCheck}
+              />
+            </section>
 
-          <section className="query-panel album-query-panel">
-            <div className="search-row album-search-row">
-              <div className="search-input">
-                <Search size={18} />
-                <input
-                  value={albumRequest.searchText}
-                  onChange={(event) =>
-                    setAlbumRequest((previous) => ({ ...previous, searchText: event.target.value, offset: 0 }))
+            <section className="query-panel tool-query-panel">
+              <div className="search-row tool-search-row">
+                <div className="search-input">
+                  <Search size={18} />
+                  <input
+                    value={toolIssueRequest.searchText}
+                    onChange={(event) =>
+                      setToolIssueRequest((previous) =>
+                        renewMusicToolIssueRequest(previous, {
+                          searchText: event.target.value,
+                          offset: 0,
+                        }),
+                      )
+                    }
+                    placeholder="Filter affected albums, tracks, files, and issue values"
+                  />
+                </div>
+                <SelectField
+                  label="Sort"
+                  value={toolIssueRequest.sort.field}
+                  onChange={(field) =>
+                    setToolIssueRequest((previous) =>
+                      renewMusicToolIssueRequest(previous, {
+                        sort: { ...previous.sort, field },
+                        offset: 0,
+                      }),
+                    )
                   }
-                  placeholder="Search albums, artists, genres, publishers"
+                  options={[
+                    { value: "album", label: "Album" },
+                    { value: "artist", label: "Artist" },
+                    { value: "year", label: "Year" },
+                    { value: "title", label: "Track" },
+                    { value: "detail", label: "Issue" },
+                    { value: "value", label: "Value" },
+                    { value: "filename", label: "Filename" },
+                    { value: "severity", label: "Severity" },
+                  ]}
                 />
               </div>
-              <SelectField
-                label="Sort"
-                value={albumRequest.sort.field}
-                onChange={(field) =>
-                  setAlbumRequest((previous) => ({
-                    ...previous,
-                    sort: { ...previous.sort, field },
-                    offset: 0,
-                  }))
+
+              <div className="query-footer">
+                <div
+                  className="chip-row inline"
+                  aria-label="Active tool filters"
+                >
+                  {toolIssueRequest.searchText.trim() ? (
+                    <button
+                      className="filter-chip"
+                      type="button"
+                      onClick={() =>
+                        setToolIssueRequest((previous) =>
+                          renewMusicToolIssueRequest(previous, {
+                            searchText: "",
+                            offset: 0,
+                          }),
+                        )
+                      }
+                    >
+                      <span>Filter "{toolIssueRequest.searchText.trim()}"</span>
+                      <X size={14} />
+                    </button>
+                  ) : (
+                    <span className="chip-empty">No active filters</span>
+                  )}
+                </div>
+
+                <div className="sort-controls">
+                  <SelectField
+                    label="Direction"
+                    value={toolIssueRequest.sort.direction}
+                    onChange={(direction) =>
+                      setToolIssueRequest((previous) =>
+                        renewMusicToolIssueRequest(previous, {
+                          sort: {
+                            ...previous.sort,
+                            direction: direction as "asc" | "desc",
+                          },
+                          offset: 0,
+                        }),
+                      )
+                    }
+                    options={[
+                      { value: "asc", label: "Ascending" },
+                      { value: "desc", label: "Descending" },
+                    ]}
+                  />
+                  <NumberField
+                    label="Rows"
+                    value={toolIssueRequest.limit}
+                    min={10}
+                    max={500}
+                    onChange={(value) =>
+                      setToolIssueRequest((previous) =>
+                        renewMusicToolIssueRequest(previous, {
+                          limit: value ?? 50,
+                          offset: 0,
+                        }),
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="table-panel" aria-label="Validation tool index">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Validation suite</h2>
+                  <p>
+                    {isToolsLoading
+                      ? "Loading tools"
+                      : `${formatNumber(musicTools.length)} tools`}
+                  </p>
+                </div>
+                <span className="run-status">
+                  {totalToolIssues == null
+                    ? "Counts on select"
+                    : `${formatNumber(totalToolIssues)} issues`}
+                </span>
+              </div>
+
+              {toolsError ? (
+                <p className="error-message">{toolsError}</p>
+              ) : null}
+              <MusicToolIndexTable
+                tools={musicTools}
+                selectedToolId={selectedToolId}
+                progress={activeToolProgress}
+                onSelect={selectMusicTool}
+              />
+            </section>
+
+            <section className="table-panel" aria-label="Validation issues">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>{selectedTool?.label ?? "Issue list"}</h2>
+                  <p>{toolIssuePanelCaption}</p>
+                </div>
+                <div className="panel-actions">
+                  <MusicToolFixControls
+                    tool={selectedTool}
+                    response={currentToolIssueResponse}
+                    isPending={isToolRunPending}
+                    fixSummary={toolFixSummary}
+                    fixError={toolFixError}
+                    onPreview={() => runToolFix(false)}
+                    onApply={() => runToolFix(true)}
+                  />
+                  <MusicToolExportControls
+                    tool={selectedTool}
+                    isPending={isToolRunPending}
+                    exportResult={toolExportResult}
+                    onExport={runToolExport}
+                  />
+                  <div className="pager">
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label="Previous issue page"
+                      disabled={toolIssueRequest.offset === 0}
+                      onClick={() =>
+                        setToolIssueRequest((previous) =>
+                          renewMusicToolIssueRequest(previous, {
+                            offset: Math.max(
+                              0,
+                              previous.offset - previous.limit,
+                            ),
+                          }),
+                        )
+                      }
+                    >
+                      <ChevronLeft size={17} />
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label="Next issue page"
+                      disabled={
+                        toolIssueRequest.offset + toolIssueRequest.limit >=
+                        toolIssueTotal
+                      }
+                      onClick={() =>
+                        setToolIssueRequest((previous) =>
+                          renewMusicToolIssueRequest(previous, {
+                            offset: previous.offset + previous.limit,
+                          }),
+                        )
+                      }
+                    >
+                      <ChevronRight size={17} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {toolIssueError ? (
+                <p className="error-message">{toolIssueError}</p>
+              ) : null}
+              <MusicToolIssueTable
+                response={
+                  isToolProgressActive ? null : currentToolIssueResponse
                 }
-                options={[
-                  { value: "album", label: "Album" },
-                  { value: "artist", label: "Artist" },
-                  { value: "year", label: "Year" },
-                  { value: "genre", label: "Genre" },
-                  { value: "totalMinutes", label: "Minutes" },
-                  { value: "trackCount", label: "Tracks" },
-                  { value: "albumRating", label: "Rating" },
-                  { value: "ratingCompleteness", label: "Completeness" },
-                  { value: "lovedTracks", label: "Loved" },
-                  { value: "albumScore", label: "Score" },
-                ]}
+                progress={activeToolProgress}
               />
-            </div>
+            </section>
+          </section>
+        ) : activeSection === "Albums" ? (
+          <section className="workspace albums-workspace">
+            <header className="topbar">
+              <div>
+                <h1>Albums</h1>
+                <p>
+                  Dedicated album index, drill-down calculations, ordered
+                  tracks, and album export.
+                </p>
+              </div>
+              <div className="topbar-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Clear album filters"
+                  onClick={clearAlbumQuery}
+                >
+                  <RotateCcw size={18} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Refresh albums"
+                  onClick={() => void loadData()}
+                >
+                  <Database size={18} />
+                </button>
+              </div>
+            </header>
 
-            <div className="filter-grid">
-              <TextCriterion
-                label="Album title"
-                filter={albumFilters.albumTitle}
-                onChange={(filter) => updateAlbumFilter("albumTitle", filter)}
+            <section className="metric-grid" aria-label="Album summary">
+              <Metric
+                label="Library albums"
+                value={formatNumber(status?.albumCount)}
+                tone="teal"
+                icon={Album}
               />
-              <TextCriterion
-                label="Album artist"
-                filter={albumFilters.albumArtist}
-                onChange={(filter) => updateAlbumFilter("albumArtist", filter)}
+              <Metric
+                label="Matches"
+                value={formatNumber(albumTotal)}
+                tone="amber"
+                icon={Search}
               />
-              <TextCriterion
-                label="Publisher"
-                filter={albumFilters.publisher}
-                onChange={(filter) => updateAlbumFilter("publisher", filter)}
+              <Metric
+                label="Tracks"
+                value={formatNumber(selectedAlbumTrackCount)}
+                icon={ListMusic}
               />
-              <GenreListCriterion
-                label="Genres"
-                values={albumFilters.genres}
-                onChange={(genres) => updateAlbumFilter("genres", genres)}
-                genreOptions={genreSuggestionOptions}
-                onRequestOptions={requestGenreSuggestionRefresh}
-                placeholder="Synthpop, AOR"
+              <Metric
+                label="Complete"
+                value={
+                  selectedAlbum
+                    ? formatPercent(selectedAlbum.ratingCompleteness)
+                    : "Select"
+                }
+                icon={Gauge}
               />
-              <GenreListCriterion
-                label="Exclude genres"
-                values={albumFilters.excludedGenres}
-                onChange={(excludedGenres) => updateAlbumFilter("excludedGenres", excludedGenres)}
-                genreOptions={genreSuggestionOptions}
-                onRequestOptions={requestGenreSuggestionRefresh}
-              />
-              <NumberField
-                label="Year from"
-                value={albumFilters.yearFrom}
-                onChange={(value) => updateAlbumFilter("yearFrom", value)}
-              />
-              <NumberField
-                label="Year to"
-                value={albumFilters.yearTo}
-                onChange={(value) => updateAlbumFilter("yearTo", value)}
-              />
-              <NumberField
-                label="Billboard min"
-                value={albumFilters.billboardRankMin}
-                min={1}
-                onChange={(value) => updateAlbumFilter("billboardRankMin", value)}
-              />
-              <NumberField
-                label="Billboard max"
-                value={albumFilters.billboardRankMax}
-                min={1}
-                onChange={(value) => updateAlbumFilter("billboardRankMax", value)}
-              />
-              <NumberField
-                label="Minutes min"
-                value={albumFilters.totalMinutesMin}
-                step={0.5}
-                onChange={(value) => updateAlbumFilter("totalMinutesMin", value)}
-              />
-              <NumberField
-                label="Minutes max"
-                value={albumFilters.totalMinutesMax}
-                step={0.5}
-                onChange={(value) => updateAlbumFilter("totalMinutesMax", value)}
-              />
-              <NumberField
-                label="Tracks min"
-                value={albumFilters.trackCountMin}
-                onChange={(value) => updateAlbumFilter("trackCountMin", value)}
-              />
-              <NumberField
-                label="Album rating min"
-                value={albumFilters.albumRatingMin}
-                min={0}
-                max={100}
-                onChange={(value) => updateAlbumFilter("albumRatingMin", value)}
-              />
-              <CompletenessRangeCriterion
-                minValue={albumFilters.ratingCompletenessMin}
-                maxValue={albumFilters.ratingCompletenessMax}
-                onChange={(range) => updateAlbumFilters(toCompletenessFilterRange(range.min, range.max))}
-              />
-            </div>
+            </section>
 
-            <div className="query-footer">
-              <div className="chip-row inline" aria-label="Active album filters">
-                {albumChips.length === 0 ? (
+            <section className="query-panel album-query-panel">
+              <div className="search-row album-search-row">
+                <div className="search-input">
+                  <Search size={18} />
+                  <input
+                    value={albumRequest.searchText}
+                    onChange={(event) =>
+                      setAlbumRequest((previous) => ({
+                        ...previous,
+                        searchText: event.target.value,
+                        offset: 0,
+                      }))
+                    }
+                    placeholder="Search albums, artists, genres, publishers"
+                  />
+                </div>
+                <SelectField
+                  label="Sort"
+                  value={albumRequest.sort.field}
+                  onChange={(field) =>
+                    setAlbumRequest((previous) => ({
+                      ...previous,
+                      sort: { ...previous.sort, field },
+                      offset: 0,
+                    }))
+                  }
+                  options={[
+                    { value: "album", label: "Album" },
+                    { value: "artist", label: "Artist" },
+                    { value: "year", label: "Year" },
+                    { value: "genre", label: "Genre" },
+                    { value: "totalMinutes", label: "Minutes" },
+                    { value: "trackCount", label: "Tracks" },
+                    { value: "albumRating", label: "Rating" },
+                    { value: "ratingCompleteness", label: "Completeness" },
+                    { value: "lovedTracks", label: "Loved" },
+                    { value: "albumScore", label: "Score" },
+                  ]}
+                />
+              </div>
+
+              <div className="filter-grid">
+                <TextCriterion
+                  label="Album title"
+                  filter={albumFilters.albumTitle}
+                  onChange={(filter) => updateAlbumFilter("albumTitle", filter)}
+                />
+                <TextCriterion
+                  label="Album artist"
+                  filter={albumFilters.albumArtist}
+                  onChange={(filter) =>
+                    updateAlbumFilter("albumArtist", filter)
+                  }
+                />
+                <TextCriterion
+                  label="Publisher"
+                  filter={albumFilters.publisher}
+                  onChange={(filter) => updateAlbumFilter("publisher", filter)}
+                />
+                <GenreListCriterion
+                  label="Genres"
+                  values={albumFilters.genres}
+                  onChange={(genres) => updateAlbumFilter("genres", genres)}
+                  genreOptions={genreSuggestionOptions}
+                  onRequestOptions={requestGenreSuggestionRefresh}
+                  placeholder="Synthpop, AOR"
+                />
+                <GenreListCriterion
+                  label="Exclude genres"
+                  values={albumFilters.excludedGenres}
+                  onChange={(excludedGenres) =>
+                    updateAlbumFilter("excludedGenres", excludedGenres)
+                  }
+                  genreOptions={genreSuggestionOptions}
+                  onRequestOptions={requestGenreSuggestionRefresh}
+                />
+                <NumberField
+                  label="Year from"
+                  value={albumFilters.yearFrom}
+                  onChange={(value) => updateAlbumFilter("yearFrom", value)}
+                />
+                <NumberField
+                  label="Year to"
+                  value={albumFilters.yearTo}
+                  onChange={(value) => updateAlbumFilter("yearTo", value)}
+                />
+                <NumberField
+                  label="Billboard min"
+                  value={albumFilters.billboardRankMin}
+                  min={1}
+                  onChange={(value) =>
+                    updateAlbumFilter("billboardRankMin", value)
+                  }
+                />
+                <NumberField
+                  label="Billboard max"
+                  value={albumFilters.billboardRankMax}
+                  min={1}
+                  onChange={(value) =>
+                    updateAlbumFilter("billboardRankMax", value)
+                  }
+                />
+                <NumberField
+                  label="Minutes min"
+                  value={albumFilters.totalMinutesMin}
+                  step={0.5}
+                  onChange={(value) =>
+                    updateAlbumFilter("totalMinutesMin", value)
+                  }
+                />
+                <NumberField
+                  label="Minutes max"
+                  value={albumFilters.totalMinutesMax}
+                  step={0.5}
+                  onChange={(value) =>
+                    updateAlbumFilter("totalMinutesMax", value)
+                  }
+                />
+                <NumberField
+                  label="Tracks min"
+                  value={albumFilters.trackCountMin}
+                  onChange={(value) =>
+                    updateAlbumFilter("trackCountMin", value)
+                  }
+                />
+                <NumberField
+                  label="Album rating min"
+                  value={albumFilters.albumRatingMin}
+                  min={0}
+                  max={100}
+                  onChange={(value) =>
+                    updateAlbumFilter("albumRatingMin", value)
+                  }
+                />
+                <CompletenessRangeCriterion
+                  minValue={albumFilters.ratingCompletenessMin}
+                  maxValue={albumFilters.ratingCompletenessMax}
+                  onChange={(range) =>
+                    updateAlbumFilters(
+                      toCompletenessFilterRange(range.min, range.max),
+                    )
+                  }
+                />
+              </div>
+
+              <div className="query-footer">
+                <div
+                  className="chip-row inline"
+                  aria-label="Active album filters"
+                >
+                  {albumChips.length === 0 ? (
+                    <span className="chip-empty">No active filters</span>
+                  ) : (
+                    albumChips.map((chip) => (
+                      <button
+                        className="filter-chip"
+                        type="button"
+                        key={chip.key}
+                        onClick={chip.remove}
+                      >
+                        <span>{chip.label}</span>
+                        <X size={14} />
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                <div className="sort-controls">
+                  <SelectField
+                    label="Direction"
+                    value={albumRequest.sort.direction}
+                    onChange={(direction) =>
+                      setAlbumRequest((previous) => ({
+                        ...previous,
+                        sort: {
+                          ...previous.sort,
+                          direction: direction as "asc" | "desc",
+                        },
+                        offset: 0,
+                      }))
+                    }
+                    options={[
+                      { value: "asc", label: "Ascending" },
+                      { value: "desc", label: "Descending" },
+                    ]}
+                  />
+                  <NumberField
+                    label="Rows"
+                    value={albumRequest.limit}
+                    min={10}
+                    max={500}
+                    onChange={(value) =>
+                      setAlbumRequest((previous) => ({
+                        ...previous,
+                        limit: value ?? 25,
+                        offset: 0,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="table-panel" aria-label="Album index">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Album index</h2>
+                  <p>
+                    {isAlbumLoading
+                      ? "Loading albums"
+                      : `${formatNumber(albumPageStart)}-${formatNumber(albumPageEnd)} of ${formatNumber(albumTotal)}`}
+                  </p>
+                </div>
+                <div className="pager">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="Previous album page"
+                    disabled={albumRequest.offset === 0}
+                    onClick={() =>
+                      setAlbumRequest((previous) => ({
+                        ...previous,
+                        offset: Math.max(0, previous.offset - previous.limit),
+                      }))
+                    }
+                  >
+                    <ChevronLeft size={17} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="Next album page"
+                    disabled={
+                      albumRequest.offset + albumRequest.limit >= albumTotal
+                    }
+                    onClick={() =>
+                      setAlbumRequest((previous) => ({
+                        ...previous,
+                        offset: previous.offset + previous.limit,
+                      }))
+                    }
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
+              </div>
+
+              {albumError ? (
+                <p className="error-message">{albumError}</p>
+              ) : null}
+              <AlbumIndexTable
+                response={albumResponse}
+                selectedAlbumId={selectedAlbumId}
+                sort={albumRequest.sort}
+                onSort={sortAlbumsBy}
+                onSelect={selectAlbum}
+                countryFlagDisplay={settings.countryFlagDisplay}
+              />
+            </section>
+
+            <section className="table-panel" aria-label="Selected album tracks">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>{selectedAlbum?.album ?? "Track list"}</h2>
+                  <p>
+                    {isAlbumTracksLoading
+                      ? "Loading tracks"
+                      : `${formatNumber(albumTracksResponse?.rows.length ?? 0)} of ${formatNumber(selectedAlbumTrackCount)} tracks`}
+                  </p>
+                </div>
+                <span className="run-status">
+                  {selectedAlbum?.year ?? "Album"}
+                </span>
+              </div>
+
+              {albumTracksError ? (
+                <p className="error-message">{albumTracksError}</p>
+              ) : null}
+              <AlbumTrackTable
+                response={albumTracksResponse}
+                isLoading={isAlbumTracksLoading}
+              />
+            </section>
+          </section>
+        ) : activeSection === "Statistics" ? (
+          <section className="workspace statistics-workspace">
+            <header className="topbar">
+              <div>
+                <h1>Statistics</h1>
+                <p>
+                  Library health, rating progress, metadata coverage, time
+                  shape, duration, and outlier signals.
+                </p>
+              </div>
+              <div className="topbar-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Refresh statistics"
+                  onClick={() => void refreshStatistics()}
+                >
+                  <RotateCcw size={18} />
+                </button>
+              </div>
+            </header>
+
+            <section className="metric-grid" aria-label="Statistics summary">
+              <Metric
+                label="Tracks"
+                value={formatNumber(
+                  statistics?.overview.trackCount ?? status?.trackCount,
+                )}
+                tone="teal"
+                icon={ListMusic}
+              />
+              <Metric
+                label="Albums"
+                value={formatNumber(
+                  statistics?.overview.albumCount ?? status?.albumCount,
+                )}
+                tone="amber"
+                icon={Album}
+              />
+              <Metric
+                label="Artists"
+                value={formatNumber(statistics?.overview.albumArtistCount)}
+                icon={UsersRound}
+              />
+              <Metric
+                label="Duration"
+                value={formatHours(statistics?.overview.totalSeconds)}
+                icon={Clock3}
+              />
+            </section>
+
+            {statsError ? <p className="error-message">{statsError}</p> : null}
+
+            <section
+              className="stats-dashboard-grid"
+              aria-label="Statistics dashboards"
+            >
+              <section className="stats-panel health-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Library health score</h2>
+                    <p>
+                      {statistics
+                        ? "Ratings, metadata, covers, and score coverage"
+                        : "Waiting for library data"}
+                    </p>
+                  </div>
+                  <ShieldCheck size={18} />
+                </div>
+                <LibraryHealthScorePanel statistics={statistics} />
+              </section>
+
+              <section className="stats-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Rating completion burndown</h2>
+                    <p>Unrated tracks remaining across rating snapshots.</p>
+                  </div>
+                  <Activity size={18} />
+                </div>
+                <RatingCompletionBurndown statistics={statistics} />
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Decade progress timeline</h2>
+                    <p>Rated, partial, and open albums by release decade.</p>
+                  </div>
+                  <Clock3 size={18} />
+                </div>
+                <DecadeProgressTimeline
+                  rows={statistics?.decadeProgress ?? []}
+                />
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Genre portfolio matrix</h2>
+                    <p>
+                      Catalog size, completion, and average Album Score by
+                      genre.
+                    </p>
+                  </div>
+                  <Tags size={18} />
+                </div>
+                <GenrePortfolioMatrix rows={statistics?.genreProgress ?? []} />
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Metadata coverage</h2>
+                    <p>Core album, track, artwork, and rating fields.</p>
+                  </div>
+                  <ShieldCheck size={18} />
+                </div>
+                <MetadataCoveragePanel
+                  metrics={statistics?.metadataCoverage ?? []}
+                />
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Import delta timeline</h2>
+                    <p>
+                      Added, changed, removed, and rating-event movement by
+                      import.
+                    </p>
+                  </div>
+                  <FolderInput size={18} />
+                </div>
+                <ImportDeltaTimeline runs={statistics?.importHistory ?? []} />
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Library shape by time</h2>
+                    <p>
+                      Albums, tracks, duration, and release-year center of
+                      gravity.
+                    </p>
+                  </div>
+                  <Clock3 size={18} />
+                </div>
+                <LibraryShapeByTime statistics={statistics} />
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Loved density</h2>
+                    <p>
+                      Loved tracks per 100 tracks by genre, decade, and rating
+                      bucket.
+                    </p>
+                  </div>
+                  <Heart size={18} />
+                </div>
+                <LovedDensityPanel rows={statistics?.lovedDensity ?? []} />
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Catalog concentration</h2>
+                    <p>
+                      Top artist and genre slices as a share of the album
+                      library.
+                    </p>
+                  </div>
+                  <UsersRound size={18} />
+                </div>
+                <CatalogConcentrationPanel statistics={statistics} />
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Duration analytics</h2>
+                    <p>
+                      Listening time, album length extremes, and
+                      tracks-per-album shape.
+                    </p>
+                  </div>
+                  <Clock3 size={18} />
+                </div>
+                <DurationAnalyticsPanel statistics={statistics} />
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Outlier stats</h2>
+                    <p>
+                      Aggregate oddities worth knowing without leaving
+                      Statistics.
+                    </p>
+                  </div>
+                  <Sparkles size={18} />
+                </div>
+                <OutlierStatsPanel rows={statistics?.outlierStats ?? []} />
+              </section>
+
+              <section className="stats-panel rating-progress-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Rating progress</h2>
+                    <p>
+                      {isStatsLoading
+                        ? "Refreshing"
+                        : formatPercent(
+                            statistics?.ratingProgress
+                              .averageRatingCompleteness,
+                          )}
+                    </p>
+                  </div>
+                  <Gauge size={18} />
+                </div>
+
+                {statistics ? (
+                  <div className="meter-stack">
+                    <Meter
+                      label="Fully rated albums"
+                      value={statistics.ratingProgress.fullyRatedAlbums}
+                      total={ratingAlbumTotal}
+                      detail={`${percentOf(statistics.ratingProgress.fullyRatedAlbums, ratingAlbumTotal).toFixed(1)}%`}
+                    />
+                    <Meter
+                      label="Partially rated albums"
+                      value={statistics.ratingProgress.partiallyRatedAlbums}
+                      total={ratingAlbumTotal}
+                      detail={`${percentOf(statistics.ratingProgress.partiallyRatedAlbums, ratingAlbumTotal).toFixed(1)}%`}
+                    />
+                    <Meter
+                      label="Rated tracks"
+                      value={statistics.ratingProgress.ratedTracks}
+                      total={ratingTrackTotal}
+                      detail={`${percentOf(statistics.ratingProgress.ratedTracks, ratingTrackTotal).toFixed(1)}%`}
+                    />
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <Activity size={20} />
+                    <span>No statistics loaded.</span>
+                  </div>
+                )}
+              </section>
+
+              <section className="stats-panel loved-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Loved tracks</h2>
+                    <p>
+                      {statistics?.lovedTracks.topLovedGenre ??
+                        "Waiting for library data"}
+                    </p>
+                  </div>
+                  <Heart size={18} />
+                </div>
+                <div className="stat-pairs">
+                  <div>
+                    <span>Loved tracks</span>
+                    <strong>
+                      {formatNumber(statistics?.lovedTracks.lovedTracks)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Albums with love</span>
+                    <strong>
+                      {formatNumber(
+                        statistics?.lovedTracks.albumsWithLovedTracks,
+                      )}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Average per album</span>
+                    <strong>
+                      {formatAverage(
+                        statistics?.lovedTracks.averageLovedTracksPerAlbum,
+                        2,
+                      )}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Top year</span>
+                    <strong>
+                      {statistics?.lovedTracks.topLovedYear ?? ""}
+                    </strong>
+                  </div>
+                </div>
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Year progress</h2>
+                    <p>
+                      {formatNumber(statistics?.overview.yearCount)} years with
+                      albums
+                    </p>
+                  </div>
+                  <Clock3 size={18} />
+                </div>
+                <YearProgressTable rows={statistics?.yearProgress ?? []} />
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Genre progress</h2>
+                    <p>
+                      {formatNumber(statistics?.overview.genreCount)} canonical
+                      genres
+                    </p>
+                  </div>
+                  <Tags size={18} />
+                </div>
+                <GenreProgressTable rows={statistics?.genreProgress ?? []} />
+              </section>
+
+              <section className="stats-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Track ratings</h2>
+                    <p>
+                      {formatNumber(statistics?.ratingProgress.ratedTracks)}{" "}
+                      rated tracks
+                    </p>
+                  </div>
+                  <ListMusic size={18} />
+                </div>
+                <DistributionBars
+                  buckets={statistics?.trackRatingDistribution ?? []}
+                />
+              </section>
+
+              <section className="stats-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Album ratings</h2>
+                    <p>
+                      {formatNumber(
+                        statistics?.ratingProgress.albumsWithEffectiveRating,
+                      )}{" "}
+                      scored albums
+                    </p>
+                  </div>
+                  <Album size={18} />
+                </div>
+                <DistributionBars
+                  buckets={statistics?.albumRatingDistribution ?? []}
+                />
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Import history</h2>
+                    <p>Track and album deltas recorded during imports.</p>
+                  </div>
+                  <FolderInput size={18} />
+                </div>
+                <div className="stats-table import-stats-table" role="table">
+                  <div className="stats-table-head" role="row">
+                    <span role="columnheader">Status</span>
+                    <span role="columnheader">Completed</span>
+                    <span role="columnheader">Tracks</span>
+                    <span role="columnheader">Track delta</span>
+                    <span role="columnheader">Albums</span>
+                    <span role="columnheader">Album delta</span>
+                  </div>
+                  {(statistics?.importHistory ?? []).length === 0 ? (
+                    <div className="empty-state">
+                      <FileSearch size={20} />
+                      <span>No imports yet.</span>
+                    </div>
+                  ) : (
+                    statistics?.importHistory.map((run) => (
+                      <div className="stats-table-row" role="row" key={run.id}>
+                        <span role="cell">
+                          <RunStatus status={run.status} />
+                        </span>
+                        <span role="cell">{formatDate(run.completedAt)}</span>
+                        <span role="cell">{formatNumber(run.trackRows)}</span>
+                        <span role="cell">
+                          +{formatNumber(run.addedTracks)} / ~
+                          {formatNumber(run.changedTracks)} / -
+                          {formatNumber(run.removedTracks)}
+                        </span>
+                        <span role="cell">{formatNumber(run.albumCount)}</span>
+                        <span role="cell">
+                          +{formatNumber(run.addedAlbums)} / ~
+                          {formatNumber(run.changedAlbums)} / -
+                          {formatNumber(run.removedAlbums)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              <section className="stats-panel wide">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Rating history</h2>
+                    <p>
+                      {formatNumber(statistics?.recentRatingEvents.length)}{" "}
+                      recent rating events
+                    </p>
+                  </div>
+                  <Activity size={18} />
+                </div>
+                <div className="rating-history-strip">
+                  {(statistics?.ratingHistory ?? []).slice(-8).map((point) => (
+                    <article className="history-point" key={point.importRunId}>
+                      <span>{formatDate(point.createdAt)}</span>
+                      <strong>
+                        {formatPercent(
+                          point.ratedTracks / Math.max(1, point.trackCount),
+                        )}
+                      </strong>
+                      <small>
+                        {formatNumber(point.ratingEventsCount)} events
+                      </small>
+                    </article>
+                  ))}
+                </div>
+                <RatingEventList
+                  events={statistics?.recentRatingEvents ?? []}
+                />
+              </section>
+            </section>
+          </section>
+        ) : activeSection === "Settings" ? (
+          <section className="workspace settings-workspace">
+            <header className="topbar">
+              <div>
+                <h1>Settings</h1>
+                <p>Backup retention, appearance, and workspace layout.</p>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Reload settings"
+                onClick={() => void loadData()}
+              >
+                <RotateCcw size={18} />
+              </button>
+            </header>
+
+            <section className="metric-grid" aria-label="Settings summary">
+              <Metric
+                label="Rolling backups"
+                value={formatNumber(settings.backupRetention)}
+                tone="teal"
+                icon={Database}
+              />
+              <Metric
+                label="Theme"
+                value={settings.darkMode ? "Dark" : "Light"}
+                tone="amber"
+                icon={Moon}
+              />
+              <Metric
+                label="Navigation"
+                value={leftSidebarModeLabels[settings.leftSidebarDefault]}
+                icon={Library}
+              />
+              <Metric
+                label="Details"
+                value={rightSidebarModeLabels[settings.rightSidebarDefault]}
+                icon={SlidersHorizontal}
+              />
+              <Metric
+                label="MusicBrainz"
+                value={musicBrainzStatusLabel}
+                tone={musicBrainzMetricTone}
+                icon={ShieldCheck}
+              />
+              <Metric
+                label="Updates"
+                value={appUpdateMetricValue}
+                tone="teal"
+                icon={Download}
+              />
+            </section>
+
+            {settingsError ? (
+              <p className="error-message">{settingsError}</p>
+            ) : null}
+
+            <section
+              className="settings-grid"
+              aria-label="Application settings"
+            >
+              <section className="settings-panel update-settings-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>App Updates</h2>
+                    <p>{appUpdatePanelText}</p>
+                  </div>
+                  <Download size={18} />
+                </div>
+
+                <div className="app-update-settings-toolbar">
+                  <label className="criterion setting-number app-update-interval">
+                    <span>Auto minutes</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={1440}
+                      value={appUpdateAutoCheckDraft}
+                      onChange={(event) =>
+                        setAppUpdateAutoCheckDraft(event.target.value)
+                      }
+                      onBlur={() => void commitAppUpdateAutoCheckMinutes()}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.currentTarget.blur();
+                        }
+                      }}
+                    />
+                  </label>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={appUpdateIsBusy}
+                    onClick={() => void checkAppUpdate("manual")}
+                  >
+                    <RotateCcw size={16} />
+                    <span>
+                      {appUpdateStatus === "checking"
+                        ? "Checking"
+                        : "Check now"}
+                    </span>
+                  </button>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={!appUpdateCanInstall || appUpdateIsBusy}
+                    onClick={() => void runAppUpdateInstall()}
+                  >
+                    <Download size={16} />
+                    <span>
+                      {appUpdateStatus === "downloading" ||
+                      appUpdateStatus === "installing" ||
+                      appUpdateStatus === "restarting"
+                        ? appUpdateStatusLabel(appUpdateStatus)
+                        : "Update now"}
+                    </span>
+                  </button>
+                </div>
+
+                {appUpdateError ? (
+                  <p className="error-message">{appUpdateError}</p>
+                ) : null}
+
+                <dl className="performance-summary app-update-summary">
+                  <div>
+                    <dt>Installed</dt>
+                    <dd>{appUpdateInfo?.currentVersion ?? "Current build"}</dd>
+                  </div>
+                  <div>
+                    <dt>Available</dt>
+                    <dd>{appUpdateInfo?.version ?? "None"}</dd>
+                  </div>
+                  <div>
+                    <dt>Last check</dt>
+                    <dd>{appUpdateLastCheckedText}</dd>
+                  </div>
+                  <div>
+                    <dt>Auto</dt>
+                    <dd>
+                      {appUpdateAutoCheckMinutes > 0
+                        ? `${appUpdateAutoCheckMinutes} min`
+                        : "Off"}
+                    </dd>
+                  </div>
+                </dl>
+
+                {appUpdateStatus === "downloading" &&
+                appUpdateProgress?.percent != null ? (
+                  <div
+                    className="app-update-progress app-update-progress-settings"
+                    aria-hidden="true"
+                  >
+                    <div style={{ width: `${appUpdateProgress.percent}%` }} />
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="settings-panel backup-settings-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Backups</h2>
+                    <p>
+                      {formatNumber(databaseBackups.length)} available /{" "}
+                      {settings.backupRetention} retained
+                    </p>
+                  </div>
+                  <Database size={18} />
+                </div>
+
+                <div className="backup-settings-toolbar">
+                  <label className="criterion setting-number">
+                    <span>Rolling backups</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={settings.backupRetention}
+                      onChange={(event) =>
+                        void saveAppSettings({
+                          backupRetention: clampBackupRetention(
+                            numberValue(event.target.value),
+                          ),
+                        })
+                      }
+                    />
+                  </label>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="Refresh backups"
+                    onClick={() => void loadData()}
+                  >
+                    <RotateCcw size={18} />
+                  </button>
+                </div>
+
+                {backupError ? (
+                  <p className="error-message">{backupError}</p>
+                ) : null}
+                {restoreSummary ? (
+                  <div className="export-result restore-result">
+                    <Check size={17} />
+                    <span>
+                      Restored {formatNumber(restoreSummary.trackCount)} tracks
+                      / {formatNumber(restoreSummary.albumCount)} albums. Safety
+                      copy:{" "}
+                      {restoreSummary.preRestoreBackupPath ?? "not needed"}
+                    </span>
+                  </div>
+                ) : null}
+
+                {!canImport ? (
+                  <div className="empty-state">
+                    <Database size={20} />
+                    <span>Desktop runtime required.</span>
+                  </div>
+                ) : databaseBackups.length === 0 ? (
+                  <div className="empty-state">
+                    <Database size={20} />
+                    <span>No backups found.</span>
+                  </div>
+                ) : (
+                  <div className="database-backup-list">
+                    {databaseBackups.map((backup) => (
+                      <article
+                        className="database-backup-card"
+                        key={backup.backupPath}
+                      >
+                        <div>
+                          <strong>{formatDate(backup.createdAt)}</strong>
+                          <span>{backup.operation}</span>
+                        </div>
+                        <dl>
+                          <div>
+                            <dt>Rows</dt>
+                            <dd>
+                              {backup.trackRows == null
+                                ? "Unknown"
+                                : formatNumber(backup.trackRows)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Albums</dt>
+                            <dd>
+                              {backup.albumCount == null
+                                ? "Unknown"
+                                : formatNumber(backup.albumCount)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Schema</dt>
+                            <dd>
+                              {backup.schemaVersion == null
+                                ? "Unknown"
+                                : backup.schemaVersion}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Size</dt>
+                            <dd>{formatBytes(backup.fileSizeBytes)}</dd>
+                          </div>
+                        </dl>
+                        <small>{backup.backupPath}</small>
+                        <button
+                          className="primary-button"
+                          type="button"
+                          disabled={!backup.canRestore || isRestoringBackup}
+                          onClick={() => void restoreBackup(backup)}
+                        >
+                          <Database size={16} />
+                          <span>
+                            {isRestoringBackup
+                              ? "Restoring"
+                              : backup.canRestore
+                                ? "Restore"
+                                : "Unavailable"}
+                          </span>
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="settings-panel musicbrainz-settings-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>MusicBrainz Cache</h2>
+                    <p>{musicBrainzStatusText}</p>
+                  </div>
+                  <ShieldCheck size={18} />
+                </div>
+
+                <div className="musicbrainz-toolbar">
+                  <label className="criterion musicbrainz-cache-path">
+                    <span>Cache path</span>
+                    <input
+                      type="text"
+                      value={musicBrainzCachePathDraft}
+                      onChange={(event) =>
+                        setMusicBrainzCachePathDraft(event.target.value)
+                      }
+                      placeholder={defaultMusicBrainzCachePath}
+                    />
+                  </label>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={isMusicBrainzChecking}
+                    onClick={() => void checkMusicBrainzCache()}
+                  >
+                    <ShieldCheck size={16} />
+                    <span>
+                      {isMusicBrainzChecking ? "Checking" : "Save and check"}
+                    </span>
+                  </button>
+                </div>
+
+                {musicBrainzStatusError ? (
+                  <p className="error-message">{musicBrainzStatusError}</p>
+                ) : null}
+
+                {musicBrainzStatus ? (
+                  <>
+                    <div
+                      className={`musicbrainz-status-strip musicbrainz-status-${musicBrainzStatus.state}`}
+                    >
+                      <RunStatus status={musicBrainzStatus.state} />
+                      <span>{musicBrainzStatus.message}</span>
+                    </div>
+
+                    <dl className="performance-summary musicbrainz-summary">
+                      <div>
+                        <dt>File</dt>
+                        <dd>
+                          {musicBrainzStatus.exists
+                            ? formatBytes(musicBrainzStatus.fileSizeBytes)
+                            : "Missing"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Artists</dt>
+                        <dd>{formatNumber(musicBrainzStatus.artistCount)}</dd>
+                      </div>
+                      <div>
+                        <dt>MBIDs</dt>
+                        <dd>
+                          {formatNumber(musicBrainzStatus.distinctMbidCount)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Releases</dt>
+                        <dd>
+                          {formatNumber(musicBrainzStatus.releaseGroupCount)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Pure albums</dt>
+                        <dd>
+                          {formatNumber(
+                            musicBrainzStatus.pureAlbumReleaseGroupCount,
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Years</dt>
+                        <dd>{musicBrainzYearRange(musicBrainzStatus)}</dd>
+                      </div>
+                    </dl>
+
+                    <dl className="musicbrainz-quality-grid">
+                      <div>
+                        <dt>Official releases</dt>
+                        <dd>
+                          {formatNumber(
+                            musicBrainzStatus.officialReleaseGroupCount,
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Duplicate MBIDs</dt>
+                        <dd>
+                          {formatNumber(musicBrainzStatus.duplicateMbidCount)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Mapping warnings</dt>
+                        <dd>
+                          {formatNumber(
+                            musicBrainzStatus.suspiciousMappingCount,
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Cache dates</dt>
+                        <dd>{musicBrainzCacheDateRange(musicBrainzStatus)}</dd>
+                      </div>
+                    </dl>
+
+                    {musicBrainzHasWarnings ? (
+                      <div className="musicbrainz-warning-list">
+                        {musicBrainzStatus.warningExamples.map((example) => (
+                          <article key={example.mbid}>
+                            <div>
+                              <strong>
+                                {example.cachedNames.join(", ") || example.mbid}
+                              </strong>
+                              <span>{example.mbid}</span>
+                            </div>
+                            <dl>
+                              <div>
+                                <dt>Names</dt>
+                                <dd>{formatNumber(example.cachedNameCount)}</dd>
+                              </div>
+                              <div>
+                                <dt>Releases</dt>
+                                <dd>
+                                  {formatNumber(example.releaseGroupCount)}
+                                </dd>
+                              </div>
+                            </dl>
+                          </article>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <small className="performance-database-path">
+                      {musicBrainzStatus.resolvedPath}
+                    </small>
+                  </>
+                ) : (
+                  <div className="empty-state">
+                    <ShieldCheck size={20} />
+                    <span>No MusicBrainz cache check has run yet.</span>
+                  </div>
+                )}
+              </section>
+
+              <section className="settings-panel musicbrainz-origin-settings-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>MusicBrainz Origin Countries</h2>
+                    <p>
+                      {musicBrainzOriginStatus
+                        ? `${formatNumber(musicBrainzOriginStatus.importedOrigins)} imported / ${formatNumber(musicBrainzOriginStatus.totalAlbumArtists)} artists`
+                        : "Not checked"}
+                    </p>
+                  </div>
+                  <UsersRound size={18} />
+                </div>
+
+                <div className="musicbrainz-origin-grid">
+                  <div className="musicbrainz-origin-workflow">
+                    <div className="musicbrainz-toolbar">
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={
+                          isMusicBrainzOriginPreviewing ||
+                          isMusicBrainzOriginImporting
+                        }
+                        onClick={() => void previewMusicBrainzOriginCountries()}
+                      >
+                        <FileSearch size={16} />
+                        <span>
+                          {isMusicBrainzOriginPreviewing
+                            ? "Previewing"
+                            : "Preview"}
+                        </span>
+                      </button>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        disabled={
+                          isMusicBrainzOriginPreviewing ||
+                          isMusicBrainzOriginImporting
+                        }
+                        onClick={() => void runMusicBrainzOriginCountryImport()}
+                      >
+                        <CloudDownload size={16} />
+                        <span>
+                          {isMusicBrainzOriginImporting
+                            ? "Importing"
+                            : "Import origins"}
+                        </span>
+                      </button>
+                      <button
+                        className="icon-button"
+                        type="button"
+                        aria-label="Cancel MusicBrainz origin import"
+                        disabled={!isMusicBrainzOriginImporting}
+                        onClick={() => void cancelMusicBrainzOriginImport()}
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    {musicBrainzOriginError ? (
+                      <p className="error-message">{musicBrainzOriginError}</p>
+                    ) : null}
+
+                    {musicBrainzOriginStatus ? (
+                      <dl className="performance-summary musicbrainz-summary">
+                        <div>
+                          <dt>Countries</dt>
+                          <dd>
+                            {formatNumber(musicBrainzOriginStatus.countryCount)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Manual</dt>
+                          <dd>
+                            {formatNumber(
+                              musicBrainzOriginStatus.manualOrigins,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Unresolved</dt>
+                          <dd>
+                            {formatNumber(
+                              musicBrainzOriginStatus.unresolvedOrigins,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Missing</dt>
+                          <dd>
+                            {formatNumber(
+                              musicBrainzOriginStatus.missingOrigins,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Last run</dt>
+                          <dd>
+                            {musicBrainzOriginStatus.lastRun
+                              ? formatDate(
+                                  musicBrainzOriginStatus.lastRun.completedAt,
+                                )
+                              : "Not yet"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Status</dt>
+                          <dd>
+                            {musicBrainzOriginStatus.lastRun?.status ?? "Idle"}
+                          </dd>
+                        </div>
+                      </dl>
+                    ) : null}
+
+                    {musicBrainzOriginImportSummary ? (
+                      <div className="export-result">
+                        <Check size={17} />
+                        <span>
+                          {formatNumber(
+                            musicBrainzOriginImportSummary.fetchedCount,
+                          )}{" "}
+                          fetched /{" "}
+                          {formatNumber(
+                            musicBrainzOriginImportSummary.storedCount,
+                          )}{" "}
+                          stored /{" "}
+                          {formatNumber(
+                            musicBrainzOriginImportSummary.unresolvedCount,
+                          )}{" "}
+                          unresolved
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <aside
+                    className="musicbrainz-origin-live-panel"
+                    aria-live="polite"
+                  >
+                    <div className="musicbrainz-origin-live-heading">
+                      <div>
+                        <h3>Live import</h3>
+                        <p>{musicBrainzOriginProgress?.message ?? "Idle"}</p>
+                      </div>
+                      <span
+                        className={`run-status run-status-${(musicBrainzOriginProgress?.status ?? "idle").toLowerCase()}`}
+                      >
+                        {originImportStatusLabel(
+                          musicBrainzOriginProgress?.status,
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="progress-block musicbrainz-origin-progress-block">
+                      <div className="progress-row">
+                        <span>
+                          {formatNumber(
+                            musicBrainzOriginProgress?.processedCount ?? 0,
+                          )}{" "}
+                          done /{" "}
+                          {formatNumber(
+                            musicBrainzOriginProgress?.remainingCount ?? 0,
+                          )}{" "}
+                          left
+                        </span>
+                        <strong>
+                          {formatPercent(
+                            musicBrainzOriginProgressPercent / 100,
+                            0,
+                          ) || "0%"}
+                        </strong>
+                      </div>
+                      <div className="progress-track">
+                        <div
+                          className="progress-fill"
+                          style={{
+                            width: `${musicBrainzOriginProgressPercent}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="progress-meta">
+                        <span>
+                          {formatNumber(
+                            musicBrainzOriginProgress?.eligibleCount ?? 0,
+                          )}{" "}
+                          eligible
+                        </span>
+                        <span>
+                          {formatNumber(
+                            musicBrainzOriginProgress?.totalArtists ?? 0,
+                          )}{" "}
+                          artists total
+                        </span>
+                      </div>
+                    </div>
+
+                    <dl className="musicbrainz-origin-live-stats">
+                      <div>
+                        <dt>Succeeded</dt>
+                        <dd>
+                          {formatNumber(
+                            musicBrainzOriginProgress?.storedCount ?? 0,
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Skipped</dt>
+                        <dd>
+                          {formatNumber(
+                            musicBrainzOriginProgress?.skippedCount ?? 0,
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Unresolved</dt>
+                        <dd>
+                          {formatNumber(
+                            musicBrainzOriginProgress?.unresolvedCount ?? 0,
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Failed</dt>
+                        <dd>
+                          {formatNumber(
+                            musicBrainzOriginProgress?.failedCount ?? 0,
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    {musicBrainzOriginLog.length > 0 ? (
+                      <div className="musicbrainz-origin-log">
+                        {musicBrainzOriginLog.map((entry, index) => (
+                          <article
+                            key={`${entry.status}-${entry.processedCount}-${entry.currentArtistKey ?? index}`}
+                          >
+                            <div>
+                              <strong>
+                                {originImportStatusLabel(entry.status)}
+                              </strong>
+                              <span>
+                                {entry.currentArtist ??
+                                  entry.currentMbid ??
+                                  "Origin importer"}
+                              </span>
+                            </div>
+                            <small>{entry.message}</small>
+                          </article>
+                        ))}
+                      </div>
+                    ) : musicBrainzOriginPreview ? (
+                      <div className="musicbrainz-warning-list musicbrainz-origin-preview-list">
+                        {musicBrainzOriginPreview.rows
+                          .slice(0, 8)
+                          .map((row) => (
+                            <article key={row.localArtistKey}>
+                              <div>
+                                <strong>{row.displayArtist}</strong>
+                                <span>
+                                  {row.musicbrainzMbid ??
+                                    row.skippedReason ??
+                                    "No MBID"}
+                                </span>
+                              </div>
+                              <dl>
+                                <div>
+                                  <dt>Status</dt>
+                                  <dd>{row.status}</dd>
+                                </div>
+                                <div>
+                                  <dt>Country</dt>
+                                  <dd>
+                                    <CountryDisplay
+                                      value={{
+                                        originCountryCode:
+                                          row.existingCountryCode,
+                                        originCountryName:
+                                          row.existingCountryName,
+                                        originCountryRawArea: null,
+                                      }}
+                                      mode={settings.countryFlagDisplay}
+                                      fallback="Missing"
+                                    />
+                                  </dd>
+                                </div>
+                              </dl>
+                            </article>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="empty-state">
+                        <FileSearch size={20} />
+                        <span>No origin preview yet.</span>
+                      </div>
+                    )}
+                  </aside>
+                </div>
+
+                {musicBrainzOriginPreview ? (
+                  <section
+                    className="musicbrainz-origin-report"
+                    aria-label="MusicBrainz origin coverage report"
+                  >
+                    <div className="musicbrainz-origin-report-heading">
+                      <div>
+                        <h3>Origin coverage report</h3>
+                        <p>
+                          {formatNumber(musicBrainzOriginReportRows.length)}{" "}
+                          matching /{" "}
+                          {formatNumber(musicBrainzOriginPreview.rows.length)}{" "}
+                          previewed
+                        </p>
+                      </div>
+                      <label className="criterion musicbrainz-origin-report-search">
+                        <span>Find artist</span>
+                        <input
+                          type="search"
+                          value={musicBrainzOriginReportSearch}
+                          onChange={(event) =>
+                            setMusicBrainzOriginReportSearch(event.target.value)
+                          }
+                          placeholder="Beastie Boys"
+                        />
+                      </label>
+                    </div>
+
+                    <div
+                      className="segmented-control musicbrainz-origin-report-tabs"
+                      role="group"
+                      aria-label="Origin report filter"
+                    >
+                      {originReportFilterOptions.map((option) => (
+                        <button
+                          className={
+                            musicBrainzOriginReportFilter === option.value
+                              ? "active"
+                              : ""
+                          }
+                          type="button"
+                          key={option.value}
+                          onClick={() =>
+                            setMusicBrainzOriginReportFilter(option.value)
+                          }
+                        >
+                          {option.label}
+                          <span>
+                            {formatNumber(
+                              musicBrainzOriginReportCounts[option.value],
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div
+                      className="musicbrainz-origin-report-table"
+                      role="table"
+                    >
+                      <div
+                        className="musicbrainz-origin-report-head"
+                        role="row"
+                      >
+                        <span role="columnheader">Artist</span>
+                        <span role="columnheader">Status</span>
+                        <span role="columnheader">Country</span>
+                        <span role="columnheader">Match</span>
+                        <span role="columnheader">Reason</span>
+                      </div>
+                      {musicBrainzOriginVisibleReportRows.length === 0 ? (
+                        <div className="empty-state musicbrainz-origin-report-empty">
+                          <FileSearch size={20} />
+                          <span>No matching origin rows.</span>
+                        </div>
+                      ) : (
+                        musicBrainzOriginVisibleReportRows.map((row) => (
+                          <div
+                            className={`musicbrainz-origin-report-row origin-report-status-${row.status.toLowerCase()}`}
+                            role="row"
+                            key={row.localArtistKey}
+                          >
+                            <span role="cell">
+                              <strong>{row.displayArtist}</strong>
+                              <small>
+                                {formatNumber(row.albumCount)} albums
+                              </small>
+                            </span>
+                            <span role="cell">
+                              <RunStatus
+                                status={originPreviewStatusLabel(row.status)}
+                              />
+                            </span>
+                            <span role="cell">
+                              <CountryDisplay
+                                value={{
+                                  originCountryCode: row.existingCountryCode,
+                                  originCountryName: row.existingCountryName,
+                                  originCountryRawArea: null,
+                                }}
+                                mode={settings.countryFlagDisplay}
+                                fallback="Missing"
+                              />
+                            </span>
+                            <span role="cell">
+                              <span>{originPreviewMatchLabel(row)}</span>
+                              {row.musicbrainzMbid ? (
+                                <button
+                                  className="icon-button musicbrainz-origin-report-link"
+                                  type="button"
+                                  aria-label={`Open ${row.displayArtist} in MusicBrainz`}
+                                  onClick={() =>
+                                    void openExternalUrl(
+                                      musicBrainzArtistUrl(
+                                        row.musicbrainzMbid!,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <ExternalLink size={14} />
+                                </button>
+                              ) : null}
+                            </span>
+                            <span role="cell">{originPreviewReason(row)}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {musicBrainzOriginReportRows.length >
+                    musicBrainzOriginVisibleReportRows.length ? (
+                      <small className="musicbrainz-origin-report-limit">
+                        Showing{" "}
+                        {formatNumber(
+                          musicBrainzOriginVisibleReportRows.length,
+                        )}{" "}
+                        of {formatNumber(musicBrainzOriginReportRows.length)}{" "}
+                        matching rows.
+                      </small>
+                    ) : null}
+                  </section>
+                ) : null}
+              </section>
+
+              <section className="settings-panel musicbrainz-origin-settings-panel musicbrainz-artist-info-settings-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>MusicBrainz Artist Information</h2>
+                    <p>
+                      {musicBrainzArtistInfoStatus
+                        ? `${formatNumber(musicBrainzArtistInfoStatus.importedInfos)} imported / ${formatNumber(musicBrainzArtistInfoStatus.totalAlbumArtists)} artists`
+                        : "Not checked"}
+                    </p>
+                  </div>
+                  <UsersRound size={18} />
+                </div>
+
+                <div className="musicbrainz-origin-grid">
+                  <div className="musicbrainz-origin-workflow">
+                    <div className="musicbrainz-toolbar">
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={
+                          isMusicBrainzArtistInfoPreviewing ||
+                          isMusicBrainzArtistInfoImporting
+                        }
+                        onClick={() => void previewMusicBrainzArtistInfos()}
+                      >
+                        <FileSearch size={16} />
+                        <span>
+                          {isMusicBrainzArtistInfoPreviewing
+                            ? "Previewing"
+                            : "Preview"}
+                        </span>
+                      </button>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        disabled={
+                          isMusicBrainzArtistInfoPreviewing ||
+                          isMusicBrainzArtistInfoImporting
+                        }
+                        onClick={() => void runMusicBrainzArtistInfoImport()}
+                      >
+                        <CloudDownload size={16} />
+                        <span>
+                          {isMusicBrainzArtistInfoImporting
+                            ? "Importing"
+                            : "Import info"}
+                        </span>
+                      </button>
+                      <button
+                        className="icon-button"
+                        type="button"
+                        aria-label="Cancel MusicBrainz artist-info import"
+                        disabled={!isMusicBrainzArtistInfoImporting}
+                        onClick={() =>
+                          void cancelMusicBrainzArtistInfoImportRun()
+                        }
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    {musicBrainzArtistInfoError ? (
+                      <p className="error-message">
+                        {musicBrainzArtistInfoError}
+                      </p>
+                    ) : null}
+
+                    {musicBrainzArtistInfoStatus ? (
+                      <dl className="performance-summary musicbrainz-summary">
+                        <div>
+                          <dt>People</dt>
+                          <dd>
+                            {formatNumber(
+                              musicBrainzArtistInfoStatus.personArtists,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Groups</dt>
+                          <dd>
+                            {formatNumber(
+                              musicBrainzArtistInfoStatus.groupArtists,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Gender</dt>
+                          <dd>
+                            {formatNumber(
+                              musicBrainzArtistInfoStatus.genderedArtists,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Born</dt>
+                          <dd>
+                            {formatNumber(
+                              musicBrainzArtistInfoStatus.bornArtists,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Died</dt>
+                          <dd>
+                            {formatNumber(
+                              musicBrainzArtistInfoStatus.diedArtists,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Founded</dt>
+                          <dd>
+                            {formatNumber(
+                              musicBrainzArtistInfoStatus.foundedArtists,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Dissolved</dt>
+                          <dd>
+                            {formatNumber(
+                              musicBrainzArtistInfoStatus.dissolvedArtists,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Missing</dt>
+                          <dd>
+                            {formatNumber(
+                              musicBrainzArtistInfoStatus.missingInfos,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Last run</dt>
+                          <dd>
+                            {musicBrainzArtistInfoStatus.lastRun
+                              ? formatDate(
+                                  musicBrainzArtistInfoStatus.lastRun
+                                    .completedAt,
+                                )
+                              : "Not yet"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Status</dt>
+                          <dd>
+                            {musicBrainzArtistInfoStatus.lastRun?.status ??
+                              "Idle"}
+                          </dd>
+                        </div>
+                      </dl>
+                    ) : null}
+
+                    {musicBrainzArtistInfoImportSummary ? (
+                      <div className="export-result">
+                        <Check size={17} />
+                        <span>
+                          {formatNumber(
+                            musicBrainzArtistInfoImportSummary.fetchedCount,
+                          )}{" "}
+                          fetched /{" "}
+                          {formatNumber(
+                            musicBrainzArtistInfoImportSummary.storedCount,
+                          )}{" "}
+                          stored /{" "}
+                          {formatNumber(
+                            musicBrainzArtistInfoImportSummary.unresolvedCount,
+                          )}{" "}
+                          unresolved
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <aside
+                    className="musicbrainz-origin-live-panel"
+                    aria-live="polite"
+                  >
+                    <div className="musicbrainz-origin-live-heading">
+                      <div>
+                        <h3>Live import</h3>
+                        <p>
+                          {musicBrainzArtistInfoProgress?.message ?? "Idle"}
+                        </p>
+                      </div>
+                      <span
+                        className={`run-status run-status-${(musicBrainzArtistInfoProgress?.status ?? "idle").toLowerCase()}`}
+                      >
+                        {originImportStatusLabel(
+                          musicBrainzArtistInfoProgress?.status,
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="progress-block musicbrainz-origin-progress-block">
+                      <div className="progress-row">
+                        <span>
+                          {formatNumber(
+                            musicBrainzArtistInfoProgress?.processedCount ?? 0,
+                          )}{" "}
+                          done /{" "}
+                          {formatNumber(
+                            musicBrainzArtistInfoProgress?.remainingCount ?? 0,
+                          )}{" "}
+                          left
+                        </span>
+                        <strong>
+                          {formatPercent(
+                            musicBrainzArtistInfoProgressPercent / 100,
+                            0,
+                          ) || "0%"}
+                        </strong>
+                      </div>
+                      <div className="progress-track">
+                        <div
+                          className="progress-fill"
+                          style={{
+                            width: `${musicBrainzArtistInfoProgressPercent}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="progress-meta">
+                        <span>
+                          {formatNumber(
+                            musicBrainzArtistInfoProgress?.eligibleCount ?? 0,
+                          )}{" "}
+                          eligible
+                        </span>
+                        <span>
+                          {formatNumber(
+                            musicBrainzArtistInfoProgress?.totalArtists ?? 0,
+                          )}{" "}
+                          artists total
+                        </span>
+                      </div>
+                    </div>
+
+                    <dl className="musicbrainz-origin-live-stats">
+                      <div>
+                        <dt>Succeeded</dt>
+                        <dd>
+                          {formatNumber(
+                            musicBrainzArtistInfoProgress?.storedCount ?? 0,
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Skipped</dt>
+                        <dd>
+                          {formatNumber(
+                            musicBrainzArtistInfoProgress?.skippedCount ?? 0,
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Unresolved</dt>
+                        <dd>
+                          {formatNumber(
+                            musicBrainzArtistInfoProgress?.unresolvedCount ?? 0,
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Failed</dt>
+                        <dd>
+                          {formatNumber(
+                            musicBrainzArtistInfoProgress?.failedCount ?? 0,
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    {musicBrainzArtistInfoLog.length > 0 ? (
+                      <div className="musicbrainz-origin-log">
+                        {musicBrainzArtistInfoLog.map((entry, index) => (
+                          <article
+                            key={`${entry.status}-${entry.processedCount}-${entry.currentArtistKey ?? index}`}
+                          >
+                            <div>
+                              <strong>
+                                {originImportStatusLabel(entry.status)}
+                              </strong>
+                              <span>
+                                {entry.currentArtist ??
+                                  entry.currentMbid ??
+                                  "Artist info importer"}
+                              </span>
+                            </div>
+                            <small>{entry.message}</small>
+                          </article>
+                        ))}
+                      </div>
+                    ) : musicBrainzArtistInfoPreview ? (
+                      <div className="musicbrainz-warning-list musicbrainz-origin-preview-list">
+                        {musicBrainzArtistInfoPreview.rows
+                          .slice(0, 8)
+                          .map((row) => (
+                            <article key={row.localArtistKey}>
+                              <div>
+                                <strong>{row.displayArtist}</strong>
+                                <span>
+                                  {row.musicbrainzMbid ??
+                                    row.skippedReason ??
+                                    "No MBID"}
+                                </span>
+                              </div>
+                              <dl>
+                                <div>
+                                  <dt>Status</dt>
+                                  <dd>{row.status}</dd>
+                                </div>
+                                <div>
+                                  <dt>Type</dt>
+                                  <dd>{row.existingArtistType ?? "Missing"}</dd>
+                                </div>
+                              </dl>
+                            </article>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="empty-state">
+                        <FileSearch size={20} />
+                        <span>No artist-info preview yet.</span>
+                      </div>
+                    )}
+                  </aside>
+                </div>
+
+                {musicBrainzArtistInfoPreview ? (
+                  <section
+                    className="musicbrainz-origin-report"
+                    aria-label="MusicBrainz artist-info coverage report"
+                  >
+                    <div className="musicbrainz-origin-report-heading">
+                      <div>
+                        <h3>Artist information report</h3>
+                        <p>
+                          {formatNumber(musicBrainzArtistInfoReportRows.length)}{" "}
+                          matching /{" "}
+                          {formatNumber(
+                            musicBrainzArtistInfoPreview.rows.length,
+                          )}{" "}
+                          previewed
+                        </p>
+                      </div>
+                      <label className="criterion musicbrainz-origin-report-search">
+                        <span>Find artist</span>
+                        <input
+                          type="search"
+                          value={musicBrainzArtistInfoReportSearch}
+                          onChange={(event) =>
+                            setMusicBrainzArtistInfoReportSearch(
+                              event.target.value,
+                            )
+                          }
+                          placeholder="David Bowie"
+                        />
+                      </label>
+                    </div>
+
+                    <div
+                      className="segmented-control musicbrainz-origin-report-tabs"
+                      role="group"
+                      aria-label="Artist information report filter"
+                    >
+                      {artistInfoReportFilterOptions.map((option) => (
+                        <button
+                          className={
+                            musicBrainzArtistInfoReportFilter === option.value
+                              ? "active"
+                              : ""
+                          }
+                          type="button"
+                          key={option.value}
+                          onClick={() =>
+                            setMusicBrainzArtistInfoReportFilter(option.value)
+                          }
+                        >
+                          {option.label}
+                          <span>
+                            {formatNumber(
+                              musicBrainzArtistInfoReportCounts[option.value],
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div
+                      className="musicbrainz-origin-report-table musicbrainz-artist-info-report-table"
+                      role="table"
+                    >
+                      <div
+                        className="musicbrainz-artist-info-report-head"
+                        role="row"
+                      >
+                        <span role="columnheader">Artist</span>
+                        <span role="columnheader">Status</span>
+                        <span role="columnheader">Type</span>
+                        <span role="columnheader">Gender</span>
+                        <span role="columnheader">Life</span>
+                        <span role="columnheader">Match</span>
+                        <span role="columnheader">Reason</span>
+                      </div>
+                      {musicBrainzArtistInfoVisibleReportRows.length === 0 ? (
+                        <div className="empty-state musicbrainz-origin-report-empty">
+                          <FileSearch size={20} />
+                          <span>No matching artist-info rows.</span>
+                        </div>
+                      ) : (
+                        musicBrainzArtistInfoVisibleReportRows.map((row) => (
+                          <div
+                            className={`musicbrainz-artist-info-report-row origin-report-status-${row.status.toLowerCase()}`}
+                            role="row"
+                            key={row.localArtistKey}
+                          >
+                            <span role="cell">
+                              <strong>{row.displayArtist}</strong>
+                              <small>
+                                {row.existingSortName ??
+                                  `${formatNumber(row.albumCount)} albums`}
+                              </small>
+                            </span>
+                            <span role="cell">
+                              <RunStatus
+                                status={artistInfoPreviewStatusLabel(
+                                  row.status,
+                                )}
+                              />
+                            </span>
+                            <span role="cell">
+                              {row.existingArtistType ?? "Missing"}
+                            </span>
+                            <span role="cell">
+                              {row.existingGender ?? "Missing"}
+                            </span>
+                            <span role="cell">
+                              <strong>{artistInfoLifeStartLabel(row)}</strong>
+                              <small>
+                                {artistInfoDateLabel(
+                                  row.existingBeginDate,
+                                  row.existingBeginYear,
+                                  row.existingBeginAreaName,
+                                )}
+                              </small>
+                              <strong>{artistInfoLifeEndLabel(row)}</strong>
+                              <small>
+                                {artistInfoDateLabel(
+                                  row.existingEndDate,
+                                  row.existingEndYear,
+                                  row.existingEndAreaName,
+                                )}
+                              </small>
+                            </span>
+                            <span role="cell">
+                              <span>{artistInfoPreviewMatchLabel(row)}</span>
+                              {row.musicbrainzMbid ? (
+                                <button
+                                  className="icon-button musicbrainz-origin-report-link"
+                                  type="button"
+                                  aria-label={`Open ${row.displayArtist} in MusicBrainz`}
+                                  onClick={() =>
+                                    void openExternalUrl(
+                                      musicBrainzArtistUrl(
+                                        row.musicbrainzMbid!,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <ExternalLink size={14} />
+                                </button>
+                              ) : null}
+                            </span>
+                            <span role="cell">
+                              {artistInfoPreviewReason(row)}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {musicBrainzArtistInfoReportRows.length >
+                    musicBrainzArtistInfoVisibleReportRows.length ? (
+                      <small className="musicbrainz-origin-report-limit">
+                        Showing{" "}
+                        {formatNumber(
+                          musicBrainzArtistInfoVisibleReportRows.length,
+                        )}{" "}
+                        of{" "}
+                        {formatNumber(musicBrainzArtistInfoReportRows.length)}{" "}
+                        matching rows.
+                      </small>
+                    ) : null}
+                  </section>
+                ) : null}
+              </section>
+
+              <section className="settings-panel musicbrainz-sync-settings-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>MusicBrainz Overlay Sync</h2>
+                    <p>
+                      {musicBrainzOverlaySyncResult
+                        ? musicBrainzOverlaySyncResult.summary
+                        : (musicBrainzOverlaySyncLog[0]?.summary ??
+                          "Not synced")}
+                    </p>
+                  </div>
+                  <CloudDownload size={18} />
+                </div>
+
+                <div className="musicbrainz-sync-toolbar">
+                  <label className="criterion musicbrainz-sync-path">
+                    <span>Sync database</span>
+                    <input
+                      type="text"
+                      value={musicBrainzOverlaySyncPathDraft}
+                      onChange={(event) =>
+                        setMusicBrainzOverlaySyncPathDraft(event.target.value)
+                      }
+                      placeholder={defaultMusicBrainzOverlaySyncPath}
+                    />
+                  </label>
+                  <label className="criterion setting-number musicbrainz-sync-interval">
+                    <span>Auto minutes</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={1440}
+                      value={musicBrainzOverlayAutoSyncDraft}
+                      onChange={(event) =>
+                        setMusicBrainzOverlayAutoSyncDraft(event.target.value)
+                      }
+                      onBlur={() =>
+                        void commitMusicBrainzOverlayAutoSyncMinutes()
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.currentTarget.blur();
+                        }
+                      }}
+                    />
+                  </label>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={isMusicBrainzOverlaySyncing}
+                    onClick={() => void runMusicBrainzOverlaySync()}
+                  >
+                    <CloudDownload size={16} />
+                    <span>
+                      {isMusicBrainzOverlaySyncing ? "Syncing" : "Sync now"}
+                    </span>
+                  </button>
+                </div>
+
+                {musicBrainzOverlaySyncError ? (
+                  <p className="error-message">{musicBrainzOverlaySyncError}</p>
+                ) : null}
+
+                {musicBrainzOverlaySyncResult ? (
+                  <div className="export-result musicbrainz-sync-result">
+                    <Check size={17} />
+                    <span>
+                      {musicBrainzOverlaySyncResult.summary}{" "}
+                      {musicBrainzOverlaySyncDetails(
+                        musicBrainzOverlaySyncResult,
+                      )}
+                      .
+                    </span>
+                  </div>
+                ) : null}
+
+                {musicBrainzOverlaySyncLog.length > 0 ? (
+                  <div
+                    className="musicbrainz-sync-log"
+                    aria-label="MusicBrainz overlay sync log"
+                  >
+                    {musicBrainzOverlaySyncLog.map((entry) => (
+                      <article key={entry.id}>
+                        <div>
+                          <strong>{formatDate(entry.syncedAt)}</strong>
+                          <span>{entry.summary}</span>
+                        </div>
+                        <small>{musicBrainzOverlaySyncDetails(entry)}</small>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <Clock3 size={20} />
+                    <span>No overlay sync runs logged yet.</span>
+                  </div>
+                )}
+
+                <small className="performance-database-path">
+                  {settings.musicBrainzOverlaySyncPath}
+                </small>
+              </section>
+
+              <section className="settings-panel performance-settings-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Performance Proof</h2>
+                    <p>
+                      {performanceProbe
+                        ? `${formatDate(performanceProbe.generatedAt)} / ${formatDuration(performanceProbe.totalDurationMs)} total`
+                        : "Not run"}
+                    </p>
+                  </div>
+                  <Activity size={18} />
+                </div>
+
+                <div className="performance-toolbar">
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={isPerformanceProbeRunning}
+                    onClick={() => void runSettingsPerformanceProbe()}
+                  >
+                    <Gauge size={16} />
+                    <span>
+                      {isPerformanceProbeRunning ? "Running" : "Run probe"}
+                    </span>
+                  </button>
+                  <span>
+                    {performanceProbe
+                      ? `${formatNumber(performanceProbe.operations.length)} checks`
+                      : "No report"}
+                  </span>
+                </div>
+
+                {performanceProbeError ? (
+                  <p className="error-message">{performanceProbeError}</p>
+                ) : null}
+
+                {performanceProbe ? (
+                  <>
+                    <dl className="performance-summary">
+                      <div>
+                        <dt>Tracks</dt>
+                        <dd>{formatNumber(performanceProbe.trackCount)}</dd>
+                      </div>
+                      <div>
+                        <dt>Albums</dt>
+                        <dd>{formatNumber(performanceProbe.albumCount)}</dd>
+                      </div>
+                      <div>
+                        <dt>Total</dt>
+                        <dd>
+                          {formatDuration(performanceProbe.totalDurationMs)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Slowest</dt>
+                        <dd>
+                          {formatDuration(performanceProbe.slowestOperationMs)}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <div className="performance-probe-list">
+                      {performanceProbe.operations.map((operation) => (
+                        <article
+                          className={`performance-probe-row ${operation.status}`}
+                          key={operation.id}
+                        >
+                          <div>
+                            <strong>{operation.label}</strong>
+                            <span>{operation.category}</span>
+                          </div>
+                          <dl>
+                            <div>
+                              <dt>Time</dt>
+                              <dd>{formatDuration(operation.durationMs)}</dd>
+                            </div>
+                            <div>
+                              <dt>Total</dt>
+                              <dd>
+                                {operation.totalCount == null
+                                  ? "n/a"
+                                  : formatNumber(operation.totalCount)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Rows</dt>
+                              <dd>
+                                {operation.rowCount == null
+                                  ? "n/a"
+                                  : formatNumber(operation.rowCount)}
+                              </dd>
+                            </div>
+                          </dl>
+                          <small>
+                            {operation.errorMessage ?? operation.detail}
+                          </small>
+                        </article>
+                      ))}
+                    </div>
+
+                    <small className="performance-database-path">
+                      {performanceProbe.databasePath}
+                    </small>
+                  </>
+                ) : null}
+              </section>
+
+              <section className="settings-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Appearance</h2>
+                    <p>{settings.darkMode ? "Dark mode" : "Light mode"}</p>
+                  </div>
+                  <Moon size={18} />
+                </div>
+
+                <label className="setting-toggle">
+                  <input
+                    type="checkbox"
+                    aria-label="Dark mode"
+                    checked={settings.darkMode}
+                    onChange={(event) =>
+                      void saveAppSettings({ darkMode: event.target.checked })
+                    }
+                  />
+                  <span>
+                    <strong>Dark mode</strong>
+                    <small>{settings.darkMode ? "On" : "Off"}</small>
+                  </span>
+                </label>
+              </section>
+
+              <section className="settings-panel layout-settings-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Layout</h2>
+                    <p>
+                      {isSavingSettings
+                        ? "Saving preferences"
+                        : "Preferences saved"}
+                    </p>
+                  </div>
+                  <SlidersHorizontal size={18} />
+                </div>
+
+                <div className="layout-setting-stack">
+                  <div className="layout-setting">
+                    <span>Left sidebar default</span>
+                    <div
+                      className="segmented-control layout-mode-control left-layout-mode-control"
+                      role="group"
+                      aria-label="Left sidebar default"
+                    >
+                      {leftSidebarModeOptions.map((option) => (
+                        <button
+                          className={
+                            settings.leftSidebarDefault === option.value
+                              ? "active"
+                              : ""
+                          }
+                          type="button"
+                          key={option.value}
+                          onClick={() => saveLeftSidebarDefault(option.value)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="layout-setting">
+                    <span>Right sidebar default</span>
+                    <div
+                      className="segmented-control layout-mode-control right-layout-mode-control"
+                      role="group"
+                      aria-label="Right sidebar default"
+                    >
+                      {rightSidebarModeOptions.map((option) => (
+                        <button
+                          className={
+                            settings.rightSidebarDefault === option.value
+                              ? "active"
+                              : ""
+                          }
+                          type="button"
+                          key={option.value}
+                          onClick={() => saveRightSidebarDefault(option.value)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="layout-setting">
+                    <span>Origin country display</span>
+                    <div
+                      className="segmented-control layout-mode-control country-display-mode-control"
+                      role="group"
+                      aria-label="Origin country display"
+                    >
+                      {countryFlagDisplayOptions.map((option) => (
+                        <button
+                          className={
+                            settings.countryFlagDisplay === option.value
+                              ? "active"
+                              : ""
+                          }
+                          type="button"
+                          key={option.value}
+                          onClick={() => saveCountryFlagDisplay(option.value)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </section>
+          </section>
+        ) : (
+          <section className="workspace search-workspace">
+            <header className="topbar">
+              <div>
+                <h1>Search</h1>
+                <p>
+                  Album and track browsing over the imported MusicBee library.
+                </p>
+              </div>
+              <div className="topbar-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Clear query"
+                  onClick={clearQuery}
+                >
+                  <RotateCcw size={18} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Refresh"
+                  onClick={() => void loadData()}
+                >
+                  <Database size={18} />
+                </button>
+              </div>
+            </header>
+
+            <section className="metric-grid" aria-label="Library summary">
+              <Metric
+                label="Tracks"
+                value={formatNumber(status?.trackCount)}
+                tone="teal"
+                icon={ListMusic}
+              />
+              <Metric
+                label="Albums"
+                value={formatNumber(status?.albumCount)}
+                tone="amber"
+                icon={Album}
+              />
+              <Metric
+                label="Matches"
+                value={formatNumber(total)}
+                icon={Search}
+              />
+              <Metric
+                label="Saved"
+                value={formatNumber(savedSearches.length)}
+                icon={Save}
+              />
+            </section>
+
+            <section className="query-panel">
+              <div className="search-row">
+                <div className="search-input">
+                  <Search size={18} />
+                  <input
+                    value={request.searchText}
+                    onChange={(event) =>
+                      setRequest((previous) => ({
+                        ...previous,
+                        searchText: event.target.value,
+                        offset: 0,
+                      }))
+                    }
+                    placeholder="Search albums, artists, genres, tracks, publishers, files"
+                  />
+                </div>
+
+                <div className="segmented-control" aria-label="Browse view">
+                  <button
+                    className={request.view === "albums" ? "active" : ""}
+                    type="button"
+                    onClick={() => setView("albums")}
+                  >
+                    <Album size={16} />
+                    <span>Albums</span>
+                  </button>
+                  <button
+                    className={request.view === "tracks" ? "active" : ""}
+                    type="button"
+                    onClick={() => setView("tracks")}
+                  >
+                    <ListMusic size={16} />
+                    <span>Tracks</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="filter-grid">
+                <TextCriterion
+                  label="Album title"
+                  filter={currentFilters.albumTitle}
+                  onChange={(filter) => updateFilter("albumTitle", filter)}
+                />
+                <TextCriterion
+                  label="Track title"
+                  filter={currentFilters.trackTitle}
+                  onChange={(filter) => updateFilter("trackTitle", filter)}
+                />
+                <TextCriterion
+                  label="Album artist"
+                  filter={currentFilters.albumArtist}
+                  onChange={(filter) => updateFilter("albumArtist", filter)}
+                />
+                <TextCriterion
+                  label="Display artist"
+                  filter={currentFilters.displayArtist}
+                  onChange={(filter) => updateFilter("displayArtist", filter)}
+                />
+
+                <GenreListCriterion
+                  label="Genres"
+                  values={currentFilters.genres}
+                  onChange={(genres) => updateFilter("genres", genres)}
+                  genreOptions={genreSuggestionOptions}
+                  onRequestOptions={requestGenreSuggestionRefresh}
+                  placeholder="Synthpop, AOR"
+                />
+                <GenreListCriterion
+                  label="Exclude genres"
+                  values={currentFilters.excludedGenres}
+                  onChange={(excludedGenres) =>
+                    updateFilter("excludedGenres", excludedGenres)
+                  }
+                  genreOptions={genreSuggestionOptions}
+                  onRequestOptions={requestGenreSuggestionRefresh}
+                />
+                <CountryListCriterion
+                  label="Origin countries"
+                  values={currentFilters.originCountryCodes}
+                  onChange={(originCountryCodes) =>
+                    updateFilter("originCountryCodes", originCountryCodes)
+                  }
+                  countryOptions={originCountryOptions}
+                  displayMode={settings.countryFlagDisplay}
+                />
+                <CountryListCriterion
+                  label="Exclude origin countries"
+                  values={currentFilters.excludedOriginCountryCodes}
+                  onChange={(excludedOriginCountryCodes) =>
+                    updateFilter(
+                      "excludedOriginCountryCodes",
+                      excludedOriginCountryCodes,
+                    )
+                  }
+                  countryOptions={originCountryOptions}
+                  displayMode={settings.countryFlagDisplay}
+                />
+                <TextCriterion
+                  label="Publisher"
+                  filter={currentFilters.publisher}
+                  onChange={(filter) => updateFilter("publisher", filter)}
+                />
+                <label className="criterion">
+                  <span>Track text</span>
+                  <input
+                    value={currentFilters.hasTrackText}
+                    onChange={(event) =>
+                      updateFilter("hasTrackText", event.target.value)
+                    }
+                  />
+                </label>
+
+                <NumberField
+                  label="Year from"
+                  value={currentFilters.yearFrom}
+                  onChange={(value) => updateFilter("yearFrom", value)}
+                />
+                <NumberField
+                  label="Year to"
+                  value={currentFilters.yearTo}
+                  onChange={(value) => updateFilter("yearTo", value)}
+                />
+                <NumberField
+                  label={
+                    request.view === "tracks"
+                      ? "Album Billboard min"
+                      : "Billboard min"
+                  }
+                  value={currentFilters.billboardRankMin}
+                  min={1}
+                  onChange={(value) => updateFilter("billboardRankMin", value)}
+                />
+                <NumberField
+                  label={
+                    request.view === "tracks"
+                      ? "Album Billboard max"
+                      : "Billboard max"
+                  }
+                  value={currentFilters.billboardRankMax}
+                  min={1}
+                  onChange={(value) => updateFilter("billboardRankMax", value)}
+                />
+                {request.view === "tracks" ? (
+                  <>
+                    <NumberField
+                      label="Single Billboard min"
+                      value={currentFilters.billboardSingleRankMin}
+                      min={1}
+                      onChange={(value) =>
+                        updateFilter("billboardSingleRankMin", value)
+                      }
+                    />
+                    <NumberField
+                      label="Single Billboard max"
+                      value={currentFilters.billboardSingleRankMax}
+                      min={1}
+                      onChange={(value) =>
+                        updateFilter("billboardSingleRankMax", value)
+                      }
+                    />
+                  </>
+                ) : null}
+                <NumberField
+                  label="Release from"
+                  value={currentFilters.releaseYearFrom}
+                  onChange={(value) => updateFilter("releaseYearFrom", value)}
+                />
+                <NumberField
+                  label="Release to"
+                  value={currentFilters.releaseYearTo}
+                  onChange={(value) => updateFilter("releaseYearTo", value)}
+                />
+
+                <NumberField
+                  label="Minutes min"
+                  value={currentFilters.totalMinutesMin}
+                  step={0.5}
+                  onChange={(value) => updateFilter("totalMinutesMin", value)}
+                />
+                <NumberField
+                  label="Minutes max"
+                  value={currentFilters.totalMinutesMax}
+                  step={0.5}
+                  onChange={(value) => updateFilter("totalMinutesMax", value)}
+                />
+                <NumberField
+                  label="Tracks min"
+                  value={currentFilters.trackCountMin}
+                  onChange={(value) => updateFilter("trackCountMin", value)}
+                />
+                <NumberField
+                  label="Tracks max"
+                  value={currentFilters.trackCountMax}
+                  onChange={(value) => updateFilter("trackCountMax", value)}
+                />
+                <NumberField
+                  label="Tracks rated min"
+                  value={currentFilters.ratedTracksMin}
+                  min={0}
+                  onChange={(value) => updateFilter("ratedTracksMin", value)}
+                />
+                <NumberField
+                  label="Tracks rated max"
+                  value={currentFilters.ratedTracksMax}
+                  min={0}
+                  onChange={(value) => updateFilter("ratedTracksMax", value)}
+                />
+
+                <NumberField
+                  label="Album rating min"
+                  value={currentFilters.albumRatingMin}
+                  min={0}
+                  max={100}
+                  onChange={(value) => updateFilter("albumRatingMin", value)}
+                />
+                <NumberField
+                  label="Album rating max"
+                  value={currentFilters.albumRatingMax}
+                  min={0}
+                  max={100}
+                  onChange={(value) => updateFilter("albumRatingMax", value)}
+                />
+                <NumberField
+                  label="Track rating min"
+                  value={currentFilters.trackRatingMin}
+                  min={0}
+                  max={5}
+                  onChange={(value) => updateFilter("trackRatingMin", value)}
+                />
+                <NumberField
+                  label="Track rating max"
+                  value={currentFilters.trackRatingMax}
+                  min={0}
+                  max={5}
+                  onChange={(value) => updateFilter("trackRatingMax", value)}
+                />
+
+                <CompletenessRangeCriterion
+                  minValue={currentFilters.ratingCompletenessMin}
+                  maxValue={currentFilters.ratingCompletenessMax}
+                  onChange={(range) =>
+                    updateFilters(
+                      toCompletenessFilterRange(range.min, range.max),
+                    )
+                  }
+                />
+                <NumberField
+                  label="Loved min"
+                  value={currentFilters.lovedTracksMin}
+                  min={0}
+                  onChange={(value) => updateFilter("lovedTracksMin", value)}
+                />
+                <NumberField
+                  label="Loved max"
+                  value={currentFilters.lovedTracksMax}
+                  min={0}
+                  onChange={(value) => updateFilter("lovedTracksMax", value)}
+                />
+                <TextCriterion
+                  label="File path"
+                  filter={currentFilters.filePath}
+                  onChange={(filter) => updateFilter("filePath", filter)}
+                />
+                <TextCriterion
+                  label="Filename"
+                  filter={currentFilters.filename}
+                  onChange={(filter) => updateFilter("filename", filter)}
+                />
+              </div>
+
+              <div className="query-footer">
+                <div className="missing-flags" aria-label="Missing metadata">
+                  <span className="missing-flags-title">Missing fields</span>
+                  {missingFieldOptions
+                    .filter(
+                      (option) =>
+                        request.view === "tracks" ||
+                        option.value !== "billboardSingle",
+                    )
+                    .map((option) => {
+                      const checked = currentFilters.missingFields.includes(
+                        option.value,
+                      );
+                      const label = missingFieldLabel(
+                        option.value,
+                        request.view,
+                      );
+                      return (
+                        <label key={option.value}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                              const nextValues = event.target.checked
+                                ? [
+                                    ...currentFilters.missingFields,
+                                    option.value,
+                                  ]
+                                : currentFilters.missingFields.filter(
+                                    (value) => value !== option.value,
+                                  );
+                              updateFilter("missingFields", nextValues);
+                            }}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      );
+                    })}
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={currentFilters.missingOriginCountry}
+                      onChange={(event) =>
+                        updateFilter(
+                          "missingOriginCountry",
+                          event.target.checked,
+                        )
+                      }
+                    />
+                    <span>Origin Country</span>
+                  </label>
+                </div>
+
+                <div
+                  className="missing-flags"
+                  aria-label="Visible Search columns"
+                >
+                  <span className="missing-flags-title">Table columns</span>
+                  {searchTableColumnOptions.map((option) => (
+                    <label key={option.value}>
+                      <input
+                        type="checkbox"
+                        checked={searchTableColumns.includes(option.value)}
+                        onChange={() => toggleSearchTableColumn(option.value)}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="sort-controls">
+                  <SelectField
+                    label="Sort"
+                    value={request.sort.field}
+                    onChange={(field) =>
+                      setRequest((previous) => ({
+                        ...previous,
+                        sort: { ...previous.sort, field },
+                        offset: 0,
+                      }))
+                    }
+                    options={
+                      request.view === "tracks"
+                        ? [
+                            { value: "title", label: "Title" },
+                            { value: "album", label: "Album" },
+                            { value: "displayArtist", label: "Display artist" },
+                            { value: "year", label: "Year" },
+                            { value: "originCountry", label: "Origin country" },
+                            {
+                              value: "billboardRank",
+                              label: "Album Billboard",
+                            },
+                            {
+                              value: "billboardSingleRank",
+                              label: "Single Billboard",
+                            },
+                            { value: "trackRating", label: "Track rating" },
+                            { value: "trackNumber", label: "Track number" },
+                          ]
+                        : [
+                            { value: "album", label: "Album" },
+                            { value: "artist", label: "Artist" },
+                            { value: "year", label: "Year" },
+                            { value: "originCountry", label: "Origin country" },
+                            { value: "billboardRank", label: "Billboard" },
+                            { value: "genre", label: "Genre" },
+                            { value: "totalMinutes", label: "Minutes" },
+                            { value: "trackCount", label: "Tracks" },
+                            { value: "albumRating", label: "Rating" },
+                            {
+                              value: "ratingCompleteness",
+                              label: "Completeness",
+                            },
+                            { value: "lovedTracks", label: "Loved" },
+                            { value: "albumScore", label: "Score" },
+                          ]
+                    }
+                  />
+                  <SelectField
+                    label="Direction"
+                    value={request.sort.direction}
+                    onChange={(direction) =>
+                      setRequest((previous) => ({
+                        ...previous,
+                        sort: {
+                          ...previous.sort,
+                          direction: direction as "asc" | "desc",
+                        },
+                        offset: 0,
+                      }))
+                    }
+                    options={[
+                      { value: "asc", label: "Ascending" },
+                      { value: "desc", label: "Descending" },
+                    ]}
+                  />
+                  <NumberField
+                    label="Rows"
+                    value={request.limit}
+                    min={10}
+                    max={500}
+                    onChange={(value) =>
+                      setRequest((previous) => ({
+                        ...previous,
+                        limit: value ?? 50,
+                        offset: 0,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="chip-row" aria-label="Active filters">
+                {chips.length === 0 ? (
                   <span className="chip-empty">No active filters</span>
                 ) : (
-                  albumChips.map((chip) => (
-                    <button className="filter-chip" type="button" key={chip.key} onClick={chip.remove}>
+                  chips.map((chip) => (
+                    <button
+                      className="filter-chip"
+                      type="button"
+                      key={chip.key}
+                      onClick={chip.remove}
+                    >
                       <span>{chip.label}</span>
                       <X size={14} />
                     </button>
                   ))
                 )}
               </div>
-
-              <div className="sort-controls">
-                <SelectField
-                  label="Direction"
-                  value={albumRequest.sort.direction}
-                  onChange={(direction) =>
-                    setAlbumRequest((previous) => ({
-                      ...previous,
-                      sort: { ...previous.sort, direction: direction as "asc" | "desc" },
-                      offset: 0,
-                    }))
-                  }
-                  options={[
-                    { value: "asc", label: "Ascending" },
-                    { value: "desc", label: "Descending" },
-                  ]}
-                />
-                <NumberField
-                  label="Rows"
-                  value={albumRequest.limit}
-                  min={10}
-                  max={500}
-                  onChange={(value) =>
-                    setAlbumRequest((previous) => ({ ...previous, limit: value ?? 25, offset: 0 }))
-                  }
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="table-panel" aria-label="Album index">
-            <div className="panel-heading compact">
-              <div>
-                <h2>Album index</h2>
-                <p>
-                  {isAlbumLoading
-                    ? "Loading albums"
-                    : `${formatNumber(albumPageStart)}-${formatNumber(albumPageEnd)} of ${formatNumber(albumTotal)}`}
-                </p>
-              </div>
-              <div className="pager">
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Previous album page"
-                  disabled={albumRequest.offset === 0}
-                  onClick={() =>
-                    setAlbumRequest((previous) => ({
-                      ...previous,
-                      offset: Math.max(0, previous.offset - previous.limit),
-                    }))
-                  }
-                >
-                  <ChevronLeft size={17} />
-                </button>
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Next album page"
-                  disabled={albumRequest.offset + albumRequest.limit >= albumTotal}
-                  onClick={() =>
-                    setAlbumRequest((previous) => ({
-                      ...previous,
-                      offset: previous.offset + previous.limit,
-                    }))
-                  }
-                >
-                  <ChevronRight size={17} />
-                </button>
-              </div>
-            </div>
-
-            {albumError ? <p className="error-message">{albumError}</p> : null}
-            <AlbumIndexTable
-              response={albumResponse}
-              selectedAlbumId={selectedAlbumId}
-              sort={albumRequest.sort}
-              onSort={sortAlbumsBy}
-              onSelect={selectAlbum}
-              countryFlagDisplay={settings.countryFlagDisplay}
-            />
-          </section>
-
-          <section className="table-panel" aria-label="Selected album tracks">
-            <div className="panel-heading compact">
-              <div>
-                <h2>{selectedAlbum?.album ?? "Track list"}</h2>
-                <p>
-                  {isAlbumTracksLoading
-                    ? "Loading tracks"
-                    : `${formatNumber(albumTracksResponse?.rows.length ?? 0)} of ${formatNumber(selectedAlbumTrackCount)} tracks`}
-                </p>
-              </div>
-              <span className="run-status">{selectedAlbum?.year ?? "Album"}</span>
-            </div>
-
-            {albumTracksError ? <p className="error-message">{albumTracksError}</p> : null}
-            <AlbumTrackTable response={albumTracksResponse} isLoading={isAlbumTracksLoading} />
-          </section>
-        </section>
-      ) : activeSection === "Statistics" ? (
-        <section className="workspace statistics-workspace">
-          <header className="topbar">
-            <div>
-              <h1>Statistics</h1>
-              <p>Library health, rating progress, metadata coverage, time shape, duration, and outlier signals.</p>
-            </div>
-            <div className="topbar-actions">
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="Refresh statistics"
-                onClick={() => void refreshStatistics()}
-              >
-                <RotateCcw size={18} />
-              </button>
-            </div>
-          </header>
-
-          <section className="metric-grid" aria-label="Statistics summary">
-            <Metric
-              label="Tracks"
-              value={formatNumber(statistics?.overview.trackCount ?? status?.trackCount)}
-              tone="teal"
-              icon={ListMusic}
-            />
-            <Metric
-              label="Albums"
-              value={formatNumber(statistics?.overview.albumCount ?? status?.albumCount)}
-              tone="amber"
-              icon={Album}
-            />
-            <Metric label="Artists" value={formatNumber(statistics?.overview.albumArtistCount)} icon={UsersRound} />
-            <Metric label="Duration" value={formatHours(statistics?.overview.totalSeconds)} icon={Clock3} />
-          </section>
-
-          {statsError ? <p className="error-message">{statsError}</p> : null}
-
-          <section className="stats-dashboard-grid" aria-label="Statistics dashboards">
-            <section className="stats-panel health-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Library health score</h2>
-                  <p>{statistics ? "Ratings, metadata, covers, and score coverage" : "Waiting for library data"}</p>
-                </div>
-                <ShieldCheck size={18} />
-              </div>
-              <LibraryHealthScorePanel statistics={statistics} />
             </section>
 
-            <section className="stats-panel">
+            <section className="table-panel" aria-label="Search results">
               <div className="panel-heading compact">
                 <div>
-                  <h2>Rating completion burndown</h2>
-                  <p>Unrated tracks remaining across rating snapshots.</p>
-                </div>
-                <Activity size={18} />
-              </div>
-              <RatingCompletionBurndown statistics={statistics} />
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Decade progress timeline</h2>
-                  <p>Rated, partial, and open albums by release decade.</p>
-                </div>
-                <Clock3 size={18} />
-              </div>
-              <DecadeProgressTimeline rows={statistics?.decadeProgress ?? []} />
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Genre portfolio matrix</h2>
-                  <p>Catalog size, completion, and average Album Score by genre.</p>
-                </div>
-                <Tags size={18} />
-              </div>
-              <GenrePortfolioMatrix rows={statistics?.genreProgress ?? []} />
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Metadata coverage</h2>
-                  <p>Core album, track, artwork, and rating fields.</p>
-                </div>
-                <ShieldCheck size={18} />
-              </div>
-              <MetadataCoveragePanel metrics={statistics?.metadataCoverage ?? []} />
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Import delta timeline</h2>
-                  <p>Added, changed, removed, and rating-event movement by import.</p>
-                </div>
-                <FolderInput size={18} />
-              </div>
-              <ImportDeltaTimeline runs={statistics?.importHistory ?? []} />
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Library shape by time</h2>
-                  <p>Albums, tracks, duration, and release-year center of gravity.</p>
-                </div>
-                <Clock3 size={18} />
-              </div>
-              <LibraryShapeByTime statistics={statistics} />
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Loved density</h2>
-                  <p>Loved tracks per 100 tracks by genre, decade, and rating bucket.</p>
-                </div>
-                <Heart size={18} />
-              </div>
-              <LovedDensityPanel rows={statistics?.lovedDensity ?? []} />
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Catalog concentration</h2>
-                  <p>Top artist and genre slices as a share of the album library.</p>
-                </div>
-                <UsersRound size={18} />
-              </div>
-              <CatalogConcentrationPanel statistics={statistics} />
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Duration analytics</h2>
-                  <p>Listening time, album length extremes, and tracks-per-album shape.</p>
-                </div>
-                <Clock3 size={18} />
-              </div>
-              <DurationAnalyticsPanel statistics={statistics} />
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Outlier stats</h2>
-                  <p>Aggregate oddities worth knowing without leaving Statistics.</p>
-                </div>
-                <Sparkles size={18} />
-              </div>
-              <OutlierStatsPanel rows={statistics?.outlierStats ?? []} />
-            </section>
-
-            <section className="stats-panel rating-progress-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Rating progress</h2>
-                  <p>{isStatsLoading ? "Refreshing" : formatPercent(statistics?.ratingProgress.averageRatingCompleteness)}</p>
-                </div>
-                <Gauge size={18} />
-              </div>
-
-              {statistics ? (
-                <div className="meter-stack">
-                  <Meter
-                    label="Fully rated albums"
-                    value={statistics.ratingProgress.fullyRatedAlbums}
-                    total={ratingAlbumTotal}
-                    detail={`${percentOf(statistics.ratingProgress.fullyRatedAlbums, ratingAlbumTotal).toFixed(1)}%`}
-                  />
-                  <Meter
-                    label="Partially rated albums"
-                    value={statistics.ratingProgress.partiallyRatedAlbums}
-                    total={ratingAlbumTotal}
-                    detail={`${percentOf(statistics.ratingProgress.partiallyRatedAlbums, ratingAlbumTotal).toFixed(1)}%`}
-                  />
-                  <Meter
-                    label="Rated tracks"
-                    value={statistics.ratingProgress.ratedTracks}
-                    total={ratingTrackTotal}
-                    detail={`${percentOf(statistics.ratingProgress.ratedTracks, ratingTrackTotal).toFixed(1)}%`}
-                  />
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <Activity size={20} />
-                  <span>No statistics loaded.</span>
-                </div>
-              )}
-            </section>
-
-            <section className="stats-panel loved-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Loved tracks</h2>
-                  <p>{statistics?.lovedTracks.topLovedGenre ?? "Waiting for library data"}</p>
-                </div>
-                <Heart size={18} />
-              </div>
-              <div className="stat-pairs">
-                <div>
-                  <span>Loved tracks</span>
-                  <strong>{formatNumber(statistics?.lovedTracks.lovedTracks)}</strong>
-                </div>
-                <div>
-                  <span>Albums with love</span>
-                  <strong>{formatNumber(statistics?.lovedTracks.albumsWithLovedTracks)}</strong>
-                </div>
-                <div>
-                  <span>Average per album</span>
-                  <strong>{formatAverage(statistics?.lovedTracks.averageLovedTracksPerAlbum, 2)}</strong>
-                </div>
-                <div>
-                  <span>Top year</span>
-                  <strong>{statistics?.lovedTracks.topLovedYear ?? ""}</strong>
-                </div>
-              </div>
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Year progress</h2>
-                  <p>{formatNumber(statistics?.overview.yearCount)} years with albums</p>
-                </div>
-                <Clock3 size={18} />
-              </div>
-              <YearProgressTable rows={statistics?.yearProgress ?? []} />
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Genre progress</h2>
-                  <p>{formatNumber(statistics?.overview.genreCount)} canonical genres</p>
-                </div>
-                <Tags size={18} />
-              </div>
-              <GenreProgressTable rows={statistics?.genreProgress ?? []} />
-            </section>
-
-            <section className="stats-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Track ratings</h2>
-                  <p>{formatNumber(statistics?.ratingProgress.ratedTracks)} rated tracks</p>
-                </div>
-                <ListMusic size={18} />
-              </div>
-              <DistributionBars buckets={statistics?.trackRatingDistribution ?? []} />
-            </section>
-
-            <section className="stats-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Album ratings</h2>
-                  <p>{formatNumber(statistics?.ratingProgress.albumsWithEffectiveRating)} scored albums</p>
-                </div>
-                <Album size={18} />
-              </div>
-              <DistributionBars buckets={statistics?.albumRatingDistribution ?? []} />
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Import history</h2>
-                  <p>Track and album deltas recorded during imports.</p>
-                </div>
-                <FolderInput size={18} />
-              </div>
-              <div className="stats-table import-stats-table" role="table">
-                <div className="stats-table-head" role="row">
-                  <span role="columnheader">Status</span>
-                  <span role="columnheader">Completed</span>
-                  <span role="columnheader">Tracks</span>
-                  <span role="columnheader">Track delta</span>
-                  <span role="columnheader">Albums</span>
-                  <span role="columnheader">Album delta</span>
-                </div>
-                {(statistics?.importHistory ?? []).length === 0 ? (
-                  <div className="empty-state">
-                    <FileSearch size={20} />
-                    <span>No imports yet.</span>
-                  </div>
-                ) : (
-                  statistics?.importHistory.map((run) => (
-                    <div className="stats-table-row" role="row" key={run.id}>
-                      <span role="cell">
-                        <RunStatus status={run.status} />
-                      </span>
-                      <span role="cell">{formatDate(run.completedAt)}</span>
-                      <span role="cell">{formatNumber(run.trackRows)}</span>
-                      <span role="cell">
-                        +{formatNumber(run.addedTracks)} / ~{formatNumber(run.changedTracks)} / -
-                        {formatNumber(run.removedTracks)}
-                      </span>
-                      <span role="cell">{formatNumber(run.albumCount)}</span>
-                      <span role="cell">
-                        +{formatNumber(run.addedAlbums)} / ~{formatNumber(run.changedAlbums)} / -
-                        {formatNumber(run.removedAlbums)}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="stats-panel wide">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Rating history</h2>
-                  <p>{formatNumber(statistics?.recentRatingEvents.length)} recent rating events</p>
-                </div>
-                <Activity size={18} />
-              </div>
-              <div className="rating-history-strip">
-                {(statistics?.ratingHistory ?? []).slice(-8).map((point) => (
-                  <article className="history-point" key={point.importRunId}>
-                    <span>{formatDate(point.createdAt)}</span>
-                    <strong>{formatPercent(point.ratedTracks / Math.max(1, point.trackCount))}</strong>
-                    <small>{formatNumber(point.ratingEventsCount)} events</small>
-                  </article>
-                ))}
-              </div>
-              <RatingEventList events={statistics?.recentRatingEvents ?? []} />
-            </section>
-          </section>
-        </section>
-      ) : activeSection === "Settings" ? (
-        <section className="workspace settings-workspace">
-          <header className="topbar">
-            <div>
-              <h1>Settings</h1>
-              <p>Backup retention, appearance, and workspace layout.</p>
-            </div>
-            <button className="icon-button" type="button" aria-label="Reload settings" onClick={() => void loadData()}>
-              <RotateCcw size={18} />
-            </button>
-          </header>
-
-          <section className="metric-grid" aria-label="Settings summary">
-            <Metric
-              label="Rolling backups"
-              value={formatNumber(settings.backupRetention)}
-              tone="teal"
-              icon={Database}
-            />
-            <Metric label="Theme" value={settings.darkMode ? "Dark" : "Light"} tone="amber" icon={Moon} />
-            <Metric label="Navigation" value={leftSidebarModeLabels[settings.leftSidebarDefault]} icon={Library} />
-            <Metric label="Details" value={rightSidebarModeLabels[settings.rightSidebarDefault]} icon={SlidersHorizontal} />
-            <Metric label="MusicBrainz" value={musicBrainzStatusLabel} tone={musicBrainzMetricTone} icon={ShieldCheck} />
-            <Metric label="Updates" value={appUpdateMetricValue} tone="teal" icon={Download} />
-          </section>
-
-          {settingsError ? <p className="error-message">{settingsError}</p> : null}
-
-          <section className="settings-grid" aria-label="Application settings">
-            <section className="settings-panel update-settings-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>App Updates</h2>
-                  <p>{appUpdatePanelText}</p>
-                </div>
-                <Download size={18} />
-              </div>
-
-              <div className="app-update-settings-toolbar">
-                <label className="criterion setting-number app-update-interval">
-                  <span>Auto minutes</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={1440}
-                    value={appUpdateAutoCheckDraft}
-                    onChange={(event) => setAppUpdateAutoCheckDraft(event.target.value)}
-                    onBlur={() => void commitAppUpdateAutoCheckMinutes()}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.currentTarget.blur();
-                      }
-                    }}
-                  />
-                </label>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  disabled={appUpdateIsBusy}
-                  onClick={() => void checkAppUpdate("manual")}
-                >
-                  <RotateCcw size={16} />
-                  <span>{appUpdateStatus === "checking" ? "Checking" : "Check now"}</span>
-                </button>
-                <button
-                  className="primary-button"
-                  type="button"
-                  disabled={!appUpdateCanInstall || appUpdateIsBusy}
-                  onClick={() => void runAppUpdateInstall()}
-                >
-                  <Download size={16} />
-                  <span>
-                    {appUpdateStatus === "downloading" ||
-                    appUpdateStatus === "installing" ||
-                    appUpdateStatus === "restarting"
-                      ? appUpdateStatusLabel(appUpdateStatus)
-                      : "Update now"}
-                  </span>
-                </button>
-              </div>
-
-              {appUpdateError ? <p className="error-message">{appUpdateError}</p> : null}
-
-              <dl className="performance-summary app-update-summary">
-                <div>
-                  <dt>Installed</dt>
-                  <dd>{appUpdateInfo?.currentVersion ?? "Current build"}</dd>
-                </div>
-                <div>
-                  <dt>Available</dt>
-                  <dd>{appUpdateInfo?.version ?? "None"}</dd>
-                </div>
-                <div>
-                  <dt>Last check</dt>
-                  <dd>{appUpdateLastCheckedText}</dd>
-                </div>
-                <div>
-                  <dt>Auto</dt>
-                  <dd>{appUpdateAutoCheckMinutes > 0 ? `${appUpdateAutoCheckMinutes} min` : "Off"}</dd>
-                </div>
-              </dl>
-
-              {appUpdateStatus === "downloading" && appUpdateProgress?.percent != null ? (
-                <div className="app-update-progress app-update-progress-settings" aria-hidden="true">
-                  <div style={{ width: `${appUpdateProgress.percent}%` }} />
-                </div>
-              ) : null}
-            </section>
-
-            <section className="settings-panel backup-settings-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Backups</h2>
+                  <h2>
+                    {request.view === "albums" ? "Album table" : "Track table"}
+                  </h2>
                   <p>
-                    {formatNumber(databaseBackups.length)} available / {settings.backupRetention} retained
+                    {isSearching
+                      ? "Searching"
+                      : `${formatNumber(pageStart)}-${formatNumber(pageEnd)} of ${formatNumber(total)}`}
                   </p>
                 </div>
-                <Database size={18} />
-              </div>
-
-              <div className="backup-settings-toolbar">
-                <label className="criterion setting-number">
-                  <span>Rolling backups</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={settings.backupRetention}
-                    onChange={(event) =>
-                      void saveAppSettings({
-                        backupRetention: clampBackupRetention(numberValue(event.target.value)),
-                      })
+                <div className="pager">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="Previous page"
+                    disabled={request.offset === 0}
+                    onClick={() =>
+                      setRequest((previous) => ({
+                        ...previous,
+                        offset: Math.max(0, previous.offset - previous.limit),
+                      }))
                     }
-                  />
-                </label>
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Refresh backups"
-                  onClick={() => void loadData()}
-                >
-                  <RotateCcw size={18} />
-                </button>
-              </div>
-
-              {backupError ? <p className="error-message">{backupError}</p> : null}
-              {restoreSummary ? (
-                <div className="export-result restore-result">
-                  <Check size={17} />
-                  <span>
-                    Restored {formatNumber(restoreSummary.trackCount)} tracks /{" "}
-                    {formatNumber(restoreSummary.albumCount)} albums. Safety copy:{" "}
-                    {restoreSummary.preRestoreBackupPath ?? "not needed"}
-                  </span>
-                </div>
-              ) : null}
-
-              {!canImport ? (
-                <div className="empty-state">
-                  <Database size={20} />
-                  <span>Desktop runtime required.</span>
-                </div>
-              ) : databaseBackups.length === 0 ? (
-                <div className="empty-state">
-                  <Database size={20} />
-                  <span>No backups found.</span>
-                </div>
-              ) : (
-                <div className="database-backup-list">
-                  {databaseBackups.map((backup) => (
-                    <article className="database-backup-card" key={backup.backupPath}>
-                      <div>
-                        <strong>{formatDate(backup.createdAt)}</strong>
-                        <span>{backup.operation}</span>
-                      </div>
-                      <dl>
-                        <div>
-                          <dt>Rows</dt>
-                          <dd>{backup.trackRows == null ? "Unknown" : formatNumber(backup.trackRows)}</dd>
-                        </div>
-                        <div>
-                          <dt>Albums</dt>
-                          <dd>{backup.albumCount == null ? "Unknown" : formatNumber(backup.albumCount)}</dd>
-                        </div>
-                        <div>
-                          <dt>Schema</dt>
-                          <dd>{backup.schemaVersion == null ? "Unknown" : backup.schemaVersion}</dd>
-                        </div>
-                        <div>
-                          <dt>Size</dt>
-                          <dd>{formatBytes(backup.fileSizeBytes)}</dd>
-                        </div>
-                      </dl>
-                      <small>{backup.backupPath}</small>
-                      <button
-                        className="primary-button"
-                        type="button"
-                        disabled={!backup.canRestore || isRestoringBackup}
-                        onClick={() => void restoreBackup(backup)}
-                      >
-                        <Database size={16} />
-                        <span>{isRestoringBackup ? "Restoring" : backup.canRestore ? "Restore" : "Unavailable"}</span>
-                      </button>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="settings-panel musicbrainz-settings-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>MusicBrainz Cache</h2>
-                  <p>{musicBrainzStatusText}</p>
-                </div>
-                <ShieldCheck size={18} />
-              </div>
-
-              <div className="musicbrainz-toolbar">
-                <label className="criterion musicbrainz-cache-path">
-                  <span>Cache path</span>
-                  <input
-                    type="text"
-                    value={musicBrainzCachePathDraft}
-                    onChange={(event) => setMusicBrainzCachePathDraft(event.target.value)}
-                    placeholder={defaultMusicBrainzCachePath}
-                  />
-                </label>
-                <button
-                  className="primary-button"
-                  type="button"
-                  disabled={isMusicBrainzChecking}
-                  onClick={() => void checkMusicBrainzCache()}
-                >
-                  <ShieldCheck size={16} />
-                  <span>{isMusicBrainzChecking ? "Checking" : "Save and check"}</span>
-                </button>
-              </div>
-
-              {musicBrainzStatusError ? <p className="error-message">{musicBrainzStatusError}</p> : null}
-
-              {musicBrainzStatus ? (
-                <>
-                  <div className={`musicbrainz-status-strip musicbrainz-status-${musicBrainzStatus.state}`}>
-                    <RunStatus status={musicBrainzStatus.state} />
-                    <span>{musicBrainzStatus.message}</span>
-                  </div>
-
-                  <dl className="performance-summary musicbrainz-summary">
-                    <div>
-                      <dt>File</dt>
-                      <dd>{musicBrainzStatus.exists ? formatBytes(musicBrainzStatus.fileSizeBytes) : "Missing"}</dd>
-                    </div>
-                    <div>
-                      <dt>Artists</dt>
-                      <dd>{formatNumber(musicBrainzStatus.artistCount)}</dd>
-                    </div>
-                    <div>
-                      <dt>MBIDs</dt>
-                      <dd>{formatNumber(musicBrainzStatus.distinctMbidCount)}</dd>
-                    </div>
-                    <div>
-                      <dt>Releases</dt>
-                      <dd>{formatNumber(musicBrainzStatus.releaseGroupCount)}</dd>
-                    </div>
-                    <div>
-                      <dt>Pure albums</dt>
-                      <dd>{formatNumber(musicBrainzStatus.pureAlbumReleaseGroupCount)}</dd>
-                    </div>
-                    <div>
-                      <dt>Years</dt>
-                      <dd>{musicBrainzYearRange(musicBrainzStatus)}</dd>
-                    </div>
-                  </dl>
-
-                  <dl className="musicbrainz-quality-grid">
-                    <div>
-                      <dt>Official releases</dt>
-                      <dd>{formatNumber(musicBrainzStatus.officialReleaseGroupCount)}</dd>
-                    </div>
-                    <div>
-                      <dt>Duplicate MBIDs</dt>
-                      <dd>{formatNumber(musicBrainzStatus.duplicateMbidCount)}</dd>
-                    </div>
-                    <div>
-                      <dt>Mapping warnings</dt>
-                      <dd>{formatNumber(musicBrainzStatus.suspiciousMappingCount)}</dd>
-                    </div>
-                    <div>
-                      <dt>Cache dates</dt>
-                      <dd>{musicBrainzCacheDateRange(musicBrainzStatus)}</dd>
-                    </div>
-                  </dl>
-
-                  {musicBrainzHasWarnings ? (
-                    <div className="musicbrainz-warning-list">
-                      {musicBrainzStatus.warningExamples.map((example) => (
-                        <article key={example.mbid}>
-                          <div>
-                            <strong>{example.cachedNames.join(", ") || example.mbid}</strong>
-                            <span>{example.mbid}</span>
-                          </div>
-                          <dl>
-                            <div>
-                              <dt>Names</dt>
-                              <dd>{formatNumber(example.cachedNameCount)}</dd>
-                            </div>
-                            <div>
-                              <dt>Releases</dt>
-                              <dd>{formatNumber(example.releaseGroupCount)}</dd>
-                            </div>
-                          </dl>
-                        </article>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <small className="performance-database-path">{musicBrainzStatus.resolvedPath}</small>
-                </>
-              ) : (
-                <div className="empty-state">
-                  <ShieldCheck size={20} />
-                  <span>No MusicBrainz cache check has run yet.</span>
-                </div>
-              )}
-            </section>
-
-            <section className="settings-panel musicbrainz-origin-settings-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>MusicBrainz Origin Countries</h2>
-                  <p>
-                    {musicBrainzOriginStatus
-                      ? `${formatNumber(musicBrainzOriginStatus.importedOrigins)} imported / ${formatNumber(musicBrainzOriginStatus.totalAlbumArtists)} artists`
-                      : "Not checked"}
-                  </p>
-                </div>
-                <UsersRound size={18} />
-              </div>
-
-              <div className="musicbrainz-origin-grid">
-                <div className="musicbrainz-origin-workflow">
-                  <div className="musicbrainz-toolbar">
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={isMusicBrainzOriginPreviewing || isMusicBrainzOriginImporting}
-                      onClick={() => void previewMusicBrainzOriginCountries()}
-                    >
-                      <FileSearch size={16} />
-                      <span>{isMusicBrainzOriginPreviewing ? "Previewing" : "Preview"}</span>
-                    </button>
-                    <button
-                      className="primary-button"
-                      type="button"
-                      disabled={isMusicBrainzOriginPreviewing || isMusicBrainzOriginImporting}
-                      onClick={() => void runMusicBrainzOriginCountryImport()}
-                    >
-                      <CloudDownload size={16} />
-                      <span>{isMusicBrainzOriginImporting ? "Importing" : "Import origins"}</span>
-                    </button>
-                    <button
-                      className="icon-button"
-                      type="button"
-                      aria-label="Cancel MusicBrainz origin import"
-                      disabled={!isMusicBrainzOriginImporting}
-                      onClick={() => void cancelMusicBrainzOriginImport()}
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
-
-                  {musicBrainzOriginError ? <p className="error-message">{musicBrainzOriginError}</p> : null}
-
-                  {musicBrainzOriginStatus ? (
-                    <dl className="performance-summary musicbrainz-summary">
-                      <div>
-                        <dt>Countries</dt>
-                        <dd>{formatNumber(musicBrainzOriginStatus.countryCount)}</dd>
-                      </div>
-                      <div>
-                        <dt>Manual</dt>
-                        <dd>{formatNumber(musicBrainzOriginStatus.manualOrigins)}</dd>
-                      </div>
-                      <div>
-                        <dt>Unresolved</dt>
-                        <dd>{formatNumber(musicBrainzOriginStatus.unresolvedOrigins)}</dd>
-                      </div>
-                      <div>
-                        <dt>Missing</dt>
-                        <dd>{formatNumber(musicBrainzOriginStatus.missingOrigins)}</dd>
-                      </div>
-                      <div>
-                        <dt>Last run</dt>
-                        <dd>
-                          {musicBrainzOriginStatus.lastRun
-                            ? formatDate(musicBrainzOriginStatus.lastRun.completedAt)
-                            : "Not yet"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Status</dt>
-                        <dd>{musicBrainzOriginStatus.lastRun?.status ?? "Idle"}</dd>
-                      </div>
-                    </dl>
-                  ) : null}
-
-                  {musicBrainzOriginImportSummary ? (
-                    <div className="export-result">
-                      <Check size={17} />
-                      <span>
-                        {formatNumber(musicBrainzOriginImportSummary.fetchedCount)} fetched /{" "}
-                        {formatNumber(musicBrainzOriginImportSummary.storedCount)} stored /{" "}
-                        {formatNumber(musicBrainzOriginImportSummary.unresolvedCount)} unresolved
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-
-                <aside className="musicbrainz-origin-live-panel" aria-live="polite">
-                  <div className="musicbrainz-origin-live-heading">
-                    <div>
-                      <h3>Live import</h3>
-                      <p>{musicBrainzOriginProgress?.message ?? "Idle"}</p>
-                    </div>
-                    <span
-                      className={`run-status run-status-${(musicBrainzOriginProgress?.status ?? "idle").toLowerCase()}`}
-                    >
-                      {originImportStatusLabel(musicBrainzOriginProgress?.status)}
-                    </span>
-                  </div>
-
-                  <div className="progress-block musicbrainz-origin-progress-block">
-                    <div className="progress-row">
-                      <span>
-                        {formatNumber(musicBrainzOriginProgress?.processedCount ?? 0)} done /{" "}
-                        {formatNumber(musicBrainzOriginProgress?.remainingCount ?? 0)} left
-                      </span>
-                      <strong>{formatPercent(musicBrainzOriginProgressPercent / 100, 0) || "0%"}</strong>
-                    </div>
-                    <div className="progress-track">
-                      <div className="progress-fill" style={{ width: `${musicBrainzOriginProgressPercent}%` }} />
-                    </div>
-                    <div className="progress-meta">
-                      <span>{formatNumber(musicBrainzOriginProgress?.eligibleCount ?? 0)} eligible</span>
-                      <span>{formatNumber(musicBrainzOriginProgress?.totalArtists ?? 0)} artists total</span>
-                    </div>
-                  </div>
-
-                  <dl className="musicbrainz-origin-live-stats">
-                    <div>
-                      <dt>Succeeded</dt>
-                      <dd>{formatNumber(musicBrainzOriginProgress?.storedCount ?? 0)}</dd>
-                    </div>
-                    <div>
-                      <dt>Skipped</dt>
-                      <dd>{formatNumber(musicBrainzOriginProgress?.skippedCount ?? 0)}</dd>
-                    </div>
-                    <div>
-                      <dt>Unresolved</dt>
-                      <dd>{formatNumber(musicBrainzOriginProgress?.unresolvedCount ?? 0)}</dd>
-                    </div>
-                    <div>
-                      <dt>Failed</dt>
-                      <dd>{formatNumber(musicBrainzOriginProgress?.failedCount ?? 0)}</dd>
-                    </div>
-                  </dl>
-
-                  {musicBrainzOriginLog.length > 0 ? (
-                    <div className="musicbrainz-origin-log">
-                      {musicBrainzOriginLog.map((entry, index) => (
-                        <article key={`${entry.status}-${entry.processedCount}-${entry.currentArtistKey ?? index}`}>
-                          <div>
-                            <strong>{originImportStatusLabel(entry.status)}</strong>
-                            <span>{entry.currentArtist ?? entry.currentMbid ?? "Origin importer"}</span>
-                          </div>
-                          <small>{entry.message}</small>
-                        </article>
-                      ))}
-                    </div>
-                  ) : musicBrainzOriginPreview ? (
-                    <div className="musicbrainz-warning-list musicbrainz-origin-preview-list">
-                      {musicBrainzOriginPreview.rows.slice(0, 8).map((row) => (
-                        <article key={row.localArtistKey}>
-                          <div>
-                            <strong>{row.displayArtist}</strong>
-                            <span>{row.musicbrainzMbid ?? row.skippedReason ?? "No MBID"}</span>
-                          </div>
-                          <dl>
-                            <div>
-                              <dt>Status</dt>
-                              <dd>{row.status}</dd>
-                            </div>
-                            <div>
-                              <dt>Country</dt>
-                              <dd>
-                                <CountryDisplay
-                                  value={{
-                                    originCountryCode: row.existingCountryCode,
-                                    originCountryName: row.existingCountryName,
-                                    originCountryRawArea: null,
-                                  }}
-                                  mode={settings.countryFlagDisplay}
-                                  fallback="Missing"
-                                />
-                              </dd>
-                            </div>
-                          </dl>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="empty-state">
-                      <FileSearch size={20} />
-                      <span>No origin preview yet.</span>
-                    </div>
-                  )}
-                </aside>
-              </div>
-
-              {musicBrainzOriginPreview ? (
-                <section className="musicbrainz-origin-report" aria-label="MusicBrainz origin coverage report">
-                  <div className="musicbrainz-origin-report-heading">
-                    <div>
-                      <h3>Origin coverage report</h3>
-                      <p>
-                        {formatNumber(musicBrainzOriginReportRows.length)} matching /{" "}
-                        {formatNumber(musicBrainzOriginPreview.rows.length)} previewed
-                      </p>
-                    </div>
-                    <label className="criterion musicbrainz-origin-report-search">
-                      <span>Find artist</span>
-                      <input
-                        type="search"
-                        value={musicBrainzOriginReportSearch}
-                        onChange={(event) => setMusicBrainzOriginReportSearch(event.target.value)}
-                        placeholder="Beastie Boys"
-                      />
-                    </label>
-                  </div>
-
-                  <div
-                    className="segmented-control musicbrainz-origin-report-tabs"
-                    role="group"
-                    aria-label="Origin report filter"
                   >
-                    {originReportFilterOptions.map((option) => (
-                      <button
-                        className={musicBrainzOriginReportFilter === option.value ? "active" : ""}
-                        type="button"
-                        key={option.value}
-                        onClick={() => setMusicBrainzOriginReportFilter(option.value)}
-                      >
-                        {option.label}
-                        <span>{formatNumber(musicBrainzOriginReportCounts[option.value])}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="musicbrainz-origin-report-table" role="table">
-                    <div className="musicbrainz-origin-report-head" role="row">
-                      <span role="columnheader">Artist</span>
-                      <span role="columnheader">Status</span>
-                      <span role="columnheader">Country</span>
-                      <span role="columnheader">Match</span>
-                      <span role="columnheader">Reason</span>
-                    </div>
-                    {musicBrainzOriginVisibleReportRows.length === 0 ? (
-                      <div className="empty-state musicbrainz-origin-report-empty">
-                        <FileSearch size={20} />
-                        <span>No matching origin rows.</span>
-                      </div>
-                    ) : (
-                      musicBrainzOriginVisibleReportRows.map((row) => (
-                        <div
-                          className={`musicbrainz-origin-report-row origin-report-status-${row.status.toLowerCase()}`}
-                          role="row"
-                          key={row.localArtistKey}
-                        >
-                          <span role="cell">
-                            <strong>{row.displayArtist}</strong>
-                            <small>{formatNumber(row.albumCount)} albums</small>
-                          </span>
-                          <span role="cell">
-                            <RunStatus status={originPreviewStatusLabel(row.status)} />
-                          </span>
-                          <span role="cell">
-                            <CountryDisplay
-                              value={{
-                                originCountryCode: row.existingCountryCode,
-                                originCountryName: row.existingCountryName,
-                                originCountryRawArea: null,
-                              }}
-                              mode={settings.countryFlagDisplay}
-                              fallback="Missing"
-                            />
-                          </span>
-                          <span role="cell">
-                            <span>{originPreviewMatchLabel(row)}</span>
-                            {row.musicbrainzMbid ? (
-                              <button
-                                className="icon-button musicbrainz-origin-report-link"
-                                type="button"
-                                aria-label={`Open ${row.displayArtist} in MusicBrainz`}
-                                onClick={() => void openExternalUrl(musicBrainzArtistUrl(row.musicbrainzMbid!))}
-                              >
-                                <ExternalLink size={14} />
-                              </button>
-                            ) : null}
-                          </span>
-                          <span role="cell">{originPreviewReason(row)}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  {musicBrainzOriginReportRows.length > musicBrainzOriginVisibleReportRows.length ? (
-                    <small className="musicbrainz-origin-report-limit">
-                      Showing {formatNumber(musicBrainzOriginVisibleReportRows.length)} of{" "}
-                      {formatNumber(musicBrainzOriginReportRows.length)} matching rows.
-                    </small>
-                  ) : null}
-                </section>
-              ) : null}
-            </section>
-
-            <section className="settings-panel musicbrainz-sync-settings-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>MusicBrainz Overlay Sync</h2>
-                  <p>
-                    {musicBrainzOverlaySyncResult
-                      ? musicBrainzOverlaySyncResult.summary
-                      : musicBrainzOverlaySyncLog[0]?.summary ?? "Not synced"}
-                  </p>
-                </div>
-                <CloudDownload size={18} />
-              </div>
-
-              <div className="musicbrainz-sync-toolbar">
-                <label className="criterion musicbrainz-sync-path">
-                  <span>Sync database</span>
-                  <input
-                    type="text"
-                    value={musicBrainzOverlaySyncPathDraft}
-                    onChange={(event) => setMusicBrainzOverlaySyncPathDraft(event.target.value)}
-                    placeholder={defaultMusicBrainzOverlaySyncPath}
-                  />
-                </label>
-                <label className="criterion setting-number musicbrainz-sync-interval">
-                  <span>Auto minutes</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={1440}
-                    value={musicBrainzOverlayAutoSyncDraft}
-                    onChange={(event) => setMusicBrainzOverlayAutoSyncDraft(event.target.value)}
-                    onBlur={() => void commitMusicBrainzOverlayAutoSyncMinutes()}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.currentTarget.blur();
-                      }
-                    }}
-                  />
-                </label>
-                <button
-                  className="primary-button"
-                  type="button"
-                  disabled={isMusicBrainzOverlaySyncing}
-                  onClick={() => void runMusicBrainzOverlaySync()}
-                >
-                  <CloudDownload size={16} />
-                  <span>{isMusicBrainzOverlaySyncing ? "Syncing" : "Sync now"}</span>
-                </button>
-              </div>
-
-              {musicBrainzOverlaySyncError ? (
-                <p className="error-message">{musicBrainzOverlaySyncError}</p>
-              ) : null}
-
-              {musicBrainzOverlaySyncResult ? (
-                <div className="export-result musicbrainz-sync-result">
-                  <Check size={17} />
-                  <span>
-                    {musicBrainzOverlaySyncResult.summary}{" "}
-                    {musicBrainzOverlaySyncDetails(musicBrainzOverlaySyncResult)}.
-                  </span>
-                </div>
-              ) : null}
-
-              {musicBrainzOverlaySyncLog.length > 0 ? (
-                <div className="musicbrainz-sync-log" aria-label="MusicBrainz overlay sync log">
-                  {musicBrainzOverlaySyncLog.map((entry) => (
-                    <article key={entry.id}>
-                      <div>
-                        <strong>{formatDate(entry.syncedAt)}</strong>
-                        <span>{entry.summary}</span>
-                      </div>
-                      <small>{musicBrainzOverlaySyncDetails(entry)}</small>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <Clock3 size={20} />
-                  <span>No overlay sync runs logged yet.</span>
-                </div>
-              )}
-
-              <small className="performance-database-path">{settings.musicBrainzOverlaySyncPath}</small>
-            </section>
-
-            <section className="settings-panel performance-settings-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Performance Proof</h2>
-                  <p>
-                    {performanceProbe
-                      ? `${formatDate(performanceProbe.generatedAt)} / ${formatDuration(performanceProbe.totalDurationMs)} total`
-                      : "Not run"}
-                  </p>
-                </div>
-                <Activity size={18} />
-              </div>
-
-              <div className="performance-toolbar">
-                <button
-                  className="primary-button"
-                  type="button"
-                  disabled={isPerformanceProbeRunning}
-                  onClick={() => void runSettingsPerformanceProbe()}
-                >
-                  <Gauge size={16} />
-                  <span>{isPerformanceProbeRunning ? "Running" : "Run probe"}</span>
-                </button>
-                <span>{performanceProbe ? `${formatNumber(performanceProbe.operations.length)} checks` : "No report"}</span>
-              </div>
-
-              {performanceProbeError ? <p className="error-message">{performanceProbeError}</p> : null}
-
-              {performanceProbe ? (
-                <>
-                  <dl className="performance-summary">
-                    <div>
-                      <dt>Tracks</dt>
-                      <dd>{formatNumber(performanceProbe.trackCount)}</dd>
-                    </div>
-                    <div>
-                      <dt>Albums</dt>
-                      <dd>{formatNumber(performanceProbe.albumCount)}</dd>
-                    </div>
-                    <div>
-                      <dt>Total</dt>
-                      <dd>{formatDuration(performanceProbe.totalDurationMs)}</dd>
-                    </div>
-                    <div>
-                      <dt>Slowest</dt>
-                      <dd>{formatDuration(performanceProbe.slowestOperationMs)}</dd>
-                    </div>
-                  </dl>
-
-                  <div className="performance-probe-list">
-                    {performanceProbe.operations.map((operation) => (
-                      <article className={`performance-probe-row ${operation.status}`} key={operation.id}>
-                        <div>
-                          <strong>{operation.label}</strong>
-                          <span>{operation.category}</span>
-                        </div>
-                        <dl>
-                          <div>
-                            <dt>Time</dt>
-                            <dd>{formatDuration(operation.durationMs)}</dd>
-                          </div>
-                          <div>
-                            <dt>Total</dt>
-                            <dd>{operation.totalCount == null ? "n/a" : formatNumber(operation.totalCount)}</dd>
-                          </div>
-                          <div>
-                            <dt>Rows</dt>
-                            <dd>{operation.rowCount == null ? "n/a" : formatNumber(operation.rowCount)}</dd>
-                          </div>
-                        </dl>
-                        <small>{operation.errorMessage ?? operation.detail}</small>
-                      </article>
-                    ))}
-                  </div>
-
-                  <small className="performance-database-path">{performanceProbe.databasePath}</small>
-                </>
-              ) : null}
-            </section>
-
-            <section className="settings-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Appearance</h2>
-                  <p>{settings.darkMode ? "Dark mode" : "Light mode"}</p>
-                </div>
-                <Moon size={18} />
-              </div>
-
-              <label className="setting-toggle">
-                <input
-                  type="checkbox"
-                  aria-label="Dark mode"
-                  checked={settings.darkMode}
-                  onChange={(event) => void saveAppSettings({ darkMode: event.target.checked })}
-                />
-                <span>
-                  <strong>Dark mode</strong>
-                  <small>{settings.darkMode ? "On" : "Off"}</small>
-                </span>
-              </label>
-            </section>
-
-            <section className="settings-panel layout-settings-panel">
-              <div className="panel-heading compact">
-                <div>
-                  <h2>Layout</h2>
-                  <p>{isSavingSettings ? "Saving preferences" : "Preferences saved"}</p>
-                </div>
-                <SlidersHorizontal size={18} />
-              </div>
-
-              <div className="layout-setting-stack">
-                <div className="layout-setting">
-                  <span>Left sidebar default</span>
-                  <div className="segmented-control layout-mode-control left-layout-mode-control" role="group" aria-label="Left sidebar default">
-                    {leftSidebarModeOptions.map((option) => (
-                      <button
-                        className={settings.leftSidebarDefault === option.value ? "active" : ""}
-                        type="button"
-                        key={option.value}
-                        onClick={() => saveLeftSidebarDefault(option.value)}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="layout-setting">
-                  <span>Right sidebar default</span>
-                  <div className="segmented-control layout-mode-control right-layout-mode-control" role="group" aria-label="Right sidebar default">
-                    {rightSidebarModeOptions.map((option) => (
-                      <button
-                        className={settings.rightSidebarDefault === option.value ? "active" : ""}
-                        type="button"
-                        key={option.value}
-                        onClick={() => saveRightSidebarDefault(option.value)}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="layout-setting">
-                  <span>Origin country display</span>
-                  <div
-                    className="segmented-control layout-mode-control country-display-mode-control"
-                    role="group"
-                    aria-label="Origin country display"
-                  >
-                    {countryFlagDisplayOptions.map((option) => (
-                      <button
-                        className={settings.countryFlagDisplay === option.value ? "active" : ""}
-                        type="button"
-                        key={option.value}
-                        onClick={() => saveCountryFlagDisplay(option.value)}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-          </section>
-        </section>
-      ) : (
-        <section className="workspace search-workspace">
-          <header className="topbar">
-            <div>
-              <h1>Search</h1>
-              <p>Album and track browsing over the imported MusicBee library.</p>
-            </div>
-            <div className="topbar-actions">
-              <button className="icon-button" type="button" aria-label="Clear query" onClick={clearQuery}>
-                <RotateCcw size={18} />
-              </button>
-              <button className="icon-button" type="button" aria-label="Refresh" onClick={() => void loadData()}>
-                <Database size={18} />
-              </button>
-            </div>
-          </header>
-
-          <section className="metric-grid" aria-label="Library summary">
-            <Metric label="Tracks" value={formatNumber(status?.trackCount)} tone="teal" icon={ListMusic} />
-            <Metric label="Albums" value={formatNumber(status?.albumCount)} tone="amber" icon={Album} />
-            <Metric label="Matches" value={formatNumber(total)} icon={Search} />
-            <Metric label="Saved" value={formatNumber(savedSearches.length)} icon={Save} />
-          </section>
-
-          <section className="query-panel">
-            <div className="search-row">
-              <div className="search-input">
-                <Search size={18} />
-                <input
-                  value={request.searchText}
-                  onChange={(event) =>
-                    setRequest((previous) => ({ ...previous, searchText: event.target.value, offset: 0 }))
-                  }
-                  placeholder="Search albums, artists, genres, tracks, publishers, files"
-                />
-              </div>
-
-              <div className="segmented-control" aria-label="Browse view">
-                <button
-                  className={request.view === "albums" ? "active" : ""}
-                  type="button"
-                  onClick={() => setView("albums")}
-                >
-                  <Album size={16} />
-                  <span>Albums</span>
-                </button>
-                <button
-                  className={request.view === "tracks" ? "active" : ""}
-                  type="button"
-                  onClick={() => setView("tracks")}
-                >
-                  <ListMusic size={16} />
-                  <span>Tracks</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="filter-grid">
-              <TextCriterion
-                label="Album title"
-                filter={currentFilters.albumTitle}
-                onChange={(filter) => updateFilter("albumTitle", filter)}
-              />
-              <TextCriterion
-                label="Track title"
-                filter={currentFilters.trackTitle}
-                onChange={(filter) => updateFilter("trackTitle", filter)}
-              />
-              <TextCriterion
-                label="Album artist"
-                filter={currentFilters.albumArtist}
-                onChange={(filter) => updateFilter("albumArtist", filter)}
-              />
-              <TextCriterion
-                label="Display artist"
-                filter={currentFilters.displayArtist}
-                onChange={(filter) => updateFilter("displayArtist", filter)}
-              />
-
-              <GenreListCriterion
-                label="Genres"
-                values={currentFilters.genres}
-                onChange={(genres) => updateFilter("genres", genres)}
-                genreOptions={genreSuggestionOptions}
-                onRequestOptions={requestGenreSuggestionRefresh}
-                placeholder="Synthpop, AOR"
-              />
-              <GenreListCriterion
-                label="Exclude genres"
-                values={currentFilters.excludedGenres}
-                onChange={(excludedGenres) => updateFilter("excludedGenres", excludedGenres)}
-                genreOptions={genreSuggestionOptions}
-                onRequestOptions={requestGenreSuggestionRefresh}
-              />
-              <CountryListCriterion
-                label="Origin countries"
-                values={currentFilters.originCountryCodes}
-                onChange={(originCountryCodes) => updateFilter("originCountryCodes", originCountryCodes)}
-                countryOptions={originCountryOptions}
-                displayMode={settings.countryFlagDisplay}
-              />
-              <CountryListCriterion
-                label="Exclude origin countries"
-                values={currentFilters.excludedOriginCountryCodes}
-                onChange={(excludedOriginCountryCodes) => updateFilter("excludedOriginCountryCodes", excludedOriginCountryCodes)}
-                countryOptions={originCountryOptions}
-                displayMode={settings.countryFlagDisplay}
-              />
-              <TextCriterion
-                label="Publisher"
-                filter={currentFilters.publisher}
-                onChange={(filter) => updateFilter("publisher", filter)}
-              />
-              <label className="criterion">
-                <span>Track text</span>
-                <input
-                  value={currentFilters.hasTrackText}
-                  onChange={(event) => updateFilter("hasTrackText", event.target.value)}
-                />
-              </label>
-
-              <NumberField label="Year from" value={currentFilters.yearFrom} onChange={(value) => updateFilter("yearFrom", value)} />
-              <NumberField label="Year to" value={currentFilters.yearTo} onChange={(value) => updateFilter("yearTo", value)} />
-              <NumberField
-                label={request.view === "tracks" ? "Album Billboard min" : "Billboard min"}
-                value={currentFilters.billboardRankMin}
-                min={1}
-                onChange={(value) => updateFilter("billboardRankMin", value)}
-              />
-              <NumberField
-                label={request.view === "tracks" ? "Album Billboard max" : "Billboard max"}
-                value={currentFilters.billboardRankMax}
-                min={1}
-                onChange={(value) => updateFilter("billboardRankMax", value)}
-              />
-              {request.view === "tracks" ? (
-                <>
-                  <NumberField
-                    label="Single Billboard min"
-                    value={currentFilters.billboardSingleRankMin}
-                    min={1}
-                    onChange={(value) => updateFilter("billboardSingleRankMin", value)}
-                  />
-                  <NumberField
-                    label="Single Billboard max"
-                    value={currentFilters.billboardSingleRankMax}
-                    min={1}
-                    onChange={(value) => updateFilter("billboardSingleRankMax", value)}
-                  />
-                </>
-              ) : null}
-              <NumberField
-                label="Release from"
-                value={currentFilters.releaseYearFrom}
-                onChange={(value) => updateFilter("releaseYearFrom", value)}
-              />
-              <NumberField
-                label="Release to"
-                value={currentFilters.releaseYearTo}
-                onChange={(value) => updateFilter("releaseYearTo", value)}
-              />
-
-              <NumberField
-                label="Minutes min"
-                value={currentFilters.totalMinutesMin}
-                step={0.5}
-                onChange={(value) => updateFilter("totalMinutesMin", value)}
-              />
-              <NumberField
-                label="Minutes max"
-                value={currentFilters.totalMinutesMax}
-                step={0.5}
-                onChange={(value) => updateFilter("totalMinutesMax", value)}
-              />
-              <NumberField
-                label="Tracks min"
-                value={currentFilters.trackCountMin}
-                onChange={(value) => updateFilter("trackCountMin", value)}
-              />
-              <NumberField
-                label="Tracks max"
-                value={currentFilters.trackCountMax}
-                onChange={(value) => updateFilter("trackCountMax", value)}
-              />
-              <NumberField
-                label="Tracks rated min"
-                value={currentFilters.ratedTracksMin}
-                min={0}
-                onChange={(value) => updateFilter("ratedTracksMin", value)}
-              />
-              <NumberField
-                label="Tracks rated max"
-                value={currentFilters.ratedTracksMax}
-                min={0}
-                onChange={(value) => updateFilter("ratedTracksMax", value)}
-              />
-
-              <NumberField
-                label="Album rating min"
-                value={currentFilters.albumRatingMin}
-                min={0}
-                max={100}
-                onChange={(value) => updateFilter("albumRatingMin", value)}
-              />
-              <NumberField
-                label="Album rating max"
-                value={currentFilters.albumRatingMax}
-                min={0}
-                max={100}
-                onChange={(value) => updateFilter("albumRatingMax", value)}
-              />
-              <NumberField
-                label="Track rating min"
-                value={currentFilters.trackRatingMin}
-                min={0}
-                max={5}
-                onChange={(value) => updateFilter("trackRatingMin", value)}
-              />
-              <NumberField
-                label="Track rating max"
-                value={currentFilters.trackRatingMax}
-                min={0}
-                max={5}
-                onChange={(value) => updateFilter("trackRatingMax", value)}
-              />
-
-              <CompletenessRangeCriterion
-                minValue={currentFilters.ratingCompletenessMin}
-                maxValue={currentFilters.ratingCompletenessMax}
-                onChange={(range) => updateFilters(toCompletenessFilterRange(range.min, range.max))}
-              />
-              <NumberField
-                label="Loved min"
-                value={currentFilters.lovedTracksMin}
-                min={0}
-                onChange={(value) => updateFilter("lovedTracksMin", value)}
-              />
-              <NumberField
-                label="Loved max"
-                value={currentFilters.lovedTracksMax}
-                min={0}
-                onChange={(value) => updateFilter("lovedTracksMax", value)}
-              />
-              <TextCriterion
-                label="File path"
-                filter={currentFilters.filePath}
-                onChange={(filter) => updateFilter("filePath", filter)}
-              />
-              <TextCriterion
-                label="Filename"
-                filter={currentFilters.filename}
-                onChange={(filter) => updateFilter("filename", filter)}
-              />
-            </div>
-
-            <div className="query-footer">
-              <div className="missing-flags" aria-label="Missing metadata">
-                <span className="missing-flags-title">Missing fields</span>
-                {missingFieldOptions.filter((option) => request.view === "tracks" || option.value !== "billboardSingle").map((option) => {
-                  const checked = currentFilters.missingFields.includes(option.value);
-                  const label = missingFieldLabel(option.value, request.view);
-                  return (
-                    <label key={option.value}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => {
-                          const nextValues = event.target.checked
-                            ? [...currentFilters.missingFields, option.value]
-                            : currentFilters.missingFields.filter((value) => value !== option.value);
-                          updateFilter("missingFields", nextValues);
-                        }}
-                      />
-                      <span>{label}</span>
-                    </label>
-                  );
-                })}
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={currentFilters.missingOriginCountry}
-                    onChange={(event) => updateFilter("missingOriginCountry", event.target.checked)}
-                  />
-                  <span>Origin Country</span>
-                </label>
-              </div>
-
-              <div className="missing-flags" aria-label="Visible Search columns">
-                <span className="missing-flags-title">Table columns</span>
-                {searchTableColumnOptions.map((option) => (
-                  <label key={option.value}>
-                    <input
-                      type="checkbox"
-                      checked={searchTableColumns.includes(option.value)}
-                      onChange={() => toggleSearchTableColumn(option.value)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
-
-              <div className="sort-controls">
-                <SelectField
-                  label="Sort"
-                  value={request.sort.field}
-                  onChange={(field) =>
-                    setRequest((previous) => ({ ...previous, sort: { ...previous.sort, field }, offset: 0 }))
-                  }
-                  options={
-                    request.view === "tracks"
-                      ? [
-                          { value: "title", label: "Title" },
-                          { value: "album", label: "Album" },
-                          { value: "displayArtist", label: "Display artist" },
-                          { value: "year", label: "Year" },
-                          { value: "originCountry", label: "Origin country" },
-                          { value: "billboardRank", label: "Album Billboard" },
-                          { value: "billboardSingleRank", label: "Single Billboard" },
-                          { value: "trackRating", label: "Track rating" },
-                          { value: "trackNumber", label: "Track number" },
-                        ]
-                      : [
-                          { value: "album", label: "Album" },
-                          { value: "artist", label: "Artist" },
-                          { value: "year", label: "Year" },
-                          { value: "originCountry", label: "Origin country" },
-                          { value: "billboardRank", label: "Billboard" },
-                          { value: "genre", label: "Genre" },
-                          { value: "totalMinutes", label: "Minutes" },
-                          { value: "trackCount", label: "Tracks" },
-                          { value: "albumRating", label: "Rating" },
-                          { value: "ratingCompleteness", label: "Completeness" },
-                          { value: "lovedTracks", label: "Loved" },
-                          { value: "albumScore", label: "Score" },
-                        ]
-                  }
-                />
-                <SelectField
-                  label="Direction"
-                  value={request.sort.direction}
-                  onChange={(direction) =>
-                    setRequest((previous) => ({
-                      ...previous,
-                      sort: { ...previous.sort, direction: direction as "asc" | "desc" },
-                      offset: 0,
-                    }))
-                  }
-                  options={[
-                    { value: "asc", label: "Ascending" },
-                    { value: "desc", label: "Descending" },
-                  ]}
-                />
-                <NumberField
-                  label="Rows"
-                  value={request.limit}
-                  min={10}
-                  max={500}
-                  onChange={(value) =>
-                    setRequest((previous) => ({ ...previous, limit: value ?? 50, offset: 0 }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="chip-row" aria-label="Active filters">
-              {chips.length === 0 ? (
-                <span className="chip-empty">No active filters</span>
-              ) : (
-                chips.map((chip) => (
-                  <button className="filter-chip" type="button" key={chip.key} onClick={chip.remove}>
-                    <span>{chip.label}</span>
-                    <X size={14} />
+                    <ChevronLeft size={17} />
                   </button>
-                ))
-              )}
-            </div>
-          </section>
-
-          <section className="table-panel" aria-label="Search results">
-            <div className="panel-heading compact">
-              <div>
-                <h2>{request.view === "albums" ? "Album table" : "Track table"}</h2>
-                <p>
-                  {isSearching ? "Searching" : `${formatNumber(pageStart)}-${formatNumber(pageEnd)} of ${formatNumber(total)}`}
-                </p>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="Next page"
+                    disabled={request.offset + request.limit >= total}
+                    onClick={() =>
+                      setRequest((previous) => ({
+                        ...previous,
+                        offset: previous.offset + previous.limit,
+                      }))
+                    }
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
               </div>
-              <div className="pager">
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Previous page"
-                  disabled={request.offset === 0}
-                  onClick={() =>
-                    setRequest((previous) => ({
-                      ...previous,
-                      offset: Math.max(0, previous.offset - previous.limit),
-                    }))
-                  }
-                >
-                  <ChevronLeft size={17} />
-                </button>
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Next page"
-                  disabled={request.offset + request.limit >= total}
-                  onClick={() =>
-                    setRequest((previous) => ({
-                      ...previous,
-                      offset: previous.offset + previous.limit,
-                    }))
-                  }
-                >
-                  <ChevronRight size={17} />
-                </button>
-              </div>
-            </div>
 
-            {browseError ? <p className="error-message">{browseError}</p> : null}
-            <ResultTable
-              response={response}
-              sort={request.sort}
-              onSort={sortSearchBy}
-              countryFlagDisplay={settings.countryFlagDisplay}
-              visibleColumns={searchTableColumns}
-            />
+              {browseError ? (
+                <p className="error-message">{browseError}</p>
+              ) : null}
+              <ResultTable
+                response={response}
+                sort={request.sort}
+                onSort={sortSearchBy}
+                countryFlagDisplay={settings.countryFlagDisplay}
+                visibleColumns={searchTableColumns}
+              />
+            </section>
           </section>
-        </section>
-      )}
+        )}
       </div>
 
       <section className="detail-column" aria-hidden={isRightSidebarHidden}>
         {activeSection === "Imports" ? (
           <aside className="detail-panel" aria-label="Selected import details">
-          <div className="detail-header">
-            <Sparkles size={20} />
-            <div>
-              <h2>Calculation Summary</h2>
-              <p>Phase 1 album fields</p>
-            </div>
-          </div>
-
-          <div className="calculation-list">
-            <div>
-              <Gauge size={17} />
-              <span>Rating completeness</span>
-            </div>
-            <div>
-              <Heart size={17} />
-              <span>Loved tracks</span>
-            </div>
-            <div>
-              <Clock3 size={17} />
-              <span>TMOE and AE</span>
-            </div>
-            <div>
-              <BarChart3 size={17} />
-              <span>Album Score</span>
-            </div>
-          </div>
-
-          <dl className="run-details">
-            <div>
-              <dt>Source size</dt>
-              <dd>{lastRun ? formatBytes(lastRun.sourceSizeBytes) : "Waiting for first import"}</dd>
-            </div>
-            <div>
-              <dt>Completed</dt>
-              <dd>{lastRun ? formatDate(lastRun.completedAt) : "Not yet"}</dd>
-            </div>
-            <div>
-              <dt>Backup</dt>
-              <dd>{lastRun?.backupPath ?? "Created before import replacement"}</dd>
-            </div>
-            <div>
-              <dt>Source</dt>
-              <dd>{lastRun?.sourcePath ?? sourcePath}</dd>
-            </div>
-          </dl>
-        </aside>
-      ) : activeSection === "Discovery" ? (
-        <aside className="detail-panel discovery-detail" aria-label="Discovery details">
-          <div className="detail-header">
-            <Compass size={20} />
-            <div>
-              <h2>Discovery Map</h2>
-              <p>{discovery?.generatedAt ? formatDate(discovery.generatedAt) : "Waiting for library data"}</p>
-            </div>
-          </div>
-
-          <dl className="run-details">
-            <div>
-              <dt>Backlog missions</dt>
-              <dd>{formatNumber(discovery?.backlogMissions.length)}</dd>
-            </div>
-            <div>
-              <dt>Smart missions</dt>
-              <dd>{formatNumber(discovery?.smartMissions.length)}</dd>
-            </div>
-            <div>
-              <dt>Current result</dt>
-              <dd>{formatNumber(discoveryAlbumTotal)}</dd>
-            </div>
-            <div>
-              <dt>Selection</dt>
-              <dd>{discoverySelection?.title ?? "None yet"}</dd>
-            </div>
-          </dl>
-
-          <section className="calculation-list discovery-signals">
-            <div>
-              <Gauge size={17} />
-              <span>Heatmap cells open matching genre/year albums</span>
-            </div>
-            <div>
-              <Heart size={17} />
-              <span>Scatter points open individual outlier albums</span>
-            </div>
-            <div>
-              <Tags size={17} />
-              <span>Genre bubbles open full genre album sets</span>
-            </div>
-            <div>
-              <UsersRound size={17} />
-              <span>Artist bubbles open catalog deep dives</span>
-            </div>
-          </section>
-        </aside>
-      ) : activeSection === "Charts" ? (
-        <aside className="detail-panel chart-detail" aria-label="Chart actions">
-          <div className="detail-header">
-            <BarChart3 size={20} />
-            <div>
-              <h2>Chart Library</h2>
-              <p>Saved chart configs and exports</p>
-            </div>
-          </div>
-
-          <section className="save-search-box">
-            <label className="source-input">
-              <span>Name</span>
-              <input value={chartName} onChange={(event) => setChartName(event.target.value)} />
-            </label>
-            <button className="primary-button" type="button" onClick={() => void saveCurrentChart()}>
-              <Save size={17} />
-              <span>Save chart</span>
-            </button>
-          </section>
-
-          <section className="saved-list" aria-label="Saved charts">
-            {savedCharts.length === 0 ? (
-              <div className="empty-state">
-                <BarChart3 size={20} />
-                <span>No saved charts.</span>
-              </div>
-            ) : (
-              savedCharts.map((chart) => (
-                <div className="saved-search" key={chart.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setChartConfig(normalizeChartConfigForClient(chart.config));
-                      setChartTableSort(null);
-                      setActiveSection("Charts");
-                    }}
-                  >
-                    <strong>{chart.name}</strong>
-                    <span>
-                      {rankingLabel(chart.config.rankingMetric)} / {chart.config.viewMode}
-                    </span>
-                  </button>
-                  <button
-                    className="icon-button"
-                    type="button"
-                    aria-label={`Delete ${chart.name}`}
-                    onClick={() => void removeSavedChart(chart.id)}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))
-            )}
-          </section>
-
-          <section className="export-box">
-            <div className="export-grid">
-              {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
-                <button type="button" key={format} onClick={() => void runChartExport(format)}>
-                  <Download size={16} />
-                  <span>{format.toUpperCase()}</span>
-                </button>
-              ))}
-            </div>
-            {chartExportResult ? (
-              <div className="export-result">
-                <Check size={17} />
-                <span>
-                  {formatNumber(chartExportResult.rowCount)} rows to {chartExportResult.path}
-                </span>
-              </div>
-            ) : null}
-          </section>
-        </aside>
-      ) : activeSection === "Artists" ? (
-        <ArtistDetailPanel
-          artist={selectedArtist}
-          includeCalculated={artistIncludeCalculated}
-          onIncludeCalculatedChange={(value) => setArtistIncludeCalculated(value)}
-          exportResult={artistExportResult}
-          onExport={runArtistExport}
-          countryFlagDisplay={settings.countryFlagDisplay}
-        />
-      ) : activeSection === "Genres" ? (
-        <GenreDetailPanel
-          genre={selectedGenre}
-          includeCalculated={genreIncludeCalculated}
-          onIncludeCalculatedChange={(value) => setGenreIncludeCalculated(value)}
-          exportResult={genreExportResult}
-          onExport={runGenreExport}
-        />
-      ) : activeSection === "Tools" ? (
-        <MusicToolDetailPanel
-          tool={selectedTool}
-          progress={activeToolProgress}
-          exportResult={toolExportResult}
-          onExport={runToolExport}
-        />
-      ) : activeSection === "Albums" ? (
-        <AlbumDetailPanel
-          album={selectedAlbum}
-          tracks={albumTracksResponse}
-          isLoading={isAlbumTracksLoading}
-          includeCalculated={albumIncludeCalculated}
-          onIncludeCalculatedChange={(value) => setAlbumIncludeCalculated(value)}
-          exportResult={albumExportResult}
-          onExport={runAlbumExport}
-          countryFlagDisplay={settings.countryFlagDisplay}
-        />
-      ) : activeSection === "Statistics" ? (
-        <aside className="detail-panel statistics-detail" aria-label="Statistics details">
-          <div className="detail-header">
-            <Activity size={20} />
-            <div>
-              <h2>Library Signals</h2>
-              <p>{statistics?.lastUpdated ? formatDate(statistics.lastUpdated) : "No import yet"}</p>
-            </div>
-          </div>
-
-          <dl className="run-details">
-            <div>
-              <dt>Health score</dt>
-              <dd>{statistics ? `${Math.round(statistics.healthScore.score)}/100` : ""}</dd>
-            </div>
-            <div>
-              <dt>Average album rating</dt>
-              <dd>{formatAverage(statistics?.ratingProgress.averageAlbumRating, 1)}</dd>
-            </div>
-            <div>
-              <dt>Average album score</dt>
-              <dd>{formatAverage(statistics?.overview.averageAlbumScore, 2)}</dd>
-            </div>
-            <div>
-              <dt>Unrated albums</dt>
-              <dd>{formatNumber(statistics?.ratingProgress.unratedAlbums)}</dd>
-            </div>
-            <div>
-              <dt>Top loved genre</dt>
-              <dd>{statistics?.lovedTracks.topLovedGenre ?? "Not yet"}</dd>
-            </div>
-            <div>
-              <dt>Median release year</dt>
-              <dd>{statistics?.libraryShape.medianYear ?? "Not yet"}</dd>
-            </div>
-            <div>
-              <dt>Top artist share</dt>
-              <dd>{formatPercent(statistics?.catalogConcentration.artistPoints[0]?.share, 1)}</dd>
-            </div>
-          </dl>
-
-          <section className="calculation-list statistics-signals">
-            <div>
-              <Album size={17} />
-              <span>{formatNumber(statistics?.ratingProgress.fullyRatedAlbums)} fully rated albums</span>
-            </div>
-            <div>
-              <Gauge size={17} />
-              <span>{formatNumber(statistics?.ratingProgress.partiallyRatedAlbums)} partial albums</span>
-            </div>
-            <div>
-              <Heart size={17} />
-              <span>{formatNumber(statistics?.lovedTracks.lovedTracks)} loved tracks</span>
-            </div>
-            <div>
-              <FolderInput size={17} />
-              <span>{formatNumber(statistics?.importHistory.length)} import runs</span>
-            </div>
-            <div>
-              <ShieldCheck size={17} />
-              <span>{formatPercent(statistics?.healthScore.metadataCoverage, 0)} metadata coverage</span>
-            </div>
-            <div>
-              <Clock3 size={17} />
-              <span>{formatHours(statistics?.durationAnalytics.averageAlbumSeconds)} average album</span>
-            </div>
-          </section>
-
-          <section className="saved-list" aria-label="Recent rating events">
-            <div className="detail-header small">
-              <Sparkles size={18} />
+            <div className="detail-header">
+              <Sparkles size={20} />
               <div>
-                <h2>Recent Events</h2>
-                <p>Rating changes from imports</p>
+                <h2>Calculation Summary</h2>
+                <p>Phase 1 album fields</p>
               </div>
             </div>
-            <RatingEventList events={statistics?.recentRatingEvents ?? []} />
-          </section>
-        </aside>
-      ) : activeSection === "Settings" ? (
-        <aside className="detail-panel settings-detail" aria-label="Settings details">
-          <div className="detail-header">
-            <Settings size={20} />
-            <div>
-              <h2>Preferences</h2>
-              <p>{settings.updatedAt ? formatDate(settings.updatedAt) : "Default settings"}</p>
-            </div>
-          </div>
 
-          <dl className="run-details">
-            <div>
-              <dt>Rolling backups</dt>
-              <dd>{formatNumber(settings.backupRetention)}</dd>
-            </div>
-            <div>
-              <dt>Theme</dt>
-              <dd>{settings.darkMode ? "Dark" : "Light"}</dd>
-            </div>
-            <div>
-              <dt>Navigation</dt>
-              <dd>{leftSidebarModeLabels[settings.leftSidebarDefault]}</dd>
-            </div>
-            <div>
-              <dt>Details</dt>
-              <dd>{rightSidebarModeLabels[settings.rightSidebarDefault]}</dd>
-            </div>
-            <div>
-              <dt>Origin display</dt>
-              <dd>{countryFlagDisplayLabels[settings.countryFlagDisplay]}</dd>
-            </div>
-            <div>
-              <dt>Updates</dt>
-              <dd>{appUpdateAutoCheckMinutes > 0 ? `${appUpdateAutoCheckMinutes} min` : appUpdateStatusLabel(appUpdateStatus)}</dd>
-            </div>
-            <div>
-              <dt>Runtime</dt>
-              <dd>{canImport ? "Tauri desktop" : "Web preview"}</dd>
-            </div>
-          </dl>
-
-          <section className="calculation-list settings-signals">
-            <div>
-              <ShieldCheck size={17} />
-              <span>Backups pruned after import</span>
-            </div>
-            <div>
-              <Moon size={17} />
-              <span>{settings.darkMode ? "Dark mode active" : "Light mode active"}</span>
-            </div>
-            <div>
-              <Download size={17} />
-              <span>{appUpdateStatusLabel(appUpdateStatus)}</span>
-            </div>
-          </section>
-        </aside>
-      ) : (
-        <aside className="detail-panel search-detail" aria-label="Search actions">
-          <div className="detail-header">
-            <SlidersHorizontal size={20} />
-            <div>
-              <h2>Views</h2>
-              <p>Saved searches and exports</p>
-            </div>
-          </div>
-
-          <section className="save-search-box">
-            <label className="source-input">
-              <span>Name</span>
-              <input value={saveName} onChange={(event) => setSaveName(event.target.value)} />
-            </label>
-            <button className="primary-button" type="button" onClick={() => void saveCurrentSearch()}>
-              <Save size={17} />
-              <span>Save search</span>
-            </button>
-          </section>
-
-          <section className="saved-list" aria-label="Saved searches">
-            {savedSearches.length === 0 ? (
-              <div className="empty-state">
-                <FileSearch size={20} />
-                <span>No saved searches.</span>
+            <div className="calculation-list">
+              <div>
+                <Gauge size={17} />
+                <span>Rating completeness</span>
               </div>
-            ) : (
-              savedSearches.map((search) => (
-                <div className="saved-search" key={search.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRequest(search.request);
-                      setActiveSection("Search");
-                    }}
-                  >
-                    <strong>{search.name}</strong>
-                    <span>{search.view}</span>
-                  </button>
-                  <button
-                    className="icon-button"
-                    type="button"
-                    aria-label={`Delete ${search.name}`}
-                    onClick={() => void removeSavedSearch(search.id)}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+              <div>
+                <Heart size={17} />
+                <span>Loved tracks</span>
+              </div>
+              <div>
+                <Clock3 size={17} />
+                <span>TMOE and AE</span>
+              </div>
+              <div>
+                <BarChart3 size={17} />
+                <span>Album Score</span>
+              </div>
+            </div>
+
+            <dl className="run-details">
+              <div>
+                <dt>Source size</dt>
+                <dd>
+                  {lastRun
+                    ? formatBytes(lastRun.sourceSizeBytes)
+                    : "Waiting for first import"}
+                </dd>
+              </div>
+              <div>
+                <dt>Completed</dt>
+                <dd>{lastRun ? formatDate(lastRun.completedAt) : "Not yet"}</dd>
+              </div>
+              <div>
+                <dt>Backup</dt>
+                <dd>
+                  {lastRun?.backupPath ?? "Created before import replacement"}
+                </dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd>{lastRun?.sourcePath ?? sourcePath}</dd>
+              </div>
+            </dl>
+          </aside>
+        ) : activeSection === "Discovery" ? (
+          <aside
+            className="detail-panel discovery-detail"
+            aria-label="Discovery details"
+          >
+            <div className="detail-header">
+              <Compass size={20} />
+              <div>
+                <h2>Discovery Map</h2>
+                <p>
+                  {discovery?.generatedAt
+                    ? formatDate(discovery.generatedAt)
+                    : "Waiting for library data"}
+                </p>
+              </div>
+            </div>
+
+            <dl className="run-details">
+              <div>
+                <dt>Backlog missions</dt>
+                <dd>{formatNumber(discovery?.backlogMissions.length)}</dd>
+              </div>
+              <div>
+                <dt>Smart missions</dt>
+                <dd>{formatNumber(discovery?.smartMissions.length)}</dd>
+              </div>
+              <div>
+                <dt>Current result</dt>
+                <dd>{formatNumber(discoveryAlbumTotal)}</dd>
+              </div>
+              <div>
+                <dt>Selection</dt>
+                <dd>{discoverySelection?.title ?? "None yet"}</dd>
+              </div>
+            </dl>
+
+            <section className="calculation-list discovery-signals">
+              <div>
+                <Gauge size={17} />
+                <span>Heatmap cells open matching genre/year albums</span>
+              </div>
+              <div>
+                <Heart size={17} />
+                <span>Scatter points open individual outlier albums</span>
+              </div>
+              <div>
+                <Tags size={17} />
+                <span>Genre bubbles open full genre album sets</span>
+              </div>
+              <div>
+                <UsersRound size={17} />
+                <span>Artist bubbles open catalog deep dives</span>
+              </div>
+            </section>
+          </aside>
+        ) : activeSection === "Charts" ? (
+          <aside
+            className="detail-panel chart-detail"
+            aria-label="Chart actions"
+          >
+            <div className="detail-header">
+              <BarChart3 size={20} />
+              <div>
+                <h2>Chart Library</h2>
+                <p>Saved chart configs and exports</p>
+              </div>
+            </div>
+
+            <section className="save-search-box">
+              <label className="source-input">
+                <span>Name</span>
+                <input
+                  value={chartName}
+                  onChange={(event) => setChartName(event.target.value)}
+                />
+              </label>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => void saveCurrentChart()}
+              >
+                <Save size={17} />
+                <span>Save chart</span>
+              </button>
+            </section>
+
+            <section className="saved-list" aria-label="Saved charts">
+              {savedCharts.length === 0 ? (
+                <div className="empty-state">
+                  <BarChart3 size={20} />
+                  <span>No saved charts.</span>
                 </div>
-              ))
-            )}
-          </section>
+              ) : (
+                savedCharts.map((chart) => (
+                  <div className="saved-search" key={chart.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChartConfig(
+                          normalizeChartConfigForClient(chart.config),
+                        );
+                        setChartTableSort(null);
+                        setActiveSection("Charts");
+                      }}
+                    >
+                      <strong>{chart.name}</strong>
+                      <span>
+                        {rankingLabel(chart.config.rankingMetric)} /{" "}
+                        {chart.config.viewMode}
+                      </span>
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label={`Delete ${chart.name}`}
+                      onClick={() => void removeSavedChart(chart.id)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </section>
 
-          <section className="export-box">
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                checked={includeCalculated}
-                onChange={(event) => {
-                  setIncludeCalculated(event.target.checked);
-                  setExportResult(null);
-                }}
-              />
-              <span>Calculated columns</span>
-            </label>
-            {availableSearchExportColumns.length > 0 ? (
-              <div className="missing-flags" aria-label="Optional Search export columns">
-                {availableSearchExportColumns.map((option) => (
-                  <label key={option.value}>
-                    <input
-                      type="checkbox"
-                      checked={searchExportColumns.includes(option.value)}
-                      onChange={() => toggleSearchExportColumn(option.value)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
+            <section className="export-box">
+              <div className="export-grid">
+                {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
+                  <button
+                    type="button"
+                    key={format}
+                    onClick={() => void runChartExport(format)}
+                  >
+                    <Download size={16} />
+                    <span>{format.toUpperCase()}</span>
+                  </button>
                 ))}
               </div>
-            ) : null}
-            <div className="export-grid">
-              {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
-                <button type="button" key={format} onClick={() => void runExport(format)}>
-                  <Download size={16} />
-                  <span>{format.toUpperCase()}</span>
-                </button>
-              ))}
+              {chartExportResult ? (
+                <div className="export-result">
+                  <Check size={17} />
+                  <span>
+                    {formatNumber(chartExportResult.rowCount)} rows to{" "}
+                    {chartExportResult.path}
+                  </span>
+                </div>
+              ) : null}
+            </section>
+          </aside>
+        ) : activeSection === "Artists" ? (
+          <ArtistDetailPanel
+            artist={selectedArtist}
+            includeCalculated={artistIncludeCalculated}
+            onIncludeCalculatedChange={(value) =>
+              setArtistIncludeCalculated(value)
+            }
+            exportResult={artistExportResult}
+            onExport={runArtistExport}
+            countryFlagDisplay={settings.countryFlagDisplay}
+          />
+        ) : activeSection === "Genres" ? (
+          <GenreDetailPanel
+            genre={selectedGenre}
+            includeCalculated={genreIncludeCalculated}
+            onIncludeCalculatedChange={(value) =>
+              setGenreIncludeCalculated(value)
+            }
+            exportResult={genreExportResult}
+            onExport={runGenreExport}
+          />
+        ) : activeSection === "Tools" ? (
+          <MusicToolDetailPanel
+            tool={selectedTool}
+            progress={activeToolProgress}
+            exportResult={toolExportResult}
+            onExport={runToolExport}
+          />
+        ) : activeSection === "Albums" ? (
+          <AlbumDetailPanel
+            album={selectedAlbum}
+            tracks={albumTracksResponse}
+            isLoading={isAlbumTracksLoading}
+            includeCalculated={albumIncludeCalculated}
+            onIncludeCalculatedChange={(value) =>
+              setAlbumIncludeCalculated(value)
+            }
+            exportResult={albumExportResult}
+            onExport={runAlbumExport}
+            countryFlagDisplay={settings.countryFlagDisplay}
+          />
+        ) : activeSection === "Statistics" ? (
+          <aside
+            className="detail-panel statistics-detail"
+            aria-label="Statistics details"
+          >
+            <div className="detail-header">
+              <Activity size={20} />
+              <div>
+                <h2>Library Signals</h2>
+                <p>
+                  {statistics?.lastUpdated
+                    ? formatDate(statistics.lastUpdated)
+                    : "No import yet"}
+                </p>
+              </div>
             </div>
-            {exportResult ? (
-              <div className="export-result">
-                <Check size={17} />
+
+            <dl className="run-details">
+              <div>
+                <dt>Health score</dt>
+                <dd>
+                  {statistics
+                    ? `${Math.round(statistics.healthScore.score)}/100`
+                    : ""}
+                </dd>
+              </div>
+              <div>
+                <dt>Average album rating</dt>
+                <dd>
+                  {formatAverage(
+                    statistics?.ratingProgress.averageAlbumRating,
+                    1,
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>Average album score</dt>
+                <dd>
+                  {formatAverage(statistics?.overview.averageAlbumScore, 2)}
+                </dd>
+              </div>
+              <div>
+                <dt>Unrated albums</dt>
+                <dd>
+                  {formatNumber(statistics?.ratingProgress.unratedAlbums)}
+                </dd>
+              </div>
+              <div>
+                <dt>Top loved genre</dt>
+                <dd>{statistics?.lovedTracks.topLovedGenre ?? "Not yet"}</dd>
+              </div>
+              <div>
+                <dt>Median release year</dt>
+                <dd>{statistics?.libraryShape.medianYear ?? "Not yet"}</dd>
+              </div>
+              <div>
+                <dt>Top artist share</dt>
+                <dd>
+                  {formatPercent(
+                    statistics?.catalogConcentration.artistPoints[0]?.share,
+                    1,
+                  )}
+                </dd>
+              </div>
+            </dl>
+
+            <section className="calculation-list statistics-signals">
+              <div>
+                <Album size={17} />
                 <span>
-                  {formatNumber(exportResult.rowCount)} rows to {exportResult.path}
+                  {formatNumber(statistics?.ratingProgress.fullyRatedAlbums)}{" "}
+                  fully rated albums
                 </span>
               </div>
-            ) : null}
-          </section>
-        </aside>
-      )}
+              <div>
+                <Gauge size={17} />
+                <span>
+                  {formatNumber(
+                    statistics?.ratingProgress.partiallyRatedAlbums,
+                  )}{" "}
+                  partial albums
+                </span>
+              </div>
+              <div>
+                <Heart size={17} />
+                <span>
+                  {formatNumber(statistics?.lovedTracks.lovedTracks)} loved
+                  tracks
+                </span>
+              </div>
+              <div>
+                <FolderInput size={17} />
+                <span>
+                  {formatNumber(statistics?.importHistory.length)} import runs
+                </span>
+              </div>
+              <div>
+                <ShieldCheck size={17} />
+                <span>
+                  {formatPercent(statistics?.healthScore.metadataCoverage, 0)}{" "}
+                  metadata coverage
+                </span>
+              </div>
+              <div>
+                <Clock3 size={17} />
+                <span>
+                  {formatHours(
+                    statistics?.durationAnalytics.averageAlbumSeconds,
+                  )}{" "}
+                  average album
+                </span>
+              </div>
+            </section>
+
+            <section className="saved-list" aria-label="Recent rating events">
+              <div className="detail-header small">
+                <Sparkles size={18} />
+                <div>
+                  <h2>Recent Events</h2>
+                  <p>Rating changes from imports</p>
+                </div>
+              </div>
+              <RatingEventList events={statistics?.recentRatingEvents ?? []} />
+            </section>
+          </aside>
+        ) : activeSection === "Settings" ? (
+          <aside
+            className="detail-panel settings-detail"
+            aria-label="Settings details"
+          >
+            <div className="detail-header">
+              <Settings size={20} />
+              <div>
+                <h2>Preferences</h2>
+                <p>
+                  {settings.updatedAt
+                    ? formatDate(settings.updatedAt)
+                    : "Default settings"}
+                </p>
+              </div>
+            </div>
+
+            <dl className="run-details">
+              <div>
+                <dt>Rolling backups</dt>
+                <dd>{formatNumber(settings.backupRetention)}</dd>
+              </div>
+              <div>
+                <dt>Theme</dt>
+                <dd>{settings.darkMode ? "Dark" : "Light"}</dd>
+              </div>
+              <div>
+                <dt>Navigation</dt>
+                <dd>{leftSidebarModeLabels[settings.leftSidebarDefault]}</dd>
+              </div>
+              <div>
+                <dt>Details</dt>
+                <dd>{rightSidebarModeLabels[settings.rightSidebarDefault]}</dd>
+              </div>
+              <div>
+                <dt>Origin display</dt>
+                <dd>{countryFlagDisplayLabels[settings.countryFlagDisplay]}</dd>
+              </div>
+              <div>
+                <dt>Updates</dt>
+                <dd>
+                  {appUpdateAutoCheckMinutes > 0
+                    ? `${appUpdateAutoCheckMinutes} min`
+                    : appUpdateStatusLabel(appUpdateStatus)}
+                </dd>
+              </div>
+              <div>
+                <dt>Runtime</dt>
+                <dd>{canImport ? "Tauri desktop" : "Web preview"}</dd>
+              </div>
+            </dl>
+
+            <section className="calculation-list settings-signals">
+              <div>
+                <ShieldCheck size={17} />
+                <span>Backups pruned after import</span>
+              </div>
+              <div>
+                <Moon size={17} />
+                <span>
+                  {settings.darkMode ? "Dark mode active" : "Light mode active"}
+                </span>
+              </div>
+              <div>
+                <Download size={17} />
+                <span>{appUpdateStatusLabel(appUpdateStatus)}</span>
+              </div>
+            </section>
+          </aside>
+        ) : (
+          <aside
+            className="detail-panel search-detail"
+            aria-label="Search actions"
+          >
+            <div className="detail-header">
+              <SlidersHorizontal size={20} />
+              <div>
+                <h2>Views</h2>
+                <p>Saved searches and exports</p>
+              </div>
+            </div>
+
+            <section className="save-search-box">
+              <label className="source-input">
+                <span>Name</span>
+                <input
+                  value={saveName}
+                  onChange={(event) => setSaveName(event.target.value)}
+                />
+              </label>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => void saveCurrentSearch()}
+              >
+                <Save size={17} />
+                <span>Save search</span>
+              </button>
+            </section>
+
+            <section className="saved-list" aria-label="Saved searches">
+              {savedSearches.length === 0 ? (
+                <div className="empty-state">
+                  <FileSearch size={20} />
+                  <span>No saved searches.</span>
+                </div>
+              ) : (
+                savedSearches.map((search) => (
+                  <div className="saved-search" key={search.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRequest(search.request);
+                        setActiveSection("Search");
+                      }}
+                    >
+                      <strong>{search.name}</strong>
+                      <span>{search.view}</span>
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label={`Delete ${search.name}`}
+                      onClick={() => void removeSavedSearch(search.id)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </section>
+
+            <section className="export-box">
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={includeCalculated}
+                  onChange={(event) => {
+                    setIncludeCalculated(event.target.checked);
+                    setExportResult(null);
+                  }}
+                />
+                <span>Calculated columns</span>
+              </label>
+              {availableSearchExportColumns.length > 0 ? (
+                <div
+                  className="missing-flags"
+                  aria-label="Optional Search export columns"
+                >
+                  {availableSearchExportColumns.map((option) => (
+                    <label key={option.value}>
+                      <input
+                        type="checkbox"
+                        checked={searchExportColumns.includes(option.value)}
+                        onChange={() => toggleSearchExportColumn(option.value)}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              <div className="export-grid">
+                {["csv", "tsv", "xlsx", "json", "txt"].map((format) => (
+                  <button
+                    type="button"
+                    key={format}
+                    onClick={() => void runExport(format)}
+                  >
+                    <Download size={16} />
+                    <span>{format.toUpperCase()}</span>
+                  </button>
+                ))}
+              </div>
+              {exportResult ? (
+                <div className="export-result">
+                  <Check size={17} />
+                  <span>
+                    {formatNumber(exportResult.rowCount)} rows to{" "}
+                    {exportResult.path}
+                  </span>
+                </div>
+              ) : null}
+            </section>
+          </aside>
+        )}
       </section>
     </main>
   );

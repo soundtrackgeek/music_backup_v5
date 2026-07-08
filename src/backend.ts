@@ -41,6 +41,12 @@ import type {
   MusicToolSummary,
   MusicBrainzArtistDiscographyResponse,
   MusicBrainzArtistExportRequest,
+  MusicBrainzArtistInfoImportProgress,
+  MusicBrainzArtistInfoImportRequest,
+  MusicBrainzArtistInfoImportSummary,
+  MusicBrainzArtistInfoPreview,
+  MusicBrainzArtistInfoPreviewRow,
+  MusicBrainzArtistInfoStatus,
   MusicBrainzArtistOriginCountryUpdate,
   MusicBrainzArtistRefreshResult,
   MusicBrainzArtistReleaseRow,
@@ -115,7 +121,12 @@ const mockMusicBrainzCacheStatus: MusicBrainzCacheStatus = {
       mbid: "preview-shared-mbid",
       cachedNameCount: 4,
       releaseGroupCount: 242,
-      cachedNames: ["canonical artist", "alternate spelling", "featured credit", "search mismatch"],
+      cachedNames: [
+        "canonical artist",
+        "alternate spelling",
+        "featured credit",
+        "search mismatch",
+      ],
     },
   ],
 };
@@ -149,6 +160,36 @@ const mockMusicBrainzOriginCountryStatus: MusicBrainzOriginCountryStatus = {
     { code: "GB", name: "United Kingdom", artistCount: 2 },
     { code: "US", name: "United States", artistCount: 2 },
   ],
+};
+
+const mockMusicBrainzArtistInfoRun = {
+  id: 1,
+  scope: "album-artists",
+  status: "completed",
+  totalArtists: 6,
+  eligibleCount: 4,
+  fetchedCount: 4,
+  skippedCount: 1,
+  unresolvedCount: 0,
+  failedCount: 0,
+  lastProcessedArtistKey: "madonna",
+  startedAt: "2026-07-08T10:12:00.000Z",
+  completedAt: "2026-07-08T10:12:05.000Z",
+  errorSummary: null,
+};
+
+const mockMusicBrainzArtistInfoStatus: MusicBrainzArtistInfoStatus = {
+  totalAlbumArtists: 6,
+  importedInfos: 4,
+  personArtists: 2,
+  groupArtists: 2,
+  genderedArtists: 2,
+  bornArtists: 2,
+  diedArtists: 1,
+  foundedArtists: 2,
+  dissolvedArtists: 1,
+  missingInfos: 2,
+  lastRun: mockMusicBrainzArtistInfoRun,
 };
 
 const mockMusicBrainzOriginPreviewRows = [
@@ -244,10 +285,167 @@ const mockMusicBrainzOriginPreviewRows = [
   },
 ] satisfies MusicBrainzOriginCountryPreview["rows"];
 
-const mockOriginProgressHandlers = new Set<(progress: MusicBrainzOriginCountryImportProgress) => void>();
+const mockMusicBrainzArtistInfoPreviewRows = [
+  {
+    localArtistKey: "david bowie",
+    displayArtist: "David Bowie",
+    albumCount: 4,
+    musicbrainzMbid: "5441c29d-3602-4898-b1a1-b77fa23b8e50",
+    matchedName: "David Bowie",
+    matchMethod: "verified-link",
+    artistLinkState: "verified",
+    suspectMapping: false,
+    existingSortName: "Bowie, David",
+    existingArtistType: "Person",
+    existingGender: "Male",
+    existingBeginDate: "1947-01-08",
+    existingBeginYear: 1947,
+    existingEndDate: "2016-01-10",
+    existingEndYear: 2016,
+    existingEnded: true,
+    existingBeginAreaName: "Brixton, Lambeth, London",
+    existingEndAreaName: "New York, New York",
+    existingReviewState: "imported",
+    status: "alreadyImported",
+    skippedReason: null,
+  },
+  {
+    localArtistKey: "the chordettes",
+    displayArtist: "The Chordettes",
+    albumCount: 2,
+    musicbrainzMbid: "mock-chordettes-mbid",
+    matchedName: "The Chordettes",
+    matchMethod: "exact-name",
+    artistLinkState: "unverified",
+    suspectMapping: false,
+    existingSortName: "Chordettes, The",
+    existingArtistType: "Group",
+    existingGender: null,
+    existingBeginDate: "1946",
+    existingBeginYear: 1946,
+    existingEndDate: "1963",
+    existingEndYear: 1963,
+    existingEnded: true,
+    existingBeginAreaName: "Sheboygan, Wisconsin",
+    existingEndAreaName: "Sheboygan, Wisconsin",
+    existingReviewState: "imported",
+    status: "alreadyImported",
+    skippedReason: null,
+  },
+  {
+    localArtistKey: "def leppard",
+    displayArtist: "Def Leppard",
+    albumCount: 3,
+    musicbrainzMbid: "8f92558c-2baa-4758-8c38-615519e9deda",
+    matchedName: "Def Leppard",
+    matchMethod: "manual-mbid",
+    artistLinkState: "verified",
+    suspectMapping: false,
+    existingSortName: "Def Leppard",
+    existingArtistType: "Group",
+    existingGender: null,
+    existingBeginDate: "1977",
+    existingBeginYear: 1977,
+    existingEndDate: null,
+    existingEndYear: null,
+    existingEnded: false,
+    existingBeginAreaName: "Sheffield, South Yorkshire, England",
+    existingEndAreaName: null,
+    existingReviewState: "imported",
+    status: "alreadyImported",
+    skippedReason: null,
+  },
+  {
+    localArtistKey: "madonna",
+    displayArtist: "Madonna",
+    albumCount: 5,
+    musicbrainzMbid: "79239441-bfd5-4981-a70c-55c3f15c1287",
+    matchedName: "Madonna",
+    matchMethod: "verified-link",
+    artistLinkState: "verified",
+    suspectMapping: false,
+    existingSortName: "Madonna",
+    existingArtistType: "Person",
+    existingGender: "Female",
+    existingBeginDate: "1958-08-16",
+    existingBeginYear: 1958,
+    existingEndDate: null,
+    existingEndYear: null,
+    existingEnded: false,
+    existingBeginAreaName: "Bay City, Michigan",
+    existingEndAreaName: null,
+    existingReviewState: "imported",
+    status: "alreadyImported",
+    skippedReason: null,
+  },
+  {
+    localArtistKey: "austin wintory",
+    displayArtist: "Austin Wintory",
+    albumCount: 1,
+    musicbrainzMbid: "preview-austin-wintory",
+    matchedName: "Austin Wintory",
+    matchMethod: "exact-name",
+    artistLinkState: "unverified",
+    suspectMapping: false,
+    existingSortName: null,
+    existingArtistType: null,
+    existingGender: null,
+    existingBeginDate: null,
+    existingBeginYear: null,
+    existingEndDate: null,
+    existingEndYear: null,
+    existingEnded: null,
+    existingBeginAreaName: null,
+    existingEndAreaName: null,
+    existingReviewState: null,
+    status: "eligible",
+    skippedReason: null,
+  },
+  {
+    localArtistKey: "killswitch engage",
+    displayArtist: "Killswitch Engage",
+    albumCount: 1,
+    musicbrainzMbid: null,
+    matchedName: null,
+    matchMethod: "none",
+    artistLinkState: "none",
+    suspectMapping: false,
+    existingSortName: null,
+    existingArtistType: null,
+    existingGender: null,
+    existingBeginDate: null,
+    existingBeginYear: null,
+    existingEndDate: null,
+    existingEndYear: null,
+    existingEnded: null,
+    existingBeginAreaName: null,
+    existingEndAreaName: null,
+    existingReviewState: null,
+    status: "unresolved",
+    skippedReason: "No high-confidence MusicBrainz artist match.",
+  },
+] satisfies MusicBrainzArtistInfoPreview["rows"];
 
-function emitMockMusicBrainzOriginProgress(progress: MusicBrainzOriginCountryImportProgress) {
+const mockOriginProgressHandlers = new Set<
+  (progress: MusicBrainzOriginCountryImportProgress) => void
+>();
+
+function emitMockMusicBrainzOriginProgress(
+  progress: MusicBrainzOriginCountryImportProgress,
+) {
   for (const handler of mockOriginProgressHandlers) {
+    handler(progress);
+  }
+}
+
+const mockArtistInfoProgressHandlers = new Set<
+  (progress: MusicBrainzArtistInfoImportProgress) => void
+>();
+
+function emitMockMusicBrainzArtistInfoProgress(
+  progress: MusicBrainzArtistInfoImportProgress,
+) {
+  for (const handler of mockArtistInfoProgressHandlers) {
     handler(progress);
   }
 }
@@ -266,7 +464,10 @@ function mockOriginProgress(
   message: string,
 ): MusicBrainzOriginCountryImportProgress {
   const remainingCount = Math.max(0, eligibleCount - processedCount);
-  const percent = eligibleCount > 0 ? Math.min(100, Math.max(0, (processedCount / eligibleCount) * 100)) : 0;
+  const percent =
+    eligibleCount > 0
+      ? Math.min(100, Math.max(0, (processedCount / eligibleCount) * 100))
+      : 0;
   return {
     status,
     totalArtists,
@@ -286,12 +487,53 @@ function mockOriginProgress(
   };
 }
 
-const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyResponse> = {
+function mockArtistInfoProgress(
+  status: string,
+  totalArtists: number,
+  eligibleCount: number,
+  processedCount: number,
+  fetchedCount: number,
+  storedCount: number,
+  skippedCount: number,
+  unresolvedCount: number,
+  failedCount: number,
+  row: MusicBrainzArtistInfoPreviewRow | null,
+  message: string,
+): MusicBrainzArtistInfoImportProgress {
+  const remainingCount = Math.max(0, eligibleCount - processedCount);
+  const percent =
+    eligibleCount > 0
+      ? Math.min(100, Math.max(0, (processedCount / eligibleCount) * 100))
+      : 0;
+  return {
+    status,
+    totalArtists,
+    eligibleCount,
+    processedCount,
+    remainingCount,
+    fetchedCount,
+    storedCount,
+    skippedCount,
+    unresolvedCount,
+    failedCount,
+    percent,
+    currentArtist: row?.displayArtist ?? null,
+    currentArtistKey: row?.localArtistKey ?? null,
+    currentMbid: row?.musicbrainzMbid ?? null,
+    message,
+  };
+}
+
+const mockMusicBrainzDiscographies: Record<
+  string,
+  MusicBrainzArtistDiscographyResponse
+> = {
   "pet shop boys": {
     artistKey: "pet shop boys",
     artistName: "Pet Shop Boys",
     state: "available",
-    message: "Matched 3 pure official MusicBrainz albums against 1 local album.",
+    message:
+      "Matched 3 pure official MusicBrainz albums against 1 local album.",
     cachePath: defaultMusicBrainzCachePath,
     resolvedPath: `Preview runtime / ${defaultMusicBrainzCachePath}`,
     musicbrainzMbid: "012151a8-preview-psb",
@@ -357,7 +599,8 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
     artistKey: "the smiths",
     artistName: "The Smiths",
     state: "warning",
-    message: "Matched through the preview cache, but this artist has alternate cached names. Review before trusting broad reports.",
+    message:
+      "Matched through the preview cache, but this artist has alternate cached names. Review before trusting broad reports.",
     cachePath: defaultMusicBrainzCachePath,
     resolvedPath: `Preview runtime / ${defaultMusicBrainzCachePath}`,
     musicbrainzMbid: "preview-smiths",
@@ -420,12 +663,20 @@ const mockMusicBrainzDiscographies: Record<string, MusicBrainzArtistDiscographyR
 
 type OriginCountryFields = Pick<
   BrowseRow,
-  "originCountryCode" | "originCountryName" | "originCountryRawArea" | "originCountryReviewState"
+  | "originCountryCode"
+  | "originCountryName"
+  | "originCountryRawArea"
+  | "originCountryReviewState"
 >;
 type BrowseRowWithoutOrigin = Omit<BrowseRow, keyof OriginCountryFields>;
-type ArtistSummaryWithoutOrigin = Omit<ArtistSummary, keyof OriginCountryFields>;
+type ArtistSummaryWithoutOrigin = Omit<
+  ArtistSummary,
+  keyof OriginCountryFields
+>;
 
-function mockOriginForArtist(artist: string | null | undefined): OriginCountryFields {
+function mockOriginForArtist(
+  artist: string | null | undefined,
+): OriginCountryFields {
   switch (normalizeArtistKey(artist ?? null)) {
     case "pet shop boys":
       return {
@@ -466,327 +717,331 @@ function withMockOrigin(row: BrowseRowWithoutOrigin): BrowseRow {
   };
 }
 
-const mockRows: BrowseRow[] = ([
-  {
-    id: "mb:mock-1",
-    trackId: null,
-    albumId: "mb:mock-1",
-    album: "Actually",
-    albumArtistDisplay: "Pet Shop Boys",
-    displayArtist: null,
-    title: null,
-    canonicalGenre: "Synthpop",
-    publisher: "Parlophone",
-    year: 1987,
-    releaseYear: 1987,
-    totalTracks: 10,
-    ratedTracks: 10,
-    ratingCompleteness: 1,
-    totalSeconds: 2880,
-    lovedTracks: 2,
-    tmoeSeconds: 840,
-    aeRatio: 0.2916,
-    effectiveAlbumRating: 86,
-    albumScore: 207.62,
-    billboardRank: 103,
-    billboardYear: 1987,
-    billboardSingleRank: null,
-    billboardSingleYear: null,
-    trackSeconds: null,
-    normalizedRating: null,
-    discNumber: null,
-    trackNumber: null,
-    love: null,
-    filePath: null,
-    filename: null,
-    coverPath: null,
-    coverMimeType: null,
-  },
-  {
-    id: "mb:mock-2",
-    trackId: null,
-    albumId: "mb:mock-2",
-    album: "The Queen Is Dead",
-    albumArtistDisplay: "The Smiths",
-    displayArtist: null,
-    title: null,
-    canonicalGenre: "Post-Punk",
-    publisher: "Rough Trade",
-    year: 1986,
-    releaseYear: 1986,
-    totalTracks: 10,
-    ratedTracks: 10,
-    ratingCompleteness: 1,
-    totalSeconds: 2220,
-    lovedTracks: 1,
-    tmoeSeconds: 600,
-    aeRatio: 0.2702,
-    effectiveAlbumRating: 88,
-    albumScore: 108.4,
-    billboardRank: 282,
-    billboardYear: 1986,
-    billboardSingleRank: null,
-    billboardSingleYear: null,
-    trackSeconds: null,
-    normalizedRating: null,
-    discNumber: null,
-    trackNumber: null,
-    love: null,
-    filePath: null,
-    filename: null,
-    coverPath: null,
-    coverMimeType: null,
-  },
-  {
-    id: "mb:mock-score",
-    trackId: null,
-    albumId: "mb:mock-score",
-    album: "Journey",
-    albumArtistDisplay: "Austin Wintory",
-    displayArtist: null,
-    title: null,
-    canonicalGenre: "Video Game",
-    publisher: "Sony Computer Entertainment",
-    year: 2012,
-    releaseYear: 2012,
-    totalTracks: 18,
-    ratedTracks: 18,
-    ratingCompleteness: 1,
-    totalSeconds: 3480,
-    lovedTracks: 3,
-    tmoeSeconds: 960,
-    aeRatio: 0.2759,
-    effectiveAlbumRating: 91,
-    albumScore: 251.16,
-    billboardRank: null,
-    billboardYear: null,
-    billboardSingleRank: null,
-    billboardSingleYear: null,
-    trackSeconds: null,
-    normalizedRating: null,
-    discNumber: null,
-    trackNumber: null,
-    love: null,
-    filePath: null,
-    filename: null,
-    coverPath: null,
-    coverMimeType: null,
-  },
-  {
-    id: "mb:mock-metal",
-    trackId: null,
-    albumId: "mb:mock-metal",
-    album: "Holy Diver",
-    albumArtistDisplay: "Dio",
-    displayArtist: null,
-    title: null,
-    canonicalGenre: "Heavy Metal",
-    publisher: "Warner Bros.",
-    year: 1984,
-    releaseYear: 1983,
-    totalTracks: 9,
-    ratedTracks: 4,
-    ratingCompleteness: 0.44,
-    totalSeconds: 2520,
-    lovedTracks: 1,
-    tmoeSeconds: 480,
-    aeRatio: 0.1904,
-    effectiveAlbumRating: 74,
-    albumScore: 82.1,
-    billboardRank: 428,
-    billboardYear: 1984,
-    billboardSingleRank: null,
-    billboardSingleYear: null,
-    trackSeconds: null,
-    normalizedRating: null,
-    discNumber: null,
-    trackNumber: null,
-    love: null,
-    filePath: null,
-    filename: null,
-    coverPath: null,
-    coverMimeType: null,
-  },
-  {
-    id: "mb:mock-nu",
-    trackId: null,
-    albumId: "mb:mock-nu",
-    album: "Issues",
-    albumArtistDisplay: "Korn",
-    displayArtist: null,
-    title: null,
-    canonicalGenre: "Nu-Metal",
-    publisher: "Immortal",
-    year: 1999,
-    releaseYear: 1999,
-    totalTracks: 12,
-    ratedTracks: 4,
-    ratingCompleteness: 0.33,
-    totalSeconds: 3180,
-    lovedTracks: 0,
-    tmoeSeconds: 420,
-    aeRatio: 0.132,
-    effectiveAlbumRating: 68,
-    albumScore: 61.5,
-    billboardRank: 20,
-    billboardYear: 1999,
-    billboardSingleRank: null,
-    billboardSingleYear: null,
-    trackSeconds: null,
-    normalizedRating: null,
-    discNumber: null,
-    trackNumber: null,
-    love: null,
-    filePath: null,
-    filename: null,
-    coverPath: null,
-    coverMimeType: null,
-  },
-  {
-    id: "mb:mock-unrated",
-    trackId: null,
-    albumId: "mb:mock-unrated",
-    album: "The End of Heartache",
-    albumArtistDisplay: "Killswitch Engage",
-    displayArtist: null,
-    title: null,
-    canonicalGenre: "Metalcore",
-    publisher: "Roadrunner",
-    year: 2004,
-    releaseYear: 2004,
-    totalTracks: 10,
-    ratedTracks: 0,
-    ratingCompleteness: 0,
-    totalSeconds: 2860,
-    lovedTracks: 0,
-    tmoeSeconds: 0,
-    aeRatio: 0,
-    effectiveAlbumRating: null,
-    albumScore: null,
-    billboardRank: null,
-    billboardYear: null,
-    billboardSingleRank: null,
-    billboardSingleYear: null,
-    trackSeconds: null,
-    normalizedRating: null,
-    discNumber: null,
-    trackNumber: null,
-    love: null,
-    filePath: null,
-    filename: null,
-    coverPath: null,
-    coverMimeType: null,
-  },
-  {
-    id: "track:mock-1",
-    trackId: 1,
-    albumId: "mb:mock-1",
-    album: "Actually",
-    albumArtistDisplay: "Pet Shop Boys",
-    displayArtist: "Pet Shop Boys",
-    title: "What Have I Done to Deserve This?",
-    canonicalGenre: "Synthpop",
-    publisher: "Parlophone",
-    year: 1987,
-    releaseYear: 1987,
-    totalTracks: 10,
-    ratedTracks: 10,
-    ratingCompleteness: 1,
-    totalSeconds: 2880,
-    lovedTracks: 2,
-    tmoeSeconds: 840,
-    aeRatio: 0.2916,
-    effectiveAlbumRating: 86,
-    albumScore: 207.62,
-    billboardRank: 103,
-    billboardYear: 1987,
-    billboardSingleRank: 10,
-    billboardSingleYear: 1987,
-    trackSeconds: 260,
-    normalizedRating: 100,
-    discNumber: 1,
-    trackNumber: 2,
-    love: "L",
-    filePath: "D:\\Music\\Pet Shop Boys\\Actually",
-    filename: "02 What Have I Done to Deserve This.mp3",
-    coverPath: null,
-    coverMimeType: null,
-  },
-  {
-    id: "track:mock-score",
-    trackId: 2,
-    albumId: "mb:mock-score",
-    album: "Journey",
-    albumArtistDisplay: "Austin Wintory",
-    displayArtist: "Austin Wintory",
-    title: "Nascence",
-    canonicalGenre: "Video Game",
-    publisher: "Sony Computer Entertainment",
-    year: 2012,
-    releaseYear: 2012,
-    totalTracks: 18,
-    ratedTracks: 18,
-    ratingCompleteness: 1,
-    totalSeconds: 3480,
-    lovedTracks: 3,
-    tmoeSeconds: 960,
-    aeRatio: 0.2759,
-    effectiveAlbumRating: 91,
-    albumScore: 251.16,
-    billboardRank: null,
-    billboardYear: null,
-    billboardSingleRank: null,
-    billboardSingleYear: null,
-    trackSeconds: 108,
-    normalizedRating: 100,
-    discNumber: 1,
-    trackNumber: 1,
-    love: "L",
-    filePath: "D:\\Music\\Austin Wintory\\Journey",
-    filename: "01 Nascence.mp3",
-    coverPath: null,
-    coverMimeType: null,
-  },
-  ] satisfies BrowseRowWithoutOrigin[]).map(withMockOrigin);
+const mockRows: BrowseRow[] = (
+  [
+    {
+      id: "mb:mock-1",
+      trackId: null,
+      albumId: "mb:mock-1",
+      album: "Actually",
+      albumArtistDisplay: "Pet Shop Boys",
+      displayArtist: null,
+      title: null,
+      canonicalGenre: "Synthpop",
+      publisher: "Parlophone",
+      year: 1987,
+      releaseYear: 1987,
+      totalTracks: 10,
+      ratedTracks: 10,
+      ratingCompleteness: 1,
+      totalSeconds: 2880,
+      lovedTracks: 2,
+      tmoeSeconds: 840,
+      aeRatio: 0.2916,
+      effectiveAlbumRating: 86,
+      albumScore: 207.62,
+      billboardRank: 103,
+      billboardYear: 1987,
+      billboardSingleRank: null,
+      billboardSingleYear: null,
+      trackSeconds: null,
+      normalizedRating: null,
+      discNumber: null,
+      trackNumber: null,
+      love: null,
+      filePath: null,
+      filename: null,
+      coverPath: null,
+      coverMimeType: null,
+    },
+    {
+      id: "mb:mock-2",
+      trackId: null,
+      albumId: "mb:mock-2",
+      album: "The Queen Is Dead",
+      albumArtistDisplay: "The Smiths",
+      displayArtist: null,
+      title: null,
+      canonicalGenre: "Post-Punk",
+      publisher: "Rough Trade",
+      year: 1986,
+      releaseYear: 1986,
+      totalTracks: 10,
+      ratedTracks: 10,
+      ratingCompleteness: 1,
+      totalSeconds: 2220,
+      lovedTracks: 1,
+      tmoeSeconds: 600,
+      aeRatio: 0.2702,
+      effectiveAlbumRating: 88,
+      albumScore: 108.4,
+      billboardRank: 282,
+      billboardYear: 1986,
+      billboardSingleRank: null,
+      billboardSingleYear: null,
+      trackSeconds: null,
+      normalizedRating: null,
+      discNumber: null,
+      trackNumber: null,
+      love: null,
+      filePath: null,
+      filename: null,
+      coverPath: null,
+      coverMimeType: null,
+    },
+    {
+      id: "mb:mock-score",
+      trackId: null,
+      albumId: "mb:mock-score",
+      album: "Journey",
+      albumArtistDisplay: "Austin Wintory",
+      displayArtist: null,
+      title: null,
+      canonicalGenre: "Video Game",
+      publisher: "Sony Computer Entertainment",
+      year: 2012,
+      releaseYear: 2012,
+      totalTracks: 18,
+      ratedTracks: 18,
+      ratingCompleteness: 1,
+      totalSeconds: 3480,
+      lovedTracks: 3,
+      tmoeSeconds: 960,
+      aeRatio: 0.2759,
+      effectiveAlbumRating: 91,
+      albumScore: 251.16,
+      billboardRank: null,
+      billboardYear: null,
+      billboardSingleRank: null,
+      billboardSingleYear: null,
+      trackSeconds: null,
+      normalizedRating: null,
+      discNumber: null,
+      trackNumber: null,
+      love: null,
+      filePath: null,
+      filename: null,
+      coverPath: null,
+      coverMimeType: null,
+    },
+    {
+      id: "mb:mock-metal",
+      trackId: null,
+      albumId: "mb:mock-metal",
+      album: "Holy Diver",
+      albumArtistDisplay: "Dio",
+      displayArtist: null,
+      title: null,
+      canonicalGenre: "Heavy Metal",
+      publisher: "Warner Bros.",
+      year: 1984,
+      releaseYear: 1983,
+      totalTracks: 9,
+      ratedTracks: 4,
+      ratingCompleteness: 0.44,
+      totalSeconds: 2520,
+      lovedTracks: 1,
+      tmoeSeconds: 480,
+      aeRatio: 0.1904,
+      effectiveAlbumRating: 74,
+      albumScore: 82.1,
+      billboardRank: 428,
+      billboardYear: 1984,
+      billboardSingleRank: null,
+      billboardSingleYear: null,
+      trackSeconds: null,
+      normalizedRating: null,
+      discNumber: null,
+      trackNumber: null,
+      love: null,
+      filePath: null,
+      filename: null,
+      coverPath: null,
+      coverMimeType: null,
+    },
+    {
+      id: "mb:mock-nu",
+      trackId: null,
+      albumId: "mb:mock-nu",
+      album: "Issues",
+      albumArtistDisplay: "Korn",
+      displayArtist: null,
+      title: null,
+      canonicalGenre: "Nu-Metal",
+      publisher: "Immortal",
+      year: 1999,
+      releaseYear: 1999,
+      totalTracks: 12,
+      ratedTracks: 4,
+      ratingCompleteness: 0.33,
+      totalSeconds: 3180,
+      lovedTracks: 0,
+      tmoeSeconds: 420,
+      aeRatio: 0.132,
+      effectiveAlbumRating: 68,
+      albumScore: 61.5,
+      billboardRank: 20,
+      billboardYear: 1999,
+      billboardSingleRank: null,
+      billboardSingleYear: null,
+      trackSeconds: null,
+      normalizedRating: null,
+      discNumber: null,
+      trackNumber: null,
+      love: null,
+      filePath: null,
+      filename: null,
+      coverPath: null,
+      coverMimeType: null,
+    },
+    {
+      id: "mb:mock-unrated",
+      trackId: null,
+      albumId: "mb:mock-unrated",
+      album: "The End of Heartache",
+      albumArtistDisplay: "Killswitch Engage",
+      displayArtist: null,
+      title: null,
+      canonicalGenre: "Metalcore",
+      publisher: "Roadrunner",
+      year: 2004,
+      releaseYear: 2004,
+      totalTracks: 10,
+      ratedTracks: 0,
+      ratingCompleteness: 0,
+      totalSeconds: 2860,
+      lovedTracks: 0,
+      tmoeSeconds: 0,
+      aeRatio: 0,
+      effectiveAlbumRating: null,
+      albumScore: null,
+      billboardRank: null,
+      billboardYear: null,
+      billboardSingleRank: null,
+      billboardSingleYear: null,
+      trackSeconds: null,
+      normalizedRating: null,
+      discNumber: null,
+      trackNumber: null,
+      love: null,
+      filePath: null,
+      filename: null,
+      coverPath: null,
+      coverMimeType: null,
+    },
+    {
+      id: "track:mock-1",
+      trackId: 1,
+      albumId: "mb:mock-1",
+      album: "Actually",
+      albumArtistDisplay: "Pet Shop Boys",
+      displayArtist: "Pet Shop Boys",
+      title: "What Have I Done to Deserve This?",
+      canonicalGenre: "Synthpop",
+      publisher: "Parlophone",
+      year: 1987,
+      releaseYear: 1987,
+      totalTracks: 10,
+      ratedTracks: 10,
+      ratingCompleteness: 1,
+      totalSeconds: 2880,
+      lovedTracks: 2,
+      tmoeSeconds: 840,
+      aeRatio: 0.2916,
+      effectiveAlbumRating: 86,
+      albumScore: 207.62,
+      billboardRank: 103,
+      billboardYear: 1987,
+      billboardSingleRank: 10,
+      billboardSingleYear: 1987,
+      trackSeconds: 260,
+      normalizedRating: 100,
+      discNumber: 1,
+      trackNumber: 2,
+      love: "L",
+      filePath: "D:\\Music\\Pet Shop Boys\\Actually",
+      filename: "02 What Have I Done to Deserve This.mp3",
+      coverPath: null,
+      coverMimeType: null,
+    },
+    {
+      id: "track:mock-score",
+      trackId: 2,
+      albumId: "mb:mock-score",
+      album: "Journey",
+      albumArtistDisplay: "Austin Wintory",
+      displayArtist: "Austin Wintory",
+      title: "Nascence",
+      canonicalGenre: "Video Game",
+      publisher: "Sony Computer Entertainment",
+      year: 2012,
+      releaseYear: 2012,
+      totalTracks: 18,
+      ratedTracks: 18,
+      ratingCompleteness: 1,
+      totalSeconds: 3480,
+      lovedTracks: 3,
+      tmoeSeconds: 960,
+      aeRatio: 0.2759,
+      effectiveAlbumRating: 91,
+      albumScore: 251.16,
+      billboardRank: null,
+      billboardYear: null,
+      billboardSingleRank: null,
+      billboardSingleYear: null,
+      trackSeconds: 108,
+      normalizedRating: 100,
+      discNumber: 1,
+      trackNumber: 1,
+      love: "L",
+      filePath: "D:\\Music\\Austin Wintory\\Journey",
+      filename: "01 Nascence.mp3",
+      coverPath: null,
+      coverMimeType: null,
+    },
+  ] satisfies BrowseRowWithoutOrigin[]
+).map(withMockOrigin);
 
-const mockArtists: ArtistSummary[] = ([
-  {
-    id: "pet shop boys",
-    name: "Pet Shop Boys",
-    albumCount: 1,
-    ratedAlbumCount: 1,
-    partialAlbumCount: 0,
-    unratedAlbumCount: 0,
-    trackCount: 10,
-    totalSeconds: 2880,
-    lovedTracks: 2,
-    tmoeSeconds: 840,
-    averageRatingCompleteness: 1,
-    averageAlbumRating: 86,
-    averageAlbumScore: 207.62,
-    firstYear: 1987,
-    lastYear: 1987,
-    topGenre: "Synthpop",
-  },
-  {
-    id: "the smiths",
-    name: "The Smiths",
-    albumCount: 1,
-    ratedAlbumCount: 1,
-    partialAlbumCount: 0,
-    unratedAlbumCount: 0,
-    trackCount: 10,
-    totalSeconds: 2220,
-    lovedTracks: 1,
-    tmoeSeconds: 600,
-    averageRatingCompleteness: 1,
-    averageAlbumRating: 88,
-    averageAlbumScore: 108.4,
-    firstYear: 1986,
-    lastYear: 1986,
-    topGenre: "Post-Punk",
-  },
-  ] satisfies ArtistSummaryWithoutOrigin[]).map((artist) => ({
+const mockArtists: ArtistSummary[] = (
+  [
+    {
+      id: "pet shop boys",
+      name: "Pet Shop Boys",
+      albumCount: 1,
+      ratedAlbumCount: 1,
+      partialAlbumCount: 0,
+      unratedAlbumCount: 0,
+      trackCount: 10,
+      totalSeconds: 2880,
+      lovedTracks: 2,
+      tmoeSeconds: 840,
+      averageRatingCompleteness: 1,
+      averageAlbumRating: 86,
+      averageAlbumScore: 207.62,
+      firstYear: 1987,
+      lastYear: 1987,
+      topGenre: "Synthpop",
+    },
+    {
+      id: "the smiths",
+      name: "The Smiths",
+      albumCount: 1,
+      ratedAlbumCount: 1,
+      partialAlbumCount: 0,
+      unratedAlbumCount: 0,
+      trackCount: 10,
+      totalSeconds: 2220,
+      lovedTracks: 1,
+      tmoeSeconds: 600,
+      averageRatingCompleteness: 1,
+      averageAlbumRating: 88,
+      averageAlbumScore: 108.4,
+      firstYear: 1986,
+      lastYear: 1986,
+      topGenre: "Post-Punk",
+    },
+  ] satisfies ArtistSummaryWithoutOrigin[]
+).map((artist) => ({
   ...artist,
   ...mockOriginForArtist(artist.name),
 }));
@@ -960,7 +1215,8 @@ let mockMusicTools: MusicToolSummary[] = [
   {
     id: "duplicate-albums",
     label: "Duplicate albums",
-    description: "Potential duplicate album versions with the same artist, title, and year.",
+    description:
+      "Potential duplicate album versions with the same artist, title, and year.",
     severity: "medium",
     scope: "albums",
     issueCount: 2,
@@ -970,7 +1226,8 @@ let mockMusicTools: MusicToolSummary[] = [
   {
     id: "albums-without-cover-image",
     label: "Albums without embedded cover image",
-    description: "Albums missing an imported archive or embedded cover image record.",
+    description:
+      "Albums missing an imported archive or embedded cover image record.",
     severity: "low",
     scope: "albums",
     issueCount: 1,
@@ -980,7 +1237,8 @@ let mockMusicTools: MusicToolSummary[] = [
   {
     id: "missing-billboard-albums",
     label: "Missing Billboard Albums",
-    description: "Imported Billboard chart albums that are not linked to any library album.",
+    description:
+      "Imported Billboard chart albums that are not linked to any library album.",
     severity: "low",
     scope: "albums",
     issueCount: 1,
@@ -990,7 +1248,8 @@ let mockMusicTools: MusicToolSummary[] = [
   {
     id: "artists-without-musicbrainz-data",
     label: "Artists without MusicBrainz data",
-    description: "Library album artists without a usable MusicBrainz cache or verified overlay match.",
+    description:
+      "Library album artists without a usable MusicBrainz cache or verified overlay match.",
     severity: "medium",
     scope: "artists",
     issueCount: 1,
@@ -1000,7 +1259,8 @@ let mockMusicTools: MusicToolSummary[] = [
   {
     id: "high-confidence-missing-musicbrainz-albums",
     label: "High-confidence missing MusicBrainz albums",
-    description: "Collection-wide missing pure official MusicBrainz albums from trusted artist matches.",
+    description:
+      "Collection-wide missing pure official MusicBrainz albums from trusted artist matches.",
     severity: "low",
     scope: "albums",
     issueCount: 1,
@@ -1020,7 +1280,8 @@ let mockMusicTools: MusicToolSummary[] = [
   {
     id: "genre-normalization-issues",
     label: "Genre normalization issues",
-    description: "Tracks with multi-value genre strings that were collapsed to one canonical genre.",
+    description:
+      "Tracks with multi-value genre strings that were collapsed to one canonical genre.",
     severity: "low",
     scope: "tracks",
     issueCount: 1,
@@ -1199,7 +1460,10 @@ let mockSavedSearches: SavedSearch[] = [];
 let mockSavedCharts: SavedChart[] = [];
 let mockSettings: AppSettings = loadCachedSettings();
 let mockMusicBrainzOverlaySyncLog: MusicBrainzOverlaySyncLogEntry[] = [];
-const coverDataUrlCache = new Map<string, Promise<string | null> | string | null>();
+const coverDataUrlCache = new Map<
+  string,
+  Promise<string | null> | string | null
+>();
 
 const mockImportRun = {
   id: 1,
@@ -1271,20 +1535,22 @@ const mockImportRuns: ImportRun[] = [
   },
 ];
 
-const mockDatabaseBackups: DatabaseBackup[] = mockImportRuns.slice(0, 3).map((run, index) => ({
-  id: index + 1,
-  createdAt: run.startedAt,
-  operation: "import",
-  sourcePath: run.sourcePath,
-  sourceSizeBytes: run.sourceSizeBytes,
-  backupPath: run.backupPath ?? `Preview runtime backup ${index + 1}.sqlite3`,
-  fileSizeBytes: 64_000_000 - index * 1_500_000,
-  trackRows: run.trackRows,
-  albumCount: run.albumCount,
-  schemaVersion: 10,
-  exists: true,
-  canRestore: false,
-}));
+const mockDatabaseBackups: DatabaseBackup[] = mockImportRuns
+  .slice(0, 3)
+  .map((run, index) => ({
+    id: index + 1,
+    createdAt: run.startedAt,
+    operation: "import",
+    sourcePath: run.sourcePath,
+    sourceSizeBytes: run.sourceSizeBytes,
+    backupPath: run.backupPath ?? `Preview runtime backup ${index + 1}.sqlite3`,
+    fileSizeBytes: 64_000_000 - index * 1_500_000,
+    trackRows: run.trackRows,
+    albumCount: run.albumCount,
+    schemaVersion: 10,
+    exists: true,
+    canRestore: false,
+  }));
 
 const mockStatistics: StatisticsResponse = {
   overview: {
@@ -1460,15 +1726,78 @@ const mockStatistics: StatisticsResponse = {
     },
   ],
   lovedDensity: [
-    { scope: "Genre", label: "Synthpop", albumCount: 1840, trackCount: 21_440, lovedTracks: 720, lovedPer100Tracks: 3.36 },
-    { scope: "Genre", label: "Post-Punk", albumCount: 1390, trackCount: 15_890, lovedTracks: 488, lovedPer100Tracks: 3.07 },
-    { scope: "Genre", label: "Video Game", albumCount: 840, trackCount: 18_200, lovedTracks: 480, lovedPer100Tracks: 2.64 },
-    { scope: "Decade", label: "1980s", albumCount: 13_620, trackCount: 154_800, lovedTracks: 2920, lovedPer100Tracks: 1.89 },
-    { scope: "Decade", label: "1970s", albumCount: 9840, trackCount: 112_300, lovedTracks: 1830, lovedPer100Tracks: 1.63 },
-    { scope: "Decade", label: "1990s", albumCount: 14_920, trackCount: 169_300, lovedTracks: 2460, lovedPer100Tracks: 1.45 },
-    { scope: "Rating bucket", label: "90-99", albumCount: 2600, trackCount: 31_700, lovedTracks: 1780, lovedPer100Tracks: 5.62 },
-    { scope: "Rating bucket", label: "80-89", albumCount: 6400, trackCount: 76_100, lovedTracks: 3220, lovedPer100Tracks: 4.23 },
-    { scope: "Rating bucket", label: "70-79", albumCount: 8700, trackCount: 101_500, lovedTracks: 2610, lovedPer100Tracks: 2.57 },
+    {
+      scope: "Genre",
+      label: "Synthpop",
+      albumCount: 1840,
+      trackCount: 21_440,
+      lovedTracks: 720,
+      lovedPer100Tracks: 3.36,
+    },
+    {
+      scope: "Genre",
+      label: "Post-Punk",
+      albumCount: 1390,
+      trackCount: 15_890,
+      lovedTracks: 488,
+      lovedPer100Tracks: 3.07,
+    },
+    {
+      scope: "Genre",
+      label: "Video Game",
+      albumCount: 840,
+      trackCount: 18_200,
+      lovedTracks: 480,
+      lovedPer100Tracks: 2.64,
+    },
+    {
+      scope: "Decade",
+      label: "1980s",
+      albumCount: 13_620,
+      trackCount: 154_800,
+      lovedTracks: 2920,
+      lovedPer100Tracks: 1.89,
+    },
+    {
+      scope: "Decade",
+      label: "1970s",
+      albumCount: 9840,
+      trackCount: 112_300,
+      lovedTracks: 1830,
+      lovedPer100Tracks: 1.63,
+    },
+    {
+      scope: "Decade",
+      label: "1990s",
+      albumCount: 14_920,
+      trackCount: 169_300,
+      lovedTracks: 2460,
+      lovedPer100Tracks: 1.45,
+    },
+    {
+      scope: "Rating bucket",
+      label: "90-99",
+      albumCount: 2600,
+      trackCount: 31_700,
+      lovedTracks: 1780,
+      lovedPer100Tracks: 5.62,
+    },
+    {
+      scope: "Rating bucket",
+      label: "80-89",
+      albumCount: 6400,
+      trackCount: 76_100,
+      lovedTracks: 3220,
+      lovedPer100Tracks: 4.23,
+    },
+    {
+      scope: "Rating bucket",
+      label: "70-79",
+      albumCount: 8700,
+      trackCount: 101_500,
+      lovedTracks: 2610,
+      lovedPer100Tracks: 2.57,
+    },
   ],
   catalogConcentration: {
     artistPoints: [
@@ -1590,21 +1919,111 @@ const mockStatistics: StatisticsResponse = {
     { label: "40-49", count: 1800 },
   ],
   metadataCoverage: [
-    { id: "album-title", label: "Album title", scope: "Albums", coveredCount: 76_789, totalCount: 76_789 },
-    { id: "album-artist", label: "Album artist", scope: "Albums", coveredCount: 76_520, totalCount: 76_789 },
-    { id: "genre", label: "Genre", scope: "Albums", coveredCount: 75_960, totalCount: 76_789 },
-    { id: "year", label: "Year", scope: "Albums", coveredCount: 74_880, totalCount: 76_789 },
-    { id: "release-year", label: "Release year", scope: "Albums", coveredCount: 59_200, totalCount: 76_789 },
-    { id: "publisher", label: "Publisher", scope: "Albums", coveredCount: 44_300, totalCount: 76_789 },
-    { id: "track-title", label: "Track title", scope: "Tracks", coveredCount: 1_130_120, totalCount: 1_130_882 },
-    { id: "display-artist", label: "Display artist", scope: "Tracks", coveredCount: 1_128_240, totalCount: 1_130_882 },
-    { id: "track-number", label: "Track number", scope: "Tracks", coveredCount: 1_090_200, totalCount: 1_130_882 },
-    { id: "disc-number", label: "Disc number", scope: "Tracks", coveredCount: 1_066_500, totalCount: 1_130_882 },
-    { id: "duration", label: "Duration", scope: "Tracks", coveredCount: 1_129_880, totalCount: 1_130_882 },
-    { id: "filename", label: "Filename", scope: "Tracks", coveredCount: 1_130_882, totalCount: 1_130_882 },
-    { id: "cover-art", label: "Cover art", scope: "Artwork", coveredCount: 32_400, totalCount: 76_789 },
-    { id: "track-rating", label: "Track rating", scope: "Ratings", coveredCount: 412_580, totalCount: 1_130_882 },
-    { id: "album-rating", label: "Album rating", scope: "Ratings", coveredCount: 27_800, totalCount: 76_789 },
+    {
+      id: "album-title",
+      label: "Album title",
+      scope: "Albums",
+      coveredCount: 76_789,
+      totalCount: 76_789,
+    },
+    {
+      id: "album-artist",
+      label: "Album artist",
+      scope: "Albums",
+      coveredCount: 76_520,
+      totalCount: 76_789,
+    },
+    {
+      id: "genre",
+      label: "Genre",
+      scope: "Albums",
+      coveredCount: 75_960,
+      totalCount: 76_789,
+    },
+    {
+      id: "year",
+      label: "Year",
+      scope: "Albums",
+      coveredCount: 74_880,
+      totalCount: 76_789,
+    },
+    {
+      id: "release-year",
+      label: "Release year",
+      scope: "Albums",
+      coveredCount: 59_200,
+      totalCount: 76_789,
+    },
+    {
+      id: "publisher",
+      label: "Publisher",
+      scope: "Albums",
+      coveredCount: 44_300,
+      totalCount: 76_789,
+    },
+    {
+      id: "track-title",
+      label: "Track title",
+      scope: "Tracks",
+      coveredCount: 1_130_120,
+      totalCount: 1_130_882,
+    },
+    {
+      id: "display-artist",
+      label: "Display artist",
+      scope: "Tracks",
+      coveredCount: 1_128_240,
+      totalCount: 1_130_882,
+    },
+    {
+      id: "track-number",
+      label: "Track number",
+      scope: "Tracks",
+      coveredCount: 1_090_200,
+      totalCount: 1_130_882,
+    },
+    {
+      id: "disc-number",
+      label: "Disc number",
+      scope: "Tracks",
+      coveredCount: 1_066_500,
+      totalCount: 1_130_882,
+    },
+    {
+      id: "duration",
+      label: "Duration",
+      scope: "Tracks",
+      coveredCount: 1_129_880,
+      totalCount: 1_130_882,
+    },
+    {
+      id: "filename",
+      label: "Filename",
+      scope: "Tracks",
+      coveredCount: 1_130_882,
+      totalCount: 1_130_882,
+    },
+    {
+      id: "cover-art",
+      label: "Cover art",
+      scope: "Artwork",
+      coveredCount: 32_400,
+      totalCount: 76_789,
+    },
+    {
+      id: "track-rating",
+      label: "Track rating",
+      scope: "Ratings",
+      coveredCount: 412_580,
+      totalCount: 1_130_882,
+    },
+    {
+      id: "album-rating",
+      label: "Album rating",
+      scope: "Ratings",
+      coveredCount: 27_800,
+      totalCount: 76_789,
+    },
   ],
   lovedTracks: {
     lovedTracks: 14_280,
@@ -1798,7 +2217,8 @@ const mockDiscovery: DiscoveryResponse = {
     {
       id: "finish-high-score-partials",
       title: "Finish high-score partials",
-      description: "Partially rated albums with the strongest Album Score signals.",
+      description:
+        "Partially rated albums with the strongest Album Score signals.",
       actionLabel: "Open top partials",
       albumCount: 2,
       trackCount: 21,
@@ -1822,7 +2242,8 @@ const mockDiscovery: DiscoveryResponse = {
     {
       id: "neglected-decade",
       title: "Rate a neglected decade",
-      description: "The decade with the largest unfinished album pile. 1980s albums are still open.",
+      description:
+        "The decade with the largest unfinished album pile. 1980s albums are still open.",
       actionLabel: "Open decade backlog",
       albumCount: 1,
       trackCount: 9,
@@ -1846,7 +2267,8 @@ const mockDiscovery: DiscoveryResponse = {
     {
       id: "high-potential-genre",
       title: "High-potential Heavy Metal",
-      description: "A genre backlog with unusually strong scored-album signals.",
+      description:
+        "A genre backlog with unusually strong scored-album signals.",
       actionLabel: "Open genre backlog",
       albumCount: 1,
       trackCount: 9,
@@ -1920,7 +2342,8 @@ const mockDiscovery: DiscoveryResponse = {
     {
       id: "smart-unrated-high-potential-genre",
       title: "Unrated Metalcore waiting room",
-      description: "A fully unrated genre pocket whose rated neighbors score well.",
+      description:
+        "A fully unrated genre pocket whose rated neighbors score well.",
       actionLabel: "Open unrated genre",
       albumCount: 1,
       trackCount: 10,
@@ -2095,7 +2518,9 @@ export async function openExternalUrl(url: string) {
     parsedUrl.pathname.startsWith("/artist/");
 
   if (!isAllowedMusicBrainzArtistUrl) {
-    throw new Error("Only MusicBrainz artist URLs can be opened from this view.");
+    throw new Error(
+      "Only MusicBrainz artist URLs can be opened from this view.",
+    );
   }
 
   const normalizedUrl = parsedUrl.toString();
@@ -2119,14 +2544,70 @@ export async function getLibraryStatus() {
 export async function runPerformanceProbe() {
   if (!isTauriRuntime()) {
     const operations = [
-      ["search-albums-default", "Album search default page", "Search", 18, mockRows.length, "Default album page, sorted by album."],
-      ["search-albums-sampled-text", "Album search sampled text", "Search", 23, 1, "Sampled album text: Actually"],
-      ["search-tracks-sampled-text", "Track search sampled text", "Search", 27, 1, "Sampled track text: What Have I Done to Deserve This?"],
-      ["chart-album-score", "Chart-style album score ranking", "Charts", 31, 1, "Fully rated albums sorted by Album Score."],
-      ["tools-missing-covers", "Music Tool missing covers", "Tools", 34, 1, "Albums without imported cover records."],
-      ["tools-whitespace", "Music Tool whitespace anomalies", "Tools", 12, 1, "Repeated whitespace validator."],
-      ["statistics-dashboard", "Statistics dashboard payload", "Statistics", 44, mockRows.length, "Mock dashboard summary."],
-      ["discovery-dashboard", "Discovery dashboard payload", "Discovery", 39, 12, "Mock discovery summary."],
+      [
+        "search-albums-default",
+        "Album search default page",
+        "Search",
+        18,
+        mockRows.length,
+        "Default album page, sorted by album.",
+      ],
+      [
+        "search-albums-sampled-text",
+        "Album search sampled text",
+        "Search",
+        23,
+        1,
+        "Sampled album text: Actually",
+      ],
+      [
+        "search-tracks-sampled-text",
+        "Track search sampled text",
+        "Search",
+        27,
+        1,
+        "Sampled track text: What Have I Done to Deserve This?",
+      ],
+      [
+        "chart-album-score",
+        "Chart-style album score ranking",
+        "Charts",
+        31,
+        1,
+        "Fully rated albums sorted by Album Score.",
+      ],
+      [
+        "tools-missing-covers",
+        "Music Tool missing covers",
+        "Tools",
+        34,
+        1,
+        "Albums without imported cover records.",
+      ],
+      [
+        "tools-whitespace",
+        "Music Tool whitespace anomalies",
+        "Tools",
+        12,
+        1,
+        "Repeated whitespace validator.",
+      ],
+      [
+        "statistics-dashboard",
+        "Statistics dashboard payload",
+        "Statistics",
+        44,
+        mockRows.length,
+        "Mock dashboard summary.",
+      ],
+      [
+        "discovery-dashboard",
+        "Discovery dashboard payload",
+        "Discovery",
+        39,
+        12,
+        "Mock discovery summary.",
+      ],
     ] as const;
 
     return {
@@ -2134,19 +2615,26 @@ export async function runPerformanceProbe() {
       databasePath: mockStatus.dbPath,
       trackCount: mockStatus.trackCount,
       albumCount: mockStatus.albumCount,
-      totalDurationMs: operations.reduce((sum, operation) => sum + operation[3], 0),
-      slowestOperationMs: Math.max(...operations.map((operation) => operation[3])),
-      operations: operations.map(([id, label, category, durationMs, rowCount, detail]) => ({
-        id,
-        label,
-        category,
-        status: "ok",
-        durationMs,
-        totalCount: rowCount,
-        rowCount,
-        detail,
-        errorMessage: null,
-      })),
+      totalDurationMs: operations.reduce(
+        (sum, operation) => sum + operation[3],
+        0,
+      ),
+      slowestOperationMs: Math.max(
+        ...operations.map((operation) => operation[3]),
+      ),
+      operations: operations.map(
+        ([id, label, category, durationMs, rowCount, detail]) => ({
+          id,
+          label,
+          category,
+          status: "ok",
+          durationMs,
+          totalCount: rowCount,
+          rowCount,
+          detail,
+          errorMessage: null,
+        }),
+      ),
     } satisfies PerformanceProbeResponse;
   }
 
@@ -2171,10 +2659,14 @@ export async function listDatabaseBackups() {
 
 export async function restoreDatabaseBackup(backupPath: string) {
   if (!isTauriRuntime()) {
-    throw new Error("Start restore from the Tauri desktop app to access local SQLite backups.");
+    throw new Error(
+      "Start restore from the Tauri desktop app to access local SQLite backups.",
+    );
   }
 
-  return invoke<DatabaseRestoreSummary>("restore_database_backup", { backupPath });
+  return invoke<DatabaseRestoreSummary>("restore_database_backup", {
+    backupPath,
+  });
 }
 
 export async function getStatistics() {
@@ -2205,7 +2697,9 @@ export async function getSettings() {
 
 export async function getMusicBrainzCacheStatus(cachePath?: string) {
   if (!isTauriRuntime()) {
-    const nextCachePath = normalizeMusicBrainzCachePath(cachePath ?? mockSettings.musicBrainzCachePath);
+    const nextCachePath = normalizeMusicBrainzCachePath(
+      cachePath ?? mockSettings.musicBrainzCachePath,
+    );
     return {
       ...mockMusicBrainzCacheStatus,
       cachePath: nextCachePath,
@@ -2218,13 +2712,22 @@ export async function getMusicBrainzCacheStatus(cachePath?: string) {
   });
 }
 
-function mockOriginPreview(request: MusicBrainzOriginCountryImportRequest = {}): MusicBrainzOriginCountryPreview {
-  const selectedKeys = new Set((request.artistKeys ?? []).map(normalizeArtistKey).filter(Boolean));
+function mockOriginPreview(
+  request: MusicBrainzOriginCountryImportRequest = {},
+): MusicBrainzOriginCountryPreview {
+  const selectedKeys = new Set(
+    (request.artistKeys ?? []).map(normalizeArtistKey).filter(Boolean),
+  );
   const rows = mockMusicBrainzOriginPreviewRows
-    .filter((row) => selectedKeys.size === 0 || selectedKeys.has(row.localArtistKey))
+    .filter(
+      (row) => selectedKeys.size === 0 || selectedKeys.has(row.localArtistKey),
+    )
     .slice(0, request.limit ?? undefined)
     .map((row) => {
-      if (request.refetch && (row.status === "alreadyImported" || row.status === "manual")) {
+      if (
+        request.refetch &&
+        (row.status === "alreadyImported" || row.status === "manual")
+      ) {
         return { ...row, status: "eligible" };
       }
       return row;
@@ -2232,10 +2735,13 @@ function mockOriginPreview(request: MusicBrainzOriginCountryImportRequest = {}):
   return {
     totalAlbumArtists: mockMusicBrainzOriginCountryStatus.totalAlbumArtists,
     eligibleCount: rows.filter((row) => row.status === "eligible").length,
-    alreadyImportedCount: rows.filter((row) => row.status === "alreadyImported" || row.status === "manual").length,
+    alreadyImportedCount: rows.filter(
+      (row) => row.status === "alreadyImported" || row.status === "manual",
+    ).length,
     skippedCount: rows.filter((row) => row.status === "skipped").length,
     unresolvedCount: rows.filter((row) => row.status === "unresolved").length,
-    estimatedSeconds: rows.filter((row) => row.status === "eligible").length * 2,
+    estimatedSeconds:
+      rows.filter((row) => row.status === "eligible").length * 2,
     rows,
   };
 }
@@ -2245,23 +2751,34 @@ export async function getMusicBrainzOriginCountryStatus() {
     return mockMusicBrainzOriginCountryStatus;
   }
 
-  return invoke<MusicBrainzOriginCountryStatus>("get_musicbrainz_origin_country_status");
+  return invoke<MusicBrainzOriginCountryStatus>(
+    "get_musicbrainz_origin_country_status",
+  );
 }
 
-export async function previewMusicBrainzOriginCountryImport(request: MusicBrainzOriginCountryImportRequest = {}) {
+export async function previewMusicBrainzOriginCountryImport(
+  request: MusicBrainzOriginCountryImportRequest = {},
+) {
   if (!isTauriRuntime()) {
     return mockOriginPreview(request);
   }
 
-  return invoke<MusicBrainzOriginCountryPreview>("preview_musicbrainz_origin_country_import", {
-    request,
-  });
+  return invoke<MusicBrainzOriginCountryPreview>(
+    "preview_musicbrainz_origin_country_import",
+    {
+      request,
+    },
+  );
 }
 
-export async function importMusicBrainzOriginCountries(request: MusicBrainzOriginCountryImportRequest = {}) {
+export async function importMusicBrainzOriginCountries(
+  request: MusicBrainzOriginCountryImportRequest = {},
+) {
   if (!isTauriRuntime()) {
     const preview = mockOriginPreview(request);
-    const eligibleRows = preview.rows.filter((row) => row.status === "eligible");
+    const eligibleRows = preview.rows.filter(
+      (row) => row.status === "eligible",
+    );
     const fetchedCount = eligibleRows.length;
     const skippedCount = Math.max(0, preview.rows.length - eligibleRows.length);
     let storedCount = 0;
@@ -2363,9 +2880,12 @@ export async function importMusicBrainzOriginCountries(request: MusicBrainzOrigi
     } satisfies MusicBrainzOriginCountryImportSummary;
   }
 
-  return invoke<MusicBrainzOriginCountryImportSummary>("import_musicbrainz_origin_countries", {
-    request,
-  });
+  return invoke<MusicBrainzOriginCountryImportSummary>(
+    "import_musicbrainz_origin_countries",
+    {
+      request,
+    },
+  );
 }
 
 export async function cancelMusicBrainzOriginCountryImport() {
@@ -2376,7 +2896,191 @@ export async function cancelMusicBrainzOriginCountryImport() {
   await invoke<void>("cancel_musicbrainz_origin_country_import");
 }
 
-export async function getMusicBrainzArtistDiscography(artistKey: string, artistName: string) {
+function mockArtistInfoPreview(
+  request: MusicBrainzArtistInfoImportRequest = {},
+): MusicBrainzArtistInfoPreview {
+  const selectedKeys = new Set(
+    (request.artistKeys ?? []).map(normalizeArtistKey).filter(Boolean),
+  );
+  const rows = mockMusicBrainzArtistInfoPreviewRows
+    .filter(
+      (row) => selectedKeys.size === 0 || selectedKeys.has(row.localArtistKey),
+    )
+    .slice(0, request.limit ?? undefined)
+    .map((row) => {
+      if (request.refetch && row.status === "alreadyImported") {
+        return { ...row, status: "eligible" };
+      }
+      return row;
+    });
+  return {
+    totalAlbumArtists: mockMusicBrainzArtistInfoStatus.totalAlbumArtists,
+    eligibleCount: rows.filter((row) => row.status === "eligible").length,
+    alreadyImportedCount: rows.filter((row) => row.status === "alreadyImported")
+      .length,
+    skippedCount: rows.filter((row) => row.status === "skipped").length,
+    unresolvedCount: rows.filter((row) => row.status === "unresolved").length,
+    estimatedSeconds:
+      rows.filter((row) => row.status === "eligible").length * 2,
+    rows,
+  };
+}
+
+export async function getMusicBrainzArtistInfoStatus() {
+  if (!isTauriRuntime()) {
+    return mockMusicBrainzArtistInfoStatus;
+  }
+
+  return invoke<MusicBrainzArtistInfoStatus>(
+    "get_musicbrainz_artist_info_status",
+  );
+}
+
+export async function previewMusicBrainzArtistInfoImport(
+  request: MusicBrainzArtistInfoImportRequest = {},
+) {
+  if (!isTauriRuntime()) {
+    return mockArtistInfoPreview(request);
+  }
+
+  return invoke<MusicBrainzArtistInfoPreview>(
+    "preview_musicbrainz_artist_info_import",
+    {
+      request,
+    },
+  );
+}
+
+export async function importMusicBrainzArtistInfos(
+  request: MusicBrainzArtistInfoImportRequest = {},
+) {
+  if (!isTauriRuntime()) {
+    const preview = mockArtistInfoPreview(request);
+    const eligibleRows = preview.rows.filter(
+      (row) => row.status === "eligible",
+    );
+    const fetchedCount = eligibleRows.length;
+    const skippedCount = Math.max(0, preview.rows.length - eligibleRows.length);
+    let storedCount = 0;
+    let unresolvedCount = 0;
+    emitMockMusicBrainzArtistInfoProgress(
+      mockArtistInfoProgress(
+        "running",
+        preview.totalAlbumArtists,
+        fetchedCount,
+        0,
+        0,
+        0,
+        skippedCount,
+        0,
+        0,
+        null,
+        `Ready to fetch ${fetchedCount} eligible artists; ${skippedCount} skipped by preview rules.`,
+      ),
+    );
+
+    for (const [index, row] of eligibleRows.entries()) {
+      emitMockMusicBrainzArtistInfoProgress(
+        mockArtistInfoProgress(
+          "fetching",
+          preview.totalAlbumArtists,
+          fetchedCount,
+          index,
+          index,
+          storedCount,
+          skippedCount,
+          unresolvedCount,
+          0,
+          row,
+          `Fetching artist info for ${row.displayArtist} from MusicBrainz.`,
+        ),
+      );
+      await new Promise((resolve) => window.setTimeout(resolve, 180));
+      const isUnresolved =
+        row.displayArtist === "Austin Wintory" && request.refetch;
+      if (isUnresolved) {
+        unresolvedCount += 1;
+      } else {
+        storedCount += 1;
+      }
+      emitMockMusicBrainzArtistInfoProgress(
+        mockArtistInfoProgress(
+          isUnresolved ? "unresolved" : "stored",
+          preview.totalAlbumArtists,
+          fetchedCount,
+          index + 1,
+          index + 1,
+          storedCount,
+          skippedCount,
+          unresolvedCount,
+          0,
+          row,
+          isUnresolved
+            ? `${row.displayArtist} did not return type, gender, or life-span data; saved as unresolved.`
+            : `Stored artist info for ${row.displayArtist}.`,
+        ),
+      );
+    }
+
+    emitMockMusicBrainzArtistInfoProgress(
+      mockArtistInfoProgress(
+        "completed",
+        preview.totalAlbumArtists,
+        fetchedCount,
+        fetchedCount,
+        fetchedCount,
+        storedCount,
+        skippedCount,
+        unresolvedCount,
+        0,
+        null,
+        `Import completed: ${storedCount} succeeded, ${unresolvedCount} unresolved, 0 failed, ${skippedCount} skipped.`,
+      ),
+    );
+
+    return {
+      run: {
+        ...mockMusicBrainzArtistInfoRun,
+        id: mockMusicBrainzArtistInfoRun.id + 1,
+        eligibleCount: fetchedCount,
+        fetchedCount,
+        skippedCount,
+        unresolvedCount,
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+      },
+      totalAlbumArtists: preview.totalAlbumArtists,
+      eligibleCount: fetchedCount,
+      fetchedCount,
+      storedCount,
+      skippedCount,
+      unresolvedCount,
+      failedCount: 0,
+      cancelled: false,
+      rows: preview.rows,
+    } satisfies MusicBrainzArtistInfoImportSummary;
+  }
+
+  return invoke<MusicBrainzArtistInfoImportSummary>(
+    "import_musicbrainz_artist_infos",
+    {
+      request,
+    },
+  );
+}
+
+export async function cancelMusicBrainzArtistInfoImport() {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  await invoke<void>("cancel_musicbrainz_artist_info_import");
+}
+
+export async function getMusicBrainzArtistDiscography(
+  artistKey: string,
+  artistName: string,
+) {
   if (!isTauriRuntime()) {
     const normalizedKey = normalizeArtistKey(artistKey || artistName);
     const mockDiscography = mockMusicBrainzDiscographies[normalizedKey];
@@ -2411,9 +3115,12 @@ export async function getMusicBrainzArtistDiscography(artistKey: string, artistN
     } satisfies MusicBrainzArtistDiscographyResponse;
   }
 
-  return invoke<MusicBrainzArtistDiscographyResponse>("get_musicbrainz_artist_discography", {
-    request: { artistKey, artistName },
-  });
+  return invoke<MusicBrainzArtistDiscographyResponse>(
+    "get_musicbrainz_artist_discography",
+    {
+      request: { artistKey, artistName },
+    },
+  );
 }
 
 export async function refreshMusicBrainzArtistInfo(input: {
@@ -2422,10 +3129,17 @@ export async function refreshMusicBrainzArtistInfo(input: {
   musicbrainzMbid: string | null;
 }) {
   if (!isTauriRuntime()) {
-    const normalizedKey = normalizeArtistKey(input.artistKey || input.artistName);
+    const normalizedKey = normalizeArtistKey(
+      input.artistKey || input.artistName,
+    );
     const mockDiscography = mockMusicBrainzDiscographies[normalizedKey];
     const fetchedAt = new Date().toISOString();
-    if (mockDiscography && !mockDiscography.releases.some((row) => row.releaseMbid === "preview-sandbox")) {
+    if (
+      mockDiscography &&
+      !mockDiscography.releases.some(
+        (row) => row.releaseMbid === "preview-sandbox",
+      )
+    ) {
       mockDiscography.releases.push({
         releaseMbid: "preview-sandbox",
         title: "Sandbox",
@@ -2443,7 +3157,9 @@ export async function refreshMusicBrainzArtistInfo(input: {
       mockDiscography.releaseGroupUpdatedAt = fetchedAt;
       recomputeMockMusicBrainzDiscographyCounts(mockDiscography);
     }
-    const currentOrigin = mockOriginForArtist(input.artistName || input.artistKey);
+    const currentOrigin = mockOriginForArtist(
+      input.artistName || input.artistKey,
+    );
     const origin = applyMockArtistOriginCountry(
       input.artistKey,
       input.artistName,
@@ -2455,7 +3171,10 @@ export async function refreshMusicBrainzArtistInfo(input: {
     return {
       artistKey: normalizedKey,
       artistName: input.artistName || input.artistKey || "Unknown Artist",
-      musicbrainzMbid: input.musicbrainzMbid ?? mockDiscography?.musicbrainzMbid ?? "preview-mbid",
+      musicbrainzMbid:
+        input.musicbrainzMbid ??
+        mockDiscography?.musicbrainzMbid ??
+        "preview-mbid",
       fetchedCount: mockDiscography?.releases.length ?? 0,
       storedCount: mockDiscography?.releases.length ?? 0,
       fetchedAt,
@@ -2463,9 +3182,12 @@ export async function refreshMusicBrainzArtistInfo(input: {
     } satisfies MusicBrainzArtistRefreshResult;
   }
 
-  return invoke<MusicBrainzArtistRefreshResult>("refresh_musicbrainz_artist_releases", {
-    request: input,
-  });
+  return invoke<MusicBrainzArtistRefreshResult>(
+    "refresh_musicbrainz_artist_releases",
+    {
+      request: input,
+    },
+  );
 }
 
 export async function setMusicBrainzArtistOriginCountry(input: {
@@ -2480,7 +3202,8 @@ export async function setMusicBrainzArtistOriginCountry(input: {
     if (!/^[A-Z]{2}$/.test(countryCode)) {
       throw new Error("Origin Country must be a two-letter country code.");
     }
-    const countryName = input.countryName?.trim() || mockCountryNameFromCode(countryCode);
+    const countryName =
+      input.countryName?.trim() || mockCountryNameFromCode(countryCode);
     return applyMockArtistOriginCountry(
       input.artistKey,
       input.artistName,
@@ -2491,9 +3214,12 @@ export async function setMusicBrainzArtistOriginCountry(input: {
     );
   }
 
-  return invoke<MusicBrainzArtistOriginCountryUpdate>("set_musicbrainz_artist_origin_country", {
-    request: input,
-  });
+  return invoke<MusicBrainzArtistOriginCountryUpdate>(
+    "set_musicbrainz_artist_origin_country",
+    {
+      request: input,
+    },
+  );
 }
 
 export async function setMusicBrainzArtistLink(input: {
@@ -2504,7 +3230,9 @@ export async function setMusicBrainzArtistLink(input: {
   canonicalName?: string | null;
 }) {
   if (!isTauriRuntime()) {
-    const normalizedKey = normalizeArtistKey(input.artistKey || input.artistName);
+    const normalizedKey = normalizeArtistKey(
+      input.artistKey || input.artistName,
+    );
     const mockDiscography = mockMusicBrainzDiscographies[normalizedKey];
     if (!mockDiscography) {
       return;
@@ -2513,14 +3241,22 @@ export async function setMusicBrainzArtistLink(input: {
     if (input.action === "unlink") {
       mockDiscography.artistLinkState = "unverified";
       mockDiscography.artistLinkIgnored = false;
-      mockDiscography.matchMethod = mockDiscography.musicbrainzMbid ? "exact-name" : "none";
-      mockDiscography.state = mockDiscography.musicbrainzMbid ? "available" : "notFound";
+      mockDiscography.matchMethod = mockDiscography.musicbrainzMbid
+        ? "exact-name"
+        : "none";
+      mockDiscography.state = mockDiscography.musicbrainzMbid
+        ? "available"
+        : "notFound";
       recomputeMockMusicBrainzDiscographyCounts(mockDiscography);
       return;
     }
 
-    const nextMbid = input.musicbrainzMbid?.trim() || mockDiscography.musicbrainzMbid;
-    const nextName = input.canonicalName?.trim() || mockDiscography.matchedCacheName || input.artistName;
+    const nextMbid =
+      input.musicbrainzMbid?.trim() || mockDiscography.musicbrainzMbid;
+    const nextName =
+      input.canonicalName?.trim() ||
+      mockDiscography.matchedCacheName ||
+      input.artistName;
 
     if (input.action === "ignore") {
       mockDiscography.musicbrainzMbid = nextMbid;
@@ -2539,7 +3275,8 @@ export async function setMusicBrainzArtistLink(input: {
 
     mockDiscography.musicbrainzMbid = nextMbid;
     mockDiscography.matchedCacheName = nextName;
-    mockDiscography.matchMethod = input.action === "set" ? "manual-mbid" : "verified-link";
+    mockDiscography.matchMethod =
+      input.action === "set" ? "manual-mbid" : "verified-link";
     mockDiscography.artistLinkState = "verified";
     mockDiscography.artistLinkIgnored = false;
     mockDiscography.state = "available";
@@ -2562,14 +3299,18 @@ export async function setMusicBrainzReleaseDecision(input: {
   localAlbumId?: string | null;
 }) {
   if (!isTauriRuntime()) {
-    const normalizedKey = normalizeArtistKey(input.artistKey || input.artistName);
+    const normalizedKey = normalizeArtistKey(
+      input.artistKey || input.artistName,
+    );
     const mockDiscography = mockMusicBrainzDiscographies[normalizedKey];
     if (!mockDiscography) {
       return;
     }
 
     const nextDecision =
-      input.decision === "clear" || input.decision === "include" ? null : input.decision;
+      input.decision === "clear" || input.decision === "include"
+        ? null
+        : input.decision;
     mockDiscography.releases = mockDiscography.releases.map((row) =>
       row.releaseMbid === input.releaseMbid
         ? applyMockMusicBrainzReleaseDecision(row, nextDecision)
@@ -2584,11 +3325,16 @@ export async function setMusicBrainzReleaseDecision(input: {
   });
 }
 
-export async function syncMusicBrainzOverlay(options: { recordNoop?: boolean } = {}) {
+export async function syncMusicBrainzOverlay(
+  options: { recordNoop?: boolean } = {},
+) {
   if (!isTauriRuntime()) {
     const result = createMockMusicBrainzOverlaySyncResult();
     if (options.recordNoop !== false || result.changedCount > 0) {
-      mockMusicBrainzOverlaySyncLog = [result, ...mockMusicBrainzOverlaySyncLog].slice(0, 12);
+      mockMusicBrainzOverlaySyncLog = [
+        result,
+        ...mockMusicBrainzOverlaySyncLog,
+      ].slice(0, 12);
     }
     return result;
   }
@@ -2600,10 +3346,16 @@ export async function syncMusicBrainzOverlay(options: { recordNoop?: boolean } =
 
 export async function listMusicBrainzOverlaySyncLog(limit = 12) {
   if (!isTauriRuntime()) {
-    return mockMusicBrainzOverlaySyncLog.slice(0, limit) satisfies MusicBrainzOverlaySyncLogEntry[];
+    return mockMusicBrainzOverlaySyncLog.slice(
+      0,
+      limit,
+    ) satisfies MusicBrainzOverlaySyncLogEntry[];
   }
 
-  return invoke<MusicBrainzOverlaySyncLogEntry[]>("list_musicbrainz_overlay_sync_log", { limit });
+  return invoke<MusicBrainzOverlaySyncLogEntry[]>(
+    "list_musicbrainz_overlay_sync_log",
+    { limit },
+  );
 }
 
 function createMockMusicBrainzOverlaySyncResult(): MusicBrainzOverlaySyncLogEntry {
@@ -2658,13 +3410,23 @@ function applyMockMusicBrainzReleaseDecision(
   };
 }
 
-function recomputeMockMusicBrainzDiscographyCounts(response: MusicBrainzArtistDiscographyResponse) {
-  response.ownedCount = response.releases.filter((row) => row.status === "owned").length;
-  response.missingCount = response.releases.filter((row) => row.status === "missing").length;
-  response.excludedCount = response.releases.filter((row) => row.status === "excluded").length;
+function recomputeMockMusicBrainzDiscographyCounts(
+  response: MusicBrainzArtistDiscographyResponse,
+) {
+  response.ownedCount = response.releases.filter(
+    (row) => row.status === "owned",
+  ).length;
+  response.missingCount = response.releases.filter(
+    (row) => row.status === "missing",
+  ).length;
+  response.excludedCount = response.releases.filter(
+    (row) => row.status === "excluded",
+  ).length;
   response.pureAlbumCount = response.ownedCount + response.missingCount;
   response.completion =
-    response.pureAlbumCount > 0 ? response.ownedCount / response.pureAlbumCount : null;
+    response.pureAlbumCount > 0
+      ? response.ownedCount / response.pureAlbumCount
+      : null;
   response.message = `Matched ${response.pureAlbumCount} scoped MusicBrainz albums against ${response.localAlbumCount} local albums; ${response.excludedCount} excluded by release decisions.`;
 }
 
@@ -2685,7 +3447,9 @@ export async function saveSettings(settings: AppSettings) {
 
 export async function importMusicBeeTsv(sourcePath: string) {
   if (!isTauriRuntime()) {
-    throw new Error("Start import from the Tauri desktop app to access local files and SQLite.");
+    throw new Error(
+      "Start import from the Tauri desktop app to access local files and SQLite.",
+    );
   }
 
   return invoke<ImportSummary>("import_musicbee_tsv", { sourcePath });
@@ -2693,7 +3457,9 @@ export async function importMusicBeeTsv(sourcePath: string) {
 
 export async function importAlbumCovers(request: CoverImportRequest) {
   if (!isTauriRuntime()) {
-    throw new Error("Start cover import from the Tauri desktop app to access local files and SQLite.");
+    throw new Error(
+      "Start cover import from the Tauri desktop app to access local files and SQLite.",
+    );
   }
 
   return invoke<CoverImportSummary>("import_album_covers", { request });
@@ -2701,7 +3467,9 @@ export async function importAlbumCovers(request: CoverImportRequest) {
 
 export async function importBillboardCharts(sourcePath: string) {
   if (!isTauriRuntime()) {
-    const matchedAlbums = mockRows.filter((row) => row.trackId === null && row.billboardRank != null).length;
+    const matchedAlbums = mockRows.filter(
+      (row) => row.trackId === null && row.billboardRank != null,
+    ).length;
     return {
       sourcePath,
       filesScanned: 70,
@@ -2711,12 +3479,16 @@ export async function importBillboardCharts(sourcePath: string) {
     } satisfies BillboardImportSummary;
   }
 
-  return invoke<BillboardImportSummary>("import_billboard_charts", { sourcePath });
+  return invoke<BillboardImportSummary>("import_billboard_charts", {
+    sourcePath,
+  });
 }
 
 export async function importBillboardSingles(sourcePath: string) {
   if (!isTauriRuntime()) {
-    const matchedTracks = mockRows.filter((row) => row.trackId !== null && row.billboardSingleRank != null).length;
+    const matchedTracks = mockRows.filter(
+      (row) => row.trackId !== null && row.billboardSingleRank != null,
+    ).length;
     return {
       sourcePath,
       filesScanned: 135,
@@ -2726,7 +3498,9 @@ export async function importBillboardSingles(sourcePath: string) {
     } satisfies BillboardSinglesImportSummary;
   }
 
-  return invoke<BillboardSinglesImportSummary>("import_billboard_singles", { sourcePath });
+  return invoke<BillboardSinglesImportSummary>("import_billboard_singles", {
+    sourcePath,
+  });
 }
 
 export async function getAlbumCoverDataUrl(albumId: string) {
@@ -2738,7 +3512,9 @@ export async function getAlbumCoverDataUrl(albumId: string) {
     return coverDataUrlCache.get(albumId) ?? null;
   }
 
-  const request = invoke<string | null>("get_album_cover_data_url", { albumId }).catch(() => null);
+  const request = invoke<string | null>("get_album_cover_data_url", {
+    albumId,
+  }).catch(() => null);
   coverDataUrlCache.set(albumId, request);
   const dataUrl = await request;
   coverDataUrlCache.set(albumId, dataUrl);
@@ -2755,10 +3531,18 @@ export async function searchLibrary(request: BrowseRequest) {
     const albumIds = new Set(request.filters.albumIds);
     const artistKeys = new Set(request.filters.artistKeys);
     const genreKeys = new Set(expandGenreFilterKeys(request.filters.genres));
-    const excludedGenreKeys = new Set(expandGenreFilterKeys(request.filters.excludedGenres));
-    const originCountryCodes = new Set((request.filters.originCountryCodes ?? []).map((code) => code.trim().toUpperCase()));
+    const excludedGenreKeys = new Set(
+      expandGenreFilterKeys(request.filters.excludedGenres),
+    );
+    const originCountryCodes = new Set(
+      (request.filters.originCountryCodes ?? []).map((code) =>
+        code.trim().toUpperCase(),
+      ),
+    );
     const excludedOriginCountryCodes = new Set(
-      (request.filters.excludedOriginCountryCodes ?? []).map((code) => code.trim().toUpperCase()),
+      (request.filters.excludedOriginCountryCodes ?? []).map((code) =>
+        code.trim().toUpperCase(),
+      ),
     );
     const ratedTracksMin = request.filters.ratedTracksMin;
     const ratedTracksMax = request.filters.ratedTracksMax;
@@ -2780,15 +3564,25 @@ export async function searchLibrary(request: BrowseRequest) {
     const billboardSingleRankMax = request.filters.billboardSingleRankMax;
     const lovedTracksMin = request.filters.lovedTracksMin;
     const lovedTracksMax = request.filters.lovedTracksMax;
-    const ratingCompletenessMin = normalizePercentFilter(request.filters.ratingCompletenessMin);
-    const ratingCompletenessMax = normalizePercentFilter(request.filters.ratingCompletenessMax);
+    const ratingCompletenessMin = normalizePercentFilter(
+      request.filters.ratingCompletenessMin,
+    );
+    const ratingCompletenessMax = normalizePercentFilter(
+      request.filters.ratingCompletenessMax,
+    );
     const rows = mockRows.filter((row) => {
-      const matchesView = isTracks ? row.trackId !== null : row.trackId === null;
+      const matchesView = isTracks
+        ? row.trackId !== null
+        : row.trackId === null;
       const artistKey = normalizeArtistKey(row.albumArtistDisplay);
       const genreKey = normalizeGenreKey(row.canonicalGenre);
       const ratedTracks = row.ratedTracks ?? 0;
       const ratingCompleteness = row.ratingCompleteness ?? 0;
-      const lovedTracks = isTracks ? (row.love === "L" ? 1 : 0) : (row.lovedTracks ?? 0);
+      const lovedTracks = isTracks
+        ? row.love === "L"
+          ? 1
+          : 0
+        : (row.lovedTracks ?? 0);
       return (
         matchesView &&
         (albumIds.size === 0 || albumIds.has(row.albumId)) &&
@@ -2796,26 +3590,56 @@ export async function searchLibrary(request: BrowseRequest) {
         (genreKeys.size === 0 || genreKeys.has(genreKey)) &&
         !excludedGenreKeys.has(genreKey) &&
         (originCountryCodes.size === 0 ||
-          originCountryCodes.has((row.originCountryCode ?? "").trim().toUpperCase())) &&
-        !excludedOriginCountryCodes.has((row.originCountryCode ?? "").trim().toUpperCase()) &&
+          originCountryCodes.has(
+            (row.originCountryCode ?? "").trim().toUpperCase(),
+          )) &&
+        !excludedOriginCountryCodes.has(
+          (row.originCountryCode ?? "").trim().toUpperCase(),
+        ) &&
         (!request.filters.missingOriginCountry || !row.originCountryCode) &&
         matchesNumberRange(row.year, yearFrom, yearTo) &&
         matchesNumberRange(row.releaseYear, releaseYearFrom, releaseYearTo) &&
-        matchesMinuteRange(isTracks ? row.trackSeconds : row.totalSeconds, totalMinutesMin, totalMinutesMax) &&
+        matchesMinuteRange(
+          isTracks ? row.trackSeconds : row.totalSeconds,
+          totalMinutesMin,
+          totalMinutesMax,
+        ) &&
         matchesNumberRange(row.totalTracks, trackCountMin, trackCountMax) &&
         matchesNumberRange(ratedTracks, ratedTracksMin, ratedTracksMax) &&
-        matchesNumberRange(row.effectiveAlbumRating, albumRatingMin, albumRatingMax) &&
-        matchesTrackRatingRange(row, isTracks, trackRatingMin, trackRatingMax) &&
-        matchesNumberRange(row.billboardRank, billboardRankMin, billboardRankMax) &&
-        (!isTracks || matchesNumberRange(row.billboardSingleRank, billboardSingleRankMin, billboardSingleRankMax)) &&
+        matchesNumberRange(
+          row.effectiveAlbumRating,
+          albumRatingMin,
+          albumRatingMax,
+        ) &&
+        matchesTrackRatingRange(
+          row,
+          isTracks,
+          trackRatingMin,
+          trackRatingMax,
+        ) &&
+        matchesNumberRange(
+          row.billboardRank,
+          billboardRankMin,
+          billboardRankMax,
+        ) &&
+        (!isTracks ||
+          matchesNumberRange(
+            row.billboardSingleRank,
+            billboardSingleRankMin,
+            billboardSingleRankMax,
+          )) &&
         (lovedTracksMin == null || lovedTracks >= lovedTracksMin) &&
         (lovedTracksMax == null || lovedTracks <= lovedTracksMax) &&
-        (ratingCompletenessMin == null || ratingCompleteness >= ratingCompletenessMin) &&
-        (ratingCompletenessMax == null || ratingCompleteness <= ratingCompletenessMax) &&
+        (ratingCompletenessMin == null ||
+          ratingCompleteness >= ratingCompletenessMin) &&
+        (ratingCompletenessMax == null ||
+          ratingCompleteness <= ratingCompletenessMax) &&
         matchesMissingFields(row, isTracks, request.filters.missingFields)
       );
     });
-    const sorted = [...rows].sort((left, right) => compareBrowseRows(left, right, request.sort.field));
+    const sorted = [...rows].sort((left, right) =>
+      compareBrowseRows(left, right, request.sort.field),
+    );
     if (request.sort.direction === "desc") {
       sorted.reverse();
     }
@@ -2834,8 +3658,12 @@ export async function searchLibrary(request: BrowseRequest) {
 export async function listArtists(request: ArtistListRequest) {
   if (!isTauriRuntime()) {
     const searchText = request.searchText.trim().toLowerCase();
-    const filtered = mockArtists.filter((artist) => artist.name.toLowerCase().includes(searchText));
-    const sorted = [...filtered].sort((left, right) => compareArtists(left, right, request.sort.field));
+    const filtered = mockArtists.filter((artist) =>
+      artist.name.toLowerCase().includes(searchText),
+    );
+    const sorted = [...filtered].sort((left, right) =>
+      compareArtists(left, right, request.sort.field),
+    );
     if (request.sort.direction === "desc") {
       sorted.reverse();
     }
@@ -2853,8 +3681,12 @@ export async function listArtists(request: ArtistListRequest) {
 export async function listGenres(request: GenreListRequest) {
   if (!isTauriRuntime()) {
     const searchText = request.searchText.trim().toLowerCase();
-    const filtered = mockGenres.filter((genre) => genre.name.toLowerCase().includes(searchText));
-    const sorted = [...filtered].sort((left, right) => compareGenres(left, right, request.sort.field));
+    const filtered = mockGenres.filter((genre) =>
+      genre.name.toLowerCase().includes(searchText),
+    );
+    const sorted = [...filtered].sort((left, right) =>
+      compareGenres(left, right, request.sort.field),
+    );
     if (request.sort.direction === "desc") {
       sorted.reverse();
     }
@@ -2888,7 +3720,9 @@ export async function listMusicTools() {
 export async function listMusicToolIssues(request: MusicToolIssueRequest) {
   if (!isTauriRuntime()) {
     const searchText = request.searchText.trim().toLowerCase();
-    const tool = mockMusicTools.find((item) => item.id === request.toolId) ?? mockMusicTools[0];
+    const tool =
+      mockMusicTools.find((item) => item.id === request.toolId) ??
+      mockMusicTools[0];
     const filtered = mockMusicToolIssues.filter((issue) => {
       if (issue.toolId !== tool.id) {
         return false;
@@ -2911,7 +3745,9 @@ export async function listMusicToolIssues(request: MusicToolIssueRequest) {
         .toLowerCase()
         .includes(searchText);
     });
-    const sorted = [...filtered].sort((left, right) => compareMusicToolIssues(left, right, request.sort.field));
+    const sorted = [...filtered].sort((left, right) =>
+      compareMusicToolIssues(left, right, request.sort.field),
+    );
     if (request.sort.direction === "desc") {
       sorted.reverse();
     }
@@ -2931,15 +3767,21 @@ export async function fixMusicToolIssues(input: MusicToolFixRequest) {
   if (!isTauriRuntime()) {
     const requestedIds = new Set(input.issueIds);
     const fixableRows = mockMusicToolIssues.filter(
-      (issue) => issue.toolId === "whitespace-anomalies" && issue.toolId === input.toolId && requestedIds.has(issue.id),
+      (issue) =>
+        issue.toolId === "whitespace-anomalies" &&
+        issue.toolId === input.toolId &&
+        requestedIds.has(issue.id),
     );
     if (input.toolId !== "whitespace-anomalies") {
-      throw new Error(`No fix action is available for this music tool yet: ${input.toolId}`);
+      throw new Error(
+        `No fix action is available for this music tool yet: ${input.toolId}`,
+      );
     }
 
     if (input.apply) {
       mockMusicToolIssues = mockMusicToolIssues.filter(
-        (issue) => !(issue.toolId === input.toolId && requestedIds.has(issue.id)),
+        (issue) =>
+          !(issue.toolId === input.toolId && requestedIds.has(issue.id)),
       );
       mockMusicTools = mockMusicTools.map((tool) =>
         tool.id === input.toolId
@@ -2959,8 +3801,13 @@ export async function fixMusicToolIssues(input: MusicToolFixRequest) {
       applied: input.apply,
       requestedCount: requestedIds.size,
       fixableCount: fixableRows.length,
-      affectedAlbumCount: new Set(fixableRows.map((issue) => issue.albumId)).size,
-      affectedTrackCount: new Set(fixableRows.map((issue) => issue.trackId).filter((trackId) => trackId != null)).size,
+      affectedAlbumCount: new Set(fixableRows.map((issue) => issue.albumId))
+        .size,
+      affectedTrackCount: new Set(
+        fixableRows
+          .map((issue) => issue.trackId)
+          .filter((trackId) => trackId != null),
+      ).size,
       changedAlbumCount: input.apply && fixableRows.length > 0 ? 1 : 0,
       changedTrackCount: input.apply ? fixableRows.length : 0,
       skippedCount: Math.max(0, requestedIds.size - fixableRows.length),
@@ -3053,14 +3900,21 @@ export async function exportSearch(
     return {
       path: `Preview runtime export.${format}`,
       format,
-      rowCount: mockRows.filter((row) => (request.view === "tracks" ? row.trackId !== null : row.trackId === null)).length,
+      rowCount: mockRows.filter((row) =>
+        request.view === "tracks" ? row.trackId !== null : row.trackId === null,
+      ).length,
     } satisfies ExportResult;
   }
 
-  return invoke<ExportResult>("export_search", { input: { request, format, includeCalculated, exportColumns } });
+  return invoke<ExportResult>("export_search", {
+    input: { request, format, includeCalculated, exportColumns },
+  });
 }
 
-export async function exportMusicToolIssues(request: MusicToolIssueRequest, format: string) {
+export async function exportMusicToolIssues(
+  request: MusicToolIssueRequest,
+  format: string,
+) {
   if (!isTauriRuntime()) {
     const normalizedSearch = request.searchText.trim().toLowerCase();
     const rowCount = mockMusicToolIssues.filter((issue) => {
@@ -3092,7 +3946,9 @@ export async function exportMusicToolIssues(request: MusicToolIssueRequest, form
     } satisfies ExportResult;
   }
 
-  return invoke<ExportResult>("export_music_tool_issues", { input: { request, format } });
+  return invoke<ExportResult>("export_music_tool_issues", {
+    input: { request, format },
+  });
 }
 
 export async function exportMusicBrainzArtistReleases(
@@ -3114,7 +3970,9 @@ export async function exportMusicBrainzArtistReleases(
   });
 }
 
-export async function listenToImportProgress(handler: (progress: ImportProgress) => void) {
+export async function listenToImportProgress(
+  handler: (progress: ImportProgress) => void,
+) {
   if (!isTauriRuntime()) {
     return (() => undefined) satisfies UnlistenFn;
   }
@@ -3124,7 +3982,9 @@ export async function listenToImportProgress(handler: (progress: ImportProgress)
   });
 }
 
-export async function listenToCoverImportProgress(handler: (progress: CoverImportProgress) => void) {
+export async function listenToCoverImportProgress(
+  handler: (progress: CoverImportProgress) => void,
+) {
   if (!isTauriRuntime()) {
     return (() => undefined) satisfies UnlistenFn;
   }
@@ -3144,12 +4004,35 @@ export async function listenToMusicBrainzOriginCountryImportProgress(
     }) satisfies UnlistenFn;
   }
 
-  return listen<MusicBrainzOriginCountryImportProgress>("musicbrainz-origin-country-import-progress", (event) => {
-    handler(event.payload);
-  });
+  return listen<MusicBrainzOriginCountryImportProgress>(
+    "musicbrainz-origin-country-import-progress",
+    (event) => {
+      handler(event.payload);
+    },
+  );
 }
 
-export async function listenToMusicToolProgress(handler: (progress: MusicToolProgress) => void) {
+export async function listenToMusicBrainzArtistInfoImportProgress(
+  handler: (progress: MusicBrainzArtistInfoImportProgress) => void,
+) {
+  if (!isTauriRuntime()) {
+    mockArtistInfoProgressHandlers.add(handler);
+    return (() => {
+      mockArtistInfoProgressHandlers.delete(handler);
+    }) satisfies UnlistenFn;
+  }
+
+  return listen<MusicBrainzArtistInfoImportProgress>(
+    "musicbrainz-artist-info-import-progress",
+    (event) => {
+      handler(event.payload);
+    },
+  );
+}
+
+export async function listenToMusicToolProgress(
+  handler: (progress: MusicToolProgress) => void,
+) {
   if (!isTauriRuntime()) {
     return (() => undefined) satisfies UnlistenFn;
   }
@@ -3158,7 +4041,6 @@ export async function listenToMusicToolProgress(handler: (progress: MusicToolPro
     handler(event.payload);
   });
 }
-
 
 export function loadCachedSettings() {
   if (typeof window === "undefined") {
@@ -3190,30 +4072,57 @@ export function cacheSettings(settings: AppSettings) {
 
 function normalizeSettings(settings: Partial<AppSettings>): AppSettings {
   const backupRetention = Math.round(Number(settings.backupRetention ?? 3));
-  const autoSyncMinutes = Math.round(Number(settings.musicBrainzOverlayAutoSyncMinutes ?? 0));
-  const updateAutoCheckMinutes = Math.round(Number(settings.updateAutoCheckMinutes ?? 0));
+  const autoSyncMinutes = Math.round(
+    Number(settings.musicBrainzOverlayAutoSyncMinutes ?? 0),
+  );
+  const updateAutoCheckMinutes = Math.round(
+    Number(settings.updateAutoCheckMinutes ?? 0),
+  );
   return {
-    backupRetention: Math.min(50, Math.max(1, Number.isFinite(backupRetention) ? backupRetention : 3)),
+    backupRetention: Math.min(
+      50,
+      Math.max(1, Number.isFinite(backupRetention) ? backupRetention : 3),
+    ),
     darkMode: Boolean(settings.darkMode),
-    countryFlagDisplay: normalizeCountryFlagDisplay(settings.countryFlagDisplay),
+    countryFlagDisplay: normalizeCountryFlagDisplay(
+      settings.countryFlagDisplay,
+    ),
     leftSidebarDefault: normalizeLeftSidebarMode(settings.leftSidebarDefault),
-    rightSidebarDefault: normalizeRightSidebarMode(settings.rightSidebarDefault),
-    importSourcePath: normalizeImportPath(settings.importSourcePath, defaultImportSourcePath),
-    coverSourcePath: normalizeImportPath(settings.coverSourcePath, defaultCoverSourcePath),
-    billboardSourcePath: normalizeImportPath(settings.billboardSourcePath, defaultBillboardSourcePath),
+    rightSidebarDefault: normalizeRightSidebarMode(
+      settings.rightSidebarDefault,
+    ),
+    importSourcePath: normalizeImportPath(
+      settings.importSourcePath,
+      defaultImportSourcePath,
+    ),
+    coverSourcePath: normalizeImportPath(
+      settings.coverSourcePath,
+      defaultCoverSourcePath,
+    ),
+    billboardSourcePath: normalizeImportPath(
+      settings.billboardSourcePath,
+      defaultBillboardSourcePath,
+    ),
     billboardSinglesSourcePath: normalizeImportPath(
       settings.billboardSinglesSourcePath,
       defaultBillboardSinglesSourcePath,
     ),
-    musicBrainzCachePath: normalizeMusicBrainzCachePath(settings.musicBrainzCachePath),
-    musicBrainzOverlaySyncPath: normalizeMusicBrainzOverlaySyncPath(settings.musicBrainzOverlaySyncPath),
+    musicBrainzCachePath: normalizeMusicBrainzCachePath(
+      settings.musicBrainzCachePath,
+    ),
+    musicBrainzOverlaySyncPath: normalizeMusicBrainzOverlaySyncPath(
+      settings.musicBrainzOverlaySyncPath,
+    ),
     musicBrainzOverlayAutoSyncMinutes: Math.min(
       1440,
       Math.max(0, Number.isFinite(autoSyncMinutes) ? autoSyncMinutes : 0),
     ),
     updateAutoCheckMinutes: Math.min(
       1440,
-      Math.max(0, Number.isFinite(updateAutoCheckMinutes) ? updateAutoCheckMinutes : 0),
+      Math.max(
+        0,
+        Number.isFinite(updateAutoCheckMinutes) ? updateAutoCheckMinutes : 0,
+      ),
     ),
     updatedAt: settings.updatedAt ?? null,
   };
@@ -3239,7 +4148,9 @@ function defaultSettings(): AppSettings {
 }
 
 function normalizeLeftSidebarMode(value: unknown): LeftSidebarMode {
-  return value === "iconOnly" || value === "hidden" || value === "expanded" ? value : "expanded";
+  return value === "iconOnly" || value === "hidden" || value === "expanded"
+    ? value
+    : "expanded";
 }
 
 function normalizeRightSidebarMode(value: unknown): RightSidebarMode {
@@ -3247,7 +4158,9 @@ function normalizeRightSidebarMode(value: unknown): RightSidebarMode {
 }
 
 function normalizeCountryFlagDisplay(value: unknown): CountryFlagDisplay {
-  return value === "flagAndName" || value === "name" || value === "flag" ? value : "flagAndName";
+  return value === "flagAndName" || value === "name" || value === "flag"
+    ? value
+    : "flagAndName";
 }
 
 function normalizeImportPath(value: unknown, fallback: string) {
@@ -3313,7 +4226,9 @@ function normalizePercentFilter(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) {
     return null;
   }
-  return value > 1 ? Math.min(1, Math.max(0, value / 100)) : Math.min(1, Math.max(0, value));
+  return value > 1
+    ? Math.min(1, Math.max(0, value / 100))
+    : Math.min(1, Math.max(0, value));
 }
 
 function matchesNumberRange(
@@ -3327,7 +4242,10 @@ function matchesNumberRange(
   if (value == null || !Number.isFinite(value)) {
     return false;
   }
-  return (minimum == null || value >= minimum) && (maximum == null || value <= maximum);
+  return (
+    (minimum == null || value >= minimum) &&
+    (maximum == null || value <= maximum)
+  );
 }
 
 function matchesMinuteRange(
@@ -3355,17 +4273,29 @@ function matchesTrackRatingRange(
   const minimumPoints = minimum == null ? null : minimum * 20;
   const maximumPoints = maximum == null ? null : maximum * 20;
   if (isTracks) {
-    return matchesNumberRange(row.normalizedRating, minimumPoints, maximumPoints);
+    return matchesNumberRange(
+      row.normalizedRating,
+      minimumPoints,
+      maximumPoints,
+    );
   }
 
-  const albumTracks = mockRows.filter((track) => track.trackId != null && track.albumId === row.albumId);
+  const albumTracks = mockRows.filter(
+    (track) => track.trackId != null && track.albumId === row.albumId,
+  );
   if (albumTracks.length === 0) {
     return true;
   }
-  return albumTracks.some((track) => matchesNumberRange(track.normalizedRating, minimumPoints, maximumPoints));
+  return albumTracks.some((track) =>
+    matchesNumberRange(track.normalizedRating, minimumPoints, maximumPoints),
+  );
 }
 
-function matchesMissingFields(row: BrowseRow, isTracks: boolean, fields: string[]) {
+function matchesMissingFields(
+  row: BrowseRow,
+  isTracks: boolean,
+  fields: string[],
+) {
   return fields.every((field) => {
     switch (field) {
       case "album":
@@ -3381,9 +4311,13 @@ function matchesMissingFields(row: BrowseRow, isTracks: boolean, fields: string[
       case "billboardSingle":
         return isTracks ? row.billboardSingleRank == null : true;
       case "rating":
-        return isTracks ? row.normalizedRating == null : row.effectiveAlbumRating == null;
+        return isTracks
+          ? row.normalizedRating == null
+          : row.effectiveAlbumRating == null;
       case "time":
-        return isTracks ? row.trackSeconds == null : (row.totalSeconds ?? 0) <= 0;
+        return isTracks
+          ? row.trackSeconds == null
+          : (row.totalSeconds ?? 0) <= 0;
       default:
         return true;
     }
@@ -3412,7 +4346,11 @@ function browseSortValue(row: BrowseRow, field: string) {
     case "genre":
       return row.canonicalGenre?.toLowerCase() ?? "";
     case "originCountry":
-      return (row.originCountryName || row.originCountryCode || "").toLowerCase();
+      return (
+        row.originCountryName ||
+        row.originCountryCode ||
+        ""
+      ).toLowerCase();
     case "billboardRank":
       return row.billboardRank;
     case "billboardSingleRank":
@@ -3444,7 +4382,11 @@ function browseSortValue(row: BrowseRow, field: string) {
   }
 }
 
-function compareArtists(left: ArtistSummary, right: ArtistSummary, field: string) {
+function compareArtists(
+  left: ArtistSummary,
+  right: ArtistSummary,
+  field: string,
+) {
   const leftValue = artistSortValue(left, field);
   const rightValue = artistSortValue(right, field);
   if (typeof leftValue === "string" || typeof rightValue === "string") {
@@ -3476,7 +4418,11 @@ function artistSortValue(artist: ArtistSummary, field: string) {
     case "topGenre":
       return artist.topGenre ?? "";
     case "originCountry":
-      return (artist.originCountryName || artist.originCountryCode || "").toLowerCase();
+      return (
+        artist.originCountryName ||
+        artist.originCountryCode ||
+        ""
+      ).toLowerCase();
     default:
       return artist.name.toLowerCase();
   }
@@ -3518,7 +4464,11 @@ function genreSortValue(genre: GenreSummary, field: string) {
   }
 }
 
-function compareMusicToolIssues(left: MusicToolIssueRow, right: MusicToolIssueRow, field: string) {
+function compareMusicToolIssues(
+  left: MusicToolIssueRow,
+  right: MusicToolIssueRow,
+  field: string,
+) {
   const leftValue = musicToolIssueSortValue(left, field);
   const rightValue = musicToolIssueSortValue(right, field);
   if (typeof leftValue === "string" || typeof rightValue === "string") {
