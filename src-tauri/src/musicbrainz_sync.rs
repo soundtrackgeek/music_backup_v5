@@ -1,15 +1,12 @@
 use crate::db;
 use crate::models::{MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::fs;
 use std::path::PathBuf;
 #[cfg(not(test))]
 use tauri::AppHandle;
-
-const DEFAULT_OVERLAY_SYNC_PATH: &str =
-    r"C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3";
 
 #[cfg(not(test))]
 pub fn sync_for_app(app: &AppHandle) -> Result<MusicBrainzOverlaySyncResult> {
@@ -51,7 +48,7 @@ pub fn sync_for_connection_with_options(
     ensure_overlay_schema(app_conn)
         .context("Could not prepare local MusicBrainz overlay tables")?;
 
-    let sync_path = normalized_sync_path(sync_path);
+    let sync_path = normalized_sync_path(sync_path)?;
     if let Some(parent) = sync_path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -170,13 +167,12 @@ pub fn sync_log_for_connection(
     Ok(rows)
 }
 
-fn normalized_sync_path(sync_path: &str) -> PathBuf {
+fn normalized_sync_path(sync_path: &str) -> Result<PathBuf> {
     let trimmed = sync_path.trim();
     if trimmed.is_empty() {
-        PathBuf::from(DEFAULT_OVERLAY_SYNC_PATH)
-    } else {
-        PathBuf::from(trimmed)
+        bail!("Choose a shared MusicBrainz overlay sync database path in Settings before syncing");
     }
+    Ok(PathBuf::from(trimmed))
 }
 
 fn configure_sync_connection(conn: &Connection) -> Result<()> {
@@ -1300,6 +1296,17 @@ mod tests {
             )
             .expect("count sync log rows");
         assert_eq!(log_count, 0);
+    }
+
+    #[test]
+    fn sync_requires_a_user_configured_path() {
+        let conn = test_app_connection();
+
+        let error = sync_for_connection(&conn, "  ").expect_err("reject blank sync path");
+
+        assert!(error
+            .to_string()
+            .contains("Choose a shared MusicBrainz overlay sync database path"));
     }
 
     fn test_app_connection() -> Connection {

@@ -1660,7 +1660,7 @@ fn default_musicbrainz_cache_path() -> String {
 }
 
 fn default_musicbrainz_overlay_sync_path() -> String {
-    r"C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3".to_string()
+    String::new()
 }
 
 fn default_music_tool_id() -> String {

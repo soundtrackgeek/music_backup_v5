@@ -1,10 +1,10 @@
 # Music Library Living Specification and Roadmap
 
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 Status: Living product and implementation contract
-Current implementation: MusicBrainz artist origin-country slice complete locally with selectable bundled flag display
-Current package version: 0.45.0
-SQLite schema version: 18
+Current implementation: MusicBrainz artist origin-country and artist-information slices implemented, with the frontend test safety net and first architecture extraction slices complete
+Current package version: 0.51.0
+SQLite schema version: 20
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
 
@@ -263,6 +263,7 @@ App-owned trust layer:
 - A verified manual artist link should override `artist_cache.name -> mbid` lookup results.
 - An ignored or suspect artist mapping should suppress broad batch missing-album results until reviewed.
 - Broad collection-wide missing-album reports should have a minimum quality gate: verified artist link or high-confidence non-suspect cache match.
+- Shared MusicBrainz overlay sync starts unconfigured. The user must choose a portable shared SQLite path before manual or automatic sync can run.
 
 ## Architecture Map
 
@@ -270,8 +271,8 @@ App-owned trust layer:
 
 Core files:
 
-- `src/App.tsx`: top-level app composition, workspace rendering, state wiring, and user workflows.
-- `src/backend.ts`: Tauri command wrapper, web-preview mocks, local settings cache, and event listeners.
+- `src/App.tsx`: top-level app composition, shared state wiring, and cross-workspace user workflows.
+- `src/backend.ts`: runtime-neutral backend facade and command dispatch.
 - `src/types.ts`: shared TypeScript contracts that mirror Rust model payloads.
 - `src/styles.css`: app layout, themes, workspace styling, and responsive behavior.
 
@@ -284,10 +285,15 @@ Focused frontend modules:
 - `src/app/genreSuggestions.ts`: comma-list parsing, genre token replacement, normalization, and suggestion ranking.
 - `src/app/input.ts`: small input parsing and clamping helpers.
 - `src/app/themeBootstrap.ts`: startup theme hint loaded through the bundled TypeScript entrypoint so production CSP can disallow inline scripts.
+- `src/app/navigation.ts`: workspace shortcut handling and top-position reset behavior.
+- `src/backend/tauriClient.ts`: direct Tauri invoke, event, opener, and runtime wrappers.
+- `src/backend/webPreview.ts`: web-preview fixtures, mutable preview state, and mock behavior.
+- `src/backend/normalization.ts`: portable settings defaults, local cache handling, and shared settings normalization.
+- `src/workspaces/SearchWorkspace.tsx`, `ArtistsWorkspace.tsx`, and `SettingsWorkspace.tsx`: focused workspace presentation boundaries without a global state layer.
 
 Expected next frontend modularization:
 
-- Split `App.tsx` by workspace after behavior is stable.
+- Move Search query/results sections, Artists feature panels, and the individual Settings panels behind the new workspace boundaries, then extract Charts, Discovery, Statistics, Albums, Genres, Tools, and Imports.
 - Keep shared pure helpers in `src/app`.
 - Avoid moving state into a global store until duplication or cross-workspace coupling proves it is needed.
 
@@ -300,7 +306,10 @@ Core files:
 - `src-tauri/src/lib.rs`: Tauri command registration and desktop runtime glue.
 - `src-tauri/src/main.rs`: app entrypoint.
 - `src-tauri/src/models.rs`: Rust payload models shared by commands, database logic, and import logic.
-- `src-tauri/src/db.rs`: SQLite migrations, search, charts, statistics, discovery, Billboard imports, Music Tools, settings, saved objects, and exports.
+- `src-tauri/src/db.rs`: remaining SQLite search, charts, statistics, discovery, Billboard imports, Music Tools, saved objects, and exports.
+- `src-tauri/src/db/migrations.rs`: current schema version and focused data migrations.
+- `src-tauri/src/db/settings.rs`: settings persistence, defaults, and normalization.
+- `src-tauri/src/db/backups.rs`: backup inventory, validation, creation, and restore behavior.
 - `src-tauri/src/musicbrainz.rs`: Read-only MusicBrainz cache validation, status reporting, selected-artist discography comparison, explicit selected-artist refresh, and app-owned artist/release review decisions against the optional local `musicbrainz_cache.db`.
 - `src-tauri/src/musicbrainz_sync.rs`: Two-way sync for app-owned MusicBrainz overlay rows through a shared SQLite database, including tombstone handling and local sync-log recording.
 - `src-tauri/src/importer.rs`: MusicBee TSV parsing, normalization, import run handling, album aggregation, backup retention, and rating event capture.
@@ -334,13 +343,14 @@ Release and security boundary:
 
 Important test boundary:
 
+- Vitest and React Testing Library cover frontend request serialization, saved-object/settings normalization, navigation shortcuts/top reset, and MusicBrainz review-state rendering.
 - Desktop-only Tauri/Wry command glue is excluded from Rust lib unit-test builds with `#[cfg(not(test))]`.
 - Pure Rust database/import logic remains testable through `cargo test`.
 - This avoids the Windows Common Controls v6 manifest issue that can surface as `STATUS_ENTRYPOINT_NOT_FOUND` before tests run.
 
 Expected next backend modularization:
 
-- Split `db.rs` into focused modules for migrations, queries, exports, statistics, discovery, Billboard, Music Tools, settings, and saved objects.
+- Continue splitting `db.rs` into focused modules for browse queries, saved objects, exports, statistics, discovery, Billboard, and Music Tools.
 - Keep schema migrations and SQL helpers boring and explicit.
 - Add regression tests before or alongside each split.
 
@@ -516,6 +526,21 @@ Expected next backend modularization:
 - Web-only preview mode includes representative owned/missing MusicBrainz artist discographies.
 - Rust tests cover selected-artist owned/missing comparison, suspicious cache mapping warnings, fuzzy artist candidates, artist-link override behavior, ignored artist suppression, manual artist-link decisions, and hidden-row export filtering.
 
+### Phase 30: MusicBrainz Artist Origin Countries
+
+- Settings provides preview/import/cancel workflows, live progress, activity history, and a searchable coverage report.
+- Local artist origin rows retain raw MusicBrainz area evidence, derived country, review state, and manual Artist-page corrections.
+- Search and Charts support include/exclude countries and missing-origin filters; result, detail, export, and flag/name display surfaces use the local app-owned rows.
+- Reviewed/manual origin rows are preserved during re-import. Synchronizing those origin overrides through the shared overlay remains future work.
+
+### Phase 31: MusicBrainz Artist Information
+
+- Settings provides preview/import/cancel workflows and a searchable report for artist type, gender, life-span, ended state, and begin/end/current areas.
+- SQLite schema version 19 stores app-owned artist-information rows and import-run history.
+- Artists shows a MusicBrainz Artist Info panel with MBID review, manual MBID and Origin Country controls, imported artist metadata, and explicit selected-artist refresh.
+- Search and Charts filter by artist type, gender, born/founded ranges, dead/dissolved state, and died/dissolved ranges.
+- Web-preview fixtures and Rust tests cover representative artist-information states and browse filters.
+
 ### Phase 26: Release Operations Automation
 
 - GitHub Actions CI verifies pushes to `master`, pull requests, and manual dispatches on `windows-latest`.
@@ -549,6 +574,12 @@ Implementation areas:
 - Music Tools.
 - Settings and library status.
 
+Progress in 0.51.0:
+
+- Extracted migration coordination/data migration helpers, settings persistence/normalization, and database backup/restore behavior into `src-tauri/src/db/` modules.
+- Preserved the existing command entry points through module re-exports.
+- Remaining highest-value slices are browse queries, Music Tools, statistics/discovery, saved objects, and exports.
+
 Done criteria:
 
 - No behavior changes unless separately documented.
@@ -575,6 +606,12 @@ Implementation areas:
 - Albums, Artists, Genres workspaces.
 - Tools workspace.
 - Imports and Settings workspaces.
+
+Progress in 0.51.0:
+
+- Added Search, Artists, and Settings workspace presentation components while keeping shared state local to `App.tsx`.
+- Split direct Tauri access, web-preview fixtures/mock state, and settings normalization out of `backend.ts`.
+- Added the Vitest/React Testing Library safety net before continuing deeper panel/state extraction.
 
 Done criteria:
 
@@ -714,15 +751,15 @@ Completed in 0.34.0:
 - Show selected-artist release-group source/timestamp in the MusicBrainz panel.
 - Add Rust coverage for refreshed release-group overlays overriding stale cache rows.
 
-Completed in 0.35.0:
+Completed in 0.35.0 and made portable in 0.51.0:
 
-- Add a shared MusicBrainz overlay sync database, defaulting to `C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3`.
+- Add a shared MusicBrainz overlay sync database. It now starts unconfigured and requires a user-selected shared `.sqlite3` path; schema version 20 clears the obsolete developer-specific default on upgrade.
 - Sync verified/ignored/unlinked artist links, not-in-scope/include release decisions, official-release status cache rows, and refreshed release-group overlays without moving the main app database.
 - Use tombstone rows so artist unlinks and cleared release decisions propagate between machines.
 - Add Settings controls for manual MusicBrainz overlay sync, autosync interval in minutes, and recent sync log entries.
 - Add Rust coverage for copying overlay rows and applying unlink tombstones.
 
-Planned slice: MusicBrainz artist origin countries:
+Implemented slice: MusicBrainz artist origin countries:
 
 Implemented in 0.42.0:
 
@@ -735,7 +772,7 @@ Implemented in 0.42.0:
 - Search and Charts include `originCountryCodes` and `missingOriginCountry` filters, saved-config serialization defaults, local SQLite joins through normalized album-artist keys, optional chart/search export columns, and web-preview mock states.
 - Search, Albums, Artists, Charts, and the selected-artist MusicBrainz panel can display the derived country with raw-area provenance when available.
 - Origin Country UI can render bundled SVG flags with country names, country names only, or flags only without runtime network requests.
-- Reviewed/manual Origin Country overlay sync, tombstones for manual clears, and first-class manual edit/clear UI remain future work. Local import, display, filtering, and export behavior is complete without the sync extension.
+- Reviewed/manual Origin Country overlay sync and tombstones for manual clears remain future work. Manual Artist-page country editing is implemented; local import, display, filtering, and export behavior is complete without the sync extension.
 
 Expected outcome:
 
@@ -743,7 +780,7 @@ Expected outcome:
 - Search and Charts can filter by `Origin Country` using local SQLite data only.
 - Artists can show origin country with MusicBrainz provenance, review state, and an easy path to fix ambiguous cases.
 
-Proposed data model:
+Implemented data model:
 
 - Add SQLite schema version 17 tables for `musicbrainz_origin_countries`, `musicbrainz_artist_origin_countries`, and `musicbrainz_artist_origin_import_runs`.
 - `musicbrainz_origin_countries` stores the canonical country list used by filters: country code, display name, MusicBrainz area MBID when known, ISO source, historical/special flags, and timestamps.
@@ -752,7 +789,7 @@ Proposed data model:
 - Add indexes on `musicbrainz_artist_origin_countries(local_artist_key)`, `musicbrainz_artist_origin_countries(country_code)`, and `musicbrainz_artist_origin_countries(mbid)`.
 - Include reviewed/manual origin-country rows in the shared MusicBrainz overlay sync. Imported rows may be refreshed locally, but manual overrides and cleared/ignored decisions need tombstones.
 
-Import workflow:
+Implemented import workflow:
 
 - Settings gets an explicit `Import Artist Origin Countries` action under MusicBrainz. It first previews eligible local album artists, linked MBIDs, already imported rows, skipped suspect mappings, unresolved artists, and estimated runtime.
 - Eligibility starts from distinct local album artists in the `albums` table, using the same normalized artist key rules as Artists, Search filters, and MusicBrainz discography matching.

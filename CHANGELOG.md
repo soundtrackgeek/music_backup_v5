@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.51.0] - 2026-07-09
+### Added
+- Added Vitest, React Testing Library, jest-dom, and jsdom with focused coverage for browse request creation/serialization, saved search/chart normalization, settings normalization, workspace navigation/shortcuts, and MusicBrainz review-state rendering.
+- Added focused Search, Artists, and Settings workspace presentation components without introducing a global state library.
+- Added SQLite schema version 20 to migrate the legacy developer-specific MusicBrainz overlay-sync default to an unconfigured portable state.
+
+### Changed
+- Split frontend backend responsibilities into Tauri client wrappers, web-preview fixtures/mock state, and shared normalization helpers.
+- Split Rust migration helpers, settings persistence/normalization, and database backup/restore behavior into focused `src-tauri/src/db/` modules while preserving command payloads.
+- Updated the full local check to run frontend tests and `cargo check` in addition to security checks, the TypeScript/Vite build, and Rust tests.
+- Bumped synchronized app metadata to `0.51.0`.
+
+### Fixed
+- Fixed workspace navigation so a newly selected workspace opens at the top.
+- Removed the hardcoded `C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3` default; manual and automatic overlay sync now require a user-configured path.
+
 ## [0.50.0] - 2026-07-09
 ### Added
 - Added Search and Charts filters for MusicBrainz artist type, gender, born/founded year ranges, dead/dissolved status, and died/dissolved year ranges.

@@ -1,21 +1,22 @@
+#[cfg(test)]
+use crate::models::AppSettings;
 use crate::models::{
-    AppSettings, ArtistListRequest, ArtistListResponse, ArtistSummary, BillboardImportSummary,
+    ArtistListRequest, ArtistListResponse, ArtistSummary, BillboardImportSummary,
     BillboardSinglesImportSummary, BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow,
-    BrowseSort, CatalogConcentrationStats, ChartConfig, ConcentrationPoint, DatabaseBackup,
-    DatabaseRestoreSummary, DecadeProgressStats, DiscoveryAlbumPoint, DiscoveryArtistPoint,
-    DiscoveryGenrePoint, DiscoveryHeatmapCell, DiscoveryMission, DiscoveryResponse,
-    DurationAlbumStat, DurationAnalyticsStats, ExportMusicToolRequest, ExportResult,
-    ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressStats, GenreSummary,
-    ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus,
-    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption,
-    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
-    MusicToolIssueRow, MusicToolProgress, MusicToolSummary, OutlierStat, PerformanceProbeOperation,
-    PerformanceProbeResponse, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
-    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
-    YearProgressStats,
+    BrowseSort, CatalogConcentrationStats, ChartConfig, ConcentrationPoint, DecadeProgressStats,
+    DiscoveryAlbumPoint, DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell,
+    DiscoveryMission, DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats,
+    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    GenreProgressStats, GenreSummary, ImportRun, LibraryHealthScore, LibraryOverviewStats,
+    LibraryShapeStats, LibraryStatus, LovedDensityStat, LovedTrackStats, MetadataCoverageMetric,
+    MusicBrainzOriginCountryOption, MusicToolFixRequest, MusicToolFixSummary,
+    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress,
+    MusicToolSummary, OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse,
+    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::{DateTime, Datelike, Utc};
+use chrono::{Datelike, Utc};
 use rusqlite::{params, params_from_iter, types::Value, Connection, OpenFlags, OptionalExtension};
 use rust_xlsxwriter::{Format, Workbook};
 use std::collections::{HashMap, HashSet};
@@ -37,16 +38,30 @@ type ProgressApp<'a> = &'a AppHandle;
 type ProgressApp<'a> = &'a ();
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
+mod backups;
+mod migrations;
+mod settings;
+use backups::create_database_file_backup;
+#[cfg(test)]
+use backups::{backup_directory_for_db_path, list_database_backups, restore_database_backup};
+#[cfg(not(test))]
+pub(crate) use backups::{list_database_backups_for_app, restore_database_backup_for_app};
+use migrations::LATEST_SCHEMA_VERSION;
+use settings::normalize_musicbrainz_cache_path;
+#[cfg(test)]
+use settings::save_settings_for_connection;
+pub(crate) use settings::settings_for_connection;
+#[cfg(not(test))]
+pub(crate) use settings::{save_settings_for_app, settings_for_app};
+
 const DB_FILE_NAME: &str = "music-library.sqlite3";
-const LATEST_SCHEMA_VERSION: i32 = 19;
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const DEFAULT_IMPORT_SOURCE_PATH: &str = "musicbee-library.tsv";
 const DEFAULT_COVER_SOURCE_PATH: &str = "AlbumCovers";
 const DEFAULT_BILLBOARD_SOURCE_PATH: &str = "CSV";
 const DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES";
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
-const DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH: &str =
-    r"C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3";
+const DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH: &str = "";
 const DEFAULT_COUNTRY_FLAG_DISPLAY: &str = "flagAndName";
 const MUSICBRAINZ_SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
 const MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES: u32 = 1440;
@@ -315,7 +330,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && phase_nineteen_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -593,7 +608,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             billboard_source_path TEXT NOT NULL DEFAULT 'CSV',
             billboard_singles_source_path TEXT NOT NULL DEFAULT 'CSV_SINGLES',
             musicbrainz_cache_path TEXT NOT NULL DEFAULT 'MusicBrainz/musicbrainz_cache.db',
-            musicbrainz_overlay_sync_path TEXT NOT NULL DEFAULT 'C:\\Users\\jtill\\OneDrive\\_musicbackup\\musicbrainz-overlay-sync.sqlite3',
+            musicbrainz_overlay_sync_path TEXT NOT NULL DEFAULT '',
             musicbrainz_overlay_auto_sync_minutes INTEGER NOT NULL DEFAULT 0,
             update_auto_check_minutes INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL
@@ -840,7 +855,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_artist_release_groups(conn)?;
     ensure_musicbrainz_origin_country_tables(conn)?;
     ensure_musicbrainz_artist_info_tables(conn)?;
-    conn.execute_batch("PRAGMA user_version = 19;")
+    migrations::migrate_portable_overlay_sync_default(conn)?;
+    conn.execute_batch("PRAGMA user_version = 20;")
         .context("Could not update SQLite schema version")?;
     Ok(())
 }
@@ -1056,7 +1072,7 @@ fn ensure_app_settings_musicbrainz_columns(conn: &Connection) -> Result<()> {
 fn ensure_app_settings_musicbrainz_sync_columns(conn: &Connection) -> Result<()> {
     if !schema_column_exists(conn, "app_settings", "musicbrainz_overlay_sync_path")? {
         conn.execute_batch(
-            "ALTER TABLE app_settings ADD COLUMN musicbrainz_overlay_sync_path TEXT NOT NULL DEFAULT 'C:\\Users\\jtill\\OneDrive\\_musicbackup\\musicbrainz-overlay-sync.sqlite3';",
+            "ALTER TABLE app_settings ADD COLUMN musicbrainz_overlay_sync_path TEXT NOT NULL DEFAULT '';",
         )
         .context("Could not add app_settings.musicbrainz_overlay_sync_path")?;
     }
@@ -1548,358 +1564,6 @@ pub fn library_status(app: &AppHandle) -> Result<LibraryStatus> {
 pub fn performance_probe_for_app(app: &AppHandle) -> Result<PerformanceProbeResponse> {
     let (conn, db_path) = open(app)?;
     performance_probe(&conn, db_path.display().to_string())
-}
-
-#[cfg(not(test))]
-pub fn list_database_backups_for_app(app: &AppHandle) -> Result<Vec<DatabaseBackup>> {
-    let (conn, db_path) = open(app)?;
-    list_database_backups(&conn, &db_path)
-}
-
-#[cfg(not(test))]
-pub fn restore_database_backup_for_app(
-    app: &AppHandle,
-    backup_path: String,
-) -> Result<DatabaseRestoreSummary> {
-    let db_path = database_path(app)?;
-    restore_database_backup(&db_path, &backup_path)
-}
-
-pub fn list_database_backups(conn: &Connection, db_path: &Path) -> Result<Vec<DatabaseBackup>> {
-    let backup_dir = backup_directory_for_db_path(db_path)?;
-    if !backup_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let metadata_by_path = database_backup_metadata(conn)?;
-    let mut backups = fs::read_dir(&backup_dir)
-        .with_context(|| format!("Could not read backup directory {}", backup_dir.display()))?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| sqlite_file_path(&entry.path()))
-        .map(|entry| {
-            let path = entry.path();
-            let key = backup_path_key(&path);
-            let metadata = metadata_by_path.get(&key);
-            database_backup_from_file(&path, metadata)
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    backups.sort_by(|left, right| right.created_at.cmp(&left.created_at));
-    Ok(backups)
-}
-
-pub fn restore_database_backup(
-    db_path: &Path,
-    backup_path: &str,
-) -> Result<DatabaseRestoreSummary> {
-    let source_path = resolve_database_backup_path(db_path, backup_path)?;
-    let source_schema = read_database_schema_version(&source_path).with_context(|| {
-        format!(
-            "Could not read backup schema version from {}",
-            source_path.display()
-        )
-    })?;
-
-    if !schema_version_can_restore(source_schema) {
-        bail!("Backup schema version {source_schema} cannot be restored by this app version");
-    }
-
-    let metadata_by_path = if db_path.exists() {
-        match Connection::open(db_path) {
-            Ok(conn) => database_backup_metadata(&conn).unwrap_or_default(),
-            Err(_) => HashMap::new(),
-        }
-    } else {
-        HashMap::new()
-    };
-    let source_key = backup_path_key(&source_path);
-    let restored_backup =
-        database_backup_from_file(&source_path, metadata_by_path.get(&source_key))?;
-
-    let pre_restore_backup_path = {
-        let _restore_guard = MIGRATION_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let pre_restore_backup_path = create_database_file_backup(db_path, "restore")?;
-
-        if let Some(parent) = db_path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("Could not create database directory {}", parent.display())
-            })?;
-        }
-
-        remove_sqlite_sidecars(db_path)?;
-        fs::copy(&source_path, db_path).with_context(|| {
-            format!(
-                "Could not restore backup {} to {}",
-                source_path.display(),
-                db_path.display()
-            )
-        })?;
-        remove_sqlite_sidecars(db_path)?;
-
-        pre_restore_backup_path
-    };
-
-    let conn = Connection::open(db_path)
-        .with_context(|| format!("Could not open restored database at {}", db_path.display()))?;
-    configure(&conn)?;
-    migrate(&conn)?;
-
-    if let Some(pre_restore_backup_path) = &pre_restore_backup_path {
-        let source_size_bytes = fs::metadata(&source_path)
-            .map(|metadata| metadata.len() as i64)
-            .unwrap_or_default();
-        conn.execute(
-            "
-            INSERT INTO database_backups (
-                created_at, operation, source_path, source_size_bytes, backup_path
-            ) VALUES (?1, 'restore', ?2, ?3, ?4)
-            ",
-            params![
-                Utc::now().to_rfc3339(),
-                source_path.display().to_string(),
-                source_size_bytes,
-                pre_restore_backup_path.display().to_string()
-            ],
-        )
-        .context("Could not record pre-restore backup metadata")?;
-    }
-
-    let schema_version = conn
-        .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
-        .context("Could not read restored database schema version")?;
-    let track_count = count_rows(&conn, "tracks")?;
-    let album_count = count_rows(&conn, "albums")?;
-
-    Ok(DatabaseRestoreSummary {
-        restored_backup,
-        pre_restore_backup_path: pre_restore_backup_path
-            .as_ref()
-            .map(|path| path.display().to_string()),
-        track_count,
-        album_count,
-        schema_version,
-    })
-}
-
-fn backup_directory_for_db_path(db_path: &Path) -> Result<PathBuf> {
-    Ok(db_path
-        .parent()
-        .ok_or_else(|| anyhow!("Database path has no parent directory"))?
-        .join("backups"))
-}
-
-fn database_backup_metadata(conn: &Connection) -> Result<HashMap<String, BackupMetadata>> {
-    let mut stmt = conn
-        .prepare(
-            "
-            SELECT b.id, b.created_at, b.operation, b.source_path,
-                   b.source_size_bytes, b.backup_path, i.track_rows, i.album_count
-            FROM database_backups b
-            LEFT JOIN import_runs i ON i.backup_path = b.backup_path
-            ORDER BY b.id DESC
-            ",
-        )
-        .context("Could not prepare database backup metadata query")?;
-
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(BackupMetadata {
-                id: row.get(0)?,
-                created_at: row.get(1)?,
-                operation: row.get(2)?,
-                source_path: row.get(3)?,
-                source_size_bytes: row.get(4)?,
-                backup_path: row.get(5)?,
-                track_rows: row.get(6)?,
-                album_count: row.get(7)?,
-            })
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .context("Could not read database backup metadata")?;
-
-    let mut metadata_by_path = HashMap::new();
-    for metadata in rows {
-        metadata_by_path.insert(
-            backup_path_key(Path::new(&metadata.backup_path)),
-            metadata.clone(),
-        );
-        if let Ok(canonical) = PathBuf::from(&metadata.backup_path).canonicalize() {
-            metadata_by_path.insert(backup_path_key(&canonical), metadata);
-        }
-    }
-
-    Ok(metadata_by_path)
-}
-
-fn database_backup_from_file(
-    path: &Path,
-    metadata: Option<&BackupMetadata>,
-) -> Result<DatabaseBackup> {
-    let file_metadata = fs::metadata(path)
-        .with_context(|| format!("Could not read backup metadata for {}", path.display()))?;
-    let schema_version = read_database_schema_version(path).ok();
-    let created_at = metadata
-        .map(|metadata| metadata.created_at.clone())
-        .or_else(|| {
-            file_metadata
-                .modified()
-                .ok()
-                .map(|time| DateTime::<Utc>::from(time).to_rfc3339())
-        })
-        .unwrap_or_else(|| Utc::now().to_rfc3339());
-    let operation = metadata
-        .map(|metadata| metadata.operation.clone())
-        .unwrap_or_else(|| fallback_backup_operation(path));
-
-    Ok(DatabaseBackup {
-        id: metadata.map(|metadata| metadata.id),
-        created_at,
-        operation,
-        source_path: metadata.and_then(|metadata| metadata.source_path.clone()),
-        source_size_bytes: metadata
-            .map(|metadata| metadata.source_size_bytes)
-            .unwrap_or_default(),
-        backup_path: path.display().to_string(),
-        file_size_bytes: file_metadata.len() as i64,
-        track_rows: metadata.and_then(|metadata| metadata.track_rows),
-        album_count: metadata.and_then(|metadata| metadata.album_count),
-        schema_version,
-        exists: true,
-        can_restore: schema_version
-            .map(schema_version_can_restore)
-            .unwrap_or(false),
-    })
-}
-
-fn fallback_backup_operation(path: &Path) -> String {
-    let filename = path
-        .file_name()
-        .map(|value| value.to_string_lossy().to_lowercase())
-        .unwrap_or_default();
-
-    if filename.contains("before-restore") {
-        "restore".to_string()
-    } else if filename.contains("before-import") {
-        "import".to_string()
-    } else {
-        "backup".to_string()
-    }
-}
-
-fn sqlite_file_path(path: &Path) -> bool {
-    path.extension()
-        .map(|extension| extension.eq_ignore_ascii_case("sqlite3"))
-        .unwrap_or(false)
-}
-
-fn backup_path_key(path: &Path) -> String {
-    path.display().to_string().to_lowercase()
-}
-
-fn resolve_database_backup_path(db_path: &Path, backup_path: &str) -> Result<PathBuf> {
-    let trimmed = backup_path.trim();
-    if trimmed.is_empty() {
-        bail!("Choose a database backup before restoring");
-    }
-
-    let backup_dir = backup_directory_for_db_path(db_path)?;
-    fs::create_dir_all(&backup_dir)
-        .with_context(|| format!("Could not create backup directory {}", backup_dir.display()))?;
-    let backup_dir = backup_dir.canonicalize().with_context(|| {
-        format!(
-            "Could not resolve backup directory {}",
-            backup_dir.display()
-        )
-    })?;
-
-    let provided = PathBuf::from(trimmed);
-    let candidate = if provided.is_absolute() {
-        provided
-    } else {
-        backup_dir.join(provided)
-    };
-
-    if !candidate.exists() {
-        bail!("Database backup does not exist: {}", candidate.display());
-    }
-    if !sqlite_file_path(&candidate) {
-        bail!("Database backup must be a .sqlite3 file");
-    }
-
-    let candidate = candidate
-        .canonicalize()
-        .with_context(|| format!("Could not resolve database backup {}", candidate.display()))?;
-    if !candidate.starts_with(&backup_dir) {
-        bail!("Database backup must be inside the app backup directory");
-    }
-
-    Ok(candidate)
-}
-
-fn read_database_schema_version(path: &Path) -> Result<i32> {
-    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .with_context(|| format!("Could not open SQLite database {}", path.display()))?;
-    conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
-        .with_context(|| {
-            format!(
-                "Could not read SQLite schema version from {}",
-                path.display()
-            )
-        })
-}
-
-fn schema_version_can_restore(schema_version: i32) -> bool {
-    schema_version > 0 && schema_version <= LATEST_SCHEMA_VERSION
-}
-
-fn create_database_file_backup(db_path: &Path, operation: &str) -> Result<Option<PathBuf>> {
-    if !db_path.exists() {
-        return Ok(None);
-    }
-
-    let conn = Connection::open(db_path)
-        .with_context(|| format!("Could not open active database {}", db_path.display()))?;
-    conn.execute_batch("PRAGMA wal_checkpoint(FULL);")
-        .context("Could not checkpoint SQLite WAL before database backup")?;
-    drop(conn);
-
-    let backup_dir = backup_directory_for_db_path(db_path)?;
-    fs::create_dir_all(&backup_dir)
-        .with_context(|| format!("Could not create backup directory {}", backup_dir.display()))?;
-    let backup_path = backup_dir.join(format!(
-        "music-library-{}-before-{operation}.sqlite3",
-        Utc::now().format("%Y%m%d-%H%M%S")
-    ));
-
-    fs::copy(db_path, &backup_path).with_context(|| {
-        format!(
-            "Could not create database backup from {} to {}",
-            db_path.display(),
-            backup_path.display()
-        )
-    })?;
-
-    Ok(Some(backup_path))
-}
-
-fn remove_sqlite_sidecars(db_path: &Path) -> Result<()> {
-    for suffix in ["-wal", "-shm"] {
-        let sidecar = sqlite_sidecar_path(db_path, suffix);
-        if sidecar.exists() {
-            fs::remove_file(&sidecar).with_context(|| {
-                format!("Could not remove SQLite sidecar {}", sidecar.display())
-            })?;
-        }
-    }
-    Ok(())
-}
-
-fn sqlite_sidecar_path(db_path: &Path, suffix: &str) -> PathBuf {
-    let mut path = db_path.as_os_str().to_os_string();
-    path.push(suffix);
-    PathBuf::from(path)
 }
 
 #[cfg(not(test))]
@@ -2613,213 +2277,6 @@ fn billboard_text_key(value: &str) -> String {
 pub fn list_import_runs_for_app(app: &AppHandle, limit: u32) -> Result<Vec<ImportRun>> {
     let (conn, _) = open(app)?;
     list_import_runs(&conn, limit)
-}
-
-#[cfg(not(test))]
-pub fn settings_for_app(app: &AppHandle) -> Result<AppSettings> {
-    let (conn, _) = open(app)?;
-    settings_for_connection(&conn)
-}
-
-#[cfg(not(test))]
-pub fn save_settings_for_app(app: &AppHandle, settings: AppSettings) -> Result<AppSettings> {
-    let (conn, _) = open(app)?;
-    save_settings_for_connection(&conn, settings)
-}
-
-pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
-    let settings = conn
-        .query_row(
-            "
-            SELECT backup_retention, dark_mode, country_flag_display,
-                   left_sidebar_default, right_sidebar_default,
-                   import_source_path, cover_source_path, billboard_source_path,
-                   billboard_singles_source_path, musicbrainz_cache_path,
-                   musicbrainz_overlay_sync_path, musicbrainz_overlay_auto_sync_minutes,
-                   update_auto_check_minutes, updated_at
-            FROM app_settings
-            WHERE id = 1
-            ",
-            [],
-            settings_from_row,
-        )
-        .optional()
-        .context("Could not load settings")?;
-
-    match settings {
-        Some(settings) => Ok(normalize_settings(settings)),
-        None => save_settings_for_connection(
-            conn,
-            AppSettings {
-                backup_retention: DEFAULT_BACKUP_RETENTION,
-                dark_mode: false,
-                country_flag_display: DEFAULT_COUNTRY_FLAG_DISPLAY.to_string(),
-                left_sidebar_default: "expanded".to_string(),
-                right_sidebar_default: "expanded".to_string(),
-                import_source_path: DEFAULT_IMPORT_SOURCE_PATH.to_string(),
-                cover_source_path: DEFAULT_COVER_SOURCE_PATH.to_string(),
-                billboard_source_path: DEFAULT_BILLBOARD_SOURCE_PATH.to_string(),
-                billboard_singles_source_path: DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH.to_string(),
-                musicbrainz_cache_path: DEFAULT_MUSICBRAINZ_CACHE_PATH.to_string(),
-                musicbrainz_overlay_sync_path: DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH.to_string(),
-                musicbrainz_overlay_auto_sync_minutes: 0,
-                update_auto_check_minutes: 0,
-                updated_at: None,
-            },
-        ),
-    }
-}
-
-fn save_settings_for_connection(conn: &Connection, settings: AppSettings) -> Result<AppSettings> {
-    let settings = normalize_settings(settings);
-    let now = Utc::now().to_rfc3339();
-    conn.execute(
-        "
-        INSERT INTO app_settings (
-            id, backup_retention, dark_mode, country_flag_display, left_sidebar_default, right_sidebar_default,
-            import_source_path, cover_source_path, billboard_source_path,
-            billboard_singles_source_path, musicbrainz_cache_path, musicbrainz_overlay_sync_path,
-            musicbrainz_overlay_auto_sync_minutes, update_auto_check_minutes, updated_at
-        )
-        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
-        ON CONFLICT(id) DO UPDATE SET
-            backup_retention = excluded.backup_retention,
-            dark_mode = excluded.dark_mode,
-            country_flag_display = excluded.country_flag_display,
-            left_sidebar_default = excluded.left_sidebar_default,
-            right_sidebar_default = excluded.right_sidebar_default,
-            import_source_path = excluded.import_source_path,
-            cover_source_path = excluded.cover_source_path,
-            billboard_source_path = excluded.billboard_source_path,
-            billboard_singles_source_path = excluded.billboard_singles_source_path,
-            musicbrainz_cache_path = excluded.musicbrainz_cache_path,
-            musicbrainz_overlay_sync_path = excluded.musicbrainz_overlay_sync_path,
-            musicbrainz_overlay_auto_sync_minutes = excluded.musicbrainz_overlay_auto_sync_minutes,
-            update_auto_check_minutes = excluded.update_auto_check_minutes,
-            updated_at = excluded.updated_at
-        ",
-        params![
-            i64::from(settings.backup_retention),
-            if settings.dark_mode { 1 } else { 0 },
-            settings.country_flag_display,
-            settings.left_sidebar_default,
-            settings.right_sidebar_default,
-            settings.import_source_path,
-            settings.cover_source_path,
-            settings.billboard_source_path,
-            settings.billboard_singles_source_path,
-            settings.musicbrainz_cache_path,
-            settings.musicbrainz_overlay_sync_path,
-            i64::from(settings.musicbrainz_overlay_auto_sync_minutes),
-            i64::from(settings.update_auto_check_minutes),
-            now
-        ],
-    )
-    .context("Could not save settings")?;
-
-    settings_for_connection(conn)
-}
-
-fn settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppSettings> {
-    let backup_retention: i64 = row.get(0)?;
-    let dark_mode: i64 = row.get(1)?;
-    Ok(AppSettings {
-        backup_retention: backup_retention.max(0) as u32,
-        dark_mode: dark_mode != 0,
-        country_flag_display: row.get(2)?,
-        left_sidebar_default: row.get(3)?,
-        right_sidebar_default: row.get(4)?,
-        import_source_path: row.get(5)?,
-        cover_source_path: row.get(6)?,
-        billboard_source_path: row.get(7)?,
-        billboard_singles_source_path: row.get(8)?,
-        musicbrainz_cache_path: row.get(9)?,
-        musicbrainz_overlay_sync_path: row.get(10)?,
-        musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(11)?.max(0) as u32,
-        update_auto_check_minutes: row.get::<_, i64>(12)?.max(0) as u32,
-        updated_at: row.get(13)?,
-    })
-}
-
-fn normalize_settings(mut settings: AppSettings) -> AppSettings {
-    settings.backup_retention = settings
-        .backup_retention
-        .clamp(MIN_BACKUP_RETENTION, MAX_BACKUP_RETENTION);
-    settings.country_flag_display = normalize_country_flag_display(&settings.country_flag_display);
-    settings.left_sidebar_default = normalize_left_sidebar_default(&settings.left_sidebar_default);
-    settings.right_sidebar_default =
-        normalize_right_sidebar_default(&settings.right_sidebar_default);
-    settings.import_source_path =
-        normalize_import_path(&settings.import_source_path, DEFAULT_IMPORT_SOURCE_PATH);
-    settings.cover_source_path =
-        normalize_import_path(&settings.cover_source_path, DEFAULT_COVER_SOURCE_PATH);
-    settings.billboard_source_path = normalize_import_path(
-        &settings.billboard_source_path,
-        DEFAULT_BILLBOARD_SOURCE_PATH,
-    );
-    settings.billboard_singles_source_path = normalize_import_path(
-        &settings.billboard_singles_source_path,
-        DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH,
-    );
-    settings.musicbrainz_cache_path =
-        normalize_musicbrainz_cache_path(&settings.musicbrainz_cache_path);
-    settings.musicbrainz_overlay_sync_path =
-        normalize_musicbrainz_overlay_sync_path(&settings.musicbrainz_overlay_sync_path);
-    settings.musicbrainz_overlay_auto_sync_minutes = settings
-        .musicbrainz_overlay_auto_sync_minutes
-        .min(MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES);
-    settings.update_auto_check_minutes = settings
-        .update_auto_check_minutes
-        .min(MAX_UPDATE_AUTO_CHECK_MINUTES);
-    settings
-}
-
-fn normalize_country_flag_display(value: &str) -> String {
-    match value {
-        "flagAndName" | "name" | "flag" => value.to_string(),
-        _ => DEFAULT_COUNTRY_FLAG_DISPLAY.to_string(),
-    }
-}
-
-fn normalize_left_sidebar_default(value: &str) -> String {
-    match value {
-        "expanded" | "iconOnly" | "hidden" => value.to_string(),
-        _ => "expanded".to_string(),
-    }
-}
-
-fn normalize_right_sidebar_default(value: &str) -> String {
-    match value {
-        "expanded" | "hidden" => value.to_string(),
-        _ => "expanded".to_string(),
-    }
-}
-
-fn normalize_import_path(value: &str, fallback: &str) -> String {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        fallback.to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-fn normalize_musicbrainz_cache_path(value: &str) -> String {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        DEFAULT_MUSICBRAINZ_CACHE_PATH.to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-fn normalize_musicbrainz_overlay_sync_path(value: &str) -> String {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH.to_string()
-    } else {
-        trimmed.to_string()
-    }
 }
 
 #[cfg(not(test))]
@@ -11034,6 +10491,31 @@ mod tests {
             schema_table_exists(&conn, "musicbrainz_artist_info_import_runs")
                 .expect("artist info import run table exists")
         );
+    }
+
+    #[test]
+    fn clears_legacy_developer_overlay_sync_default() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute(
+            "UPDATE app_settings SET musicbrainz_overlay_sync_path = ?1 WHERE id = 1",
+            params![r"C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3"],
+        )
+        .expect("restore legacy developer default");
+        conn.execute_batch("PRAGMA user_version = 19;")
+            .expect("rewind schema version");
+
+        migrate(&conn).expect("migrate portable overlay default");
+
+        let sync_path: String = conn
+            .query_row(
+                "SELECT musicbrainz_overlay_sync_path FROM app_settings WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read migrated overlay path");
+        assert!(sync_path.is_empty());
     }
 
     #[test]

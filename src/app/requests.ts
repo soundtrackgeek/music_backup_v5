@@ -14,6 +14,8 @@ import type {
   GenreListRequest,
   GenreSummary,
   MusicToolIssueRequest,
+  SavedChart,
+  SavedSearch,
   TextFilter,
 } from "../types";
 import { chartGridCoverSize, completenessRange, genreSuggestionPageSize } from "./config";
@@ -106,6 +108,23 @@ export function normalizeBrowseRequestForClient(request: BrowseRequest): BrowseR
     limit: request.limit ?? 50,
     offset: request.offset ?? 0,
   };
+}
+
+export function serializeBrowseRequest(request: BrowseRequest) {
+  return JSON.stringify(normalizeBrowseRequestForClient(request));
+}
+
+export function deserializeBrowseRequest(value: string) {
+  return normalizeBrowseRequestForClient(JSON.parse(value) as BrowseRequest);
+}
+
+export function normalizeSavedSearchForClient(search: SavedSearch): SavedSearch {
+  const request = normalizeBrowseRequestForClient(search.request);
+  return { ...search, view: request.view, request };
+}
+
+export function normalizeSavedSearchesForClient(searches: SavedSearch[]) {
+  return searches.map(normalizeSavedSearchForClient);
 }
 
 export function createAlbumTracksRequest(albumId: string): BrowseRequest {
@@ -360,6 +379,14 @@ export function normalizeChartConfigForClient(config: ChartConfig) {
     ratingCompletenessThreshold: null,
     gridCoverSize: normalizeChartGridCoverSize(config.gridCoverSize),
   } satisfies ChartConfig;
+}
+
+export function normalizeSavedChartForClient(chart: SavedChart): SavedChart {
+  return { ...chart, config: normalizeChartConfigForClient(chart.config) };
+}
+
+export function normalizeSavedChartsForClient(charts: SavedChart[]) {
+  return charts.map(normalizeSavedChartForClient);
 }
 
 export function nextSort(current: BrowseSort, field: string): BrowseSort {

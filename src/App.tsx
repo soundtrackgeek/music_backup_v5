@@ -217,7 +217,6 @@ import {
   missingFieldOptions,
   musicToolCatalog,
   navigation,
-  navigationShortcutMap,
   operatorLabels,
   rankingOptions,
   rightSidebarModeLabels,
@@ -263,6 +262,14 @@ import {
   uniqueGenreSuggestionOptions,
 } from "./app/genreSuggestions";
 import { clampBackupRetention, numberValue } from "./app/input";
+import { useWorkspaceNavigation } from "./app/navigation";
+import {
+  formatMusicBrainzReviewState,
+  MusicBrainzReviewState,
+} from "./components/MusicBrainzReviewState";
+import { ArtistsWorkspace } from "./workspaces/ArtistsWorkspace";
+import { SearchWorkspace } from "./workspaces/SearchWorkspace";
+import { SettingsWorkspace } from "./workspaces/SettingsWorkspace";
 import {
   checkForAppUpdate,
   installAppUpdate,
@@ -2586,15 +2593,7 @@ function formatMusicBrainzArtistLifeSummary(artist: ArtistSummary | null) {
 }
 
 function formatMusicBrainzArtistInfoState(artist: ArtistSummary | null) {
-  const state = artist?.musicBrainzInfoReviewState?.trim();
-  if (!state) {
-    return "Missing";
-  }
-  return state
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
+  return formatMusicBrainzReviewState(artist?.musicBrainzInfoReviewState);
 }
 
 function ArtistIndexTable({
@@ -2939,11 +2938,9 @@ function MusicBrainzArtistInfoPanel({
           </p>
         </div>
         <div className="panel-actions">
-          <span
-            className={`run-status run-status-${(artist?.musicBrainzInfoReviewState ?? "unavailable").toLowerCase()}`}
-          >
-            {infoStatusLabel}
-          </span>
+          <MusicBrainzReviewState
+            state={artist?.musicBrainzInfoReviewState}
+          />
           <button
             className="musicbrainz-update-button"
             type="button"
@@ -6174,15 +6171,9 @@ function RatingEventList({ events }: { events: RatingEvent[] }) {
   );
 }
 
-function isEditableShortcutTarget(target: EventTarget | null) {
-  return (
-    target instanceof HTMLElement &&
-    Boolean(target.closest("input, textarea, select, [contenteditable]"))
-  );
-}
-
 export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
+  useWorkspaceNavigation(activeSection, setActiveSection);
   const [sourcePath, setSourcePath] = useState(() =>
     createDefaultImportSourcePath(),
   );
@@ -6505,34 +6496,6 @@ export default function App() {
   const isMusicBrainzOverlaySyncingRef = useRef(false);
   const canImport = isTauriRuntime();
 
-  useEffect(() => {
-    function handleNavigationShortcut(event: globalThis.KeyboardEvent) {
-      if (
-        event.defaultPrevented ||
-        event.altKey ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.shiftKey ||
-        event.isComposing ||
-        isEditableShortcutTarget(event.target)
-      ) {
-        return;
-      }
-
-      const shortcut = navigationShortcutMap.get(event.key);
-      if (!shortcut?.enabled) {
-        return;
-      }
-
-      event.preventDefault();
-      setActiveSection(shortcut.label);
-    }
-
-    window.addEventListener("keydown", handleNavigationShortcut);
-    return () =>
-      window.removeEventListener("keydown", handleNavigationShortcut);
-  }, []);
-
   const refreshGenreSuggestions = useCallback(async () => {
     const nextGenreNames = await loadGenreSuggestionNames();
     setGenreSuggestionNames(nextGenreNames);
@@ -6568,18 +6531,8 @@ export default function App() {
     setRuns(nextRuns);
     setDatabaseBackups(nextBackups);
     setBackupError(null);
-    setSavedSearches(
-      nextSavedSearches.map((search) => ({
-        ...search,
-        request: normalizeBrowseRequestForClient(search.request),
-      })),
-    );
-    setSavedCharts(
-      nextSavedCharts.map((chart) => ({
-        ...chart,
-        config: normalizeChartConfigForClient(chart.config),
-      })),
-    );
+    setSavedSearches(nextSavedSearches);
+    setSavedCharts(nextSavedCharts);
     setStatistics(nextStatistics);
     settingsRef.current = nextSettings;
     setSettings(nextSettings);
@@ -8448,7 +8401,7 @@ export default function App() {
       `${request.view === "albums" ? "Album" : "Track"} search`;
     const saved = await saveSearch(saveName.trim() || fallbackName, request);
     setSavedSearches((previous) => [
-      { ...saved, request: normalizeBrowseRequestForClient(saved.request) },
+      saved,
       ...previous.filter((search) => search.id !== saved.id),
     ]);
     setSaveName("");
@@ -8892,7 +8845,7 @@ export default function App() {
     const fallbackName = `${rankingLabel(nextConfig.rankingMetric)} chart`;
     const saved = await saveChart(chartName.trim() || fallbackName, nextConfig);
     setSavedCharts((previous) => [
-      { ...saved, config: normalizeChartConfigForClient(saved.config) },
+      saved,
       ...previous.filter((chart) => chart.id !== saved.id),
     ]);
     setChartName("");
@@ -9451,9 +9404,15 @@ export default function App() {
     }
 
     const isAutoSync = options.source === "auto";
-    const syncPath =
-      musicBrainzOverlaySyncPathDraft.trim() ||
-      defaultMusicBrainzOverlaySyncPath;
+    const syncPath = musicBrainzOverlaySyncPathDraft.trim();
+    if (!syncPath) {
+      if (!isAutoSync) {
+        setMusicBrainzOverlaySyncError(
+          "Choose a shared MusicBrainz overlay sync database path before syncing.",
+        );
+      }
+      return;
+    }
     isMusicBrainzOverlaySyncingRef.current = true;
     if (!isAutoSync) {
       setIsMusicBrainzOverlaySyncing(true);
@@ -9622,7 +9581,11 @@ export default function App() {
     const autoSyncMinutes = overlayAutoSyncMinutesValue(
       settings.musicBrainzOverlayAutoSyncMinutes,
     );
-    if (!canImport || autoSyncMinutes <= 0) {
+    if (
+      !canImport ||
+      autoSyncMinutes <= 0 ||
+      !settings.musicBrainzOverlaySyncPath.trim()
+    ) {
       return undefined;
     }
 
@@ -11163,16 +11126,9 @@ export default function App() {
             </section>
           </section>
         ) : activeSection === "Artists" ? (
-          <section className="workspace artists-workspace">
-            <header className="topbar">
-              <div>
-                <h1>Artists</h1>
-                <p>
-                  Album-artist index, selected artist album lists, and
-                  artist-level summary stats.
-                </p>
-              </div>
-              <div className="topbar-actions">
+          <ArtistsWorkspace
+            actions={
+              <>
                 <button
                   className="icon-button"
                   type="button"
@@ -11192,8 +11148,9 @@ export default function App() {
                 >
                   <Database size={18} />
                 </button>
-              </div>
-            </header>
+              </>
+            }
+          >
 
             <section className="metric-grid" aria-label="Artist summary">
               <Metric
@@ -11481,7 +11438,7 @@ export default function App() {
                 onClose={clearSelectedArtistAlbum}
               />
             </section>
-          </section>
+          </ArtistsWorkspace>
         ) : activeSection === "Genres" ? (
           <section className="workspace genres-workspace">
             <header className="topbar">
@@ -12757,12 +12714,8 @@ export default function App() {
             </section>
           </section>
         ) : activeSection === "Settings" ? (
-          <section className="workspace settings-workspace">
-            <header className="topbar">
-              <div>
-                <h1>Settings</h1>
-                <p>Backup retention, appearance, and workspace layout.</p>
-              </div>
+          <SettingsWorkspace
+            reloadAction={
               <button
                 className="icon-button"
                 type="button"
@@ -12771,7 +12724,8 @@ export default function App() {
               >
                 <RotateCcw size={18} />
               </button>
-            </header>
+            }
+          >
 
             <section className="metric-grid" aria-label="Settings summary">
               <Metric
@@ -14157,7 +14111,7 @@ export default function App() {
                       onChange={(event) =>
                         setMusicBrainzOverlaySyncPathDraft(event.target.value)
                       }
-                      placeholder={defaultMusicBrainzOverlaySyncPath}
+                      placeholder="Choose a shared .sqlite3 file path"
                     />
                   </label>
                   <label className="criterion setting-number musicbrainz-sync-interval">
@@ -14183,7 +14137,10 @@ export default function App() {
                   <button
                     className="primary-button"
                     type="button"
-                    disabled={isMusicBrainzOverlaySyncing}
+                    disabled={
+                      isMusicBrainzOverlaySyncing ||
+                      !musicBrainzOverlaySyncPathDraft.trim()
+                    }
                     onClick={() => void runMusicBrainzOverlaySync()}
                   >
                     <CloudDownload size={16} />
@@ -14233,7 +14190,7 @@ export default function App() {
                 )}
 
                 <small className="performance-database-path">
-                  {settings.musicBrainzOverlaySyncPath}
+                  {settings.musicBrainzOverlaySyncPath || "Not configured"}
                 </small>
               </section>
 
@@ -14457,17 +14414,11 @@ export default function App() {
                 </div>
               </section>
             </section>
-          </section>
+          </SettingsWorkspace>
         ) : (
-          <section className="workspace search-workspace">
-            <header className="topbar">
-              <div>
-                <h1>Search</h1>
-                <p>
-                  Album and track browsing over the imported MusicBee library.
-                </p>
-              </div>
-              <div className="topbar-actions">
+          <SearchWorkspace
+            actions={
+              <>
                 <button
                   className="icon-button"
                   type="button"
@@ -14484,8 +14435,9 @@ export default function App() {
                 >
                   <Database size={18} />
                 </button>
-              </div>
-            </header>
+              </>
+            }
+          >
 
             <section className="metric-grid" aria-label="Library summary">
               <Metric
@@ -15106,7 +15058,7 @@ export default function App() {
                 visibleColumns={searchTableColumns}
               />
             </section>
-          </section>
+          </SearchWorkspace>
         )}
       </div>
 
