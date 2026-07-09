@@ -199,6 +199,8 @@ import type {
 import { chartTemplates, type ChartTemplate } from "./app/chartTemplates";
 import {
   EXPORT_FORMATS,
+  artistGenderOptions,
+  artistTypeOptions,
   chartColumnOptions,
   chartGridCoverSize,
   chartViewModes,
@@ -290,6 +292,7 @@ import {
   createTextFilter,
   defaultSort,
   nextSort,
+  normalizeBrowseRequestForClient,
   normalizeChartConfigForClient,
   normalizeChartGridCoverSize,
   normalizeCompletenessRange,
@@ -6565,7 +6568,12 @@ export default function App() {
     setRuns(nextRuns);
     setDatabaseBackups(nextBackups);
     setBackupError(null);
-    setSavedSearches(nextSavedSearches);
+    setSavedSearches(
+      nextSavedSearches.map((search) => ({
+        ...search,
+        request: normalizeBrowseRequestForClient(search.request),
+      })),
+    );
     setSavedCharts(
       nextSavedCharts.map((chart) => ({
         ...chart,
@@ -7748,6 +7756,20 @@ export default function App() {
         remove: () => updateFilter("missingOriginCountry", false),
       });
     }
+    if (currentFilters.artistType.trim()) {
+      nextChips.push({
+        key: "artistType",
+        label: `Type: ${currentFilters.artistType.trim()}`,
+        remove: () => updateFilter("artistType", ""),
+      });
+    }
+    if (currentFilters.artistGender.trim()) {
+      nextChips.push({
+        key: "artistGender",
+        label: `Gender: ${currentFilters.artistGender.trim()}`,
+        remove: () => updateFilter("artistGender", ""),
+      });
+    }
 
     addRangeChip(
       nextChips,
@@ -7789,6 +7811,76 @@ export default function App() {
       currentFilters.releaseYearTo,
       () => updateFilters({ releaseYearFrom: null, releaseYearTo: null }),
     );
+    addRangeChip(
+      nextChips,
+      "artistBorn",
+      "Born",
+      currentFilters.artistBornYearFrom,
+      currentFilters.artistBornYearTo,
+      () =>
+        updateFilters({
+          artistBornYearFrom: null,
+          artistBornYearTo: null,
+        }),
+    );
+    if (
+      currentFilters.artistDiedYearFrom != null ||
+      currentFilters.artistDiedYearTo != null
+    ) {
+      addRangeChip(
+        nextChips,
+        "artistDiedYears",
+        "Died",
+        currentFilters.artistDiedYearFrom,
+        currentFilters.artistDiedYearTo,
+        () =>
+          updateFilters({
+            artistDiedYearFrom: null,
+            artistDiedYearTo: null,
+          }),
+      );
+    } else if (currentFilters.artistDied) {
+      nextChips.push({
+        key: "artistDied",
+        label: "Dead artists",
+        remove: () => updateFilter("artistDied", false),
+      });
+    }
+    addRangeChip(
+      nextChips,
+      "artistFounded",
+      "Founded",
+      currentFilters.artistFoundedYearFrom,
+      currentFilters.artistFoundedYearTo,
+      () =>
+        updateFilters({
+          artistFoundedYearFrom: null,
+          artistFoundedYearTo: null,
+        }),
+    );
+    if (
+      currentFilters.artistDissolvedYearFrom != null ||
+      currentFilters.artistDissolvedYearTo != null
+    ) {
+      addRangeChip(
+        nextChips,
+        "artistDissolvedYears",
+        "Dissolved",
+        currentFilters.artistDissolvedYearFrom,
+        currentFilters.artistDissolvedYearTo,
+        () =>
+          updateFilters({
+            artistDissolvedYearFrom: null,
+            artistDissolvedYearTo: null,
+          }),
+      );
+    } else if (currentFilters.artistDissolved) {
+      nextChips.push({
+        key: "artistDissolved",
+        label: "Dissolved groups",
+        remove: () => updateFilter("artistDissolved", false),
+      });
+    }
     addRangeChip(
       nextChips,
       "minutes",
@@ -8356,7 +8448,7 @@ export default function App() {
       `${request.view === "albums" ? "Album" : "Track"} search`;
     const saved = await saveSearch(saveName.trim() || fallbackName, request);
     setSavedSearches((previous) => [
-      saved,
+      { ...saved, request: normalizeBrowseRequestForClient(saved.request) },
       ...previous.filter((search) => search.id !== saved.id),
     ]);
     setSaveName("");
@@ -10528,6 +10620,20 @@ export default function App() {
                   countryOptions={originCountryOptions}
                   displayMode={settings.countryFlagDisplay}
                 />
+                <SelectField
+                  label="Artist type"
+                  value={chartConfig.request.filters.artistType}
+                  onChange={(artistType) => updateChartFilters({ artistType })}
+                  options={artistTypeOptions}
+                />
+                <SelectField
+                  label="Gender"
+                  value={chartConfig.request.filters.artistGender}
+                  onChange={(artistGender) =>
+                    updateChartFilters({ artistGender })
+                  }
+                  options={artistGenderOptions}
+                />
                 <TextCriterion
                   label="Album artist"
                   filter={chartConfig.request.filters.albumArtist}
@@ -10547,6 +10653,62 @@ export default function App() {
                   filter={chartConfig.request.filters.publisher}
                   onChange={(filter) =>
                     updateChartFilters({ publisher: filter })
+                  }
+                />
+                <NumberField
+                  label="Born after"
+                  value={chartConfig.request.filters.artistBornYearFrom}
+                  onChange={(value) =>
+                    updateChartFilters({ artistBornYearFrom: value })
+                  }
+                />
+                <NumberField
+                  label="Born before"
+                  value={chartConfig.request.filters.artistBornYearTo}
+                  onChange={(value) =>
+                    updateChartFilters({ artistBornYearTo: value })
+                  }
+                />
+                <NumberField
+                  label="Died after"
+                  value={chartConfig.request.filters.artistDiedYearFrom}
+                  onChange={(value) =>
+                    updateChartFilters({ artistDiedYearFrom: value })
+                  }
+                />
+                <NumberField
+                  label="Died before"
+                  value={chartConfig.request.filters.artistDiedYearTo}
+                  onChange={(value) =>
+                    updateChartFilters({ artistDiedYearTo: value })
+                  }
+                />
+                <NumberField
+                  label="Founded after"
+                  value={chartConfig.request.filters.artistFoundedYearFrom}
+                  onChange={(value) =>
+                    updateChartFilters({ artistFoundedYearFrom: value })
+                  }
+                />
+                <NumberField
+                  label="Founded before"
+                  value={chartConfig.request.filters.artistFoundedYearTo}
+                  onChange={(value) =>
+                    updateChartFilters({ artistFoundedYearTo: value })
+                  }
+                />
+                <NumberField
+                  label="Dissolved after"
+                  value={chartConfig.request.filters.artistDissolvedYearFrom}
+                  onChange={(value) =>
+                    updateChartFilters({ artistDissolvedYearFrom: value })
+                  }
+                />
+                <NumberField
+                  label="Dissolved before"
+                  value={chartConfig.request.filters.artistDissolvedYearTo}
+                  onChange={(value) =>
+                    updateChartFilters({ artistDissolvedYearTo: value })
                   }
                 />
                 <NumberField
@@ -10704,6 +10866,30 @@ export default function App() {
                     }
                   />
                   <span>Missing origin country</span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={chartConfig.request.filters.artistDied}
+                    onChange={(event) =>
+                      updateChartFilters({
+                        artistDied: event.target.checked,
+                      })
+                    }
+                  />
+                  <span>Dead artists</span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={chartConfig.request.filters.artistDissolved}
+                    onChange={(event) =>
+                      updateChartFilters({
+                        artistDissolved: event.target.checked,
+                      })
+                    }
+                  />
+                  <span>Dissolved groups</span>
                 </label>
                 <label className="toggle-row">
                   <input
@@ -14423,6 +14609,20 @@ export default function App() {
                   countryOptions={originCountryOptions}
                   displayMode={settings.countryFlagDisplay}
                 />
+                <SelectField
+                  label="Artist type"
+                  value={currentFilters.artistType}
+                  onChange={(artistType) => updateFilter("artistType", artistType)}
+                  options={artistTypeOptions}
+                />
+                <SelectField
+                  label="Gender"
+                  value={currentFilters.artistGender}
+                  onChange={(artistGender) =>
+                    updateFilter("artistGender", artistGender)
+                  }
+                  options={artistGenderOptions}
+                />
                 <TextCriterion
                   label="Publisher"
                   filter={currentFilters.publisher}
@@ -14497,6 +14697,62 @@ export default function App() {
                   label="Release to"
                   value={currentFilters.releaseYearTo}
                   onChange={(value) => updateFilter("releaseYearTo", value)}
+                />
+                <NumberField
+                  label="Born after"
+                  value={currentFilters.artistBornYearFrom}
+                  onChange={(value) =>
+                    updateFilter("artistBornYearFrom", value)
+                  }
+                />
+                <NumberField
+                  label="Born before"
+                  value={currentFilters.artistBornYearTo}
+                  onChange={(value) =>
+                    updateFilter("artistBornYearTo", value)
+                  }
+                />
+                <NumberField
+                  label="Died after"
+                  value={currentFilters.artistDiedYearFrom}
+                  onChange={(value) =>
+                    updateFilter("artistDiedYearFrom", value)
+                  }
+                />
+                <NumberField
+                  label="Died before"
+                  value={currentFilters.artistDiedYearTo}
+                  onChange={(value) =>
+                    updateFilter("artistDiedYearTo", value)
+                  }
+                />
+                <NumberField
+                  label="Founded after"
+                  value={currentFilters.artistFoundedYearFrom}
+                  onChange={(value) =>
+                    updateFilter("artistFoundedYearFrom", value)
+                  }
+                />
+                <NumberField
+                  label="Founded before"
+                  value={currentFilters.artistFoundedYearTo}
+                  onChange={(value) =>
+                    updateFilter("artistFoundedYearTo", value)
+                  }
+                />
+                <NumberField
+                  label="Dissolved after"
+                  value={currentFilters.artistDissolvedYearFrom}
+                  onChange={(value) =>
+                    updateFilter("artistDissolvedYearFrom", value)
+                  }
+                />
+                <NumberField
+                  label="Dissolved before"
+                  value={currentFilters.artistDissolvedYearTo}
+                  onChange={(value) =>
+                    updateFilter("artistDissolvedYearTo", value)
+                  }
                 />
 
                 <NumberField
@@ -14646,6 +14902,33 @@ export default function App() {
                       }
                     />
                     <span>Origin Country</span>
+                  </label>
+                </div>
+
+                <div
+                  className="missing-flags"
+                  aria-label="Artist lifecycle filters"
+                >
+                  <span className="missing-flags-title">Artist status</span>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={currentFilters.artistDied}
+                      onChange={(event) =>
+                        updateFilter("artistDied", event.target.checked)
+                      }
+                    />
+                    <span>Dead artists</span>
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={currentFilters.artistDissolved}
+                      onChange={(event) =>
+                        updateFilter("artistDissolved", event.target.checked)
+                      }
+                    />
+                    <span>Dissolved groups</span>
                   </label>
                 </div>
 
@@ -15307,7 +15590,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
-                        setRequest(search.request);
+                        setRequest(normalizeBrowseRequestForClient(search.request));
                         setActiveSection("Search");
                       }}
                     >

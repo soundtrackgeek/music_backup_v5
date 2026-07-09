@@ -62,6 +62,18 @@ export function createFilters(): BrowseFilters {
     originCountryCodes: [],
     excludedOriginCountryCodes: [],
     missingOriginCountry: false,
+    artistType: "",
+    artistGender: "",
+    artistBornYearFrom: null,
+    artistBornYearTo: null,
+    artistDied: false,
+    artistDiedYearFrom: null,
+    artistDiedYearTo: null,
+    artistFoundedYearFrom: null,
+    artistFoundedYearTo: null,
+    artistDissolved: false,
+    artistDissolvedYearFrom: null,
+    artistDissolvedYearTo: null,
   };
 }
 
@@ -77,6 +89,22 @@ export function createRequest(view: BrowseView = "albums"): BrowseRequest {
     sort: defaultSort(view),
     limit: 50,
     offset: 0,
+  };
+}
+
+export function normalizeBrowseRequestForClient(request: BrowseRequest): BrowseRequest {
+  const view = request.view === "tracks" ? "tracks" : "albums";
+  return {
+    ...createRequest(view),
+    ...request,
+    view,
+    filters: {
+      ...createFilters(),
+      ...(request.filters ?? {}),
+    },
+    sort: request.sort ?? defaultSort(view),
+    limit: request.limit ?? 50,
+    offset: request.offset ?? 0,
   };
 }
 
@@ -321,11 +349,8 @@ export function chartCompletenessRange(config: ChartConfig) {
 export function normalizeChartConfigForClient(config: ChartConfig) {
   const { min, max } = chartCompletenessRange(config);
   const request = {
-    ...config.request,
-    filters: {
-      ...createFilters(),
-      ...(config.request?.filters ?? {}),
-    },
+    ...normalizeBrowseRequestForClient(config.request),
+    view: "albums" as const,
   };
   return {
     ...config,

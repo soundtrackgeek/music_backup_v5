@@ -8220,12 +8220,12 @@ fn search_library(
     let from_sql = if is_tracks {
         let origin_key_sql = artist_key_sql("a.album_artist_display");
         format!(
-            "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id LEFT JOIN album_covers c ON c.album_id = t.album_id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql}"
+            "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id LEFT JOIN album_covers c ON c.album_id = t.album_id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql}"
         )
     } else {
         let origin_key_sql = artist_key_sql("a.album_artist_display");
         format!(
-            "FROM albums a LEFT JOIN album_covers c ON c.album_id = a.id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql}"
+            "FROM albums a LEFT JOIN album_covers c ON c.album_id = a.id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql}"
         )
     };
 
@@ -8590,6 +8590,7 @@ fn build_where_clause(
         &filters.excluded_origin_country_codes,
         filters.missing_origin_country,
     );
+    add_artist_info_conditions(&mut conditions, &mut values, filters);
 
     add_missing_field_conditions(
         &mut conditions,
@@ -8699,6 +8700,101 @@ fn add_origin_country_conditions(
     if missing_origin_country {
         conditions.push("NULLIF(TRIM(COALESCE(origin.country_code, '')), '') IS NULL".to_string());
     }
+}
+
+fn add_artist_info_conditions(
+    conditions: &mut Vec<String>,
+    values: &mut Vec<Value>,
+    filters: &BrowseFilters,
+) {
+    if let Some(artist_type) =
+        normalized_artist_info_option(&filters.artist_type, &["person", "group"])
+    {
+        add_artist_type_condition(conditions, values, &artist_type);
+    }
+    if let Some(gender) = normalized_artist_info_option(&filters.artist_gender, &["male", "female"])
+    {
+        conditions.push("LOWER(COALESCE(info.gender, '')) = ?".to_string());
+        values.push(Value::Text(gender));
+    }
+
+    if filters.artist_born_year_from.is_some() || filters.artist_born_year_to.is_some() {
+        add_artist_type_condition(conditions, values, "person");
+        add_i32_range(
+            conditions,
+            values,
+            "info.life_begin_year",
+            filters.artist_born_year_from,
+            filters.artist_born_year_to,
+        );
+    }
+
+    if filters.artist_died
+        || filters.artist_died_year_from.is_some()
+        || filters.artist_died_year_to.is_some()
+    {
+        add_artist_type_condition(conditions, values, "person");
+        if filters.artist_died {
+            conditions.push(artist_ended_condition());
+        }
+        add_i32_range(
+            conditions,
+            values,
+            "info.life_end_year",
+            filters.artist_died_year_from,
+            filters.artist_died_year_to,
+        );
+    }
+
+    if filters.artist_founded_year_from.is_some() || filters.artist_founded_year_to.is_some() {
+        add_artist_type_condition(conditions, values, "group");
+        add_i32_range(
+            conditions,
+            values,
+            "info.life_begin_year",
+            filters.artist_founded_year_from,
+            filters.artist_founded_year_to,
+        );
+    }
+
+    if filters.artist_dissolved
+        || filters.artist_dissolved_year_from.is_some()
+        || filters.artist_dissolved_year_to.is_some()
+    {
+        add_artist_type_condition(conditions, values, "group");
+        if filters.artist_dissolved {
+            conditions.push(artist_ended_condition());
+        }
+        add_i32_range(
+            conditions,
+            values,
+            "info.life_end_year",
+            filters.artist_dissolved_year_from,
+            filters.artist_dissolved_year_to,
+        );
+    }
+}
+
+fn normalized_artist_info_option(value: &str, allowed_values: &[&str]) -> Option<String> {
+    let normalized = value.trim().to_lowercase();
+    if allowed_values.contains(&normalized.as_str()) {
+        Some(normalized)
+    } else {
+        None
+    }
+}
+
+fn add_artist_type_condition(
+    conditions: &mut Vec<String>,
+    values: &mut Vec<Value>,
+    artist_type: &str,
+) {
+    conditions.push("LOWER(COALESCE(info.artist_type, '')) = ?".to_string());
+    values.push(Value::Text(artist_type.to_string()));
+}
+
+fn artist_ended_condition() -> String {
+    "(COALESCE(info.life_ended, 0) = 1 OR info.life_end_year IS NOT NULL OR NULLIF(TRIM(COALESCE(info.life_end_date, '')), '') IS NOT NULL)".to_string()
 }
 
 fn add_text_condition(
@@ -9719,6 +9815,47 @@ mod tests {
             params![album_id, artist, album, year, total_tracks],
         )
         .expect("insert test album");
+    }
+
+    fn insert_test_artist_info(
+        conn: &Connection,
+        artist: &str,
+        artist_type: &str,
+        gender: Option<&str>,
+        begin_year: Option<i32>,
+        end_year: Option<i32>,
+        ended: bool,
+    ) {
+        let artist_key = normalize_artist_key(artist);
+        let mbid = format!("mbid-{artist_key}");
+        let begin_date = begin_year.map(|year| year.to_string());
+        let end_date = end_year.map(|year| year.to_string());
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_artist_infos (
+                local_artist_key, display_artist, mbid, sort_name, artist_type, gender,
+                life_begin_date, life_begin_year, life_end_date, life_end_year,
+                life_ended, review_state, source, fetched_at, created_at, updated_at
+            ) VALUES (
+                ?1, ?2, ?3, ?2, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
+                'imported', 'musicbrainz-live', '2026-07-09T00:00:00Z',
+                '2026-07-09T00:00:00Z', '2026-07-09T00:00:00Z'
+            )
+            ",
+            params![
+                artist_key,
+                artist,
+                mbid,
+                artist_type,
+                gender,
+                begin_date,
+                begin_year,
+                end_date,
+                end_year,
+                if ended { 1 } else { 0 },
+            ],
+        )
+        .expect("insert test artist info");
     }
 
     fn seeded_file_database(db_path: &Path, album_id: &str, album: &str) -> Connection {
@@ -10973,6 +11110,116 @@ mod tests {
     }
 
     #[test]
+    fn filters_browse_rows_by_musicbrainz_artist_info() {
+        let conn = seeded_connection();
+        insert_test_album(&conn, "mb:bowie", "David Bowie", "Low", 1977, 11);
+        insert_test_album(&conn, "mb:madonna", "Madonna", "True Blue", 1986, 9);
+        insert_test_album(
+            &conn,
+            "mb:chordettes",
+            "The Chordettes",
+            "The Chordettes",
+            1957,
+            12,
+        );
+
+        insert_test_artist_info(
+            &conn,
+            "Pet Shop Boys",
+            "Group",
+            None,
+            Some(1981),
+            None,
+            false,
+        );
+        insert_test_artist_info(
+            &conn,
+            "David Bowie",
+            "Person",
+            Some("Male"),
+            Some(1947),
+            Some(2016),
+            true,
+        );
+        insert_test_artist_info(
+            &conn,
+            "Madonna",
+            "Person",
+            Some("Female"),
+            Some(1958),
+            None,
+            false,
+        );
+        insert_test_artist_info(
+            &conn,
+            "The Chordettes",
+            "Group",
+            None,
+            Some(1946),
+            Some(1963),
+            true,
+        );
+
+        let mut person_request = BrowseRequest::default();
+        person_request.filters.artist_type = "Person".to_string();
+        let person_response = search_library(&conn, person_request, 50).expect("filter people");
+        assert_eq!(person_response.total, 2);
+
+        let mut born_request = BrowseRequest::default();
+        born_request.filters.artist_born_year_from = Some(1954);
+        born_request.filters.artist_born_year_to = Some(1958);
+        let born_response = search_library(&conn, born_request, 50).expect("filter born range");
+        assert_eq!(born_response.total, 1);
+        assert_eq!(
+            born_response.rows[0].album_artist_display.as_deref(),
+            Some("Madonna")
+        );
+
+        let mut gender_request = BrowseRequest::default();
+        gender_request.filters.artist_gender = "Female".to_string();
+        let gender_response = search_library(&conn, gender_request, 50).expect("filter gender");
+        assert_eq!(gender_response.total, 1);
+        assert_eq!(
+            gender_response.rows[0].album_artist_display.as_deref(),
+            Some("Madonna")
+        );
+
+        let mut died_request = BrowseRequest::default();
+        died_request.filters.artist_died = true;
+        died_request.filters.artist_died_year_from = Some(2010);
+        died_request.filters.artist_died_year_to = Some(2020);
+        let died_response = search_library(&conn, died_request, 50).expect("filter died range");
+        assert_eq!(died_response.total, 1);
+        assert_eq!(
+            died_response.rows[0].album_artist_display.as_deref(),
+            Some("David Bowie")
+        );
+
+        let mut founded_request = BrowseRequest::default();
+        founded_request.filters.artist_founded_year_from = Some(1980);
+        founded_request.filters.artist_founded_year_to = Some(1985);
+        let founded_response =
+            search_library(&conn, founded_request, 50).expect("filter founded range");
+        assert_eq!(founded_response.total, 1);
+        assert_eq!(
+            founded_response.rows[0].album_artist_display.as_deref(),
+            Some("Pet Shop Boys")
+        );
+
+        let mut dissolved_request = BrowseRequest::default();
+        dissolved_request.filters.artist_dissolved = true;
+        dissolved_request.filters.artist_dissolved_year_from = Some(1960);
+        dissolved_request.filters.artist_dissolved_year_to = Some(1970);
+        let dissolved_response =
+            search_library(&conn, dissolved_request, 50).expect("filter dissolved range");
+        assert_eq!(dissolved_response.total, 1);
+        assert_eq!(
+            dissolved_response.rows[0].album_artist_display.as_deref(),
+            Some("The Chordettes")
+        );
+    }
+
+    #[test]
     fn browse_filter_defaults_deserialize_without_origin_country_fields() {
         let filters: BrowseFilters =
             serde_json::from_value(serde_json::json!({})).expect("deserialize filters");
@@ -10980,6 +11227,18 @@ mod tests {
         assert!(filters.origin_country_codes.is_empty());
         assert!(filters.excluded_origin_country_codes.is_empty());
         assert!(!filters.missing_origin_country);
+        assert!(filters.artist_type.is_empty());
+        assert!(filters.artist_gender.is_empty());
+        assert_eq!(filters.artist_born_year_from, None);
+        assert_eq!(filters.artist_born_year_to, None);
+        assert!(!filters.artist_died);
+        assert_eq!(filters.artist_died_year_from, None);
+        assert_eq!(filters.artist_died_year_to, None);
+        assert_eq!(filters.artist_founded_year_from, None);
+        assert_eq!(filters.artist_founded_year_to, None);
+        assert!(!filters.artist_dissolved);
+        assert_eq!(filters.artist_dissolved_year_from, None);
+        assert_eq!(filters.artist_dissolved_year_to, None);
     }
 
     #[test]

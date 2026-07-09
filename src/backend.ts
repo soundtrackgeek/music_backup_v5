@@ -8,6 +8,7 @@ import type {
   ArtistSummary,
   BillboardImportSummary,
   BillboardSinglesImportSummary,
+  BrowseFilters,
   BrowseRequest,
   BrowseResponse,
   BrowseRow,
@@ -758,6 +759,54 @@ function mockArtistInfoForArtist(
         musicBrainzEndYear: 1987,
         musicBrainzEnded: true,
         musicBrainzBeginAreaName: "Manchester, England",
+        musicBrainzEndAreaName: null,
+        musicBrainzInfoReviewState: "imported",
+        musicBrainzInfoFetchedAt: "2026-07-08T10:12:05.000Z",
+      };
+    case "austin wintory":
+      return {
+        musicBrainzMbid: "preview-austin-wintory",
+        musicBrainzSortName: "Wintory, Austin",
+        musicBrainzArtistType: "Person",
+        musicBrainzGender: "Male",
+        musicBrainzBeginDate: "1984-09-09",
+        musicBrainzBeginYear: 1984,
+        musicBrainzEndDate: null,
+        musicBrainzEndYear: null,
+        musicBrainzEnded: false,
+        musicBrainzBeginAreaName: "Denver, Colorado",
+        musicBrainzEndAreaName: null,
+        musicBrainzInfoReviewState: "imported",
+        musicBrainzInfoFetchedAt: "2026-07-08T10:12:05.000Z",
+      };
+    case "dio":
+      return {
+        musicBrainzMbid: "preview-dio",
+        musicBrainzSortName: "Dio",
+        musicBrainzArtistType: "Group",
+        musicBrainzGender: null,
+        musicBrainzBeginDate: "1982",
+        musicBrainzBeginYear: 1982,
+        musicBrainzEndDate: "2010",
+        musicBrainzEndYear: 2010,
+        musicBrainzEnded: true,
+        musicBrainzBeginAreaName: "Cortland, New York",
+        musicBrainzEndAreaName: null,
+        musicBrainzInfoReviewState: "imported",
+        musicBrainzInfoFetchedAt: "2026-07-08T10:12:05.000Z",
+      };
+    case "korn":
+      return {
+        musicBrainzMbid: "preview-korn",
+        musicBrainzSortName: "Korn",
+        musicBrainzArtistType: "Group",
+        musicBrainzGender: null,
+        musicBrainzBeginDate: "1993",
+        musicBrainzBeginYear: 1993,
+        musicBrainzEndDate: null,
+        musicBrainzEndYear: null,
+        musicBrainzEnded: false,
+        musicBrainzBeginAreaName: "Bakersfield, California",
         musicBrainzEndAreaName: null,
         musicBrainzInfoReviewState: "imported",
         musicBrainzInfoFetchedAt: "2026-07-08T10:12:05.000Z",
@@ -3650,6 +3699,7 @@ export async function searchLibrary(request: BrowseRequest) {
       const genreKey = normalizeGenreKey(row.canonicalGenre);
       const ratedTracks = row.ratedTracks ?? 0;
       const ratingCompleteness = row.ratingCompleteness ?? 0;
+      const artistInfo = mockArtistInfoForArtist(row.albumArtistDisplay);
       const lovedTracks = isTracks
         ? row.love === "L"
           ? 1
@@ -3669,6 +3719,7 @@ export async function searchLibrary(request: BrowseRequest) {
           (row.originCountryCode ?? "").trim().toUpperCase(),
         ) &&
         (!request.filters.missingOriginCountry || !row.originCountryCode) &&
+        matchesArtistInfoFilters(artistInfo, request.filters) &&
         matchesNumberRange(row.year, yearFrom, yearTo) &&
         matchesNumberRange(row.releaseYear, releaseYearFrom, releaseYearTo) &&
         matchesMinuteRange(
@@ -4317,6 +4368,88 @@ function matchesNumberRange(
   return (
     (minimum == null || value >= minimum) &&
     (maximum == null || value <= maximum)
+  );
+}
+
+function normalizedArtistInfoValue(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function hasYearRange(
+  minimum: number | null | undefined,
+  maximum: number | null | undefined,
+) {
+  return minimum != null || maximum != null;
+}
+
+function artistInfoEnded(info: MusicBrainzArtistInfoFields) {
+  return (
+    Boolean(info.musicBrainzEnded) ||
+    info.musicBrainzEndYear != null ||
+    Boolean(info.musicBrainzEndDate?.trim())
+  );
+}
+
+function matchesArtistInfoFilters(
+  info: MusicBrainzArtistInfoFields,
+  filters: BrowseFilters,
+) {
+  const artistType = normalizedArtistInfoValue(info.musicBrainzArtistType);
+  const artistGender = normalizedArtistInfoValue(info.musicBrainzGender);
+  const typeFilter = normalizedArtistInfoValue(filters.artistType);
+  const genderFilter = normalizedArtistInfoValue(filters.artistGender);
+  const bornRange = hasYearRange(
+    filters.artistBornYearFrom,
+    filters.artistBornYearTo,
+  );
+  const diedRange = hasYearRange(
+    filters.artistDiedYearFrom,
+    filters.artistDiedYearTo,
+  );
+  const foundedRange = hasYearRange(
+    filters.artistFoundedYearFrom,
+    filters.artistFoundedYearTo,
+  );
+  const dissolvedRange = hasYearRange(
+    filters.artistDissolvedYearFrom,
+    filters.artistDissolvedYearTo,
+  );
+
+  return (
+    (!typeFilter || artistType === typeFilter) &&
+    (!genderFilter || artistGender === genderFilter) &&
+    (!bornRange ||
+      (artistType === "person" &&
+        matchesNumberRange(
+          info.musicBrainzBeginYear,
+          filters.artistBornYearFrom,
+          filters.artistBornYearTo,
+        ))) &&
+    (!filters.artistDied ||
+      (artistType === "person" && artistInfoEnded(info))) &&
+    (!diedRange ||
+      (artistType === "person" &&
+        matchesNumberRange(
+          info.musicBrainzEndYear,
+          filters.artistDiedYearFrom,
+          filters.artistDiedYearTo,
+        ))) &&
+    (!foundedRange ||
+      (artistType === "group" &&
+        matchesNumberRange(
+          info.musicBrainzBeginYear,
+          filters.artistFoundedYearFrom,
+          filters.artistFoundedYearTo,
+        ))) &&
+    (!filters.artistDissolved ||
+      (artistType === "group" && artistInfoEnded(info))) &&
+    (!dissolvedRange ||
+      (artistType === "group" &&
+        matchesNumberRange(
+          info.musicBrainzEndYear,
+          filters.artistDissolvedYearFrom,
+          filters.artistDissolvedYearTo,
+        )))
   );
 }
 

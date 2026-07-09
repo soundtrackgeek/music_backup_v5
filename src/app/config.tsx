@@ -80,6 +80,18 @@ export const countryFlagDisplayLabels: Record<CountryFlagDisplay, string> = {
   flag: "Flag",
 };
 
+export const artistTypeOptions = [
+  { value: "", label: "Any" },
+  { value: "Person", label: "Person" },
+  { value: "Group", label: "Group" },
+];
+
+export const artistGenderOptions = [
+  { value: "", label: "Any" },
+  { value: "Male", label: "Male" },
+  { value: "Female", label: "Female" },
+];
+
 export const operatorLabels: Record<TextFilterOperator, string> = {
   contains: "Contains",
   equals: "Equals",

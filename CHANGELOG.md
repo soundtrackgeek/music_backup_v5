@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.50.0] - 2026-07-09
+### Added
+- Added Search and Charts filters for MusicBrainz artist type, gender, born/founded year ranges, dead/dissolved status, and died/dissolved year ranges.
+- Added Rust coverage for MusicBrainz artist-info browse filters.
+
+### Changed
+- Bumped synchronized app metadata to `0.50.0`.
+
 ## [0.49.0] - 2026-07-09
 ### Added
 - Added a selected-artist MusicBrainz Artist Info box above Discography with MBID review/linking, manual MBID entry, Origin Country editing, and imported type, gender, sort name, life-span, and begin/end area details.

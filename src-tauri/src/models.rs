@@ -810,6 +810,30 @@ pub struct BrowseFilters {
     pub excluded_origin_country_codes: Vec<String>,
     #[serde(default)]
     pub missing_origin_country: bool,
+    #[serde(default)]
+    pub artist_type: String,
+    #[serde(default)]
+    pub artist_gender: String,
+    #[serde(default)]
+    pub artist_born_year_from: Option<i32>,
+    #[serde(default)]
+    pub artist_born_year_to: Option<i32>,
+    #[serde(default)]
+    pub artist_died: bool,
+    #[serde(default)]
+    pub artist_died_year_from: Option<i32>,
+    #[serde(default)]
+    pub artist_died_year_to: Option<i32>,
+    #[serde(default)]
+    pub artist_founded_year_from: Option<i32>,
+    #[serde(default)]
+    pub artist_founded_year_to: Option<i32>,
+    #[serde(default)]
+    pub artist_dissolved: bool,
+    #[serde(default)]
+    pub artist_dissolved_year_from: Option<i32>,
+    #[serde(default)]
+    pub artist_dissolved_year_to: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

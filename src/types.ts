@@ -566,6 +566,18 @@ export type BrowseFilters = {
   originCountryCodes: string[];
   excludedOriginCountryCodes: string[];
   missingOriginCountry: boolean;
+  artistType: string;
+  artistGender: string;
+  artistBornYearFrom: number | null;
+  artistBornYearTo: number | null;
+  artistDied: boolean;
+  artistDiedYearFrom: number | null;
+  artistDiedYearTo: number | null;
+  artistFoundedYearFrom: number | null;
+  artistFoundedYearTo: number | null;
+  artistDissolved: boolean;
+  artistDissolvedYearFrom: number | null;
+  artistDissolvedYearTo: number | null;
 };
 
 export type BrowseSort = {
