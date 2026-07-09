@@ -2525,6 +2525,75 @@ function formatYearSpan(
   return `${firstYear ?? lastYear}`;
 }
 
+function hasMusicBrainzArtistInfo(artist: ArtistSummary | null) {
+  if (!artist) {
+    return false;
+  }
+  return Boolean(
+    artist.musicBrainzArtistType ||
+      artist.musicBrainzGender ||
+      artist.musicBrainzBeginDate ||
+      artist.musicBrainzBeginYear != null ||
+      artist.musicBrainzEndDate ||
+      artist.musicBrainzEndYear != null ||
+      artist.musicBrainzBeginAreaName ||
+      artist.musicBrainzEndAreaName ||
+      artist.musicBrainzInfoReviewState,
+  );
+}
+
+function isMusicBrainzGroupArtist(artist: ArtistSummary | null) {
+  return artist?.musicBrainzArtistType?.trim().toLowerCase() === "group";
+}
+
+function formatMusicBrainzArtistLifeDate(
+  date: string | null | undefined,
+  year: number | null | undefined,
+) {
+  return date?.trim() || (year == null ? "" : String(year));
+}
+
+function formatMusicBrainzArtistEndValue(artist: ArtistSummary | null) {
+  if (!artist) {
+    return "";
+  }
+  const explicitDate = formatMusicBrainzArtistLifeDate(
+    artist.musicBrainzEndDate,
+    artist.musicBrainzEndYear,
+  );
+  if (explicitDate) {
+    return explicitDate;
+  }
+  if (artist.musicBrainzEnded === false) {
+    return isMusicBrainzGroupArtist(artist) ? "Active" : "Living";
+  }
+  return "";
+}
+
+function formatMusicBrainzArtistLifeSummary(artist: ArtistSummary | null) {
+  if (!artist) {
+    return "";
+  }
+  const start = formatMusicBrainzArtistLifeDate(
+    artist.musicBrainzBeginDate,
+    artist.musicBrainzBeginYear,
+  );
+  const end = formatMusicBrainzArtistEndValue(artist);
+  return [start, end].filter(Boolean).join("-");
+}
+
+function formatMusicBrainzArtistInfoState(artist: ArtistSummary | null) {
+  const state = artist?.musicBrainzInfoReviewState?.trim();
+  if (!state) {
+    return "Missing";
+  }
+  return state
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
 function ArtistIndexTable({
   response,
   selectedArtistId,
@@ -2688,20 +2757,16 @@ function ArtistAlbumTable({
   );
 }
 
-function MusicBrainzArtistDiscographyPanel({
+function MusicBrainzArtistInfoPanel({
   artist,
   response,
   isLoading,
   isUpdating,
   error,
-  onRefresh,
   onUpdateInfo,
   onOpenExternalUrl,
   onSetArtistLink,
   onSetOriginCountry,
-  onSetReleaseDecision,
-  onExport,
-  exportResult,
   refreshResult,
   originResult,
   countryOptions,
@@ -2712,7 +2777,6 @@ function MusicBrainzArtistDiscographyPanel({
   isLoading: boolean;
   isUpdating: boolean;
   error: string | null;
-  onRefresh: () => void;
   onUpdateInfo: () => void;
   onOpenExternalUrl: (url: string) => void;
   onSetArtistLink: (
@@ -2724,30 +2788,32 @@ function MusicBrainzArtistDiscographyPanel({
     countryCode: string,
     countryName?: string | null,
   ) => void;
-  onSetReleaseDecision: (
-    row: MusicBrainzArtistReleaseRow,
-    decision: "not-in-scope" | "include",
-  ) => void;
-  onExport: (format: "csv" | "xlsx") => void;
-  exportResult: ExportResult | null;
   refreshResult: MusicBrainzArtistRefreshResult | null;
   originResult: MusicBrainzArtistOriginCountryUpdate | null;
   countryOptions: MusicBrainzOriginCountryOption[];
   countryFlagDisplay: CountryFlagDisplay;
 }) {
-  const rows = response?.releases ?? [];
-  const visibleRows = rows.filter((row) => row.status !== "excluded");
-  const candidates = response?.candidates ?? [];
-  const statusLabel = musicBrainzStateLabel(response?.state);
   const [manualMbid, setManualMbid] = useState("");
   const [manualOriginCode, setManualOriginCode] = useState("");
   const [manualOriginName, setManualOriginName] = useState("");
   const originInputId = useId();
   const originNameInputId = useId();
   const originOptionsId = `${originInputId}-options`;
-  const musicBrainzArtistUrl = response?.musicbrainzMbid
-    ? `https://musicbrainz.org/artist/${encodeURIComponent(response.musicbrainzMbid)}`
+  const musicBrainzMbid =
+    response?.musicbrainzMbid ?? artist?.musicBrainzMbid ?? null;
+  const musicBrainzArtistLink = musicBrainzMbid
+    ? musicBrainzArtistUrl(musicBrainzMbid)
     : null;
+  const hasArtistInfo = hasMusicBrainzArtistInfo(artist);
+  const infoStatusLabel = formatMusicBrainzArtistInfoState(artist);
+  const isGroup = isMusicBrainzGroupArtist(artist);
+  const lifeStartLabel = isGroup ? "Founded" : "Born";
+  const lifeEndLabel = isGroup ? "Dissolved" : "Died";
+  const lifeStartValue = formatMusicBrainzArtistLifeDate(
+    artist?.musicBrainzBeginDate,
+    artist?.musicBrainzBeginYear,
+  );
+  const lifeEndValue = formatMusicBrainzArtistEndValue(artist);
   const artistLinkLabel =
     response?.artistLinkState === "verified"
       ? "Verified"
@@ -2756,17 +2822,22 @@ function MusicBrainzArtistDiscographyPanel({
         : response?.artistLinkState === "unverified"
           ? "Unverified"
           : "No review";
+  const artistLinkIgnored = response?.artistLinkIgnored ?? false;
   const canVerify = Boolean(
     artist &&
-    response?.musicbrainzMbid &&
-    response.artistLinkState !== "verified",
+      musicBrainzMbid &&
+      response?.artistLinkState !== "verified" &&
+      !isLoading,
   );
-  const canIgnore = Boolean(artist && response && !response.artistLinkIgnored);
+  const canIgnore = Boolean(
+    artist && musicBrainzMbid && !artistLinkIgnored && !isLoading,
+  );
   const canUnlink = Boolean(
     artist &&
-    response &&
-    (response.artistLinkState === "verified" ||
-      response.artistLinkState === "ignored"),
+      response &&
+      (response.artistLinkState === "verified" ||
+        response.artistLinkState === "ignored") &&
+      !isLoading,
   );
   const manualMbidValue = manualMbid.trim();
   const manualOriginCodeValue = manualOriginCode.trim().toUpperCase();
@@ -2780,23 +2851,14 @@ function MusicBrainzArtistDiscographyPanel({
   const canSetManualOrigin = Boolean(
     artist && /^[A-Z]{2}$/.test(manualOriginCodeValue) && !isLoading,
   );
-  const canExport = Boolean(
-    response &&
-    !response.artistLinkIgnored &&
-    visibleRows.length > 0 &&
-    !isLoading,
-  );
   const canUpdateInfo = Boolean(
-    artist &&
-    response?.musicbrainzMbid &&
-    !response.artistLinkIgnored &&
-    !isLoading,
+    artist && musicBrainzMbid && !artistLinkIgnored && !isLoading,
   );
   const refreshedOrigin = refreshResult?.origin ?? null;
 
   useEffect(() => {
-    setManualMbid(response?.musicbrainzMbid ?? "");
-  }, [response?.artistKey, response?.musicbrainzMbid]);
+    setManualMbid(musicBrainzMbid ?? "");
+  }, [artist?.id, musicBrainzMbid]);
 
   useEffect(() => {
     setManualOriginCode(artist?.originCountryCode ?? "");
@@ -2841,38 +2903,43 @@ function MusicBrainzArtistDiscographyPanel({
   function handleMusicBrainzArtistLinkClick(
     event: MouseEvent<HTMLAnchorElement>,
   ) {
-    if (!musicBrainzArtistUrl) {
+    if (!musicBrainzArtistLink) {
       return;
     }
     event.preventDefault();
-    onOpenExternalUrl(musicBrainzArtistUrl);
+    onOpenExternalUrl(musicBrainzArtistLink);
   }
 
   return (
     <section
-      className="table-panel musicbrainz-artist-panel"
-      aria-label="MusicBrainz artist discography"
+      className="table-panel musicbrainz-artist-info-panel"
+      aria-label="MusicBrainz artist information"
     >
       <div className="panel-heading compact">
         <div>
-          <h2>MusicBrainz Discography</h2>
+          <h2>MusicBrainz Artist Info</h2>
           <p>
             {isLoading
               ? isUpdating
-                ? "Updating MusicBrainz"
+                ? "Updating artist information"
                 : "Checking local cache"
-              : response
-                ? `${formatNumber(response.ownedCount)} owned / ${formatNumber(response.missingCount)} missing scoped albums`
-                : artist
-                  ? "Not checked"
-                  : "Select an artist"}
+              : artist
+                ? hasArtistInfo
+                  ? [
+                      artist.musicBrainzArtistType,
+                      formatMusicBrainzArtistLifeSummary(artist),
+                    ]
+                      .filter(Boolean)
+                      .join(" / ")
+                  : "Artist info not imported"
+                : "Select an artist"}
           </p>
         </div>
         <div className="panel-actions">
           <span
-            className={`run-status run-status-${(response?.state ?? "unavailable").toLowerCase()}`}
+            className={`run-status run-status-${(artist?.musicBrainzInfoReviewState ?? "unavailable").toLowerCase()}`}
           >
-            {statusLabel}
+            {infoStatusLabel}
           </span>
           <button
             className="musicbrainz-update-button"
@@ -2885,15 +2952,6 @@ function MusicBrainzArtistDiscographyPanel({
             <CloudDownload size={16} />
             <span>{isUpdating ? "Updating" : "Update"}</span>
           </button>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Refresh MusicBrainz discography"
-            disabled={!artist || isLoading}
-            onClick={onRefresh}
-          >
-            <RotateCcw size={18} />
-          </button>
         </div>
       </div>
 
@@ -2904,60 +2962,36 @@ function MusicBrainzArtistDiscographyPanel({
           <UsersRound size={20} />
           <span>Select an artist.</span>
         </div>
-      ) : !response ? (
-        <div className="empty-state large">
-          <ShieldCheck size={20} />
-          <span>
-            {isLoading
-              ? "Checking MusicBrainz cache."
-              : "No MusicBrainz result yet."}
-          </span>
-        </div>
       ) : (
         <>
-          <div
-            className={`musicbrainz-status-strip musicbrainz-status-${response.state}`}
-          >
-            <span
-              className={`run-status run-status-${response.state.toLowerCase()}`}
-            >
-              {statusLabel}
-            </span>
-            <span>{response.message}</span>
-          </div>
-
-          <dl className="performance-summary musicbrainz-artist-summary">
+          <dl className="performance-summary musicbrainz-artist-info-summary">
             <div>
-              <dt>Completion</dt>
-              <dd>
-                {response.completion == null
-                  ? "n/a"
-                  : formatPercent(response.completion, 0)}
-              </dd>
+              <dt>Type</dt>
+              <dd>{artist.musicBrainzArtistType ?? "Missing"}</dd>
             </div>
             <div>
-              <dt>Owned</dt>
-              <dd>{formatNumber(response.ownedCount)}</dd>
+              <dt>Gender</dt>
+              <dd>{artist.musicBrainzGender ?? "n/a"}</dd>
             </div>
             <div>
-              <dt>Missing</dt>
-              <dd>{formatNumber(response.missingCount)}</dd>
+              <dt>Sort name</dt>
+              <dd>{artist.musicBrainzSortName ?? "Missing"}</dd>
             </div>
             <div>
-              <dt>Filtered</dt>
-              <dd>{formatNumber(response.excludedCount)}</dd>
+              <dt>{lifeStartLabel}</dt>
+              <dd>{lifeStartValue || "Missing"}</dd>
             </div>
             <div>
-              <dt>Scoped albums</dt>
-              <dd>{formatNumber(response.pureAlbumCount)}</dd>
+              <dt>{lifeEndLabel}</dt>
+              <dd>{lifeEndValue || "Missing"}</dd>
             </div>
             <div>
-              <dt>Local albums</dt>
-              <dd>{formatNumber(response.localAlbumCount)}</dd>
+              <dt>Begin area</dt>
+              <dd>{artist.musicBrainzBeginAreaName ?? "Missing"}</dd>
             </div>
             <div>
-              <dt>Match</dt>
-              <dd>{response.matchMethod}</dd>
+              <dt>End area</dt>
+              <dd>{artist.musicBrainzEndAreaName ?? "n/a"}</dd>
             </div>
             <div>
               <dt>Origin</dt>
@@ -2972,29 +3006,24 @@ function MusicBrainzArtistDiscographyPanel({
           </dl>
 
           <div className="musicbrainz-artist-meta">
-            <span>{`Cache: ${response.matchedCacheName ?? "No cache artist"}`}</span>
-            {musicBrainzArtistUrl ? (
+            {musicBrainzArtistLink ? (
               <a
-                href={musicBrainzArtistUrl}
+                href={musicBrainzArtistLink}
                 target="_blank"
                 rel="noreferrer"
                 onClick={handleMusicBrainzArtistLinkClick}
               >
-                {`MBID: ${response.musicbrainzMbid}`}
+                {`MBID: ${musicBrainzMbid}`}
                 <ExternalLink size={13} aria-hidden="true" />
               </a>
             ) : (
               <span>No MBID</span>
             )}
-            <span>{`Method: ${response.matchMethod}`}</span>
+            <span>{`Match: ${response?.matchMethod ?? "none"}`}</span>
             <span>{`Trust: ${artistLinkLabel}`}</span>
-            <span>
-              {response.releaseGroupSource === "refreshed"
-                ? `Source: refreshed${response.releaseGroupUpdatedAt ? ` ${formatDate(response.releaseGroupUpdatedAt)}` : ""}`
-                : "Source: cache"}
-            </span>
-            {response.suspectMapping ? (
-              <span>{`${formatNumber(response.cachedNameCount)} cache names / ${formatNumber(response.totalReleaseGroupCount)} release groups`}</span>
+            <span>{`Info: ${infoStatusLabel}`}</span>
+            {artist.musicBrainzInfoFetchedAt ? (
+              <span>{`Fetched: ${formatDate(artist.musicBrainzInfoFetchedAt)}`}</span>
             ) : null}
           </div>
 
@@ -3006,10 +3035,8 @@ function MusicBrainzArtistDiscographyPanel({
               <button
                 className="primary-button"
                 type="button"
-                disabled={!canVerify || isLoading}
-                onClick={() =>
-                  onSetArtistLink("verify", response.musicbrainzMbid)
-                }
+                disabled={!canVerify}
+                onClick={() => onSetArtistLink("verify", musicBrainzMbid)}
               >
                 <Check size={16} />
                 <span>Verify</span>
@@ -3019,10 +3046,8 @@ function MusicBrainzArtistDiscographyPanel({
                 type="button"
                 title="Ignore MusicBrainz for this artist"
                 aria-label="Ignore MusicBrainz for this artist"
-                disabled={!canIgnore || isLoading}
-                onClick={() =>
-                  onSetArtistLink("ignore", response.musicbrainzMbid)
-                }
+                disabled={!canIgnore}
+                onClick={() => onSetArtistLink("ignore", musicBrainzMbid)}
               >
                 <Ban size={16} />
               </button>
@@ -3031,7 +3056,7 @@ function MusicBrainzArtistDiscographyPanel({
                 type="button"
                 title="Unlink MusicBrainz artist match"
                 aria-label="Unlink MusicBrainz artist match"
-                disabled={!canUnlink || isLoading}
+                disabled={!canUnlink}
                 onClick={() => onSetArtistLink("unlink")}
               >
                 <Unlink size={16} />
@@ -3117,6 +3142,214 @@ function MusicBrainzArtistDiscographyPanel({
             </button>
           </form>
 
+          {refreshResult || originResult ? (
+            <div
+              className="musicbrainz-info-results"
+              aria-label="MusicBrainz artist info updates"
+            >
+              {refreshResult ? (
+                <div className="export-result musicbrainz-export-result">
+                  <CloudDownload size={16} />
+                  <span>
+                    Artist info and {formatNumber(refreshResult.storedCount)}{" "}
+                    release groups refreshed at{" "}
+                    {formatDate(refreshResult.fetchedAt)}
+                    {refreshedOrigin ? (
+                      <>
+                        {" / Origin "}
+                        <CountryDisplay
+                          value={refreshedOrigin}
+                          mode={countryFlagDisplay}
+                        />
+                      </>
+                    ) : null}
+                  </span>
+                </div>
+              ) : null}
+              {originResult ? (
+                <div className="export-result musicbrainz-export-result">
+                  <Save size={16} />
+                  <span>
+                    Origin saved as{" "}
+                    <CountryDisplay
+                      value={originResult}
+                      mode={countryFlagDisplay}
+                      fallback="manual"
+                    />
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
+}
+
+function MusicBrainzArtistDiscographyPanel({
+  artist,
+  response,
+  isLoading,
+  isUpdating,
+  onRefresh,
+  onOpenExternalUrl,
+  onSetArtistLink,
+  onSetReleaseDecision,
+  onExport,
+  exportResult,
+}: {
+  artist: ArtistSummary | null;
+  response: MusicBrainzArtistDiscographyResponse | null;
+  isLoading: boolean;
+  isUpdating: boolean;
+  onRefresh: () => void;
+  onOpenExternalUrl: (url: string) => void;
+  onSetArtistLink: (
+    action: "verify" | "ignore" | "unlink" | "set",
+    musicbrainzMbid?: string | null,
+    canonicalName?: string | null,
+  ) => void;
+  onSetReleaseDecision: (
+    row: MusicBrainzArtistReleaseRow,
+    decision: "not-in-scope" | "include",
+  ) => void;
+  onExport: (format: "csv" | "xlsx") => void;
+  exportResult: ExportResult | null;
+}) {
+  const rows = response?.releases ?? [];
+  const visibleRows = rows.filter((row) => row.status !== "excluded");
+  const candidates = response?.candidates ?? [];
+  const statusLabel = musicBrainzStateLabel(response?.state);
+  const artistLinkLabel =
+    response?.artistLinkState === "verified"
+      ? "Verified"
+      : response?.artistLinkState === "ignored"
+        ? "Ignored"
+        : response?.artistLinkState === "unverified"
+          ? "Unverified"
+          : "No review";
+  const canExport = Boolean(
+    response &&
+    !response.artistLinkIgnored &&
+    visibleRows.length > 0 &&
+    !isLoading,
+  );
+
+  return (
+    <section
+      className="table-panel musicbrainz-artist-panel"
+      aria-label="MusicBrainz artist discography"
+    >
+      <div className="panel-heading compact">
+        <div>
+          <h2>MusicBrainz Discography</h2>
+          <p>
+            {isLoading
+              ? isUpdating
+                ? "Updating MusicBrainz"
+                : "Checking local cache"
+              : response
+                ? `${formatNumber(response.ownedCount)} owned / ${formatNumber(response.missingCount)} missing scoped albums`
+                : artist
+                  ? "Not checked"
+                  : "Select an artist"}
+          </p>
+        </div>
+        <div className="panel-actions">
+          <span
+            className={`run-status run-status-${(response?.state ?? "unavailable").toLowerCase()}`}
+          >
+            {statusLabel}
+          </span>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Refresh MusicBrainz discography"
+            disabled={!artist || isLoading}
+            onClick={onRefresh}
+          >
+            <RotateCcw size={18} />
+          </button>
+        </div>
+      </div>
+
+      {!artist ? (
+        <div className="empty-state large">
+          <UsersRound size={20} />
+          <span>Select an artist.</span>
+        </div>
+      ) : !response ? (
+        <div className="empty-state large">
+          <ShieldCheck size={20} />
+          <span>
+            {isLoading
+              ? "Checking MusicBrainz cache."
+              : "No MusicBrainz result yet."}
+          </span>
+        </div>
+      ) : (
+        <>
+          <div
+            className={`musicbrainz-status-strip musicbrainz-status-${response.state}`}
+          >
+            <span
+              className={`run-status run-status-${response.state.toLowerCase()}`}
+            >
+              {statusLabel}
+            </span>
+            <span>{response.message}</span>
+          </div>
+
+          <dl className="performance-summary musicbrainz-artist-summary">
+            <div>
+              <dt>Completion</dt>
+              <dd>
+                {response.completion == null
+                  ? "n/a"
+                  : formatPercent(response.completion, 0)}
+              </dd>
+            </div>
+            <div>
+              <dt>Owned</dt>
+              <dd>{formatNumber(response.ownedCount)}</dd>
+            </div>
+            <div>
+              <dt>Missing</dt>
+              <dd>{formatNumber(response.missingCount)}</dd>
+            </div>
+            <div>
+              <dt>Filtered</dt>
+              <dd>{formatNumber(response.excludedCount)}</dd>
+            </div>
+            <div>
+              <dt>Scoped albums</dt>
+              <dd>{formatNumber(response.pureAlbumCount)}</dd>
+            </div>
+            <div>
+              <dt>Local albums</dt>
+              <dd>{formatNumber(response.localAlbumCount)}</dd>
+            </div>
+            <div>
+              <dt>Match</dt>
+              <dd>{response.matchMethod}</dd>
+            </div>
+          </dl>
+
+          <div className="musicbrainz-artist-meta">
+            <span>{`Cache: ${response.matchedCacheName ?? "No cache artist"}`}</span>
+            <span>{`Method: ${response.matchMethod}`}</span>
+            <span>{`Trust: ${artistLinkLabel}`}</span>
+            <span>
+              {response.releaseGroupSource === "refreshed"
+                ? `Source: refreshed${response.releaseGroupUpdatedAt ? ` ${formatDate(response.releaseGroupUpdatedAt)}` : ""}`
+                : "Source: cache"}
+            </span>
+            {response.suspectMapping ? (
+              <span>{`${formatNumber(response.cachedNameCount)} cache names / ${formatNumber(response.totalReleaseGroupCount)} release groups`}</span>
+            ) : null}
+          </div>
+
           {response.artistLinkIgnored ? null : (
             <>
               <div
@@ -3147,37 +3380,6 @@ function MusicBrainzArtistDiscographyPanel({
                     <span>
                       {formatNumber(exportResult.rowCount)} albums to{" "}
                       {exportResult.path}
-                    </span>
-                  </div>
-                ) : null}
-                {refreshResult ? (
-                  <div className="export-result musicbrainz-export-result">
-                    <CloudDownload size={16} />
-                    <span>
-                      {formatNumber(refreshResult.storedCount)} release groups
-                      refreshed at {formatDate(refreshResult.fetchedAt)}
-                      {refreshedOrigin ? (
-                        <>
-                          {" / Origin "}
-                          <CountryDisplay
-                            value={refreshedOrigin}
-                            mode={countryFlagDisplay}
-                          />
-                        </>
-                      ) : null}
-                    </span>
-                  </div>
-                ) : null}
-                {originResult ? (
-                  <div className="export-result musicbrainz-export-result">
-                    <Save size={16} />
-                    <span>
-                      Origin saved as{" "}
-                      <CountryDisplay
-                        value={originResult}
-                        mode={countryFlagDisplay}
-                        fallback="manual"
-                      />
                     </span>
                   </div>
                 ) : null}
@@ -3615,14 +3817,12 @@ function ArtistDetailPanel({
   onIncludeCalculatedChange,
   exportResult,
   onExport,
-  countryFlagDisplay,
 }: {
   artist: ArtistSummary | null;
   includeCalculated: boolean;
   onIncludeCalculatedChange: (value: boolean) => void;
   exportResult: ExportResult | null;
   onExport: (format: string) => Promise<void>;
-  countryFlagDisplay: CountryFlagDisplay;
 }) {
   if (!artist) {
     return (
@@ -3706,16 +3906,6 @@ function ArtistDetailPanel({
         <div>
           <dt>TMOE</dt>
           <dd>{formatMinutes(artist.tmoeSeconds)}</dd>
-        </div>
-        <div>
-          <dt>Origin Country</dt>
-          <dd>
-            <CountryDisplay
-              value={artist}
-              mode={countryFlagDisplay}
-              fallback="Not imported"
-            />
-          </dd>
         </div>
       </dl>
 
@@ -8232,6 +8422,7 @@ export default function App() {
         selectedArtist.name,
       );
       setMusicBrainzArtistDiscography(result);
+      setArtistRequest((current) => ({ ...current }));
     } catch (error) {
       setMusicBrainzArtistError(
         error instanceof Error ? error.message : String(error),
@@ -8271,6 +8462,7 @@ export default function App() {
         selectedArtist.name,
       );
       setMusicBrainzArtistDiscography(result);
+      setArtistRequest((current) => ({ ...current }));
     } catch (error) {
       setMusicBrainzArtistError(
         error instanceof Error ? error.message : String(error),
@@ -8315,6 +8507,7 @@ export default function App() {
         selectedArtist.name,
       );
       setMusicBrainzArtistDiscography(result);
+      setArtistRequest((current) => ({ ...current }));
     } catch (error) {
       setMusicBrainzArtistError(
         error instanceof Error ? error.message : String(error),
@@ -8325,7 +8518,11 @@ export default function App() {
   }
 
   async function updateArtistMusicBrainzInfo() {
-    if (!selectedArtist || !musicBrainzArtistDiscography?.musicbrainzMbid) {
+    const musicBrainzMbid =
+      musicBrainzArtistDiscography?.musicbrainzMbid ??
+      selectedArtist?.musicBrainzMbid ??
+      null;
+    if (!selectedArtist || !musicBrainzMbid) {
       return;
     }
 
@@ -8339,7 +8536,7 @@ export default function App() {
       const refreshResult = await refreshMusicBrainzArtistInfo({
         artistKey: selectedArtist.id,
         artistName: selectedArtist.name,
-        musicbrainzMbid: musicBrainzArtistDiscography.musicbrainzMbid,
+        musicbrainzMbid: musicBrainzMbid,
       });
       const discography = await getMusicBrainzArtistDiscography(
         selectedArtist.id,
@@ -8349,7 +8546,11 @@ export default function App() {
       setMusicBrainzArtistRefreshResult(refreshResult);
       setMusicBrainzArtistOriginResult(null);
       applyArtistOriginUpdate(refreshResult.origin);
-      await refreshMusicBrainzOriginCountryStatus();
+      setArtistRequest((current) => ({ ...current }));
+      await Promise.all([
+        refreshMusicBrainzOriginCountryStatus(),
+        refreshMusicBrainzArtistInfoStatus(),
+      ]);
     } catch (error) {
       setMusicBrainzArtistError(
         error instanceof Error ? error.message : String(error),
@@ -8379,7 +8580,10 @@ export default function App() {
       const origin = await setMusicBrainzArtistOriginCountry({
         artistKey: selectedArtist.id,
         artistName: selectedArtist.name,
-        musicbrainzMbid: musicBrainzArtistDiscography?.musicbrainzMbid ?? null,
+        musicbrainzMbid:
+          musicBrainzArtistDiscography?.musicbrainzMbid ??
+          selectedArtist.musicBrainzMbid ??
+          null,
         countryCode,
         countryName,
       });
@@ -11015,13 +11219,12 @@ export default function App() {
               />
             </section>
 
-            <MusicBrainzArtistDiscographyPanel
+            <MusicBrainzArtistInfoPanel
               artist={selectedArtist}
               response={musicBrainzArtistDiscography}
               isLoading={isMusicBrainzArtistLoading}
               isUpdating={isMusicBrainzArtistUpdating}
               error={musicBrainzArtistError}
-              onRefresh={() => void refreshArtistMusicBrainz()}
               onUpdateInfo={() => void updateArtistMusicBrainzInfo()}
               onOpenExternalUrl={(url) => void openMusicBrainzArtistPage(url)}
               onSetArtistLink={(action, musicbrainzMbid, canonicalName) =>
@@ -11034,15 +11237,31 @@ export default function App() {
               onSetOriginCountry={(countryCode, countryName) =>
                 void saveArtistOriginCountry(countryCode, countryName)
               }
+              refreshResult={musicBrainzArtistRefreshResult}
+              originResult={musicBrainzArtistOriginResult}
+              countryOptions={originCountryOptions}
+              countryFlagDisplay={settings.countryFlagDisplay}
+            />
+
+            <MusicBrainzArtistDiscographyPanel
+              artist={selectedArtist}
+              response={musicBrainzArtistDiscography}
+              isLoading={isMusicBrainzArtistLoading}
+              isUpdating={isMusicBrainzArtistUpdating}
+              onRefresh={() => void refreshArtistMusicBrainz()}
+              onOpenExternalUrl={(url) => void openMusicBrainzArtistPage(url)}
+              onSetArtistLink={(action, musicbrainzMbid, canonicalName) =>
+                void setArtistMusicBrainzLink(
+                  action,
+                  musicbrainzMbid,
+                  canonicalName,
+                )
+              }
               onSetReleaseDecision={(row, decision) =>
                 void setArtistMusicBrainzReleaseDecision(row, decision)
               }
               onExport={(format) => void runArtistMusicBrainzExport(format)}
               exportResult={musicBrainzArtistExportResult}
-              refreshResult={musicBrainzArtistRefreshResult}
-              originResult={musicBrainzArtistOriginResult}
-              countryOptions={originCountryOptions}
-              countryFlagDisplay={settings.countryFlagDisplay}
             />
 
             <section
@@ -14820,7 +15039,6 @@ export default function App() {
             }
             exportResult={artistExportResult}
             onExport={runArtistExport}
-            countryFlagDisplay={settings.countryFlagDisplay}
           />
         ) : activeSection === "Genres" ? (
           <GenreDetailPanel

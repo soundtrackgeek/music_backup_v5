@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.49.0] - 2026-07-09
+### Added
+- Added a selected-artist MusicBrainz Artist Info box above Discography with MBID review/linking, manual MBID entry, Origin Country editing, and imported type, gender, sort name, life-span, and begin/end area details.
+
+### Changed
+- Changed the selected-artist MusicBrainz Update action to persist artist-info rows from the live MusicBrainz artist payload alongside refreshed release groups and Origin Country.
+- Moved selected-artist MBID and Origin Country controls out of MusicBrainz Discography so the discography panel focuses on release scope and exports.
+- Bumped synchronized app metadata to `0.49.0`.
+
 ## [0.48.0] - 2026-07-08
 ### Added
 - Added a Settings MusicBrainz Artist Information import tool with preview, import, cancel/resume behavior, live progress counters, recent activity, and a searchable report for artist type, gender, born/founded, and died/dissolved data.

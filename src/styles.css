@@ -3772,7 +3772,15 @@ button {
 }
 
 .performance-summary.musicbrainz-artist-summary {
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.performance-summary.musicbrainz-artist-info-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.performance-summary.musicbrainz-artist-info-summary dd {
+  overflow-wrap: anywhere;
 }
 
 .musicbrainz-artist-meta {
@@ -3898,6 +3906,12 @@ button {
 .musicbrainz-origin-editor .icon-button {
   width: 34px;
   height: 34px;
+}
+
+.musicbrainz-info-results {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .musicbrainz-update-button {
@@ -5264,6 +5278,7 @@ button {
   .performance-summary,
   .performance-summary.musicbrainz-summary,
   .performance-summary.musicbrainz-artist-summary,
+  .performance-summary.musicbrainz-artist-info-summary,
   .performance-probe-row,
   .musicbrainz-quality-grid,
   .musicbrainz-warning-list article {

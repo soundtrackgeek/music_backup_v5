@@ -668,10 +668,26 @@ type OriginCountryFields = Pick<
   | "originCountryRawArea"
   | "originCountryReviewState"
 >;
-type BrowseRowWithoutOrigin = Omit<BrowseRow, keyof OriginCountryFields>;
-type ArtistSummaryWithoutOrigin = Omit<
+type MusicBrainzArtistInfoFields = Pick<
   ArtistSummary,
-  keyof OriginCountryFields
+  | "musicBrainzMbid"
+  | "musicBrainzSortName"
+  | "musicBrainzArtistType"
+  | "musicBrainzGender"
+  | "musicBrainzBeginDate"
+  | "musicBrainzBeginYear"
+  | "musicBrainzEndDate"
+  | "musicBrainzEndYear"
+  | "musicBrainzEnded"
+  | "musicBrainzBeginAreaName"
+  | "musicBrainzEndAreaName"
+  | "musicBrainzInfoReviewState"
+  | "musicBrainzInfoFetchedAt"
+>;
+type BrowseRowWithoutOrigin = Omit<BrowseRow, keyof OriginCountryFields>;
+type ArtistSummaryWithoutMusicBrainz = Omit<
+  ArtistSummary,
+  keyof OriginCountryFields | keyof MusicBrainzArtistInfoFields
 >;
 
 function mockOriginForArtist(
@@ -706,6 +722,61 @@ function mockOriginForArtist(
         originCountryName: null,
         originCountryRawArea: null,
         originCountryReviewState: null,
+      };
+  }
+}
+
+function mockArtistInfoForArtist(
+  artist: string | null | undefined,
+): MusicBrainzArtistInfoFields {
+  switch (normalizeArtistKey(artist ?? null)) {
+    case "pet shop boys":
+      return {
+        musicBrainzMbid: "012151a8-preview-psb",
+        musicBrainzSortName: "Pet Shop Boys",
+        musicBrainzArtistType: "Group",
+        musicBrainzGender: null,
+        musicBrainzBeginDate: "1981",
+        musicBrainzBeginYear: 1981,
+        musicBrainzEndDate: null,
+        musicBrainzEndYear: null,
+        musicBrainzEnded: false,
+        musicBrainzBeginAreaName: "London, England",
+        musicBrainzEndAreaName: null,
+        musicBrainzInfoReviewState: "imported",
+        musicBrainzInfoFetchedAt: "2026-07-08T10:12:05.000Z",
+      };
+    case "the smiths":
+      return {
+        musicBrainzMbid: "preview-smiths",
+        musicBrainzSortName: "Smiths, The",
+        musicBrainzArtistType: "Group",
+        musicBrainzGender: null,
+        musicBrainzBeginDate: "1982",
+        musicBrainzBeginYear: 1982,
+        musicBrainzEndDate: "1987",
+        musicBrainzEndYear: 1987,
+        musicBrainzEnded: true,
+        musicBrainzBeginAreaName: "Manchester, England",
+        musicBrainzEndAreaName: null,
+        musicBrainzInfoReviewState: "imported",
+        musicBrainzInfoFetchedAt: "2026-07-08T10:12:05.000Z",
+      };
+    default:
+      return {
+        musicBrainzMbid: null,
+        musicBrainzSortName: null,
+        musicBrainzArtistType: null,
+        musicBrainzGender: null,
+        musicBrainzBeginDate: null,
+        musicBrainzBeginYear: null,
+        musicBrainzEndDate: null,
+        musicBrainzEndYear: null,
+        musicBrainzEnded: null,
+        musicBrainzBeginAreaName: null,
+        musicBrainzEndAreaName: null,
+        musicBrainzInfoReviewState: null,
+        musicBrainzInfoFetchedAt: null,
       };
   }
 }
@@ -1040,9 +1111,10 @@ const mockArtists: ArtistSummary[] = (
       lastYear: 1986,
       topGenre: "Post-Punk",
     },
-  ] satisfies ArtistSummaryWithoutOrigin[]
+  ] satisfies ArtistSummaryWithoutMusicBrainz[]
 ).map((artist) => ({
   ...artist,
+  ...mockArtistInfoForArtist(artist.name),
   ...mockOriginForArtist(artist.name),
 }));
 

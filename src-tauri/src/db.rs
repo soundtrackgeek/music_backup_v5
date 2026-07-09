@@ -5481,11 +5481,28 @@ fn list_artists(
                 ORDER BY COUNT(*) DESC, LOWER(COALESCE(a2.canonical_genre, '')) ASC
                 LIMIT 1
             ) AS top_genre,
+            COALESCE(link.mbid, info.mbid) AS music_brainz_mbid,
+            info.sort_name AS music_brainz_sort_name,
+            info.artist_type AS music_brainz_artist_type,
+            info.gender AS music_brainz_gender,
+            info.life_begin_date AS music_brainz_begin_date,
+            info.life_begin_year AS music_brainz_begin_year,
+            info.life_end_date AS music_brainz_end_date,
+            info.life_end_year AS music_brainz_end_year,
+            info.life_ended AS music_brainz_ended,
+            info.begin_area_name AS music_brainz_begin_area_name,
+            info.end_area_name AS music_brainz_end_area_name,
+            info.review_state AS music_brainz_info_review_state,
+            info.fetched_at AS music_brainz_info_fetched_at,
             origin.country_code AS origin_country_code,
             origin.country_name AS origin_country_name,
             origin.raw_area_name AS origin_country_raw_area,
             origin.review_state AS origin_country_review_state
         FROM grouped
+        LEFT JOIN musicbrainz_artist_infos info
+          ON info.local_artist_key = grouped.artist_key
+        LEFT JOIN musicbrainz_artist_links link
+          ON link.local_artist_key = grouped.artist_key
         LEFT JOIN musicbrainz_artist_origin_countries origin
           ON origin.local_artist_key = grouped.artist_key
         {order_sql}
@@ -5528,10 +5545,23 @@ fn artist_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArtistSu
         first_year: row.get(13)?,
         last_year: row.get(14)?,
         top_genre: row.get(15)?,
-        origin_country_code: row.get(16)?,
-        origin_country_name: row.get(17)?,
-        origin_country_raw_area: row.get(18)?,
-        origin_country_review_state: row.get(19)?,
+        music_brainz_mbid: row.get(16)?,
+        music_brainz_sort_name: row.get(17)?,
+        music_brainz_artist_type: row.get(18)?,
+        music_brainz_gender: row.get(19)?,
+        music_brainz_begin_date: row.get(20)?,
+        music_brainz_begin_year: row.get(21)?,
+        music_brainz_end_date: row.get(22)?,
+        music_brainz_end_year: row.get(23)?,
+        music_brainz_ended: row.get(24)?,
+        music_brainz_begin_area_name: row.get(25)?,
+        music_brainz_end_area_name: row.get(26)?,
+        music_brainz_info_review_state: row.get(27)?,
+        music_brainz_info_fetched_at: row.get(28)?,
+        origin_country_code: row.get(29)?,
+        origin_country_name: row.get(30)?,
+        origin_country_raw_area: row.get(31)?,
+        origin_country_review_state: row.get(32)?,
     })
 }
 

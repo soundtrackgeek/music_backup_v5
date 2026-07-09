@@ -216,6 +216,16 @@ pub fn refresh_artist_release_groups_for_app(
     let origin_payload = fetch_artist_origin(&mbid)?;
     let fetched_at = Utc::now().to_rfc3339();
     let stored_count = save_refreshed_artist_release_groups(&mut conn, &mbid, &rows, &fetched_at)?;
+    db::ensure_musicbrainz_artist_info_tables(&conn)?;
+    let artist_info = derive_artist_info(&origin_payload);
+    save_artist_info_evidence(
+        &conn,
+        &artist_key,
+        &artist_name,
+        &mbid,
+        &artist_info,
+        &fetched_at,
+    )?;
     let origin = save_refreshed_artist_origin_country(
         &conn,
         &artist_key,
