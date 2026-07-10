@@ -267,7 +267,13 @@ import {
   formatMusicBrainzReviewState,
   MusicBrainzReviewState,
 } from "./components/MusicBrainzReviewState";
-import { ArtistsWorkspace } from "./workspaces/ArtistsWorkspace";
+import {
+  ArtistDetailTabs,
+  artistDetailTabNeedsMusicBrainz,
+  artistDetailTabNeedsTracks,
+  ArtistsWorkspace,
+  type ArtistDetailTab,
+} from "./workspaces/ArtistsWorkspace";
 import { SearchWorkspace } from "./workspaces/SearchWorkspace";
 import { SettingsWorkspace } from "./workspaces/SettingsWorkspace";
 import {
@@ -6252,6 +6258,8 @@ export default function App() {
   const [artistError, setArtistError] = useState<string | null>(null);
   const [isArtistLoading, setIsArtistLoading] = useState(false);
   const [selectedArtistId, setSelectedArtistId] = useState<string | null>(null);
+  const [artistDetailTab, setArtistDetailTab] =
+    useState<ArtistDetailTab>("local-albums");
   const [artistAlbumsResponse, setArtistAlbumsResponse] =
     useState<BrowseResponse | null>(null);
   const [artistAlbumsError, setArtistAlbumsError] = useState<string | null>(
@@ -6752,6 +6760,10 @@ export default function App() {
         : null,
     [selectedArtistAlbumId],
   );
+  const shouldLoadArtistAlbumTracks =
+    artistDetailTabNeedsTracks(artistDetailTab);
+  const shouldLoadArtistMusicBrainz =
+    artistDetailTabNeedsMusicBrainz(artistDetailTab);
   const selectedGenre =
     genreResponse?.rows.find((genre) => genre.id === selectedGenreId) ?? null;
   const genreAlbumsRequest = useMemo(
@@ -6947,17 +6959,18 @@ export default function App() {
     }
 
     const rows = artistResponse?.rows ?? [];
-    if (rows.length === 0) {
-      setSelectedArtistId(null);
+    const nextArtistId =
+      selectedArtistId && rows.some((artist) => artist.id === selectedArtistId)
+        ? selectedArtistId
+        : (rows[0]?.id ?? null);
+
+    if (nextArtistId === selectedArtistId) {
       return;
     }
 
-    setSelectedArtistId((previous) =>
-      previous && rows.some((artist) => artist.id === previous)
-        ? previous
-        : rows[0].id,
-    );
-  }, [activeSection, artistResponse]);
+    resetDeferredArtistDetails();
+    setSelectedArtistId(nextArtistId);
+  }, [activeSection, artistResponse, selectedArtistId]);
 
   useEffect(() => {
     if (activeSection !== "Artists" || !artistAlbumsRequest) {
@@ -7014,8 +7027,11 @@ export default function App() {
   }, [activeSection, artistAlbumsResponse]);
 
   useEffect(() => {
-    if (activeSection !== "Artists" || !artistAlbumTracksRequest) {
-      setArtistAlbumTracksResponse(null);
+    if (
+      activeSection !== "Artists" ||
+      !shouldLoadArtistAlbumTracks ||
+      !artistAlbumTracksRequest
+    ) {
       return;
     }
 
@@ -7047,10 +7063,14 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, artistAlbumTracksRequest]);
+  }, [activeSection, artistAlbumTracksRequest, shouldLoadArtistAlbumTracks]);
 
   useEffect(() => {
-    if (activeSection !== "Artists" || !selectedArtist) {
+    if (activeSection !== "Artists") {
+      return;
+    }
+
+    if (!selectedArtist) {
       setMusicBrainzArtistDiscography(null);
       setMusicBrainzArtistError(null);
       setIsMusicBrainzArtistLoading(false);
@@ -7058,6 +7078,13 @@ export default function App() {
       setMusicBrainzArtistExportResult(null);
       setMusicBrainzArtistRefreshResult(null);
       setMusicBrainzArtistOriginResult(null);
+      return;
+    }
+
+    if (
+      !shouldLoadArtistMusicBrainz ||
+      musicBrainzArtistDiscography?.artistKey === selectedArtist.id
+    ) {
       return;
     }
 
@@ -7093,7 +7120,12 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, selectedArtist]);
+  }, [
+    activeSection,
+    musicBrainzArtistDiscography?.artistKey,
+    selectedArtist,
+    shouldLoadArtistMusicBrainz,
+  ]);
 
   useEffect(() => {
     if (activeSection !== "Genres") {
@@ -8180,33 +8212,39 @@ export default function App() {
     setAlbumExportResult(null);
   }
 
+  function resetDeferredArtistDetails() {
+    setArtistDetailTab("local-albums");
+    setSelectedArtistAlbumId(null);
+    setArtistAlbumTracksResponse(null);
+    setArtistAlbumTracksError(null);
+    setIsArtistAlbumTracksLoading(false);
+    setMusicBrainzArtistDiscography(null);
+    setMusicBrainzArtistError(null);
+    setIsMusicBrainzArtistLoading(false);
+    setIsMusicBrainzArtistUpdating(false);
+    setMusicBrainzArtistExportResult(null);
+    setMusicBrainzArtistRefreshResult(null);
+    setMusicBrainzArtistOriginResult(null);
+  }
+
   function clearArtistQuery() {
     setArtistRequest((previous) => ({
       ...createArtistListRequest(),
       limit: previous.limit,
     }));
-    setSelectedArtistAlbumId(null);
-    setArtistAlbumTracksResponse(null);
-    setArtistAlbumTracksError(null);
+    resetDeferredArtistDetails();
     setArtistExportResult(null);
-    setMusicBrainzArtistExportResult(null);
-    setMusicBrainzArtistRefreshResult(null);
-    setMusicBrainzArtistOriginResult(null);
   }
 
   function selectArtist(artistId: string) {
+    resetDeferredArtistDetails();
     setSelectedArtistId(artistId);
-    setSelectedArtistAlbumId(null);
-    setArtistAlbumTracksResponse(null);
-    setArtistAlbumTracksError(null);
     setArtistExportResult(null);
-    setMusicBrainzArtistExportResult(null);
-    setMusicBrainzArtistRefreshResult(null);
-    setMusicBrainzArtistOriginResult(null);
   }
 
   function selectArtistAlbum(albumId: string) {
     setSelectedArtistAlbumId(albumId);
+    setArtistAlbumTracksResponse(null);
     setArtistAlbumTracksError(null);
   }
 
@@ -11334,110 +11372,129 @@ export default function App() {
               />
             </section>
 
-            <section
-              className="table-panel"
-              aria-label="Selected artist albums"
+            <ArtistDetailTabs
+              activeTab={artistDetailTab}
+              onChange={setArtistDetailTab}
             >
-              <div className="panel-heading compact">
-                <div>
-                  <h2>{selectedArtist?.name ?? "Artist albums"}</h2>
-                  <p>
-                    {isArtistAlbumsLoading
-                      ? "Loading albums"
-                      : `${formatNumber(artistAlbumsResponse?.rows.length ?? 0)} of ${formatNumber(selectedArtistAlbumCount)} albums`}
-                  </p>
-                </div>
-                <span className="run-status">
-                  {selectedArtist?.topGenre ?? "Artist"}
-                </span>
-              </div>
+              {artistDetailTab === "local-albums" ? (
+                <section
+                  className="table-panel"
+                  aria-label="Selected artist albums"
+                >
+                  <div className="panel-heading compact">
+                    <div>
+                      <h2>{selectedArtist?.name ?? "Artist albums"}</h2>
+                      <p>
+                        {isArtistAlbumsLoading
+                          ? "Loading albums"
+                          : `${formatNumber(artistAlbumsResponse?.rows.length ?? 0)} of ${formatNumber(selectedArtistAlbumCount)} albums`}
+                      </p>
+                    </div>
+                    <span className="run-status">
+                      {selectedArtist?.topGenre ?? "Artist"}
+                    </span>
+                  </div>
 
-              {artistAlbumsError ? (
-                <p className="error-message">{artistAlbumsError}</p>
+                  {artistAlbumsError ? (
+                    <p className="error-message">{artistAlbumsError}</p>
+                  ) : null}
+                  <ArtistAlbumTable
+                    response={artistAlbumsResponse}
+                    selectedAlbumId={selectedArtistAlbumId}
+                    onSelect={selectArtistAlbum}
+                  />
+                </section>
               ) : null}
-              <ArtistAlbumTable
-                response={artistAlbumsResponse}
-                selectedAlbumId={selectedArtistAlbumId}
-                onSelect={selectArtistAlbum}
-              />
-            </section>
 
-            <MusicBrainzArtistInfoPanel
-              artist={selectedArtist}
-              response={musicBrainzArtistDiscography}
-              isLoading={isMusicBrainzArtistLoading}
-              isUpdating={isMusicBrainzArtistUpdating}
-              error={musicBrainzArtistError}
-              onUpdateInfo={() => void updateArtistMusicBrainzInfo()}
-              onOpenExternalUrl={(url) => void openMusicBrainzArtistPage(url)}
-              onSetArtistLink={(action, musicbrainzMbid, canonicalName) =>
-                void setArtistMusicBrainzLink(
-                  action,
-                  musicbrainzMbid,
-                  canonicalName,
-                )
-              }
-              onSetOriginCountry={(countryCode, countryName) =>
-                void saveArtistOriginCountry(countryCode, countryName)
-              }
-              refreshResult={musicBrainzArtistRefreshResult}
-              originResult={musicBrainzArtistOriginResult}
-              countryOptions={originCountryOptions}
-              countryFlagDisplay={settings.countryFlagDisplay}
-            />
-
-            <MusicBrainzArtistDiscographyPanel
-              artist={selectedArtist}
-              response={musicBrainzArtistDiscography}
-              isLoading={isMusicBrainzArtistLoading}
-              isUpdating={isMusicBrainzArtistUpdating}
-              onRefresh={() => void refreshArtistMusicBrainz()}
-              onOpenExternalUrl={(url) => void openMusicBrainzArtistPage(url)}
-              onSetArtistLink={(action, musicbrainzMbid, canonicalName) =>
-                void setArtistMusicBrainzLink(
-                  action,
-                  musicbrainzMbid,
-                  canonicalName,
-                )
-              }
-              onSetReleaseDecision={(row, decision) =>
-                void setArtistMusicBrainzReleaseDecision(row, decision)
-              }
-              onExport={(format) => void runArtistMusicBrainzExport(format)}
-              exportResult={musicBrainzArtistExportResult}
-            />
-
-            <section
-              className="table-panel"
-              aria-label="Selected artist cover view"
-            >
-              <div className="artist-album-board-heading">
-                <div>
-                  <h3>Cover view</h3>
-                  <p>
-                    {isArtistAlbumTracksLoading
-                      ? "Loading tracks"
-                      : `${formatNumber(artistAlbumTracksResponse?.rows.length ?? 0)} of ${formatNumber(selectedArtistAlbumTrackCount)} tracks`}
-                  </p>
-                </div>
-                <span className="run-status">
-                  {selectedArtistAlbum?.year ?? "Album"}
-                </span>
-              </div>
-
-              {artistAlbumTracksError ? (
-                <p className="error-message">{artistAlbumTracksError}</p>
+              {artistDetailTab === "artist-info" ? (
+                <MusicBrainzArtistInfoPanel
+                  artist={selectedArtist}
+                  response={musicBrainzArtistDiscography}
+                  isLoading={isMusicBrainzArtistLoading}
+                  isUpdating={isMusicBrainzArtistUpdating}
+                  error={musicBrainzArtistError}
+                  onUpdateInfo={() => void updateArtistMusicBrainzInfo()}
+                  onOpenExternalUrl={(url) =>
+                    void openMusicBrainzArtistPage(url)
+                  }
+                  onSetArtistLink={(action, musicbrainzMbid, canonicalName) =>
+                    void setArtistMusicBrainzLink(
+                      action,
+                      musicbrainzMbid,
+                      canonicalName,
+                    )
+                  }
+                  onSetOriginCountry={(countryCode, countryName) =>
+                    void saveArtistOriginCountry(countryCode, countryName)
+                  }
+                  refreshResult={musicBrainzArtistRefreshResult}
+                  originResult={musicBrainzArtistOriginResult}
+                  countryOptions={originCountryOptions}
+                  countryFlagDisplay={settings.countryFlagDisplay}
+                />
               ) : null}
-              <ArtistAlbumCoverBoard
-                response={artistAlbumsResponse}
-                selectedAlbumId={selectedArtistAlbumId}
-                selectedAlbum={selectedArtistAlbum}
-                tracks={artistAlbumTracksResponse}
-                isLoading={isArtistAlbumTracksLoading}
-                onSelect={selectArtistAlbum}
-                onClose={clearSelectedArtistAlbum}
-              />
-            </section>
+
+              {artistDetailTab === "discography" ? (
+                <MusicBrainzArtistDiscographyPanel
+                  artist={selectedArtist}
+                  response={musicBrainzArtistDiscography}
+                  isLoading={isMusicBrainzArtistLoading}
+                  isUpdating={isMusicBrainzArtistUpdating}
+                  onRefresh={() => void refreshArtistMusicBrainz()}
+                  onOpenExternalUrl={(url) =>
+                    void openMusicBrainzArtistPage(url)
+                  }
+                  onSetArtistLink={(action, musicbrainzMbid, canonicalName) =>
+                    void setArtistMusicBrainzLink(
+                      action,
+                      musicbrainzMbid,
+                      canonicalName,
+                    )
+                  }
+                  onSetReleaseDecision={(row, decision) =>
+                    void setArtistMusicBrainzReleaseDecision(row, decision)
+                  }
+                  onExport={(format) =>
+                    void runArtistMusicBrainzExport(format)
+                  }
+                  exportResult={musicBrainzArtistExportResult}
+                />
+              ) : null}
+
+              {artistDetailTab === "cover-view" ? (
+                <section
+                  className="table-panel"
+                  aria-label="Selected artist cover view"
+                >
+                  <div className="artist-album-board-heading">
+                    <div>
+                      <h3>Cover view</h3>
+                      <p>
+                        {isArtistAlbumTracksLoading
+                          ? "Loading tracks"
+                          : `${formatNumber(artistAlbumTracksResponse?.rows.length ?? 0)} of ${formatNumber(selectedArtistAlbumTrackCount)} tracks`}
+                      </p>
+                    </div>
+                    <span className="run-status">
+                      {selectedArtistAlbum?.year ?? "Album"}
+                    </span>
+                  </div>
+
+                  {artistAlbumTracksError ? (
+                    <p className="error-message">{artistAlbumTracksError}</p>
+                  ) : null}
+                  <ArtistAlbumCoverBoard
+                    response={artistAlbumsResponse}
+                    selectedAlbumId={selectedArtistAlbumId}
+                    selectedAlbum={selectedArtistAlbum}
+                    tracks={artistAlbumTracksResponse}
+                    isLoading={isArtistAlbumTracksLoading}
+                    onSelect={selectArtistAlbum}
+                    onClose={clearSelectedArtistAlbum}
+                  />
+                </section>
+              ) : null}
+            </ArtistDetailTabs>
           </ArtistsWorkspace>
         ) : activeSection === "Genres" ? (
           <section className="workspace genres-workspace">

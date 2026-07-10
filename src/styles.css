@@ -369,6 +369,102 @@ button {
   padding: 18px;
 }
 
+.artist-detail-shell {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.artist-detail-tabs {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid #d8e1dd;
+  background: #f4f7f6;
+  padding: 6px;
+  scrollbar-width: thin;
+}
+
+.artist-detail-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #5b6864;
+  background: transparent;
+  padding: 0 14px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.artist-detail-tab:hover {
+  color: #174f49;
+  background: #e9f0ee;
+}
+
+.artist-detail-tab[aria-selected="true"] {
+  border-color: #b9d8d2;
+  color: #0a625b;
+  background: #ffffff;
+  box-shadow: inset 0 -2px 0 #18887d;
+}
+
+.artist-detail-tab:focus-visible {
+  outline: 2px solid #18887d;
+  outline-offset: 1px;
+}
+
+.artist-detail-tab:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.artist-detail-tab-panel {
+  min-width: 0;
+  padding: 18px;
+  animation: artist-detail-panel-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.artist-detail-tab-panel:focus {
+  outline: none;
+}
+
+.artist-detail-tab-panel > .table-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.artist-detail-tab-panel .artist-album-board-heading {
+  margin-top: 0;
+}
+
+@keyframes artist-detail-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .panel-heading {
   align-items: flex-start;
   justify-content: space-between;
@@ -4390,6 +4486,7 @@ button {
 :root[data-theme="dark"] .query-panel,
 :root[data-theme="dark"] .import-panel,
 :root[data-theme="dark"] .table-panel,
+:root[data-theme="dark"] .artist-detail-shell,
 :root[data-theme="dark"] .stats-panel,
 :root[data-theme="dark"] .discovery-panel,
 :root[data-theme="dark"] .settings-panel,
@@ -4414,6 +4511,27 @@ button {
   border-color: #2f3d38;
   color: #dce7e3;
   background: #171f1c;
+}
+
+:root[data-theme="dark"] .artist-detail-tabs {
+  border-color: #2f3d38;
+  background: #131a18;
+}
+
+:root[data-theme="dark"] .artist-detail-tab {
+  color: #9eada8;
+}
+
+:root[data-theme="dark"] .artist-detail-tab:hover {
+  color: #bfe3dd;
+  background: #1c2a26;
+}
+
+:root[data-theme="dark"] .artist-detail-tab[aria-selected="true"] {
+  border-color: #315a53;
+  color: #8ee4d8;
+  background: #1a2d28;
+  box-shadow: inset 0 -2px 0 #55b8ab;
 }
 
 :root[data-theme="dark"] .sidebar,
@@ -5426,6 +5544,15 @@ button {
     gap: 8px;
   }
 
+  .artist-detail-tab-panel {
+    padding: 14px;
+  }
+
+  .artist-detail-tab {
+    min-height: 34px;
+    padding: 0 12px;
+  }
+
   .artist-album-cover-grid {
     grid-template-columns: 1fr;
   }
@@ -5486,5 +5613,13 @@ button {
   .rank-metric {
     justify-items: start;
     grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artist-detail-tab,
+  .artist-detail-tab-panel {
+    transition: none;
+    animation: none;
   }
 }

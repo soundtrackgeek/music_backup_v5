@@ -268,7 +268,8 @@ npm run security:check
 - Artists workspace with a searchable, sortable, paginated album-artist index.
 - Artist-level summary stats for album counts, rating progress, year span, top genre, track totals, loved tracks, TMOE, average completeness, average album rating, and average Album Score.
 - Selected artist album lists backed by normalized artist-key filtering so casing differences do not split album lists.
-- Artist album cover board below the selected album list, with clickable covers and inline track detail showing ratings, loved status, and clock time.
+- Selected-artist details are grouped into Local albums, Artist info, MusicBrainz discography, and Cover view tabs; Local albums opens automatically, while MusicBrainz and cover/track data wait until their relevant tab is selected.
+- The Cover view tab provides a clickable artist album cover board with inline track detail showing ratings, loved status, and clock time.
 - Artist album-list export to CSV, TSV, XLSX, JSON, and TXT with optional calculated columns.
 - Web-only preview mock data covers Artists alongside Search, Charts, Statistics, Albums, and Imports.
 

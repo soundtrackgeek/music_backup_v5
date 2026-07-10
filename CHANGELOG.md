@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.52.0] - 2026-07-10
+### Added
+- Added accessible Local albums, Artist info, MusicBrainz discography, and Cover view tabs to the selected-artist details area, including keyboard navigation.
+- Added focused frontend coverage for artist tab selection, keyboard behavior, and deferred-request routing.
+
+### Changed
+- Changed Artists so Local albums is the default tab and MusicBrainz plus cover-track work starts only after its corresponding tab is selected.
+- Changed artist selection to return the detail area to Local albums and discard deferred data from the previously selected artist.
+- Bumped synchronized app metadata to `0.52.0`.
+
 ## [0.51.0] - 2026-07-09
 ### Added
 - Added Vitest, React Testing Library, jest-dom, and jsdom with focused coverage for browse request creation/serialization, saved search/chart normalization, settings normalization, workspace navigation/shortcuts, and MusicBrainz review-state rendering.
