@@ -641,6 +641,73 @@ export type SaveAiSnapshotRequest = {
   content: AiSnapshotContent;
 };
 
+export type AiPlaylistStrategy =
+  | "ranked"
+  | "variety"
+  | "discovery"
+  | "random";
+
+export type AiPlaylistBuildRequest = {
+  prompt: string;
+};
+
+export type AiPlaylistTrack = {
+  trackId: number;
+  albumId: string;
+  album: string | null;
+  albumArtist: string | null;
+  displayArtist: string | null;
+  title: string | null;
+  genre: string | null;
+  year: number | null;
+  seconds: number;
+  rating: number | null;
+  loved: boolean;
+  filePath: string | null;
+  filename: string | null;
+};
+
+export type AiPlaylist = {
+  prompt: string;
+  name: string;
+  description: string;
+  request: BrowseRequest;
+  strategy: AiPlaylistStrategy;
+  targetTrackCount: number;
+  targetMinutes: number;
+  maxTracksPerArtist: number;
+  maxTracksPerAlbum: number;
+  model: string;
+  usage: AiUsage;
+  matchingTrackCount: number;
+  candidateCount: number;
+  totalSeconds: number;
+  tracks: AiPlaylistTrack[];
+};
+
+export type SavePlaylistRequest = {
+  id: number | null;
+  name: string;
+  playlist: AiPlaylist;
+};
+
+export type ExportPlaylistRequest = {
+  name: string;
+  playlist: AiPlaylist;
+};
+
+export type SavedPlaylist = {
+  id: number;
+  name: string;
+  playlist: AiPlaylist;
+  libraryImportRunId: number | null;
+  libraryImportedAt: string | null;
+  libraryAlbumCount: number;
+  libraryTrackCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AiConnectionTest = {
   model: string;
   message: string;

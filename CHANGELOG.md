@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.57.0] - 2026-07-16
+### Added
+- Added a dedicated Playlist Builder workspace where Luna converts a natural-language request into a strict bounded track-filter recipe and local SQLite selects the actual tracks.
+- Added ranked, variety, discovery, and random selection strategies, duration/track targets, per-artist and per-album repeat caps, a 500-candidate ceiling, and a 200-track result ceiling.
+- Added review-first draft controls for renaming, reordering, and removing tracks plus explicit UTF-8 M3U8 export using local file paths.
+- Added SQLite schema version 22 with exact ordered saved playlists, their Luna recipe, and source library import/count state so playlists can reopen, update, delete, and participate in normal backups without another AI call.
+- Added strict recipe/schema tests, local-selection and saved-playlist round-trip tests, M3U8 coverage, a live Luna contract test, and Playlist workspace interaction coverage.
+
+### Changed
+- Kept track, album, artist, filename, and path rows out of Playlist Builder model context; only the user's request is sent to Luna and local rows remain inside SQLite/the desktop UI.
+- Added `P` as the Playlist workspace shortcut without changing the established numbered workspace shortcuts.
+- Bumped synchronized app metadata to `0.57.0`.
+
 ## [0.56.1] - 2026-07-16
 ### Fixed
 - Changed Library analyst useful-next-question buttons to run the selected follow-up immediately instead of only copying it into the Focus question field.

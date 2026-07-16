@@ -22,6 +22,7 @@ import {
   settingsStorageKey,
 } from "./backend/normalization";
 import {
+  createRequest,
   normalizeSavedChartForClient,
   normalizeSavedChartsForClient,
   normalizeSavedSearchForClient,
@@ -96,6 +97,11 @@ import type {
   AiLibraryAnalysisRequest,
   AiSnapshot,
   AiSnapshotKind,
+  AiPlaylist,
+  AiPlaylistBuildRequest,
+  ExportPlaylistRequest,
+  SavePlaylistRequest,
+  SavedPlaylist,
   SaveAiSnapshotRequest,
   ArtistListRequest,
   ArtistListResponse,
@@ -153,6 +159,8 @@ import type {
   MusicBrainzOverlaySyncResult,
   PerformanceProbeResponse,
 } from "./types";
+
+let mockSavedPlaylists: SavedPlaylist[] = [];
 
 export async function openExternalUrl(url: string) {
   let parsedUrl: URL;
@@ -525,6 +533,122 @@ export async function deleteAiSnapshot(id: number) {
   }
 
   return invoke<void>("delete_ai_snapshot", { id });
+}
+
+export async function buildPlaylist(input: AiPlaylistBuildRequest) {
+  if (!isTauriRuntime()) {
+    const request = createRequest("tracks");
+    request.sort = { field: "trackRating", direction: "desc" };
+    request.limit = 200;
+    const tracks = mockRows
+      .filter((row) => row.trackId != null)
+      .map((row) => ({
+        trackId: row.trackId!,
+        albumId: row.albumId,
+        album: row.album,
+        albumArtist: row.albumArtistDisplay,
+        displayArtist: row.displayArtist,
+        title: row.title,
+        genre: row.canonicalGenre,
+        year: row.year,
+        seconds: row.trackSeconds ?? 0,
+        rating: row.normalizedRating,
+        loved: row.love?.trim().toLowerCase() === "l",
+        filePath: row.filePath,
+        filename: row.filename,
+      }));
+    const prompt = input.prompt.trim();
+    const strategy = /discover|surpris|deep cut/i.test(prompt)
+      ? "discovery"
+      : /random|shuffle/i.test(prompt)
+        ? "random"
+        : "variety";
+    return {
+      prompt,
+      name: "Luna preview mix",
+      description:
+        "A varied local-library sequence shaped from the request, with repeat caps applied.",
+      request,
+      strategy,
+      targetTrackCount: 12,
+      targetMinutes: 45,
+      maxTracksPerArtist: 2,
+      maxTracksPerAlbum: 1,
+      model: "gpt-5.6-luna",
+      usage: {
+        inputTokens: null,
+        cachedInputTokens: null,
+        outputTokens: null,
+      },
+      matchingTrackCount: tracks.length,
+      candidateCount: tracks.length,
+      totalSeconds: tracks.reduce((total, track) => total + track.seconds, 0),
+      tracks,
+    } satisfies AiPlaylist;
+  }
+
+  return invoke<AiPlaylist>("build_playlist", { input });
+}
+
+export async function listSavedPlaylists() {
+  if (!isTauriRuntime()) {
+    return mockSavedPlaylists;
+  }
+  return invoke<SavedPlaylist[]>("list_saved_playlists");
+}
+
+export async function savePlaylist(input: SavePlaylistRequest) {
+  if (!isTauriRuntime()) {
+    const now = new Date().toISOString();
+    const existing = input.id == null
+      ? null
+      : mockSavedPlaylists.find((playlist) => playlist.id === input.id) ?? null;
+    const saved = {
+      id:
+        existing?.id ??
+        mockSavedPlaylists.reduce(
+          (largest, playlist) => Math.max(largest, playlist.id),
+          0,
+        ) + 1,
+      name: input.name.trim(),
+      playlist: input.playlist,
+      libraryImportRunId: mockStatus.lastImport?.id ?? null,
+      libraryImportedAt: mockStatus.lastImport?.completedAt ?? null,
+      libraryAlbumCount: mockStatus.albumCount,
+      libraryTrackCount: mockStatus.trackCount,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    } satisfies SavedPlaylist;
+    mockSavedPlaylists = [
+      saved,
+      ...mockSavedPlaylists.filter((playlist) => playlist.id !== saved.id),
+    ];
+    return saved;
+  }
+  return invoke<SavedPlaylist>("save_playlist", { input });
+}
+
+export async function deleteSavedPlaylist(id: number) {
+  if (!isTauriRuntime()) {
+    mockSavedPlaylists = mockSavedPlaylists.filter(
+      (playlist) => playlist.id !== id,
+    );
+    return;
+  }
+  return invoke<void>("delete_saved_playlist", { id });
+}
+
+export async function exportPlaylist(input: ExportPlaylistRequest) {
+  if (!isTauriRuntime()) {
+    return {
+      path: `Preview runtime / ${input.name.trim() || "playlist"}.m3u8`,
+      format: "m3u8",
+      rowCount: input.playlist.tracks.filter(
+        (track) => track.filePath && track.filename,
+      ).length,
+    } satisfies ExportResult;
+  }
+  return invoke<ExportResult>("export_playlist", { input });
 }
 
 export async function getMusicBrainzCacheStatus(cachePath?: string) {

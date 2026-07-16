@@ -207,6 +207,63 @@ async fn delete_ai_snapshot(app: AppHandle, id: i64) -> Result<(), String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn build_playlist(
+    app: AppHandle,
+    input: ai::AiPlaylistBuildRequest,
+) -> Result<ai::AiPlaylist, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let plan = ai::plan_playlist(input)?;
+        db::build_playlist_for_app(&app, plan)
+    })
+    .await
+    .map_err(|error| format!("Playlist builder task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn list_saved_playlists(app: AppHandle) -> Result<Vec<ai::SavedPlaylist>, String> {
+    tauri::async_runtime::spawn_blocking(move || db::list_saved_playlists_for_app(&app))
+        .await
+        .map_err(|error| format!("Saved playlist list task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn save_playlist(
+    app: AppHandle,
+    input: ai::SavePlaylistRequest,
+) -> Result<ai::SavedPlaylist, String> {
+    tauri::async_runtime::spawn_blocking(move || db::save_playlist_for_app(&app, input))
+        .await
+        .map_err(|error| format!("Save playlist task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn delete_saved_playlist(app: AppHandle, id: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || db::delete_saved_playlist_for_app(&app, id))
+        .await
+        .map_err(|error| format!("Delete saved playlist task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn export_playlist(
+    app: AppHandle,
+    input: ai::ExportPlaylistRequest,
+) -> Result<ExportResult, String> {
+    tauri::async_runtime::spawn_blocking(move || db::export_playlist_for_app(&app, input))
+        .await
+        .map_err(|error| format!("Playlist export task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_musicbrainz_cache_status(
     app: AppHandle,
     cache_path: Option<String>,
@@ -687,6 +744,11 @@ pub fn run() {
             list_ai_snapshots,
             save_ai_snapshot,
             delete_ai_snapshot,
+            build_playlist,
+            list_saved_playlists,
+            save_playlist,
+            delete_saved_playlist,
+            export_playlist,
             get_musicbrainz_cache_status,
             get_musicbrainz_origin_country_status,
             preview_musicbrainz_origin_country_import,

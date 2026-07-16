@@ -35,6 +35,7 @@ export const navigation: { label: string; icon: LucideIcon; enabled: boolean; sh
   { label: "Search", icon: Search, enabled: true, shortcut: "1" },
   { label: "Charts", icon: BarChart3, enabled: true, shortcut: "2" },
   { label: "Discovery", icon: Compass, enabled: true, shortcut: "3" },
+  { label: "Playlists", icon: ListMusic, enabled: true, shortcut: "p" },
   { label: "Statistics", icon: Activity, enabled: true, shortcut: "4" },
   { label: "Albums", icon: Album, enabled: true, shortcut: "5" },
   { label: "Artists", icon: UsersRound, enabled: true, shortcut: "6" },

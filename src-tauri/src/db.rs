@@ -1,6 +1,8 @@
 use crate::ai::{
-    AiSnapshot, AiSnapshotContent, LibraryProfileRequest, LibraryProfileResult,
-    SaveAiSnapshotRequest, ViewInspectionItem, ViewInspectionRequest, ViewInspectionResult,
+    AiPlaylist, AiPlaylistPlan, AiPlaylistTrack, AiSnapshot, AiSnapshotContent,
+    ExportPlaylistRequest, LibraryProfileRequest, LibraryProfileResult, SaveAiSnapshotRequest,
+    SavePlaylistRequest, SavedPlaylist, ViewInspectionItem, ViewInspectionRequest,
+    ViewInspectionResult,
 };
 #[cfg(test)]
 use crate::models::AppSettings;
@@ -334,7 +336,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_one_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_two_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -563,6 +565,22 @@ pub fn migrate(conn: &Connection) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_ai_snapshots_kind_created
             ON ai_snapshots(kind, created_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS saved_playlists (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            playlist_json TEXT NOT NULL,
+            library_import_run_id INTEGER,
+            library_imported_at TEXT,
+            library_album_count INTEGER NOT NULL DEFAULT 0,
+            library_track_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_saved_playlists_updated
+            ON saved_playlists(updated_at DESC, id DESC);
 
         CREATE TABLE IF NOT EXISTS exports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -875,7 +893,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_origin_country_tables(conn)?;
     ensure_musicbrainz_artist_info_tables(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
-    conn.execute_batch("PRAGMA user_version = 21;")
+    conn.execute_batch("PRAGMA user_version = 22;")
         .context("Could not update SQLite schema version")?;
     Ok(())
 }
@@ -4883,6 +4901,429 @@ pub fn save_ai_snapshot_for_app(
 pub fn delete_ai_snapshot_for_app(app: &AppHandle, id: i64) -> Result<()> {
     let (conn, _) = open(app)?;
     delete_ai_snapshot(&conn, id)
+}
+
+fn playlist_value_key(value: Option<&str>, fallback: &str) -> String {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(fallback)
+        .to_lowercase()
+}
+
+fn playlist_row_keys(row: &BrowseRow) -> (String, String, String) {
+    let artist = playlist_value_key(
+        row.display_artist
+            .as_deref()
+            .or(row.album_artist_display.as_deref()),
+        "unknown artist",
+    );
+    let album = playlist_value_key(row.album.as_deref(), &row.album_id);
+    let genre = playlist_value_key(row.canonical_genre.as_deref(), "unknown genre");
+    (artist, album, genre)
+}
+
+fn playlist_target_reached(plan: &AiPlaylistPlan, track_count: usize, total_seconds: i64) -> bool {
+    (plan.target_track_count > 0 && track_count >= plan.target_track_count as usize)
+        || (plan.target_minutes > 0
+            && total_seconds >= i64::from(plan.target_minutes).saturating_mul(60))
+}
+
+fn select_playlist_rows(rows: Vec<BrowseRow>, plan: &AiPlaylistPlan) -> Vec<BrowseRow> {
+    let mut genre_pool_counts = HashMap::<String, usize>::new();
+    for row in &rows {
+        let (_, _, genre) = playlist_row_keys(row);
+        *genre_pool_counts.entry(genre).or_default() += 1;
+    }
+
+    let mut used = vec![false; rows.len()];
+    let mut artist_counts = HashMap::<String, usize>::new();
+    let mut album_counts = HashMap::<String, usize>::new();
+    let mut genre_counts = HashMap::<String, usize>::new();
+    let mut selected = Vec::new();
+    let mut total_seconds = 0_i64;
+
+    while selected.len() < 200 && !playlist_target_reached(plan, selected.len(), total_seconds) {
+        let mut best: Option<(usize, Vec<usize>)> = None;
+        for (index, row) in rows.iter().enumerate() {
+            if used[index] || row.track_id.is_none() {
+                continue;
+            }
+            let (artist, album, genre) = playlist_row_keys(row);
+            let artist_count = *artist_counts.get(&artist).unwrap_or(&0);
+            let album_count = *album_counts.get(&album).unwrap_or(&0);
+            if artist_count >= plan.max_tracks_per_artist as usize
+                || album_count >= plan.max_tracks_per_album as usize
+            {
+                continue;
+            }
+            let genre_count = *genre_counts.get(&genre).unwrap_or(&0);
+            let genre_pool_count = *genre_pool_counts.get(&genre).unwrap_or(&0);
+            let priority = match plan.strategy.as_str() {
+                "variety" => vec![genre_count, artist_count, album_count, index],
+                "discovery" => vec![
+                    genre_count,
+                    genre_pool_count,
+                    artist_count,
+                    album_count,
+                    index,
+                ],
+                _ => vec![index],
+            };
+            if best
+                .as_ref()
+                .is_none_or(|(_, current_priority)| priority < *current_priority)
+            {
+                best = Some((index, priority));
+            }
+        }
+
+        let Some((index, _)) = best else {
+            break;
+        };
+        used[index] = true;
+        let row = rows[index].clone();
+        let (artist, album, genre) = playlist_row_keys(&row);
+        *artist_counts.entry(artist).or_default() += 1;
+        *album_counts.entry(album).or_default() += 1;
+        *genre_counts.entry(genre).or_default() += 1;
+        total_seconds = total_seconds.saturating_add(row.track_seconds.unwrap_or(0).max(0));
+        selected.push(row);
+    }
+    selected
+}
+
+fn playlist_track_from_row(row: BrowseRow) -> Result<AiPlaylistTrack> {
+    Ok(AiPlaylistTrack {
+        track_id: row
+            .track_id
+            .context("The local playlist candidate has no track ID")?,
+        album_id: row.album_id,
+        album: row.album,
+        album_artist: row.album_artist_display,
+        display_artist: row.display_artist,
+        title: row.title,
+        genre: row.canonical_genre,
+        year: row.year,
+        seconds: row.track_seconds.unwrap_or(0).max(0),
+        rating: row.normalized_rating,
+        loved: row.love.as_deref() == Some("L"),
+        file_path: row.file_path,
+        filename: row.filename,
+    })
+}
+
+fn build_playlist(conn: &Connection, plan: AiPlaylistPlan) -> Result<AiPlaylist> {
+    let mut request = plan.request.clone();
+    request.view = "tracks".to_string();
+    request.offset = 0;
+    request.limit = request.limit.clamp(20, 500);
+    let response = search_library(conn, request.clone(), 500)?;
+    let candidate_count = response.rows.len();
+    let selected_rows = select_playlist_rows(response.rows, &plan);
+    let tracks = selected_rows
+        .into_iter()
+        .map(playlist_track_from_row)
+        .collect::<Result<Vec<_>>>()?;
+    let total_seconds = tracks.iter().map(|track| track.seconds.max(0)).sum::<i64>();
+
+    Ok(AiPlaylist {
+        prompt: plan.prompt,
+        name: plan.name,
+        description: plan.description,
+        request,
+        strategy: plan.strategy,
+        target_track_count: plan.target_track_count,
+        target_minutes: plan.target_minutes,
+        max_tracks_per_artist: plan.max_tracks_per_artist,
+        max_tracks_per_album: plan.max_tracks_per_album,
+        matching_track_count: response.total,
+        candidate_count,
+        total_seconds,
+        tracks,
+        model: plan.model,
+        usage: plan.usage,
+    })
+}
+
+fn normalize_playlist(mut playlist: AiPlaylist) -> Result<AiPlaylist> {
+    if playlist.prompt.trim().is_empty() || playlist.prompt.chars().count() > 2_000 {
+        bail!("A saved playlist requires its original prompt")
+    }
+    if playlist.name.trim().is_empty() || playlist.name.chars().count() > 120 {
+        bail!("Playlist titles must contain 1 to 120 characters")
+    }
+    if playlist.description.trim().is_empty() || playlist.description.chars().count() > 500 {
+        bail!("Playlist descriptions must contain 1 to 500 characters")
+    }
+    if playlist.request.view != "tracks"
+        || !matches!(
+            playlist.strategy.as_str(),
+            "ranked" | "variety" | "discovery" | "random"
+        )
+        || playlist.target_track_count > 200
+        || playlist.target_minutes > 1_440
+        || (playlist.target_track_count == 0 && playlist.target_minutes == 0)
+        || !(1..=10).contains(&playlist.max_tracks_per_artist)
+        || !(1..=10).contains(&playlist.max_tracks_per_album)
+        || playlist.tracks.len() > 200
+    {
+        bail!("The playlist recipe is outside the supported local limits")
+    }
+    if playlist
+        .tracks
+        .iter()
+        .any(|track| track.track_id <= 0 || track.album_id.trim().is_empty())
+    {
+        bail!("The playlist contains an invalid local track reference")
+    }
+    playlist.name = playlist.name.trim().to_string();
+    playlist.description = playlist.description.trim().to_string();
+    playlist.prompt = playlist.prompt.trim().to_string();
+    playlist.total_seconds = playlist
+        .tracks
+        .iter()
+        .map(|track| track.seconds.max(0))
+        .sum();
+    playlist.candidate_count = playlist.candidate_count.max(playlist.tracks.len());
+    Ok(playlist)
+}
+
+fn saved_playlist_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SavedPlaylist> {
+    let playlist_json: String = row.get(3)?;
+    let playlist = serde_json::from_str::<AiPlaylist>(&playlist_json).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(error))
+    })?;
+    Ok(SavedPlaylist {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        playlist,
+        library_import_run_id: row.get(4)?,
+        library_imported_at: row.get(5)?,
+        library_album_count: row.get(6)?,
+        library_track_count: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
+    })
+}
+
+fn load_saved_playlist(conn: &Connection, id: i64) -> Result<SavedPlaylist> {
+    conn.query_row(
+        "
+        SELECT id, name, prompt, playlist_json, library_import_run_id,
+               library_imported_at, library_album_count, library_track_count,
+               created_at, updated_at
+        FROM saved_playlists
+        WHERE id = ?1
+        ",
+        params![id],
+        saved_playlist_from_row,
+    )
+    .with_context(|| format!("Could not load saved playlist {id}"))
+}
+
+fn list_saved_playlists(conn: &Connection) -> Result<Vec<SavedPlaylist>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT id, name, prompt, playlist_json, library_import_run_id,
+               library_imported_at, library_album_count, library_track_count,
+               created_at, updated_at
+        FROM saved_playlists
+        ORDER BY updated_at DESC, id DESC
+        ",
+    )?;
+    let playlists = stmt
+        .query_map([], saved_playlist_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(playlists)
+}
+
+fn save_playlist(conn: &Connection, input: SavePlaylistRequest) -> Result<SavedPlaylist> {
+    let name = input.name.trim();
+    if name.is_empty() || name.chars().count() > 120 {
+        bail!("Name the playlist with no more than 120 characters")
+    }
+    let playlist = normalize_playlist(input.playlist)?;
+    if playlist.tracks.is_empty() {
+        bail!("Add at least one track before saving the playlist")
+    }
+    let playlist_json =
+        serde_json::to_string(&playlist).context("Could not serialize the playlist")?;
+    if playlist_json.len() > 4_000_000 {
+        bail!("The playlist is too large to save")
+    }
+    let (import_run_id, imported_at, album_count, track_count) =
+        current_library_snapshot_state(conn)?;
+    let now = Utc::now().to_rfc3339();
+    let id = if let Some(id) = input.id {
+        let changed = conn.execute(
+            "
+            UPDATE saved_playlists
+            SET name = ?1, prompt = ?2, playlist_json = ?3,
+                library_import_run_id = ?4, library_imported_at = ?5,
+                library_album_count = ?6, library_track_count = ?7, updated_at = ?8
+            WHERE id = ?9
+            ",
+            params![
+                name,
+                playlist.prompt,
+                playlist_json,
+                import_run_id,
+                imported_at,
+                album_count,
+                track_count,
+                now,
+                id
+            ],
+        )?;
+        if changed == 0 {
+            bail!("The saved playlist no longer exists")
+        }
+        id
+    } else {
+        conn.execute(
+            "
+            INSERT INTO saved_playlists (
+                name, prompt, playlist_json, library_import_run_id, library_imported_at,
+                library_album_count, library_track_count, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+            ",
+            params![
+                name,
+                playlist.prompt,
+                playlist_json,
+                import_run_id,
+                imported_at,
+                album_count,
+                track_count,
+                now
+            ],
+        )?;
+        conn.last_insert_rowid()
+    };
+    load_saved_playlist(conn, id)
+}
+
+fn delete_saved_playlist(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM saved_playlists WHERE id = ?1", params![id])
+        .with_context(|| format!("Could not delete saved playlist {id}"))?;
+    Ok(())
+}
+
+fn playlist_track_file(track: &AiPlaylistTrack) -> Option<PathBuf> {
+    let directory = track.file_path.as_deref()?.trim();
+    let filename = track.filename.as_deref()?.trim();
+    if directory.is_empty() || filename.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(directory).join(filename))
+}
+
+fn write_playlist_m3u8(path: &Path, playlist: &AiPlaylist) -> Result<usize> {
+    let mut file = fs::File::create(path)?;
+    file.write_all(b"#EXTM3U\r\n")?;
+    let mut row_count = 0;
+    for track in &playlist.tracks {
+        let Some(track_path) = playlist_track_file(track) else {
+            continue;
+        };
+        let artist = track
+            .display_artist
+            .as_deref()
+            .or(track.album_artist.as_deref())
+            .unwrap_or("Unknown artist")
+            .replace(['\r', '\n'], " ");
+        let title = track
+            .title
+            .as_deref()
+            .unwrap_or("Unknown track")
+            .replace(['\r', '\n'], " ");
+        writeln!(
+            file,
+            "#EXTINF:{},{} - {}\r",
+            track.seconds.max(0),
+            artist,
+            title
+        )?;
+        writeln!(file, "{}\r", track_path.display())?;
+        row_count += 1;
+    }
+    Ok(row_count)
+}
+
+#[cfg(not(test))]
+pub fn build_playlist_for_app(app: &AppHandle, plan: AiPlaylistPlan) -> Result<AiPlaylist> {
+    let (conn, _) = open(app)?;
+    ensure_search_indexes(&conn)?;
+    build_playlist(&conn, plan)
+}
+
+#[cfg(not(test))]
+pub fn list_saved_playlists_for_app(app: &AppHandle) -> Result<Vec<SavedPlaylist>> {
+    let (conn, _) = open(app)?;
+    list_saved_playlists(&conn)
+}
+
+#[cfg(not(test))]
+pub fn save_playlist_for_app(app: &AppHandle, input: SavePlaylistRequest) -> Result<SavedPlaylist> {
+    let (conn, _) = open(app)?;
+    save_playlist(&conn, input)
+}
+
+#[cfg(not(test))]
+pub fn delete_saved_playlist_for_app(app: &AppHandle, id: i64) -> Result<()> {
+    let (conn, _) = open(app)?;
+    delete_saved_playlist(&conn, id)
+}
+
+#[cfg(not(test))]
+pub fn export_playlist_for_app(
+    app: &AppHandle,
+    input: ExportPlaylistRequest,
+) -> Result<ExportResult> {
+    let (conn, _) = open(app)?;
+    let name = input.name.trim();
+    if name.is_empty() || name.chars().count() > 120 {
+        bail!("Name the playlist with no more than 120 characters")
+    }
+    let playlist = normalize_playlist(input.playlist)?;
+    if playlist.tracks.is_empty() {
+        bail!("Add at least one track before exporting the playlist")
+    }
+    let export_dir = app
+        .path()
+        .app_data_dir()
+        .context("Could not resolve the app data directory")?
+        .join("exports");
+    fs::create_dir_all(&export_dir).context("Could not create export directory")?;
+    let path = export_dir.join(format!(
+        "music-library-playlist-{}-{}.m3u8",
+        safe_file_segment(name),
+        Utc::now().format("%Y%m%d-%H%M%S")
+    ));
+    let row_count = write_playlist_m3u8(&path, &playlist)?;
+    if row_count == 0 {
+        bail!("None of the selected tracks has both a local folder and filename")
+    }
+    let request_json = serde_json::to_string(&playlist)
+        .context("Could not serialize the playlist export record")?;
+    conn.execute(
+        "
+        INSERT INTO exports (created_at, view, format, row_count, path, request_json)
+        VALUES (?1, 'playlist', 'm3u8', ?2, ?3, ?4)
+        ",
+        params![
+            Utc::now().to_rfc3339(),
+            row_count as i64,
+            path.display().to_string(),
+            request_json
+        ],
+    )?;
+    Ok(ExportResult {
+        path: path.display().to_string(),
+        format: "m3u8".to_string(),
+        row_count,
+    })
 }
 
 #[cfg(not(test))]
@@ -11642,6 +12083,7 @@ mod tests {
                 .expect("artist info import run table exists")
         );
         assert!(schema_table_exists(&conn, "ai_snapshots").expect("Luna snapshot table exists"));
+        assert!(schema_table_exists(&conn, "saved_playlists").expect("saved playlist table exists"));
     }
 
     #[test]
@@ -11734,6 +12176,125 @@ mod tests {
         delete_ai_snapshot(&conn, saved.id).expect("delete Luna snapshot");
         delete_ai_snapshot(&conn, saved_answer.id).expect("delete Luna answer snapshot");
         assert!(list_ai_snapshots(&conn, None).unwrap().is_empty());
+    }
+
+    fn test_playlist_plan() -> AiPlaylistPlan {
+        let mut request = BrowseRequest::default();
+        request.view = "tracks".to_string();
+        request.filters.genres = vec!["Synthpop".to_string()];
+        request.sort = BrowseSort {
+            field: "trackRating".to_string(),
+            direction: "desc".to_string(),
+        };
+        request.limit = 50;
+        AiPlaylistPlan {
+            prompt: "A short loved synthpop playlist".to_string(),
+            name: "Neon Test".to_string(),
+            description: "Loved synthpop selected from the local library.".to_string(),
+            request,
+            strategy: "variety".to_string(),
+            target_track_count: 10,
+            target_minutes: 45,
+            max_tracks_per_artist: 2,
+            max_tracks_per_album: 1,
+            model: "gpt-5.6-luna".to_string(),
+            usage: crate::ai::AiUsage {
+                input_tokens: Some(180),
+                cached_input_tokens: None,
+                output_tokens: Some(45),
+            },
+        }
+    }
+
+    #[test]
+    fn builds_playlist_from_local_rows_and_preserves_privacy_boundary() {
+        let conn = seeded_connection();
+
+        let playlist = build_playlist(&conn, test_playlist_plan()).expect("build playlist");
+
+        assert_eq!(playlist.matching_track_count, 1);
+        assert_eq!(playlist.candidate_count, 1);
+        assert_eq!(playlist.tracks.len(), 1);
+        assert_eq!(playlist.tracks[0].track_id, 1);
+        assert_eq!(playlist.tracks[0].album_id, "mb:test");
+        assert_eq!(playlist.tracks[0].seconds, 260);
+        assert!(playlist.tracks[0].loved);
+        assert_eq!(playlist.total_seconds, 260);
+        assert_eq!(playlist.request.view, "tracks");
+        assert_eq!(playlist.request.limit, 50);
+    }
+
+    #[test]
+    fn saves_reopens_updates_and_deletes_exact_playlists() {
+        let conn = seeded_connection();
+        let playlist = build_playlist(&conn, test_playlist_plan()).expect("build playlist");
+
+        let saved = save_playlist(
+            &conn,
+            SavePlaylistRequest {
+                id: None,
+                name: "Friday Night".to_string(),
+                playlist,
+            },
+        )
+        .expect("save playlist");
+
+        assert_eq!(saved.name, "Friday Night");
+        assert_eq!(saved.playlist.tracks.len(), 1);
+        assert_eq!(saved.playlist.tracks[0].track_id, 1);
+        assert_eq!(list_saved_playlists(&conn).unwrap().len(), 1);
+
+        let updated = save_playlist(
+            &conn,
+            SavePlaylistRequest {
+                id: Some(saved.id),
+                name: "Friday Night, edited".to_string(),
+                playlist: saved.playlist,
+            },
+        )
+        .expect("update playlist");
+        assert_eq!(updated.id, saved.id);
+        assert_eq!(updated.name, "Friday Night, edited");
+
+        delete_saved_playlist(&conn, saved.id).expect("delete playlist");
+        assert!(list_saved_playlists(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn writes_utf8_m3u8_and_skips_tracks_without_local_paths() {
+        let conn = seeded_connection();
+        let mut playlist = build_playlist(&conn, test_playlist_plan()).expect("build playlist");
+        playlist.tracks[0].display_artist = Some("Björk".to_string());
+        playlist.tracks[0].title = Some("Jóga".to_string());
+        playlist.tracks.push(AiPlaylistTrack {
+            track_id: 99,
+            album_id: "mb:missing-path".to_string(),
+            album: Some("Local only".to_string()),
+            album_artist: Some("No file".to_string()),
+            display_artist: None,
+            title: Some("Skipped".to_string()),
+            genre: Some("Test".to_string()),
+            year: Some(2026),
+            seconds: 120,
+            rating: None,
+            loved: false,
+            file_path: None,
+            filename: None,
+        });
+        let path = std::env::temp_dir().join(format!(
+            "music-library-playlist-test-{}.m3u8",
+            Utc::now().timestamp_millis()
+        ));
+
+        let written = write_playlist_m3u8(&path, &playlist).expect("write playlist");
+        let content = fs::read_to_string(&path).expect("read playlist");
+
+        assert_eq!(written, 1);
+        assert!(content.starts_with("#EXTM3U\r\n"));
+        assert!(content.contains("#EXTINF:260,Björk - Jóga\r\n"));
+        assert!(content.contains("02 What Have I Done.mp3"));
+        assert!(!content.contains("Skipped"));
+        fs::remove_file(path).expect("remove playlist test file");
     }
 
     #[test]

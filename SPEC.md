@@ -2,9 +2,9 @@
 
 Last updated: 2026-07-16
 Status: Living product and implementation contract
-Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, and an aggregate-only Statistics Library analyst are implemented through Luna-generated typed filters/function calls and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
-Current package version: 0.53.2
-SQLite schema version: 20
+Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, an aggregate-only Statistics Library analyst, and a reviewable local Playlist Builder are implemented through Luna-generated typed recipes/function calls and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
+Current package version: 0.57.0
+SQLite schema version: 22
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
 
@@ -53,6 +53,7 @@ Core principles:
 | Search | Implemented | Primary album and track browsing, composable filters, Ask Luna natural-language filter creation and bounded current-view questions, saved searches, and exports. |
 | Charts | Implemented | Built-in and saved ranked album views with Ask Luna natural-language chart creation and bounded current-view questions plus table, compact list, and cover grid modes. |
 | Discovery | Implemented | Exploration dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions. |
+| Playlists | Implemented | Luna-planned, SQLite-selected track playlists with review/reorder/remove, exact local saved copies, and M3U8 export. |
 | Statistics | Implemented | Aggregate-only Luna Library analyst plus library health, rating progress, metadata coverage, import history, time shape, duration, concentration, and outlier dashboards. |
 | Albums | Implemented | Album index, album filters, detail drill-down, track lists, and album-level exports. |
 | Artists | Implemented | Album-artist index, artist summary stats, album lists, cover board, MusicBrainz pure-official-album discography status, and exports. |
@@ -566,6 +567,8 @@ Expected next backend modularization:
 - Debug builds can use an ignored `OPENAI_API_KEY` environment or `.env` fallback; production builds do not load the project `.env` file.
 - Query summaries and input/cached/output token usage remain visible and generated filters stay editable before anything is saved.
 - SQLite schema version 21 keeps an automatic local Snapshot history for successful Search/Chart compilations, current-view answers, and Library analyst reports. Users can reopen or delete entries; snapshots are part of normal database backups and never contain the OpenAI key.
+- Playlist Builder sends Luna only the natural-language request and receives a strict track-filter recipe with a strategy, target, and repeat caps. SQLite owns candidate search and selection; raw library rows and file paths never enter model context.
+- SQLite schema version 22 stores explicitly saved exact playlist order, the validated recipe, and its source library state. Saved playlists reopen without Luna and export as UTF-8 M3U8 files.
 
 ### Phase 26: Release Operations Automation
 
@@ -912,7 +915,7 @@ Constraints:
 
 Expected outcome:
 
-- AI extends the implemented natural-language Search and Charts foundation into bounded questions about the current filtered view, followed later by reviewable playlists or recommendations.
+- AI extends the implemented natural-language Search and Charts foundation into bounded questions about the current filtered view and reviewable local playlists, followed later by recommendations.
 
 Implemented in version `0.54.0`:
 
@@ -938,6 +941,13 @@ Implemented in version `0.56.1`:
 - Selecting a Library analyst useful next question immediately runs the follow-up through the current analysis lens without requiring a second button click.
 - Starting a manual or suggested analysis clears the Focus question while retaining the submitted value in the request and automatic snapshot.
 - Follow-up question controls remain disabled while Luna is analyzing, preventing duplicate requests and snapshots.
+
+Implemented in version `0.57.0`:
+
+- Playlists exposes a dedicated review-first builder that asks Luna for one strict bounded track recipe and executes it against local SQLite.
+- Selection supports ranked, variety, discovery, and random strategies, up to 500 local candidates and 200 selected tracks, duration or count targets, and repeat caps per artist and album.
+- The draft can be renamed, reordered, and trimmed before it affects saved state. Saving is explicit and stores the exact order plus source library state in SQLite schema version 22.
+- Saved playlists reopen and update without token cost, participate in normal database backups, and export to UTF-8 M3U8 using paths that never leave the device.
 
 Candidate prompts:
 
