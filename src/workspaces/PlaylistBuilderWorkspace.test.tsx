@@ -16,12 +16,25 @@ describe("playlist builder workspace", () => {
       await screen.findByText("What Have I Done to Deserve This?"),
     ).toBeInTheDocument();
     expect(screen.getByText("2 tracks")).toBeInTheDocument();
+    const lovedTrack = screen
+      .getByText("What Have I Done to Deserve This?")
+      .closest("article");
+    const unlovedTrack = screen.getByText("Nascence").closest("article");
     expect(
-      screen
-        .getByText("Nascence")
-        .closest("article")
-        ?.querySelector(".playlist-loved-slot:empty"),
+      lovedTrack?.querySelector(".playlist-track-year"),
+    ).toHaveTextContent("1987");
+    expect(
+      lovedTrack?.querySelector('[aria-label="Track rating 100 out of 100"]'),
     ).toBeInTheDocument();
+    expect(
+      lovedTrack?.querySelector('[aria-label="Loved track"]'),
+    ).toBeInTheDocument();
+    expect(
+      unlovedTrack?.querySelector(".playlist-track-year"),
+    ).toHaveTextContent("2012");
+    expect(
+      unlovedTrack?.querySelector('[aria-label="Loved track"]'),
+    ).not.toBeInTheDocument();
     expect(container.querySelectorAll(".playlist-track-actions")).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", { name: "Save playlist" }));

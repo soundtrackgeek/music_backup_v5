@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.58.1] - 2026-07-16
+### Added
+- Added track year, numeric rating when available, and a loved-heart indicator to every Playlist Builder draft and reopened saved playlist.
+
+### Changed
+- Kept playlist metadata visible in the compact responsive row layout while preserving fixed space for duration and reorder/remove controls.
+- Bumped synchronized app metadata to `0.58.1`.
+
 ## [0.58.0] - 2026-07-16
 ### Added
 - Added an outside-library Discovery panel for natural-language artist, album, and song requests, including explicit count, release/formation-year interpretation, genre, country, and keyword recipes from Luna.

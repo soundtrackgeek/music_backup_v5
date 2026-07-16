@@ -10,6 +10,7 @@ import {
   Save,
   ShieldCheck,
   Sparkles,
+  Star,
   Trash2,
 } from "lucide-react";
 
@@ -361,19 +362,35 @@ export function PlaylistBuilderWorkspace({
                         <span>
                           {track.displayArtist || track.albumArtist || "Unknown artist"} · {track.album || "Unknown album"}
                         </span>
+                        <div className="playlist-track-metadata">
+                          {track.year != null ? (
+                            <span className="playlist-track-year">
+                              {track.year}
+                            </span>
+                          ) : null}
+                          {track.rating != null ? (
+                            <span
+                              className="playlist-track-rating"
+                              aria-label={`Track rating ${track.rating} out of 100`}
+                              title={`Rating ${track.rating} out of 100`}
+                            >
+                              <Star size={11} fill="currentColor" aria-hidden="true" />
+                              {track.rating}
+                            </span>
+                          ) : null}
+                          {track.loved ? (
+                            <span
+                              className="playlist-loved"
+                              aria-label="Loved track"
+                              title="Loved track"
+                            >
+                              <Heart size={12} fill="currentColor" aria-hidden="true" />
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                       <span className="playlist-track-genre">
                         {track.genre || "Unknown"}
-                      </span>
-                      <span className="playlist-loved-slot">
-                        {track.loved ? (
-                          <Heart
-                            className="playlist-loved"
-                            size={15}
-                            fill="currentColor"
-                            aria-label="Loved"
-                          />
-                        ) : null}
                       </span>
                       <span className="playlist-track-duration">
                         {durationLabel(track.seconds)}

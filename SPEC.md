@@ -3,7 +3,7 @@
 Last updated: 2026-07-16
 Status: Living product and implementation contract
 Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, an aggregate-only Statistics Library analyst, a reviewable local Playlist Builder, and verified outside-library artist/album/song Discovery are implemented through Luna-generated typed recipes/function calls, bounded MusicBrainz search, and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
-Current package version: 0.58.0
+Current package version: 0.58.1
 SQLite schema version: 23
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -54,7 +54,7 @@ Core principles:
 | Search | Implemented | Primary album and track browsing, composable filters, Ask Luna natural-language filter creation and bounded current-view questions, saved searches, and exports. |
 | Charts | Implemented | Built-in and saved ranked album views with Ask Luna natural-language chart creation and bounded current-view questions plus table, compact list, and cover grid modes. |
 | Discovery | Implemented | Verified outside-library artist/album/song discovery plus exploration dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions. |
-| Playlists | Implemented | Luna-planned, SQLite-selected track playlists with review/reorder/remove, exact local saved copies, and M3U8 export. |
+| Playlists | Implemented | Luna-planned, SQLite-selected track playlists with year/rating/loved metadata, review/reorder/remove, exact local saved copies, and M3U8 export. |
 | Statistics | Implemented | Aggregate-only Luna Library analyst plus library health, rating progress, metadata coverage, import history, time shape, duration, concentration, and outlier dashboards. |
 | Albums | Implemented | Album index, album filters, detail drill-down, track lists, and album-level exports. |
 | Artists | Implemented | Album-artist index, artist summary stats, album lists, cover board, MusicBrainz pure-official-album discography status, and exports. |
@@ -949,7 +949,7 @@ Implemented in version `0.57.0`:
 
 - Playlists exposes a dedicated review-first builder that asks Luna for one strict bounded track recipe and executes it against local SQLite.
 - Selection supports ranked, variety, discovery, and random strategies, up to 500 local candidates and 200 selected tracks, duration or count targets, and repeat caps per artist and album.
-- The draft can be renamed, reordered, and trimmed before it affects saved state. Saving is explicit and stores the exact order plus source library state in SQLite schema version 22.
+- The draft shows each track's year, numeric rating when present, and loved-heart state, and can be renamed, reordered, and trimmed before it affects saved state. Saving is explicit and stores the exact order plus source library state in SQLite schema version 22.
 - Saved playlists reopen and update without token cost, participate in normal database backups, and export to UTF-8 M3U8 using paths that never leave the device.
 
 Implemented in version `0.57.1`:
