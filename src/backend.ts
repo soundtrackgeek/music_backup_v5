@@ -99,8 +99,13 @@ import type {
   AiSnapshotKind,
   AiPlaylist,
   AiPlaylistBuildRequest,
+  ExternalDiscoveryEntity,
+  ExternalDiscoveryItem,
+  ExternalDiscoveryResponse,
   ExportPlaylistRequest,
+  SaveExternalDiscoveryRequest,
   SavePlaylistRequest,
+  SavedExternalDiscovery,
   SavedPlaylist,
   SaveAiSnapshotRequest,
   ArtistListRequest,
@@ -161,6 +166,7 @@ import type {
 } from "./types";
 
 let mockSavedPlaylists: SavedPlaylist[] = [];
+let mockSavedExternalDiscoveries: SavedExternalDiscovery[] = [];
 
 export async function openExternalUrl(url: string) {
   let parsedUrl: URL;
@@ -170,14 +176,16 @@ export async function openExternalUrl(url: string) {
     throw new Error("Invalid external URL.");
   }
 
-  const isAllowedMusicBrainzArtistUrl =
+  const isAllowedMusicBrainzUrl =
     parsedUrl.protocol === "https:" &&
     parsedUrl.hostname === "musicbrainz.org" &&
-    parsedUrl.pathname.startsWith("/artist/");
+    ["/artist/", "/release-group/", "/recording/"].some((prefix) =>
+      parsedUrl.pathname.startsWith(prefix),
+    );
 
-  if (!isAllowedMusicBrainzArtistUrl) {
+  if (!isAllowedMusicBrainzUrl) {
     throw new Error(
-      "Only MusicBrainz artist URLs can be opened from this view.",
+      "Only MusicBrainz artist, release-group, and recording URLs can be opened from this view.",
     );
   }
 
@@ -636,6 +644,168 @@ export async function deleteSavedPlaylist(id: number) {
     return;
   }
   return invoke<void>("delete_saved_playlist", { id });
+}
+
+const previewExternalCatalog: Record<
+  ExternalDiscoveryEntity,
+  Array<[string, string, string]>
+> = {
+  artist: [
+    ["Porcupine Tree", "On the Sunday of Life…", "b9d134dd-2e7c-4ccc-9a26-81cb9c8d4d7a"],
+    ["The Cardigans", "Emmerdale", "0a03e7c3-63e6-4db2-902c-438c1f7241c0"],
+    ["Kyuss", "Blues for the Red Sun", "bd53f61e-ade8-4151-9a31-8b8b7d41a1c3"],
+    ["Morphine", "Good", "13e28215-eae1-4bd4-b7e7-6b4b6b9e81cb"],
+    ["The Pharcyde", "Bizarre Ride II the Pharcyde", "647221d0-f45a-4238-8d16-320f1c2f9b46"],
+    ["Luna", "Lunapark", "44aa8475-aba2-480b-8a89-a7c9339d1bf8"],
+    ["Pavement", "Slanted and Enchanted", "bdea8a47-0c90-4a9a-95c6-a790c9f7bf45"],
+    ["Stereolab", "Peng!", "98d2f0ec-3c08-4f52-ac0c-2243b2b0c31a"],
+    ["Helmet", "Meantime", "e2b2c4a8-9b9a-44d3-9d4b-97a6a274710b"],
+    ["Spiritualized", "Lazer Guided Melodies", "c1fda6fa-2a76-4d6c-bd0c-0e53285c1718"],
+  ],
+  album: [
+    ["Images and Words", "Dream Theater", "8b2acb43-832f-34f5-b372-01b37d368636"],
+    ["Automatic for the People", "R.E.M.", "3402eece-7c5c-354b-bf87-a8108912f9a7"],
+    ["Copper Blue", "Sugar", "4a51cbcf-878e-3f09-89a3-3e7a6e80623a"],
+    ["Dirt", "Alice in Chains", "82822e11-4cb6-39cc-8c4e-791923d62561"],
+    ["Dry", "PJ Harvey", "00465433-411a-33e1-aecb-4572f7b14848"],
+    ["Selected Ambient Works 85–92", "Aphex Twin", "fdefee02-3886-3b28-b1fd-22664d17b5ed"],
+    ["Meantime", "Helmet", "812d8919-04a8-3ae7-a0e4-8afc8157fe2c"],
+    ["The Chronic", "Dr. Dre", "0d1868bd-3b30-33c4-8664-55826459c3f9"],
+    ["Little Earthquakes", "Tori Amos", "88b6c5e7-4e6c-35b8-a029-6941d15a5535"],
+    ["Lazer Guided Melodies", "Spiritualized", "152815ca-8ce5-3e54-9155-0fa16f7d20d1"],
+  ],
+  song: [
+    ["Friday I'm in Love", "The Cure", "083721bb-1f61-4da0-a4f4-baa8d758b516"],
+    ["Nuthin' but a ‘G’ Thang", "Dr. Dre", "1d557f61-5f77-499c-bc28-b86f9b03c97c"],
+    ["Would?", "Alice in Chains", "8488d5e4-30f2-4f38-8dd8-89a33a2095fb"],
+    ["Connected", "Stereo MC's", "c74215e7-7bb5-42e0-9456-f5a05122f2c7"],
+    ["Drive", "R.E.M.", "6d4d4032-f476-4e33-aecf-fc51cfe17da7"],
+    ["Killing in the Name", "Rage Against the Machine", "c0727b09-0f08-4a42-8aa4-e511e08e6b34"],
+    ["Silent Lucidity", "Queensrÿche", "3be10621-7df9-4ecb-8b0b-391577fcf40b"],
+    ["Motorcycle Emptiness", "Manic Street Preachers", "d54e2b7e-270d-4e13-9b4a-88448f05a5ad"],
+    ["Human Behaviour", "Björk", "485778d2-5edb-4b5d-bf8e-037b979bf8fd"],
+    ["Creep", "Radiohead", "ccfdd180-22e5-4dd2-a739-907a40055a27"],
+  ],
+};
+
+function previewDiscoveryEntity(prompt: string): ExternalDiscoveryEntity {
+  if (/\b(song|songs|track|tracks|recording|recordings)\b/i.test(prompt)) {
+    return "song";
+  }
+  if (/\b(album|albums|record|records|lp|lps)\b/i.test(prompt)) {
+    return "album";
+  }
+  return "artist";
+}
+
+function previewDiscoveryCount(prompt: string) {
+  const match = prompt.match(/\b(\d{1,2})\b/);
+  const value = match ? Number(match[1]) : 5;
+  return Math.min(25, Math.max(1, value));
+}
+
+export async function discoverOutsideLibrary(input: { prompt: string }) {
+  if (!isTauriRuntime()) {
+    const prompt = input.prompt.trim();
+    const entity = previewDiscoveryEntity(prompt);
+    const count = previewDiscoveryCount(prompt);
+    const year = Number(prompt.match(/\b(19|20)\d{2}\b/)?.[0] ?? 0);
+    const formedYear =
+      entity === "artist" && /\b(formed|founded|started)\b/i.test(prompt);
+    const entityLabel = entity === "song" ? "songs" : `${entity}s`;
+    const rows = previewExternalCatalog[entity].slice(0, count);
+    const path = entity === "album" ? "release-group" : entity === "song" ? "recording" : "artist";
+    const items = rows.map(([title, artistOrAnchor, id]) => ({
+      id,
+      entity,
+      title,
+      artist: entity === "artist" ? title : artistOrAnchor,
+      anchor: entity === "artist" ? artistOrAnchor : null,
+      year: year || 1992,
+      country: null,
+      itemType: entity === "artist" ? "Group" : entity === "album" ? "Album" : "Recording",
+      tags: [],
+      score: 100,
+      evidence:
+        entity === "artist"
+          ? `MusicBrainz verifies the release “${artistOrAnchor}” in ${year || 1992}.`
+          : `MusicBrainz verifies this ${entity}'s first release in ${year || 1992}.`,
+      url: `https://musicbrainz.org/${path}/${id}`,
+    })) satisfies ExternalDiscoveryItem[];
+    const title = `${entityLabel[0].toUpperCase()}${entityLabel.slice(1)} outside my library`;
+    return {
+      prompt,
+      title,
+      summary: `${count} verified ${entityLabel}${year ? ` tied to ${year}` : ""}, excluding local-library matches.`,
+      plan: {
+        prompt,
+        entity,
+        count,
+        year,
+        yearMeaning: formedYear ? "formedYear" : "releaseYear",
+        genres: /\baor\b/i.test(prompt) ? ["AOR"] : [],
+        countries: [],
+        keywords: "",
+        title,
+        summary: `${count} verified ${entityLabel} outside the local library.`,
+        model: "gpt-5.6-luna",
+        usage: { inputTokens: null, cachedInputTokens: null, outputTokens: null },
+      },
+      items,
+      source: "MusicBrainz",
+      fetchedAt: new Date().toISOString(),
+      catalogCandidateCount: Math.min(100, Math.max(25, count * 12)),
+      excludedOwnedCount: 3,
+      limitations: rows.length < count
+        ? [`MusicBrainz returned ${rows.length} unowned results from the bounded candidate set, fewer than the requested ${count}.`]
+        : [],
+    } satisfies ExternalDiscoveryResponse;
+  }
+  return invoke<ExternalDiscoveryResponse>("discover_outside_library", { input });
+}
+
+export async function listSavedExternalDiscoveries() {
+  if (!isTauriRuntime()) return mockSavedExternalDiscoveries;
+  return invoke<SavedExternalDiscovery[]>("list_saved_external_discoveries");
+}
+
+export async function saveExternalDiscovery(input: SaveExternalDiscoveryRequest) {
+  if (!isTauriRuntime()) {
+    const now = new Date().toISOString();
+    const existing = input.id == null
+      ? null
+      : mockSavedExternalDiscoveries.find((saved) => saved.id === input.id) ?? null;
+    const saved = {
+      id: existing?.id ?? mockSavedExternalDiscoveries.reduce(
+        (largest, entry) => Math.max(largest, entry.id),
+        0,
+      ) + 1,
+      name: input.name.trim(),
+      response: input.response,
+      libraryImportRunId: mockStatus.lastImport?.id ?? null,
+      libraryImportedAt: mockStatus.lastImport?.completedAt ?? null,
+      libraryAlbumCount: mockStatus.albumCount,
+      libraryTrackCount: mockStatus.trackCount,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    } satisfies SavedExternalDiscovery;
+    mockSavedExternalDiscoveries = [
+      saved,
+      ...mockSavedExternalDiscoveries.filter((entry) => entry.id !== saved.id),
+    ];
+    return saved;
+  }
+  return invoke<SavedExternalDiscovery>("save_external_discovery", { input });
+}
+
+export async function deleteSavedExternalDiscovery(id: number) {
+  if (!isTauriRuntime()) {
+    mockSavedExternalDiscoveries = mockSavedExternalDiscoveries.filter(
+      (saved) => saved.id !== id,
+    );
+    return;
+  }
+  return invoke<void>("delete_saved_external_discovery", { id });
 }
 
 export async function exportPlaylist(input: ExportPlaylistRequest) {

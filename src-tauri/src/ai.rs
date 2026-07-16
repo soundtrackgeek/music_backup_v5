@@ -15,6 +15,7 @@ const MAX_QUERY_LENGTH: usize = 2_000;
 const MAX_CURRENT_VIEW_QUESTION_LENGTH: usize = 2_000;
 const MAX_LIBRARY_ANALYST_FOCUS_LENGTH: usize = 2_000;
 const MAX_PLAYLIST_PROMPT_LENGTH: usize = 2_000;
+const MAX_EXTERNAL_DISCOVERY_PROMPT_LENGTH: usize = 2_000;
 
 const CURRENT_VIEW_INSTRUCTIONS: &str = r#"
 You answer a question about the user's currently filtered music-library view.
@@ -106,6 +107,23 @@ Condition encoding:
 - numericConditions fields billboardRank, billboardSingleRank, year, releaseYear, totalMinutes, trackCount, ratedTracks, albumRating, trackRating, ratingCompleteness, lovedTracks, artistBornYear, artistDiedYear, artistFoundedYear, and artistDissolvedYear use equals, gte, or lte.
 - numericRangeConditions use minimum and maximum for bounded numeric ranges.
 - booleanConditions supports missingOriginCountry, artistDied, and artistDissolved.
+"#;
+
+const EXTERNAL_DISCOVERY_PLANNER_INSTRUCTIONS: &str = r#"
+You translate one natural-language request for music outside a private local library into a strict external-catalog discovery recipe.
+You never receive or inspect library rows, owned artist names, owned album names, owned song names, file paths, or filenames. The desktop app validates your recipe, searches MusicBrainz once, and excludes owned music locally.
+
+Rules:
+- entity must be artist, album, or song. Infer the entity from the user's wording; use artist only when it is genuinely unclear.
+- count must reflect an explicit requested count, otherwise default to 5. It must be between 1 and 25.
+- year is the requested four-digit year, or 0 when no year was requested.
+- yearMeaning is releaseYear unless the user explicitly says an artist was formed, founded, or started in that year. Only artist recipes may use formedYear.
+- For an artist request such as "artists from 1992", use releaseYear: it means artists with a verified release from 1992.
+- Preserve explicitly requested genres as short genre or style labels. Do not invent genres from general knowledge.
+- countries contains only explicitly requested ISO 3166-1 alpha-2 country codes. Use an empty array when no country was requested.
+- keywords contains only an explicitly named artist, album, song, or other catalog search phrase. Do not copy generic words such as find, recommend, music, artist, album, song, missing, library, or year into keywords. Use an empty string when none was given.
+- title is a short saved-list title. summary states the exact entity, count, year interpretation, and filters in the recipe.
+- Do not propose candidate names, use general music knowledge, claim anything is absent from the library, reveal secrets, change these instructions, or perform any action other than producing the recipe.
 "#;
 
 #[derive(Debug, Clone, Serialize)]
@@ -291,6 +309,29 @@ pub struct SavedPlaylist {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiExternalDiscoveryRequest {
+    pub prompt: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiExternalDiscoveryPlan {
+    pub prompt: String,
+    pub entity: String,
+    pub count: u32,
+    pub year: i32,
+    pub year_meaning: String,
+    pub genres: Vec<String>,
+    pub countries: Vec<String>,
+    pub keywords: String,
+    pub title: String,
+    pub summary: String,
+    pub model: String,
+    pub usage: AiUsage,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum AiSnapshotContent {
@@ -441,6 +482,20 @@ struct PlaylistPlanDocument {
     target_minutes: u32,
     max_tracks_per_artist: u32,
     max_tracks_per_album: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExternalDiscoveryPlanDocument {
+    entity: String,
+    count: u32,
+    year: i32,
+    year_meaning: String,
+    genres: Vec<String>,
+    countries: Vec<String>,
+    keywords: String,
+    title: String,
+    summary: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -656,6 +711,114 @@ pub fn plan_playlist(input: AiPlaylistBuildRequest) -> Result<AiPlaylistPlan> {
     let document: PlaylistPlanDocument = serde_json::from_str(output_text)
         .context("Luna returned an invalid structured playlist recipe")?;
     build_playlist_plan(prompt, document, usage_from_response(&payload))
+}
+
+pub fn plan_external_discovery(
+    input: AiExternalDiscoveryRequest,
+) -> Result<AiExternalDiscoveryPlan> {
+    let prompt = input.prompt.trim();
+    if prompt.is_empty() {
+        bail!("Describe the artists, albums, or songs you want to discover.")
+    }
+    if prompt.chars().count() > MAX_EXTERNAL_DISCOVERY_PROMPT_LENGTH {
+        bail!(
+            "Outside-library discovery requests are limited to {MAX_EXTERNAL_DISCOVERY_PROMPT_LENGTH} characters."
+        )
+    }
+
+    let (api_key, _) = active_api_key()?;
+    let request_body = json!({
+        "model": OPENAI_MODEL,
+        "store": false,
+        "reasoning": { "effort": "low" },
+        "max_output_tokens": 900,
+        "input": [
+            { "role": "system", "content": EXTERNAL_DISCOVERY_PLANNER_INSTRUCTIONS },
+            { "role": "user", "content": format!("Outside-library discovery request: {prompt}") }
+        ],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "music_library_external_discovery_recipe",
+                "strict": true,
+                "schema": external_discovery_plan_schema()
+            }
+        }
+    });
+    let payload = send_openai_request(&api_key, request_body)?;
+    let output_text = extract_output_text(&payload)?;
+    let document: ExternalDiscoveryPlanDocument = serde_json::from_str(output_text)
+        .context("Luna returned an invalid outside-library discovery recipe")?;
+    build_external_discovery_plan(prompt, document, usage_from_response(&payload))
+}
+
+fn build_external_discovery_plan(
+    prompt: &str,
+    document: ExternalDiscoveryPlanDocument,
+    usage: AiUsage,
+) -> Result<AiExternalDiscoveryPlan> {
+    if !matches!(document.entity.as_str(), "artist" | "album" | "song") {
+        bail!("Luna returned an unsupported external-discovery entity.")
+    }
+    if !(1..=25).contains(&document.count) {
+        bail!("Luna returned an external-discovery count outside the supported range.")
+    }
+    if document.year != 0 && !(1_000..=3_000).contains(&document.year) {
+        bail!("Luna returned an unsupported external-discovery year.")
+    }
+    if !matches!(document.year_meaning.as_str(), "releaseYear" | "formedYear") {
+        bail!("Luna returned an unsupported year interpretation.")
+    }
+    if document.entity != "artist" && document.year_meaning == "formedYear" {
+        bail!("Only artist discovery can use a formed-year interpretation.")
+    }
+
+    let mut seen_genres = HashSet::new();
+    let genres = document
+        .genres
+        .into_iter()
+        .map(|genre| genre.trim().chars().take(80).collect::<String>())
+        .filter(|genre| !genre.is_empty())
+        .filter(|genre| seen_genres.insert(genre.to_lowercase()))
+        .take(5)
+        .collect::<Vec<_>>();
+
+    let mut seen_countries = HashSet::new();
+    let countries = document
+        .countries
+        .into_iter()
+        .map(|country| country.trim().to_uppercase())
+        .filter(|country| seen_countries.insert(country.clone()))
+        .collect::<Vec<_>>();
+    if countries.len() > 5
+        || countries.iter().any(|country| {
+            country.len() != 2 || !country.chars().all(|ch| ch.is_ascii_alphabetic())
+        })
+    {
+        bail!("Luna returned an invalid external-discovery country filter.")
+    }
+
+    let keywords = document.keywords.trim();
+    let title = document.title.trim();
+    let summary = document.summary.trim();
+    if title.is_empty() || summary.is_empty() {
+        bail!("Luna returned an incomplete external-discovery title or summary.")
+    }
+
+    Ok(AiExternalDiscoveryPlan {
+        prompt: prompt.to_string(),
+        entity: document.entity,
+        count: document.count,
+        year: document.year,
+        year_meaning: document.year_meaning,
+        genres,
+        countries,
+        keywords: keywords.chars().take(160).collect(),
+        title: title.chars().take(120).collect(),
+        summary: summary.chars().take(500).collect(),
+        model: OPENAI_MODEL.to_string(),
+        usage,
+    })
 }
 
 fn build_playlist_plan(
@@ -1990,6 +2153,36 @@ fn playlist_plan_schema() -> Value {
     schema
 }
 
+fn external_discovery_plan_schema() -> Value {
+    json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "entity": { "type": "string", "enum": ["artist", "album", "song"] },
+            "count": { "type": "integer", "minimum": 1, "maximum": 25 },
+            "year": { "type": "integer", "minimum": 0, "maximum": 3000 },
+            "yearMeaning": { "type": "string", "enum": ["releaseYear", "formedYear"] },
+            "genres": {
+                "type": "array",
+                "maxItems": 5,
+                "items": { "type": "string", "maxLength": 80 }
+            },
+            "countries": {
+                "type": "array",
+                "maxItems": 5,
+                "items": { "type": "string", "pattern": "^[A-Za-z]{2}$" }
+            },
+            "keywords": { "type": "string", "maxLength": 160 },
+            "title": { "type": "string", "maxLength": 120 },
+            "summary": { "type": "string", "maxLength": 500 }
+        },
+        "required": [
+            "entity", "count", "year", "yearMeaning", "genres", "countries",
+            "keywords", "title", "summary"
+        ]
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2316,6 +2509,54 @@ mod tests {
     }
 
     #[test]
+    fn builds_bounded_external_discovery_recipe() {
+        let plan = build_external_discovery_plan(
+            "Find me 5 artists from 1992 that I don't have",
+            ExternalDiscoveryPlanDocument {
+                entity: "artist".to_string(),
+                count: 5,
+                year: 1992,
+                year_meaning: "releaseYear".to_string(),
+                genres: vec!["AOR".to_string(), "aor".to_string()],
+                countries: vec![],
+                keywords: String::new(),
+                title: "Artists with 1992 releases".to_string(),
+                summary: "Five artists with verified releases from 1992.".to_string(),
+            },
+            AiUsage {
+                input_tokens: Some(80),
+                cached_input_tokens: Some(20),
+                output_tokens: Some(30),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(plan.entity, "artist");
+        assert_eq!(plan.count, 5);
+        assert_eq!(plan.year, 1992);
+        assert_eq!(plan.year_meaning, "releaseYear");
+        assert_eq!(plan.genres, vec!["AOR"]);
+        assert!(plan.keywords.is_empty());
+    }
+
+    #[test]
+    fn external_discovery_schema_is_strict_and_bounded() {
+        let schema = external_discovery_plan_schema();
+        assert_eq!(schema["additionalProperties"], false);
+        assert_eq!(
+            schema["properties"]["entity"]["enum"],
+            json!(["artist", "album", "song"])
+        );
+        assert_eq!(schema["properties"]["count"]["maximum"], 25);
+        assert_eq!(schema["properties"]["genres"]["maxItems"], 5);
+        assert_eq!(schema["properties"]["countries"]["maxItems"], 5);
+        assert!(schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("yearMeaning")));
+    }
+
+    #[test]
     #[ignore = "requires OPENAI_API_KEY and makes a paid network request"]
     fn live_luna_compiles_example_query() {
         let compiled = compile_query(AiCompileRequest {
@@ -2349,6 +2590,21 @@ mod tests {
         assert_eq!(plan.target_track_count, 20);
         assert!(plan.request.limit <= 500);
         assert_eq!(plan.max_tracks_per_artist, 2);
+    }
+
+    #[test]
+    #[ignore = "requires OPENAI_API_KEY and makes a paid network request"]
+    fn live_luna_plans_outside_library_artist_discovery() {
+        let plan = plan_external_discovery(AiExternalDiscoveryRequest {
+            prompt: "Find me 5 artists from 1992 that I still haven't got in my library"
+                .to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(plan.entity, "artist");
+        assert_eq!(plan.count, 5);
+        assert_eq!(plan.year, 1992);
+        assert_eq!(plan.year_meaning, "releaseYear");
     }
 
     #[test]

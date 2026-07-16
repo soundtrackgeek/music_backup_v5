@@ -271,6 +271,7 @@ import { AiSettingsPanel } from "./components/AiSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
 import { LibraryAnalystPanel } from "./components/LibraryAnalystPanel";
 import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPanel";
+import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
 import {
   ArtistDetailTabs,
   artistDetailTabNeedsMusicBrainz,
@@ -10988,8 +10989,8 @@ export default function App() {
               <div>
                 <h1>Discovery</h1>
                 <p>
-                  Explore rating backlogs, loved outliers, genre clusters, and
-                  artist catalog pockets.
+                  Find music outside your library, then explore rating
+                  backlogs, loved outliers, and catalog pockets.
                 </p>
               </div>
               <div className="topbar-actions">
@@ -11011,6 +11012,10 @@ export default function App() {
                 </button>
               </div>
             </header>
+
+            <OutsideLibraryDiscovery
+              isAvailable={Boolean(status?.hasDatabase && status.trackCount > 0)}
+            />
 
             <section className="metric-grid" aria-label="Discovery summary">
               <Metric

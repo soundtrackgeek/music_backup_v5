@@ -708,6 +708,69 @@ export type SavedPlaylist = {
   updatedAt: string;
 };
 
+export type ExternalDiscoveryEntity = "artist" | "album" | "song";
+
+export type ExternalDiscoveryPlan = {
+  prompt: string;
+  entity: ExternalDiscoveryEntity;
+  count: number;
+  year: number;
+  yearMeaning: "releaseYear" | "formedYear";
+  genres: string[];
+  countries: string[];
+  keywords: string;
+  title: string;
+  summary: string;
+  model: string;
+  usage: AiUsage;
+};
+
+export type ExternalDiscoveryItem = {
+  id: string;
+  entity: ExternalDiscoveryEntity;
+  title: string;
+  artist: string;
+  anchor: string | null;
+  year: number | null;
+  country: string | null;
+  itemType: string | null;
+  tags: string[];
+  score: number;
+  evidence: string;
+  url: string;
+};
+
+export type ExternalDiscoveryResponse = {
+  prompt: string;
+  title: string;
+  summary: string;
+  plan: ExternalDiscoveryPlan;
+  items: ExternalDiscoveryItem[];
+  source: "MusicBrainz";
+  fetchedAt: string;
+  catalogCandidateCount: number;
+  excludedOwnedCount: number;
+  limitations: string[];
+};
+
+export type SaveExternalDiscoveryRequest = {
+  id: number | null;
+  name: string;
+  response: ExternalDiscoveryResponse;
+};
+
+export type SavedExternalDiscovery = {
+  id: number;
+  name: string;
+  response: ExternalDiscoveryResponse;
+  libraryImportRunId: number | null;
+  libraryImportedAt: string | null;
+  libraryAlbumCount: number;
+  libraryTrackCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AiConnectionTest = {
   model: string;
   message: string;

@@ -4,6 +4,7 @@ mod ai;
 #[cfg(not(test))]
 mod covers;
 mod db;
+mod external_discovery;
 mod importer;
 mod models;
 mod musicbrainz;
@@ -247,6 +248,53 @@ async fn delete_saved_playlist(app: AppHandle, id: i64) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || db::delete_saved_playlist_for_app(&app, id))
         .await
         .map_err(|error| format!("Delete saved playlist task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn discover_outside_library(
+    app: AppHandle,
+    input: ai::AiExternalDiscoveryRequest,
+) -> Result<external_discovery::ExternalDiscoveryResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let plan = ai::plan_external_discovery(input)?;
+        external_discovery::discover_for_app(&app, plan)
+    })
+    .await
+    .map_err(|error| format!("Outside-library discovery task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn list_saved_external_discoveries(
+    app: AppHandle,
+) -> Result<Vec<external_discovery::SavedExternalDiscovery>, String> {
+    tauri::async_runtime::spawn_blocking(move || external_discovery::list_saved_for_app(&app))
+        .await
+        .map_err(|error| format!("Saved discovery list task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn save_external_discovery(
+    app: AppHandle,
+    input: external_discovery::SaveExternalDiscoveryRequest,
+) -> Result<external_discovery::SavedExternalDiscovery, String> {
+    tauri::async_runtime::spawn_blocking(move || external_discovery::save_for_app(&app, input))
+        .await
+        .map_err(|error| format!("Save discovery list task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn delete_saved_external_discovery(app: AppHandle, id: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || external_discovery::delete_saved_for_app(&app, id))
+        .await
+        .map_err(|error| format!("Delete saved discovery task failed: {error}"))?
         .map_err(|error| error.to_string())
 }
 
@@ -749,6 +797,10 @@ pub fn run() {
             save_playlist,
             delete_saved_playlist,
             export_playlist,
+            discover_outside_library,
+            list_saved_external_discoveries,
+            save_external_discovery,
+            delete_saved_external_discovery,
             get_musicbrainz_cache_status,
             get_musicbrainz_origin_country_status,
             preview_musicbrainz_origin_country_import,

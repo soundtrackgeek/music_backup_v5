@@ -336,7 +336,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_two_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_three_schema_exists(conn)?
+    {
         return Ok(());
     }
 
@@ -496,6 +497,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_tracks_rating ON tracks(normalized_rating);
         CREATE INDEX IF NOT EXISTS idx_tracks_love ON tracks(love);
         CREATE INDEX IF NOT EXISTS idx_tracks_file ON tracks(file_path, filename);
+        CREATE INDEX IF NOT EXISTS idx_tracks_display_artist_title_nocase
+            ON tracks(display_artist COLLATE NOCASE, title COLLATE NOCASE);
+        CREATE INDEX IF NOT EXISTS idx_tracks_album_artist_title_nocase
+            ON tracks(album_artist_display COLLATE NOCASE, title COLLATE NOCASE);
         CREATE INDEX IF NOT EXISTS idx_albums_unique_id ON albums(album_unique_id);
         CREATE INDEX IF NOT EXISTS idx_albums_year ON albums(year);
         CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums(album_artist_display);
@@ -581,6 +586,22 @@ pub fn migrate(conn: &Connection) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_saved_playlists_updated
             ON saved_playlists(updated_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS saved_external_discoveries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            response_json TEXT NOT NULL,
+            library_import_run_id INTEGER,
+            library_imported_at TEXT,
+            library_album_count INTEGER NOT NULL DEFAULT 0,
+            library_track_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_saved_external_discoveries_updated
+            ON saved_external_discoveries(updated_at DESC, id DESC);
 
         CREATE TABLE IF NOT EXISTS exports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -893,7 +914,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_origin_country_tables(conn)?;
     ensure_musicbrainz_artist_info_tables(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
-    conn.execute_batch("PRAGMA user_version = 22;")
+    conn.execute_batch("PRAGMA user_version = 23;")
         .context("Could not update SQLite schema version")?;
     Ok(())
 }
@@ -12084,6 +12105,8 @@ mod tests {
         );
         assert!(schema_table_exists(&conn, "ai_snapshots").expect("Luna snapshot table exists"));
         assert!(schema_table_exists(&conn, "saved_playlists").expect("saved playlist table exists"));
+        assert!(schema_table_exists(&conn, "saved_external_discoveries")
+            .expect("saved external discovery table exists"));
     }
 
     #[test]
