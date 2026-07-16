@@ -1104,7 +1104,7 @@ const mockRows: BrowseRow[] = (
       normalizedRating: 100,
       discNumber: 1,
       trackNumber: 1,
-      love: "L",
+      love: null,
       filePath: "D:\\Music\\Austin Wintory\\Journey",
       filename: "01 Nascence.mp3",
       coverPath: null,

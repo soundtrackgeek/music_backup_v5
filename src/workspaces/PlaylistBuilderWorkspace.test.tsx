@@ -5,7 +5,7 @@ import { PlaylistBuilderWorkspace } from "./PlaylistBuilderWorkspace";
 
 describe("playlist builder workspace", () => {
   it("builds a reviewable draft and explicitly stores its exact track order", async () => {
-    render(<PlaylistBuilderWorkspace isAvailable />);
+    const { container } = render(<PlaylistBuilderWorkspace isAvailable />);
 
     fireEvent.change(screen.getByLabelText("Playlist request"), {
       target: { value: "A varied loved synthpop playlist" },
@@ -16,6 +16,13 @@ describe("playlist builder workspace", () => {
       await screen.findByText("What Have I Done to Deserve This?"),
     ).toBeInTheDocument();
     expect(screen.getByText("2 tracks")).toBeInTheDocument();
+    expect(
+      screen
+        .getByText("Nascence")
+        .closest("article")
+        ?.querySelector(".playlist-loved-slot:empty"),
+    ).toBeInTheDocument();
+    expect(container.querySelectorAll(".playlist-track-actions")).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", { name: "Save playlist" }));
 

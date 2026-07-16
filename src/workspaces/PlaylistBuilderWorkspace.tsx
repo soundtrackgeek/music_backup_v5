@@ -365,14 +365,16 @@ export function PlaylistBuilderWorkspace({
                       <span className="playlist-track-genre">
                         {track.genre || "Unknown"}
                       </span>
-                      {track.loved ? (
-                        <Heart
-                          className="playlist-loved"
-                          size={15}
-                          fill="currentColor"
-                          aria-label="Loved"
-                        />
-                      ) : null}
+                      <span className="playlist-loved-slot">
+                        {track.loved ? (
+                          <Heart
+                            className="playlist-loved"
+                            size={15}
+                            fill="currentColor"
+                            aria-label="Loved"
+                          />
+                        ) : null}
+                      </span>
                       <span className="playlist-track-duration">
                         {durationLabel(track.seconds)}
                       </span>

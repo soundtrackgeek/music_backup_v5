@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.57.2] - 2026-07-16
+### Fixed
+- Kept playlist row duration and up, down, and remove controls in their intended columns when a track is not loved, preventing the action buttons from being clipped by the review panel.
+- Added an unloved-track regression state to the web preview and Playlist Builder interaction coverage.
+
+### Changed
+- Bumped synchronized app metadata to `0.57.2`.
+
 ## [0.57.1] - 2026-07-16
 ### Added
 - Added an amber download badge to the Windows taskbar icon and app system tray icon while a newer signed app version is known to be available.

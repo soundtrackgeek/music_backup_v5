@@ -6746,6 +6746,12 @@ button {
   color: #c45958;
 }
 
+.playlist-loved-slot {
+  display: grid;
+  min-width: 0;
+  place-items: center;
+}
+
 .playlist-track-duration {
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -6997,7 +7003,7 @@ button {
   }
 
   .playlist-track-genre,
-  .playlist-loved {
+  .playlist-loved-slot {
     display: none;
   }
 }
