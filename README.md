@@ -43,6 +43,8 @@ The desktop dev shell loads Vite from `http://127.0.0.1:1420/`, matching the loo
 
 Search and Charts include an Ask Luna panel powered by the exact `gpt-5.6-luna` model. A request such as `Top AOR albums from 1984 under 45 minutes` is translated into the app's existing typed filters (`Genres: AOR`, `Year: 1984`, `Minutes max: 45`) and Album Score descending sort. The desktop app validates that structured plan and runs the resulting query against local SQLite. Album rows, track rows, database files, saved searches, and library statistics are never sent to OpenAI.
 
+Bounded numeric requests are supported as typed ranges. For example, `Albums from artists who died between 1985 and 1989` activates the artist-death filter and applies `Died year: 1985–1989` before searching locally.
+
 Configure the OpenAI key in **Settings → Luna & OpenAI**. The desktop backend stores it as a generic credential in Windows Credential Manager and returns only configured/source status to the frontend. The key is not part of `AppSettings`, SQLite, browser storage, logs, exports, or database backups. Settings can test the connection and remove or replace the stored credential without displaying the existing key.
 
 For temporary local development, a repo-root `.env` file containing `OPENAI_API_KEY=...` is supported by debug builds only. Secure Settings storage takes precedence over that fallback. `.env` and `.env.*` are gitignored, while `.env.example` remains allowed; `npm run security:check` enforces those rules. Production builds do not load the project `.env` file.

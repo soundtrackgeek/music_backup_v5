@@ -3,7 +3,7 @@
 Last updated: 2026-07-16
 Status: Living product and implementation contract
 Current implementation: Natural-language Search and Charts are implemented through Luna-generated typed filters and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
-Current package version: 0.53.0
+Current package version: 0.53.1
 SQLite schema version: 20
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -320,7 +320,7 @@ Core files:
 
 AI boundary:
 
-- Luna receives only the user's request, target workspace, current album/track view, fixed planner instructions, and a strict query-plan schema.
+- Luna receives only the user's request, target workspace, current album/track view, fixed planner instructions, and a strict query-plan schema with separate text, list, numeric, numeric-range, and boolean condition groups so required numeric values cannot be omitted.
 - Never send raw library rows, database files, covers, saved objects, statistics payloads, or the OpenAI key as model context.
 - Validate every model-produced field, operator, numeric range, sort, limit, target, and chart metric before executing the existing local SQLite search tool.
 - Store the production key outside `AppSettings`, SQLite, localStorage, logs, exports, and backups. Windows Credential Manager is the primary source; `OPENAI_API_KEY` and repo-root `.env` are debug-only fallbacks.

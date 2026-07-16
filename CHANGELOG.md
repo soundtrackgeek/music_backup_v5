@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.53.1] - 2026-07-16
+### Fixed
+- Fixed Ask Luna numeric ranges such as `artists who died between 1985 and 1989` by replacing nullable generic conditions with typed Structured Output groups whose numeric values and range endpoints are required.
+- Added regression coverage for artist death-year ranges and live-model coverage for both the reported prompt and the original AOR query.
+
+### Changed
+- Changed death-year and dissolution-year ranges to activate their corresponding lifecycle filters automatically.
+- Bumped synchronized app metadata to `0.53.1`.
+
 ## [0.53.0] - 2026-07-16
 ### Added
 - Added Ask Luna panels to Search and Charts using `gpt-5.6-luna`, strict Structured Outputs, and the existing local browse/chart request types.
