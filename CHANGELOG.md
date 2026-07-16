@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.57.1] - 2026-07-16
+### Added
+- Added an amber download badge to the Windows taskbar icon and app system tray icon while a newer signed app version is known to be available.
+- Added an always-available system tray icon whose tooltip names the available version and whose left-click restores and focuses the main window.
+- Added deterministic icon-artwork coverage for the transparent taskbar overlay and non-mutating tray-icon badge composition.
+
+### Changed
+- Kept the update badge visible through later checks or install progress until a successful check confirms that no update is available.
+- Enabled the scoped Tauri tray and window-icon capabilities required for runtime update indicators.
+- Bumped synchronized app metadata to `0.57.1`.
+
 ## [0.57.0] - 2026-07-16
 ### Added
 - Added a dedicated Playlist Builder workspace where Luna converts a natural-language request into a strict bounded track-filter recipe and local SQLite selects the actual tracks.

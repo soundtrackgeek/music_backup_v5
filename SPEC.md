@@ -3,7 +3,7 @@
 Last updated: 2026-07-16
 Status: Living product and implementation contract
 Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, an aggregate-only Statistics Library analyst, and a reviewable local Playlist Builder are implemented through Luna-generated typed recipes/function calls and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
-Current package version: 0.57.0
+Current package version: 0.57.1
 SQLite schema version: 22
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -948,6 +948,11 @@ Implemented in version `0.57.0`:
 - Selection supports ranked, variety, discovery, and random strategies, up to 500 local candidates and 200 selected tracks, duration or count targets, and repeat caps per artist and album.
 - The draft can be renamed, reordered, and trimmed before it affects saved state. Saving is explicit and stores the exact order plus source library state in SQLite schema version 22.
 - Saved playlists reopen and update without token cost, participate in normal database backups, and export to UTF-8 M3U8 using paths that never leave the device.
+
+Implemented in version `0.57.1`:
+
+- A known available app update adds an amber download overlay to the Windows taskbar icon and the app's system tray icon until a successful check reports that the installed version is current.
+- The tray tooltip includes the available update version, and left-clicking the tray icon restores and focuses the main app window.
 
 Candidate prompts:
 

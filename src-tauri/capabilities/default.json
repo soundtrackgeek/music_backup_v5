@@ -3,5 +3,15 @@
   "identifier": "default",
   "description": "Main window local-only core permissions",
   "windows": ["main"],
-  "permissions": ["core:default", "opener:default", "process:allow-restart", "updater:default"]
+  "permissions": [
+    "core:default",
+    "core:app:allow-default-window-icon",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-overlay-icon",
+    "core:window:allow-show",
+    "core:window:allow-unminimize",
+    "opener:default",
+    "process:allow-restart",
+    "updater:default"
+  ]
 }

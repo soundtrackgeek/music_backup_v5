@@ -288,6 +288,7 @@ import {
   type AppUpdateInfo,
   type AppUpdateInstallProgress,
 } from "./app/updater";
+import { setAppUpdateIndicator } from "./app/updateIndicator";
 import {
   chartCompletenessRange,
   chartRequestFromConfig,
@@ -9610,6 +9611,18 @@ export default function App() {
       void appUpdateRef.current?.close().catch(() => undefined);
     };
   }, [canImport, checkAppUpdate]);
+
+  useEffect(() => {
+    if (!canImport) {
+      return;
+    }
+
+    void setAppUpdateIndicator(appUpdateInfo?.version ?? null).catch(
+      (error) => {
+        console.warn("Could not update the desktop update indicator.", error);
+      },
+    );
+  }, [appUpdateInfo?.version, canImport]);
 
   useEffect(() => {
     const autoCheckMinutes = updateAutoCheckMinutesValue(
