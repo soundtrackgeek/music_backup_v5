@@ -520,6 +520,37 @@ export type MusicBrainzArtistDiscographyResponse = {
 
 export type BrowseView = "albums" | "tracks";
 
+export type AiKeySource =
+  | "windowsCredentialManager"
+  | "environment"
+  | "none";
+
+export type AiKeyStatus = {
+  configured: boolean;
+  source: AiKeySource;
+  model: string;
+};
+
+export type AiUsage = {
+  inputTokens: number | null;
+  cachedInputTokens: number | null;
+  outputTokens: number | null;
+};
+
+export type AiQueryTarget = "search" | "chart";
+
+export type AiCompileRequest = {
+  prompt: string;
+  target: AiQueryTarget;
+  currentView?: BrowseView | null;
+};
+
+export type AiConnectionTest = {
+  model: string;
+  message: string;
+  usage: AiUsage;
+};
+
 export type TextFilterOperator = "contains" | "equals" | "startsWith";
 
 export type TextFilter = {
@@ -918,6 +949,15 @@ export type ChartConfig = {
   exportColumns: string[];
   viewMode: ChartViewMode;
   gridCoverSize: number;
+};
+
+export type AiCompiledQuery = {
+  target: AiQueryTarget;
+  summary: string;
+  request: BrowseRequest;
+  chartConfig: ChartConfig | null;
+  model: string;
+  usage: AiUsage;
 };
 
 export type SavedChart = {

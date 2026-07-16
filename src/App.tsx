@@ -267,6 +267,8 @@ import {
   formatMusicBrainzReviewState,
   MusicBrainzReviewState,
 } from "./components/MusicBrainzReviewState";
+import { AiSettingsPanel } from "./components/AiSettingsPanel";
+import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPanel";
 import {
   ArtistDetailTabs,
   artistDetailTabNeedsMusicBrainz,
@@ -10494,6 +10496,20 @@ export default function App() {
               />
             </section>
 
+            <NaturalLanguageQueryPanel
+              target="chart"
+              currentView="albums"
+              onApply={(compiled) => {
+                if (compiled.chartConfig) {
+                  setChartConfig(
+                    normalizeChartConfigForClient(compiled.chartConfig),
+                  );
+                  setChartTableSort(null);
+                  setChartError(null);
+                }
+              }}
+            />
+
             <section
               className="chart-template-panel"
               aria-label="Built-in charts"
@@ -12829,6 +12845,8 @@ export default function App() {
               className="settings-grid"
               aria-label="Application settings"
             >
+              <AiSettingsPanel />
+
               <section className="settings-panel update-settings-panel">
                 <div className="panel-heading compact">
                   <div>
@@ -14520,6 +14538,15 @@ export default function App() {
                 icon={Save}
               />
             </section>
+
+            <NaturalLanguageQueryPanel
+              target="search"
+              currentView={request.view}
+              onApply={(compiled) => {
+                setRequest(normalizeBrowseRequestForClient(compiled.request));
+                setBrowseError(null);
+              }}
+            />
 
             <section className="query-panel">
               <div className="search-row">

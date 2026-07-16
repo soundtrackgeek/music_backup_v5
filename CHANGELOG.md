@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.53.0] - 2026-07-16
+### Added
+- Added Ask Luna panels to Search and Charts using `gpt-5.6-luna`, strict Structured Outputs, and the existing local browse/chart request types.
+- Added secure OpenAI key management in Settings backed by Windows Credential Manager, including connection testing, replacement, removal, and a debug-only `OPENAI_API_KEY` fallback.
+- Added per-query input, cached-input, and output token reporting plus Rust and React coverage for the natural-language query flow.
+
+### Changed
+- Changed natural-language queries to send only the user's request, target workspace, and fixed query schema to OpenAI; validated filters are executed against local SQLite without sending library rows.
+- Added `.env` and `.env.*` to `.gitignore` and the release/security guard while preserving a keyless `.env.example` path.
+- Bumped synchronized app metadata to `0.53.0`.
+
 ## [0.52.0] - 2026-07-10
 ### Added
 - Added accessible Local albums, Artist info, MusicBrainz discography, and Cover view tabs to the selected-artist details area, including keyboard navigation.

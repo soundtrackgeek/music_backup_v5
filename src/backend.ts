@@ -84,6 +84,10 @@ export {
 } from "./backend/normalization";
 import type {
   AppSettings,
+  AiCompileRequest,
+  AiCompiledQuery,
+  AiConnectionTest,
+  AiKeyStatus,
   ArtistListRequest,
   ArtistListResponse,
   ArtistSummary,
@@ -330,6 +334,54 @@ export async function getSettings() {
   const settings = await invoke<AppSettings>("get_settings");
   cacheSettings(settings);
   return settings;
+}
+
+export async function getAiKeyStatus() {
+  if (!isTauriRuntime()) {
+    return {
+      configured: false,
+      source: "none",
+      model: "gpt-5.6-luna",
+    } satisfies AiKeyStatus;
+  }
+
+  return invoke<AiKeyStatus>("get_ai_key_status");
+}
+
+export async function saveOpenAiApiKey(apiKey: string) {
+  if (!isTauriRuntime()) {
+    throw new Error(
+      "OpenAI keys can only be stored by the Tauri desktop app.",
+    );
+  }
+
+  return invoke<AiKeyStatus>("save_openai_api_key", { apiKey });
+}
+
+export async function deleteOpenAiApiKey() {
+  if (!isTauriRuntime()) {
+    throw new Error(
+      "OpenAI keys can only be removed by the Tauri desktop app.",
+    );
+  }
+
+  return invoke<AiKeyStatus>("delete_openai_api_key");
+}
+
+export async function testOpenAiConnection() {
+  if (!isTauriRuntime()) {
+    throw new Error("OpenAI connection tests require the Tauri desktop app.");
+  }
+
+  return invoke<AiConnectionTest>("test_openai_connection");
+}
+
+export async function compileNaturalLanguageQuery(input: AiCompileRequest) {
+  if (!isTauriRuntime()) {
+    throw new Error("Natural-language queries require the Tauri desktop app.");
+  }
+
+  return invoke<AiCompiledQuery>("compile_natural_language_query", { input });
 }
 
 export async function getMusicBrainzCacheStatus(cachePath?: string) {

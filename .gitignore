@@ -5,6 +5,9 @@ release-assets/
 target/
 src-tauri/target/
 src-tauri/gen/
+.env
+.env.*
+!.env.example
 .DS_Store
 *.log
 *.sqlite3

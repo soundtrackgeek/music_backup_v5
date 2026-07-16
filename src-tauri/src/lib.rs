@@ -1,5 +1,6 @@
 #![cfg_attr(test, allow(dead_code, unused_imports))]
 
+mod ai;
 #[cfg(not(test))]
 mod covers;
 mod db;
@@ -91,6 +92,53 @@ async fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
     tauri::async_runtime::spawn_blocking(move || db::settings_for_app(&app))
         .await
         .map_err(|error| format!("Settings task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_ai_key_status() -> Result<ai::AiKeyStatus, String> {
+    tauri::async_runtime::spawn_blocking(ai::key_status)
+        .await
+        .map_err(|error| format!("AI key status task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn save_openai_api_key(api_key: String) -> Result<ai::AiKeyStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || ai::save_api_key(api_key))
+        .await
+        .map_err(|error| format!("AI key save task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn delete_openai_api_key() -> Result<ai::AiKeyStatus, String> {
+    tauri::async_runtime::spawn_blocking(ai::delete_api_key)
+        .await
+        .map_err(|error| format!("AI key removal task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn test_openai_connection() -> Result<ai::AiConnectionTest, String> {
+    tauri::async_runtime::spawn_blocking(ai::test_connection)
+        .await
+        .map_err(|error| format!("AI connection task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn compile_natural_language_query(
+    input: ai::AiCompileRequest,
+) -> Result<ai::AiCompiledQuery, String> {
+    tauri::async_runtime::spawn_blocking(move || ai::compile_query(input))
+        .await
+        .map_err(|error| format!("Natural-language query task failed: {error}"))?
         .map_err(|error| error.to_string())
 }
 
@@ -566,6 +614,11 @@ pub fn run() {
             list_database_backups,
             restore_database_backup,
             get_settings,
+            get_ai_key_status,
+            save_openai_api_key,
+            delete_openai_api_key,
+            test_openai_connection,
+            compile_natural_language_query,
             get_musicbrainz_cache_status,
             get_musicbrainz_origin_country_status,
             preview_musicbrainz_origin_country_import,

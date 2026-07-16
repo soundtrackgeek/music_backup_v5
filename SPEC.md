@@ -1,9 +1,9 @@
 # Music Library Living Specification and Roadmap
 
-Last updated: 2026-07-09
+Last updated: 2026-07-16
 Status: Living product and implementation contract
-Current implementation: MusicBrainz artist origin-country and artist-information slices implemented, with the frontend test safety net and first architecture extraction slices complete
-Current package version: 0.51.0
+Current implementation: Natural-language Search and Charts are implemented through Luna-generated typed filters and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
+Current package version: 0.53.0
 SQLite schema version: 20
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -50,8 +50,8 @@ Core principles:
 
 | Workspace | Status | Purpose |
 | --- | --- | --- |
-| Search | Implemented | Primary album and track browsing, composable filters, saved searches, and exports. |
-| Charts | Implemented | Built-in and saved ranked album views with table, compact list, and cover grid modes. |
+| Search | Implemented | Primary album and track browsing, composable filters, Ask Luna natural-language filter creation, saved searches, and exports. |
+| Charts | Implemented | Built-in and saved ranked album views with Ask Luna natural-language chart creation plus table, compact list, and cover grid modes. |
 | Discovery | Implemented | Exploration dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions. |
 | Statistics | Implemented | Library health, rating progress, metadata coverage, import history, time shape, duration, concentration, and outlier dashboards. |
 | Albums | Implemented | Album index, album filters, detail drill-down, track lists, and album-level exports. |
@@ -59,7 +59,7 @@ Core principles:
 | Genres | Implemented | Canonical-genre index, genre summary stats, album lists, and exports. |
 | Tools | Implemented | Query-backed validation issue lists, severity, progress, pagination, sorting, counts, exports, and guarded whitespace cleanup. |
 | Imports | Implemented | MusicBee TSV import, cover art import, Billboard album CSV import, Billboard singles CSV import, progress, and import history. |
-| Settings | Implemented | Theme, backup retention, backup restore, Performance Proof diagnostics, MusicBrainz cache status, country flag display, and default left/right sidebar visibility. |
+| Settings | Implemented | Secure Windows OpenAI key storage, theme, backup retention, backup restore, Performance Proof diagnostics, MusicBrainz cache status, country flag display, and default left/right sidebar visibility. |
 
 The left sidebar supports full, icon-only, and hidden modes. The right detail sidebar supports shown and hidden modes.
 
@@ -289,6 +289,8 @@ Focused frontend modules:
 - `src/backend/tauriClient.ts`: direct Tauri invoke, event, opener, and runtime wrappers.
 - `src/backend/webPreview.ts`: web-preview fixtures, mutable preview state, and mock behavior.
 - `src/backend/normalization.ts`: portable settings defaults, local cache handling, and shared settings normalization.
+- `src/components/AiSettingsPanel.tsx`: transient API-key entry and configured/source status without persisting or displaying the secret.
+- `src/components/NaturalLanguageQueryPanel.tsx`: shared Search/Charts prompt, compiled-plan summary, and token-usage surface.
 - `src/workspaces/SearchWorkspace.tsx`, `ArtistsWorkspace.tsx`, and `SettingsWorkspace.tsx`: focused workspace presentation boundaries without a global state layer.
 
 Expected next frontend modularization:
@@ -314,6 +316,15 @@ Core files:
 - `src-tauri/src/musicbrainz_sync.rs`: Two-way sync for app-owned MusicBrainz overlay rows through a shared SQLite database, including tombstone handling and local sync-log recording.
 - `src-tauri/src/importer.rs`: MusicBee TSV parsing, normalization, import run handling, album aggregation, backup retention, and rating event capture.
 - `src-tauri/src/covers.rs`: cover image import, relinking, embedded-art extraction, and local image serving.
+- `src-tauri/src/ai.rs`: Windows Credential Manager access, debug-only environment fallback, OpenAI Responses calls, strict Structured Outputs validation, and conversion to local browse/chart requests.
+
+AI boundary:
+
+- Luna receives only the user's request, target workspace, current album/track view, fixed planner instructions, and a strict query-plan schema.
+- Never send raw library rows, database files, covers, saved objects, statistics payloads, or the OpenAI key as model context.
+- Validate every model-produced field, operator, numeric range, sort, limit, target, and chart metric before executing the existing local SQLite search tool.
+- Store the production key outside `AppSettings`, SQLite, localStorage, logs, exports, and backups. Windows Credential Manager is the primary source; `OPENAI_API_KEY` and repo-root `.env` are debug-only fallbacks.
+- Use the exact `gpt-5.6-luna` model, Structured Outputs, `store: false`, low reasoning effort, and bounded output. Surface token usage so cost remains visible.
 
 Expected MusicBrainz boundary:
 
@@ -540,6 +551,14 @@ Expected next backend modularization:
 - Artists shows a MusicBrainz Artist Info panel with MBID review, manual MBID and Origin Country controls, imported artist metadata, and explicit selected-artist refresh.
 - Search and Charts filter by artist type, gender, born/founded ranges, dead/dissolved state, and died/dissolved ranges.
 - Web-preview fixtures and Rust tests cover representative artist-information states and browse filters.
+
+### Phase 25: Natural-language Search and Charts
+
+- Search and Charts include Ask Luna prompt panels that compile natural language into existing `BrowseRequest` and `ChartConfig` payloads.
+- The model has no database context or direct database tool. Rust validates the structured plan, then the app's existing local search command executes it against SQLite.
+- Settings stores the OpenAI key in Windows Credential Manager and exposes only configured/source/model status to the frontend.
+- Debug builds can use an ignored `OPENAI_API_KEY` environment or `.env` fallback; production builds do not load the project `.env` file.
+- Query summaries and input/cached/output token usage remain visible and generated filters stay editable before anything is saved.
 
 ### Phase 26: Release Operations Automation
 
@@ -882,23 +901,23 @@ Constraints:
 - Review all enrichment before applying.
 - No library data should leave the machine without explicit user action.
 
-#### Phase 25: Optional AI Assistance
+#### Phase 25.5: Additional Optional AI Assistance
 
 Expected outcome:
 
-- AI helps create queries, charts, playlists, or recommendations from natural language.
+- AI extends the implemented natural-language Search and Charts foundation into playlists or recommendations.
 
 Candidate prompts:
 
-- "Show me top AOR albums from 1984 under 45 minutes."
-- "Find high-score partial albums I should finish rating."
 - "Build a playlist from loved tracks in underexplored genres."
+- "Explain why these albums rank highly without sending the full library."
 
 Constraints:
 
 - AI features must be optional.
 - No library data should leave the machine without explicit user action.
 - Generated actions should remain reviewable before they affect saved state.
+- Search and chart query compilation is implemented in version `0.53.0`; future slices must reuse the same secure key and strict local-tool boundary.
 
 #### Phase 26: Packaging and Release Operations
 

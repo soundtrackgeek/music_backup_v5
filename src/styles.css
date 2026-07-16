@@ -549,6 +549,92 @@ button {
   margin-top: 14px;
 }
 
+.natural-query-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #cfe0db;
+  border-radius: 10px;
+  background: #f8fbfa;
+  padding: 16px;
+}
+
+.natural-query-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.natural-query-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  color: #0b625c;
+  background: #dcefeb;
+}
+
+.natural-query-heading h2 {
+  margin: 0;
+  color: #13201d;
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.natural-query-heading p {
+  margin: 3px 0 0;
+  color: #697671;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.natural-query-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.natural-query-form > input {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid #c7d5d0;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #17211e;
+  background: #ffffff;
+  outline: none;
+}
+
+.natural-query-form > input:focus {
+  border-color: #6eaaa2;
+  box-shadow: 0 0 0 3px rgba(60, 135, 126, 0.12);
+}
+
+.natural-query-message {
+  margin: 0;
+}
+
+.natural-query-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  color: #42514c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.natural-query-result strong {
+  color: #0b625c;
+}
+
+.natural-query-result small {
+  color: #7c8985;
+  white-space: nowrap;
+}
+
 .criterion,
 .source-input {
   display: grid;
@@ -3871,6 +3957,52 @@ button {
   grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
+.ai-settings-panel {
+  grid-column: span 2;
+}
+
+.ai-settings-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.ai-key-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  border: 1px solid #cfd9d5;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #66736f;
+  background: #fbfcfc;
+}
+
+.ai-key-input input {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.ai-settings-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 12px;
+  color: #697671;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ai-settings-result {
+  margin-top: 12px;
+}
+
 .performance-summary.musicbrainz-artist-info-summary {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -4484,6 +4616,7 @@ button {
 :root[data-theme="dark"] .metric,
 :root[data-theme="dark"] .app-update-banner,
 :root[data-theme="dark"] .query-panel,
+:root[data-theme="dark"] .natural-query-panel,
 :root[data-theme="dark"] .import-panel,
 :root[data-theme="dark"] .table-panel,
 :root[data-theme="dark"] .artist-detail-shell,
@@ -4511,6 +4644,24 @@ button {
   border-color: #2f3d38;
   color: #dce7e3;
   background: #171f1c;
+}
+
+:root[data-theme="dark"] .natural-query-form > input,
+:root[data-theme="dark"] .ai-key-input {
+  border-color: #35443f;
+  color: #e2ebe8;
+  background: #111815;
+}
+
+:root[data-theme="dark"] .natural-query-heading h2,
+:root[data-theme="dark"] .natural-query-result {
+  color: #dce7e3;
+}
+
+:root[data-theme="dark"] .natural-query-heading p,
+:root[data-theme="dark"] .natural-query-result small,
+:root[data-theme="dark"] .ai-settings-notes {
+  color: #9eada8;
 }
 
 :root[data-theme="dark"] .artist-detail-tabs {
@@ -5246,6 +5397,10 @@ button {
     justify-items: stretch;
   }
 
+  .ai-settings-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .tool-export-controls,
   .musicbrainz-export-controls {
     justify-items: stretch;
@@ -5512,6 +5667,7 @@ button {
   }
 
   .layout-settings-panel,
+  .ai-settings-panel,
   .update-settings-panel,
   .backup-settings-panel,
   .performance-settings-panel,
@@ -5520,6 +5676,16 @@ button {
   .musicbrainz-artist-info-settings-panel,
   .musicbrainz-sync-settings-panel {
     grid-column: span 1;
+  }
+
+  .natural-query-form,
+  .natural-query-result,
+  .ai-settings-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .natural-query-result small {
+    white-space: normal;
   }
 
   .stats-panel.wide {

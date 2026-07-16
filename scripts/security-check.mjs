@@ -50,6 +50,8 @@ check(!/<script(?![^>]*\bsrc=)[^>]*>/i.test(indexHtml), "index.html must not con
 check(!/<style[\s>]/i.test(indexHtml), "index.html must not contain inline style tags.");
 
 for (const entry of [
+  ".env",
+  ".env.*",
   "musicbee-library.tsv",
   "AlbumCovers/",
   "CSV/",
@@ -60,6 +62,11 @@ for (const entry of [
 ]) {
   check(gitignore.includes(entry), `.gitignore must keep ${entry} ignored.`);
 }
+
+check(
+  gitignore.includes("!.env.example"),
+  ".gitignore must allow a keyless .env.example template.",
+);
 
 if (failures.length > 0) {
   console.error("Release/security checks failed:");
