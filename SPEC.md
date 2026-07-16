@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-16
 Status: Living product and implementation contract
-Current implementation: Natural-language Search and Charts plus bounded questions about the active filtered view are implemented through Luna-generated typed filters/function calls and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
+Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, and an aggregate-only Statistics Library analyst are implemented through Luna-generated typed filters/function calls and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
 Current package version: 0.53.2
 SQLite schema version: 20
 
@@ -53,7 +53,7 @@ Core principles:
 | Search | Implemented | Primary album and track browsing, composable filters, Ask Luna natural-language filter creation and bounded current-view questions, saved searches, and exports. |
 | Charts | Implemented | Built-in and saved ranked album views with Ask Luna natural-language chart creation and bounded current-view questions plus table, compact list, and cover grid modes. |
 | Discovery | Implemented | Exploration dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions. |
-| Statistics | Implemented | Library health, rating progress, metadata coverage, import history, time shape, duration, concentration, and outlier dashboards. |
+| Statistics | Implemented | Aggregate-only Luna Library analyst plus library health, rating progress, metadata coverage, import history, time shape, duration, concentration, and outlier dashboards. |
 | Albums | Implemented | Album index, album filters, detail drill-down, track lists, and album-level exports. |
 | Artists | Implemented | Album-artist index, artist summary stats, album lists, cover board, MusicBrainz pure-official-album discography status, and exports. |
 | Genres | Implemented | Canonical-genre index, genre summary stats, album lists, and exports. |
@@ -316,7 +316,7 @@ Core files:
 - `src-tauri/src/musicbrainz_sync.rs`: Two-way sync for app-owned MusicBrainz overlay rows through a shared SQLite database, including tombstone handling and local sync-log recording.
 - `src-tauri/src/importer.rs`: MusicBee TSV parsing, normalization, import run handling, album aggregation, backup retention, and rating event capture.
 - `src-tauri/src/covers.rs`: cover image import, relinking, embedded-art extraction, and local image serving.
-- `src-tauri/src/ai.rs`: Windows Credential Manager access, debug-only environment fallback, OpenAI Responses calls, strict Structured Outputs/function-call validation, conversion to local browse/chart requests, and bounded current-view tool orchestration.
+- `src-tauri/src/ai.rs`: Windows Credential Manager access, debug-only environment fallback, OpenAI Responses calls, strict Structured Outputs/function-call validation, conversion to local browse/chart requests, bounded current-view tool orchestration, and typed Library analyst reports.
 
 AI boundary:
 
@@ -324,6 +324,8 @@ AI boundary:
 - Search supports a typed Random sort. Luna selects that mode, while SQLite performs `RANDOM()` ordering locally; unrated phrases map to the existing missing-rating filter.
 - Current-view questions send the question and album/track view first, then require exactly one strict function call containing one to three validated overview/group/list requests. The active `BrowseRequest` and SQLite database stay inside the app.
 - The local current-view tool can return exact aggregate summaries, no more than 20 groups, and no more than 20 named rows. It excludes paths, filenames, covers, saved objects, and arbitrary columns; named metadata leaves the machine only after the user's explicit Ask action.
+- Library analyst sends only the selected lens and optional focus first, then requires exactly one strict `inspect_library_profile` call containing one to four validated aggregate sections. SQLite reuses the existing Statistics calculations and returns only bounded overview, rating-progress, catalog-shape, taste-signal, metadata-health, and recent-change points.
+- Library analyst never sends album, track, or artist names, raw rows, file/source paths, filenames, covers, saved objects, or arbitrary SQL results. Genre labels, decades, fixed metadata fields, rating buckets, and timestamps may leave the machine only after the user's explicit Analyze action; the UI reports the section count, aggregate-point count, and combined token usage.
 - Never send the database, full result sets, unbounded raw rows, file paths, filenames, covers, saved objects, unrelated statistics payloads, or the OpenAI key as model context.
 - Validate every model-produced field, operator, numeric range, sort, limit, target, and chart metric before executing the existing local SQLite search tool.
 - Store the production key outside `AppSettings`, SQLite, localStorage, logs, exports, and backups. Windows Credential Manager is the primary source; `OPENAI_API_KEY` and repo-root `.env` are debug-only fallbacks.
@@ -916,6 +918,12 @@ Implemented in version `0.54.0`:
 - Luna uses a strict `inspect_current_view` function call instead of receiving the request or database directly.
 - SQLite can return an exact overview, bounded groups, and/or at most 20 named rows; paths and filenames are excluded.
 - Answers are stateless, show matching-row/inspection/name-sharing metadata, and combine token usage across the tool and answer calls.
+
+Implemented in version `0.55.0`:
+
+- Statistics exposes a Library analyst with Overview, Rating backlog, Taste profile, Catalog balance, and Metadata health lenses plus an optional focus question.
+- Luna uses one strict `inspect_library_profile` call to choose up to four locally calculated aggregate sections, then returns a strict typed report with one to five evidence-backed findings and up to three next questions.
+- Reports are stateless and disclose profile sections, aggregate points, and combined token usage. No album, track, artist, path, filename, or source-path rows are shared.
 
 Candidate prompts:
 

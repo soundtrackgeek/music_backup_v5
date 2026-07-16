@@ -1,4 +1,7 @@
-use crate::ai::{ViewInspectionItem, ViewInspectionRequest, ViewInspectionResult};
+use crate::ai::{
+    LibraryProfileRequest, LibraryProfileResult, ViewInspectionItem, ViewInspectionRequest,
+    ViewInspectionResult,
+};
 #[cfg(test)]
 use crate::models::AppSettings;
 use crate::models::{
@@ -2286,6 +2289,15 @@ pub fn statistics_for_app(app: &AppHandle) -> Result<StatisticsResponse> {
     statistics(&conn)
 }
 
+#[cfg(not(test))]
+pub fn library_profile_for_app(
+    app: &AppHandle,
+    request: &LibraryProfileRequest,
+) -> Result<LibraryProfileResult> {
+    let (conn, _) = open(app)?;
+    library_profile(&conn, request)
+}
+
 pub fn list_import_runs(conn: &Connection, limit: u32) -> Result<Vec<ImportRun>> {
     let mut stmt = conn.prepare(
         "
@@ -2351,6 +2363,341 @@ fn statistics(conn: &Connection) -> Result<StatisticsResponse> {
         recent_rating_events,
         last_updated,
     })
+}
+
+fn library_profile(
+    conn: &Connection,
+    request: &LibraryProfileRequest,
+) -> Result<LibraryProfileResult> {
+    if request.sections.is_empty() || request.sections.len() > 4 {
+        bail!("Library analysis requires one to four compact profile sections.")
+    }
+    let allowed = [
+        "overview",
+        "ratingProgress",
+        "catalogShape",
+        "tasteSignals",
+        "metadataHealth",
+        "recentChange",
+    ];
+    let mut seen = HashSet::new();
+    for section in &request.sections {
+        if !allowed.contains(&section.as_str()) {
+            bail!("Luna requested an unsupported library profile section.")
+        }
+        if !seen.insert(section.as_str()) {
+            bail!("Luna requested the same library profile section more than once.")
+        }
+    }
+
+    let statistics = statistics(conn)?;
+    let mut sections = serde_json::Map::new();
+    let mut aggregate_points_shared = 0usize;
+    for section in &request.sections {
+        let (value, points) = match section.as_str() {
+            "overview" => library_overview_profile(&statistics),
+            "ratingProgress" => library_rating_profile(&statistics),
+            "catalogShape" => library_catalog_profile(&statistics),
+            "tasteSignals" => library_taste_profile(&statistics),
+            "metadataHealth" => library_metadata_profile(&statistics),
+            "recentChange" => library_recent_change_profile(&statistics),
+            _ => unreachable!("validated library profile section"),
+        };
+        aggregate_points_shared += points;
+        sections.insert(section.clone(), value);
+    }
+
+    Ok(LibraryProfileResult {
+        payload: serde_json::json!({
+            "scope": {
+                "sectionCount": request.sections.len(),
+                "aggregatePoints": aggregate_points_shared,
+                "namedRows": 0,
+                "note": "All calculations remained local. This payload contains only requested aggregate profile sections and no album, track, artist, path, or filename rows."
+            },
+            "sections": sections
+        }),
+        sections: request.sections.clone(),
+        aggregate_points_shared,
+    })
+}
+
+fn library_overview_profile(statistics: &StatisticsResponse) -> (serde_json::Value, usize) {
+    let overview = &statistics.overview;
+    let health = &statistics.health_score;
+    let progress = &statistics.rating_progress;
+    (
+        serde_json::json!({
+            "tracks": overview.track_count,
+            "albums": overview.album_count,
+            "albumArtists": overview.album_artist_count,
+            "genres": overview.genre_count,
+            "distinctYears": overview.year_count,
+            "totalDurationHours": overview.total_seconds as f64 / 3600.0,
+            "averageAlbumScore": overview.average_album_score,
+            "medianYear": statistics.library_shape.median_year,
+            "peakYear": statistics.library_shape.peak_year,
+            "peakYearAlbums": statistics.library_shape.peak_year_albums,
+            "mostRepresentedDecade": statistics.library_shape.most_represented_decade,
+            "mostRepresentedDecadeAlbums": statistics.library_shape.most_represented_decade_albums,
+            "libraryHealthScorePercent": health.score,
+            "ratingCoveragePercent": health.rating_coverage * 100.0,
+            "albumCompletionPercent": health.album_completion * 100.0,
+            "metadataCoveragePercent": health.metadata_coverage * 100.0,
+            "coverCoveragePercent": health.cover_coverage * 100.0,
+            "scoreCoveragePercent": health.score_coverage * 100.0,
+            "fullyRatedAlbums": progress.fully_rated_albums,
+            "partiallyRatedAlbums": progress.partially_rated_albums,
+            "unratedAlbums": progress.unrated_albums,
+            "ratedTracks": progress.rated_tracks,
+            "unratedTracks": progress.unrated_tracks,
+            "lastUpdated": statistics.last_updated
+        }),
+        1,
+    )
+}
+
+fn library_rating_profile(statistics: &StatisticsResponse) -> (serde_json::Value, usize) {
+    let mut decade_backlog = statistics.decade_progress.iter().collect::<Vec<_>>();
+    decade_backlog.sort_by(|left, right| {
+        right
+            .unrated_album_count
+            .cmp(&left.unrated_album_count)
+            .then_with(|| right.album_count.cmp(&left.album_count))
+            .then_with(|| right.decade.cmp(&left.decade))
+    });
+    decade_backlog.truncate(8);
+    let mut genre_backlog = statistics.genre_progress.iter().collect::<Vec<_>>();
+    genre_backlog.sort_by(|left, right| {
+        right
+            .unrated_album_count
+            .cmp(&left.unrated_album_count)
+            .then_with(|| right.album_count.cmp(&left.album_count))
+            .then_with(|| left.genre.to_lowercase().cmp(&right.genre.to_lowercase()))
+    });
+    genre_backlog.truncate(8);
+    let points = 1 + decade_backlog.len() + genre_backlog.len();
+
+    (
+        serde_json::json!({
+            "totals": {
+                "fullyRatedAlbums": statistics.rating_progress.fully_rated_albums,
+                "partiallyRatedAlbums": statistics.rating_progress.partially_rated_albums,
+                "unratedAlbums": statistics.rating_progress.unrated_albums,
+                "albumsWithEffectiveRating": statistics.rating_progress.albums_with_effective_rating,
+                "ratedTracks": statistics.rating_progress.rated_tracks,
+                "unratedTracks": statistics.rating_progress.unrated_tracks,
+                "averageRatingCompletenessPercent": statistics.rating_progress.average_rating_completeness.map(|value| value * 100.0),
+                "averageAlbumRating": statistics.rating_progress.average_album_rating
+            },
+            "decadesWithLargestUnratedBacklog": decade_backlog.into_iter().map(|row| serde_json::json!({
+                "decade": row.decade,
+                "albums": row.album_count,
+                "fullyRatedAlbums": row.rated_album_count,
+                "partiallyRatedAlbums": row.partial_album_count,
+                "unratedAlbums": row.unrated_album_count
+            })).collect::<Vec<_>>(),
+            "genresWithLargestUnratedBacklog": genre_backlog.into_iter().map(|row| serde_json::json!({
+                "genre": row.genre,
+                "albums": row.album_count,
+                "fullyRatedAlbums": row.rated_album_count,
+                "partiallyRatedAlbums": row.partial_album_count,
+                "unratedAlbums": row.unrated_album_count
+            })).collect::<Vec<_>>()
+        }),
+        points,
+    )
+}
+
+fn library_catalog_profile(statistics: &StatisticsResponse) -> (serde_json::Value, usize) {
+    let mut decades = statistics.decade_progress.iter().collect::<Vec<_>>();
+    decades.sort_by(|left, right| {
+        right
+            .album_count
+            .cmp(&left.album_count)
+            .then_with(|| right.decade.cmp(&left.decade))
+    });
+    decades.truncate(8);
+    let genres = statistics.genre_progress.iter().take(8).collect::<Vec<_>>();
+    let points = decades.len()
+        + genres.len()
+        + statistics.catalog_concentration.artist_points.len()
+        + statistics.catalog_concentration.genre_points.len();
+
+    (
+        serde_json::json!({
+            "timeShape": {
+                "medianYear": statistics.library_shape.median_year,
+                "peakYear": statistics.library_shape.peak_year,
+                "peakYearAlbums": statistics.library_shape.peak_year_albums,
+                "mostRepresentedDecade": statistics.library_shape.most_represented_decade,
+                "mostRepresentedDecadeAlbums": statistics.library_shape.most_represented_decade_albums
+            },
+            "largestDecades": decades.into_iter().map(|row| serde_json::json!({
+                "decade": row.decade,
+                "albums": row.album_count,
+                "tracks": row.track_count,
+                "durationHours": row.total_seconds as f64 / 3600.0
+            })).collect::<Vec<_>>(),
+            "largestGenres": genres.into_iter().map(|row| serde_json::json!({
+                "genre": row.genre,
+                "albums": row.album_count,
+                "tracks": row.track_count,
+                "durationHours": row.total_seconds as f64 / 3600.0
+            })).collect::<Vec<_>>(),
+            "anonymousArtistConcentration": statistics.catalog_concentration.artist_points.iter().map(|point| serde_json::json!({
+                "topN": point.top_n,
+                "albums": point.album_count,
+                "sharePercent": point.share * 100.0
+            })).collect::<Vec<_>>(),
+            "genreConcentration": statistics.catalog_concentration.genre_points.iter().map(|point| serde_json::json!({
+                "topN": point.top_n,
+                "albums": point.album_count,
+                "sharePercent": point.share * 100.0
+            })).collect::<Vec<_>>()
+        }),
+        points,
+    )
+}
+
+fn library_taste_profile(statistics: &StatisticsResponse) -> (serde_json::Value, usize) {
+    let loved_density = statistics
+        .loved_density
+        .iter()
+        .filter(|row| row.scope == "Genre" || row.scope == "Decade")
+        .take(12)
+        .collect::<Vec<_>>();
+    let mut score_genres = statistics
+        .genre_progress
+        .iter()
+        .filter(|row| row.album_count >= 5 && row.average_album_score.is_some())
+        .collect::<Vec<_>>();
+    score_genres.sort_by(|left, right| {
+        right
+            .average_album_score
+            .unwrap_or_default()
+            .total_cmp(&left.average_album_score.unwrap_or_default())
+            .then_with(|| right.album_count.cmp(&left.album_count))
+    });
+    score_genres.truncate(6);
+    let mut score_decades = statistics
+        .decade_progress
+        .iter()
+        .filter(|row| row.album_count >= 5 && row.average_album_score.is_some())
+        .collect::<Vec<_>>();
+    score_decades.sort_by(|left, right| {
+        right
+            .average_album_score
+            .unwrap_or_default()
+            .total_cmp(&left.average_album_score.unwrap_or_default())
+            .then_with(|| right.album_count.cmp(&left.album_count))
+    });
+    score_decades.truncate(6);
+    let points = 1
+        + loved_density.len()
+        + score_genres.len()
+        + score_decades.len()
+        + statistics.album_rating_distribution.len()
+        + statistics.track_rating_distribution.len();
+
+    (
+        serde_json::json!({
+            "lovedTotals": {
+                "lovedTracks": statistics.loved_tracks.loved_tracks,
+                "albumsWithLovedTracks": statistics.loved_tracks.albums_with_loved_tracks,
+                "averageLovedTracksPerLovedAlbum": statistics.loved_tracks.average_loved_tracks_per_album,
+                "topLovedGenre": statistics.loved_tracks.top_loved_genre,
+                "topLovedYear": statistics.loved_tracks.top_loved_year
+            },
+            "lovedDensity": loved_density.into_iter().map(|row| serde_json::json!({
+                "dimension": row.scope,
+                "label": row.label,
+                "albums": row.album_count,
+                "tracks": row.track_count,
+                "lovedTracks": row.loved_tracks,
+                "lovedPer100Tracks": row.loved_per_100_tracks
+            })).collect::<Vec<_>>(),
+            "highestAverageScoreGenres": score_genres.into_iter().map(|row| serde_json::json!({
+                "genre": row.genre,
+                "albums": row.album_count,
+                "averageAlbumScore": row.average_album_score
+            })).collect::<Vec<_>>(),
+            "highestAverageScoreDecades": score_decades.into_iter().map(|row| serde_json::json!({
+                "decade": row.decade,
+                "albums": row.album_count,
+                "averageAlbumScore": row.average_album_score
+            })).collect::<Vec<_>>(),
+            "albumRatingDistribution": statistics.album_rating_distribution,
+            "trackRatingDistribution": statistics.track_rating_distribution
+        }),
+        points,
+    )
+}
+
+fn library_metadata_profile(statistics: &StatisticsResponse) -> (serde_json::Value, usize) {
+    (
+        serde_json::json!({
+            "health": {
+                "libraryHealthScorePercent": statistics.health_score.score,
+                "metadataCoveragePercent": statistics.health_score.metadata_coverage * 100.0,
+                "coverCoveragePercent": statistics.health_score.cover_coverage * 100.0,
+                "ratingCoveragePercent": statistics.health_score.rating_coverage * 100.0,
+                "scoreCoveragePercent": statistics.health_score.score_coverage * 100.0
+            },
+            "coverage": statistics.metadata_coverage.iter().map(|metric| serde_json::json!({
+                "field": metric.label,
+                "scope": metric.scope,
+                "covered": metric.covered_count,
+                "missing": (metric.total_count - metric.covered_count).max(0),
+                "total": metric.total_count,
+                "coveragePercent": ratio(metric.covered_count, metric.total_count) * 100.0
+            })).collect::<Vec<_>>()
+        }),
+        statistics.metadata_coverage.len(),
+    )
+}
+
+fn library_recent_change_profile(statistics: &StatisticsResponse) -> (serde_json::Value, usize) {
+    let rating_snapshots = statistics
+        .rating_history
+        .iter()
+        .rev()
+        .take(6)
+        .collect::<Vec<_>>();
+    let import_deltas = statistics.import_history.iter().take(6).collect::<Vec<_>>();
+    let points = rating_snapshots.len() + import_deltas.len();
+    (
+        serde_json::json!({
+            "ratingSnapshotsNewestFirst": rating_snapshots.into_iter().map(|point| serde_json::json!({
+                "createdAt": point.created_at,
+                "tracks": point.track_count,
+                "albums": point.album_count,
+                "ratedTracks": point.rated_tracks,
+                "unratedTracks": point.unrated_tracks,
+                "fullyRatedAlbums": point.fully_rated_albums,
+                "partiallyRatedAlbums": point.partially_rated_albums,
+                "unratedAlbums": point.unrated_albums,
+                "averageAlbumRating": point.average_album_rating,
+                "averageAlbumScore": point.average_album_score,
+                "ratingEvents": point.rating_events_count
+            })).collect::<Vec<_>>(),
+            "importDeltasNewestFirst": import_deltas.into_iter().map(|run| serde_json::json!({
+                "startedAt": run.started_at,
+                "completedAt": run.completed_at,
+                "status": run.status,
+                "trackRows": run.track_rows,
+                "albumCount": run.album_count,
+                "addedTracks": run.added_tracks,
+                "changedTracks": run.changed_tracks,
+                "removedTracks": run.removed_tracks,
+                "addedAlbums": run.added_albums,
+                "changedAlbums": run.changed_albums,
+                "removedAlbums": run.removed_albums,
+                "ratingEvents": run.rating_events_count
+            })).collect::<Vec<_>>()
+        }),
+        points,
+    )
 }
 
 fn library_overview_stats(conn: &Connection) -> Result<LibraryOverviewStats> {
@@ -9918,9 +10265,10 @@ mod tests {
         assert_eq!(result.payload["analyses"][1]["groups"][0]["count"], 2);
         assert_eq!(result.payload["analyses"][2]["rows"][0]["name"], "Actually");
         let serialized = serde_json::to_string(&result.payload).unwrap();
-        assert!(!serialized.contains("filePath"));
-        assert!(!serialized.contains("filename"));
+        assert!(!serialized.contains("\"filePath\":"));
+        assert!(!serialized.contains("\"filename\":"));
         assert!(!serialized.contains("D:\\\\Music"));
+        assert!(!serialized.contains("02 What Have I Done.mp3"));
 
         let mut empty_request = BrowseRequest::default();
         empty_request.filters.year_from = Some(1900);
@@ -9939,6 +10287,62 @@ mod tests {
         assert_eq!(empty.matching_rows, 0);
         assert_eq!(empty.payload["analyses"][0]["unratedCount"], 0);
         assert_eq!(empty.payload["analyses"][0]["partiallyRatedAlbumCount"], 0);
+    }
+
+    #[test]
+    fn builds_bounded_library_profiles_without_named_rows_or_paths() {
+        let conn = seeded_connection();
+        let request = LibraryProfileRequest {
+            sections: vec![
+                "overview".to_string(),
+                "ratingProgress".to_string(),
+                "catalogShape".to_string(),
+                "recentChange".to_string(),
+            ],
+        };
+
+        let profile = library_profile(&conn, &request).expect("build library profile");
+
+        assert_eq!(profile.sections, request.sections);
+        assert!(profile.aggregate_points_shared > 0);
+        assert_eq!(profile.payload["scope"]["namedRows"], 0);
+        assert_eq!(profile.payload["sections"]["overview"]["albums"], 1);
+        assert!(
+            profile.payload["sections"]["catalogShape"]["anonymousArtistConcentration"].is_array()
+        );
+        let serialized = serde_json::to_string(&profile.payload).unwrap();
+        assert!(!serialized.contains("Pet Shop Boys"));
+        assert!(!serialized.contains("Actually"));
+        assert!(!serialized.contains("\"filePath\":"));
+        assert!(!serialized.contains("\"filename\":"));
+        assert!(!serialized.contains("D:\\\\Music"));
+        assert!(!serialized.contains("02 What Have I Done.mp3"));
+    }
+
+    #[test]
+    fn rejects_duplicate_or_unbounded_library_profile_sections() {
+        let conn = seeded_connection();
+        let duplicate = LibraryProfileRequest {
+            sections: vec!["overview".to_string(), "overview".to_string()],
+        };
+        assert!(library_profile(&conn, &duplicate)
+            .unwrap_err()
+            .to_string()
+            .contains("more than once"));
+
+        let too_many = LibraryProfileRequest {
+            sections: vec![
+                "overview".to_string(),
+                "ratingProgress".to_string(),
+                "catalogShape".to_string(),
+                "tasteSignals".to_string(),
+                "metadataHealth".to_string(),
+            ],
+        };
+        assert!(library_profile(&conn, &too_many)
+            .unwrap_err()
+            .to_string()
+            .contains("one to four"));
     }
 
     #[test]

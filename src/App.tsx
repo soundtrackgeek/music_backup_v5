@@ -269,6 +269,7 @@ import {
 } from "./components/MusicBrainzReviewState";
 import { AiSettingsPanel } from "./components/AiSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
+import { LibraryAnalystPanel } from "./components/LibraryAnalystPanel";
 import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPanel";
 import {
   ArtistDetailTabs,
@@ -12410,6 +12411,10 @@ export default function App() {
             </section>
 
             {statsError ? <p className="error-message">{statsError}</p> : null}
+
+            <LibraryAnalystPanel
+              isAvailable={Boolean(statistics && statistics.overview.albumCount > 0)}
+            />
 
             <section
               className="stats-dashboard-grid"

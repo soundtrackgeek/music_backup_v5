@@ -160,6 +160,20 @@ async fn ask_current_view(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn analyze_library(
+    app: AppHandle,
+    input: ai::AiLibraryAnalysisRequest,
+) -> Result<ai::AiLibraryAnalysis, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ai::analyze_library(input, |request| db::library_profile_for_app(&app, request))
+    })
+    .await
+    .map_err(|error| format!("Library analyst task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_musicbrainz_cache_status(
     app: AppHandle,
     cache_path: Option<String>,
@@ -636,6 +650,7 @@ pub fn run() {
             test_openai_connection,
             compile_natural_language_query,
             ask_current_view,
+            analyze_library,
             get_musicbrainz_cache_status,
             get_musicbrainz_origin_country_status,
             preview_musicbrainz_origin_country_import,

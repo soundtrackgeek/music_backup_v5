@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.55.0] - 2026-07-16
+### Added
+- Added a Statistics Library analyst with Overview, Rating backlog, Taste profile, Catalog balance, and Metadata health lenses plus an optional focus question.
+- Added a strict `inspect_library_profile` Luna function tool that selects one to four compact local aggregate sections and a strict typed report with evidence, interpretation, and useful next questions.
+- Added per-report disclosure of profile sections, aggregate points, combined input/cached/output token usage, and the zero-name privacy boundary.
+- Added Rust projection/privacy/schema tests, a live two-request Luna contract test, React interaction coverage, and rendered desktop/mobile QA.
+
+### Changed
+- Reused the established Statistics calculations for collection-wide AI analysis instead of creating a second analytics system or sending the Statistics payload wholesale.
+- Kept Library analyst reports stateless and excluded raw rows, album/track/artist names, paths, filenames, covers, saved objects, source paths, and arbitrary SQL results from model context.
+- Bumped synchronized app metadata to `0.55.0`.
+
 ## [0.54.0] - 2026-07-16
 ### Added
 - Added Ask about this view panels to Search and Charts for questions about the active filtered album or track results.

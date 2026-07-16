@@ -560,6 +560,36 @@ export type AiCurrentViewAnswer = {
   usage: AiUsage;
 };
 
+export type AiLibraryLens =
+  | "overview"
+  | "ratingBacklog"
+  | "tasteProfile"
+  | "catalogBalance"
+  | "metadataHealth";
+
+export type AiLibraryAnalysisRequest = {
+  lens: AiLibraryLens;
+  focus: string;
+};
+
+export type AiLibraryFinding = {
+  title: string;
+  evidence: string;
+  interpretation: string;
+};
+
+export type AiLibraryAnalysis = {
+  lens: AiLibraryLens;
+  headline: string;
+  summary: string;
+  findings: AiLibraryFinding[];
+  nextQuestions: string[];
+  profileSections: string[];
+  aggregatePointsShared: number;
+  model: string;
+  usage: AiUsage;
+};
+
 export type AiConnectionTest = {
   model: string;
   message: string;

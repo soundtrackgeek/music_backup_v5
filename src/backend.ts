@@ -90,6 +90,8 @@ import type {
   AiCurrentViewAnswer,
   AiCurrentViewQuestion,
   AiKeyStatus,
+  AiLibraryAnalysis,
+  AiLibraryAnalysisRequest,
   ArtistListRequest,
   ArtistListResponse,
   ArtistSummary,
@@ -424,6 +426,55 @@ export async function askCurrentView(input: AiCurrentViewQuestion) {
   }
 
   return invoke<AiCurrentViewAnswer>("ask_current_view", { input });
+}
+
+export async function analyzeLibrary(input: AiLibraryAnalysisRequest) {
+  if (!isTauriRuntime()) {
+    const albumTotal = mockStatistics.overview.albumCount;
+    const unrated = mockStatistics.ratingProgress.unratedAlbums;
+    const ratingCoverage = mockStatistics.healthScore.ratingCoverage * 100;
+    const genre = mockStatistics.genreProgress[0];
+    const lensSummary = {
+      overview: `The preview library contains ${albumTotal.toLocaleString()} albums and ${mockStatistics.overview.trackCount.toLocaleString()} tracks.`,
+      ratingBacklog: `${unrated.toLocaleString()} albums remain unrated, while track rating coverage is ${ratingCoverage.toFixed(1)}%.`,
+      tasteProfile: `${mockStatistics.lovedTracks.lovedTracks.toLocaleString()} tracks are marked loved${genre ? `, with ${genre.genre} the largest preview genre` : ""}.`,
+      catalogBalance: `${mockStatistics.libraryShape.mostRepresentedDecade ?? "The leading decade"}s is the most represented decade in the preview profile.`,
+      metadataHealth: `The preview library health score is ${mockStatistics.healthScore.score.toFixed(1)}%.`,
+    }[input.lens];
+    return {
+      lens: input.lens,
+      headline: "A compact profile with a clear next step",
+      summary: lensSummary,
+      findings: [
+        {
+          title: "Rating coverage is the main opportunity",
+          evidence: `${unrated.toLocaleString()} albums are unrated and track coverage is ${ratingCoverage.toFixed(1)}%.`,
+          interpretation:
+            "A focused rating pass would improve both completion and the quality of later taste comparisons.",
+        },
+        {
+          title: "The catalog has a visible center of gravity",
+          evidence: `${mockStatistics.libraryShape.mostRepresentedDecade ?? 1980}s contains ${mockStatistics.libraryShape.mostRepresentedDecadeAlbums.toLocaleString()} albums.`,
+          interpretation:
+            "Compare that decade with a smaller adjacent decade to distinguish collection size from preference.",
+        },
+      ],
+      nextQuestions: [
+        "Which genres contain the largest unrated backlog?",
+        "How concentrated is the catalog by decade?",
+      ],
+      profileSections: ["overview", "ratingProgress"],
+      aggregatePointsShared: 17,
+      model: "gpt-5.6-luna",
+      usage: {
+        inputTokens: null,
+        cachedInputTokens: null,
+        outputTokens: null,
+      },
+    } satisfies AiLibraryAnalysis;
+  }
+
+  return invoke<AiLibraryAnalysis>("analyze_library", { input });
 }
 
 export async function getMusicBrainzCacheStatus(cachePath?: string) {
