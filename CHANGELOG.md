@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.56.0] - 2026-07-16
+### Added
+- Added automatic local snapshot history for Ask Luna Search and Charts queries, Ask about this view answers, and Statistics Library analyst reports.
+- Added one-click reopening without another OpenAI request, including reapplying saved Search/Chart filters, restoring exact current-view answers and analyst narratives, and deleting individual snapshots.
+- Added SQLite schema version 21 with typed snapshot payloads, creation timestamps, and the source library import/count state for historical context.
+- Added React restore-flow coverage and Rust migration, validation, round-trip, filtering, and deletion coverage for Luna snapshots.
+
+### Changed
+- Changed successful Luna filter compilations and analyst reports to save automatically in the local app database and therefore participate in normal SQLite backups.
+- Clarified that reopened Search/Chart snapshots rerun the stored filters against the current library, while analyst snapshots preserve the report produced from the recorded library state.
+- Bumped synchronized app metadata to `0.56.0`.
+
 ## [0.55.0] - 2026-07-16
 ### Added
 - Added a Statistics Library analyst with Overview, Rating backlog, Taste profile, Catalog balance, and Metadata health lenses plus an optional focus question.

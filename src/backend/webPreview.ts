@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  AiSnapshot,
   ArtistListRequest,
   ArtistListResponse,
   ArtistSummary,
@@ -1569,6 +1570,7 @@ let mockMusicToolIssues: MusicToolIssueRow[] = [
 
 let mockSavedSearches: SavedSearch[] = [];
 let mockSavedCharts: SavedChart[] = [];
+let mockAiSnapshots: AiSnapshot[] = [];
 let mockSettings: AppSettings = loadCachedSettings();
 let mockMusicBrainzOverlaySyncLog: MusicBrainzOverlaySyncLogEntry[] = [];
 const coverDataUrlCache = new Map<
@@ -2638,6 +2640,10 @@ export function setMockSavedCharts(value: SavedChart[]) {
   mockSavedCharts = value;
 }
 
+export function setMockAiSnapshots(value: AiSnapshot[]) {
+  mockAiSnapshots = value;
+}
+
 export {
   applyMockArtistOriginCountry,
   coverDataUrlCache,
@@ -2668,6 +2674,7 @@ export {
   mockOriginProgress,
   mockOriginProgressHandlers,
   mockRows,
+  mockAiSnapshots,
   mockSavedCharts,
   mockSavedSearches,
   mockSettings,

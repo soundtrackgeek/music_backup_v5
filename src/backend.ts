@@ -56,6 +56,7 @@ import {
   mockOriginProgress,
   mockOriginProgressHandlers,
   mockRows,
+  mockAiSnapshots,
   mockSavedCharts,
   mockSavedSearches,
   mockSettings,
@@ -66,6 +67,7 @@ import {
   setMockMusicToolIssues,
   setMockMusicTools,
   setMockSavedCharts,
+  setMockAiSnapshots,
   setMockSavedSearches,
   setMockSettings,
   type MusicBrainzArtistInfoFields,
@@ -92,6 +94,9 @@ import type {
   AiKeyStatus,
   AiLibraryAnalysis,
   AiLibraryAnalysisRequest,
+  AiSnapshot,
+  AiSnapshotKind,
+  SaveAiSnapshotRequest,
   ArtistListRequest,
   ArtistListResponse,
   ArtistSummary,
@@ -475,6 +480,51 @@ export async function analyzeLibrary(input: AiLibraryAnalysisRequest) {
   }
 
   return invoke<AiLibraryAnalysis>("analyze_library", { input });
+}
+
+export async function listAiSnapshots(kind?: AiSnapshotKind) {
+  if (!isTauriRuntime()) {
+    return mockAiSnapshots.filter(
+      (snapshot) => kind == null || snapshot.content.kind === kind,
+    ) satisfies AiSnapshot[];
+  }
+
+  return invoke<AiSnapshot[]>("list_ai_snapshots", { kind: kind ?? null });
+}
+
+export async function saveAiSnapshot(input: SaveAiSnapshotRequest) {
+  if (!isTauriRuntime()) {
+    const nextId =
+      mockAiSnapshots.reduce(
+        (largest, snapshot) => Math.max(largest, snapshot.id),
+        0,
+      ) + 1;
+    const saved = {
+      id: nextId,
+      title: input.title,
+      content: input.content,
+      libraryImportRunId: mockStatus.lastImport?.id ?? null,
+      libraryImportedAt: mockStatus.lastImport?.completedAt ?? null,
+      libraryAlbumCount: mockStatus.albumCount,
+      libraryTrackCount: mockStatus.trackCount,
+      createdAt: new Date().toISOString(),
+    } satisfies AiSnapshot;
+    setMockAiSnapshots([saved, ...mockAiSnapshots]);
+    return saved;
+  }
+
+  return invoke<AiSnapshot>("save_ai_snapshot", { input });
+}
+
+export async function deleteAiSnapshot(id: number) {
+  if (!isTauriRuntime()) {
+    setMockAiSnapshots(
+      mockAiSnapshots.filter((snapshot) => snapshot.id !== id),
+    );
+    return;
+  }
+
+  return invoke<void>("delete_ai_snapshot", { id });
 }
 
 export async function getMusicBrainzCacheStatus(cachePath?: string) {

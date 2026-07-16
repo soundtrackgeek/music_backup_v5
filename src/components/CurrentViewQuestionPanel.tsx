@@ -1,14 +1,23 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { MessageCircleQuestion, Sparkles } from "lucide-react";
 
-import { askCurrentView } from "../backend";
+import {
+  askCurrentView,
+  deleteAiSnapshot,
+  listAiSnapshots,
+  saveAiSnapshot,
+} from "../backend";
 import type {
   AiCurrentViewAnswer,
+  AiQueryTarget,
+  AiSnapshot,
   AiUsage,
   BrowseRequest,
 } from "../types";
+import { AiSnapshotHistory } from "./AiSnapshotHistory";
 
 type CurrentViewQuestionPanelProps = {
+  context: AiQueryTarget;
   request: BrowseRequest;
 };
 
@@ -27,13 +36,50 @@ function inspectionLabel(result: AiCurrentViewAnswer) {
   return `${result.matchingRows.toLocaleString()} matching ${result.view} • ${result.analysisCount} local ${result.analysisCount === 1 ? "analysis" : "analyses"}${names}`;
 }
 
+function answerSnapshotTitle(question: string) {
+  const normalized = question.trim().replace(/\s+/g, " ");
+  return normalized.length <= 96 ? normalized : `${normalized.slice(0, 93)}...`;
+}
+
+function answerSnapshotCategory(snapshot: AiSnapshot) {
+  return snapshot.content.kind === "chartAnswer"
+    ? "Chart answer"
+    : "Search answer";
+}
+
 export function CurrentViewQuestionPanel({
+  context,
   request,
 }: CurrentViewQuestionPanelProps) {
   const [question, setQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AiCurrentViewAnswer | null>(null);
+  const [snapshots, setSnapshots] = useState<AiSnapshot[]>([]);
+  const [activeSnapshotId, setActiveSnapshotId] = useState<number | null>(null);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [resultSource, setResultSource] = useState<"live" | "snapshot">("live");
+  const snapshotKind = context === "chart" ? "chartAnswer" : "searchAnswer";
+
+  useEffect(() => {
+    let disposed = false;
+    void listAiSnapshots(snapshotKind)
+      .then((saved) => {
+        if (!disposed) setSnapshots(saved);
+      })
+      .catch((historyError) => {
+        if (!disposed) {
+          setSnapshotError(
+            historyError instanceof Error
+              ? historyError.message
+              : String(historyError),
+          );
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [snapshotKind]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,6 +92,39 @@ export function CurrentViewQuestionPanel({
         request,
       });
       setResult(answer);
+      setResultSource("live");
+      setActiveSnapshotId(null);
+      try {
+        const saved = await saveAiSnapshot({
+          title: answerSnapshotTitle(question),
+          content:
+            context === "chart"
+              ? {
+                  kind: "chartAnswer",
+                  prompt: question.trim(),
+                  request,
+                  result: answer,
+                }
+              : {
+                  kind: "searchAnswer",
+                  prompt: question.trim(),
+                  request,
+                  result: answer,
+                },
+        });
+        setSnapshots((previous) => [
+          saved,
+          ...previous.filter((snapshot) => snapshot.id !== saved.id),
+        ]);
+        setActiveSnapshotId(saved.id);
+        setSnapshotError(null);
+      } catch (saveError) {
+        setSnapshotError(
+          `The answer is visible, but its snapshot could not be saved: ${
+            saveError instanceof Error ? saveError.message : String(saveError)
+          }`,
+        );
+      }
     } catch (askError) {
       setError(askError instanceof Error ? askError.message : String(askError));
     } finally {
@@ -55,6 +134,41 @@ export function CurrentViewQuestionPanel({
 
   const noun = request.view === "tracks" ? "tracks" : "albums";
   const usage = result ? usageLabel(result.usage) : null;
+
+  function openSnapshot(snapshot: AiSnapshot) {
+    if (
+      snapshot.content.kind !== "searchAnswer" &&
+      snapshot.content.kind !== "chartAnswer"
+    ) {
+      return;
+    }
+    setQuestion(snapshot.content.prompt);
+    setResult(snapshot.content.result);
+    setResultSource("snapshot");
+    setActiveSnapshotId(snapshot.id);
+    setError(null);
+    setSnapshotError(null);
+  }
+
+  async function removeSnapshot(snapshot: AiSnapshot) {
+    try {
+      await deleteAiSnapshot(snapshot.id);
+      setSnapshots((previous) =>
+        previous.filter((saved) => saved.id !== snapshot.id),
+      );
+      if (activeSnapshotId === snapshot.id) {
+        setActiveSnapshotId(null);
+        setResultSource("live");
+      }
+      setSnapshotError(null);
+    } catch (deleteError) {
+      setSnapshotError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : String(deleteError),
+      );
+    }
+  }
 
   return (
     <section
@@ -107,13 +221,31 @@ export function CurrentViewQuestionPanel({
       {result ? (
         <div className="current-view-answer" role="status">
           <div>
-            <strong>Luna</strong>
+            <strong>
+              {resultSource === "snapshot"
+                ? "Luna · saved answer"
+                : activeSnapshotId != null
+                  ? "Luna · saved"
+                  : "Luna"}
+            </strong>
             <p>{result.answer}</p>
           </div>
           <small>{inspectionLabel(result)}</small>
           {usage ? <small>{usage}</small> : null}
         </div>
       ) : null}
+      {snapshotError ? (
+        <p className="error-message natural-query-message">{snapshotError}</p>
+      ) : null}
+      <AiSnapshotHistory
+        snapshots={snapshots}
+        activeSnapshotId={activeSnapshotId}
+        description="Exact answers and their filtered-view request are stored locally; reopening costs no tokens."
+        emptyMessage="Your next current-view answer will be saved here automatically."
+        getCategoryLabel={answerSnapshotCategory}
+        onOpen={openSnapshot}
+        onDelete={(snapshot) => void removeSnapshot(snapshot)}
+      />
     </section>
   );
 }

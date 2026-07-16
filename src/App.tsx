@@ -10518,7 +10518,7 @@ export default function App() {
               }}
             />
 
-            <CurrentViewQuestionPanel request={chartRequest} />
+            <CurrentViewQuestionPanel context="chart" request={chartRequest} />
 
             <section
               className="chart-template-panel"
@@ -14562,7 +14562,7 @@ export default function App() {
               }}
             />
 
-            <CurrentViewQuestionPanel request={request} />
+            <CurrentViewQuestionPanel context="search" request={request} />
 
             <section className="query-panel">
               <div className="search-row">

@@ -590,6 +590,57 @@ export type AiLibraryAnalysis = {
   usage: AiUsage;
 };
 
+export type AiSnapshotKind =
+  | AiQueryTarget
+  | "searchAnswer"
+  | "chartAnswer"
+  | "libraryAnalysis";
+
+export type AiSnapshotContent =
+  | {
+      kind: "search";
+      prompt: string;
+      result: AiCompiledQuery;
+    }
+  | {
+      kind: "chart";
+      prompt: string;
+      result: AiCompiledQuery;
+    }
+  | {
+      kind: "searchAnswer";
+      prompt: string;
+      request: BrowseRequest;
+      result: AiCurrentViewAnswer;
+    }
+  | {
+      kind: "chartAnswer";
+      prompt: string;
+      request: BrowseRequest;
+      result: AiCurrentViewAnswer;
+    }
+  | {
+      kind: "libraryAnalysis";
+      prompt: string;
+      result: AiLibraryAnalysis;
+    };
+
+export type AiSnapshot = {
+  id: number;
+  title: string;
+  content: AiSnapshotContent;
+  libraryImportRunId: number | null;
+  libraryImportedAt: string | null;
+  libraryAlbumCount: number;
+  libraryTrackCount: number;
+  createdAt: string;
+};
+
+export type SaveAiSnapshotRequest = {
+  title: string;
+  content: AiSnapshotContent;
+};
+
 export type AiConnectionTest = {
   model: string;
   message: string;

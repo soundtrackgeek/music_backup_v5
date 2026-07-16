@@ -1,12 +1,19 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { BrainCircuit, ChevronRight, Sparkles } from "lucide-react";
 
-import { analyzeLibrary } from "../backend";
+import {
+  analyzeLibrary,
+  deleteAiSnapshot,
+  listAiSnapshots,
+  saveAiSnapshot,
+} from "../backend";
 import type {
   AiLibraryAnalysis,
   AiLibraryLens,
+  AiSnapshot,
   AiUsage,
 } from "../types";
+import { AiSnapshotHistory } from "./AiSnapshotHistory";
 
 type LibraryAnalystPanelProps = {
   isAvailable: boolean;
@@ -58,6 +65,20 @@ function usageLabel(usage: AiUsage) {
   return `${(usage.inputTokens ?? 0).toLocaleString()} input${cached} / ${(usage.outputTokens ?? 0).toLocaleString()} output tokens`;
 }
 
+function analystSnapshotTitle(headline: string) {
+  const normalized = headline.trim().replace(/\s+/g, " ");
+  return normalized.length <= 120 ? normalized : `${normalized.slice(0, 117)}...`;
+}
+
+function analystSnapshotCategory(snapshot: AiSnapshot) {
+  if (snapshot.content.kind !== "libraryAnalysis") return "Analysis";
+  const snapshotLens = snapshot.content.result.lens;
+  return (
+    lensOptions.find((option) => option.value === snapshotLens)?.label ??
+    "Analysis"
+  );
+}
+
 export function LibraryAnalystPanel({
   isAvailable,
 }: LibraryAnalystPanelProps) {
@@ -66,6 +87,30 @@ export function LibraryAnalystPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AiLibraryAnalysis | null>(null);
+  const [snapshots, setSnapshots] = useState<AiSnapshot[]>([]);
+  const [activeSnapshotId, setActiveSnapshotId] = useState<number | null>(null);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [resultSource, setResultSource] = useState<"live" | "snapshot">("live");
+
+  useEffect(() => {
+    let disposed = false;
+    void listAiSnapshots("libraryAnalysis")
+      .then((saved) => {
+        if (!disposed) setSnapshots(saved);
+      })
+      .catch((historyError) => {
+        if (!disposed) {
+          setSnapshotError(
+            historyError instanceof Error
+              ? historyError.message
+              : String(historyError),
+          );
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   const selectedLens =
     lensOptions.find((option) => option.value === lens) ?? lensOptions[0];
@@ -76,12 +121,35 @@ export function LibraryAnalystPanel({
     setIsLoading(true);
     setError(null);
     try {
-      setResult(
-        await analyzeLibrary({
-          lens,
-          focus: focus.trim(),
-        }),
-      );
+      const analysis = await analyzeLibrary({
+        lens,
+        focus: focus.trim(),
+      });
+      setResult(analysis);
+      setResultSource("live");
+      setActiveSnapshotId(null);
+      try {
+        const saved = await saveAiSnapshot({
+          title: analystSnapshotTitle(analysis.headline),
+          content: {
+            kind: "libraryAnalysis",
+            prompt: focus.trim(),
+            result: analysis,
+          },
+        });
+        setSnapshots((previous) => [
+          saved,
+          ...previous.filter((snapshot) => snapshot.id !== saved.id),
+        ]);
+        setActiveSnapshotId(saved.id);
+        setSnapshotError(null);
+      } catch (saveError) {
+        setSnapshotError(
+          `The report is visible, but its snapshot could not be saved: ${
+            saveError instanceof Error ? saveError.message : String(saveError)
+          }`,
+        );
+      }
     } catch (analysisError) {
       setError(
         analysisError instanceof Error
@@ -96,7 +164,39 @@ export function LibraryAnalystPanel({
   function chooseLens(nextLens: AiLibraryLens) {
     setLens(nextLens);
     setResult(null);
+    setActiveSnapshotId(null);
     setError(null);
+  }
+
+  function openSnapshot(snapshot: AiSnapshot) {
+    if (snapshot.content.kind !== "libraryAnalysis") return;
+    setLens(snapshot.content.result.lens);
+    setFocus(snapshot.content.prompt);
+    setResult(snapshot.content.result);
+    setResultSource("snapshot");
+    setActiveSnapshotId(snapshot.id);
+    setError(null);
+    setSnapshotError(null);
+  }
+
+  async function removeSnapshot(snapshot: AiSnapshot) {
+    try {
+      await deleteAiSnapshot(snapshot.id);
+      setSnapshots((previous) =>
+        previous.filter((saved) => saved.id !== snapshot.id),
+      );
+      if (activeSnapshotId === snapshot.id) {
+        setActiveSnapshotId(null);
+        setResultSource("live");
+      }
+      setSnapshotError(null);
+    } catch (deleteError) {
+      setSnapshotError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : String(deleteError),
+      );
+    }
   }
 
   const usage = result ? usageLabel(result.usage) : null;
@@ -166,11 +266,32 @@ export function LibraryAnalystPanel({
         <p className="library-analyst-note">Import a library before running an analysis.</p>
       ) : null}
       {error ? <p className="error-message library-analyst-note">{error}</p> : null}
+      {snapshotError ? (
+        <p className="error-message library-analyst-note">{snapshotError}</p>
+      ) : null}
+
+      <AiSnapshotHistory
+        tone="dark"
+        snapshots={snapshots}
+        activeSnapshotId={activeSnapshotId}
+        description="Exact reports are stored locally and reopen without token cost."
+        emptyMessage="Your next analyst report will be saved here automatically."
+        getCategoryLabel={analystSnapshotCategory}
+        onOpen={openSnapshot}
+        onDelete={(snapshot) => void removeSnapshot(snapshot)}
+      />
 
       {result ? (
         <article className="library-analysis" aria-live="polite">
           <header>
-            <span>{lensOptions.find((option) => option.value === result.lens)?.label}</span>
+            <span>
+              {lensOptions.find((option) => option.value === result.lens)?.label}
+              {resultSource === "snapshot"
+                ? " · saved snapshot"
+                : activeSnapshotId != null
+                  ? " · saved automatically"
+                  : " · current report"}
+            </span>
             <h3>{result.headline}</h3>
             <p>{result.summary}</p>
           </header>

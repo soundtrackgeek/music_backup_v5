@@ -1,6 +1,6 @@
 use crate::ai::{
-    LibraryProfileRequest, LibraryProfileResult, ViewInspectionItem, ViewInspectionRequest,
-    ViewInspectionResult,
+    AiSnapshot, AiSnapshotContent, LibraryProfileRequest, LibraryProfileResult,
+    SaveAiSnapshotRequest, ViewInspectionItem, ViewInspectionRequest, ViewInspectionResult,
 };
 #[cfg(test)]
 use crate::models::AppSettings;
@@ -334,7 +334,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_one_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -548,6 +548,21 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS ai_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            title TEXT NOT NULL,
+            content_json TEXT NOT NULL,
+            library_import_run_id INTEGER,
+            library_imported_at TEXT,
+            library_album_count INTEGER NOT NULL DEFAULT 0,
+            library_track_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_ai_snapshots_kind_created
+            ON ai_snapshots(kind, created_at DESC, id DESC);
 
         CREATE TABLE IF NOT EXISTS exports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -860,7 +875,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_origin_country_tables(conn)?;
     ensure_musicbrainz_artist_info_tables(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
-    conn.execute_batch("PRAGMA user_version = 20;")
+    conn.execute_batch("PRAGMA user_version = 21;")
         .context("Could not update SQLite schema version")?;
     Ok(())
 }
@@ -4651,6 +4666,223 @@ fn validate_musicbrainz_tool_cache_schema(conn: &Connection) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn validate_ai_snapshot_kind(kind: &str) -> Result<()> {
+    if matches!(
+        kind,
+        "search" | "chart" | "searchAnswer" | "chartAnswer" | "libraryAnalysis"
+    ) {
+        Ok(())
+    } else {
+        bail!("Unsupported Luna snapshot type: {kind}")
+    }
+}
+
+fn validate_ai_snapshot_content(content: &AiSnapshotContent) -> Result<()> {
+    let prompt = match content {
+        AiSnapshotContent::Search { prompt, result } => {
+            if result.target != "search" || result.chart_config.is_some() {
+                bail!("The saved Luna search payload is inconsistent")
+            }
+            prompt
+        }
+        AiSnapshotContent::Chart { prompt, result } => {
+            if result.target != "chart" || result.chart_config.is_none() {
+                bail!("The saved Luna chart payload is inconsistent")
+            }
+            prompt
+        }
+        AiSnapshotContent::SearchAnswer {
+            prompt,
+            request,
+            result,
+        }
+        | AiSnapshotContent::ChartAnswer {
+            prompt,
+            request,
+            result,
+        } => {
+            if result.view != request.view {
+                bail!("The saved Luna current-view answer payload is inconsistent")
+            }
+            prompt
+        }
+        AiSnapshotContent::LibraryAnalysis { prompt, result } => {
+            if !matches!(
+                result.lens.as_str(),
+                "overview" | "ratingBacklog" | "tasteProfile" | "catalogBalance" | "metadataHealth"
+            ) {
+                bail!("The saved Luna analyst payload has an unsupported lens")
+            }
+            prompt
+        }
+    };
+
+    if prompt.chars().count() > 2_000 {
+        bail!("Luna snapshot prompts cannot exceed 2,000 characters")
+    }
+    if !matches!(content, AiSnapshotContent::LibraryAnalysis { .. }) && prompt.trim().is_empty() {
+        bail!("A Luna search or chart snapshot requires its original prompt")
+    }
+    Ok(())
+}
+
+fn current_library_snapshot_state(
+    conn: &Connection,
+) -> Result<(Option<i64>, Option<String>, i64, i64)> {
+    let latest_import = conn
+        .query_row(
+            "
+            SELECT id, completed_at, album_count, track_rows
+            FROM import_runs
+            WHERE status = 'completed'
+            ORDER BY COALESCE(completed_at, started_at) DESC, id DESC
+            LIMIT 1
+            ",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            },
+        )
+        .optional()
+        .context("Could not read the current library import for a Luna snapshot")?;
+
+    if let Some((id, imported_at, album_count, track_count)) = latest_import {
+        return Ok((Some(id), imported_at, album_count, track_count));
+    }
+
+    let album_count = conn
+        .query_row("SELECT COUNT(*) FROM albums", [], |row| row.get(0))
+        .context("Could not count albums for a Luna snapshot")?;
+    let track_count = conn
+        .query_row("SELECT COUNT(*) FROM tracks", [], |row| row.get(0))
+        .context("Could not count tracks for a Luna snapshot")?;
+    Ok((None, None, album_count, track_count))
+}
+
+fn ai_snapshot_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AiSnapshot> {
+    let content_json: String = row.get(3)?;
+    let content = serde_json::from_str::<AiSnapshotContent>(&content_json).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(error))
+    })?;
+
+    Ok(AiSnapshot {
+        id: row.get(0)?,
+        title: row.get(2)?,
+        content,
+        library_import_run_id: row.get(4)?,
+        library_imported_at: row.get(5)?,
+        library_album_count: row.get(6)?,
+        library_track_count: row.get(7)?,
+        created_at: row.get(8)?,
+    })
+}
+
+fn load_ai_snapshot(conn: &Connection, id: i64) -> Result<AiSnapshot> {
+    conn.query_row(
+        "
+        SELECT id, kind, title, content_json, library_import_run_id,
+               library_imported_at, library_album_count, library_track_count, created_at
+        FROM ai_snapshots
+        WHERE id = ?1
+        ",
+        params![id],
+        ai_snapshot_from_row,
+    )
+    .with_context(|| format!("Could not load Luna snapshot {id}"))
+}
+
+fn list_ai_snapshots(conn: &Connection, kind: Option<&str>) -> Result<Vec<AiSnapshot>> {
+    if let Some(kind) = kind {
+        validate_ai_snapshot_kind(kind)?;
+    }
+    let mut stmt = conn.prepare(
+        "
+        SELECT id, kind, title, content_json, library_import_run_id,
+               library_imported_at, library_album_count, library_track_count, created_at
+        FROM ai_snapshots
+        WHERE (?1 IS NULL OR kind = ?1)
+        ORDER BY created_at DESC, id DESC
+        ",
+    )?;
+    let snapshots = stmt
+        .query_map(params![kind], ai_snapshot_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(snapshots)
+}
+
+fn save_ai_snapshot(conn: &Connection, input: SaveAiSnapshotRequest) -> Result<AiSnapshot> {
+    let title = input.title.trim();
+    if title.is_empty() {
+        bail!("A Luna snapshot needs a title")
+    }
+    if title.chars().count() > 160 {
+        bail!("Luna snapshot titles cannot exceed 160 characters")
+    }
+    validate_ai_snapshot_content(&input.content)?;
+
+    let kind = input.content.kind();
+    let content_json =
+        serde_json::to_string(&input.content).context("Could not serialize Luna snapshot")?;
+    if content_json.len() > 1_000_000 {
+        bail!("The Luna snapshot is too large to save")
+    }
+    let (import_run_id, imported_at, album_count, track_count) =
+        current_library_snapshot_state(conn)?;
+    let created_at = Utc::now().to_rfc3339();
+    conn.execute(
+        "
+        INSERT INTO ai_snapshots (
+            kind, title, content_json, library_import_run_id, library_imported_at,
+            library_album_count, library_track_count, created_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        ",
+        params![
+            kind,
+            title,
+            content_json,
+            import_run_id,
+            imported_at,
+            album_count,
+            track_count,
+            created_at
+        ],
+    )
+    .context("Could not save Luna snapshot")?;
+    load_ai_snapshot(conn, conn.last_insert_rowid())
+}
+
+fn delete_ai_snapshot(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM ai_snapshots WHERE id = ?1", params![id])
+        .with_context(|| format!("Could not delete Luna snapshot {id}"))?;
+    Ok(())
+}
+
+#[cfg(not(test))]
+pub fn list_ai_snapshots_for_app(app: &AppHandle, kind: Option<String>) -> Result<Vec<AiSnapshot>> {
+    let (conn, _) = open(app)?;
+    list_ai_snapshots(&conn, kind.as_deref())
+}
+
+#[cfg(not(test))]
+pub fn save_ai_snapshot_for_app(
+    app: &AppHandle,
+    input: SaveAiSnapshotRequest,
+) -> Result<AiSnapshot> {
+    let (conn, _) = open(app)?;
+    save_ai_snapshot(&conn, input)
+}
+
+#[cfg(not(test))]
+pub fn delete_ai_snapshot_for_app(app: &AppHandle, id: i64) -> Result<()> {
+    let (conn, _) = open(app)?;
+    delete_ai_snapshot(&conn, id)
 }
 
 #[cfg(not(test))]
@@ -11409,6 +11641,99 @@ mod tests {
             schema_table_exists(&conn, "musicbrainz_artist_info_import_runs")
                 .expect("artist info import run table exists")
         );
+        assert!(schema_table_exists(&conn, "ai_snapshots").expect("Luna snapshot table exists"));
+    }
+
+    #[test]
+    fn saves_lists_and_deletes_typed_luna_snapshots() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            UPDATE import_runs
+            SET completed_at = '2026-07-16T10:00:00Z', track_rows = 10, album_count = 1
+            WHERE id = 1
+            ",
+            [],
+        )
+        .expect("complete test import run");
+        let result = crate::ai::AiCompiledQuery {
+            target: "search".to_string(),
+            summary: "Synthpop albums from 1987.".to_string(),
+            request: BrowseRequest::default(),
+            chart_config: None,
+            model: "gpt-5.6-luna".to_string(),
+            usage: crate::ai::AiUsage {
+                input_tokens: Some(220),
+                cached_input_tokens: Some(20),
+                output_tokens: Some(55),
+            },
+        };
+
+        let saved = save_ai_snapshot(
+            &conn,
+            SaveAiSnapshotRequest {
+                title: "1987 Synthpop".to_string(),
+                content: AiSnapshotContent::Search {
+                    prompt: "Synthpop albums from 1987".to_string(),
+                    result,
+                },
+            },
+        )
+        .expect("save Luna snapshot");
+
+        assert_eq!(saved.title, "1987 Synthpop");
+        assert_eq!(saved.library_import_run_id, Some(1));
+        assert_eq!(
+            saved.library_imported_at.as_deref(),
+            Some("2026-07-16T10:00:00Z")
+        );
+        assert_eq!(saved.library_album_count, 1);
+        assert_eq!(saved.library_track_count, 10);
+        match &saved.content {
+            AiSnapshotContent::Search { prompt, result } => {
+                assert_eq!(prompt, "Synthpop albums from 1987");
+                assert_eq!(result.summary, "Synthpop albums from 1987.");
+            }
+            _ => panic!("expected a search snapshot"),
+        }
+
+        assert_eq!(list_ai_snapshots(&conn, Some("search")).unwrap().len(), 1);
+        assert!(list_ai_snapshots(&conn, Some("chart")).unwrap().is_empty());
+
+        let saved_answer = save_ai_snapshot(
+            &conn,
+            SaveAiSnapshotRequest {
+                title: "How many albums?".to_string(),
+                content: AiSnapshotContent::SearchAnswer {
+                    prompt: "How many albums?".to_string(),
+                    request: BrowseRequest::default(),
+                    result: crate::ai::AiCurrentViewAnswer {
+                        answer: "The filtered view contains one album.".to_string(),
+                        view: "albums".to_string(),
+                        matching_rows: 1,
+                        analysis_count: 1,
+                        named_rows_shared: 0,
+                        model: "gpt-5.6-luna".to_string(),
+                        usage: crate::ai::AiUsage {
+                            input_tokens: Some(300),
+                            cached_input_tokens: None,
+                            output_tokens: Some(45),
+                        },
+                    },
+                },
+            },
+        )
+        .expect("save current-view answer snapshot");
+        assert_eq!(
+            list_ai_snapshots(&conn, Some("searchAnswer"))
+                .unwrap()
+                .len(),
+            1
+        );
+
+        delete_ai_snapshot(&conn, saved.id).expect("delete Luna snapshot");
+        delete_ai_snapshot(&conn, saved_answer.id).expect("delete Luna answer snapshot");
+        assert!(list_ai_snapshots(&conn, None).unwrap().is_empty());
     }
 
     #[test]

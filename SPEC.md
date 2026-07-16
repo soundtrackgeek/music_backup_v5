@@ -326,6 +326,7 @@ AI boundary:
 - The local current-view tool can return exact aggregate summaries, no more than 20 groups, and no more than 20 named rows. It excludes paths, filenames, covers, saved objects, and arbitrary columns; named metadata leaves the machine only after the user's explicit Ask action.
 - Library analyst sends only the selected lens and optional focus first, then requires exactly one strict `inspect_library_profile` call containing one to four validated aggregate sections. SQLite reuses the existing Statistics calculations and returns only bounded overview, rating-progress, catalog-shape, taste-signal, metadata-health, and recent-change points.
 - Library analyst never sends album, track, or artist names, raw rows, file/source paths, filenames, covers, saved objects, or arbitrary SQL results. Genre labels, decades, fixed metadata fields, rating buckets, and timestamps may leave the machine only after the user's explicit Analyze action; the UI reports the section count, aggregate-point count, and combined token usage.
+- Successful Search/Chart compilations, current-view answers, and Library analyst reports save automatically as typed local SQLite snapshots containing the prompt, exact AI output, creation time, and source library import/count state. Current-view answer snapshots also retain their filtered request. Reopening never calls OpenAI; query snapshots reapply filters to the current library, while answer and analyst snapshots preserve the exact historical output.
 - Never send the database, full result sets, unbounded raw rows, file paths, filenames, covers, saved objects, unrelated statistics payloads, or the OpenAI key as model context.
 - Validate every model-produced field, operator, numeric range, sort, limit, target, and chart metric before executing the existing local SQLite search tool.
 - Store the production key outside `AppSettings`, SQLite, localStorage, logs, exports, and backups. Windows Credential Manager is the primary source; `OPENAI_API_KEY` and repo-root `.env` are debug-only fallbacks.
@@ -564,6 +565,7 @@ Expected next backend modularization:
 - Settings stores the OpenAI key in Windows Credential Manager and exposes only configured/source/model status to the frontend.
 - Debug builds can use an ignored `OPENAI_API_KEY` environment or `.env` fallback; production builds do not load the project `.env` file.
 - Query summaries and input/cached/output token usage remain visible and generated filters stay editable before anything is saved.
+- SQLite schema version 21 keeps an automatic local Snapshot history for successful Search/Chart compilations, current-view answers, and Library analyst reports. Users can reopen or delete entries; snapshots are part of normal database backups and never contain the OpenAI key.
 
 ### Phase 26: Release Operations Automation
 
@@ -924,6 +926,12 @@ Implemented in version `0.55.0`:
 - Statistics exposes a Library analyst with Overview, Rating backlog, Taste profile, Catalog balance, and Metadata health lenses plus an optional focus question.
 - Luna uses one strict `inspect_library_profile` call to choose up to four locally calculated aggregate sections, then returns a strict typed report with one to five evidence-backed findings and up to three next questions.
 - Reports are stateless and disclose profile sections, aggregate points, and combined token usage. No album, track, artist, path, filename, or source-path rows are shared.
+
+Implemented in version `0.56.0`:
+
+- Successful Ask Luna Search/Chart compilations, Ask about this view answers, and Library analyst reports save automatically in a shared typed local Snapshot history.
+- Reopening a Search/Chart snapshot reapplies its compiled filters against the current library without another API call; reopening an analyst snapshot restores the exact report generated from its recorded library state.
+- Snapshot rows include created time, source import identifier/timestamp, and album/track counts, can be deleted individually, and participate in normal SQLite backups.
 
 Candidate prompts:
 

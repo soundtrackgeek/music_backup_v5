@@ -96,7 +96,7 @@ pub struct AiCompileRequest {
     pub current_view: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiUsage {
     pub input_tokens: Option<u64>,
@@ -104,7 +104,7 @@ pub struct AiUsage {
     pub output_tokens: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiCompiledQuery {
     pub target: String,
@@ -130,7 +130,7 @@ pub struct AiCurrentViewQuestion {
     pub request: BrowseRequest,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiCurrentViewAnswer {
     pub answer: String,
@@ -150,7 +150,7 @@ pub struct AiLibraryAnalysisRequest {
     pub focus: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiLibraryFinding {
     pub title: String,
@@ -158,7 +158,7 @@ pub struct AiLibraryFinding {
     pub interpretation: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiLibraryAnalysis {
     pub lens: String,
@@ -170,6 +170,65 @@ pub struct AiLibraryAnalysis {
     pub aggregate_points_shared: usize,
     pub model: String,
     pub usage: AiUsage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AiSnapshotContent {
+    Search {
+        prompt: String,
+        result: AiCompiledQuery,
+    },
+    Chart {
+        prompt: String,
+        result: AiCompiledQuery,
+    },
+    SearchAnswer {
+        prompt: String,
+        request: BrowseRequest,
+        result: AiCurrentViewAnswer,
+    },
+    ChartAnswer {
+        prompt: String,
+        request: BrowseRequest,
+        result: AiCurrentViewAnswer,
+    },
+    LibraryAnalysis {
+        prompt: String,
+        result: AiLibraryAnalysis,
+    },
+}
+
+impl AiSnapshotContent {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Search { .. } => "search",
+            Self::Chart { .. } => "chart",
+            Self::SearchAnswer { .. } => "searchAnswer",
+            Self::ChartAnswer { .. } => "chartAnswer",
+            Self::LibraryAnalysis { .. } => "libraryAnalysis",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveAiSnapshotRequest {
+    pub title: String,
+    pub content: AiSnapshotContent,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiSnapshot {
+    pub id: i64,
+    pub title: String,
+    pub content: AiSnapshotContent,
+    pub library_import_run_id: Option<i64>,
+    pub library_imported_at: Option<String>,
+    pub library_album_count: i64,
+    pub library_track_count: i64,
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

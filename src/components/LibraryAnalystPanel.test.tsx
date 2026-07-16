@@ -1,18 +1,31 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AiLibraryAnalysis } from "../types";
 import { LibraryAnalystPanel } from "./LibraryAnalystPanel";
 
-const analyzeLibrary = vi.hoisted(() => vi.fn());
+const backend = vi.hoisted(() => ({
+  analyzeLibrary: vi.fn(),
+  deleteAiSnapshot: vi.fn(),
+  listAiSnapshots: vi.fn(),
+  saveAiSnapshot: vi.fn(),
+}));
 
-vi.mock("../backend", () => ({ analyzeLibrary }));
+vi.mock("../backend", () => backend);
 
 describe("LibraryAnalystPanel", () => {
+  beforeEach(() => {
+    backend.analyzeLibrary.mockReset();
+    backend.deleteAiSnapshot.mockReset();
+    backend.listAiSnapshots.mockReset();
+    backend.saveAiSnapshot.mockReset();
+    backend.listAiSnapshots.mockResolvedValue([]);
+  });
+
   it("sends the selected lens and renders a typed aggregate-only report", async () => {
     const user = userEvent.setup();
-    analyzeLibrary.mockResolvedValueOnce({
+    const analysis = {
       lens: "ratingBacklog",
       headline: "The 1980s hold the clearest rating opportunity",
       summary: "The open work is concentrated enough to tackle deliberately.",
@@ -32,7 +45,22 @@ describe("LibraryAnalystPanel", () => {
         cachedInputTokens: 210,
         outputTokens: 180,
       },
-    } satisfies AiLibraryAnalysis);
+    } satisfies AiLibraryAnalysis;
+    backend.analyzeLibrary.mockResolvedValueOnce(analysis);
+    backend.saveAiSnapshot.mockResolvedValueOnce({
+      id: 7,
+      title: analysis.headline,
+      content: {
+        kind: "libraryAnalysis",
+        prompt: "Where should I start?",
+        result: analysis,
+      },
+      libraryImportRunId: 8,
+      libraryImportedAt: "2026-07-16T10:00:00Z",
+      libraryAlbumCount: 73_128,
+      libraryTrackCount: 1_111_666,
+      createdAt: "2026-07-16T10:05:00Z",
+    });
 
     render(<LibraryAnalystPanel isAvailable />);
     await user.click(screen.getByRole("button", { name: /Rating backlog/ }));
@@ -42,16 +70,28 @@ describe("LibraryAnalystPanel", () => {
     );
     await user.click(screen.getByRole("button", { name: "Analyze library" }));
 
-    expect(analyzeLibrary).toHaveBeenCalledWith({
+    expect(backend.analyzeLibrary).toHaveBeenCalledWith({
       lens: "ratingBacklog",
       focus: "Where should I start?",
     });
     expect(
-      await screen.findByText("The 1980s hold the clearest rating opportunity"),
+      await screen.findByRole("heading", {
+        level: 3,
+        name: "The 1980s hold the clearest rating opportunity",
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText(/17 aggregate points/)).toBeInTheDocument();
     expect(screen.getByText(/no album, track, or artist names/)).toBeInTheDocument();
     expect(screen.getByText(/940 input, 210 cached/)).toBeInTheDocument();
+    expect(backend.saveAiSnapshot).toHaveBeenCalledWith({
+      title: analysis.headline,
+      content: {
+        kind: "libraryAnalysis",
+        prompt: "Where should I start?",
+        result: analysis,
+      },
+    });
+    expect(screen.getByText(/saved automatically/)).toBeInTheDocument();
   });
 
   it("keeps analysis disabled until a library is available", () => {
@@ -63,5 +103,53 @@ describe("LibraryAnalystPanel", () => {
     expect(
       screen.getByText("Import a library before running an analysis."),
     ).toBeInTheDocument();
+  });
+
+  it("reopens an exact analyst snapshot without another API call", async () => {
+    const user = userEvent.setup();
+    const analysis = {
+      lens: "overview",
+      headline: "Saved collection overview",
+      summary: "The saved summary.",
+      findings: [
+        {
+          title: "Saved finding",
+          evidence: "73,128 albums.",
+          interpretation: "This is the exact saved interpretation.",
+        },
+      ],
+      nextQuestions: ["What changed?"],
+      profileSections: ["overview"],
+      aggregatePointsShared: 8,
+      model: "gpt-5.6-luna",
+      usage: { inputTokens: 800, cachedInputTokens: 0, outputTokens: 150 },
+    } satisfies AiLibraryAnalysis;
+    backend.listAiSnapshots.mockResolvedValueOnce([
+      {
+        id: 11,
+        title: analysis.headline,
+        content: { kind: "libraryAnalysis", prompt: "", result: analysis },
+        libraryImportRunId: 8,
+        libraryImportedAt: "2026-07-16T10:00:00Z",
+        libraryAlbumCount: 73_128,
+        libraryTrackCount: 1_111_666,
+        createdAt: "2026-07-16T10:05:00Z",
+      },
+    ]);
+
+    render(<LibraryAnalystPanel isAvailable />);
+    const savedTitle = await screen.findByText("Saved collection overview", {
+      selector: ".ai-snapshot-list strong",
+    });
+    await user.click(savedTitle.closest("button")!);
+
+    expect(
+      screen.getByRole("heading", {
+        level: 3,
+        name: "Saved collection overview",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/saved snapshot/)).toBeInTheDocument();
+    expect(backend.analyzeLibrary).not.toHaveBeenCalled();
   });
 });
