@@ -4,6 +4,7 @@
 ### Added
 - Added an outside-library Discovery panel for natural-language artist, album, and song requests, including explicit count, release/formation-year interpretation, genre, country, and keyword recipes from Luna.
 - Added one-request bounded MusicBrainz artist, release-group, and recording searches with visible source evidence and HTTPS links to the verified catalog records.
+- Added a process-wide 1.1-second MusicBrainz request-start gate so repeated Discovery searches respect the catalog service's per-IP request-rate guidance.
 - Added local SQLite ownership exclusion using MusicBrainz IDs where available plus normalized artist, artist/album, and artist/song identities; no library rows or owned-name lists are sent to Luna or MusicBrainz.
 - Added SQLite schema version 23 for explicitly saved Discovery lists containing the exact verified result order, recipe, evidence, and source library import/count state so lists reopen without AI or catalog calls.
 - Added web-preview artist/album/song fixtures, React save/reopen interaction coverage, Rust recipe/schema/ownership/persistence tests, and opt-in live Luna and MusicBrainz contract tests.

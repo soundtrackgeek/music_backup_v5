@@ -960,7 +960,7 @@ Implemented in version `0.57.1`:
 Implemented in version `0.58.0`:
 
 - Discovery exposes Find what your library is missing for artist, album, and song requests with counts from 1 to 25, optional year/genre/country/keyword filters, and separate release-year versus explicit artist formation-year semantics.
-- Luna receives only the request and returns a strict recipe. The desktop app makes one bounded MusicBrainz search (maximum 100 candidates), attributes each result, and locally excludes owned artists by MBID/name, albums by release-group MBID or artist/title, and songs by artist/title.
+- Luna receives only the request and returns a strict recipe. The desktop app makes one bounded MusicBrainz search (maximum 100 candidates), spaces request starts by at least 1.1 seconds, attributes each result, and locally excludes owned artists by MBID/name, albums by release-group MBID or artist/title, and songs by artist/title.
 - The result can be named and saved explicitly with its exact order, MusicBrainz evidence, Luna recipe, timestamp, and library import/count state in SQLite schema version 23. Reopening or deleting a saved list requires no OpenAI or MusicBrainz request.
 - External links remain restricted to HTTPS `musicbrainz.org` artist, release-group, and recording pages. Requests can return fewer results than requested; the UI discloses this instead of inventing candidates.
 

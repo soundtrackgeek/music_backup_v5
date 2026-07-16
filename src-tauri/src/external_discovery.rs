@@ -7,6 +7,9 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
+use std::sync::Mutex;
+use std::thread;
+use std::time::{Duration, Instant};
 #[cfg(not(test))]
 use tauri::AppHandle;
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
@@ -18,6 +21,8 @@ const MUSICBRAINZ_USER_AGENT: &str =
     "music-backup-v5/0.58.0 (https://github.com/soundtrackgeek/music_backup_v5)";
 const MAX_CATALOG_CANDIDATES: usize = 100;
 const MAX_SAVED_RESPONSE_BYTES: usize = 1_000_000;
+const MUSICBRAINZ_REQUEST_INTERVAL: Duration = Duration::from_millis(1_100);
+static LAST_MUSICBRAINZ_REQUEST: Mutex<Option<Instant>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -673,6 +678,7 @@ fn musicbrainz_search<T>(endpoint: &str, query: &str, limit: usize) -> Result<T>
 where
     T: for<'de> Deserialize<'de>,
 {
+    wait_for_musicbrainz_slot();
     let limit = limit.clamp(1, MAX_CATALOG_CANDIDATES).to_string();
     let response = ureq::get(endpoint)
         .query("query", query)
@@ -685,6 +691,19 @@ where
     response
         .into_json::<T>()
         .context("MusicBrainz returned an unreadable search response")
+}
+
+fn wait_for_musicbrainz_slot() {
+    let mut previous = LAST_MUSICBRAINZ_REQUEST
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(previous) = *previous {
+        let elapsed = previous.elapsed();
+        if elapsed < MUSICBRAINZ_REQUEST_INTERVAL {
+            thread::sleep(MUSICBRAINZ_REQUEST_INTERVAL - elapsed);
+        }
+    }
+    *previous = Some(Instant::now());
 }
 
 fn artist_credit_name(credits: &[ArtistCredit]) -> String {
