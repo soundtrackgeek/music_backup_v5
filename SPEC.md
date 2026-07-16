@@ -933,6 +933,12 @@ Implemented in version `0.56.0`:
 - Reopening a Search/Chart snapshot reapplies its compiled filters against the current library without another API call; reopening an analyst snapshot restores the exact report generated from its recorded library state.
 - Snapshot rows include created time, source import identifier/timestamp, and album/track counts, can be deleted individually, and participate in normal SQLite backups.
 
+Implemented in version `0.56.1`:
+
+- Selecting a Library analyst useful next question immediately runs the follow-up through the current analysis lens without requiring a second button click.
+- Starting a manual or suggested analysis clears the Focus question while retaining the submitted value in the request and automatic snapshot.
+- Follow-up question controls remain disabled while Luna is analyzing, preventing duplicate requests and snapshots.
+
 Candidate prompts:
 
 - "Which artists appear most often in these results?"

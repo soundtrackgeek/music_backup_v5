@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.56.1] - 2026-07-16
+### Fixed
+- Changed Library analyst useful-next-question buttons to run the selected follow-up immediately instead of only copying it into the Focus question field.
+- Cleared the Focus question after a manual or suggested analysis starts while preserving the submitted question in Luna's request and the saved snapshot.
+- Disabled follow-up buttons while an analysis is running to prevent duplicate Luna requests and snapshots.
+- Added React regression coverage for the automatic follow-up analysis and snapshot flow.
+
+### Changed
+- Bumped synchronized app metadata to `0.56.1`.
+
 ## [0.56.0] - 2026-07-16
 ### Added
 - Added automatic local snapshot history for Ask Luna Search and Charts queries, Ask about this view answers, and Statistics Library analyst reports.

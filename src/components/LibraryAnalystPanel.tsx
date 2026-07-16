@@ -115,15 +115,16 @@ export function LibraryAnalystPanel({
   const selectedLens =
     lensOptions.find((option) => option.value === lens) ?? lensOptions[0];
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function runAnalysis(focusQuestion: string) {
     if (!isAvailable || isLoading) return;
+    const normalizedFocus = focusQuestion.trim();
+    setFocus("");
     setIsLoading(true);
     setError(null);
     try {
       const analysis = await analyzeLibrary({
         lens,
-        focus: focus.trim(),
+        focus: normalizedFocus,
       });
       setResult(analysis);
       setResultSource("live");
@@ -133,7 +134,7 @@ export function LibraryAnalystPanel({
           title: analystSnapshotTitle(analysis.headline),
           content: {
             kind: "libraryAnalysis",
-            prompt: focus.trim(),
+            prompt: normalizedFocus,
             result: analysis,
           },
         });
@@ -159,6 +160,15 @@ export function LibraryAnalystPanel({
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void runAnalysis(focus);
+  }
+
+  function askNextQuestion(question: string) {
+    void runAnalysis(question);
   }
 
   function chooseLens(nextLens: AiLibraryLens) {
@@ -241,7 +251,7 @@ export function LibraryAnalystPanel({
         ))}
       </div>
 
-      <form className="library-analyst-form" onSubmit={(event) => void submit(event)}>
+      <form className="library-analyst-form" onSubmit={submit}>
         <label>
           <span>Focus question</span>
           <input
@@ -316,7 +326,8 @@ export function LibraryAnalystPanel({
                 <button
                   key={question}
                   type="button"
-                  onClick={() => setFocus(question)}
+                  disabled={isLoading || !isAvailable}
+                  onClick={() => askNextQuestion(question)}
                 >
                   <ChevronRight size={14} />
                   <span>{question}</span>

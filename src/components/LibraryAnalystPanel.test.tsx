@@ -75,6 +75,9 @@ describe("LibraryAnalystPanel", () => {
       focus: "Where should I start?",
     });
     expect(
+      screen.getByRole("textbox", { name: "Focus question" }),
+    ).toHaveValue("");
+    expect(
       await screen.findByRole("heading", {
         level: 3,
         name: "The 1980s hold the clearest rating opportunity",
@@ -103,6 +106,89 @@ describe("LibraryAnalystPanel", () => {
     expect(
       screen.getByText("Import a library before running an analysis."),
     ).toBeInTheDocument();
+  });
+
+  it("analyzes a useful next question immediately when clicked", async () => {
+    const user = userEvent.setup();
+    const firstAnalysis = {
+      lens: "overview",
+      headline: "Collection overview",
+      summary: "A broad first pass.",
+      findings: [],
+      nextQuestions: ["Which decade has the largest rating backlog?"],
+      profileSections: ["overview"],
+      aggregatePointsShared: 8,
+      model: "gpt-5.6-luna",
+      usage: { inputTokens: 800, cachedInputTokens: 0, outputTokens: 150 },
+    } satisfies AiLibraryAnalysis;
+    const followUpAnalysis = {
+      ...firstAnalysis,
+      headline: "The 1980s have the largest rating backlog",
+      summary: "The follow-up ran automatically.",
+      nextQuestions: [],
+    } satisfies AiLibraryAnalysis;
+    backend.analyzeLibrary
+      .mockResolvedValueOnce(firstAnalysis)
+      .mockResolvedValueOnce(followUpAnalysis);
+    backend.saveAiSnapshot
+      .mockResolvedValueOnce({
+        id: 21,
+        title: firstAnalysis.headline,
+        content: {
+          kind: "libraryAnalysis",
+          prompt: "",
+          result: firstAnalysis,
+        },
+        libraryImportRunId: 8,
+        libraryImportedAt: "2026-07-16T10:00:00Z",
+        libraryAlbumCount: 73_128,
+        libraryTrackCount: 1_111_666,
+        createdAt: "2026-07-16T10:05:00Z",
+      })
+      .mockResolvedValueOnce({
+        id: 22,
+        title: followUpAnalysis.headline,
+        content: {
+          kind: "libraryAnalysis",
+          prompt: "Which decade has the largest rating backlog?",
+          result: followUpAnalysis,
+        },
+        libraryImportRunId: 8,
+        libraryImportedAt: "2026-07-16T10:00:00Z",
+        libraryAlbumCount: 73_128,
+        libraryTrackCount: 1_111_666,
+        createdAt: "2026-07-16T10:06:00Z",
+      });
+
+    render(<LibraryAnalystPanel isAvailable />);
+    await user.click(screen.getByRole("button", { name: "Analyze library" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Which decade has the largest rating backlog?",
+      }),
+    );
+
+    expect(backend.analyzeLibrary).toHaveBeenNthCalledWith(2, {
+      lens: "overview",
+      focus: "Which decade has the largest rating backlog?",
+    });
+    expect(
+      screen.getByRole("textbox", { name: "Focus question" }),
+    ).toHaveValue("");
+    expect(
+      await screen.findByRole("heading", {
+        level: 3,
+        name: "The 1980s have the largest rating backlog",
+      }),
+    ).toBeInTheDocument();
+    expect(backend.saveAiSnapshot).toHaveBeenLastCalledWith({
+      title: followUpAnalysis.headline,
+      content: {
+        kind: "libraryAnalysis",
+        prompt: "Which decade has the largest rating backlog?",
+        result: followUpAnalysis,
+      },
+    });
   });
 
   it("reopens an exact analyst snapshot without another API call", async () => {
