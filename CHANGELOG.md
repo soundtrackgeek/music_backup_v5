@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.53.2] - 2026-07-16
+### Added
+- Added true local random ordering for Search, including a visible Random sort option and SQLite `RANDOM()` execution without sending library rows to Luna.
+- Added deterministic and live-model coverage for random unrated albums and random albums from Swedish musicians.
+
+### Fixed
+- Fixed natural-language requests such as `10 random albums from 1989 that I haven't rated yet` by giving Luna a typed missing-fields array whose accepted values match the app's filter vocabulary.
+- Changed unrated phrases to compile to the existing missing-rating filter instead of an unsupported field, zero rating, or completeness range.
+
+### Changed
+- Bumped synchronized app metadata to `0.53.2`.
+
 ## [0.53.1] - 2026-07-16
 ### Fixed
 - Fixed Ask Luna numeric ranges such as `artists who died between 1985 and 1989` by replacing nullable generic conditions with typed Structured Output groups whose numeric values and range endpoints are required.

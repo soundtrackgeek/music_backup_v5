@@ -1803,16 +1803,22 @@ function SelectField({
   value,
   onChange,
   options,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
+  disabled?: boolean;
 }) {
   return (
     <label className="criterion">
       <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -14992,13 +14998,21 @@ export default function App() {
                     onChange={(field) =>
                       setRequest((previous) => ({
                         ...previous,
-                        sort: { ...previous.sort, field },
+                        sort: {
+                          ...previous.sort,
+                          field,
+                          direction:
+                            field === "random"
+                              ? "asc"
+                              : previous.sort.direction,
+                        },
                         offset: 0,
                       }))
                     }
                     options={
                       request.view === "tracks"
                         ? [
+                            { value: "random", label: "Random" },
                             { value: "title", label: "Title" },
                             { value: "album", label: "Album" },
                             { value: "displayArtist", label: "Display artist" },
@@ -15016,6 +15030,7 @@ export default function App() {
                             { value: "trackNumber", label: "Track number" },
                           ]
                         : [
+                            { value: "random", label: "Random" },
                             { value: "album", label: "Album" },
                             { value: "artist", label: "Artist" },
                             { value: "year", label: "Year" },
@@ -15037,6 +15052,7 @@ export default function App() {
                   <SelectField
                     label="Direction"
                     value={request.sort.direction}
+                    disabled={request.sort.field === "random"}
                     onChange={(direction) =>
                       setRequest((previous) => ({
                         ...previous,

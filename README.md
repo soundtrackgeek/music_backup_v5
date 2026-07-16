@@ -45,6 +45,8 @@ Search and Charts include an Ask Luna panel powered by the exact `gpt-5.6-luna` 
 
 Bounded numeric requests are supported as typed ranges. For example, `Albums from artists who died between 1985 and 1989` activates the artist-death filter and applies `Died year: 1985–1989` before searching locally.
 
+Unrated and random requests are also explicit local operations. For example, `10 random albums from 1989 that I haven't rated yet` applies `Missing: Album rating`, `Year: 1989`, and the Random sort; SQLite selects the random sample locally.
+
 Configure the OpenAI key in **Settings → Luna & OpenAI**. The desktop backend stores it as a generic credential in Windows Credential Manager and returns only configured/source status to the frontend. The key is not part of `AppSettings`, SQLite, browser storage, logs, exports, or database backups. Settings can test the connection and remove or replace the stored credential without displaying the existing key.
 
 For temporary local development, a repo-root `.env` file containing `OPENAI_API_KEY=...` is supported by debug builds only. Secure Settings storage takes precedence over that fallback. `.env` and `.env.*` are gitignored, while `.env.example` remains allowed; `npm run security:check` enforces those rules. Production builds do not load the project `.env` file.

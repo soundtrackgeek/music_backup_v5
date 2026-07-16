@@ -8496,6 +8496,10 @@ fn add_missing_field_conditions(conditions: &mut Vec<String>, is_tracks: bool, f
 }
 
 fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
+    if sort.field == "random" {
+        return "ORDER BY RANDOM()".to_string();
+    }
+
     let direction = if sort.direction.eq_ignore_ascii_case("desc") {
         "DESC"
     } else {
@@ -9425,6 +9429,52 @@ mod tests {
 
         assert_eq!(response.total, 1);
         assert_eq!(response.rows[0].album.as_deref(), Some("Actually"));
+    }
+
+    #[test]
+    fn searches_for_random_unrated_albums() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+            ) VALUES (
+                'mb:unrated', 1, 'unrated', 'Unrated 1989', 'Test Artist',
+                'Rock', 'rock', 'Test', 1989, 1989,
+                10, 0, 0.0, 2400, 0, 0, 0.0, NULL, NULL
+            )
+            ",
+            [],
+        )
+        .expect("insert unrated album");
+
+        let mut request = BrowseRequest::default();
+        request.filters.year_from = Some(1989);
+        request.filters.year_to = Some(1989);
+        request.filters.missing_fields = vec!["rating".to_string()];
+        request.sort = BrowseSort {
+            field: "random".to_string(),
+            direction: "asc".to_string(),
+        };
+        request.limit = 10;
+
+        let response = search_library(&conn, request, 50).expect("search unrated albums");
+
+        assert_eq!(response.total, 1);
+        assert_eq!(response.rows[0].album.as_deref(), Some("Unrated 1989"));
+        assert_eq!(
+            order_clause(
+                false,
+                &BrowseSort {
+                    field: "random".to_string(),
+                    direction: "desc".to_string(),
+                }
+            ),
+            "ORDER BY RANDOM()"
+        );
     }
 
     #[test]

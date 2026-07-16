@@ -1327,11 +1327,19 @@ export async function searchLibrary(request: BrowseRequest) {
         matchesMissingFields(row, isTracks, request.filters.missingFields)
       );
     });
-    const sorted = [...rows].sort((left, right) =>
-      compareBrowseRows(left, right, request.sort.field),
-    );
-    if (request.sort.direction === "desc") {
-      sorted.reverse();
+    const sorted = [...rows];
+    if (request.sort.field === "random") {
+      for (let index = sorted.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [sorted[index], sorted[swapIndex]] = [sorted[swapIndex], sorted[index]];
+      }
+    } else {
+      sorted.sort((left, right) =>
+        compareBrowseRows(left, right, request.sort.field),
+      );
+      if (request.sort.direction === "desc") {
+        sorted.reverse();
+      }
     }
     return {
       view: request.view,
