@@ -635,6 +635,51 @@ button {
   white-space: nowrap;
 }
 
+.current-view-question-panel {
+  border-color: #d8ded3;
+  background: #fbfcf8;
+}
+
+.current-view-question-panel .natural-query-icon {
+  color: #6a5718;
+  background: #f2ebc9;
+}
+
+.current-view-answer {
+  display: grid;
+  gap: 5px;
+  border-left: 3px solid #2d8178;
+  padding: 2px 0 2px 12px;
+  color: #42514c;
+}
+
+.current-view-answer > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+}
+
+.current-view-answer strong {
+  color: #0b625c;
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.current-view-answer p {
+  margin: 0;
+  color: #26342f;
+  font-size: 13px;
+  line-height: 19px;
+  white-space: pre-wrap;
+}
+
+.current-view-answer small {
+  color: #7c8985;
+  font-size: 11px;
+  line-height: 16px;
+}
+
 .criterion,
 .source-input {
   display: grid;
@@ -4660,8 +4705,23 @@ button {
 
 :root[data-theme="dark"] .natural-query-heading p,
 :root[data-theme="dark"] .natural-query-result small,
+:root[data-theme="dark"] .current-view-answer small,
 :root[data-theme="dark"] .ai-settings-notes {
   color: #9eada8;
+}
+
+:root[data-theme="dark"] .current-view-question-panel {
+  border-color: #454536;
+  background: #1a1e18;
+}
+
+:root[data-theme="dark"] .current-view-question-panel .natural-query-icon {
+  color: #e1c96c;
+  background: #3a351d;
+}
+
+:root[data-theme="dark"] .current-view-answer p {
+  color: #dce7e3;
 }
 
 :root[data-theme="dark"] .artist-detail-tabs {
@@ -5686,6 +5746,11 @@ button {
 
   .natural-query-result small {
     white-space: normal;
+  }
+
+  .current-view-answer > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
   }
 
   .stats-panel.wide {

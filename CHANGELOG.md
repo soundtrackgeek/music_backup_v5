@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.54.0] - 2026-07-16
+### Added
+- Added Ask about this view panels to Search and Charts for questions about the active filtered album or track results.
+- Added a strict `inspect_current_view` Luna function tool backed by exact local SQLite overviews, bounded groups, and lists capped at 20 names.
+- Added per-answer disclosure of matching rows, local analysis count, names shared, and combined input/cached/output token usage.
+- Added Rust, React, live-model, desktop, and mobile coverage for the bounded current-view question flow.
+
+### Changed
+- Changed the AI privacy boundary to distinguish row-free filter compilation from explicit current-view questions, which can share only the requested compact aggregates, groups, or bounded names while excluding paths and filenames.
+- Kept current-view questions stateless and limited to one strict tool call with one to three analyses to bound cost and context.
+- Bumped synchronized app metadata to `0.54.0`.
+
 ## [0.53.2] - 2026-07-16
 ### Added
 - Added true local random ordering for Search, including a visible Random sort option and SQLite `RANDOM()` execution without sending library rows to Luna.

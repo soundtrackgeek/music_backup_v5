@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-16
 Status: Living product and implementation contract
-Current implementation: Natural-language Search and Charts are implemented through Luna-generated typed filters and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
+Current implementation: Natural-language Search and Charts plus bounded questions about the active filtered view are implemented through Luna-generated typed filters/function calls and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
 Current package version: 0.53.2
 SQLite schema version: 20
 
@@ -50,8 +50,8 @@ Core principles:
 
 | Workspace | Status | Purpose |
 | --- | --- | --- |
-| Search | Implemented | Primary album and track browsing, composable filters, Ask Luna natural-language filter creation, saved searches, and exports. |
-| Charts | Implemented | Built-in and saved ranked album views with Ask Luna natural-language chart creation plus table, compact list, and cover grid modes. |
+| Search | Implemented | Primary album and track browsing, composable filters, Ask Luna natural-language filter creation and bounded current-view questions, saved searches, and exports. |
+| Charts | Implemented | Built-in and saved ranked album views with Ask Luna natural-language chart creation and bounded current-view questions plus table, compact list, and cover grid modes. |
 | Discovery | Implemented | Exploration dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions. |
 | Statistics | Implemented | Library health, rating progress, metadata coverage, import history, time shape, duration, concentration, and outlier dashboards. |
 | Albums | Implemented | Album index, album filters, detail drill-down, track lists, and album-level exports. |
@@ -316,13 +316,15 @@ Core files:
 - `src-tauri/src/musicbrainz_sync.rs`: Two-way sync for app-owned MusicBrainz overlay rows through a shared SQLite database, including tombstone handling and local sync-log recording.
 - `src-tauri/src/importer.rs`: MusicBee TSV parsing, normalization, import run handling, album aggregation, backup retention, and rating event capture.
 - `src-tauri/src/covers.rs`: cover image import, relinking, embedded-art extraction, and local image serving.
-- `src-tauri/src/ai.rs`: Windows Credential Manager access, debug-only environment fallback, OpenAI Responses calls, strict Structured Outputs validation, and conversion to local browse/chart requests.
+- `src-tauri/src/ai.rs`: Windows Credential Manager access, debug-only environment fallback, OpenAI Responses calls, strict Structured Outputs/function-call validation, conversion to local browse/chart requests, and bounded current-view tool orchestration.
 
 AI boundary:
 
-- Luna receives only the user's request, target workspace, current album/track view, fixed planner instructions, and a strict query-plan schema with separate text, list, missing-field, numeric, numeric-range, and boolean condition groups so field vocabularies and required numeric values cannot be omitted.
+- Filter compilation sends only the user's request, target workspace, current album/track view, fixed planner instructions, and a strict query-plan schema with separate text, list, missing-field, numeric, numeric-range, and boolean condition groups so field vocabularies and required numeric values cannot be omitted.
 - Search supports a typed Random sort. Luna selects that mode, while SQLite performs `RANDOM()` ordering locally; unrated phrases map to the existing missing-rating filter.
-- Never send raw library rows, database files, covers, saved objects, statistics payloads, or the OpenAI key as model context.
+- Current-view questions send the question and album/track view first, then require exactly one strict function call containing one to three validated overview/group/list requests. The active `BrowseRequest` and SQLite database stay inside the app.
+- The local current-view tool can return exact aggregate summaries, no more than 20 groups, and no more than 20 named rows. It excludes paths, filenames, covers, saved objects, and arbitrary columns; named metadata leaves the machine only after the user's explicit Ask action.
+- Never send the database, full result sets, unbounded raw rows, file paths, filenames, covers, saved objects, unrelated statistics payloads, or the OpenAI key as model context.
 - Validate every model-produced field, operator, numeric range, sort, limit, target, and chart metric before executing the existing local SQLite search tool.
 - Store the production key outside `AppSettings`, SQLite, localStorage, logs, exports, and backups. Windows Credential Manager is the primary source; `OPENAI_API_KEY` and repo-root `.env` are debug-only fallbacks.
 - Use the exact `gpt-5.6-luna` model, Structured Outputs, `store: false`, low reasoning effort, and bounded output. Surface token usage so cost remains visible.
@@ -906,17 +908,26 @@ Constraints:
 
 Expected outcome:
 
-- AI extends the implemented natural-language Search and Charts foundation into playlists or recommendations.
+- AI extends the implemented natural-language Search and Charts foundation into bounded questions about the current filtered view, followed later by reviewable playlists or recommendations.
+
+Implemented in version `0.54.0`:
+
+- Search and Charts expose an Ask about this view panel over the active `BrowseRequest` snapshot.
+- Luna uses a strict `inspect_current_view` function call instead of receiving the request or database directly.
+- SQLite can return an exact overview, bounded groups, and/or at most 20 named rows; paths and filenames are excluded.
+- Answers are stateless, show matching-row/inspection/name-sharing metadata, and combine token usage across the tool and answer calls.
 
 Candidate prompts:
 
+- "Which artists appear most often in these results?"
+- "How many of these albums are unrated, and what is their average length?"
 - "Build a playlist from loved tracks in underexplored genres."
 - "Explain why these albums rank highly without sending the full library."
 
 Constraints:
 
 - AI features must be optional.
-- No library data should leave the machine without explicit user action.
+- No bounded view metadata should leave the machine without the user's explicit Ask action.
 - Generated actions should remain reviewable before they affect saved state.
 - Search and chart query compilation is implemented in version `0.53.0`; future slices must reuse the same secure key and strict local-tool boundary.
 

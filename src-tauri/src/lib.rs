@@ -144,6 +144,22 @@ async fn compile_natural_language_query(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn ask_current_view(
+    app: AppHandle,
+    input: ai::AiCurrentViewQuestion,
+) -> Result<ai::AiCurrentViewAnswer, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ai::ask_current_view(input, |request, inspection| {
+            db::inspect_current_view_for_app(&app, request, inspection)
+        })
+    })
+    .await
+    .map_err(|error| format!("Current-view question task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_musicbrainz_cache_status(
     app: AppHandle,
     cache_path: Option<String>,
@@ -619,6 +635,7 @@ pub fn run() {
             delete_openai_api_key,
             test_openai_connection,
             compile_natural_language_query,
+            ask_current_view,
             get_musicbrainz_cache_status,
             get_musicbrainz_origin_country_status,
             preview_musicbrainz_origin_country_import,

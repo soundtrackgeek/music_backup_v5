@@ -268,6 +268,7 @@ import {
   MusicBrainzReviewState,
 } from "./components/MusicBrainzReviewState";
 import { AiSettingsPanel } from "./components/AiSettingsPanel";
+import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
 import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPanel";
 import {
   ArtistDetailTabs,
@@ -10516,6 +10517,8 @@ export default function App() {
               }}
             />
 
+            <CurrentViewQuestionPanel request={chartRequest} />
+
             <section
               className="chart-template-panel"
               aria-label="Built-in charts"
@@ -14553,6 +14556,8 @@ export default function App() {
                 setBrowseError(null);
               }}
             />
+
+            <CurrentViewQuestionPanel request={request} />
 
             <section className="query-panel">
               <div className="search-row">

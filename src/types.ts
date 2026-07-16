@@ -545,6 +545,21 @@ export type AiCompileRequest = {
   currentView?: BrowseView | null;
 };
 
+export type AiCurrentViewQuestion = {
+  question: string;
+  request: BrowseRequest;
+};
+
+export type AiCurrentViewAnswer = {
+  answer: string;
+  view: BrowseView;
+  matchingRows: number;
+  analysisCount: number;
+  namedRowsShared: number;
+  model: string;
+  usage: AiUsage;
+};
+
 export type AiConnectionTest = {
   model: string;
   message: string;

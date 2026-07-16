@@ -13,7 +13,7 @@ The sidebar currently enables Search, Charts, Discovery, Statistics, Albums, Art
 - Node.js 20 or newer
 - Rust toolchain compatible with Tauri 2
 - A MusicBee TSV export with the columns listed in `SPEC.md`
-- An OpenAI API key is optional and only required for Ask Luna natural-language queries
+- An OpenAI API key is optional and only required for Ask Luna search, chart, and current-view questions
 
 ## Install
 
@@ -39,19 +39,23 @@ npm run tauri:dev
 
 The desktop dev shell loads Vite from `http://127.0.0.1:1420/`, matching the loopback host used by `npm run dev`. Vite ignores the local `musicbee-library.tsv` export, `AlbumCovers/` archive, `CSV/` album chart folder, `CSV_SINGLES/` singles chart folder, and `MusicBrainz/` cache folder during development so large library data cannot stall the dev server watcher. If the Tauri window opens but stays blank, make sure port `1420` is free and restart `npm run tauri:dev`.
 
-## Luna Natural-language Search and Charts
+## Luna Search, Charts, and Current-view Questions
 
-Search and Charts include an Ask Luna panel powered by the exact `gpt-5.6-luna` model. A request such as `Top AOR albums from 1984 under 45 minutes` is translated into the app's existing typed filters (`Genres: AOR`, `Year: 1984`, `Minutes max: 45`) and Album Score descending sort. The desktop app validates that structured plan and runs the resulting query against local SQLite. Album rows, track rows, database files, saved searches, and library statistics are never sent to OpenAI.
+Search and Charts include an Ask Luna filter panel powered by the exact `gpt-5.6-luna` model. A request such as `Top AOR albums from 1984 under 45 minutes` is translated into the app's existing typed filters (`Genres: AOR`, `Year: 1984`, `Minutes max: 45`) and Album Score descending sort. The desktop app validates that structured plan and runs the resulting query against local SQLite. Filter compilation sends no album or track rows to OpenAI.
 
 Bounded numeric requests are supported as typed ranges. For example, `Albums from artists who died between 1985 and 1989` activates the artist-death filter and applies `Died year: 1985–1989` before searching locally.
 
 Unrated and random requests are also explicit local operations. For example, `10 random albums from 1989 that I haven't rated yet` applies `Missing: Album rating`, `Year: 1989`, and the Random sort; SQLite selects the random sample locally.
 
+Search and Charts also include **Ask about this view**. Questions such as `Which artists appear most often?`, `How many are unrated?`, or `What stands out about these albums?` operate on a snapshot of the active filters. Luna must call one strict `inspect_current_view` tool; the desktop app then executes only validated local SQLite operations. A question can request one to three compact inspections: an exact overview, up to 20 grouped values, and/or up to 20 named albums or tracks. File paths, filenames, database files, covers, saved objects, the complete result set, and arbitrary SQL are never sent. Album, track, and artist names are sent only when the user explicitly asks a question whose answer needs a bounded named list.
+
+Each current-view answer reports the number of matching rows, local analyses, names shared, and combined token usage. Questions are stateless rather than an accumulating chat history, which keeps context and cost bounded. The two-step tool flow normally makes two paid API requests: one to choose the local inspection and one to answer from its compact result.
+
 Configure the OpenAI key in **Settings → Luna & OpenAI**. The desktop backend stores it as a generic credential in Windows Credential Manager and returns only configured/source status to the frontend. The key is not part of `AppSettings`, SQLite, browser storage, logs, exports, or database backups. Settings can test the connection and remove or replace the stored credential without displaying the existing key.
 
 For temporary local development, a repo-root `.env` file containing `OPENAI_API_KEY=...` is supported by debug builds only. Secure Settings storage takes precedence over that fallback. `.env` and `.env.*` are gitignored, while `.env.example` remains allowed; `npm run security:check` enforces those rules. Production builds do not load the project `.env` file.
 
-Each Ask Luna result shows input, cached-input, and output token usage when the API returns it. Requests use Structured Outputs, low reasoning effort, a small output limit, `store: false`, and a fixed schema instead of passing the database as context. Each query and Settings connection test makes a small paid API request.
+Each Ask Luna result shows input, cached-input, and output token usage when the API returns it. Requests use strict schemas, low reasoning effort, bounded outputs, and `store: false` instead of passing the database as context. Filter compilation and Settings connection tests each make a small paid API request; current-view questions use the bounded two-request tool flow described above.
 
 The import screen defaults to `musicbee-library.tsv`, `AlbumCovers`, `CSV`, and `CSV_SINGLES`. Use Save paths after editing those fields to persist custom source locations across app restarts; SQLite schema version 20 stores those Imports workspace paths, app-owned MusicBrainz artist origin-country and artist-info tables, the Origin Country flag display preference, and the portable unconfigured overlay-sync default. Relative paths are resolved from the app process directory and its parent, so repo-root source folders work during local development. MusicBee TSV quote characters are treated as literal tag text during import, matching plain TSV exports where titles can contain unpaired quotes. Date-like MusicBee `Year` and `Release Year` values such as `2019-06-28` are normalized to `2019` during import. The TSV, local `AlbumCovers/` archive, local `CSV/` chart folder, local `CSV_SINGLES/` chart folder, and local `MusicBrainz/` cache folder are intentionally ignored by git.
 
@@ -110,7 +114,7 @@ npm run security:check
 - Vitest, React Testing Library, jest-dom, and jsdom cover browse request serialization, saved search/chart compatibility normalization, settings defaults, workspace shortcuts/top reset, and MusicBrainz review-state rendering.
 - Search, Artists, and Settings have focused workspace presentation boundaries; shared state remains in `App.tsx`, with no global state library.
 - `backend.ts` dispatches through separate Tauri-client, web-preview, and normalization modules.
-- `src-tauri/src/ai.rs` owns OpenAI calls, strict query-plan validation, debug-only environment fallback, and Windows Credential Manager access; the frontend never receives the key.
+- `src-tauri/src/ai.rs` owns OpenAI calls, strict query-plan and current-view tool validation, debug-only environment fallback, and Windows Credential Manager access; the frontend never receives the key.
 - Rust database migrations, settings, and backup/restore behavior live under `src-tauri/src/db/`.
 - The remaining oversized modules are `App.tsx`, `src/backend/webPreview.ts`, `src-tauri/src/db.rs`, `src-tauri/src/musicbrainz.rs`, and `src/styles.css`. Recommended next slices are Search query/results panels, individual Settings panels, Artists MusicBrainz panels, browse/saved/export SQL, Music Tools SQL, statistics/discovery SQL, and feature-scoped CSS.
 

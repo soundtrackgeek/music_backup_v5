@@ -87,6 +87,8 @@ import type {
   AiCompileRequest,
   AiCompiledQuery,
   AiConnectionTest,
+  AiCurrentViewAnswer,
+  AiCurrentViewQuestion,
   AiKeyStatus,
   ArtistListRequest,
   ArtistListResponse,
@@ -382,6 +384,46 @@ export async function compileNaturalLanguageQuery(input: AiCompileRequest) {
   }
 
   return invoke<AiCompiledQuery>("compile_natural_language_query", { input });
+}
+
+export async function askCurrentView(input: AiCurrentViewQuestion) {
+  if (!isTauriRuntime()) {
+    const preview = await searchLibrary({
+      ...input.request,
+      offset: 0,
+      limit: Math.min(input.request.limit, 20),
+    });
+    const artistCounts = new Map<string, number>();
+    for (const row of preview.rows) {
+      const artist =
+        (input.request.view === "tracks"
+          ? row.displayArtist || row.albumArtistDisplay
+          : row.albumArtistDisplay) || "Unknown";
+      artistCounts.set(artist, (artistCounts.get(artist) ?? 0) + 1);
+    }
+    const topArtist = [...artistCounts.entries()].sort(
+      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+    )[0];
+    const noun = input.request.view === "tracks" ? "tracks" : "albums";
+    const artistSummary = topArtist
+      ? ` The most frequent artist in the inspected preview rows is ${topArtist[0]} (${topArtist[1]}).`
+      : "";
+    return {
+      answer: `This filtered view contains ${preview.total.toLocaleString()} ${noun}.${artistSummary}`,
+      view: input.request.view,
+      matchingRows: preview.total,
+      analysisCount: 2,
+      namedRowsShared: 0,
+      model: "gpt-5.6-luna",
+      usage: {
+        inputTokens: null,
+        cachedInputTokens: null,
+        outputTokens: null,
+      },
+    } satisfies AiCurrentViewAnswer;
+  }
+
+  return invoke<AiCurrentViewAnswer>("ask_current_view", { input });
 }
 
 export async function getMusicBrainzCacheStatus(cachePath?: string) {
