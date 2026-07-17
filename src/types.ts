@@ -642,11 +642,13 @@ export type AiSnapshotContent =
       kind: "search";
       prompt: string;
       result: AiCompiledQuery;
+      answer?: AiCurrentViewAnswer | null;
     }
   | {
       kind: "chart";
       prompt: string;
       result: AiCompiledQuery;
+      answer?: AiCurrentViewAnswer | null;
     }
   | {
       kind: "searchAnswer";
@@ -1226,6 +1228,7 @@ export type ChartConfig = {
 
 export type AiCompiledQuery = {
   target: AiQueryTarget;
+  queryIntent?: "filter" | "answer";
   summary: string;
   request: BrowseRequest;
   chartConfig: ChartConfig | null;

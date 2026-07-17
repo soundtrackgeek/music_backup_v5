@@ -129,18 +129,37 @@ export function compiledQueryMarkdown(
   prompt: string,
   result: AiCompiledQuery,
   snapshot?: AiSnapshot,
+  answer?: AiCurrentViewAnswer | null,
 ) {
+  const answerSection = answer
+    ? [
+        "## Answer",
+        "",
+        answer.answer,
+        "",
+        "## Local inspection",
+        "",
+        `- Matching rows: ${answer.matchingRows.toLocaleString()}`,
+        `- Local analyses: ${answer.analysisCount.toLocaleString()}`,
+        `- Named rows shared: ${answer.namedRowsShared.toLocaleString()}`,
+        `- Answer model: ${answer.model}`,
+        usageLines(answer.usage),
+        "",
+      ]
+    : [];
   return finish([
-    `# Luna ${result.target === "chart" ? "Chart" : "Search"}`,
+    `# Luna ${result.target === "chart" ? "Chart" : "Search"}${answer ? " Answer" : ""}`,
     "",
     "## Request",
     "",
     quote(prompt),
     "",
-    "## Luna result",
+    ...answerSection,
+    `## ${answer ? "How Luna scoped the local query" : "Luna result"}`,
     "",
     result.summary,
     "",
+    `- Intent: ${result.queryIntent ?? "filter"}`,
     `- Target: ${result.target}`,
     `- View: ${result.request.view}`,
     `- Model: ${result.model}`,
@@ -158,6 +177,8 @@ export function compiledQueryReadableMarkdown(
   prompt: string,
   result: AiCompiledQuery,
   snapshot?: AiSnapshot,
+  answer?: AiCurrentViewAnswer | null,
+  restored = true,
 ) {
   const chartLines = result.chartConfig
     ? [
@@ -172,13 +193,27 @@ export function compiledQueryReadableMarkdown(
     : [];
 
   return finish([
-    `# Restored Luna ${result.target === "chart" ? "Chart" : "Search"}`,
+    `# ${restored ? "Restored " : ""}Luna ${result.target === "chart" ? "Chart" : "Search"}${answer ? " Answer" : ""}`,
     "",
     "## Original request",
     "",
     quote(prompt),
     "",
-    "## Luna interpretation",
+    ...(answer
+      ? [
+          "## Answer",
+          "",
+          answer.answer,
+          "",
+          "## Local inspection",
+          "",
+          `- **Matching rows:** ${answer.matchingRows.toLocaleString()}`,
+          `- **Local analyses:** ${answer.analysisCount.toLocaleString()}`,
+          `- **Named rows shared:** ${answer.namedRowsShared.toLocaleString()}`,
+          "",
+        ]
+      : []),
+    `## ${answer ? "How Luna scoped the local query" : "Luna interpretation"}`,
     "",
     result.summary,
     "",

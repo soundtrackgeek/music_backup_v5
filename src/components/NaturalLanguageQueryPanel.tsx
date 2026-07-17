@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Sparkles } from "lucide-react";
 
 import {
+  askCurrentView,
   compileNaturalLanguageQuery,
   deleteAiSnapshot,
   listAiSnapshots,
@@ -9,6 +10,7 @@ import {
 } from "../backend";
 import type {
   AiCompiledQuery,
+  AiCurrentViewAnswer,
   AiQueryTarget,
   AiSnapshot,
   AiUsage,
@@ -53,8 +55,10 @@ export function NaturalLanguageQueryPanel({
 }: NaturalLanguageQueryPanelProps) {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isAnswering, setIsAnswering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [compiled, setCompiled] = useState<AiCompiledQuery | null>(null);
+  const [answer, setAnswer] = useState<AiCurrentViewAnswer | null>(null);
   const [snapshots, setSnapshots] = useState<AiSnapshot[]>([]);
   const [activeSnapshotId, setActiveSnapshotId] = useState<number | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
@@ -84,26 +88,60 @@ export function NaturalLanguageQueryPanel({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!prompt.trim() || isLoading) return;
+    const submittedPrompt = prompt.trim();
     setIsLoading(true);
+    setIsAnswering(false);
     setError(null);
+    setAnswer(null);
     try {
       const result = await compileNaturalLanguageQuery({
-        prompt: prompt.trim(),
+        prompt: submittedPrompt,
         target,
         currentView,
       });
       setCompiled(result);
-      setResultPrompt(prompt.trim());
+      setResultPrompt(submittedPrompt);
       setResultSource("live");
       setActiveSnapshotId(null);
       onApply(result);
+
+      let localAnswer: AiCurrentViewAnswer | null = null;
+      if (result.queryIntent === "answer") {
+        setIsAnswering(true);
+        try {
+          localAnswer = await askCurrentView({
+            question: submittedPrompt,
+            request: result.request,
+          });
+          setAnswer(localAnswer);
+        } catch (askError) {
+          setError(
+            `The local filters were applied, but Luna could not finish the answer: ${
+              askError instanceof Error ? askError.message : String(askError)
+            }`,
+          );
+        } finally {
+          setIsAnswering(false);
+        }
+      }
+
       try {
         const saved = await saveAiSnapshot({
-          title: snapshotTitle(prompt),
+          title: snapshotTitle(submittedPrompt),
           content:
             target === "chart"
-              ? { kind: "chart", prompt: prompt.trim(), result }
-              : { kind: "search", prompt: prompt.trim(), result },
+              ? {
+                  kind: "chart",
+                  prompt: submittedPrompt,
+                  result,
+                  answer: localAnswer,
+                }
+              : {
+                  kind: "search",
+                  prompt: submittedPrompt,
+                  result,
+                  answer: localAnswer,
+                },
         });
         setSnapshots((previous) => [
           saved,
@@ -126,6 +164,7 @@ export function NaturalLanguageQueryPanel({
       );
     } finally {
       setIsLoading(false);
+      setIsAnswering(false);
     }
   }
 
@@ -142,6 +181,7 @@ export function NaturalLanguageQueryPanel({
     setPrompt(snapshot.content.prompt);
     setResultPrompt(snapshot.content.prompt);
     setCompiled(snapshot.content.result);
+    setAnswer(snapshot.content.answer ?? null);
     setResultSource("snapshot");
     setActiveSnapshotId(snapshot.id);
     setError(null);
@@ -175,8 +215,8 @@ export function NaturalLanguageQueryPanel({
         <div>
           <h2>Ask Luna</h2>
           <p>
-            Luna creates filters; the app searches your SQLite library locally.
-            No library rows are sent.
+            Luna creates local filters and can answer questions from bounded
+            SQLite summaries. No library rows are sent.
           </p>
         </div>
       </div>
@@ -196,7 +236,15 @@ export function NaturalLanguageQueryPanel({
           disabled={isLoading || !prompt.trim()}
         >
           <Sparkles size={16} />
-          <span>{isLoading ? "Translating" : target === "chart" ? "Build chart" : "Search"}</span>
+          <span>
+            {isAnswering
+              ? "Answering"
+              : isLoading
+                ? "Translating"
+                : target === "chart"
+                  ? "Build chart"
+                  : "Search"}
+          </span>
         </button>
       </form>
 
@@ -208,8 +256,12 @@ export function NaturalLanguageQueryPanel({
               {resultSource === "snapshot"
                 ? "Restored"
                 : activeSnapshotId != null
-                  ? "Applied · saved"
-                  : "Applied"}
+                  ? answer
+                    ? "Answered · saved"
+                    : "Applied · saved"
+                  : answer
+                    ? "Answered"
+                    : "Applied"}
             </strong>
             <span>{compiled.summary}</span>
             {usage ? <small>{usage}</small> : null}
@@ -223,14 +275,17 @@ export function NaturalLanguageQueryPanel({
               resultPrompt,
               compiled,
               activeSnapshot,
+              answer,
             )}
           />
-          {resultSource === "snapshot" ? (
+          {answer || resultSource === "snapshot" ? (
             <AiSnapshotReadablePreview
               markdown={compiledQueryReadableMarkdown(
                 resultPrompt,
                 compiled,
                 activeSnapshot,
+                answer,
+                resultSource === "snapshot",
               )}
             />
           ) : null}
@@ -242,7 +297,7 @@ export function NaturalLanguageQueryPanel({
       <AiSnapshotHistory
         snapshots={snapshots}
         activeSnapshotId={activeSnapshotId}
-        description="Reopen compiled filters without another Luna call. Results use your current library."
+        description="Reopen exact answers and compiled filters without another Luna call. Filters still use your current library."
         emptyMessage="Your next Luna query will be saved here automatically."
         getCategoryLabel={querySnapshotCategory}
         onOpen={openSnapshot}

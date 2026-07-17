@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.62.0] - 2026-07-17
+### Added
+- Added direct answer intent to Search and Charts Ask Luna, so count, comparison, total, average, summary, and similar questions automatically apply their local cohort filters and run the bounded current-view answer flow in one submission.
+- Added combined Search/Chart snapshots and Markdown exports that retain the exact direct answer alongside its original prompt, compiled local request, model usage, and recorded library state.
+- Added deterministic, interaction, persistence, and opt-in live Luna coverage for multi-part Billboard rating-progress questions.
+
+### Fixed
+- Opened direct Ask Luna answers immediately instead of showing only `Applied · saved` until the new snapshot was clicked.
+- Kept comparison fields out of the cohort filters, preventing a question about fully rated versus remaining albums from filtering away the unfinished group.
+- Defined `left to rate` and `left to finish` as partially rated plus unrated albums, so Luna reports the requested combined remainder instead of only its interpretation or separate components.
+
+### Changed
+- Search and Chart query plans now explicitly distinguish filter intent from answer intent while remaining backward-compatible with existing saved snapshots.
+- Bumped synchronized app metadata to `0.62.0`.
+
 ## [0.61.0] - 2026-07-17
 ### Added
 - Added a readable in-app document when reopening Ask Luna Search and Chart snapshots, including the original request, interpretation, active filters, applied view/sort limits, chart setup, and recorded library state.

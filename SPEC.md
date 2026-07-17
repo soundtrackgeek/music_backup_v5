@@ -3,7 +3,7 @@
 Last updated: 2026-07-17
 Status: Living product and implementation contract
 Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, an aggregate-only Statistics Library analyst, a reviewable local Playlist Builder, verified outside-library artist/album/song Discovery, and global context-aware Music Research with cited web search are implemented through Luna-generated typed recipes/function calls, bounded external tools, and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
-Current package version: 0.61.0
+Current package version: 0.62.0
 SQLite schema version: 23
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -51,8 +51,8 @@ Core principles:
 
 | Workspace | Status | Purpose |
 | --- | --- | --- |
-| Search | Implemented | Primary album and track browsing, composable filters, Ask Luna natural-language filter creation and bounded current-view questions, saved searches, and exports. |
-| Charts | Implemented | Built-in and saved ranked album views with Ask Luna natural-language chart creation and bounded current-view questions plus table, compact list, and cover grid modes. |
+| Search | Implemented | Primary album and track browsing, composable filters, Ask Luna natural-language filter creation and direct bounded answers, current-view questions, saved searches, and exports. |
+| Charts | Implemented | Built-in and saved ranked album views with Ask Luna natural-language chart creation and direct bounded answers, current-view questions, table, compact list, and cover grid modes. |
 | Discovery | Implemented | Verified outside-library artist/album/song discovery plus exploration dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions. |
 | Playlists | Implemented | Luna-planned, SQLite-selected track playlists with year/rating/loved metadata, review/reorder/remove, exact local saved copies, and M3U8 export. |
 | Statistics | Implemented | Aggregate-only Luna Library analyst plus library health, rating progress, metadata coverage, import history, time shape, duration, concentration, and outlier dashboards. |
@@ -322,7 +322,7 @@ Core files:
 
 AI boundary:
 
-- Filter compilation sends only the user's request, target workspace, current album/track view, fixed planner instructions, and a strict query-plan schema with separate text, list, missing-field, numeric, numeric-range, and boolean condition groups so field vocabularies and required numeric values cannot be omitted.
+- Query planning sends only the user's request, target workspace, current album/track view, fixed planner instructions, and a strict query-plan schema with explicit filter/answer intent plus separate text, list, missing-field, numeric, numeric-range, and boolean condition groups so field vocabularies and required numeric values cannot be omitted. Answer intent keeps comparison dimensions outside the cohort filters.
 - Search supports a typed Random sort. Luna selects that mode, while SQLite performs `RANDOM()` ordering locally; unrated phrases map to the existing missing-rating filter.
 - Current-view questions send the question and album/track view first, then require exactly one strict function call containing one to three validated overview/group/list requests. The active `BrowseRequest` and SQLite database stay inside the app.
 - The local current-view tool can return exact aggregate summaries, no more than 20 groups, and no more than 20 named rows. It excludes paths, filenames, covers, saved objects, and arbitrary columns; named metadata leaves the machine only after the user's explicit Ask action.
@@ -331,7 +331,7 @@ AI boundary:
 - Global Music Research sends the current workspace plus the displayed selected album, artist, or genre label/subtitle only after the user submits a question. The selected local row identifier remains inside the app and is used only if Luna requests the strict local inspection tool.
 - The selected-context inspector returns exact summary counts and no more than 20 track names for one selected album or 20 album names for one selected artist/genre. It excludes file paths, filenames, covers, saved objects, arbitrary columns, unrelated rows, and the database itself.
 - Search and Charts always open global Music Research in general mode, independently of their integrated query/filter and current-view assistants. Web-supported claims retain HTTPS citations, and the active conversation is bounded and reset when the workspace or selected entity changes.
-- Successful Search/Chart compilations, current-view answers, Library analyst reports, and Music Research conversations save automatically as typed local SQLite snapshots containing the prompt, exact AI output, creation time, and source library import/count state. Current-view answer snapshots also retain their filtered request; research snapshots retain their exact selected context, citations, usage, and latest five exchanges. Reopening never calls OpenAI; query snapshots reapply filters to the current library, while answer, analyst, and research snapshots preserve the exact historical output.
+- Successful Search/Chart queries, current-view answers, Library analyst reports, and Music Research conversations save automatically as typed local SQLite snapshots containing the prompt, exact AI output, creation time, and source library import/count state. A direct Search/Chart answer is stored with its compiled local request; current-view answer snapshots also retain their filtered request, and research snapshots retain their exact selected context, citations, usage, and latest five exchanges. Reopening never calls OpenAI; query snapshots reapply filters to the current library, while their bundled answer and other answer/analyst/research snapshots preserve the exact historical output.
 - All user-facing AI result panels export a self-contained UTF-8 Markdown document. Exports include the relevant prompt, answer/report/plan, evidence and citations, model/token metadata, and recorded library state for reopened snapshots or saved items, while excluding the OpenAI key and local audio paths.
 - Every successful file export automatically copies its absolute destination path to the Windows clipboard through a write-only capability. The UI confirms `Path copied`, shows the compact filename instead of an obscured full path, retains the full path as a tooltip, and provides a retry button if clipboard writing is unavailable.
 - Music Research renders GitHub-flavored Markdown with raw HTML disabled, remote images suppressed, and clickable answer links restricted to HTTPS URLs.
@@ -568,12 +568,12 @@ Expected next backend modularization:
 
 ### Phase 25: Natural-language Search and Charts
 
-- Search and Charts include Ask Luna prompt panels that compile natural language into existing `BrowseRequest` and `ChartConfig` payloads.
+- Search and Charts include Ask Luna prompt panels that compile natural language into existing `BrowseRequest` and `ChartConfig` payloads. Filter intent applies the local view; answer intent applies the cohort and automatically runs the bounded current-view tool flow so the exact result opens after one submission.
 - The model has no database context or direct database tool. Rust validates the structured plan, then the app's existing local search command executes it against SQLite.
 - Settings stores the OpenAI key in Windows Credential Manager and exposes only configured/source/model status to the frontend.
 - Debug builds can use an ignored `OPENAI_API_KEY` environment or `.env` fallback; production builds do not load the project `.env` file.
-- Query summaries and input/cached/output token usage remain visible and generated filters stay editable before anything is saved.
-- SQLite schema version 21 keeps an automatic local Snapshot history for successful Search/Chart compilations, current-view answers, and Library analyst reports. Users can reopen or delete entries; snapshots are part of normal database backups and never contain the OpenAI key. Reopened Search/Chart compilations render a readable in-app snapshot of the original request, Luna interpretation, active local filters, applied view/sort limits, chart setup, and recorded library state while still reapplying the compiled request to the current library.
+- Query summaries and input/cached/output token usage remain visible and generated filters stay editable before anything is saved. Direct Search/Chart questions use one planner request plus the existing two-request bounded tool-and-answer flow.
+- SQLite schema version 21 keeps an automatic local Snapshot history for successful Search/Chart queries, current-view answers, and Library analyst reports. Users can reopen or delete entries; snapshots are part of normal database backups and never contain the OpenAI key. Reopened Search/Chart queries render a readable in-app snapshot of the original request, bundled direct answer when present, Luna interpretation, active local filters, applied view/sort limits, chart setup, and recorded library state while still reapplying the compiled request to the current library.
 - Playlist Builder sends Luna only the natural-language request and receives a strict track-filter recipe with a strategy, target, and repeat caps. SQLite owns candidate search and selection; raw library rows and file paths never enter model context.
 - SQLite schema version 22 stores explicitly saved exact playlist order, the validated recipe, and its source library state. Saved playlists reopen without Luna and export as UTF-8 M3U8 files.
 - Discovery sends Luna only a natural-language outside-library request and receives a strict artist/album/song recipe. One bounded MusicBrainz search supplies attributed candidates, then local SQLite excludes owned identities without exporting library rows or owned-name lists.
@@ -992,6 +992,12 @@ Implemented in version `0.61.0`:
 
 - Reopening a saved Ask Luna Search or Chart compilation now displays a readable in-app snapshot containing the request, interpretation, active filters, applied view/sort limits, chart setup, and recorded library state in addition to restoring the live local result view.
 - Every file export automatically copies its absolute destination path to the Windows clipboard using write-only permission. Export confirmations keep the filename readable, explicitly report `Path copied`, and offer a copy retry without turning a successful export into a failure when clipboard access is unavailable.
+
+Implemented in version `0.62.0`:
+
+- Ask Luna query plans distinguish filter intent from direct answer intent. Count, comparison, total, average, summary, and similar questions automatically apply their cohort filters and run the bounded current-view answer flow after one submission.
+- Comparison dimensions remain outside the cohort filters. Rating-progress questions therefore retain fully rated, partially rated, and unrated groups; `left to rate`/`left to finish` reports partially rated plus unrated as one combined remainder.
+- Direct Search/Chart answers open immediately and are saved with their compiled local request in the same backward-compatible snapshot and Markdown export. Reopening restores the exact answer without another Luna call.
 
 Candidate prompts:
 

@@ -4733,15 +4733,35 @@ fn validate_ai_snapshot_kind(kind: &str) -> Result<()> {
 
 fn validate_ai_snapshot_content(content: &AiSnapshotContent) -> Result<()> {
     let (prompt, prompt_limit) = match content {
-        AiSnapshotContent::Search { prompt, result } => {
+        AiSnapshotContent::Search {
+            prompt,
+            result,
+            answer,
+        } => {
             if result.target != "search" || result.chart_config.is_some() {
                 bail!("The saved Luna search payload is inconsistent")
             }
+            if answer
+                .as_ref()
+                .is_some_and(|saved_answer| saved_answer.view != result.request.view)
+            {
+                bail!("The saved Luna search answer payload is inconsistent")
+            }
             (prompt, 2_000)
         }
-        AiSnapshotContent::Chart { prompt, result } => {
+        AiSnapshotContent::Chart {
+            prompt,
+            result,
+            answer,
+        } => {
             if result.target != "chart" || result.chart_config.is_none() {
                 bail!("The saved Luna chart payload is inconsistent")
+            }
+            if answer
+                .as_ref()
+                .is_some_and(|saved_answer| saved_answer.view != result.request.view)
+            {
+                bail!("The saved Luna chart answer payload is inconsistent")
             }
             (prompt, 2_000)
         }
@@ -12551,6 +12571,7 @@ mod tests {
         .expect("complete test import run");
         let result = crate::ai::AiCompiledQuery {
             target: "search".to_string(),
+            query_intent: "filter".to_string(),
             summary: "Synthpop albums from 1987.".to_string(),
             request: BrowseRequest::default(),
             chart_config: None,
@@ -12569,6 +12590,19 @@ mod tests {
                 content: AiSnapshotContent::Search {
                     prompt: "Synthpop albums from 1987".to_string(),
                     result,
+                    answer: Some(crate::ai::AiCurrentViewAnswer {
+                        answer: "One matching album is fully rated.".to_string(),
+                        view: "albums".to_string(),
+                        matching_rows: 1,
+                        analysis_count: 1,
+                        named_rows_shared: 0,
+                        model: "gpt-5.6-luna".to_string(),
+                        usage: crate::ai::AiUsage {
+                            input_tokens: Some(300),
+                            cached_input_tokens: Some(0),
+                            output_tokens: Some(40),
+                        },
+                    }),
                 },
             },
         )
@@ -12583,9 +12617,17 @@ mod tests {
         assert_eq!(saved.library_album_count, 1);
         assert_eq!(saved.library_track_count, 10);
         match &saved.content {
-            AiSnapshotContent::Search { prompt, result } => {
+            AiSnapshotContent::Search {
+                prompt,
+                result,
+                answer,
+            } => {
                 assert_eq!(prompt, "Synthpop albums from 1987");
                 assert_eq!(result.summary, "Synthpop albums from 1987.");
+                assert_eq!(
+                    answer.as_ref().map(|value| value.answer.as_str()),
+                    Some("One matching album is fully rated.")
+                );
             }
             _ => panic!("expected a search snapshot"),
         }
