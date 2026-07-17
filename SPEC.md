@@ -1,9 +1,9 @@
 # Music Library Living Specification and Roadmap
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 Status: Living product and implementation contract
 Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, an aggregate-only Statistics Library analyst, a reviewable local Playlist Builder, and verified outside-library artist/album/song Discovery are implemented through Luna-generated typed recipes/function calls, bounded MusicBrainz search, and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
-Current package version: 0.58.1
+Current package version: 0.58.2
 SQLite schema version: 23
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -963,6 +963,11 @@ Implemented in version `0.58.0`:
 - Luna receives only the request and returns a strict recipe. The desktop app makes one bounded MusicBrainz search (maximum 100 candidates), spaces request starts by at least 1.1 seconds, attributes each result, and locally excludes owned artists by MBID/name, albums by release-group MBID or artist/title, and songs by artist/title.
 - The result can be named and saved explicitly with its exact order, MusicBrainz evidence, Luna recipe, timestamp, and library import/count state in SQLite schema version 23. Reopening or deleting a saved list requires no OpenAI or MusicBrainz request.
 - External links remain restricted to HTTPS `musicbrainz.org` artist, release-group, and recording pages. Requests can return fewer results than requested; the UI discloses this instead of inventing candidates.
+
+Implemented in version `0.58.2`:
+
+- Playlist track recipes may order local candidates by their album's effective rating. `Discover unrated deep cuts from highly rated albums` therefore compiles to missing track rating, album rating descending, and discovery selection instead of being rejected as an unsupported track sort.
+- The playlist response schema exposes only locally supported track sort fields, preventing Luna from returning other album-only ordering fields that SQLite cannot execute for track candidates.
 
 Candidate prompts:
 

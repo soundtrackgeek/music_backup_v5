@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.58.2] - 2026-07-17
+### Fixed
+- Allowed Playlist Builder track candidates to sort by their album's effective rating, so requests such as `Discover unrated deep cuts from highly rated albums` no longer fail validation.
+- Restricted the strict playlist response schema to executable track sort fields and added deterministic plus opt-in live coverage for the reported request.
+- Included the rejected sort field in validation errors to make any future planner-contract mismatch diagnosable without exposing library data.
+
+### Changed
+- Bumped synchronized app metadata to `0.58.2`.
+
 ## [0.58.1] - 2026-07-16
 ### Added
 - Added track year, numeric rating when available, and a loved-heart indicator to every Playlist Builder draft and reopened saved playlist.
