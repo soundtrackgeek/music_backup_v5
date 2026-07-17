@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.59.0] - 2026-07-17
+### Added
+- Added a fixed global Luna button that stays visible in the top-right corner whether the details sidebar is open or hidden and opens a compact Music Research conversation from every workspace.
+- Added selected-album, selected-artist, and selected-genre context with contextual starter questions; Search and Charts intentionally open in general-research mode instead of inheriting their separate Ask Luna state.
+- Added Responses API web search with visible HTTPS citations plus a strict local `inspect_selected_library_context` tool that can share only a selected entity's summary and at most 20 relevant track or album names.
+- Added bounded in-memory follow-up history, automatic conversation reset when the workspace or selection changes, explicit clear/close controls, and token, web-search, and local-inspection disclosures.
+- Added frontend, Rust contract, SQLite privacy-boundary, opt-in live Luna, and rendered collapsed-sidebar coverage for Music Research.
+
+### Changed
+- Reserved top-right workspace space when the details sidebar is hidden so the fixed Luna and sidebar controls remain accessible without covering page actions.
+- Bumped synchronized app metadata to `0.59.0`.
+
 ## [0.58.2] - 2026-07-17
 ### Fixed
 - Allowed Playlist Builder track candidates to sort by their album's effective rating, so requests such as `Discover unrated deep cuts from highly rated albums` no longer fail validation.

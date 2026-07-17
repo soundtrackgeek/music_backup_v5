@@ -95,6 +95,8 @@ import type {
   AiKeyStatus,
   AiLibraryAnalysis,
   AiLibraryAnalysisRequest,
+  AiMusicResearchAnswer,
+  AiMusicResearchRequest,
   AiSnapshot,
   AiSnapshotKind,
   AiPlaylist,
@@ -191,6 +193,27 @@ export async function openExternalUrl(url: string) {
 
   const normalizedUrl = parsedUrl.toString();
 
+  if (!isTauriRuntime()) {
+    window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  await openUrl(normalizedUrl);
+}
+
+export async function openResearchSourceUrl(url: string) {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error("Invalid research source URL.");
+  }
+
+  if (parsedUrl.protocol !== "https:") {
+    throw new Error("Research sources must use HTTPS.");
+  }
+
+  const normalizedUrl = parsedUrl.toString();
   if (!isTauriRuntime()) {
     window.open(normalizedUrl, "_blank", "noopener,noreferrer");
     return;
@@ -447,6 +470,33 @@ export async function askCurrentView(input: AiCurrentViewQuestion) {
   }
 
   return invoke<AiCurrentViewAnswer>("ask_current_view", { input });
+}
+
+export async function researchMusic(input: AiMusicResearchRequest) {
+  if (!isTauriRuntime()) {
+    const context = input.context.selectedLabel
+      ? `${input.context.selectedLabel}${input.context.selectedSubtitle ? ` — ${input.context.selectedSubtitle}` : ""}`
+      : "the wider music question";
+    return {
+      answer: `Here is a preview research answer about ${context}. In the desktop app, Luna can search the web and, when relevant, inspect a small bounded slice of the selected local album, artist, or genre. Your question was: “${input.question.trim()}”`,
+      sources: [
+        {
+          title: "OpenAI web search documentation",
+          url: "https://developers.openai.com/api/docs/guides/tools-web-search",
+        },
+      ],
+      model: "gpt-5.6-luna",
+      usage: {
+        inputTokens: null,
+        cachedInputTokens: null,
+        outputTokens: null,
+      },
+      usedWebSearch: true,
+      localInspectionCount: input.context.selectedEntityId ? 1 : 0,
+    } satisfies AiMusicResearchAnswer;
+  }
+
+  return invoke<AiMusicResearchAnswer>("research_music", { input });
 }
 
 export async function analyzeLibrary(input: AiLibraryAnalysisRequest) {

@@ -196,7 +196,7 @@ button {
 }
 
 .right-sidebar-hidden .workspace {
-  padding-right: 72px;
+  padding-right: 120px;
 }
 
 .left-sidebar-hidden .app-update-banner {
@@ -221,6 +221,19 @@ button {
 .right-sidebar-toggle {
   top: 24px;
   right: 18px;
+}
+
+.music-research-trigger {
+  position: fixed;
+  z-index: 45;
+  top: 24px;
+  right: 66px;
+}
+
+.music-research-trigger.active {
+  border-color: #369b90;
+  color: #087168;
+  background: #e6f5f1;
 }
 
 .workspace {
@@ -6415,6 +6428,385 @@ button {
   .rank-metric {
     justify-items: start;
     grid-column: 2;
+  }
+}
+
+/* Global Luna music research */
+.music-research-panel {
+  position: fixed;
+  z-index: 70;
+  top: 76px;
+  right: 18px;
+  display: grid;
+  grid-template-rows: auto auto minmax(120px, 1fr) auto auto;
+  width: min(540px, calc(100vw - 36px));
+  max-height: calc(100vh - 94px);
+  overflow: hidden;
+  border: 1px solid #c7d8d3;
+  border-radius: 15px;
+  color: #17211f;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 72px rgba(20, 42, 36, 0.24);
+  backdrop-filter: blur(18px);
+}
+
+.music-research-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 16px 16px 12px;
+}
+
+.music-research-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #bcd5cf;
+  border-radius: 10px;
+  color: #0b756d;
+  background: #e8f5f2;
+}
+
+.music-research-header > div:nth-child(2) > span {
+  display: block;
+  color: #168277;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 15px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.music-research-header h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 23px;
+}
+
+.music-research-header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.music-research-context {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 0 16px 12px;
+  border: 1px solid #d7e3df;
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: #f4f8f6;
+}
+
+.music-research-context > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #0d766e;
+  background: #e2f2ee;
+}
+
+.music-research-context strong,
+.music-research-context small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-research-context strong {
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.music-research-context small {
+  color: #687670;
+  font-size: 10px;
+  line-height: 15px;
+  text-transform: capitalize;
+}
+
+.music-research-conversation {
+  min-height: 0;
+  overflow-y: auto;
+  border-block: 1px solid #e1e9e6;
+  padding: 14px 16px;
+  background: #fbfcfc;
+  scrollbar-width: thin;
+}
+
+.music-research-intro > p {
+  margin: 0 0 12px;
+  color: #53615c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.music-research-prompts {
+  display: grid;
+  gap: 7px;
+}
+
+.music-research-prompts button {
+  border: 1px solid #d3e1dd;
+  border-radius: 9px;
+  padding: 9px 11px;
+  color: #28413a;
+  background: #ffffff;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.music-research-prompts button:hover,
+.music-research-prompts button:focus-visible {
+  border-color: #86bbb1;
+  background: #eef8f5;
+}
+
+.music-research-exchange + .music-research-exchange {
+  margin-top: 16px;
+}
+
+.music-research-user-message {
+  width: fit-content;
+  max-width: 88%;
+  margin: 0 0 8px auto;
+  border-radius: 12px 12px 3px 12px;
+  padding: 8px 11px;
+  color: #f5fffd;
+  background: #147d73;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.music-research-answer {
+  border: 1px solid #d7e3df;
+  border-radius: 3px 12px 12px 12px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.music-research-answer > p {
+  margin: 0;
+  color: #27342f;
+  font-size: 12px;
+  line-height: 19px;
+  white-space: pre-wrap;
+}
+
+.music-research-sources {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  border-top: 1px solid #e4ebe8;
+  padding-top: 10px;
+}
+
+.music-research-sources > span {
+  color: #74817c;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.music-research-sources button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 6px;
+  padding: 5px 7px;
+  color: #176e66;
+  background: #f0f7f5;
+  font-size: 10px;
+  line-height: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.music-research-sources button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-research-answer footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 10px;
+  color: #7b8883;
+  font-size: 9px;
+  line-height: 14px;
+}
+
+.music-research-answer footer span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.music-research-thinking {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #39736a;
+  padding: 7px 2px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.music-research-thinking svg {
+  animation: music-research-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes music-research-pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+}
+
+.music-research-error {
+  margin: 10px 16px 0;
+}
+
+.music-research-form {
+  display: grid;
+  gap: 9px;
+  padding: 12px 16px 15px;
+}
+
+.music-research-form textarea {
+  width: 100%;
+  min-height: 64px;
+  max-height: 150px;
+  resize: vertical;
+  border: 1px solid #cbdad5;
+  border-radius: 9px;
+  padding: 9px 10px;
+  color: #17211f;
+  background: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.music-research-form textarea:focus {
+  outline: 2px solid rgba(24, 145, 133, 0.18);
+  border-color: #62a99f;
+}
+
+.music-research-form > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.music-research-form small {
+  max-width: 340px;
+  color: #78857f;
+  font-size: 9px;
+  line-height: 13px;
+}
+
+:root[data-theme="dark"] .music-research-panel {
+  border-color: #38504a;
+  color: #ecf5f2;
+  background: rgba(18, 27, 24, 0.98);
+  box-shadow: 0 28px 78px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="dark"] .music-research-mark {
+  border-color: #3f645b;
+  color: #93e5d9;
+  background: #18372f;
+}
+
+:root[data-theme="dark"] .music-research-context {
+  border-color: #344842;
+  background: #17231f;
+}
+
+:root[data-theme="dark"] .music-research-context > span {
+  color: #8ee4d8;
+  background: #1b3932;
+}
+
+:root[data-theme="dark"] .music-research-context small,
+:root[data-theme="dark"] .music-research-intro > p,
+:root[data-theme="dark"] .music-research-answer footer,
+:root[data-theme="dark"] .music-research-form small {
+  color: #95a59f;
+}
+
+:root[data-theme="dark"] .music-research-conversation {
+  border-color: #2e3d38;
+  background: #111815;
+}
+
+:root[data-theme="dark"] .music-research-prompts button,
+:root[data-theme="dark"] .music-research-answer {
+  border-color: #33463f;
+  color: #dce9e5;
+  background: #18211e;
+}
+
+:root[data-theme="dark"] .music-research-prompts button:hover,
+:root[data-theme="dark"] .music-research-prompts button:focus-visible {
+  border-color: #4e8a7f;
+  background: #1b302a;
+}
+
+:root[data-theme="dark"] .music-research-answer > p {
+  color: #dce9e5;
+}
+
+:root[data-theme="dark"] .music-research-sources {
+  border-color: #304039;
+}
+
+:root[data-theme="dark"] .music-research-sources button {
+  color: #8edbd0;
+  background: #1b2e29;
+}
+
+:root[data-theme="dark"] .music-research-form textarea {
+  border-color: #3b5049;
+  color: #e7f0ed;
+  background: #111815;
+}
+
+@media (max-width: 640px) {
+  .music-research-trigger {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+  }
+
+  .music-research-panel {
+    top: 64px;
+    right: 10px;
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 74px);
+  }
+
+  .music-research-form small {
+    display: none;
+  }
+
+  .music-research-form > div {
+    justify-content: flex-end;
   }
 }
 

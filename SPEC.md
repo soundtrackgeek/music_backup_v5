@@ -2,8 +2,8 @@
 
 Last updated: 2026-07-17
 Status: Living product and implementation contract
-Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, an aggregate-only Statistics Library analyst, a reviewable local Playlist Builder, and verified outside-library artist/album/song Discovery are implemented through Luna-generated typed recipes/function calls, bounded MusicBrainz search, and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
-Current package version: 0.58.2
+Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, an aggregate-only Statistics Library analyst, a reviewable local Playlist Builder, verified outside-library artist/album/song Discovery, and global context-aware Music Research with cited web search are implemented through Luna-generated typed recipes/function calls, bounded external tools, and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
+Current package version: 0.59.0
 SQLite schema version: 23
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -318,7 +318,7 @@ Core files:
 - `src-tauri/src/musicbrainz_sync.rs`: Two-way sync for app-owned MusicBrainz overlay rows through a shared SQLite database, including tombstone handling and local sync-log recording.
 - `src-tauri/src/importer.rs`: MusicBee TSV parsing, normalization, import run handling, album aggregation, backup retention, and rating event capture.
 - `src-tauri/src/covers.rs`: cover image import, relinking, embedded-art extraction, and local image serving.
-- `src-tauri/src/ai.rs`: Windows Credential Manager access, debug-only environment fallback, OpenAI Responses calls, strict Structured Outputs/function-call validation, conversion to local browse/chart requests, bounded current-view tool orchestration, and typed Library analyst reports.
+- `src-tauri/src/ai.rs`: Windows Credential Manager access, debug-only environment fallback, OpenAI Responses calls, strict Structured Outputs/function-call validation, conversion to local browse/chart requests, bounded current-view and selected-entity tool orchestration, cited web research, and typed Library analyst reports.
 
 AI boundary:
 
@@ -328,6 +328,9 @@ AI boundary:
 - The local current-view tool can return exact aggregate summaries, no more than 20 groups, and no more than 20 named rows. It excludes paths, filenames, covers, saved objects, and arbitrary columns; named metadata leaves the machine only after the user's explicit Ask action.
 - Library analyst sends only the selected lens and optional focus first, then requires exactly one strict `inspect_library_profile` call containing one to four validated aggregate sections. SQLite reuses the existing Statistics calculations and returns only bounded overview, rating-progress, catalog-shape, taste-signal, metadata-health, and recent-change points.
 - Library analyst never sends album, track, or artist names, raw rows, file/source paths, filenames, covers, saved objects, or arbitrary SQL results. Genre labels, decades, fixed metadata fields, rating buckets, and timestamps may leave the machine only after the user's explicit Analyze action; the UI reports the section count, aggregate-point count, and combined token usage.
+- Global Music Research sends the current workspace plus the displayed selected album, artist, or genre label/subtitle only after the user submits a question. The selected local row identifier remains inside the app and is used only if Luna requests the strict local inspection tool.
+- The selected-context inspector returns exact summary counts and no more than 20 track names for one selected album or 20 album names for one selected artist/genre. It excludes file paths, filenames, covers, saved objects, arbitrary columns, unrelated rows, and the database itself.
+- Search and Charts always open global Music Research in general mode, independently of their integrated query/filter and current-view assistants. Web-supported claims retain HTTPS citations, and conversation history is bounded in memory and reset when the workspace or selected entity changes.
 - Successful Search/Chart compilations, current-view answers, and Library analyst reports save automatically as typed local SQLite snapshots containing the prompt, exact AI output, creation time, and source library import/count state. Current-view answer snapshots also retain their filtered request. Reopening never calls OpenAI; query snapshots reapply filters to the current library, while answer and analyst snapshots preserve the exact historical output.
 - Never send the database, full result sets, unbounded raw rows, file paths, filenames, covers, saved objects, unrelated statistics payloads, or the OpenAI key as model context.
 - Validate every model-produced field, operator, numeric range, sort, limit, target, and chart metric before executing the existing local SQLite search tool.
@@ -918,7 +921,7 @@ Constraints:
 
 Expected outcome:
 
-- AI extends the implemented natural-language Search and Charts foundation into bounded questions about the current filtered view and reviewable local playlists, followed later by recommendations.
+- AI extends the implemented natural-language Search and Charts foundation into bounded questions about the current filtered view, reviewable local playlists, outside-library discovery, and general music research that can use the selected page entity as a clue.
 
 Implemented in version `0.54.0`:
 
@@ -969,12 +972,21 @@ Implemented in version `0.58.2`:
 - Playlist track recipes may order local candidates by their album's effective rating. `Discover unrated deep cuts from highly rated albums` therefore compiles to missing track rating, album rating descending, and discovery selection instead of being rejected as an unsupported track sort.
 - The playlist response schema exposes only locally supported track sort fields, preventing Luna from returning other album-only ordering fields that SQLite cannot execute for track candidates.
 
+Implemented in version `0.59.0`:
+
+- A fixed sparkle button remains visible in the top-right app shell independently of the right details sidebar and opens a compact Music Research panel from every workspace.
+- Albums, Artists, and Genres attach the currently selected entity as an explicit context clue. Search and Charts deliberately use general mode so their integrated Ask Luna state cannot silently become research context.
+- Luna can use cited web search and, only when the question needs the user's collection, one strict local inspection of the selected entity. SQLite shares bounded summary data plus at most 20 track or album names and never shares paths, filenames, covers, unrelated rows, saved objects, or the database.
+- Up to five completed exchanges remain in memory for follow-up questions, no more than eight validated turns are sent, and changing the workspace or selection clears the conversation. Answers disclose web/local tool use and token usage; research is not saved automatically as a snapshot.
+
 Candidate prompts:
 
 - "Which artists appear most often in these results?"
 - "How many of these albums are unrated, and what is their average length?"
 - "Build a playlist from loved tracks in underexplored genres."
 - "Explain why these albums rank highly without sending the full library."
+- "What changed stylistically on this selected album compared with the previous one?"
+- "Which highly rated albums in this selected genre should I revisit before exploring its early history?"
 
 Constraints:
 

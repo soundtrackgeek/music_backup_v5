@@ -161,6 +161,22 @@ async fn ask_current_view(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn research_music(
+    app: AppHandle,
+    input: ai::AiMusicResearchRequest,
+) -> Result<ai::AiMusicResearchAnswer, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ai::research_music(input, |context, inspection| {
+            db::inspect_music_research_context_for_app(&app, context, inspection)
+        })
+    })
+    .await
+    .map_err(|error| format!("Music research task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn analyze_library(
     app: AppHandle,
     input: ai::AiLibraryAnalysisRequest,
@@ -788,6 +804,7 @@ pub fn run() {
             test_openai_connection,
             compile_natural_language_query,
             ask_current_view,
+            research_music,
             analyze_library,
             list_ai_snapshots,
             save_ai_snapshot,

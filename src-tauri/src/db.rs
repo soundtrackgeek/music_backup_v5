@@ -1,6 +1,7 @@
 use crate::ai::{
-    AiPlaylist, AiPlaylistPlan, AiPlaylistTrack, AiSnapshot, AiSnapshotContent,
-    ExportPlaylistRequest, LibraryProfileRequest, LibraryProfileResult, SaveAiSnapshotRequest,
+    AiMusicResearchContext, AiPlaylist, AiPlaylistPlan, AiPlaylistTrack, AiSnapshot,
+    AiSnapshotContent, ExportPlaylistRequest, LibraryProfileRequest, LibraryProfileResult,
+    MusicResearchInspectionRequest, MusicResearchInspectionResult, SaveAiSnapshotRequest,
     SavePlaylistRequest, SavedPlaylist, ViewInspectionItem, ViewInspectionRequest,
     ViewInspectionResult,
 };
@@ -25,6 +26,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, Utc};
 use rusqlite::{params, params_from_iter, types::Value, Connection, OpenFlags, OptionalExtension};
 use rust_xlsxwriter::{Format, Workbook};
+use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
@@ -3960,6 +3962,17 @@ pub fn inspect_current_view_for_app(
     let (conn, _) = open(app)?;
     ensure_search_indexes(&conn)?;
     inspect_current_view(&conn, request, inspection)
+}
+
+#[cfg(not(test))]
+pub fn inspect_music_research_context_for_app(
+    app: &AppHandle,
+    context: &AiMusicResearchContext,
+    inspection: &MusicResearchInspectionRequest,
+) -> Result<MusicResearchInspectionResult> {
+    let (conn, _) = open(app)?;
+    ensure_search_indexes(&conn)?;
+    inspect_music_research_context(&conn, context, inspection)
 }
 
 #[cfg(not(test))]
@@ -8989,6 +9002,284 @@ fn bounded_view_text(value: Option<&str>) -> Option<String> {
         .map(|value| value.chars().take(160).collect())
 }
 
+fn inspect_music_research_context(
+    conn: &Connection,
+    context: &AiMusicResearchContext,
+    inspection: &MusicResearchInspectionRequest,
+) -> Result<MusicResearchInspectionResult> {
+    let entity_type = context
+        .selected_entity_type
+        .as_deref()
+        .context("No album, artist, or genre is selected for local inspection.")?;
+    let entity_id = context
+        .selected_entity_id
+        .as_deref()
+        .context("The selected local music context has no ID.")?;
+    let label = context
+        .selected_label
+        .as_deref()
+        .context("The selected local music context has no label.")?;
+    let limit = inspection.limit.clamp(1, 20);
+    let ordering = match inspection.ordering.as_str() {
+        "chronology" | "rating" | "score" | "loved" => inspection.ordering.as_str(),
+        _ => bail!("Luna requested an unsupported local-library research ordering."),
+    };
+
+    let (summary, mut request, item_kind) = match entity_type {
+        "album" => {
+            let summary = research_album_summary(conn, entity_id)?;
+            let mut request = BrowseRequest {
+                view: "tracks".to_string(),
+                limit,
+                ..BrowseRequest::default()
+            };
+            request.filters.album_ids = vec![entity_id.to_string()];
+            request.sort = BrowseSort {
+                field: match ordering {
+                    "chronology" => "trackNumber",
+                    _ => "trackRating",
+                }
+                .to_string(),
+                direction: if ordering == "chronology" {
+                    "asc"
+                } else {
+                    "desc"
+                }
+                .to_string(),
+            };
+            (summary, request, "tracks")
+        }
+        "artist" => {
+            let summary = research_artist_summary(conn, entity_id)?;
+            let mut request = BrowseRequest {
+                view: "albums".to_string(),
+                limit,
+                ..BrowseRequest::default()
+            };
+            request.filters.artist_keys = vec![entity_id.to_string()];
+            request.sort = research_album_ordering(ordering);
+            (summary, request, "albums")
+        }
+        "genre" => {
+            let summary = research_genre_summary(conn, entity_id)?;
+            let mut request = BrowseRequest {
+                view: "albums".to_string(),
+                limit,
+                ..BrowseRequest::default()
+            };
+            request.filters.genres = vec![entity_id.to_string()];
+            request.sort = research_album_ordering(ordering);
+            (summary, request, "albums")
+        }
+        _ => bail!("Unsupported selected local music context."),
+    };
+    request.offset = 0;
+    let response = search_library(conn, request, 20)?;
+    let items = response
+        .rows
+        .iter()
+        .map(|row| research_context_item(row, item_kind))
+        .collect::<Vec<_>>();
+    let named_rows_shared = items.len();
+
+    Ok(MusicResearchInspectionResult {
+        payload: json!({
+            "selected": {
+                "type": entity_type,
+                "label": label,
+                "subtitle": context.selected_subtitle
+            },
+            "summary": summary,
+            "itemKind": item_kind,
+            "matchingItemCount": response.total,
+            "returnedItemCount": named_rows_shared,
+            "ordering": ordering,
+            "items": items
+        }),
+        named_rows_shared,
+    })
+}
+
+fn research_album_ordering(ordering: &str) -> BrowseSort {
+    BrowseSort {
+        field: match ordering {
+            "chronology" => "year",
+            "rating" => "albumRating",
+            "loved" => "lovedTracks",
+            _ => "albumScore",
+        }
+        .to_string(),
+        direction: if ordering == "chronology" {
+            "asc"
+        } else {
+            "desc"
+        }
+        .to_string(),
+    }
+}
+
+fn research_album_summary(conn: &Connection, album_id: &str) -> Result<serde_json::Value> {
+    let row = conn
+        .query_row(
+            "
+            SELECT album, album_artist_display, canonical_genre, year, total_tracks,
+                   rated_tracks, rating_completeness, total_seconds, loved_tracks,
+                   effective_album_rating, album_score
+            FROM albums
+            WHERE id = ?1
+            ",
+            params![album_id],
+            |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<i32>>(3)?,
+                    row.get::<_, Option<i64>>(4)?,
+                    row.get::<_, Option<i64>>(5)?,
+                    row.get::<_, Option<f64>>(6)?,
+                    row.get::<_, Option<i64>>(7)?,
+                    row.get::<_, Option<i64>>(8)?,
+                    row.get::<_, Option<i32>>(9)?,
+                    row.get::<_, Option<f64>>(10)?,
+                ))
+            },
+        )
+        .optional()
+        .context("Could not inspect the selected album for music research")?;
+    Ok(match row {
+        Some((
+            album,
+            artist,
+            genre,
+            year,
+            total_tracks,
+            rated_tracks,
+            completeness,
+            total_seconds,
+            loved_tracks,
+            rating,
+            score,
+        )) => json!({
+            "found": true,
+            "album": album,
+            "artist": artist,
+            "genre": genre,
+            "year": year,
+            "trackCount": total_tracks,
+            "ratedTrackCount": rated_tracks,
+            "ratingCompletenessPercent": completeness.map(|value| value * 100.0),
+            "durationMinutes": total_seconds.map(|value| value as f64 / 60.0),
+            "lovedTrackCount": loved_tracks,
+            "albumRating": rating,
+            "albumScore": score
+        }),
+        None => json!({ "found": false }),
+    })
+}
+
+fn research_artist_summary(conn: &Connection, artist_id: &str) -> Result<serde_json::Value> {
+    let artist_key = artist_key_sql("album_artist_display");
+    let sql = format!(
+        "
+        SELECT COUNT(*), COALESCE(SUM(total_tracks), 0), COALESCE(SUM(loved_tracks), 0),
+               MIN(year), MAX(year), AVG(effective_album_rating), AVG(rating_completeness),
+               AVG(album_score)
+        FROM albums
+        WHERE {artist_key} = ?1
+        "
+    );
+    let (albums, tracks, loved, first_year, last_year, rating, completeness, score) = conn
+        .query_row(&sql, params![artist_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, Option<i32>>(3)?,
+                row.get::<_, Option<i32>>(4)?,
+                row.get::<_, Option<f64>>(5)?,
+                row.get::<_, Option<f64>>(6)?,
+                row.get::<_, Option<f64>>(7)?,
+            ))
+        })
+        .context("Could not inspect the selected artist for music research")?;
+    Ok(json!({
+        "albumCount": albums,
+        "trackCount": tracks,
+        "lovedTrackCount": loved,
+        "firstAlbumYear": first_year,
+        "lastAlbumYear": last_year,
+        "averageAlbumRating": rating,
+        "averageRatingCompletenessPercent": completeness.map(|value| value * 100.0),
+        "averageAlbumScore": score
+    }))
+}
+
+fn research_genre_summary(conn: &Connection, genre_id: &str) -> Result<serde_json::Value> {
+    let (albums, tracks, loved, first_year, last_year, rating, completeness, score) = conn
+        .query_row(
+            "
+            SELECT COUNT(*), COALESCE(SUM(total_tracks), 0), COALESCE(SUM(loved_tracks), 0),
+                   MIN(year), MAX(year), AVG(effective_album_rating), AVG(rating_completeness),
+                   AVG(album_score)
+            FROM albums
+            WHERE COALESCE(NULLIF(TRIM(LOWER(genre_normalized)), ''), 'unknown') = ?1
+            ",
+            params![genre_id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, Option<i32>>(3)?,
+                    row.get::<_, Option<i32>>(4)?,
+                    row.get::<_, Option<f64>>(5)?,
+                    row.get::<_, Option<f64>>(6)?,
+                    row.get::<_, Option<f64>>(7)?,
+                ))
+            },
+        )
+        .context("Could not inspect the selected genre for music research")?;
+    Ok(json!({
+        "albumCount": albums,
+        "trackCount": tracks,
+        "lovedTrackCount": loved,
+        "firstAlbumYear": first_year,
+        "lastAlbumYear": last_year,
+        "averageAlbumRating": rating,
+        "averageRatingCompletenessPercent": completeness.map(|value| value * 100.0),
+        "averageAlbumScore": score
+    }))
+}
+
+fn research_context_item(row: &BrowseRow, item_kind: &str) -> serde_json::Value {
+    if item_kind == "tracks" {
+        return json!({
+            "title": bounded_view_text(row.title.as_deref()),
+            "artist": bounded_view_text(
+                row.display_artist.as_deref().or(row.album_artist_display.as_deref())
+            ),
+            "trackNumber": row.track_number,
+            "durationSeconds": row.track_seconds,
+            "rating": row.normalized_rating,
+            "loved": row.love.as_deref().is_some_and(|value| value.trim().eq_ignore_ascii_case("L"))
+        });
+    }
+
+    json!({
+        "album": bounded_view_text(row.album.as_deref()),
+        "artist": bounded_view_text(row.album_artist_display.as_deref()),
+        "genre": bounded_view_text(row.canonical_genre.as_deref()),
+        "year": row.year,
+        "trackCount": row.total_tracks,
+        "durationMinutes": row.total_seconds.map(|value| value as f64 / 60.0),
+        "albumRating": row.effective_album_rating,
+        "ratingCompletenessPercent": row.rating_completeness.map(|value| value * 100.0),
+        "lovedTrackCount": row.loved_tracks,
+        "albumScore": row.album_score
+    })
+}
+
 fn search_library(
     conn: &Connection,
     request: BrowseRequest,
@@ -10851,6 +11142,35 @@ mod tests {
 
         assert_eq!(response.total, 1);
         assert_eq!(response.rows[0].album.as_deref(), Some("Actually"));
+    }
+
+    #[test]
+    fn research_context_inspection_returns_only_bounded_safe_genre_rows() {
+        let conn = seeded_connection();
+        let context = AiMusicResearchContext {
+            workspace: "Genres".to_string(),
+            selected_entity_type: Some("genre".to_string()),
+            selected_entity_id: Some("synthpop".to_string()),
+            selected_label: Some("Synthpop".to_string()),
+            selected_subtitle: Some("1 album in your library".to_string()),
+        };
+        let result = inspect_music_research_context(
+            &conn,
+            &context,
+            &MusicResearchInspectionRequest {
+                ordering: "score".to_string(),
+                limit: 20,
+            },
+        )
+        .expect("inspect selected genre");
+
+        assert_eq!(result.named_rows_shared, 1);
+        assert_eq!(result.payload["summary"]["albumCount"], 1);
+        assert_eq!(result.payload["items"][0]["album"], "Actually");
+        let serialized = result.payload.to_string();
+        assert!(!serialized.contains("filePath"));
+        assert!(!serialized.contains("filename"));
+        assert!(!serialized.contains("D:\\\\Music"));
     }
 
     #[test]

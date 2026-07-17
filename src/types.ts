@@ -537,6 +537,41 @@ export type AiUsage = {
   outputTokens: number | null;
 };
 
+export type AiMusicResearchEntity = "album" | "artist" | "genre";
+
+export type AiMusicResearchContext = {
+  workspace: string;
+  selectedEntityType: AiMusicResearchEntity | null;
+  selectedEntityId: string | null;
+  selectedLabel: string | null;
+  selectedSubtitle: string | null;
+};
+
+export type AiMusicResearchTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type AiMusicResearchRequest = {
+  question: string;
+  context: AiMusicResearchContext;
+  conversation: AiMusicResearchTurn[];
+};
+
+export type AiMusicResearchSource = {
+  title: string;
+  url: string;
+};
+
+export type AiMusicResearchAnswer = {
+  answer: string;
+  sources: AiMusicResearchSource[];
+  model: string;
+  usage: AiUsage;
+  usedWebSearch: boolean;
+  localInspectionCount: number;
+};
+
 export type AiQueryTarget = "search" | "chart";
 
 export type AiCompileRequest = {

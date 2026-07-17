@@ -121,6 +121,7 @@ import {
 } from "./backend";
 import type {
   AppSettings,
+  AiMusicResearchContext,
   ArtistListRequest,
   ArtistListResponse,
   ArtistSummary,
@@ -271,6 +272,7 @@ import { AiSettingsPanel } from "./components/AiSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
 import { LibraryAnalystPanel } from "./components/LibraryAnalystPanel";
 import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPanel";
+import { MusicResearchPanel } from "./components/MusicResearchPanel";
 import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
 import {
   ArtistDetailTabs,
@@ -6192,6 +6194,7 @@ function RatingEventList({ events }: { events: RatingEvent[] }) {
 
 export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
+  const [isMusicResearchOpen, setIsMusicResearchOpen] = useState(false);
   useWorkspaceNavigation(activeSection, setActiveSection);
   const [sourcePath, setSourcePath] = useState(() =>
     createDefaultImportSourcePath(),
@@ -9837,6 +9840,54 @@ export default function App() {
       : appUpdateStatus === "error"
         ? (appUpdateError ?? "Could not check for updates.")
         : appUpdateProgressLabel;
+  const musicResearchContext: AiMusicResearchContext = (() => {
+    if (activeSection === "Albums" && selectedAlbum) {
+      return {
+        workspace: activeSection,
+        selectedEntityType: "album",
+        selectedEntityId: selectedAlbum.albumId,
+        selectedLabel: selectedAlbum.album ?? "Untitled album",
+        selectedSubtitle: [
+          selectedAlbum.albumArtistDisplay,
+          selectedAlbum.year,
+        ]
+          .filter((value) => value != null && value !== "")
+          .join(" · "),
+      };
+    }
+    if (activeSection === "Artists" && selectedArtist) {
+      return {
+        workspace: activeSection,
+        selectedEntityType: "artist",
+        selectedEntityId: selectedArtist.id,
+        selectedLabel: selectedArtist.name,
+        selectedSubtitle: [
+          selectedArtist.topGenre,
+          selectedArtist.firstYear && selectedArtist.lastYear
+            ? `${selectedArtist.firstYear}–${selectedArtist.lastYear}`
+            : null,
+        ]
+          .filter((value) => value != null && value !== "")
+          .join(" · "),
+      };
+    }
+    if (activeSection === "Genres" && selectedGenre) {
+      return {
+        workspace: activeSection,
+        selectedEntityType: "genre",
+        selectedEntityId: selectedGenre.id,
+        selectedLabel: selectedGenre.name,
+        selectedSubtitle: `${formatNumber(selectedGenre.albumCount)} ${selectedGenre.albumCount === 1 ? "album" : "albums"} in your library`,
+      };
+    }
+    return {
+      workspace: activeSection,
+      selectedEntityType: null,
+      selectedEntityId: null,
+      selectedLabel: null,
+      selectedSubtitle: null,
+    };
+  })();
   const leftSidebarClass =
     leftSidebarMode === "iconOnly"
       ? "left-sidebar-icon-only"
@@ -9861,6 +9912,16 @@ export default function App() {
         </button>
       ) : null}
       <button
+        className={`icon-button music-research-trigger${isMusicResearchOpen ? " active" : ""}`}
+        type="button"
+        aria-label="Ask Luna about music"
+        aria-pressed={isMusicResearchOpen}
+        title="Ask Luna about music"
+        onClick={() => setIsMusicResearchOpen((previous) => !previous)}
+      >
+        <Sparkles size={18} />
+      </button>
+      <button
         className="icon-button edge-toggle right-sidebar-toggle"
         type="button"
         aria-label={
@@ -9879,6 +9940,11 @@ export default function App() {
           <ChevronRight size={18} />
         )}
       </button>
+      <MusicResearchPanel
+        isOpen={isMusicResearchOpen}
+        context={musicResearchContext}
+        onClose={() => setIsMusicResearchOpen(false)}
+      />
       <aside
         className="sidebar"
         aria-label="Main navigation"
