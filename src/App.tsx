@@ -270,6 +270,7 @@ import {
 } from "./components/MusicBrainzReviewState";
 import { AiSettingsPanel } from "./components/AiSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
+import { ExportResultStatus } from "./components/ExportResultStatus";
 import { LibraryAnalystPanel } from "./components/LibraryAnalystPanel";
 import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPanel";
 import { MusicResearchPanel } from "./components/MusicResearchPanel";
@@ -2528,13 +2529,7 @@ function AlbumDetailPanel({
           ))}
         </div>
         {exportResult ? (
-          <div className="export-result">
-            <Check size={17} />
-            <span>
-              {formatNumber(exportResult.rowCount)} tracks to{" "}
-              {exportResult.path}
-            </span>
-          </div>
+          <ExportResultStatus result={exportResult} itemLabel="track" />
         ) : null}
       </section>
     </aside>
@@ -3396,13 +3391,7 @@ function MusicBrainzArtistDiscographyPanel({
                   </button>
                 </div>
                 {exportResult ? (
-                  <div className="export-result musicbrainz-export-result">
-                    <Download size={16} />
-                    <span>
-                      {formatNumber(exportResult.rowCount)} albums to{" "}
-                      {exportResult.path}
-                    </span>
-                  </div>
+                  <ExportResultStatus result={exportResult} itemLabel="album" />
                 ) : null}
               </div>
               <MusicBrainzArtistCandidateTable
@@ -3954,13 +3943,7 @@ function ArtistDetailPanel({
           ))}
         </div>
         {exportResult ? (
-          <div className="export-result">
-            <Check size={17} />
-            <span>
-              {formatNumber(exportResult.rowCount)} albums to{" "}
-              {exportResult.path}
-            </span>
-          </div>
+          <ExportResultStatus result={exportResult} itemLabel="album" />
         ) : null}
       </section>
     </aside>
@@ -4225,13 +4208,7 @@ function GenreDetailPanel({
           ))}
         </div>
         {exportResult ? (
-          <div className="export-result">
-            <Check size={17} />
-            <span>
-              {formatNumber(exportResult.rowCount)} albums to{" "}
-              {exportResult.path}
-            </span>
-          </div>
+          <ExportResultStatus result={exportResult} itemLabel="album" />
         ) : null}
       </section>
     </aside>
@@ -4479,12 +4456,7 @@ function MusicToolExportControls({
         ))}
       </div>
       {exportResult ? (
-        <div className="export-result tool-export-result">
-          <Check size={17} />
-          <span>
-            {formatNumber(exportResult.rowCount)} issues to {exportResult.path}
-          </span>
-        </div>
+        <ExportResultStatus result={exportResult} itemLabel="issue" />
       ) : null}
     </div>
   );
@@ -4683,13 +4655,7 @@ function MusicToolDetailPanel({
           ))}
         </div>
         {exportResult ? (
-          <div className="export-result">
-            <Check size={17} />
-            <span>
-              {formatNumber(exportResult.rowCount)} issues to{" "}
-              {exportResult.path}
-            </span>
-          </div>
+          <ExportResultStatus result={exportResult} itemLabel="issue" />
         ) : null}
       </section>
     </aside>
@@ -15501,13 +15467,7 @@ export default function App() {
                 ))}
               </div>
               {chartExportResult ? (
-                <div className="export-result">
-                  <Check size={17} />
-                  <span>
-                    {formatNumber(chartExportResult.rowCount)} rows to{" "}
-                    {chartExportResult.path}
-                  </span>
-                </div>
+                <ExportResultStatus result={chartExportResult} itemLabel="row" />
               ) : null}
             </section>
           </aside>
@@ -15850,13 +15810,7 @@ export default function App() {
                 ))}
               </div>
               {exportResult ? (
-                <div className="export-result">
-                  <Check size={17} />
-                  <span>
-                    {formatNumber(exportResult.rowCount)} rows to{" "}
-                    {exportResult.path}
-                  </span>
-                </div>
+                <ExportResultStatus result={exportResult} itemLabel="row" />
               ) : null}
             </section>
           </aside>

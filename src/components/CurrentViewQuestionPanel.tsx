@@ -64,6 +64,7 @@ export function CurrentViewQuestionPanel({
   const [activeSnapshotId, setActiveSnapshotId] = useState<number | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [resultSource, setResultSource] = useState<"live" | "snapshot">("live");
+  const [resultQuestion, setResultQuestion] = useState("");
   const snapshotKind = context === "chart" ? "chartAnswer" : "searchAnswer";
 
   useEffect(() => {
@@ -97,6 +98,7 @@ export function CurrentViewQuestionPanel({
         request,
       });
       setResult(answer);
+      setResultQuestion(question.trim());
       setResultSource("live");
       setActiveSnapshotId(null);
       try {
@@ -155,6 +157,7 @@ export function CurrentViewQuestionPanel({
       return;
     }
     setQuestion(snapshot.content.prompt);
+    setResultQuestion(snapshot.content.prompt);
     setResult(snapshot.content.result);
     setResultSource("snapshot");
     setActiveSnapshotId(snapshot.id);
@@ -247,9 +250,9 @@ export function CurrentViewQuestionPanel({
             {usage ? <small>{usage}</small> : null}
           </div>
           <AiMarkdownExportButton
-            title={aiMarkdownTitle("Luna current-view answer", question)}
+            title={aiMarkdownTitle("Luna current-view answer", resultQuestion)}
             markdown={currentViewAnswerMarkdown(
-              question,
+              resultQuestion,
               exportRequest,
               result,
               activeSnapshot,

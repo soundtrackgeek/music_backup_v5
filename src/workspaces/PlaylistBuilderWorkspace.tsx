@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from "react";
 import {
   ArrowDown,
   ArrowUp,
-  Check,
   Clock3,
   Download,
   Heart,
@@ -29,6 +28,7 @@ import type {
 } from "../types";
 import { aiMarkdownTitle, playlistMarkdown } from "../aiMarkdownExport";
 import { AiMarkdownExportButton } from "../components/AiMarkdownExportButton";
+import { ExportResultStatus } from "../components/ExportResultStatus";
 
 type PlaylistBuilderWorkspaceProps = {
   isAvailable: boolean;
@@ -446,12 +446,7 @@ export function PlaylistBuilderWorkspace({
                 <span>{playlist.model}</span>
               </footer>
               {exportResult ? (
-                <div className="export-result playlist-export-result" role="status">
-                  <Check size={17} />
-                  <span>
-                    {exportResult.rowCount} tracks exported to {exportResult.path}
-                  </span>
-                </div>
+                <ExportResultStatus result={exportResult} itemLabel="track" />
               ) : null}
             </>
           ) : (

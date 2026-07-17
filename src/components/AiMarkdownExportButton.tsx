@@ -3,6 +3,7 @@ import { Check, Download } from "lucide-react";
 
 import { exportAiMarkdown } from "../backend";
 import type { ExportResult } from "../types";
+import { ExportResultStatus } from "./ExportResultStatus";
 
 type AiMarkdownExportButtonProps = {
   title: string;
@@ -55,10 +56,13 @@ export function AiMarkdownExportButton({
           {isExporting ? "Exporting" : result ? "Exported MD" : "Export Markdown"}
         </span>
       </button>
-      {result && !compact ? (
-        <small role="status" title={result.path}>
-          Saved to {result.path}
-        </small>
+      {result ? (
+        <ExportResultStatus
+          result={result}
+          itemLabel="line"
+          summary="Markdown exported"
+          compact={compact}
+        />
       ) : null}
       {error ? <small className="error-message">{error}</small> : null}
     </div>

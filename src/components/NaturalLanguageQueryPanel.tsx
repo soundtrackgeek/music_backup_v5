@@ -14,9 +14,14 @@ import type {
   AiUsage,
   BrowseView,
 } from "../types";
-import { aiMarkdownTitle, compiledQueryMarkdown } from "../aiMarkdownExport";
+import {
+  aiMarkdownTitle,
+  compiledQueryMarkdown,
+  compiledQueryReadableMarkdown,
+} from "../aiMarkdownExport";
 import { AiSnapshotHistory } from "./AiSnapshotHistory";
 import { AiMarkdownExportButton } from "./AiMarkdownExportButton";
+import { AiSnapshotReadablePreview } from "./AiSnapshotReadablePreview";
 
 type NaturalLanguageQueryPanelProps = {
   target: AiQueryTarget;
@@ -54,6 +59,7 @@ export function NaturalLanguageQueryPanel({
   const [activeSnapshotId, setActiveSnapshotId] = useState<number | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [resultSource, setResultSource] = useState<"live" | "snapshot">("live");
+  const [resultPrompt, setResultPrompt] = useState("");
 
   useEffect(() => {
     let disposed = false;
@@ -87,6 +93,7 @@ export function NaturalLanguageQueryPanel({
         currentView,
       });
       setCompiled(result);
+      setResultPrompt(prompt.trim());
       setResultSource("live");
       setActiveSnapshotId(null);
       onApply(result);
@@ -133,6 +140,7 @@ export function NaturalLanguageQueryPanel({
   function openSnapshot(snapshot: AiSnapshot) {
     if (snapshot.content.kind !== target) return;
     setPrompt(snapshot.content.prompt);
+    setResultPrompt(snapshot.content.prompt);
     setCompiled(snapshot.content.result);
     setResultSource("snapshot");
     setActiveSnapshotId(snapshot.id);
@@ -209,10 +217,23 @@ export function NaturalLanguageQueryPanel({
           <AiMarkdownExportButton
             title={aiMarkdownTitle(
               target === "chart" ? "Luna chart" : "Luna search",
-              prompt,
+              resultPrompt,
             )}
-            markdown={compiledQueryMarkdown(prompt, compiled, activeSnapshot)}
+            markdown={compiledQueryMarkdown(
+              resultPrompt,
+              compiled,
+              activeSnapshot,
+            )}
           />
+          {resultSource === "snapshot" ? (
+            <AiSnapshotReadablePreview
+              markdown={compiledQueryReadableMarkdown(
+                resultPrompt,
+                compiled,
+                activeSnapshot,
+              )}
+            />
+          ) : null}
         </>
       ) : null}
       {snapshotError ? (

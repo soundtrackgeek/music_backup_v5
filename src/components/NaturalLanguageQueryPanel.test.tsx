@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createRequest } from "../app/requests";
+import { createChartConfig, createRequest } from "../app/requests";
 import type { AiCompiledQuery } from "../types";
 import { NaturalLanguageQueryPanel } from "./NaturalLanguageQueryPanel";
 
@@ -137,6 +137,9 @@ describe("NaturalLanguageQueryPanel", () => {
       model: "gpt-5.6-luna",
       usage: { inputTokens: 300, cachedInputTokens: 0, outputTokens: 70 },
     } satisfies AiCompiledQuery;
+    result.request.filters.genres = ["AOR"];
+    result.request.filters.yearFrom = 1984;
+    result.request.filters.yearTo = 1984;
     backend.listAiSnapshots.mockResolvedValueOnce([
       {
         id: 42,
@@ -165,5 +168,77 @@ describe("NaturalLanguageQueryPanel", () => {
     expect(onApply).toHaveBeenCalledWith(result);
     expect(backend.compileNaturalLanguageQuery).not.toHaveBeenCalled();
     expect(screen.getByText("Restored")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Restored Luna Search" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Active local filters" })).toBeInTheDocument();
+    expect(screen.getByText("AOR")).toBeInTheDocument();
+    expect(screen.getAllByText("Saved 1984 AOR search.").length).toBe(2);
+    expect(screen.getByText(/Library albums: 73,128/)).toBeInTheDocument();
+  });
+
+  it("opens a saved chart as a readable in-app snapshot", async () => {
+    const user = userEvent.setup();
+    const request = createRequest("albums");
+    request.filters.originCountryCodes = ["JP"];
+    request.filters.ratingCompletenessMin = 100;
+    request.filters.ratingCompletenessMax = 100;
+    request.sort = { field: "albumScore", direction: "desc" };
+    request.limit = 10;
+    const chartConfig = createChartConfig();
+    chartConfig.request = request;
+    chartConfig.rankingMetric = "albumScore";
+    chartConfig.resultLimit = 10;
+    chartConfig.ratingCompletenessMin = 100;
+    chartConfig.ratingCompletenessMax = 100;
+    const result = {
+      target: "chart",
+      summary: "Top 10 Japanese albums by Album Score with 100% completeness.",
+      request,
+      chartConfig,
+      model: "gpt-5.6-luna",
+      usage: { inputTokens: 1454, cachedInputTokens: 0, outputTokens: 114 },
+    } satisfies AiCompiledQuery;
+    backend.listAiSnapshots.mockResolvedValueOnce([
+      {
+        id: 81,
+        title: "Top 10 complete Japanese albums",
+        content: {
+          kind: "chart",
+          prompt: "Top 10 albums from Japanese artists, only include albums with 100% completeness",
+          result,
+        },
+        libraryImportRunId: 9,
+        libraryImportedAt: "2026-07-16T17:00:00Z",
+        libraryAlbumCount: 73_153,
+        libraryTrackCount: 1_112_143,
+        createdAt: "2026-07-16T17:47:00Z",
+      },
+    ]);
+
+    render(
+      <NaturalLanguageQueryPanel
+        target="chart"
+        currentView="albums"
+        onApply={vi.fn()}
+      />,
+    );
+    await user.click(
+      (await screen.findByText("Top 10 complete Japanese albums", {
+        selector: ".ai-snapshot-list strong",
+      })).closest("button")!,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Restored Luna Chart" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "Top 10 Japanese albums by Album Score with 100% completeness.",
+      ).length,
+    ).toBe(2);
+    expect(screen.getAllByText("Album Score").length).toBeGreaterThan(0);
+    expect(screen.getByText(/100–100%/)).toBeInTheDocument();
+    expect(screen.getByText(/JP/)).toBeInTheDocument();
   });
 });

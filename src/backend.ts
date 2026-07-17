@@ -1,3 +1,5 @@
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+
 import {
   invoke,
   isTauriRuntime,
@@ -170,6 +172,31 @@ import type {
 
 let mockSavedPlaylists: SavedPlaylist[] = [];
 let mockSavedExternalDiscoveries: SavedExternalDiscovery[] = [];
+
+type RawExportResult = Omit<ExportResult, "pathCopied">;
+
+export async function copyTextToClipboard(value: string) {
+  if (!value) return false;
+  try {
+    if (isTauriRuntime()) {
+      await writeText(value);
+    } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+    } else {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function finalizeExport(result: RawExportResult): Promise<ExportResult> {
+  return {
+    ...result,
+    pathCopied: await copyTextToClipboard(result.path),
+  };
+}
 
 export async function openExternalUrl(url: string) {
   let parsedUrl: URL;
@@ -606,7 +633,7 @@ export async function deleteAiSnapshot(id: number) {
 
 export async function exportAiMarkdown(input: AiMarkdownExportRequest) {
   if (!isTauriRuntime()) {
-    return {
+    return finalizeExport({
       path: `C:\\Music Library\\exports\\music-library-ai-${input.title
         .trim()
         .toLowerCase()
@@ -614,10 +641,12 @@ export async function exportAiMarkdown(input: AiMarkdownExportRequest) {
         .replace(/^-|-$/g, "") || "research"}-preview.md`,
       format: "md",
       rowCount: input.markdown.split(/\r?\n/).length,
-    } satisfies ExportResult;
+    } satisfies RawExportResult);
   }
 
-  return invoke<ExportResult>("export_ai_markdown", { input });
+  return finalizeExport(
+    await invoke<RawExportResult>("export_ai_markdown", { input }),
+  );
 }
 
 export async function buildPlaylist(input: AiPlaylistBuildRequest) {
@@ -887,15 +916,17 @@ export async function deleteSavedExternalDiscovery(id: number) {
 
 export async function exportPlaylist(input: ExportPlaylistRequest) {
   if (!isTauriRuntime()) {
-    return {
+    return finalizeExport({
       path: `Preview runtime / ${input.name.trim() || "playlist"}.m3u8`,
       format: "m3u8",
       rowCount: input.playlist.tracks.filter(
         (track) => track.filePath && track.filename,
       ).length,
-    } satisfies ExportResult;
+    } satisfies RawExportResult);
   }
-  return invoke<ExportResult>("export_playlist", { input });
+  return finalizeExport(
+    await invoke<RawExportResult>("export_playlist", { input }),
+  );
 }
 
 export async function getMusicBrainzCacheStatus(cachePath?: string) {
@@ -2123,18 +2154,20 @@ export async function exportSearch(
   exportColumns: string[] = [],
 ) {
   if (!isTauriRuntime()) {
-    return {
+    return finalizeExport({
       path: `Preview runtime export.${format}`,
       format,
       rowCount: mockRows.filter((row) =>
         request.view === "tracks" ? row.trackId !== null : row.trackId === null,
       ).length,
-    } satisfies ExportResult;
+    } satisfies RawExportResult);
   }
 
-  return invoke<ExportResult>("export_search", {
-    input: { request, format, includeCalculated, exportColumns },
-  });
+  return finalizeExport(
+    await invoke<RawExportResult>("export_search", {
+      input: { request, format, includeCalculated, exportColumns },
+    }),
+  );
 }
 
 export async function exportMusicToolIssues(
@@ -2165,16 +2198,18 @@ export async function exportMusicToolIssues(
         .toLowerCase()
         .includes(normalizedSearch);
     }).length;
-    return {
+    return finalizeExport({
       path: `Preview runtime tools export.${format}`,
       format,
       rowCount,
-    } satisfies ExportResult;
+    } satisfies RawExportResult);
   }
 
-  return invoke<ExportResult>("export_music_tool_issues", {
-    input: { request, format },
-  });
+  return finalizeExport(
+    await invoke<RawExportResult>("export_music_tool_issues", {
+      input: { request, format },
+    }),
+  );
 }
 
 export async function exportMusicBrainzArtistReleases(
@@ -2184,16 +2219,18 @@ export async function exportMusicBrainzArtistReleases(
   const visibleRows = request.rows.filter((row) => row.status !== "excluded");
 
   if (!isTauriRuntime()) {
-    return {
+    return finalizeExport({
       path: `Preview runtime MusicBrainz artist export.${format}`,
       format,
       rowCount: visibleRows.length,
-    } satisfies ExportResult;
+    } satisfies RawExportResult);
   }
 
-  return invoke<ExportResult>("export_musicbrainz_artist_releases", {
-    input: { ...request, rows: visibleRows, format },
-  });
+  return finalizeExport(
+    await invoke<RawExportResult>("export_musicbrainz_artist_releases", {
+      input: { ...request, rows: visibleRows, format },
+    }),
+  );
 }
 
 export async function listenToImportProgress(

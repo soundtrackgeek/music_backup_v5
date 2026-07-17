@@ -3,7 +3,7 @@ import remarkGfm from "remark-gfm";
 
 type MusicResearchMarkdownProps = {
   markdown: string;
-  onOpenUrl: (url: string) => void;
+  onOpenUrl?: (url: string) => void;
 };
 
 function isHttpsUrl(value: string | undefined): value is string {
@@ -25,7 +25,7 @@ export default function MusicResearchMarkdown({
       skipHtml
       components={{
         a: ({ href, children }) =>
-          isHttpsUrl(href) ? (
+          isHttpsUrl(href) && onOpenUrl ? (
             <a
               href={href}
               target="_blank"

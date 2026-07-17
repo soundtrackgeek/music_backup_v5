@@ -3,7 +3,7 @@
 Last updated: 2026-07-17
 Status: Living product and implementation contract
 Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, an aggregate-only Statistics Library analyst, a reviewable local Playlist Builder, verified outside-library artist/album/song Discovery, and global context-aware Music Research with cited web search are implemented through Luna-generated typed recipes/function calls, bounded external tools, and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
-Current package version: 0.60.0
+Current package version: 0.61.0
 SQLite schema version: 23
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -333,6 +333,7 @@ AI boundary:
 - Search and Charts always open global Music Research in general mode, independently of their integrated query/filter and current-view assistants. Web-supported claims retain HTTPS citations, and the active conversation is bounded and reset when the workspace or selected entity changes.
 - Successful Search/Chart compilations, current-view answers, Library analyst reports, and Music Research conversations save automatically as typed local SQLite snapshots containing the prompt, exact AI output, creation time, and source library import/count state. Current-view answer snapshots also retain their filtered request; research snapshots retain their exact selected context, citations, usage, and latest five exchanges. Reopening never calls OpenAI; query snapshots reapply filters to the current library, while answer, analyst, and research snapshots preserve the exact historical output.
 - All user-facing AI result panels export a self-contained UTF-8 Markdown document. Exports include the relevant prompt, answer/report/plan, evidence and citations, model/token metadata, and recorded library state for reopened snapshots or saved items, while excluding the OpenAI key and local audio paths.
+- Every successful file export automatically copies its absolute destination path to the Windows clipboard through a write-only capability. The UI confirms `Path copied`, shows the compact filename instead of an obscured full path, retains the full path as a tooltip, and provides a retry button if clipboard writing is unavailable.
 - Music Research renders GitHub-flavored Markdown with raw HTML disabled, remote images suppressed, and clickable answer links restricted to HTTPS URLs.
 - Never send the database, full result sets, unbounded raw rows, file paths, filenames, covers, saved objects, unrelated statistics payloads, or the OpenAI key as model context.
 - Validate every model-produced field, operator, numeric range, sort, limit, target, and chart metric before executing the existing local SQLite search tool.
@@ -572,7 +573,7 @@ Expected next backend modularization:
 - Settings stores the OpenAI key in Windows Credential Manager and exposes only configured/source/model status to the frontend.
 - Debug builds can use an ignored `OPENAI_API_KEY` environment or `.env` fallback; production builds do not load the project `.env` file.
 - Query summaries and input/cached/output token usage remain visible and generated filters stay editable before anything is saved.
-- SQLite schema version 21 keeps an automatic local Snapshot history for successful Search/Chart compilations, current-view answers, and Library analyst reports. Users can reopen or delete entries; snapshots are part of normal database backups and never contain the OpenAI key.
+- SQLite schema version 21 keeps an automatic local Snapshot history for successful Search/Chart compilations, current-view answers, and Library analyst reports. Users can reopen or delete entries; snapshots are part of normal database backups and never contain the OpenAI key. Reopened Search/Chart compilations render a readable in-app snapshot of the original request, Luna interpretation, active local filters, applied view/sort limits, chart setup, and recorded library state while still reapplying the compiled request to the current library.
 - Playlist Builder sends Luna only the natural-language request and receives a strict track-filter recipe with a strategy, target, and repeat caps. SQLite owns candidate search and selection; raw library rows and file paths never enter model context.
 - SQLite schema version 22 stores explicitly saved exact playlist order, the validated recipe, and its source library state. Saved playlists reopen without Luna and export as UTF-8 M3U8 files.
 - Discovery sends Luna only a natural-language outside-library request and receives a strict artist/album/song recipe. One bounded MusicBrainz search supplies attributed candidates, then local SQLite excludes owned identities without exporting library rows or owned-name lists.
@@ -986,6 +987,11 @@ Implemented in version `0.60.0`:
 - Every successful Music Research answer automatically saves its exact selected context, Markdown answer, citations, disclosures, usage, and latest five exchanges in the existing typed local Snapshot history. Reopening or deleting a research snapshot does not call Luna.
 - Music Research answers render safe GitHub-flavored Markdown with raw HTML ignored, remote images suppressed, and answer links restricted to HTTPS.
 - Search/Chart compilation, current-view answers, Library analyst reports, Music Research conversations, Playlist Builder results, and outside-library Discovery results export to self-contained UTF-8 Markdown, including reopened snapshots and saved items without another AI or catalog call.
+
+Implemented in version `0.61.0`:
+
+- Reopening a saved Ask Luna Search or Chart compilation now displays a readable in-app snapshot containing the request, interpretation, active filters, applied view/sort limits, chart setup, and recorded library state in addition to restoring the live local result view.
+- Every file export automatically copies its absolute destination path to the Windows clipboard using write-only permission. Export confirmations keep the filename readable, explicitly report `Path copied`, and offer a copy retry without turning a successful export into a failure when clipboard access is unavailable.
 
 Candidate prompts:
 

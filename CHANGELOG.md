@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.61.0] - 2026-07-17
+### Added
+- Added a readable in-app document when reopening Ask Luna Search and Chart snapshots, including the original request, interpretation, active filters, applied view/sort limits, chart setup, and recorded library state.
+- Added automatic absolute-path copying after every successful file export, with a compact filename, explicit `Path copied` confirmation, and an in-place retry when clipboard writing is unavailable.
+- Added a least-privilege Tauri clipboard integration that can write exported paths but cannot read clipboard contents.
+
+### Changed
+- Export success messages no longer expose long, obscured paths as their primary text; the full path remains available in the tooltip and clipboard.
+- Preserved the exact submitted prompt/question for Search/Chart and current-view Markdown exports even if the visible input is edited afterward.
+- Bumped synchronized app metadata to `0.61.0`.
+
 ## [0.60.0] - 2026-07-17
 ### Added
 - Added automatic local snapshot history for Music Research conversations, including the selected page context, exact Markdown answers, citations, tool disclosures, token usage, and the latest five exchanges.

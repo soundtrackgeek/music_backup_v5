@@ -11,6 +11,7 @@ import type {
 import { MusicResearchPanel } from "./MusicResearchPanel";
 
 const backend = vi.hoisted(() => ({
+  copyTextToClipboard: vi.fn(),
   deleteAiSnapshot: vi.fn(),
   exportAiMarkdown: vi.fn(),
   listAiSnapshots: vi.fn(),
@@ -67,7 +68,9 @@ describe("MusicResearchPanel", () => {
     backend.exportAiMarkdown.mockReset();
     backend.exportAiMarkdown.mockResolvedValue({
       path: "C:\\Music Library\\exports\\luna-research.md",
+      format: "md",
       rowCount: 12,
+      pathCopied: true,
     });
     backend.listAiSnapshots.mockReset();
     backend.listAiSnapshots.mockResolvedValue([]);
@@ -234,7 +237,8 @@ describe("MusicResearchPanel", () => {
         markdown: expect.stringContaining("The exact **saved answer**."),
       }),
     );
-    expect(screen.getByText(/Saved to .*luna-research\.md/)).toBeInTheDocument();
+    expect(screen.getByText("luna-research.md")).toBeInTheDocument();
+    expect(screen.getByText("Path copied")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Show saved research" }));
     await user.click(

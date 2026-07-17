@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AiMarkdownExportButton } from "./AiMarkdownExportButton";
 
 const backend = vi.hoisted(() => ({
+  copyTextToClipboard: vi.fn(),
   exportAiMarkdown: vi.fn(),
 }));
 
@@ -15,7 +16,9 @@ describe("AiMarkdownExportButton", () => {
     backend.exportAiMarkdown.mockReset();
     backend.exportAiMarkdown.mockResolvedValue({
       path: "C:\\Music Library\\exports\\luna-answer.md",
+      format: "md",
       rowCount: 8,
+      pathCopied: true,
     });
   });
 
@@ -36,6 +39,9 @@ describe("AiMarkdownExportButton", () => {
       markdown,
     });
     expect(screen.getByRole("button", { name: "Exported MD" })).toBeInTheDocument();
-    expect(screen.getByText(/Saved to .*luna-answer\.md/)).toBeInTheDocument();
+    expect(screen.getByText("luna-answer.md")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy exported file path again" })).toHaveTextContent(
+      "Path copied",
+    );
   });
 });

@@ -71,6 +71,54 @@ function finish(parts: string[]) {
   return `${parts.filter(Boolean).join("\n").trim()}\n`;
 }
 
+const filterLabels: Record<string, string> = {
+  albumIds: "Albums",
+  artistKeys: "Artists",
+  albumTitle: "Album title",
+  trackTitle: "Track title",
+  albumArtist: "Album artist",
+  displayArtist: "Track artist",
+  filePath: "File path",
+  hasTrackText: "Track text",
+  excludedGenres: "Excluded genres",
+  missingFields: "Missing fields",
+  originCountryCodes: "Artist countries",
+  excludedOriginCountryCodes: "Excluded artist countries",
+  missingOriginCountry: "Missing artist country",
+};
+
+function readableIdentifier(value: string) {
+  const spaced = value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\bIds\b/g, "IDs")
+    .replace(/\bId\b/g, "ID");
+  return `${spaced.charAt(0).toUpperCase()}${spaced.slice(1)}`;
+}
+
+function readableFilterValue(value: unknown) {
+  if (value == null || value === false || value === "") return null;
+  if (Array.isArray(value)) return value.length ? value.join(", ") : null;
+  if (typeof value === "object") {
+    const filter = value as { operator?: string; value?: string };
+    if (!filter.value?.trim()) return null;
+    return `${readableIdentifier(filter.operator ?? "contains").toLowerCase()} “${filter.value.trim()}”`;
+  }
+  return value === true ? "Yes" : String(value);
+}
+
+function readableFilterLines(request: BrowseRequest) {
+  const lines = Object.entries(request.filters).flatMap(([field, value]) => {
+    const readable = readableFilterValue(value);
+    return readable == null
+      ? []
+      : [`- **${filterLabels[field] ?? readableIdentifier(field)}:** ${readable}`];
+  });
+  if (request.searchText.trim()) {
+    lines.unshift(`- **General search:** “${request.searchText.trim()}”`);
+  }
+  return lines.length ? lines : ["- No additional filters"];
+}
+
 export function aiMarkdownTitle(prefix: string, value: string) {
   const normalized = value.trim().replace(/\s+/g, " ");
   const title = normalized ? `${prefix} — ${normalized}` : prefix;
@@ -102,6 +150,50 @@ export function compiledQueryMarkdown(
     result.chartConfig
       ? jsonSection("Compiled chart configuration", result.chartConfig)
       : "",
+    libraryStateSection(snapshot),
+  ]);
+}
+
+export function compiledQueryReadableMarkdown(
+  prompt: string,
+  result: AiCompiledQuery,
+  snapshot?: AiSnapshot,
+) {
+  const chartLines = result.chartConfig
+    ? [
+        "## Chart setup",
+        "",
+        `- **Ranking metric:** ${readableIdentifier(result.chartConfig.rankingMetric)}`,
+        `- **Result limit:** ${result.chartConfig.resultLimit.toLocaleString()}`,
+        `- **Rating completeness:** ${result.chartConfig.ratingCompletenessMin}–${result.chartConfig.ratingCompletenessMax}%`,
+        `- **Layout:** ${readableIdentifier(result.chartConfig.viewMode)}`,
+        "",
+      ]
+    : [];
+
+  return finish([
+    `# Restored Luna ${result.target === "chart" ? "Chart" : "Search"}`,
+    "",
+    "## Original request",
+    "",
+    quote(prompt),
+    "",
+    "## Luna interpretation",
+    "",
+    result.summary,
+    "",
+    "## Active local filters",
+    "",
+    ...readableFilterLines(result.request),
+    "",
+    "## Applied view",
+    "",
+    `- **View:** ${readableIdentifier(result.request.view)}`,
+    `- **Sort:** ${readableIdentifier(result.request.sort.field)}`,
+    `- **Direction:** ${readableIdentifier(result.request.sort.direction)}`,
+    `- **Row limit:** ${result.request.limit.toLocaleString()}`,
+    "",
+    ...chartLines,
     libraryStateSection(snapshot),
   ]);
 }

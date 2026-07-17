@@ -1245,6 +1245,7 @@ export type ExportResult = {
   path: string;
   format: string;
   rowCount: number;
+  pathCopied: boolean;
 };
 
 export type AiMarkdownExportRequest = {
