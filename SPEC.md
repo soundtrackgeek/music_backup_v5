@@ -323,9 +323,11 @@ Core files:
 AI boundary:
 
 - Query planning sends only the user's request, target workspace, current album/track view, fixed planner instructions, and a strict query-plan schema with explicit filter/answer intent plus separate text, list, missing-field, numeric, numeric-range, and boolean condition groups so field vocabularies and required numeric values cannot be omitted. Answer intent keeps comparison dimensions outside the cohort filters.
+- A Search/Chart follow-up sends only the new question plus the immediately preceding question, its complete concise query-scope summary, and its bounded answer. Luna must return a new standalone plan that inherits referenced scope, while SQLite applies the plan locally. The latest five exchanges are saved and exported together; existing one-turn snapshots remain readable.
+- The dedicated `notFullyRated` boolean filter selects rating completeness below 100% without numeric rounding, covering both partially rated and unrated albums.
 - Search supports a typed Random sort. Luna selects that mode, while SQLite performs `RANDOM()` ordering locally; unrated phrases map to the existing missing-rating filter.
 - Current-view questions send the question and album/track view first, then require exactly one strict function call containing one to three validated overview/group/list requests. The active `BrowseRequest` and SQLite database stay inside the app.
-- The local current-view tool can return exact aggregate summaries, no more than 20 groups, and no more than 20 named rows. It excludes paths, filenames, covers, saved objects, and arbitrary columns; named metadata leaves the machine only after the user's explicit Ask action.
+- The local current-view tool can return exact aggregate summaries, no more than 20 groups, and no more than 50 named rows. It excludes paths, filenames, covers, saved objects, and arbitrary columns; named metadata leaves the machine only after the user's explicit Ask action.
 - Library analyst sends only the selected lens and optional focus first, then requires exactly one strict `inspect_library_profile` call containing one to four validated aggregate sections. SQLite reuses the existing Statistics calculations and returns only bounded overview, rating-progress, catalog-shape, taste-signal, metadata-health, and recent-change points.
 - Library analyst never sends album, track, or artist names, raw rows, file/source paths, filenames, covers, saved objects, or arbitrary SQL results. Genre labels, decades, fixed metadata fields, rating buckets, and timestamps may leave the machine only after the user's explicit Analyze action; the UI reports the section count, aggregate-point count, and combined token usage.
 - Global Music Research sends the current workspace plus the displayed selected album, artist, or genre label/subtitle only after the user submits a question. The selected local row identifier remains inside the app and is used only if Luna requests the strict local inspection tool.
@@ -930,7 +932,7 @@ Implemented in version `0.54.0`:
 
 - Search and Charts expose an Ask about this view panel over the active `BrowseRequest` snapshot.
 - Luna uses a strict `inspect_current_view` function call instead of receiving the request or database directly.
-- SQLite can return an exact overview, bounded groups, and/or at most 20 named rows; paths and filenames are excluded.
+- SQLite can return an exact overview, bounded groups, and/or at most 50 named rows; paths and filenames are excluded.
 - Answers are stateless, show matching-row/inspection/name-sharing metadata, and combine token usage across the tool and answer calls.
 
 Implemented in version `0.55.0`:

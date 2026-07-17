@@ -801,6 +801,8 @@ pub struct BrowseFilters {
     #[serde(default)]
     pub rating_completeness_max: Option<f64>,
     #[serde(default)]
+    pub not_fully_rated: bool,
+    #[serde(default)]
     pub loved_tracks_min: Option<i64>,
     #[serde(default)]
     pub loved_tracks_max: Option<i64>,

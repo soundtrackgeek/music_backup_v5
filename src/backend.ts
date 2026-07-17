@@ -465,7 +465,7 @@ export async function askCurrentView(input: AiCurrentViewQuestion) {
     const preview = await searchLibrary({
       ...input.request,
       offset: 0,
-      limit: Math.min(input.request.limit, 20),
+      limit: Math.min(input.request.limit, 50),
     });
     const artistCounts = new Map<string, number>();
     for (const row of preview.rows) {
@@ -1869,6 +1869,7 @@ export async function searchLibrary(request: BrowseRequest) {
           ratingCompleteness >= ratingCompletenessMin) &&
         (ratingCompletenessMax == null ||
           ratingCompleteness <= ratingCompletenessMax) &&
+        (!request.filters.notFullyRated || ratingCompleteness < 1) &&
         matchesMissingFields(row, isTracks, request.filters.missingFields)
       );
     });

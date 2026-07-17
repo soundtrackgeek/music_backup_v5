@@ -579,10 +579,17 @@ export type AiMusicResearchExchange = {
 
 export type AiQueryTarget = "search" | "chart";
 
+export type AiQueryFollowUpContext = {
+  previousPrompt: string;
+  previousSummary: string;
+  previousAnswer: string;
+};
+
 export type AiCompileRequest = {
   prompt: string;
   target: AiQueryTarget;
   currentView?: BrowseView | null;
+  followUp?: AiQueryFollowUpContext | null;
 };
 
 export type AiCurrentViewQuestion = {
@@ -598,6 +605,12 @@ export type AiCurrentViewAnswer = {
   namedRowsShared: number;
   model: string;
   usage: AiUsage;
+};
+
+export type AiQueryExchange = {
+  prompt: string;
+  result: AiCompiledQuery;
+  answer?: AiCurrentViewAnswer | null;
 };
 
 export type AiLibraryLens =
@@ -643,12 +656,14 @@ export type AiSnapshotContent =
       prompt: string;
       result: AiCompiledQuery;
       answer?: AiCurrentViewAnswer | null;
+      exchanges?: AiQueryExchange[];
     }
   | {
       kind: "chart";
       prompt: string;
       result: AiCompiledQuery;
       answer?: AiCurrentViewAnswer | null;
+      exchanges?: AiQueryExchange[];
     }
   | {
       kind: "searchAnswer";
@@ -867,6 +882,7 @@ export type BrowseFilters = {
   trackRatingMax: number | null;
   ratingCompletenessMin: number | null;
   ratingCompletenessMax: number | null;
+  notFullyRated: boolean;
   lovedTracksMin: number | null;
   lovedTracksMax: number | null;
   originCountryCodes: string[];

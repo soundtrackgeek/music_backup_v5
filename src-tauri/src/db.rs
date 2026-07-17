@@ -4737,6 +4737,7 @@ fn validate_ai_snapshot_content(content: &AiSnapshotContent) -> Result<()> {
             prompt,
             result,
             answer,
+            exchanges,
         } => {
             if result.target != "search" || result.chart_config.is_some() {
                 bail!("The saved Luna search payload is inconsistent")
@@ -4747,12 +4748,14 @@ fn validate_ai_snapshot_content(content: &AiSnapshotContent) -> Result<()> {
             {
                 bail!("The saved Luna search answer payload is inconsistent")
             }
+            validate_ai_query_exchanges(exchanges, "search", prompt, result, answer.as_ref())?;
             (prompt, 2_000)
         }
         AiSnapshotContent::Chart {
             prompt,
             result,
             answer,
+            exchanges,
         } => {
             if result.target != "chart" || result.chart_config.is_none() {
                 bail!("The saved Luna chart payload is inconsistent")
@@ -4763,6 +4766,7 @@ fn validate_ai_snapshot_content(content: &AiSnapshotContent) -> Result<()> {
             {
                 bail!("The saved Luna chart answer payload is inconsistent")
             }
+            validate_ai_query_exchanges(exchanges, "chart", prompt, result, answer.as_ref())?;
             (prompt, 2_000)
         }
         AiSnapshotContent::SearchAnswer {
@@ -4839,6 +4843,51 @@ fn validate_ai_snapshot_content(content: &AiSnapshotContent) -> Result<()> {
     }
     if !matches!(content, AiSnapshotContent::LibraryAnalysis { .. }) && prompt.trim().is_empty() {
         bail!("A Luna snapshot requires its original prompt")
+    }
+    Ok(())
+}
+
+fn validate_ai_query_exchanges(
+    exchanges: &[crate::ai::AiQueryExchange],
+    target: &str,
+    latest_prompt: &str,
+    latest_result: &crate::ai::AiCompiledQuery,
+    latest_answer: Option<&crate::ai::AiCurrentViewAnswer>,
+) -> Result<()> {
+    if exchanges.len() > 5 {
+        bail!("A saved Luna query conversation cannot exceed five exchanges")
+    }
+    for exchange in exchanges {
+        if exchange.prompt.trim().is_empty() || exchange.prompt.chars().count() > 2_000 {
+            bail!("A saved Luna query conversation contains an invalid question")
+        }
+        if exchange.result.target != target
+            || (target == "chart") != exchange.result.chart_config.is_some()
+        {
+            bail!("A saved Luna query conversation is inconsistent")
+        }
+        if exchange
+            .answer
+            .as_ref()
+            .is_some_and(|answer| answer.view != exchange.result.request.view)
+        {
+            bail!("A saved Luna query conversation answer is inconsistent")
+        }
+        if exchange.answer.as_ref().is_some_and(|answer| {
+            answer.answer.trim().is_empty() || answer.answer.chars().count() > 12_000
+        }) {
+            bail!("A saved Luna query conversation contains an invalid answer")
+        }
+    }
+    if let Some(last) = exchanges.last() {
+        if last.prompt != latest_prompt
+            || last.result.target != latest_result.target
+            || last.result.summary != latest_result.summary
+            || last.result.request.view != latest_result.request.view
+            || last.answer.is_some() != latest_answer.is_some()
+        {
+            bail!("The latest saved Luna query exchange is inconsistent")
+        }
     }
     Ok(())
 }
@@ -8773,6 +8822,15 @@ fn inspect_current_view(
     if inspection.requests.is_empty() || inspection.requests.len() > 3 {
         bail!("Current-view inspection requires one to three bounded requests.")
     }
+    let requested_named_rows = inspection
+        .requests
+        .iter()
+        .filter(|item| item.operation == "list")
+        .map(|item| item.limit.min(50))
+        .sum::<u32>();
+    if requested_named_rows > 50 {
+        bail!("Current-view inspection cannot request more than 50 named rows in total.")
+    }
 
     let view = normalize_view(&request.view);
     let is_tracks = view == "tracks";
@@ -9031,9 +9089,9 @@ fn current_view_list(
     let is_tracks = normalize_view(&request.view) == "tracks";
     let mut list_request = request.clone();
     list_request.offset = 0;
-    list_request.limit = item.limit.clamp(1, 20);
+    list_request.limit = item.limit.clamp(1, 50);
     list_request.sort = current_view_list_sort(is_tracks, &request.sort, item)?;
-    let response = search_library(conn, list_request, 20)?;
+    let response = search_library(conn, list_request, 50)?;
     let rows = response
         .rows
         .iter()
@@ -9060,7 +9118,7 @@ fn current_view_list(
             "operation": "list",
             "sortBy": item.sort_by,
             "direction": current_view_list_direction(item, &request.sort),
-            "limit": item.limit.clamp(1, 20),
+            "limit": item.limit.clamp(1, 50),
             "rows": rows
         }),
         row_count,
@@ -9863,6 +9921,9 @@ fn build_where_clause(
     if let Some(maximum) = filters.rating_completeness_max {
         conditions.push("a.rating_completeness <= ?".to_string());
         values.push(Value::Real(normalize_percentage(maximum)));
+    }
+    if filters.not_fully_rated {
+        conditions.push("a.rating_completeness < 1.0".to_string());
     }
 
     add_i64_range(
@@ -11348,6 +11409,100 @@ mod tests {
     }
 
     #[test]
+    fn filters_every_album_below_full_rating_completeness() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+            ) VALUES
+                ('mb:partial', 1, 'partial', 'Partially Rated', 'Test Artist',
+                 'Rock', 'rock', 'Test', 1990, 1990, 10, 4, 0.4, 2400, 0, 0, 0.0, 80, 100.0),
+                ('mb:empty', 1, 'empty', 'Entirely Unrated', 'Test Artist',
+                 'Rock', 'rock', 'Test', 1991, 1991, 10, 0, 0.0, 2400, 0, 0, 0.0, NULL, NULL);
+            ",
+        )
+        .expect("insert incomplete albums");
+
+        let mut request = BrowseRequest::default();
+        request.filters.not_fully_rated = true;
+        request.sort = BrowseSort {
+            field: "album".to_string(),
+            direction: "asc".to_string(),
+        };
+        let response = search_library(&conn, request, 50).expect("filter incomplete albums");
+
+        assert_eq!(response.total, 2);
+        let names = response
+            .rows
+            .iter()
+            .filter_map(|row| row.album.as_deref())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["Entirely Unrated", "Partially Rated"]);
+    }
+
+    #[test]
+    fn current_view_named_lists_can_return_more_than_twenty_rows_but_not_more_than_fifty() {
+        let conn = seeded_connection();
+        for index in 0..25 {
+            insert_test_album(
+                &conn,
+                &format!("mb:list-{index}"),
+                "List Artist",
+                &format!("List Album {index:02}"),
+                2000 + index,
+                10,
+            );
+        }
+        let inspection = ViewInspectionRequest {
+            requests: vec![ViewInspectionItem {
+                operation: "list".to_string(),
+                group_by: "artist".to_string(),
+                sort_by: "label".to_string(),
+                direction: "asc".to_string(),
+                limit: 50,
+            }],
+        };
+
+        let result = inspect_current_view(&conn, &BrowseRequest::default(), &inspection)
+            .expect("inspect a bounded named list");
+
+        assert_eq!(result.matching_rows, 26);
+        assert_eq!(result.named_rows_shared, 26);
+        assert_eq!(result.payload["analyses"][0]["limit"], 50);
+        assert_eq!(
+            result.payload["analyses"][0]["rows"]
+                .as_array()
+                .expect("named rows")
+                .len(),
+            26
+        );
+
+        let over_limit = ViewInspectionRequest {
+            requests: vec![
+                ViewInspectionItem {
+                    operation: "list".to_string(),
+                    group_by: "artist".to_string(),
+                    sort_by: "label".to_string(),
+                    direction: "asc".to_string(),
+                    limit: 30,
+                },
+                ViewInspectionItem {
+                    operation: "list".to_string(),
+                    group_by: "artist".to_string(),
+                    sort_by: "year".to_string(),
+                    direction: "asc".to_string(),
+                    limit: 30,
+                },
+            ],
+        };
+        assert!(inspect_current_view(&conn, &BrowseRequest::default(), &over_limit).is_err());
+    }
+
+    #[test]
     fn inspects_the_filtered_view_with_bounded_local_aggregates_and_rows() {
         let conn = seeded_connection();
         conn.execute(
@@ -12582,6 +12737,19 @@ mod tests {
                 output_tokens: Some(55),
             },
         };
+        let answer = crate::ai::AiCurrentViewAnswer {
+            answer: "One matching album is fully rated.".to_string(),
+            view: "albums".to_string(),
+            matching_rows: 1,
+            analysis_count: 1,
+            named_rows_shared: 0,
+            model: "gpt-5.6-luna".to_string(),
+            usage: crate::ai::AiUsage {
+                input_tokens: Some(300),
+                cached_input_tokens: Some(0),
+                output_tokens: Some(40),
+            },
+        };
 
         let saved = save_ai_snapshot(
             &conn,
@@ -12589,20 +12757,13 @@ mod tests {
                 title: "1987 Synthpop".to_string(),
                 content: AiSnapshotContent::Search {
                     prompt: "Synthpop albums from 1987".to_string(),
-                    result,
-                    answer: Some(crate::ai::AiCurrentViewAnswer {
-                        answer: "One matching album is fully rated.".to_string(),
-                        view: "albums".to_string(),
-                        matching_rows: 1,
-                        analysis_count: 1,
-                        named_rows_shared: 0,
-                        model: "gpt-5.6-luna".to_string(),
-                        usage: crate::ai::AiUsage {
-                            input_tokens: Some(300),
-                            cached_input_tokens: Some(0),
-                            output_tokens: Some(40),
-                        },
-                    }),
+                    result: result.clone(),
+                    answer: Some(answer.clone()),
+                    exchanges: vec![crate::ai::AiQueryExchange {
+                        prompt: "Synthpop albums from 1987".to_string(),
+                        result,
+                        answer: Some(answer),
+                    }],
                 },
             },
         )
@@ -12621,6 +12782,7 @@ mod tests {
                 prompt,
                 result,
                 answer,
+                exchanges,
             } => {
                 assert_eq!(prompt, "Synthpop albums from 1987");
                 assert_eq!(result.summary, "Synthpop albums from 1987.");
@@ -12628,6 +12790,8 @@ mod tests {
                     answer.as_ref().map(|value| value.answer.as_str()),
                     Some("One matching album is fully rated.")
                 );
+                assert_eq!(exchanges.len(), 1);
+                assert_eq!(exchanges[0].prompt, "Synthpop albums from 1987");
             }
             _ => panic!("expected a search snapshot"),
         }
@@ -13083,6 +13247,7 @@ mod tests {
         assert!(filters.origin_country_codes.is_empty());
         assert!(filters.excluded_origin_country_codes.is_empty());
         assert!(!filters.missing_origin_country);
+        assert!(!filters.not_fully_rated);
         assert!(filters.artist_type.is_empty());
         assert!(filters.artist_gender.is_empty());
         assert_eq!(filters.artist_born_year_from, None);

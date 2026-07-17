@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.63.0] - 2026-07-17
+### Added
+- Added bounded follow-up questions to Search and Charts Ask Luna, with inherited query scope for references such as `Can you list the albums I haven't rated 100% yet?`.
+- Added a dedicated local **Not fully rated** filter that includes both partially rated and unrated albums without rounding the condition to 100%.
+- Added one-to-five-turn Search/Chart conversations to local snapshots, readable in-app restores, and Markdown exports.
+- Added deterministic, interaction, SQLite boundary, persistence, and opt-in live Luna coverage for the Billboard follow-up flow.
+
+### Changed
+- Expanded explicitly requested current-view named lists from 20 to 50 rows while keeping grouped values capped at 20 and all file paths, filenames, and database contents local.
+- Ask Luna clears a completed direct-answer prompt and immediately offers a follow-up field while keeping the prior questions and answers visible.
+- Bumped synchronized app metadata to `0.63.0`.
+
 ## [0.62.0] - 2026-07-17
 ### Added
 - Added direct answer intent to Search and Charts Ask Luna, so count, comparison, total, average, summary, and similar questions automatically apply their local cohort filters and run the bounded current-view answer flow in one submission.

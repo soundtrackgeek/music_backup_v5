@@ -7894,6 +7894,13 @@ export default function App() {
         }),
       "%",
     );
+    if (currentFilters.notFullyRated) {
+      nextChips.push({
+        key: "notFullyRated",
+        label: "Not fully rated",
+        remove: () => updateFilter("notFullyRated", false),
+      });
+    }
     if (
       currentFilters.lovedTracksMin != null ||
       currentFilters.lovedTracksMax != null
@@ -8032,6 +8039,13 @@ export default function App() {
         }),
       "%",
     );
+    if (albumFilters.notFullyRated) {
+      nextChips.push({
+        key: "notFullyRated",
+        label: "Not fully rated",
+        remove: () => updateAlbumFilter("notFullyRated", false),
+      });
+    }
     if (
       albumFilters.lovedTracksMin != null ||
       albumFilters.lovedTracksMax != null

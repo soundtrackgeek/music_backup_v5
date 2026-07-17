@@ -11,6 +11,7 @@ import {
 import type {
   AiCompiledQuery,
   AiCurrentViewAnswer,
+  AiQueryExchange,
   AiQueryTarget,
   AiSnapshot,
   AiUsage,
@@ -59,6 +60,7 @@ export function NaturalLanguageQueryPanel({
   const [error, setError] = useState<string | null>(null);
   const [compiled, setCompiled] = useState<AiCompiledQuery | null>(null);
   const [answer, setAnswer] = useState<AiCurrentViewAnswer | null>(null);
+  const [exchanges, setExchanges] = useState<AiQueryExchange[]>([]);
   const [snapshots, setSnapshots] = useState<AiSnapshot[]>([]);
   const [activeSnapshotId, setActiveSnapshotId] = useState<number | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
@@ -89,17 +91,30 @@ export function NaturalLanguageQueryPanel({
     event.preventDefault();
     if (!prompt.trim() || isLoading) return;
     const submittedPrompt = prompt.trim();
+    const previousExchanges = exchanges;
+    const previousExchange = previousExchanges[previousExchanges.length - 1];
+    const isFollowUp = Boolean(previousExchange?.answer && answer);
     setIsLoading(true);
     setIsAnswering(false);
     setError(null);
-    setAnswer(null);
+    if (!isFollowUp) setAnswer(null);
     try {
       const result = await compileNaturalLanguageQuery({
         prompt: submittedPrompt,
         target,
         currentView,
+        ...(isFollowUp && previousExchange?.answer
+          ? {
+              followUp: {
+                previousPrompt: previousExchange.prompt,
+                previousSummary: previousExchange.result.summary,
+                previousAnswer: previousExchange.answer.answer,
+              },
+            }
+          : {}),
       });
       setCompiled(result);
+      if (isFollowUp) setAnswer(null);
       setResultPrompt(submittedPrompt);
       setResultSource("live");
       setActiveSnapshotId(null);
@@ -114,6 +129,7 @@ export function NaturalLanguageQueryPanel({
             request: result.request,
           });
           setAnswer(localAnswer);
+          setPrompt("");
         } catch (askError) {
           setError(
             `The local filters were applied, but Luna could not finish the answer: ${
@@ -125,6 +141,12 @@ export function NaturalLanguageQueryPanel({
         }
       }
 
+      const nextExchanges = [
+        ...(isFollowUp ? previousExchanges : []),
+        { prompt: submittedPrompt, result, answer: localAnswer },
+      ].slice(-5);
+      setExchanges(nextExchanges);
+
       try {
         const saved = await saveAiSnapshot({
           title: snapshotTitle(submittedPrompt),
@@ -135,12 +157,14 @@ export function NaturalLanguageQueryPanel({
                   prompt: submittedPrompt,
                   result,
                   answer: localAnswer,
+                  exchanges: nextExchanges,
                 }
               : {
                   kind: "search",
                   prompt: submittedPrompt,
                   result,
                   answer: localAnswer,
+                  exchanges: nextExchanges,
                 },
         });
         setSnapshots((previous) => [
@@ -175,13 +199,24 @@ export function NaturalLanguageQueryPanel({
   const usage = compiled ? usageLabel(compiled.usage) : null;
   const activeSnapshot =
     snapshots.find((snapshot) => snapshot.id === activeSnapshotId) ?? undefined;
+  const canFollowUp = Boolean(exchanges[exchanges.length - 1]?.answer && answer);
 
   function openSnapshot(snapshot: AiSnapshot) {
     if (snapshot.content.kind !== target) return;
-    setPrompt(snapshot.content.prompt);
+    const restoredExchanges = snapshot.content.exchanges?.length
+      ? snapshot.content.exchanges
+      : [
+          {
+            prompt: snapshot.content.prompt,
+            result: snapshot.content.result,
+            answer: snapshot.content.answer ?? null,
+          },
+        ];
+    setPrompt(snapshot.content.answer ? "" : snapshot.content.prompt);
     setResultPrompt(snapshot.content.prompt);
     setCompiled(snapshot.content.result);
     setAnswer(snapshot.content.answer ?? null);
+    setExchanges(restoredExchanges);
     setResultSource("snapshot");
     setActiveSnapshotId(snapshot.id);
     setError(null);
@@ -215,8 +250,9 @@ export function NaturalLanguageQueryPanel({
         <div>
           <h2>Ask Luna</h2>
           <p>
-            Luna creates local filters and can answer questions from bounded
-            SQLite summaries. No library rows are sent.
+            Luna creates local filters and answers from bounded SQLite
+            summaries. Names leave the device only when your question asks for
+            them; paths and the database stay local.
           </p>
         </div>
       </div>
@@ -227,7 +263,11 @@ export function NaturalLanguageQueryPanel({
           maxLength={2000}
           disabled={isLoading}
           onChange={(event) => setPrompt(event.target.value)}
-          placeholder={example}
+          placeholder={
+            canFollowUp
+              ? "Ask a follow-up about this result…"
+              : example
+          }
           aria-label={`Natural-language ${target} request`}
         />
         <button
@@ -241,9 +281,11 @@ export function NaturalLanguageQueryPanel({
               ? "Answering"
               : isLoading
                 ? "Translating"
-                : target === "chart"
-                  ? "Build chart"
-                  : "Search"}
+                : canFollowUp
+                  ? "Ask follow-up"
+                  : target === "chart"
+                    ? "Build chart"
+                    : "Search"}
           </span>
         </button>
       </form>
@@ -276,9 +318,10 @@ export function NaturalLanguageQueryPanel({
               compiled,
               activeSnapshot,
               answer,
+              exchanges,
             )}
           />
-          {answer || resultSource === "snapshot" ? (
+          {answer || exchanges.length > 0 || resultSource === "snapshot" ? (
             <AiSnapshotReadablePreview
               markdown={compiledQueryReadableMarkdown(
                 resultPrompt,
@@ -286,6 +329,7 @@ export function NaturalLanguageQueryPanel({
                 activeSnapshot,
                 answer,
                 resultSource === "snapshot",
+                exchanges,
               )}
             />
           ) : null}

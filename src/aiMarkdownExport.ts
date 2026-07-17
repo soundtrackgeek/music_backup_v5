@@ -5,6 +5,7 @@ import type {
   AiMusicResearchContext,
   AiMusicResearchExchange,
   AiPlaylist,
+  AiQueryExchange,
   AiSnapshot,
   AiUsage,
   BrowseRequest,
@@ -85,6 +86,7 @@ const filterLabels: Record<string, string> = {
   originCountryCodes: "Artist countries",
   excludedOriginCountryCodes: "Excluded artist countries",
   missingOriginCountry: "Missing artist country",
+  notFullyRated: "Not fully rated",
 };
 
 function readableIdentifier(value: string) {
@@ -130,7 +132,47 @@ export function compiledQueryMarkdown(
   result: AiCompiledQuery,
   snapshot?: AiSnapshot,
   answer?: AiCurrentViewAnswer | null,
+  exchanges: AiQueryExchange[] = [],
 ) {
+  if (exchanges.length > 1) {
+    return finish([
+      `# Luna ${result.target === "chart" ? "Chart" : "Search"} Conversation`,
+      "",
+      ...exchanges.flatMap((exchange, index) => [
+        `## ${index + 1}. ${index === 0 ? "Question" : "Follow-up"}`,
+        "",
+        quote(exchange.prompt),
+        "",
+        ...(exchange.answer
+          ? [
+              "### Answer",
+              "",
+              exchange.answer.answer,
+              "",
+              "### Local inspection",
+              "",
+              `- Matching rows: ${exchange.answer.matchingRows.toLocaleString()}`,
+              `- Local analyses: ${exchange.answer.analysisCount.toLocaleString()}`,
+              `- Named rows shared: ${exchange.answer.namedRowsShared.toLocaleString()}`,
+              `- Answer model: ${exchange.answer.model}`,
+              usageLines(exchange.answer.usage),
+              "",
+            ]
+          : []),
+        "### Local query scope",
+        "",
+        exchange.result.summary,
+        "",
+        `- Intent: ${exchange.result.queryIntent ?? "filter"}`,
+        `- View: ${exchange.result.request.view}`,
+        `- Planner model: ${exchange.result.model}`,
+        usageLines(exchange.result.usage),
+        "",
+        jsonSection(`Turn ${index + 1} compiled local request`, exchange.result.request),
+      ]),
+      libraryStateSection(snapshot),
+    ]);
+  }
   const answerSection = answer
     ? [
         "## Answer",
@@ -179,7 +221,44 @@ export function compiledQueryReadableMarkdown(
   snapshot?: AiSnapshot,
   answer?: AiCurrentViewAnswer | null,
   restored = true,
+  exchanges: AiQueryExchange[] = [],
 ) {
+  if (exchanges.length > 1) {
+    return finish([
+      `# ${restored ? "Restored " : ""}Luna ${result.target === "chart" ? "Chart" : "Search"} Conversation`,
+      "",
+      ...exchanges.flatMap((exchange, index) => [
+        `## ${index + 1}. ${index === 0 ? "Question" : "Follow-up"}`,
+        "",
+        quote(exchange.prompt),
+        "",
+        ...(exchange.answer
+          ? [
+              "### Answer",
+              "",
+              exchange.answer.answer,
+              "",
+              "### Local inspection",
+              "",
+              `- **Matching rows:** ${exchange.answer.matchingRows.toLocaleString()}`,
+              `- **Local analyses:** ${exchange.answer.analysisCount.toLocaleString()}`,
+              `- **Named rows shared:** ${exchange.answer.namedRowsShared.toLocaleString()}`,
+              "",
+            ]
+          : []),
+        "### Active local filters",
+        "",
+        ...readableFilterLines(exchange.result.request),
+        "",
+        `- **View:** ${readableIdentifier(exchange.result.request.view)}`,
+        `- **Sort:** ${readableIdentifier(exchange.result.request.sort.field)}`,
+        `- **Direction:** ${readableIdentifier(exchange.result.request.sort.direction)}`,
+        `- **Row limit:** ${exchange.result.request.limit.toLocaleString()}`,
+        "",
+      ]),
+      libraryStateSection(snapshot),
+    ]);
+  }
   const chartLines = result.chartConfig
     ? [
         "## Chart setup",

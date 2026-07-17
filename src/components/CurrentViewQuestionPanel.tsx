@@ -197,7 +197,7 @@ export function CurrentViewQuestionPanel({
         <div>
           <h2>Ask about this view</h2>
           <p>
-            Luna can request exact local summaries, groups, or up to 20 names
+            Luna can request exact local summaries, groups, or up to 50 names
             from these filtered {noun}. Only that compact context is sent;
             paths and the rest of your library stay local.
           </p>

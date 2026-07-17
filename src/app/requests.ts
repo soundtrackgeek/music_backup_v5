@@ -59,6 +59,7 @@ export function createFilters(): BrowseFilters {
     trackRatingMax: null,
     ratingCompletenessMin: null,
     ratingCompletenessMax: null,
+    notFullyRated: false,
     lovedTracksMin: null,
     lovedTracksMax: null,
     originCountryCodes: [],
