@@ -14,7 +14,9 @@ import type {
   AiUsage,
   BrowseView,
 } from "../types";
+import { aiMarkdownTitle, compiledQueryMarkdown } from "../aiMarkdownExport";
 import { AiSnapshotHistory } from "./AiSnapshotHistory";
+import { AiMarkdownExportButton } from "./AiMarkdownExportButton";
 
 type NaturalLanguageQueryPanelProps = {
   target: AiQueryTarget;
@@ -125,6 +127,8 @@ export function NaturalLanguageQueryPanel({
       ? "Top 25 AOR albums from 1984 under 45 minutes"
       : "Top AOR albums from 1984 under 45 minutes";
   const usage = compiled ? usageLabel(compiled.usage) : null;
+  const activeSnapshot =
+    snapshots.find((snapshot) => snapshot.id === activeSnapshotId) ?? undefined;
 
   function openSnapshot(snapshot: AiSnapshot) {
     if (snapshot.content.kind !== target) return;
@@ -190,17 +194,26 @@ export function NaturalLanguageQueryPanel({
 
       {error ? <p className="error-message natural-query-message">{error}</p> : null}
       {compiled ? (
-        <div className="natural-query-result" role="status">
-          <strong>
-            {resultSource === "snapshot"
-              ? "Restored"
-              : activeSnapshotId != null
-                ? "Applied · saved"
-                : "Applied"}
-          </strong>
-          <span>{compiled.summary}</span>
-          {usage ? <small>{usage}</small> : null}
-        </div>
+        <>
+          <div className="natural-query-result" role="status">
+            <strong>
+              {resultSource === "snapshot"
+                ? "Restored"
+                : activeSnapshotId != null
+                  ? "Applied · saved"
+                  : "Applied"}
+            </strong>
+            <span>{compiled.summary}</span>
+            {usage ? <small>{usage}</small> : null}
+          </div>
+          <AiMarkdownExportButton
+            title={aiMarkdownTitle(
+              target === "chart" ? "Luna chart" : "Luna search",
+              prompt,
+            )}
+            markdown={compiledQueryMarkdown(prompt, compiled, activeSnapshot)}
+          />
+        </>
       ) : null}
       {snapshotError ? (
         <p className="error-message natural-query-message">{snapshotError}</p>

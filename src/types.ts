@@ -572,6 +572,11 @@ export type AiMusicResearchAnswer = {
   localInspectionCount: number;
 };
 
+export type AiMusicResearchExchange = {
+  question: string;
+  result: AiMusicResearchAnswer;
+};
+
 export type AiQueryTarget = "search" | "chart";
 
 export type AiCompileRequest = {
@@ -629,7 +634,8 @@ export type AiSnapshotKind =
   | AiQueryTarget
   | "searchAnswer"
   | "chartAnswer"
-  | "libraryAnalysis";
+  | "libraryAnalysis"
+  | "musicResearch";
 
 export type AiSnapshotContent =
   | {
@@ -658,6 +664,12 @@ export type AiSnapshotContent =
       kind: "libraryAnalysis";
       prompt: string;
       result: AiLibraryAnalysis;
+    }
+  | {
+      kind: "musicResearch";
+      prompt: string;
+      context: AiMusicResearchContext;
+      exchanges: AiMusicResearchExchange[];
     };
 
 export type AiSnapshot = {
@@ -1233,6 +1245,11 @@ export type ExportResult = {
   path: string;
   format: string;
   rowCount: number;
+};
+
+export type AiMarkdownExportRequest = {
+  title: string;
+  markdown: string;
 };
 
 export type StatisticsResponse = {

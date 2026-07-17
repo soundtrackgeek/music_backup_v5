@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.60.0] - 2026-07-17
+### Added
+- Added automatic local snapshot history for Music Research conversations, including the selected page context, exact Markdown answers, citations, tool disclosures, token usage, and the latest five exchanges.
+- Added one-click Markdown export to Ask Luna Search/Charts, Ask about this view, Library analyst, Music Research, Playlist Builder, and outside-library Discovery, including reopened snapshots and saved playlists/discovery lists.
+- Added safe GitHub-flavored Markdown rendering for Music Research headings, emphasis, lists, tables, quotations, code, and HTTPS links while ignoring raw HTML and preventing remote image loading.
+- Added frontend and Rust coverage for Markdown rendering, exact snapshot reopen/delete/export behavior, export validation, and newline normalization.
+
+### Changed
+- Reopening a Music Research snapshot restores its exact context and bounded conversation without calling Luna or spending tokens.
+- Bumped synchronized app metadata to `0.60.0`.
+
 ## [0.59.0] - 2026-07-17
 ### Added
 - Added a fixed global Luna button that stays visible in the top-right corner whether the details sidebar is open or hidden and opens a compact Music Research conversation from every workspace.

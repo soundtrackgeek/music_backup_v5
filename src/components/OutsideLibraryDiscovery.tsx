@@ -25,6 +25,11 @@ import type {
   ExternalDiscoveryResponse,
   SavedExternalDiscovery,
 } from "../types";
+import {
+  aiMarkdownTitle,
+  externalDiscoveryMarkdown,
+} from "../aiMarkdownExport";
+import { AiMarkdownExportButton } from "./AiMarkdownExportButton";
 
 type OutsideLibraryDiscoveryProps = {
   isAvailable: boolean;
@@ -209,6 +214,9 @@ export function OutsideLibraryDiscovery({
     }
   }
 
+  const activeSavedDiscovery =
+    saved.find((entry) => entry.id === activeSavedId) ?? undefined;
+
   return (
     <section className="outside-library" aria-labelledby="outside-library-heading">
       <div className="outside-library-heading">
@@ -284,6 +292,15 @@ export function OutsideLibraryDiscovery({
                 {isSaving ? "Saving" : activeSavedId == null ? "Save list" : "Update saved"}
               </button>
             </header>
+
+            <AiMarkdownExportButton
+              title={aiMarkdownTitle("Luna discovery", name)}
+              markdown={externalDiscoveryMarkdown(
+                name,
+                response,
+                activeSavedDiscovery,
+              )}
+            />
 
             <div className="outside-library-recipe">
               <span><Sparkles size={14} /> {interpretationLabel(response)}</span>

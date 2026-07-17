@@ -205,7 +205,7 @@ pub struct AiCurrentViewAnswer {
     pub usage: AiUsage,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiMusicResearchContext {
     pub workspace: String,
@@ -235,14 +235,14 @@ pub struct AiMusicResearchRequest {
     pub conversation: Vec<AiMusicResearchTurn>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiMusicResearchSource {
     pub title: String,
     pub url: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiMusicResearchAnswer {
     pub answer: String,
@@ -251,6 +251,20 @@ pub struct AiMusicResearchAnswer {
     pub usage: AiUsage,
     pub used_web_search: bool,
     pub local_inspection_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiMusicResearchExchange {
+    pub question: String,
+    pub result: AiMusicResearchAnswer,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiMarkdownExportRequest {
+    pub title: String,
+    pub markdown: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -421,6 +435,11 @@ pub enum AiSnapshotContent {
         prompt: String,
         result: AiLibraryAnalysis,
     },
+    MusicResearch {
+        prompt: String,
+        context: AiMusicResearchContext,
+        exchanges: Vec<AiMusicResearchExchange>,
+    },
 }
 
 impl AiSnapshotContent {
@@ -431,6 +450,7 @@ impl AiSnapshotContent {
             Self::SearchAnswer { .. } => "searchAnswer",
             Self::ChartAnswer { .. } => "chartAnswer",
             Self::LibraryAnalysis { .. } => "libraryAnalysis",
+            Self::MusicResearch { .. } => "musicResearch",
         }
     }
 }
@@ -1338,7 +1358,7 @@ fn safe_prompt_data(value: &str) -> String {
         .join(" ")
 }
 
-fn validate_music_research_context(
+pub(crate) fn validate_music_research_context(
     mut context: AiMusicResearchContext,
 ) -> Result<AiMusicResearchContext> {
     context.workspace = safe_prompt_data(context.workspace.trim());

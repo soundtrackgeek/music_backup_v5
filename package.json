@@ -1,7 +1,7 @@
 {
   "name": "music-library-app",
   "private": true,
-  "version": "0.59.0",
+  "version": "0.60.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -24,7 +24,9 @@
     "flag-icons": "^7.5.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0",

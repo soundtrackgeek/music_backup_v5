@@ -27,6 +27,8 @@ import type {
   ExportResult,
   SavedPlaylist,
 } from "../types";
+import { aiMarkdownTitle, playlistMarkdown } from "../aiMarkdownExport";
+import { AiMarkdownExportButton } from "../components/AiMarkdownExportButton";
 
 type PlaylistBuilderWorkspaceProps = {
   isAvailable: boolean;
@@ -209,6 +211,9 @@ export function PlaylistBuilderWorkspace({
     }
   }
 
+  const activeSavedPlaylist =
+    savedPlaylists.find((saved) => saved.id === activeSavedId) ?? undefined;
+
   return (
     <section className="workspace playlist-workspace">
       <header className="topbar">
@@ -321,6 +326,15 @@ export function PlaylistBuilderWorkspace({
                   </button>
                 </div>
               </header>
+
+              <AiMarkdownExportButton
+                title={aiMarkdownTitle("Luna playlist", name)}
+                markdown={playlistMarkdown(
+                  name,
+                  { ...playlist, name: name.trim() || playlist.name },
+                  activeSavedPlaylist,
+                )}
+              />
 
               <dl className="playlist-recipe-stats">
                 <div>

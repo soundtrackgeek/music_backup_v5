@@ -14,6 +14,11 @@ import type {
   AiUsage,
   BrowseRequest,
 } from "../types";
+import {
+  aiMarkdownTitle,
+  currentViewAnswerMarkdown,
+} from "../aiMarkdownExport";
+import { AiMarkdownExportButton } from "./AiMarkdownExportButton";
 import { AiSnapshotHistory } from "./AiSnapshotHistory";
 
 type CurrentViewQuestionPanelProps = {
@@ -134,6 +139,13 @@ export function CurrentViewQuestionPanel({
 
   const noun = request.view === "tracks" ? "tracks" : "albums";
   const usage = result ? usageLabel(result.usage) : null;
+  const activeSnapshot =
+    snapshots.find((snapshot) => snapshot.id === activeSnapshotId) ?? undefined;
+  const exportRequest =
+    activeSnapshot?.content.kind === "searchAnswer" ||
+    activeSnapshot?.content.kind === "chartAnswer"
+      ? activeSnapshot.content.request
+      : request;
 
   function openSnapshot(snapshot: AiSnapshot) {
     if (
@@ -219,20 +231,31 @@ export function CurrentViewQuestionPanel({
         <p className="error-message natural-query-message">{error}</p>
       ) : null}
       {result ? (
-        <div className="current-view-answer" role="status">
-          <div>
-            <strong>
-              {resultSource === "snapshot"
-                ? "Luna · saved answer"
-                : activeSnapshotId != null
-                  ? "Luna · saved"
-                  : "Luna"}
-            </strong>
-            <p>{result.answer}</p>
+        <>
+          <div className="current-view-answer" role="status">
+            <div>
+              <strong>
+                {resultSource === "snapshot"
+                  ? "Luna · saved answer"
+                  : activeSnapshotId != null
+                    ? "Luna · saved"
+                    : "Luna"}
+              </strong>
+              <p>{result.answer}</p>
+            </div>
+            <small>{inspectionLabel(result)}</small>
+            {usage ? <small>{usage}</small> : null}
           </div>
-          <small>{inspectionLabel(result)}</small>
-          {usage ? <small>{usage}</small> : null}
-        </div>
+          <AiMarkdownExportButton
+            title={aiMarkdownTitle("Luna current-view answer", question)}
+            markdown={currentViewAnswerMarkdown(
+              question,
+              exportRequest,
+              result,
+              activeSnapshot,
+            )}
+          />
+        </>
       ) : null}
       {snapshotError ? (
         <p className="error-message natural-query-message">{snapshotError}</p>

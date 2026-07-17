@@ -13,6 +13,8 @@ import type {
   AiSnapshot,
   AiUsage,
 } from "../types";
+import { aiMarkdownTitle, libraryAnalysisMarkdown } from "../aiMarkdownExport";
+import { AiMarkdownExportButton } from "./AiMarkdownExportButton";
 import { AiSnapshotHistory } from "./AiSnapshotHistory";
 
 type LibraryAnalystPanelProps = {
@@ -87,6 +89,7 @@ export function LibraryAnalystPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AiLibraryAnalysis | null>(null);
+  const [resultPrompt, setResultPrompt] = useState("");
   const [snapshots, setSnapshots] = useState<AiSnapshot[]>([]);
   const [activeSnapshotId, setActiveSnapshotId] = useState<number | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
@@ -127,6 +130,7 @@ export function LibraryAnalystPanel({
         focus: normalizedFocus,
       });
       setResult(analysis);
+      setResultPrompt(normalizedFocus);
       setResultSource("live");
       setActiveSnapshotId(null);
       try {
@@ -174,6 +178,7 @@ export function LibraryAnalystPanel({
   function chooseLens(nextLens: AiLibraryLens) {
     setLens(nextLens);
     setResult(null);
+    setResultPrompt("");
     setActiveSnapshotId(null);
     setError(null);
   }
@@ -183,6 +188,7 @@ export function LibraryAnalystPanel({
     setLens(snapshot.content.result.lens);
     setFocus(snapshot.content.prompt);
     setResult(snapshot.content.result);
+    setResultPrompt(snapshot.content.prompt);
     setResultSource("snapshot");
     setActiveSnapshotId(snapshot.id);
     setError(null);
@@ -210,6 +216,8 @@ export function LibraryAnalystPanel({
   }
 
   const usage = result ? usageLabel(result.usage) : null;
+  const activeSnapshot =
+    snapshots.find((snapshot) => snapshot.id === activeSnapshotId) ?? undefined;
 
   return (
     <section className="library-analyst-panel" aria-label="Library analyst">
@@ -305,6 +313,15 @@ export function LibraryAnalystPanel({
             <h3>{result.headline}</h3>
             <p>{result.summary}</p>
           </header>
+
+          <AiMarkdownExportButton
+            title={aiMarkdownTitle("Luna library analysis", result.headline)}
+            markdown={libraryAnalysisMarkdown(
+              resultPrompt,
+              result,
+              activeSnapshot,
+            )}
+          />
 
           <div className="library-analysis-findings">
             {result.findings.map((finding, index) => (

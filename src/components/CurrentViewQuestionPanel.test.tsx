@@ -9,6 +9,7 @@ import { CurrentViewQuestionPanel } from "./CurrentViewQuestionPanel";
 const backend = vi.hoisted(() => ({
   askCurrentView: vi.fn(),
   deleteAiSnapshot: vi.fn(),
+  exportAiMarkdown: vi.fn(),
   listAiSnapshots: vi.fn(),
   saveAiSnapshot: vi.fn(),
 }));
@@ -19,6 +20,7 @@ describe("CurrentViewQuestionPanel", () => {
   beforeEach(() => {
     backend.askCurrentView.mockReset();
     backend.deleteAiSnapshot.mockReset();
+    backend.exportAiMarkdown.mockReset();
     backend.listAiSnapshots.mockReset();
     backend.saveAiSnapshot.mockReset();
     backend.listAiSnapshots.mockResolvedValue([]);

@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -10,26 +12,35 @@ import {
   Eraser,
   ExternalLink,
   Globe2,
+  History,
   Send,
   Sparkles,
   X,
 } from "lucide-react";
 
 import {
+  deleteAiSnapshot,
+  listAiSnapshots,
   openResearchSourceUrl,
   researchMusic,
+  saveAiSnapshot,
 } from "../backend";
 import type {
   AiMusicResearchAnswer,
   AiMusicResearchContext,
+  AiMusicResearchExchange,
   AiMusicResearchTurn,
+  AiSnapshot,
   AiUsage,
 } from "../types";
+import { aiMarkdownTitle, musicResearchMarkdown } from "../aiMarkdownExport";
+import { AiMarkdownExportButton } from "./AiMarkdownExportButton";
+import { AiSnapshotHistory } from "./AiSnapshotHistory";
 
-type ResearchExchange = {
+const MusicResearchMarkdown = lazy(() => import("./MusicResearchMarkdown"));
+
+type ResearchExchange = AiMusicResearchExchange & {
   id: number;
-  question: string;
-  result: AiMusicResearchAnswer;
 };
 
 type MusicResearchPanelProps = {
@@ -57,6 +68,21 @@ function contextCaption(context: AiMusicResearchContext) {
   }
   if (context.selectedEntityType) return context.selectedEntityType;
   return "No page filters or result rows attached";
+}
+
+function researchSnapshotTitle(question: string) {
+  const normalized = question.trim().replace(/\s+/g, " ");
+  return normalized.length <= 96 ? normalized : `${normalized.slice(0, 93)}...`;
+}
+
+function researchSnapshotCategory(snapshot: AiSnapshot) {
+  if (snapshot.content.kind !== "musicResearch") return "Music research";
+  const { context } = snapshot.content;
+  if (context.selectedEntityType && context.selectedLabel) {
+    const entity = `${context.selectedEntityType[0].toUpperCase()}${context.selectedEntityType.slice(1)}`;
+    return `${entity} · ${context.selectedLabel}`;
+  }
+  return `${context.workspace} · General`;
 }
 
 export function musicResearchPrompts(context: AiMusicResearchContext) {
@@ -93,14 +119,22 @@ export function MusicResearchPanel({
   context,
   onClose,
 }: MusicResearchPanelProps) {
+  const [conversationContext, setConversationContext] = useState(context);
   const [question, setQuestion] = useState("");
   const [exchanges, setExchanges] = useState<ResearchExchange[]>([]);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [snapshots, setSnapshots] = useState<AiSnapshot[]>([]);
+  const [activeSnapshotId, setActiveSnapshotId] = useState<number | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const conversationRef = useRef<HTMLDivElement>(null);
   const nextIdRef = useRef(1);
-  const prompts = useMemo(() => musicResearchPrompts(context), [context]);
+  const prompts = useMemo(
+    () => musicResearchPrompts(conversationContext),
+    [conversationContext],
+  );
   const contextKey = [
     context.workspace,
     context.selectedEntityType,
@@ -109,31 +143,58 @@ export function MusicResearchPanel({
     context.selectedSubtitle,
   ].join("|");
   const activeRequestRef = useRef(0);
-  const activeContextKeyRef = useRef(contextKey);
-  if (activeContextKeyRef.current !== contextKey) {
-    activeContextKeyRef.current = contextKey;
+  const incomingContextKeyRef = useRef(contextKey);
+  if (incomingContextKeyRef.current !== contextKey) {
+    incomingContextKeyRef.current = contextKey;
     activeRequestRef.current += 1;
   }
 
   useEffect(() => {
+    setConversationContext(context);
     setQuestion("");
     setExchanges([]);
     setPendingQuestion(null);
     setError(null);
+    setSnapshotError(null);
+    setActiveSnapshotId(null);
+    setIsHistoryOpen(false);
   }, [contextKey]);
 
   useEffect(() => {
     if (!isOpen) return;
-    const timer = window.setTimeout(() => inputRef.current?.focus(), 40);
+    let disposed = false;
+    void listAiSnapshots("musicResearch")
+      .then((saved) => {
+        if (!disposed) setSnapshots(saved);
+      })
+      .catch((historyError) => {
+        if (!disposed) {
+          setSnapshotError(
+            historyError instanceof Error
+              ? historyError.message
+              : String(historyError),
+          );
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = isHistoryOpen
+      ? null
+      : window.setTimeout(() => inputRef.current?.focus(), 40);
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.clearTimeout(timer);
+      if (timer != null) window.clearTimeout(timer);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isHistoryOpen, isOpen, onClose]);
 
   useEffect(() => {
     conversationRef.current?.scrollTo?.({
@@ -154,22 +215,27 @@ export function MusicResearchPanel({
       { role: "assistant", content: exchange.result.answer },
     ]);
     const requestId = ++activeRequestRef.current;
-    const requestContextKey = contextKey;
+    const requestContext = conversationContext;
     setQuestion("");
     setPendingQuestion(normalizedQuestion);
     setError(null);
     try {
       const result = await researchMusic({
         question: normalizedQuestion,
-        context,
+        context: requestContext,
         conversation,
       });
-      if (
-        activeRequestRef.current !== requestId ||
-        activeContextKeyRef.current !== requestContextKey
-      ) {
+      if (activeRequestRef.current !== requestId) {
         return;
       }
+      const storedExchanges: AiMusicResearchExchange[] = [
+        ...exchanges.slice(-4).map((exchange) => ({
+          question: exchange.question,
+          result: exchange.result,
+        })),
+        { question: normalizedQuestion, result },
+      ];
+      setPendingQuestion(null);
       setExchanges((previous) => [
         ...previous.slice(-4),
         {
@@ -178,11 +244,36 @@ export function MusicResearchPanel({
           result,
         },
       ]);
+      setActiveSnapshotId(null);
+      try {
+        const saved = await saveAiSnapshot({
+          title: researchSnapshotTitle(normalizedQuestion),
+          content: {
+            kind: "musicResearch",
+            prompt: normalizedQuestion,
+            context: requestContext,
+            exchanges: storedExchanges,
+          },
+        });
+        setSnapshots((previous) => [
+          saved,
+          ...previous.filter((snapshot) => snapshot.id !== saved.id),
+        ]);
+        if (activeRequestRef.current === requestId) {
+          setActiveSnapshotId(saved.id);
+          setSnapshotError(null);
+        }
+      } catch (saveError) {
+        if (activeRequestRef.current === requestId) {
+          setSnapshotError(
+            `The answer is visible, but its snapshot could not be saved: ${
+              saveError instanceof Error ? saveError.message : String(saveError)
+            }`,
+          );
+        }
+      }
     } catch (researchError) {
-      if (
-        activeRequestRef.current !== requestId ||
-        activeContextKeyRef.current !== requestContextKey
-      ) {
+      if (activeRequestRef.current !== requestId) {
         return;
       }
       setQuestion(normalizedQuestion);
@@ -192,20 +283,58 @@ export function MusicResearchPanel({
           : String(researchError),
       );
     } finally {
-      if (
-        activeRequestRef.current === requestId &&
-        activeContextKeyRef.current === requestContextKey
-      ) {
+      if (activeRequestRef.current === requestId) {
         setPendingQuestion(null);
       }
     }
   }
 
   function clearConversation() {
+    activeRequestRef.current += 1;
+    setConversationContext(context);
     setExchanges([]);
     setQuestion("");
     setError(null);
+    setSnapshotError(null);
+    setActiveSnapshotId(null);
+    setIsHistoryOpen(false);
     inputRef.current?.focus();
+  }
+
+  function openSnapshot(snapshot: AiSnapshot) {
+    if (snapshot.content.kind !== "musicResearch") return;
+    activeRequestRef.current += 1;
+    setConversationContext(snapshot.content.context);
+    setExchanges(
+      snapshot.content.exchanges.map((exchange) => ({
+        id: nextIdRef.current++,
+        question: exchange.question,
+        result: exchange.result,
+      })),
+    );
+    setQuestion("");
+    setPendingQuestion(null);
+    setActiveSnapshotId(snapshot.id);
+    setIsHistoryOpen(false);
+    setError(null);
+    setSnapshotError(null);
+  }
+
+  async function removeSnapshot(snapshot: AiSnapshot) {
+    try {
+      await deleteAiSnapshot(snapshot.id);
+      setSnapshots((previous) =>
+        previous.filter((saved) => saved.id !== snapshot.id),
+      );
+      if (activeSnapshotId === snapshot.id) setActiveSnapshotId(null);
+      setSnapshotError(null);
+    } catch (deleteError) {
+      setSnapshotError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : String(deleteError),
+      );
+    }
   }
 
   async function openSource(url: string) {
@@ -218,6 +347,13 @@ export function MusicResearchPanel({
       );
     }
   }
+
+  const activeSnapshot =
+    snapshots.find((snapshot) => snapshot.id === activeSnapshotId) ?? undefined;
+  const exportExchanges = exchanges.map<AiMusicResearchExchange>((exchange) => ({
+    question: exchange.question,
+    result: exchange.result,
+  }));
 
   return (
     <section
@@ -235,6 +371,18 @@ export function MusicResearchPanel({
           <h2>Ask anything about music</h2>
         </div>
         <div className="music-research-header-actions">
+          <button
+            className="icon-button music-research-history-toggle"
+            type="button"
+            aria-label={isHistoryOpen ? "Hide saved research" : "Show saved research"}
+            aria-pressed={isHistoryOpen}
+            title="Saved research"
+            disabled={pendingQuestion != null}
+            onClick={() => setIsHistoryOpen((previous) => !previous)}
+          >
+            <History size={16} />
+            {snapshots.length > 0 ? <span>{snapshots.length}</span> : null}
+          </button>
           {exchanges.length > 0 ? (
             <button
               className="icon-button"
@@ -259,16 +407,47 @@ export function MusicResearchPanel({
         </div>
       </header>
 
-      <div className="music-research-context" data-context={context.selectedEntityType ?? "general"}>
-        <span>{context.selectedEntityType ? <Database size={15} /> : <Globe2 size={15} />}</span>
+      <div className="music-research-context" data-context={conversationContext.selectedEntityType ?? "general"}>
+        <span>{conversationContext.selectedEntityType ? <Database size={15} /> : <Globe2 size={15} />}</span>
         <div>
-          <strong>{contextTitle(context)}</strong>
-          <small>{contextCaption(context)}</small>
+          <strong>{contextTitle(conversationContext)}</strong>
+          <small>
+            {activeSnapshotId != null ? "Saved snapshot · " : ""}
+            {contextCaption(conversationContext)}
+          </small>
         </div>
       </div>
 
       <div className="music-research-conversation" ref={conversationRef}>
-        {exchanges.length === 0 && !pendingQuestion ? (
+        {!isHistoryOpen && exchanges.length > 0 ? (
+          <div className="music-research-export-row">
+            <AiMarkdownExportButton
+              title={aiMarkdownTitle(
+                "Luna music research",
+                conversationContext.selectedLabel ?? exchanges[0].question,
+              )}
+              markdown={musicResearchMarkdown(
+                conversationContext,
+                exportExchanges,
+                activeSnapshot,
+              )}
+            />
+          </div>
+        ) : null}
+        {isHistoryOpen ? (
+          <div className="music-research-history">
+            <AiSnapshotHistory
+              snapshots={snapshots}
+              activeSnapshotId={activeSnapshotId}
+              description="Exact conversations, citations, context, and usage are stored locally; reopening costs no tokens."
+              emptyMessage="Your next completed research answer will be saved here automatically."
+              getCategoryLabel={researchSnapshotCategory}
+              onOpen={openSnapshot}
+              onDelete={(snapshot) => void removeSnapshot(snapshot)}
+            />
+          </div>
+        ) : null}
+        {!isHistoryOpen && exchanges.length === 0 && !pendingQuestion ? (
           <div className="music-research-intro">
             <p>
               I can research the wider music world and, when useful, compare it
@@ -291,7 +470,7 @@ export function MusicResearchPanel({
           </div>
         ) : null}
 
-        {exchanges.map((exchange) => {
+        {!isHistoryOpen ? exchanges.map((exchange) => {
           const usage = usageLabel(exchange.result.usage);
           return (
             <div className="music-research-exchange" key={exchange.id}>
@@ -299,7 +478,14 @@ export function MusicResearchPanel({
                 {exchange.question}
               </div>
               <article className="music-research-answer">
-                <p>{exchange.result.answer}</p>
+                <div className="music-research-markdown">
+                  <Suspense fallback={<p>{exchange.result.answer}</p>}>
+                    <MusicResearchMarkdown
+                      markdown={exchange.result.answer}
+                      onOpenUrl={(url) => void openSource(url)}
+                    />
+                  </Suspense>
+                </div>
                 {exchange.result.sources.length > 0 ? (
                   <div className="music-research-sources">
                     <span>Sources</span>
@@ -330,9 +516,9 @@ export function MusicResearchPanel({
               </article>
             </div>
           );
-        })}
+        }) : null}
 
-        {pendingQuestion ? (
+        {!isHistoryOpen && pendingQuestion ? (
           <div className="music-research-exchange" aria-live="polite">
             <div className="music-research-user-message">{pendingQuestion}</div>
             <div className="music-research-thinking">
@@ -343,8 +529,11 @@ export function MusicResearchPanel({
       </div>
 
       {error ? <p className="error-message music-research-error">{error}</p> : null}
+      {snapshotError ? (
+        <p className="error-message music-research-error">{snapshotError}</p>
+      ) : null}
 
-      <form className="music-research-form" onSubmit={submit}>
+      {!isHistoryOpen ? <form className="music-research-form" onSubmit={submit}>
         <textarea
           ref={inputRef}
           value={question}
@@ -352,8 +541,8 @@ export function MusicResearchPanel({
           maxLength={4000}
           disabled={pendingQuestion != null}
           placeholder={
-            context.selectedLabel
-              ? `Ask something related to ${context.selectedLabel}…`
+            conversationContext.selectedLabel
+              ? `Ask something related to ${conversationContext.selectedLabel}…`
               : "Ask a music history, discography, influence, or comparison question…"
           }
           onChange={(event) => setQuestion(event.target.value)}
@@ -378,7 +567,7 @@ export function MusicResearchPanel({
             <span>Ask</span>
           </button>
         </div>
-      </form>
+      </form> : null}
     </section>
   );
 }

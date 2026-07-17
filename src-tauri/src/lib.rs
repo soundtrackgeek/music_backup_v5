@@ -239,6 +239,18 @@ async fn build_playlist(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn export_ai_markdown(
+    app: AppHandle,
+    input: ai::AiMarkdownExportRequest,
+) -> Result<ExportResult, String> {
+    tauri::async_runtime::spawn_blocking(move || db::export_ai_markdown_for_app(&app, input))
+        .await
+        .map_err(|error| format!("AI Markdown export task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn list_saved_playlists(app: AppHandle) -> Result<Vec<ai::SavedPlaylist>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_saved_playlists_for_app(&app))
         .await
@@ -809,6 +821,7 @@ pub fn run() {
             list_ai_snapshots,
             save_ai_snapshot,
             delete_ai_snapshot,
+            export_ai_markdown,
             build_playlist,
             list_saved_playlists,
             save_playlist,

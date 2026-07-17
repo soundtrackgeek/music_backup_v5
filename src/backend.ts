@@ -97,6 +97,7 @@ import type {
   AiLibraryAnalysisRequest,
   AiMusicResearchAnswer,
   AiMusicResearchRequest,
+  AiMarkdownExportRequest,
   AiSnapshot,
   AiSnapshotKind,
   AiPlaylist,
@@ -478,7 +479,17 @@ export async function researchMusic(input: AiMusicResearchRequest) {
       ? `${input.context.selectedLabel}${input.context.selectedSubtitle ? ` — ${input.context.selectedSubtitle}` : ""}`
       : "the wider music question";
     return {
-      answer: `Here is a preview research answer about ${context}. In the desktop app, Luna can search the web and, when relevant, inspect a small bounded slice of the selected local album, artist, or genre. Your question was: “${input.question.trim()}”`,
+      answer: [
+        "## Preview research finding",
+        "",
+        `This is a **Markdown preview** about ${context}. In the desktop app, Luna can search the web and, when relevant, inspect a small bounded slice of the selected local album, artist, or genre.`,
+        "",
+        "- Web-supported music research",
+        "- Bounded local-library context when requested",
+        "- Exact local snapshots for later reopening",
+        "",
+        `> Your question: ${input.question.trim()}`,
+      ].join("\n"),
       sources: [
         {
           title: "OpenAI web search documentation",
@@ -591,6 +602,22 @@ export async function deleteAiSnapshot(id: number) {
   }
 
   return invoke<void>("delete_ai_snapshot", { id });
+}
+
+export async function exportAiMarkdown(input: AiMarkdownExportRequest) {
+  if (!isTauriRuntime()) {
+    return {
+      path: `C:\\Music Library\\exports\\music-library-ai-${input.title
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || "research"}-preview.md`,
+      format: "md",
+      rowCount: input.markdown.split(/\r?\n/).length,
+    } satisfies ExportResult;
+  }
+
+  return invoke<ExportResult>("export_ai_markdown", { input });
 }
 
 export async function buildPlaylist(input: AiPlaylistBuildRequest) {

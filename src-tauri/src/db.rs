@@ -1,9 +1,9 @@
 use crate::ai::{
-    AiMusicResearchContext, AiPlaylist, AiPlaylistPlan, AiPlaylistTrack, AiSnapshot,
-    AiSnapshotContent, ExportPlaylistRequest, LibraryProfileRequest, LibraryProfileResult,
-    MusicResearchInspectionRequest, MusicResearchInspectionResult, SaveAiSnapshotRequest,
-    SavePlaylistRequest, SavedPlaylist, ViewInspectionItem, ViewInspectionRequest,
-    ViewInspectionResult,
+    AiMarkdownExportRequest, AiMusicResearchContext, AiPlaylist, AiPlaylistPlan, AiPlaylistTrack,
+    AiSnapshot, AiSnapshotContent, ExportPlaylistRequest, LibraryProfileRequest,
+    LibraryProfileResult, MusicResearchInspectionRequest, MusicResearchInspectionResult,
+    SaveAiSnapshotRequest, SavePlaylistRequest, SavedPlaylist, ViewInspectionItem,
+    ViewInspectionRequest, ViewInspectionResult,
 };
 #[cfg(test)]
 use crate::models::AppSettings;
@@ -4723,7 +4723,7 @@ fn validate_musicbrainz_tool_cache_schema(conn: &Connection) -> Result<()> {
 fn validate_ai_snapshot_kind(kind: &str) -> Result<()> {
     if matches!(
         kind,
-        "search" | "chart" | "searchAnswer" | "chartAnswer" | "libraryAnalysis"
+        "search" | "chart" | "searchAnswer" | "chartAnswer" | "libraryAnalysis" | "musicResearch"
     ) {
         Ok(())
     } else {
@@ -4732,18 +4732,18 @@ fn validate_ai_snapshot_kind(kind: &str) -> Result<()> {
 }
 
 fn validate_ai_snapshot_content(content: &AiSnapshotContent) -> Result<()> {
-    let prompt = match content {
+    let (prompt, prompt_limit) = match content {
         AiSnapshotContent::Search { prompt, result } => {
             if result.target != "search" || result.chart_config.is_some() {
                 bail!("The saved Luna search payload is inconsistent")
             }
-            prompt
+            (prompt, 2_000)
         }
         AiSnapshotContent::Chart { prompt, result } => {
             if result.target != "chart" || result.chart_config.is_none() {
                 bail!("The saved Luna chart payload is inconsistent")
             }
-            prompt
+            (prompt, 2_000)
         }
         AiSnapshotContent::SearchAnswer {
             prompt,
@@ -4758,7 +4758,7 @@ fn validate_ai_snapshot_content(content: &AiSnapshotContent) -> Result<()> {
             if result.view != request.view {
                 bail!("The saved Luna current-view answer payload is inconsistent")
             }
-            prompt
+            (prompt, 2_000)
         }
         AiSnapshotContent::LibraryAnalysis { prompt, result } => {
             if !matches!(
@@ -4767,15 +4767,58 @@ fn validate_ai_snapshot_content(content: &AiSnapshotContent) -> Result<()> {
             ) {
                 bail!("The saved Luna analyst payload has an unsupported lens")
             }
-            prompt
+            (prompt, 2_000)
+        }
+        AiSnapshotContent::MusicResearch {
+            prompt,
+            context,
+            exchanges,
+        } => {
+            crate::ai::validate_music_research_context(context.clone())?;
+            if exchanges.is_empty() || exchanges.len() > 5 {
+                bail!("A saved music-research conversation must contain one to five exchanges")
+            }
+            for exchange in exchanges {
+                let question = exchange.question.trim();
+                if question.is_empty() || question.chars().count() > 4_000 {
+                    bail!("A saved music-research question is empty or too long")
+                }
+                let result = &exchange.result;
+                if result.answer.trim().is_empty() || result.answer.chars().count() > 12_000 {
+                    bail!("A saved music-research answer is empty or too long")
+                }
+                if result.model.trim().is_empty() || result.model.chars().count() > 80 {
+                    bail!("A saved music-research answer has an invalid model label")
+                }
+                if result.sources.len() > 12 || result.local_inspection_count > 20 {
+                    bail!("A saved music-research answer exceeds its bounded tool limits")
+                }
+                for source in &result.sources {
+                    if source.title.trim().is_empty()
+                        || source.title.chars().count() > 180
+                        || !source.url.starts_with("https://")
+                        || source.url.chars().count() > 2_000
+                    {
+                        bail!("A saved music-research answer contains an invalid source")
+                    }
+                }
+            }
+            if exchanges
+                .last()
+                .map(|exchange| exchange.question.trim() != prompt.trim())
+                .unwrap_or(true)
+            {
+                bail!("The saved music-research prompt does not match its latest exchange")
+            }
+            (prompt, 4_000)
         }
     };
 
-    if prompt.chars().count() > 2_000 {
-        bail!("Luna snapshot prompts cannot exceed 2,000 characters")
+    if prompt.chars().count() > prompt_limit {
+        bail!("The Luna snapshot prompt is too long")
     }
     if !matches!(content, AiSnapshotContent::LibraryAnalysis { .. }) && prompt.trim().is_empty() {
-        bail!("A Luna search or chart snapshot requires its original prompt")
+        bail!("A Luna snapshot requires its original prompt")
     }
     Ok(())
 }
@@ -4935,6 +4978,71 @@ pub fn save_ai_snapshot_for_app(
 pub fn delete_ai_snapshot_for_app(app: &AppHandle, id: i64) -> Result<()> {
     let (conn, _) = open(app)?;
     delete_ai_snapshot(&conn, id)
+}
+
+fn normalize_ai_markdown_export(input: AiMarkdownExportRequest) -> Result<(String, String)> {
+    let title = input.title.trim();
+    if title.is_empty() || title.chars().count() > 160 {
+        bail!("Name the AI Markdown export with no more than 160 characters")
+    }
+    let mut markdown = input.markdown.replace("\r\n", "\n").replace('\r', "\n");
+    if markdown.trim().is_empty() {
+        bail!("There is no AI content to export")
+    }
+    if markdown.len() > 1_000_000 {
+        bail!("The AI Markdown export is too large")
+    }
+    if !markdown.ends_with('\n') {
+        markdown.push('\n');
+    }
+    Ok((title.to_string(), markdown))
+}
+
+#[cfg(not(test))]
+pub fn export_ai_markdown_for_app(
+    app: &AppHandle,
+    input: AiMarkdownExportRequest,
+) -> Result<ExportResult> {
+    let (title, markdown) = normalize_ai_markdown_export(input)?;
+    let (conn, _) = open(app)?;
+    let export_dir = app
+        .path()
+        .app_data_dir()
+        .context("Could not resolve the app data directory")?
+        .join("exports");
+    fs::create_dir_all(&export_dir).context("Could not create export directory")?;
+    let path = export_dir.join(format!(
+        "music-library-ai-{}-{}.md",
+        safe_file_segment(&title),
+        Utc::now().format("%Y%m%d-%H%M%S")
+    ));
+    fs::write(&path, markdown.as_bytes())
+        .with_context(|| format!("Could not write AI Markdown export {}", path.display()))?;
+    let line_count = markdown.lines().count();
+    let request_json = serde_json::to_string(&json!({
+        "title": title,
+        "characterCount": markdown.chars().count(),
+        "byteCount": markdown.len()
+    }))
+    .context("Could not serialize the AI Markdown export record")?;
+    conn.execute(
+        "
+        INSERT INTO exports (created_at, view, format, row_count, path, request_json)
+        VALUES (?1, 'ai', 'md', ?2, ?3, ?4)
+        ",
+        params![
+            Utc::now().to_rfc3339(),
+            line_count as i64,
+            path.display().to_string(),
+            request_json
+        ],
+    )
+    .context("Could not record the AI Markdown export")?;
+    Ok(ExportResult {
+        path: path.display().to_string(),
+        format: "md".to_string(),
+        row_count: line_count,
+    })
 }
 
 fn playlist_value_key(value: Option<&str>, fallback: &str) -> String {
@@ -12516,9 +12624,86 @@ mod tests {
             1
         );
 
+        let saved_research = save_ai_snapshot(
+            &conn,
+            SaveAiSnapshotRequest {
+                title: "How did Industrial Metal develop?".to_string(),
+                content: AiSnapshotContent::MusicResearch {
+                    prompt: "How did Industrial Metal develop?".to_string(),
+                    context: crate::ai::AiMusicResearchContext {
+                        workspace: "Genres".to_string(),
+                        selected_entity_type: Some("genre".to_string()),
+                        selected_entity_id: Some("industrial metal".to_string()),
+                        selected_label: Some("Industrial Metal".to_string()),
+                        selected_subtitle: Some("67 albums in your library".to_string()),
+                    },
+                    exchanges: vec![crate::ai::AiMusicResearchExchange {
+                        question: "How did Industrial Metal develop?".to_string(),
+                        result: crate::ai::AiMusicResearchAnswer {
+                            answer: "## Foundations\n\nIndustrial music and heavy metal converged gradually."
+                                .to_string(),
+                            sources: vec![crate::ai::AiMusicResearchSource {
+                                title: "Research source".to_string(),
+                                url: "https://example.com/industrial-metal".to_string(),
+                            }],
+                            model: "gpt-5.6-luna".to_string(),
+                            usage: crate::ai::AiUsage {
+                                input_tokens: Some(620),
+                                cached_input_tokens: Some(80),
+                                output_tokens: Some(240),
+                            },
+                            used_web_search: true,
+                            local_inspection_count: 20,
+                        },
+                    }],
+                },
+            },
+        )
+        .expect("save music research snapshot");
+        assert_eq!(
+            list_ai_snapshots(&conn, Some("musicResearch"))
+                .unwrap()
+                .len(),
+            1
+        );
+        match &saved_research.content {
+            AiSnapshotContent::MusicResearch {
+                context, exchanges, ..
+            } => {
+                assert_eq!(context.selected_label.as_deref(), Some("Industrial Metal"));
+                assert_eq!(exchanges.len(), 1);
+                assert!(exchanges[0].result.answer.starts_with("## Foundations"));
+                assert_eq!(exchanges[0].result.sources.len(), 1);
+            }
+            _ => panic!("expected a music research snapshot"),
+        }
+
         delete_ai_snapshot(&conn, saved.id).expect("delete Luna snapshot");
         delete_ai_snapshot(&conn, saved_answer.id).expect("delete Luna answer snapshot");
+        delete_ai_snapshot(&conn, saved_research.id).expect("delete music research snapshot");
         assert!(list_ai_snapshots(&conn, None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn normalizes_and_bounds_ai_markdown_exports() {
+        let (title, markdown) = normalize_ai_markdown_export(AiMarkdownExportRequest {
+            title: "  Industrial Metal research  ".to_string(),
+            markdown: "# Industrial Metal\r\n\r\nA saved answer.".to_string(),
+        })
+        .expect("normalize Markdown export");
+        assert_eq!(title, "Industrial Metal research");
+        assert_eq!(markdown, "# Industrial Metal\n\nA saved answer.\n");
+
+        assert!(normalize_ai_markdown_export(AiMarkdownExportRequest {
+            title: "Empty".to_string(),
+            markdown: "   ".to_string(),
+        })
+        .is_err());
+        assert!(normalize_ai_markdown_export(AiMarkdownExportRequest {
+            title: "Too large".to_string(),
+            markdown: "x".repeat(1_000_001),
+        })
+        .is_err());
     }
 
     fn test_playlist_plan() -> AiPlaylistPlan {

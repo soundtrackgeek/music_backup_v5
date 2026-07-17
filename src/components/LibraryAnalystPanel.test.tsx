@@ -8,6 +8,7 @@ import { LibraryAnalystPanel } from "./LibraryAnalystPanel";
 const backend = vi.hoisted(() => ({
   analyzeLibrary: vi.fn(),
   deleteAiSnapshot: vi.fn(),
+  exportAiMarkdown: vi.fn(),
   listAiSnapshots: vi.fn(),
   saveAiSnapshot: vi.fn(),
 }));
@@ -18,6 +19,7 @@ describe("LibraryAnalystPanel", () => {
   beforeEach(() => {
     backend.analyzeLibrary.mockReset();
     backend.deleteAiSnapshot.mockReset();
+    backend.exportAiMarkdown.mockReset();
     backend.listAiSnapshots.mockReset();
     backend.saveAiSnapshot.mockReset();
     backend.listAiSnapshots.mockResolvedValue([]);

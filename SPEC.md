@@ -3,7 +3,7 @@
 Last updated: 2026-07-17
 Status: Living product and implementation contract
 Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, an aggregate-only Statistics Library analyst, a reviewable local Playlist Builder, verified outside-library artist/album/song Discovery, and global context-aware Music Research with cited web search are implemented through Luna-generated typed recipes/function calls, bounded external tools, and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
-Current package version: 0.59.0
+Current package version: 0.60.0
 SQLite schema version: 23
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
@@ -330,8 +330,10 @@ AI boundary:
 - Library analyst never sends album, track, or artist names, raw rows, file/source paths, filenames, covers, saved objects, or arbitrary SQL results. Genre labels, decades, fixed metadata fields, rating buckets, and timestamps may leave the machine only after the user's explicit Analyze action; the UI reports the section count, aggregate-point count, and combined token usage.
 - Global Music Research sends the current workspace plus the displayed selected album, artist, or genre label/subtitle only after the user submits a question. The selected local row identifier remains inside the app and is used only if Luna requests the strict local inspection tool.
 - The selected-context inspector returns exact summary counts and no more than 20 track names for one selected album or 20 album names for one selected artist/genre. It excludes file paths, filenames, covers, saved objects, arbitrary columns, unrelated rows, and the database itself.
-- Search and Charts always open global Music Research in general mode, independently of their integrated query/filter and current-view assistants. Web-supported claims retain HTTPS citations, and conversation history is bounded in memory and reset when the workspace or selected entity changes.
-- Successful Search/Chart compilations, current-view answers, and Library analyst reports save automatically as typed local SQLite snapshots containing the prompt, exact AI output, creation time, and source library import/count state. Current-view answer snapshots also retain their filtered request. Reopening never calls OpenAI; query snapshots reapply filters to the current library, while answer and analyst snapshots preserve the exact historical output.
+- Search and Charts always open global Music Research in general mode, independently of their integrated query/filter and current-view assistants. Web-supported claims retain HTTPS citations, and the active conversation is bounded and reset when the workspace or selected entity changes.
+- Successful Search/Chart compilations, current-view answers, Library analyst reports, and Music Research conversations save automatically as typed local SQLite snapshots containing the prompt, exact AI output, creation time, and source library import/count state. Current-view answer snapshots also retain their filtered request; research snapshots retain their exact selected context, citations, usage, and latest five exchanges. Reopening never calls OpenAI; query snapshots reapply filters to the current library, while answer, analyst, and research snapshots preserve the exact historical output.
+- All user-facing AI result panels export a self-contained UTF-8 Markdown document. Exports include the relevant prompt, answer/report/plan, evidence and citations, model/token metadata, and recorded library state for reopened snapshots or saved items, while excluding the OpenAI key and local audio paths.
+- Music Research renders GitHub-flavored Markdown with raw HTML disabled, remote images suppressed, and clickable answer links restricted to HTTPS URLs.
 - Never send the database, full result sets, unbounded raw rows, file paths, filenames, covers, saved objects, unrelated statistics payloads, or the OpenAI key as model context.
 - Validate every model-produced field, operator, numeric range, sort, limit, target, and chart metric before executing the existing local SQLite search tool.
 - Store the production key outside `AppSettings`, SQLite, localStorage, logs, exports, and backups. Windows Credential Manager is the primary source; `OPENAI_API_KEY` and repo-root `.env` are debug-only fallbacks.
@@ -978,6 +980,12 @@ Implemented in version `0.59.0`:
 - Albums, Artists, and Genres attach the currently selected entity as an explicit context clue. Search and Charts deliberately use general mode so their integrated Ask Luna state cannot silently become research context.
 - Luna can use cited web search and, only when the question needs the user's collection, one strict local inspection of the selected entity. SQLite shares bounded summary data plus at most 20 track or album names and never shares paths, filenames, covers, unrelated rows, saved objects, or the database.
 - Up to five completed exchanges remain in memory for follow-up questions, no more than eight validated turns are sent, and changing the workspace or selection clears the conversation. Answers disclose web/local tool use and token usage; research is not saved automatically as a snapshot.
+
+Implemented in version `0.60.0`:
+
+- Every successful Music Research answer automatically saves its exact selected context, Markdown answer, citations, disclosures, usage, and latest five exchanges in the existing typed local Snapshot history. Reopening or deleting a research snapshot does not call Luna.
+- Music Research answers render safe GitHub-flavored Markdown with raw HTML ignored, remote images suppressed, and answer links restricted to HTTPS.
+- Search/Chart compilation, current-view answers, Library analyst reports, Music Research conversations, Playlist Builder results, and outside-library Discovery results export to self-contained UTF-8 Markdown, including reopened snapshots and saved items without another AI or catalog call.
 
 Candidate prompts:
 

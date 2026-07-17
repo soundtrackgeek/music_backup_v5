@@ -9,6 +9,7 @@ import { NaturalLanguageQueryPanel } from "./NaturalLanguageQueryPanel";
 const backend = vi.hoisted(() => ({
   compileNaturalLanguageQuery: vi.fn(),
   deleteAiSnapshot: vi.fn(),
+  exportAiMarkdown: vi.fn(),
   listAiSnapshots: vi.fn(),
   saveAiSnapshot: vi.fn(),
 }));
@@ -19,6 +20,7 @@ describe("NaturalLanguageQueryPanel", () => {
   beforeEach(() => {
     backend.compileNaturalLanguageQuery.mockReset();
     backend.deleteAiSnapshot.mockReset();
+    backend.exportAiMarkdown.mockReset();
     backend.listAiSnapshots.mockReset();
     backend.saveAiSnapshot.mockReset();
     backend.listAiSnapshots.mockResolvedValue([]);
