@@ -2,6 +2,7 @@
 use crate::db;
 #[cfg(not(test))]
 use crate::models::{ImportProgress, ImportSummary};
+use crate::wishlist;
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
 use csv::StringRecord;
@@ -261,6 +262,8 @@ pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<Import
                 ],
             )
             .context("Could not update completed import run")?;
+            wishlist::reconcile_for_connection(&conn)
+                .context("Could not reconcile the wish list after import")?;
 
             emit_progress(
                 &app,

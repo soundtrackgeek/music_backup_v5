@@ -16,6 +16,12 @@ describe("outside-library discovery", () => {
     expect(await screen.findByText("Porcupine Tree")).toBeInTheDocument();
     expect(screen.getByText("5 artists · releases from 1992")).toBeInTheDocument();
     expect(screen.getByText("3 owned excluded")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add Porcupine Tree to Wish List" }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Added Porcupine Tree to Wish List" }),
+      ).toBeDisabled();
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Save list" }));
     await waitFor(() => {

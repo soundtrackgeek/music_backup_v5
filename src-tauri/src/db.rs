@@ -338,8 +338,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_three_schema_exists(conn)?
-    {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_four_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -604,6 +603,22 @@ pub fn migrate(conn: &Connection) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_saved_external_discoveries_updated
             ON saved_external_discoveries(updated_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS wish_list_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity TEXT NOT NULL CHECK(entity IN ('artist', 'album')),
+            title TEXT NOT NULL,
+            artist TEXT NOT NULL DEFAULT '',
+            year INTEGER,
+            musicbrainz_id TEXT,
+            musicbrainz_url TEXT,
+            source TEXT NOT NULL,
+            identity_key TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_wish_list_items_entity_created
+            ON wish_list_items(entity, created_at DESC, id DESC);
 
         CREATE TABLE IF NOT EXISTS exports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -916,7 +931,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_origin_country_tables(conn)?;
     ensure_musicbrainz_artist_info_tables(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
-    conn.execute_batch("PRAGMA user_version = 23;")
+    conn.execute_batch("PRAGMA user_version = 24;")
         .context("Could not update SQLite schema version")?;
     Ok(())
 }
@@ -12710,6 +12725,7 @@ mod tests {
         assert!(schema_table_exists(&conn, "saved_playlists").expect("saved playlist table exists"));
         assert!(schema_table_exists(&conn, "saved_external_discoveries")
             .expect("saved external discovery table exists"));
+        assert!(schema_table_exists(&conn, "wish_list_items").expect("wish list table exists"));
     }
 
     #[test]

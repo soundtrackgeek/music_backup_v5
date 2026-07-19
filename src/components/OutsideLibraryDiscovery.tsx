@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   Album,
+  Check,
   ExternalLink,
   Globe2,
+  Heart,
   History,
   Music2,
   Save,
@@ -14,8 +16,10 @@ import {
 } from "lucide-react";
 
 import {
+  addWishListItem,
   deleteSavedExternalDiscovery,
   discoverOutsideLibrary,
+  listWishList,
   listSavedExternalDiscoveries,
   openExternalUrl,
   saveExternalDiscovery,
@@ -121,6 +125,9 @@ export function OutsideLibraryDiscovery({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedError, setSavedError] = useState<string | null>(null);
+  const [wishListError, setWishListError] = useState<string | null>(null);
+  const [wishListItemIds, setWishListItemIds] = useState<Set<string>>(new Set());
+  const [addingWishListItemId, setAddingWishListItemId] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -131,6 +138,30 @@ export function OutsideLibraryDiscovery({
       .catch((loadError) => {
         if (!disposed) {
           setSavedError(loadError instanceof Error ? loadError.message : String(loadError));
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    void listWishList()
+      .then((wishList) => {
+        if (!disposed) {
+          setWishListItemIds(
+            new Set(
+              wishList.items.flatMap((item) =>
+                item.musicbrainzId ? [`${item.entity}:${item.musicbrainzId}`] : [],
+              ),
+            ),
+          );
+        }
+      })
+      .catch((loadError) => {
+        if (!disposed) {
+          setWishListError(loadError instanceof Error ? loadError.message : String(loadError));
         }
       });
     return () => {
@@ -214,6 +245,30 @@ export function OutsideLibraryDiscovery({
     }
   }
 
+  async function addResultToWishList(item: ExternalDiscoveryResponse["items"][number]) {
+    if (item.entity === "song") return;
+    const itemKey = `${item.entity}:${item.id}`;
+    if (wishListItemIds.has(itemKey) || addingWishListItemId) return;
+    setAddingWishListItemId(itemKey);
+    setWishListError(null);
+    try {
+      await addWishListItem({
+        entity: item.entity,
+        title: item.title,
+        artist: item.entity === "artist" ? "" : item.artist,
+        year: item.year,
+        musicbrainzId: item.id,
+        musicbrainzUrl: item.url,
+        source: "MusicBrainz discovery",
+      });
+      setWishListItemIds((previous) => new Set(previous).add(itemKey));
+    } catch (addError) {
+      setWishListError(addError instanceof Error ? addError.message : String(addError));
+    } finally {
+      setAddingWishListItemId(null);
+    }
+  }
+
   const activeSavedDiscovery =
     saved.find((entry) => entry.id === activeSavedId) ?? undefined;
 
@@ -267,6 +322,7 @@ export function OutsideLibraryDiscovery({
         <p className="outside-library-note">Import a library before checking what is missing.</p>
       ) : null}
       {error ? <p className="error-message">{error}</p> : null}
+      {wishListError ? <p className="error-message">{wishListError}</p> : null}
 
       {response ? (
         <div className="outside-library-content">
@@ -329,14 +385,32 @@ export function OutsideLibraryDiscovery({
                       </div>
                     ) : null}
                   </div>
-                  <button
-                    type="button"
-                    aria-label={`Open ${item.title} in MusicBrainz`}
-                    title="Open in MusicBrainz"
-                    onClick={() => void openResult(item.url)}
-                  >
-                    <ExternalLink size={16} />
-                  </button>
+                  <div className="outside-library-result-actions">
+                    {item.entity !== "song" ? (
+                      <button
+                        className="outside-library-wish-button"
+                        type="button"
+                        aria-label={`${wishListItemIds.has(`${item.entity}:${item.id}`) ? "Added" : "Add"} ${item.title} to Wish List`}
+                        title={wishListItemIds.has(`${item.entity}:${item.id}`) ? "Already on Wish List" : "Add to Wish List"}
+                        disabled={
+                          wishListItemIds.has(`${item.entity}:${item.id}`) ||
+                          addingWishListItemId === `${item.entity}:${item.id}`
+                        }
+                        onClick={() => void addResultToWishList(item)}
+                      >
+                        {wishListItemIds.has(`${item.entity}:${item.id}`) ? <Check size={15} /> : <Heart size={15} />}
+                        <span>{wishListItemIds.has(`${item.entity}:${item.id}`) ? "Added" : "Wish List"}</span>
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      aria-label={`Open ${item.title} in MusicBrainz`}
+                      title="Open in MusicBrainz"
+                      onClick={() => void openResult(item.url)}
+                    >
+                      <ExternalLink size={16} />
+                    </button>
+                  </div>
                 </article>
               ))}
               {response.items.length === 0 ? (

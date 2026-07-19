@@ -56,6 +56,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  addWishListItem,
   deleteSavedChart,
   deleteSavedSearch,
   clearCoverImageCache,
@@ -93,6 +94,7 @@ import {
   listMusicTools,
   listImportRuns,
   listMusicBrainzOverlaySyncLog,
+  listWishList,
   listSavedCharts,
   listSavedSearches,
   loadCachedSettings,
@@ -285,6 +287,7 @@ import {
 import { SearchWorkspace } from "./workspaces/SearchWorkspace";
 import { SettingsWorkspace } from "./workspaces/SettingsWorkspace";
 import { PlaylistBuilderWorkspace } from "./workspaces/PlaylistBuilderWorkspace";
+import { WishListWorkspace } from "./workspaces/WishListWorkspace";
 import {
   checkForAppUpdate,
   installAppUpdate,
@@ -3404,6 +3407,7 @@ function MusicBrainzArtistDiscographyPanel({
               />
               <MusicBrainzReleaseTable
                 rows={rows}
+                artistName={artist.name}
                 onSetReleaseDecision={onSetReleaseDecision}
               />
             </>
@@ -3495,15 +3499,68 @@ function MusicBrainzArtistCandidateTable({
 
 function MusicBrainzReleaseTable({
   rows,
+  artistName,
   onSetReleaseDecision,
 }: {
   rows: MusicBrainzArtistReleaseRow[];
+  artistName: string;
   onSetReleaseDecision: (
     row: MusicBrainzArtistReleaseRow,
     decision: "not-in-scope" | "include",
   ) => void;
 }) {
   const visibleRows = rows.filter((row) => row.status !== "excluded");
+  const [wishListReleaseIds, setWishListReleaseIds] = useState<Set<string>>(new Set());
+  const [addingReleaseId, setAddingReleaseId] = useState<string | null>(null);
+  const [wishListError, setWishListError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    void listWishList()
+      .then((wishList) => {
+        if (!disposed) {
+          setWishListReleaseIds(
+            new Set(
+              wishList.items.flatMap((item) =>
+                item.entity === "album" && item.musicbrainzId
+                  ? [item.musicbrainzId]
+                  : [],
+              ),
+            ),
+          );
+        }
+      })
+      .catch((loadError) => {
+        if (!disposed) {
+          setWishListError(loadError instanceof Error ? loadError.message : String(loadError));
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  async function addReleaseToWishList(row: MusicBrainzArtistReleaseRow) {
+    if (addingReleaseId || wishListReleaseIds.has(row.releaseMbid)) return;
+    setAddingReleaseId(row.releaseMbid);
+    setWishListError(null);
+    try {
+      await addWishListItem({
+        entity: "album",
+        title: row.title,
+        artist: artistName,
+        year: row.year,
+        musicbrainzId: row.releaseMbid,
+        musicbrainzUrl: `https://musicbrainz.org/release-group/${encodeURIComponent(row.releaseMbid)}`,
+        source: "MusicBrainz discography",
+      });
+      setWishListReleaseIds((previous) => new Set(previous).add(row.releaseMbid));
+    } catch (addError) {
+      setWishListError(addError instanceof Error ? addError.message : String(addError));
+    } finally {
+      setAddingReleaseId(null);
+    }
+  }
 
   if (visibleRows.length === 0) {
     return (
@@ -3522,7 +3579,7 @@ function MusicBrainzReleaseTable({
         <span role="columnheader">Status</span>
         <span role="columnheader">Local match</span>
         <span role="columnheader">Confidence</span>
-        <span role="columnheader">Scope</span>
+        <span role="columnheader">Actions</span>
       </div>
       {visibleRows.map((row) => (
         <div
@@ -3557,19 +3614,35 @@ function MusicBrainzReleaseTable({
                 <RotateCcw size={16} />
               </button>
             ) : row.status === "missing" ? (
-              <button
-                className="icon-button"
-                type="button"
-                title="Mark not in scope"
-                aria-label={`Mark ${row.title} as not in scope`}
-                onClick={() => onSetReleaseDecision(row, "not-in-scope")}
-              >
-                <Ban size={16} />
-              </button>
+              <>
+                <button
+                  className={`icon-button${wishListReleaseIds.has(row.releaseMbid) ? " active" : ""}`}
+                  type="button"
+                  title={wishListReleaseIds.has(row.releaseMbid) ? "Already on Wish List" : "Add to Wish List"}
+                  aria-label={`${wishListReleaseIds.has(row.releaseMbid) ? "Added" : "Add"} ${row.title} to Wish List`}
+                  disabled={
+                    wishListReleaseIds.has(row.releaseMbid) ||
+                    addingReleaseId === row.releaseMbid
+                  }
+                  onClick={() => void addReleaseToWishList(row)}
+                >
+                  {wishListReleaseIds.has(row.releaseMbid) ? <Check size={16} /> : <Heart size={16} />}
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  title="Mark not in scope"
+                  aria-label={`Mark ${row.title} as not in scope`}
+                  onClick={() => onSetReleaseDecision(row, "not-in-scope")}
+                >
+                  <Ban size={16} />
+                </button>
+              </>
             ) : null}
           </span>
         </div>
       ))}
+      {wishListError ? <p className="error-message musicbrainz-wish-list-error">{wishListError}</p> : null}
     </div>
   );
 }
@@ -11258,6 +11331,8 @@ export default function App() {
               </section>
             </section>
           </section>
+        ) : activeSection === "Wish List" ? (
+          <WishListWorkspace />
         ) : activeSection === "Artists" ? (
           <ArtistsWorkspace
             actions={
@@ -15395,6 +15470,34 @@ export default function App() {
               <div>
                 <UsersRound size={17} />
                 <span>Artist bubbles open catalog deep dives</span>
+              </div>
+            </section>
+          </aside>
+        ) : activeSection === "Wish List" ? (
+          <aside className="detail-panel wish-list-detail" aria-label="Wish List details">
+            <div className="detail-header">
+              <Heart size={20} />
+              <div>
+                <h2>Collection watch</h2>
+                <p>Automatically reconciled</p>
+              </div>
+            </div>
+            <section className="calculation-list">
+              <div>
+                <UsersRound size={17} />
+                <span>Save artists from Luna discovery</span>
+              </div>
+              <div>
+                <Album size={17} />
+                <span>Save missing MusicBrainz albums</span>
+              </div>
+              <div>
+                <Sparkles size={17} />
+                <span>Acquired music is removed after import</span>
+              </div>
+              <div>
+                <ExternalLink size={17} />
+                <span>MusicBrainz references stay one click away</span>
               </div>
             </section>
           </aside>

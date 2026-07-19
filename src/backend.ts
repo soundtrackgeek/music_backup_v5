@@ -111,6 +111,9 @@ import type {
   SaveExternalDiscoveryRequest,
   SavePlaylistRequest,
   SavedExternalDiscovery,
+  AddWishListItemRequest,
+  WishListItem,
+  WishListResponse,
   SavedPlaylist,
   SaveAiSnapshotRequest,
   ArtistListRequest,
@@ -172,6 +175,7 @@ import type {
 
 let mockSavedPlaylists: SavedPlaylist[] = [];
 let mockSavedExternalDiscoveries: SavedExternalDiscovery[] = [];
+let mockWishListItems: WishListItem[] = [];
 
 type RawExportResult = Omit<ExportResult, "pathCopied">;
 
@@ -912,6 +916,45 @@ export async function deleteSavedExternalDiscovery(id: number) {
     return;
   }
   return invoke<void>("delete_saved_external_discovery", { id });
+}
+
+export async function listWishList() {
+  if (!isTauriRuntime()) {
+    return {
+      items: mockWishListItems,
+      autoRemovedCount: 0,
+    } satisfies WishListResponse;
+  }
+  return invoke<WishListResponse>("list_wish_list");
+}
+
+export async function addWishListItem(input: AddWishListItemRequest) {
+  if (!isTauriRuntime()) {
+    const existing = mockWishListItems.find((item) =>
+      input.musicbrainzId
+        ? item.entity === input.entity && item.musicbrainzId === input.musicbrainzId
+        : item.entity === input.entity &&
+          item.title.localeCompare(input.title, undefined, { sensitivity: "base" }) === 0 &&
+          item.artist.localeCompare(input.artist, undefined, { sensitivity: "base" }) === 0,
+    );
+    if (existing) return existing;
+    const item = {
+      ...input,
+      id: mockWishListItems.reduce((largest, entry) => Math.max(largest, entry.id), 0) + 1,
+      createdAt: new Date().toISOString(),
+    } satisfies WishListItem;
+    mockWishListItems = [item, ...mockWishListItems];
+    return item;
+  }
+  return invoke<WishListItem>("add_wish_list_item", { input });
+}
+
+export async function removeWishListItem(id: number) {
+  if (!isTauriRuntime()) {
+    mockWishListItems = mockWishListItems.filter((item) => item.id !== id);
+    return;
+  }
+  return invoke<void>("remove_wish_list_item", { id });
 }
 
 export async function exportPlaylist(input: ExportPlaylistRequest) {

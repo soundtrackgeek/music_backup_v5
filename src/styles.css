@@ -3206,8 +3206,8 @@ button {
 .musicbrainz-release-results .result-table-row {
   grid-template-columns:
     minmax(240px, 2fr) 70px 96px minmax(220px, 1.5fr)
-    92px 72px;
-  min-width: 840px;
+    92px 84px;
+  min-width: 852px;
 }
 
 .artist-album-results .result-table-head,
@@ -4819,6 +4819,7 @@ button {
 .musicbrainz-scope-action {
   display: flex;
   justify-content: flex-start;
+  gap: 4px;
 }
 
 .musicbrainz-scope-action .icon-button {
@@ -5211,6 +5212,16 @@ button {
   border-color: #2f3d38;
   color: #dce7e3;
   background: #171f1c;
+}
+
+.musicbrainz-scope-action .icon-button.active {
+  border-color: #9ecbc1;
+  color: #0f766e;
+  background: #eaf7f3;
+}
+
+.musicbrainz-wish-list-error {
+  margin: 10px 12px;
 }
 
 :root[data-theme="dark"] .natural-query-form > input,
@@ -7374,7 +7385,7 @@ button {
 
 .outside-library-result-list article {
   display: grid;
-  grid-template-columns: 26px 32px minmax(0, 1fr) 34px;
+  grid-template-columns: 26px 32px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -7449,6 +7460,332 @@ button {
   color: #0f766e;
   border-color: #83b9ae;
   background: #edf7f4;
+}
+
+.outside-library-result-actions {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.outside-library-result-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 32px;
+  height: 32px;
+  border: 1px solid #d4dfdb;
+  border-radius: 7px;
+  color: #536d65;
+  background: transparent;
+  padding: 0 8px;
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.outside-library-result-actions button:hover,
+.outside-library-result-actions button:focus-visible {
+  color: #0f766e;
+  border-color: #83b9ae;
+  background: #edf7f4;
+}
+
+.outside-library-result-actions button:disabled {
+  color: #378276;
+  border-color: #b8d9d2;
+  background: #edf7f4;
+  cursor: default;
+}
+
+/* Wish List */
+.wish-list-workspace {
+  gap: 18px;
+}
+
+.wish-list-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #d7e1dd;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.wish-list-summary > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 15px 17px;
+}
+
+.wish-list-summary > div + div {
+  border-left: 1px solid #e0e7e4;
+}
+
+.wish-list-summary svg {
+  color: #a95463;
+}
+
+.wish-list-summary span {
+  overflow: hidden;
+  color: #687772;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wish-list-summary strong {
+  color: #21342f;
+  font-size: 21px;
+  line-height: 26px;
+}
+
+.wish-list-reconciled {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #b8dbd3;
+  border-radius: 8px;
+  color: #236a5f;
+  background: #eff9f6;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 680;
+}
+
+.wish-list-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.wish-list-group {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d7e1dd;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.wish-list-group > header {
+  border-bottom: 1px solid #e1e8e5;
+  padding: 14px 15px;
+}
+
+.wish-list-group > header > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wish-list-group-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: #7c4650;
+  background: #f8edef;
+}
+
+.wish-list-group-icon.album {
+  color: #276c62;
+  background: #edf7f4;
+}
+
+.wish-list-group h2,
+.wish-list-group p {
+  margin: 0;
+}
+
+.wish-list-group h2 {
+  color: #1c302b;
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.wish-list-group p {
+  color: #77847f;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.wish-list-items {
+  display: grid;
+}
+
+.wish-list-items article {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  border-bottom: 1px solid #e5ebe8;
+  padding: 11px 12px;
+}
+
+.wish-list-items article:last-child {
+  border-bottom: 0;
+}
+
+.wish-list-item-mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  color: #4d7067;
+  background: #f0f6f4;
+}
+
+.wish-list-item-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.wish-list-item-copy strong,
+.wish-list-item-copy span,
+.wish-list-item-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wish-list-item-copy strong {
+  color: #20352f;
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.wish-list-item-copy span,
+.wish-list-item-copy small {
+  color: #6d7b76;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.wish-list-item-copy small {
+  color: #87918d;
+}
+
+.wish-list-item-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.wish-list-item-actions .icon-button {
+  width: 31px;
+  height: 31px;
+}
+
+.wish-list-empty {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  color: #82908b;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.wish-list-empty strong {
+  color: #53635e;
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.wish-list-empty span {
+  max-width: 260px;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+:root[data-theme="dark"] .wish-list-summary,
+:root[data-theme="dark"] .wish-list-group {
+  border-color: #33463f;
+  background: #151e1b;
+}
+
+:root[data-theme="dark"] .wish-list-summary > div + div,
+:root[data-theme="dark"] .wish-list-group > header,
+:root[data-theme="dark"] .wish-list-items article {
+  border-color: #2e403a;
+}
+
+:root[data-theme="dark"] .wish-list-summary strong,
+:root[data-theme="dark"] .wish-list-group h2,
+:root[data-theme="dark"] .wish-list-item-copy strong,
+:root[data-theme="dark"] .wish-list-empty strong {
+  color: #dce9e5;
+}
+
+:root[data-theme="dark"] .wish-list-summary span,
+:root[data-theme="dark"] .wish-list-group p,
+:root[data-theme="dark"] .wish-list-item-copy span,
+:root[data-theme="dark"] .wish-list-item-copy small,
+:root[data-theme="dark"] .wish-list-empty {
+  color: #93a8a1;
+}
+
+:root[data-theme="dark"] .wish-list-group-icon,
+:root[data-theme="dark"] .wish-list-item-mark {
+  color: #d395a1;
+  background: #38252a;
+}
+
+:root[data-theme="dark"] .wish-list-group-icon.album {
+  color: #7ed0c0;
+  background: #19352f;
+}
+
+:root[data-theme="dark"] .wish-list-reconciled {
+  border-color: #37665c;
+  color: #88d7c8;
+  background: #17352f;
+}
+
+:root[data-theme="dark"] .outside-library-result-actions button {
+  border-color: #415a53;
+  color: #a8c0b9;
+}
+
+:root[data-theme="dark"] .outside-library-result-actions button:hover,
+:root[data-theme="dark"] .outside-library-result-actions button:focus-visible,
+:root[data-theme="dark"] .outside-library-result-actions button:disabled {
+  border-color: #5d8e83;
+  color: #8ee0d1;
+  background: #1b352f;
+}
+
+@media (max-width: 1050px) {
+  .wish-list-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .wish-list-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .wish-list-summary > div + div {
+    border-top: 1px solid #e0e7e4;
+    border-left: 0;
+  }
+
+  .outside-library-wish-button span {
+    display: none;
+  }
 }
 
 .outside-library-tags {

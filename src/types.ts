@@ -835,6 +835,28 @@ export type SavedExternalDiscovery = {
   updatedAt: string;
 };
 
+export type WishListEntity = "artist" | "album";
+
+export type AddWishListItemRequest = {
+  entity: WishListEntity;
+  title: string;
+  artist: string;
+  year: number | null;
+  musicbrainzId: string | null;
+  musicbrainzUrl: string | null;
+  source: string;
+};
+
+export type WishListItem = AddWishListItemRequest & {
+  id: number;
+  createdAt: string;
+};
+
+export type WishListResponse = {
+  items: WishListItem[];
+  autoRemovedCount: number;
+};
+
 export type AiConnectionTest = {
   model: string;
   message: string;

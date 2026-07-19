@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.64.0] - 2026-07-19
+### Added
+- Added a dedicated **Wish List** workspace with separate artist and album sections, persistent SQLite storage, manual removal, and MusicBrainz links when available.
+- Added one-click Wish List actions to missing albums in the selected artist's MusicBrainz Discography and to artist/album results in **Find what your library is missing**.
+- Added automatic Wish List reconciliation after MusicBee imports and whenever the workspace opens, using MusicBrainz IDs and normalized local artist/album identities to remove newly acquired music.
+- Added web-preview behavior plus React and Rust coverage for adding, deduplicating, listing, linking, removing, and reconciling Wish List items.
+
+### Changed
+- Added the `W` workspace shortcut and SQLite schema version 24 for persistent Wish List items.
+- Bumped synchronized app metadata to `0.64.0`.
+
 ## [0.63.0] - 2026-07-17
 ### Added
 - Added bounded follow-up questions to Search and Charts Ask Luna, with inherited query scope for references such as `Can you list the albums I haven't rated 100% yet?`.

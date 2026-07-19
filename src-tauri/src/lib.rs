@@ -9,6 +9,7 @@ mod importer;
 mod models;
 mod musicbrainz;
 mod musicbrainz_sync;
+mod wishlist;
 
 #[cfg(not(test))]
 use models::{
@@ -323,6 +324,36 @@ async fn delete_saved_external_discovery(app: AppHandle, id: i64) -> Result<(), 
     tauri::async_runtime::spawn_blocking(move || external_discovery::delete_saved_for_app(&app, id))
         .await
         .map_err(|error| format!("Delete saved discovery task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn list_wish_list(app: AppHandle) -> Result<wishlist::WishListResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || wishlist::list_for_app(&app))
+        .await
+        .map_err(|error| format!("Wish list task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn add_wish_list_item(
+    app: AppHandle,
+    input: wishlist::AddWishListItemRequest,
+) -> Result<wishlist::WishListItem, String> {
+    tauri::async_runtime::spawn_blocking(move || wishlist::add_for_app(&app, input))
+        .await
+        .map_err(|error| format!("Add wish list item task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn remove_wish_list_item(app: AppHandle, id: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || wishlist::remove_for_app(&app, id))
+        .await
+        .map_err(|error| format!("Remove wish list item task failed: {error}"))?
         .map_err(|error| error.to_string())
 }
 
@@ -832,6 +863,9 @@ pub fn run() {
             list_saved_external_discoveries,
             save_external_discovery,
             delete_saved_external_discovery,
+            list_wish_list,
+            add_wish_list_item,
+            remove_wish_list_item,
             get_musicbrainz_cache_status,
             get_musicbrainz_origin_country_status,
             preview_musicbrainz_origin_country_import,
