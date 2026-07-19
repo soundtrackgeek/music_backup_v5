@@ -2882,7 +2882,7 @@ button {
 
 .genre-stats-table .stats-table-head,
 .genre-stats-table .stats-table-row {
-  grid-template-columns: minmax(96px, 1fr) repeat(5, minmax(72px, 0.72fr));
+  grid-template-columns: minmax(96px, 1fr) repeat(6, minmax(72px, 0.72fr));
 }
 
 .year-stats-table .stats-table-head,
@@ -2893,7 +2893,7 @@ button {
 
 .genre-stats-table .stats-table-head,
 .genre-stats-table .stats-table-row {
-  grid-template-columns: minmax(140px, 1.4fr) repeat(5, minmax(72px, 0.72fr));
+  grid-template-columns: minmax(140px, 1.4fr) repeat(6, minmax(72px, 0.72fr));
 }
 
 .import-stats-table .stats-table-head,

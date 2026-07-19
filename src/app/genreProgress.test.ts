@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import type { GenreProgressStats } from "../types";
-import { selectGenreProgressRows } from "./genreProgress";
+import {
+  fullyRatedGenreRatio,
+  selectGenreProgressRows,
+} from "./genreProgress";
 
-function genreRow(genre: string, albumCount: number): GenreProgressStats {
+function genreRow(
+  genre: string,
+  albumCount: number,
+  ratedAlbumCount = 0,
+): GenreProgressStats {
   return {
     genre,
     albumCount,
-    ratedAlbumCount: 0,
+    ratedAlbumCount,
     partialAlbumCount: 0,
     unratedAlbumCount: albumCount,
     trackCount: 0,
@@ -45,5 +52,10 @@ describe("genre progress selection", () => {
       "Ambient",
       "Synthpop",
     ]);
+  });
+
+  it("calculates the fully rated share from every album in the genre", () => {
+    expect(fullyRatedGenreRatio(genreRow("Rock", 30, 12))).toBe(0.4);
+    expect(fullyRatedGenreRatio(genreRow("Unknown", 0, 0))).toBe(0);
   });
 });

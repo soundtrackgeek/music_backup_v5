@@ -274,6 +274,7 @@ import {
   type CompletionHeatmapGenreLimit,
 } from "./app/completionHeatmap";
 import {
+  fullyRatedGenreRatio,
   genreProgressLimits,
   selectGenreProgressRows,
   type GenreProgressLimit,
@@ -7034,6 +7035,7 @@ function GenreProgressTable({
         <span role="columnheader">Genre</span>
         <span role="columnheader">Albums</span>
         <span role="columnheader">Rated</span>
+        <span role="columnheader">Fully rated %</span>
         <span role="columnheader">Partial</span>
         <span role="columnheader">Loved</span>
         <span role="columnheader">Score</span>
@@ -7043,6 +7045,7 @@ function GenreProgressTable({
           <span role="cell">{row.genre}</span>
           <span role="cell">{formatNumber(row.albumCount)}</span>
           <span role="cell">{formatNumber(row.ratedAlbumCount)}</span>
+          <span role="cell">{formatPercent(fullyRatedGenreRatio(row))}</span>
           <span role="cell">{formatNumber(row.partialAlbumCount)}</span>
           <span role="cell">{formatNumber(row.lovedTracks)}</span>
           <span role="cell">{formatAverage(row.averageAlbumScore, 1)}</span>

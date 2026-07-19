@@ -5,6 +5,10 @@ export const genreProgressLimits = [12, 25, 50, 100, "all"] as const;
 export type GenreProgressLimit = (typeof genreProgressLimits)[number];
 export type GenreProgressSort = "popularity" | "name";
 
+export function fullyRatedGenreRatio(row: GenreProgressStats) {
+  return row.albumCount > 0 ? row.ratedAlbumCount / row.albumCount : 0;
+}
+
 export function selectGenreProgressRows(
   rows: GenreProgressStats[],
   limit: number | "all",

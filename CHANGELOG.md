@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.67.1] - 2026-07-19
+### Added
+- Added a fully rated album percentage column to every Genre progress row.
+
+### Changed
+- Reused the filtered Genre progress album totals for the percentage calculation, including zero-album safety and focused rendered and unit coverage.
+- Bumped synchronized app metadata to `0.67.1`.
+
 ## [0.67.0] - 2026-07-19
 ### Added
 - Added Genre progress controls for an exact dual-ended year range, oldest-first decade jumps, canonical include/exclude genre filters, and the shared `scores` group for film, TV, animation, anime, and video-game score genres.
