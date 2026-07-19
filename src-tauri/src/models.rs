@@ -1478,6 +1478,19 @@ pub struct YearProgressRequest {
     pub excluded_genres: Vec<String>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenreProgressRequest {
+    #[serde(default)]
+    pub year_from: Option<i32>,
+    #[serde(default)]
+    pub year_to: Option<i32>,
+    #[serde(default)]
+    pub genres: Vec<String>,
+    #[serde(default)]
+    pub excluded_genres: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreProgressStats {

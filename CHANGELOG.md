@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.67.0] - 2026-07-19
+### Added
+- Added Genre progress controls for an exact dual-ended year range, oldest-first decade jumps, canonical include/exclude genre filters, and the shared `scores` group for film, TV, animation, anime, and video-game score genres.
+- Added Top 12, Top 25, Top 50, Top 100, and all-genre display choices plus popularity and alphabetical sorting.
+
+### Changed
+- Genre progress now recomputes album, rating, loved-track, and score totals for the active filters and grows vertically with the selected genre count.
+- Added a bounded SQLite Genre progress command, full web-preview data, focused frontend/Rust coverage, and responsive rendered QA.
+- Bumped synchronized app metadata to `0.67.0`.
+
 ## [0.66.0] - 2026-07-19
 ### Added
 - Added Year progress controls for exact from/to selection with a dual-ended slider, decade jumps, and canonical genre include/exclude filters using the shared `scores` group for film, TV, animation, anime, and video-game score genres.

@@ -72,6 +72,7 @@ import {
   cacheSettings,
   getAlbumCoverDataUrl,
   getDiscovery,
+  getGenreProgress,
   getMusicBrainzArtistDiscography,
   getMusicBrainzArtistInfoStatus,
   getMusicBrainzCacheStatus,
@@ -272,6 +273,12 @@ import {
   selectCompletionHeatmap,
   type CompletionHeatmapGenreLimit,
 } from "./app/completionHeatmap";
+import {
+  genreProgressLimits,
+  selectGenreProgressRows,
+  type GenreProgressLimit,
+  type GenreProgressSort,
+} from "./app/genreProgress";
 import {
   fullyRatedAlbumRatio,
   selectYearProgressRows,
@@ -6759,12 +6766,264 @@ function YearProgressTable({ rows }: { rows: YearProgressStats[] }) {
   );
 }
 
-function GenreProgressTable({ rows }: { rows: GenreProgressStats[] }) {
+function GenreProgressExplorer({
+  rows,
+  yearRows,
+  genreOptions,
+  onRequestGenreOptions,
+}: {
+  rows: GenreProgressStats[];
+  yearRows: YearProgressStats[];
+  genreOptions: string[];
+  onRequestGenreOptions?: () => void;
+}) {
+  const extent = useMemo(() => yearProgressExtent(yearRows), [yearRows]);
+  const minYear = extent?.min ?? 0;
+  const maxYear = extent?.max ?? 0;
+  const [yearFrom, setYearFrom] = useState<number | null>(null);
+  const [yearTo, setYearTo] = useState<number | null>(null);
+  const [includedGenres, setIncludedGenres] = useState<string[]>([]);
+  const [excludedGenres, setExcludedGenres] = useState<string[]>([]);
+  const [genreLimit, setGenreLimit] = useState<GenreProgressLimit>(12);
+  const [genreSort, setGenreSort] =
+    useState<GenreProgressSort>("popularity");
+  const [filteredRows, setFilteredRows] = useState<GenreProgressStats[]>(rows);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const effectiveYearFrom = clampHeatmapYear(
+    yearFrom ?? minYear,
+    minYear,
+    maxYear,
+  );
+  const effectiveYearTo = clampHeatmapYear(
+    yearTo ?? maxYear,
+    effectiveYearFrom,
+    maxYear,
+  );
+  const decades = useMemo(
+    () => (extent ? completionHeatmapDecades(minYear, maxYear) : []),
+    [extent, maxYear, minYear],
+  );
+  const selectedDecade = useMemo(() => {
+    if (effectiveYearFrom === minYear && effectiveYearTo === maxYear) {
+      return "all";
+    }
+    const matchingDecade = decades.find(
+      (decade) =>
+        effectiveYearFrom === Math.max(minYear, decade) &&
+        effectiveYearTo === Math.min(maxYear, decade + 9),
+    );
+    return matchingDecade == null ? "custom" : String(matchingDecade);
+  }, [decades, effectiveYearFrom, effectiveYearTo, maxYear, minYear]);
+  const hasYearFilter =
+    extent != null &&
+    (effectiveYearFrom !== minYear || effectiveYearTo !== maxYear);
+  const hasAggregationFilters =
+    hasYearFilter || includedGenres.length > 0 || excludedGenres.length > 0;
+  const hasActiveControls =
+    hasAggregationFilters || genreLimit !== 12 || genreSort !== "popularity";
+  const visibleRows = useMemo(
+    () => selectGenreProgressRows(filteredRows, genreLimit, genreSort),
+    [filteredRows, genreLimit, genreSort],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!hasAggregationFilters) {
+      setFilteredRows(rows);
+      setError(null);
+      setIsLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsLoading(true);
+      setError(null);
+      void getGenreProgress({
+        yearFrom: hasYearFilter ? effectiveYearFrom : null,
+        yearTo: hasYearFilter ? effectiveYearTo : null,
+        genres: includedGenres,
+        excludedGenres,
+      })
+        .then((nextRows) => {
+          if (!cancelled) setFilteredRows(nextRows);
+        })
+        .catch((nextError) => {
+          if (!cancelled) {
+            setError(
+              nextError instanceof Error
+                ? nextError.message
+                : "Could not filter genre progress.",
+            );
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    effectiveYearFrom,
+    effectiveYearTo,
+    excludedGenres,
+    hasAggregationFilters,
+    hasYearFilter,
+    includedGenres,
+    rows,
+  ]);
+
+  function selectDecade(value: string) {
+    if (value === "all") {
+      setYearFrom(null);
+      setYearTo(null);
+      return;
+    }
+    if (value === "custom") return;
+    const decade = Number(value);
+    setYearFrom(Math.max(minYear, decade));
+    setYearTo(Math.min(maxYear, decade + 9));
+  }
+
+  function resetFilters() {
+    setYearFrom(null);
+    setYearTo(null);
+    setIncludedGenres([]);
+    setExcludedGenres([]);
+    setGenreLimit(12);
+    setGenreSort("popularity");
+  }
+
+  return (
+    <div className="genre-progress-explorer">
+      {extent ? (
+        <div className="heatmap-controls genre-progress-controls">
+          <div className="heatmap-filter-grid genre-progress-filter-grid">
+            <SelectField
+              label="Genres shown"
+              value={String(genreLimit)}
+              onChange={(value) =>
+                setGenreLimit(
+                  value === "all" ? "all" : (Number(value) as GenreProgressLimit),
+                )
+              }
+              options={genreProgressLimits.map((limit) => ({
+                value: String(limit),
+                label: limit === "all" ? "All genres" : `Top ${limit}`,
+              }))}
+            />
+            <SelectField
+              label="Sort genres"
+              value={genreSort}
+              onChange={(value) => setGenreSort(value as GenreProgressSort)}
+              options={[
+                { value: "popularity", label: "Popularity" },
+                { value: "name", label: "Name A–Z" },
+              ]}
+            />
+            <SelectField
+              label="Jump to decade"
+              value={selectedDecade}
+              onChange={selectDecade}
+              options={[
+                ...(selectedDecade === "custom"
+                  ? [
+                      {
+                        value: "custom",
+                        label: `${effectiveYearFrom}–${effectiveYearTo}`,
+                      },
+                    ]
+                  : []),
+                { value: "all", label: "All years" },
+                ...decades.map((decade) => ({
+                  value: String(decade),
+                  label: `${decade}s`,
+                })),
+              ]}
+            />
+            <GenreListCriterion
+              label="Include genres"
+              values={includedGenres}
+              onChange={setIncludedGenres}
+              genreOptions={genreOptions}
+              onRequestOptions={onRequestGenreOptions}
+              placeholder="Synthpop, scores"
+            />
+            <GenreListCriterion
+              label="Exclude genres"
+              values={excludedGenres}
+              onChange={setExcludedGenres}
+              genreOptions={genreOptions}
+              onRequestOptions={onRequestGenreOptions}
+              placeholder="Comedy, TV"
+            />
+            <button
+              className="secondary-button heatmap-reset-button"
+              type="button"
+              disabled={!hasActiveControls}
+              onClick={resetFilters}
+            >
+              <RotateCcw size={15} />
+              <span>Reset</span>
+            </button>
+          </div>
+          <YearRangeSlider
+            minYear={minYear}
+            maxYear={maxYear}
+            yearFrom={effectiveYearFrom}
+            yearTo={effectiveYearTo}
+            scopeLabel="Genre progress"
+            onChange={(range) => {
+              setYearFrom(range.from);
+              setYearTo(range.to);
+            }}
+          />
+          <div className="heatmap-selection-summary" aria-live="polite">
+            <span>
+              {isLoading
+                ? "Updating genre totals…"
+                : `Showing ${formatNumber(visibleRows.length)} of ${formatNumber(filteredRows.length)} matching genres`}
+            </span>
+            <small>
+              {genreSort === "popularity"
+                ? "Ranked by album popularity"
+                : "Sorted by name"}
+              {" · oldest decades listed first · scores includes film, TV, and game scores"}
+            </small>
+          </div>
+          {error ? (
+            <p className="year-progress-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      <GenreProgressTable rows={visibleRows} filtered={hasAggregationFilters} />
+    </div>
+  );
+}
+
+function GenreProgressTable({
+  rows,
+  filtered = false,
+}: {
+  rows: GenreProgressStats[];
+  filtered?: boolean;
+}) {
   if (rows.length === 0) {
     return (
       <div className="empty-state">
         <Tags size={20} />
-        <span>No genre statistics yet.</span>
+        <span>
+          {filtered
+            ? "No genres match these filters."
+            : "No genre statistics yet."}
+        </span>
       </div>
     );
   }
@@ -6779,7 +7038,7 @@ function GenreProgressTable({ rows }: { rows: GenreProgressStats[] }) {
         <span role="columnheader">Loved</span>
         <span role="columnheader">Score</span>
       </div>
-      {rows.slice(0, 12).map((row) => (
+      {rows.map((row) => (
         <div className="stats-table-row" role="row" key={row.genre}>
           <span role="cell">{row.genre}</span>
           <span role="cell">{formatNumber(row.albumCount)}</span>
@@ -13439,7 +13698,12 @@ export default function App() {
                   </div>
                   <Tags size={18} />
                 </div>
-                <GenreProgressTable rows={statistics?.genreProgress ?? []} />
+                <GenreProgressExplorer
+                  rows={statistics?.genreProgress ?? []}
+                  yearRows={statistics?.yearProgress ?? []}
+                  genreOptions={genreSuggestionOptions}
+                  onRequestGenreOptions={requestGenreSuggestionRefresh}
+                />
               </section>
 
               <section className="stats-panel">

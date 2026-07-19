@@ -1947,6 +1947,12 @@ button {
   min-width: 0;
 }
 
+.genre-progress-explorer {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
 .heatmap-controls {
   display: grid;
   gap: 12px;
@@ -1973,6 +1979,10 @@ button {
     minmax(210px, 1.3fr)
     minmax(210px, 1.3fr)
     auto;
+}
+
+.genre-progress-filter-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
 }
 
 .heatmap-filter-grid .criterion {
@@ -6308,6 +6318,15 @@ button {
   .library-analyst-heading {
     flex-direction: column;
     gap: 12px;
+  }
+
+  .genre-progress-filter-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  }
+
+  .genre-progress-controls .heatmap-year-range-layout {
+    grid-template-columns: 72px minmax(100px, 1fr) 72px;
+    gap: 8px;
   }
 
   .search-row,

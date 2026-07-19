@@ -17,14 +17,15 @@ use models::{
     BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
-    MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
-    MusicBrainzArtistExportRequest, MusicBrainzArtistInfoImportRequest,
-    MusicBrainzArtistInfoImportSummary, MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus,
-    MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginCountryRequest,
-    MusicBrainzArtistOriginCountryUpdate, MusicBrainzArtistRefreshRequest,
-    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzOriginCountryImportRequest,
-    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
-    MusicBrainzOriginCountryStatus, MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
+    GenreProgressRequest, GenreProgressStats, MusicBrainzArtistDiscographyRequest,
+    MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
+    MusicBrainzArtistInfoImportRequest, MusicBrainzArtistInfoImportSummary,
+    MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus, MusicBrainzArtistLinkRequest,
+    MusicBrainzArtistOriginCountryRequest, MusicBrainzArtistOriginCountryUpdate,
+    MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus,
+    MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
+    MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryStatus,
+    MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
     MusicBrainzReleaseDecisionRequest, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, PerformanceProbeResponse,
     SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
@@ -618,6 +619,18 @@ async fn get_year_progress(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_genre_progress(
+    app: AppHandle,
+    request: GenreProgressRequest,
+) -> Result<Vec<GenreProgressStats>, String> {
+    tauri::async_runtime::spawn_blocking(move || db::genre_progress_for_app(&app, request))
+        .await
+        .map_err(|error| format!("Genre progress task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_discovery(app: AppHandle) -> Result<DiscoveryResponse, String> {
     tauri::async_runtime::spawn_blocking(move || db::discovery_for_app(&app))
         .await
@@ -899,6 +912,7 @@ pub fn run() {
             save_settings,
             get_statistics,
             get_year_progress,
+            get_genre_progress,
             get_discovery,
             import_musicbee_tsv,
             import_album_covers,

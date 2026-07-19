@@ -1,6 +1,6 @@
 [package]
 name = "music-library"
-version = "0.66.0"
+version = "0.67.0"
 description = "Local-first MusicBee TSV library app"
 authors = ["jtill"]
 edition = "2021"

@@ -1383,6 +1383,13 @@ export type YearProgressRequest = {
   excludedGenres: string[];
 };
 
+export type GenreProgressRequest = {
+  yearFrom: number | null;
+  yearTo: number | null;
+  genres: string[];
+  excludedGenres: string[];
+};
+
 export type GenreProgressStats = {
   genre: string;
   albumCount: number;

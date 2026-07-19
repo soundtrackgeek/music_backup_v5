@@ -139,6 +139,8 @@ import type {
   SavedChart,
   SavedSearch,
   ChartConfig,
+  GenreProgressRequest,
+  GenreProgressStats,
   StatisticsResponse,
   YearProgressRequest,
   YearProgressStats,
@@ -458,6 +460,82 @@ export async function getYearProgress(request: YearProgressRequest) {
   }
 
   return invoke<YearProgressStats[]>("get_year_progress", { request });
+}
+
+export async function getGenreProgress(request: GenreProgressRequest) {
+  if (!isTauriRuntime()) {
+    const includedGenres = new Set(expandGenreFilterKeys(request.genres));
+    const excludedGenres = new Set(
+      expandGenreFilterKeys(request.excludedGenres),
+    );
+    const rowsByGenre = new Map<
+      string,
+      GenreProgressStats & { scoreTotal: number; scoredAlbumCount: number }
+    >();
+
+    mockRows.forEach((album) => {
+      if (album.trackId != null) return;
+      if (
+        request.yearFrom != null &&
+        (album.year == null || album.year < request.yearFrom)
+      ) {
+        return;
+      }
+      if (
+        request.yearTo != null &&
+        (album.year == null || album.year > request.yearTo)
+      ) {
+        return;
+      }
+      const genre = normalizeGenreKey(album.canonicalGenre) || "unknown";
+      if (includedGenres.size > 0 && !includedGenres.has(genre)) return;
+      if (excludedGenres.has(genre)) return;
+
+      const existing = rowsByGenre.get(genre) ?? {
+        genre: album.canonicalGenre?.trim() || "Unknown",
+        albumCount: 0,
+        ratedAlbumCount: 0,
+        partialAlbumCount: 0,
+        unratedAlbumCount: 0,
+        trackCount: 0,
+        totalSeconds: 0,
+        lovedTracks: 0,
+        averageAlbumScore: null,
+        scoreTotal: 0,
+        scoredAlbumCount: 0,
+      };
+      existing.albumCount += 1;
+      existing.trackCount += album.totalTracks ?? 0;
+      existing.totalSeconds += album.totalSeconds ?? 0;
+      existing.lovedTracks += album.lovedTracks ?? 0;
+      if ((album.ratingCompleteness ?? 0) >= 1) {
+        existing.ratedAlbumCount += 1;
+      } else if ((album.ratingCompleteness ?? 0) > 0) {
+        existing.partialAlbumCount += 1;
+      } else {
+        existing.unratedAlbumCount += 1;
+      }
+      if (album.albumScore != null) {
+        existing.scoreTotal += album.albumScore;
+        existing.scoredAlbumCount += 1;
+        existing.averageAlbumScore =
+          existing.scoreTotal / existing.scoredAlbumCount;
+      }
+      rowsByGenre.set(genre, existing);
+    });
+
+    return Array.from(rowsByGenre.values())
+      .sort(
+        (left, right) =>
+          right.albumCount - left.albumCount ||
+          left.genre.localeCompare(right.genre),
+      )
+      .map(({ scoreTotal: _scoreTotal, scoredAlbumCount: _scoredCount, ...row }) =>
+        row,
+      );
+  }
+
+  return invoke<GenreProgressStats[]>("get_genre_progress", { request });
 }
 
 export async function getDiscovery() {
