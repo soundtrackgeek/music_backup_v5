@@ -1,0 +1,15 @@
+export const scoreGenreGroup = [
+  "action",
+  "animation",
+  "comedy",
+  "documentary",
+  "drama",
+  "fantasy",
+  "horror",
+  "sci-fi",
+  "thriller",
+  "tv",
+  "video game",
+  "western",
+  "anime",
+] as const;

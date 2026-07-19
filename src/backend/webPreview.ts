@@ -63,22 +63,6 @@ import {
   normalizeArtistKey,
 } from "./normalization";
 
-const scoreGenreGroup = [
-  "action",
-  "animation",
-  "comedy",
-  "documentary",
-  "drama",
-  "fantasy",
-  "horror",
-  "sci-fi",
-  "thriller",
-  "tv",
-  "video game",
-  "western",
-  "anime",
-] as const;
-
 const mockStatus: LibraryStatus = {
   dbPath: "Tauri desktop runtime required for SQLite access",
   hasDatabase: true,
@@ -2649,7 +2633,6 @@ export {
   coverDataUrlCache,
   emitMockMusicBrainzArtistInfoProgress,
   emitMockMusicBrainzOriginProgress,
-  scoreGenreGroup,
   mockArtistInfoForArtist,
   mockArtistInfoProgress,
   mockArtistInfoProgressHandlers,

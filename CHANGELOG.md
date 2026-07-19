@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.65.1] - 2026-07-19
+### Fixed
+- Added the shared `scores` genre-group suggestion and expansion to Completion heatmap include/exclude filters, matching Search and Charts behavior for film, TV, animation, anime, and video-game score genres.
+
+### Changed
+- Centralized the frontend score-genre group definition so Search, Charts, the web preview, and the Completion heatmap use the same members.
+- Bumped synchronized app metadata to `0.65.1`.
+
 ## [0.65.0] - 2026-07-19
 ### Added
 - Added Completion heatmap controls for Top 12, Top 25, Top 50, and Top 100 genre rows, decade jumps, exact from/to year selection with a dual-ended slider, and genre include/exclude filters.

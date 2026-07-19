@@ -6057,9 +6057,12 @@ function CompletionHeatmap({
     cells.forEach((cell) => {
       if (!seen.has(cell.genreId)) seen.set(cell.genreId, cell.genre);
     });
-    return Array.from(seen.values()).sort((left, right) =>
-      left.localeCompare(right),
-    );
+    return uniqueGenreSuggestionOptions([
+      ...genreSuggestionAliases,
+      ...Array.from(seen.values()).sort((left, right) =>
+        left.localeCompare(right),
+      ),
+    ]);
   }, [cells]);
   const decades = useMemo(
     () =>

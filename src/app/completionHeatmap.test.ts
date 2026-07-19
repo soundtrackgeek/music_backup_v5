@@ -80,6 +80,36 @@ describe("completion heatmap selection", () => {
     expect(selection.genres.map((genre) => genre.genre)).toEqual(["Rock"]);
   });
 
+  it("expands the scores group for include and exclude filters", () => {
+    const scoreCells = [
+      heatmapCell("action", "Action", 1999, 8),
+      heatmapCell("tv", "TV", 1999, 6),
+      heatmapCell("video game", "Video Game", 1999, 4),
+      heatmapCell("rock", "Rock", 1999, 10),
+    ];
+    const included = selectCompletionHeatmap(scoreCells, {
+      yearFrom: 1999,
+      yearTo: 1999,
+      genreLimit: 100,
+      includedGenres: ["scores"],
+      excludedGenres: [],
+    });
+    const excluded = selectCompletionHeatmap(scoreCells, {
+      yearFrom: 1999,
+      yearTo: 1999,
+      genreLimit: 100,
+      includedGenres: [],
+      excludedGenres: ["score"],
+    });
+
+    expect(included.genres.map((genre) => genre.genre)).toEqual([
+      "Action",
+      "TV",
+      "Video Game",
+    ]);
+    expect(excluded.genres.map((genre) => genre.genre)).toEqual(["Rock"]);
+  });
+
   it("reports the full data extent and available decades", () => {
     expect(completionHeatmapYearExtent(cells)).toEqual({
       min: 1945,

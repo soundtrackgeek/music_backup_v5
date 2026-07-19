@@ -30,6 +30,7 @@ import {
   normalizeSavedSearchForClient,
   normalizeSavedSearchesForClient,
 } from "./app/requests";
+import { scoreGenreGroup } from "./app/genreGroups";
 import {
   applyMockArtistOriginCountry,
   coverDataUrlCache,
@@ -65,7 +66,6 @@ import {
   mockSettings,
   mockStatistics,
   mockStatus,
-  scoreGenreGroup,
   setMockMusicBrainzOverlaySyncLog,
   setMockMusicToolIssues,
   setMockMusicTools,

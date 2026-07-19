@@ -1,4 +1,5 @@
 import type { DiscoveryHeatmapCell } from "../types";
+import { scoreGenreGroup } from "./genreGroups";
 
 export const completionHeatmapGenreLimits = [12, 25, 50, 100] as const;
 
@@ -19,6 +20,20 @@ export type CompletionHeatmapSelection = {
 
 function normalizeGenre(value: string) {
   return value.trim().toLocaleLowerCase();
+}
+
+function expandGenreFilters(values: string[]) {
+  const expanded = new Set<string>();
+  values.forEach((value) => {
+    const normalized = normalizeGenre(value);
+    if (!normalized) return;
+    if (normalized === "score" || normalized === "scores") {
+      scoreGenreGroup.forEach((genre) => expanded.add(genre));
+    } else {
+      expanded.add(normalized);
+    }
+  });
+  return expanded;
 }
 
 function genreMatches(
@@ -72,12 +87,8 @@ export function selectCompletionHeatmap(
 ): CompletionHeatmapSelection {
   const yearFrom = Math.min(options.yearFrom, options.yearTo);
   const yearTo = Math.max(options.yearFrom, options.yearTo);
-  const includedGenres = new Set(
-    options.includedGenres.map(normalizeGenre).filter(Boolean),
-  );
-  const excludedGenres = new Set(
-    options.excludedGenres.map(normalizeGenre).filter(Boolean),
-  );
+  const includedGenres = expandGenreFilters(options.includedGenres);
+  const excludedGenres = expandGenreFilters(options.excludedGenres);
   const genreTotals = new Map<string, CompletionHeatmapGenre>();
   const filteredCells = cells.filter((cell) => {
     if (cell.year < yearFrom || cell.year > yearTo) return false;
