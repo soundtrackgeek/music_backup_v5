@@ -298,6 +298,7 @@ import { LibraryAnalystPanel } from "./components/LibraryAnalystPanel";
 import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPanel";
 import { MusicResearchPanel } from "./components/MusicResearchPanel";
 import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
+import { GenreTimeline } from "./components/GenreTimeline";
 import {
   ArtistDetailTabs,
   artistDetailTabNeedsMusicBrainz,
@@ -333,6 +334,7 @@ import {
   createDiscoveryMissionRequest,
   createGenreAlbumsRequest,
   createGenreListRequest,
+  createGenreTimelineRequest,
   createGenreSuggestionRequest,
   createMusicToolIssueRequest,
   createRequest,
@@ -7226,6 +7228,14 @@ export default function App() {
   );
   const [genreError, setGenreError] = useState<string | null>(null);
   const [isGenreLoading, setIsGenreLoading] = useState(false);
+  const [genreTimelineResponse, setGenreTimelineResponse] =
+    useState<GenreListResponse | null>(null);
+  const [genreTimelineError, setGenreTimelineError] = useState<string | null>(
+    null,
+  );
+  const [isGenreTimelineLoading, setIsGenreTimelineLoading] = useState(false);
+  const [genreTimelineRefreshKey, setGenreTimelineRefreshKey] = useState(0);
+  const [genreTimelineResetSignal, setGenreTimelineResetSignal] = useState(0);
   const [selectedGenreId, setSelectedGenreId] = useState<string | null>(null);
   const [genreAlbumsResponse, setGenreAlbumsResponse] =
     useState<BrowseResponse | null>(null);
@@ -7689,7 +7699,9 @@ export default function App() {
   const shouldLoadArtistMusicBrainz =
     artistDetailTabNeedsMusicBrainz(artistDetailTab);
   const selectedGenre =
-    genreResponse?.rows.find((genre) => genre.id === selectedGenreId) ?? null;
+    genreResponse?.rows.find((genre) => genre.id === selectedGenreId) ??
+    genreTimelineResponse?.rows.find((genre) => genre.id === selectedGenreId) ??
+    null;
   const genreAlbumsRequest = useMemo(
     () => (selectedGenre ? createGenreAlbumsRequest(selectedGenre) : null),
     [selectedGenre],
@@ -8090,6 +8102,41 @@ export default function App() {
   }, [activeSection, genreRequest]);
 
   useEffect(() => {
+    if (activeSection !== "Genres") {
+      return;
+    }
+
+    let cancelled = false;
+    setIsGenreTimelineLoading(true);
+    setGenreTimelineError(null);
+    void listGenres(createGenreTimelineRequest())
+      .then((nextResponse) => {
+        if (!cancelled) {
+          setGenreTimelineResponse(nextResponse);
+        }
+      })
+      .catch((searchError) => {
+        if (!cancelled) {
+          setGenreTimelineError(
+            searchError instanceof Error
+              ? searchError.message
+              : String(searchError),
+          );
+          setGenreTimelineResponse(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsGenreTimelineLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, genreTimelineRefreshKey]);
+
+  useEffect(() => {
     const visibleGenreNames =
       genreResponse?.rows.map((genre) => genre.name) ?? [];
     if (visibleGenreNames.length === 0) {
@@ -8107,17 +8154,15 @@ export default function App() {
     }
 
     const rows = genreResponse?.rows ?? [];
-    if (rows.length === 0) {
-      setSelectedGenreId(null);
-      return;
-    }
+    const timelineRows = genreTimelineResponse?.rows ?? [];
 
     setSelectedGenreId((previous) =>
-      previous && rows.some((genre) => genre.id === previous)
+      previous &&
+      [...rows, ...timelineRows].some((genre) => genre.id === previous)
         ? previous
-        : rows[0].id,
+        : (rows[0]?.id ?? timelineRows[0]?.id ?? null),
     );
-  }, [activeSection, genreResponse]);
+  }, [activeSection, genreResponse, genreTimelineResponse]);
 
   useEffect(() => {
     if (activeSection !== "Genres" || !genreAlbumsRequest) {
@@ -9197,6 +9242,7 @@ export default function App() {
       ...createGenreListRequest(),
       limit: previous.limit,
     }));
+    setGenreTimelineResetSignal((previous) => previous + 1);
     setGenreExportResult(null);
   }
 
@@ -12561,6 +12607,7 @@ export default function App() {
                   onClick={() => {
                     void loadData();
                     setGenreRequest((previous) => ({ ...previous }));
+                    setGenreTimelineRefreshKey((previous) => previous + 1);
                   }}
                 >
                   <Database size={18} />
@@ -12748,6 +12795,20 @@ export default function App() {
                 onSelect={selectGenre}
               />
             </section>
+
+            <GenreTimeline
+              genres={genreTimelineResponse?.rows ?? null}
+              totalGenres={
+                genreTimelineResponse?.total ??
+                statistics?.overview.genreCount ??
+                0
+              }
+              isLoading={isGenreTimelineLoading}
+              error={genreTimelineError}
+              selectedGenreId={selectedGenreId}
+              resetSignal={genreTimelineResetSignal}
+              onSelect={selectGenre}
+            />
 
             <section className="table-panel" aria-label="Selected genre albums">
               <div className="panel-heading compact">

@@ -162,6 +162,15 @@ export function createGenreListRequest(): GenreListRequest {
   };
 }
 
+export function createGenreTimelineRequest(): GenreListRequest {
+  return {
+    searchText: "",
+    sort: { field: "firstYear", direction: "asc" },
+    limit: 2000,
+    offset: 0,
+  };
+}
+
 export function createGenreSuggestionRequest(offset = 0): GenreListRequest {
   return {
     searchText: "",

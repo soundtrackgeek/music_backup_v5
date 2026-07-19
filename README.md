@@ -317,6 +317,7 @@ npm run security:check
 ## Phase 7 Genres Features
 
 - Genres workspace with a searchable, sortable, paginated canonical-genre index.
+- Genre Timeline below the index with first/last release years observed in the local library, earliest/latest/longest-span summaries, genre search, exact year-window matching modes, minimum-album filtering, sorting, row limits, optional album/completeness/loved-track color encoding, and direct selection into the existing genre albums and detail views. Observed ranges are explicitly presented as library coverage rather than historical genre origins or endings.
 - Genre-level summary stats for album counts, rating progress, year span, top artist, track totals, loved tracks, TMOE, average completeness, average album rating, and average Album Score.
 - Selected genre album lists backed by normalized canonical-genre filtering.
 - Genre album-list export to CSV, TSV, XLSX, JSON, and TXT with optional calculated columns.

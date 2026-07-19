@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.68.0] - 2026-07-19
+### Added
+- Added a responsive Genre Timeline directly below the Genre Index, with interval rows for every canonical genre's first and last release years observed in the local library.
+- Added filtered earliest-start, latest-release, and longest-span summaries plus genre search, year from/to, overlap/start/end/contained range matching, minimum albums, sorting, row limits, and optional album/completeness/loved-track color encoding.
+- Added keyboard-selectable timeline rows that update the existing genre albums and detail views, explicit library-coverage caveats, dark-mode styling, and focused selection/component tests.
+
+### Changed
+- Loaded the existing bounded full canonical-genre result set independently for timeline exploration while preserving the paginated Genre Index request.
+- Bumped synchronized app metadata to `0.68.0`.
+
 ## [0.67.1] - 2026-07-19
 ### Added
 - Added a fully rated album percentage column to every Genre progress row.
