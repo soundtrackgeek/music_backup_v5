@@ -78,6 +78,7 @@ import {
   getMusicBrainzOriginCountryStatus,
   getSettings,
   getStatistics,
+  getYearProgress,
   getLibraryStatus,
   importAlbumCovers,
   importBillboardCharts,
@@ -271,6 +272,11 @@ import {
   selectCompletionHeatmap,
   type CompletionHeatmapGenreLimit,
 } from "./app/completionHeatmap";
+import {
+  fullyRatedAlbumRatio,
+  selectYearProgressRows,
+  yearProgressExtent,
+} from "./app/yearProgress";
 import { clampBackupRetention, numberValue } from "./app/input";
 import { useWorkspaceNavigation } from "./app/navigation";
 import {
@@ -5824,17 +5830,19 @@ function clampHeatmapYear(value: number, minYear: number, maxYear: number) {
   return Math.min(maxYear, Math.max(minYear, Math.round(value)));
 }
 
-function HeatmapYearRange({
+function YearRangeSlider({
   minYear,
   maxYear,
   yearFrom,
   yearTo,
+  scopeLabel,
   onChange,
 }: {
   minYear: number;
   maxYear: number;
   yearFrom: number;
   yearTo: number;
+  scopeLabel: string;
   onChange: (range: { from: number; to: number }) => void;
 }) {
   const controlRef = useRef<HTMLDivElement | null>(null);
@@ -5945,7 +5953,10 @@ function HeatmapYearRange({
   }
 
   return (
-    <section className="heatmap-year-range" aria-label="Heatmap year range">
+    <section
+      className="heatmap-year-range"
+      aria-label={`${scopeLabel} year range`}
+    >
       <div className="heatmap-year-range-heading">
         <div>
           <span>Year range</span>
@@ -5958,7 +5969,7 @@ function HeatmapYearRange({
           <span>From</span>
           <input
             type="number"
-            aria-label="Heatmap year from"
+            aria-label={`${scopeLabel} year from`}
             min={minYear}
             max={yearTo}
             value={yearFrom}
@@ -5976,7 +5987,7 @@ function HeatmapYearRange({
               }
               type="button"
               role="slider"
-              aria-label="Earliest heatmap year"
+              aria-label={`Earliest ${scopeLabel.toLowerCase()} year`}
               aria-valuemin={minYear}
               aria-valuemax={yearTo}
               aria-valuenow={yearFrom}
@@ -5991,7 +6002,7 @@ function HeatmapYearRange({
               className="range-handle range-handle-max"
               type="button"
               role="slider"
-              aria-label="Latest heatmap year"
+              aria-label={`Latest ${scopeLabel.toLowerCase()} year`}
               aria-valuemin={yearFrom}
               aria-valuemax={maxYear}
               aria-valuenow={yearTo}
@@ -6012,7 +6023,7 @@ function HeatmapYearRange({
           <span>To</span>
           <input
             type="number"
-            aria-label="Heatmap year to"
+            aria-label={`${scopeLabel} year to`}
             min={yearFrom}
             max={maxYear}
             value={yearTo}
@@ -6201,11 +6212,12 @@ function CompletionHeatmap({
             <span>Reset</span>
           </button>
         </div>
-        <HeatmapYearRange
+        <YearRangeSlider
           minYear={minYear}
           maxYear={maxYear}
           yearFrom={effectiveYearFrom}
           yearTo={effectiveYearTo}
+          scopeLabel="Heatmap"
           onChange={(range) => {
             setYearFrom(range.from);
             setYearTo(range.to);
@@ -6505,6 +6517,212 @@ function ArtistConstellation({
   );
 }
 
+function YearProgressExplorer({
+  rows,
+  genreOptions,
+  onRequestGenreOptions,
+}: {
+  rows: YearProgressStats[];
+  genreOptions: string[];
+  onRequestGenreOptions?: () => void;
+}) {
+  const extent = useMemo(() => yearProgressExtent(rows), [rows]);
+  const minYear = extent?.min ?? 0;
+  const maxYear = extent?.max ?? 0;
+  const [yearFrom, setYearFrom] = useState<number | null>(null);
+  const [yearTo, setYearTo] = useState<number | null>(null);
+  const [includedGenres, setIncludedGenres] = useState<string[]>([]);
+  const [excludedGenres, setExcludedGenres] = useState<string[]>([]);
+  const [genreRows, setGenreRows] = useState<YearProgressStats[]>(rows);
+  const [isGenreLoading, setIsGenreLoading] = useState(false);
+  const [genreError, setGenreError] = useState<string | null>(null);
+  const effectiveYearFrom = clampHeatmapYear(
+    yearFrom ?? minYear,
+    minYear,
+    maxYear,
+  );
+  const effectiveYearTo = clampHeatmapYear(
+    yearTo ?? maxYear,
+    effectiveYearFrom,
+    maxYear,
+  );
+  const decades = useMemo(
+    () => (extent ? completionHeatmapDecades(minYear, maxYear) : []),
+    [extent, maxYear, minYear],
+  );
+  const selectedDecade = useMemo(() => {
+    if (effectiveYearFrom === minYear && effectiveYearTo === maxYear) {
+      return "all";
+    }
+    const matchingDecade = decades.find(
+      (decade) =>
+        effectiveYearFrom === Math.max(minYear, decade) &&
+        effectiveYearTo === Math.min(maxYear, decade + 9),
+    );
+    return matchingDecade == null ? "custom" : String(matchingDecade);
+  }, [decades, effectiveYearFrom, effectiveYearTo, maxYear, minYear]);
+  const visibleRows = useMemo(
+    () =>
+      selectYearProgressRows(
+        genreRows,
+        effectiveYearFrom,
+        effectiveYearTo,
+      ),
+    [effectiveYearFrom, effectiveYearTo, genreRows],
+  );
+  const hasGenreFilters =
+    includedGenres.length > 0 || excludedGenres.length > 0;
+  const hasActiveFilters =
+    hasGenreFilters ||
+    effectiveYearFrom !== minYear ||
+    effectiveYearTo !== maxYear;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!hasGenreFilters) {
+      setGenreRows(rows);
+      setGenreError(null);
+      setIsGenreLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsGenreLoading(true);
+      setGenreError(null);
+      void getYearProgress({
+        genres: includedGenres,
+        excludedGenres,
+      })
+        .then((nextRows) => {
+          if (!cancelled) setGenreRows(nextRows);
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setGenreError(
+              error instanceof Error
+                ? error.message
+                : "Could not filter year progress.",
+            );
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setIsGenreLoading(false);
+        });
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [excludedGenres, hasGenreFilters, includedGenres, rows]);
+
+  function selectDecade(value: string) {
+    if (value === "all") {
+      setYearFrom(null);
+      setYearTo(null);
+      return;
+    }
+    if (value === "custom") return;
+    const decade = Number(value);
+    setYearFrom(Math.max(minYear, decade));
+    setYearTo(Math.min(maxYear, decade + 9));
+  }
+
+  function resetFilters() {
+    setYearFrom(null);
+    setYearTo(null);
+    setIncludedGenres([]);
+    setExcludedGenres([]);
+  }
+
+  if (!extent) return <YearProgressTable rows={[]} />;
+
+  return (
+    <div className="year-progress-explorer">
+      <div className="heatmap-controls year-progress-controls">
+        <div className="heatmap-filter-grid year-progress-filter-grid">
+          <SelectField
+            label="Jump to decade"
+            value={selectedDecade}
+            onChange={selectDecade}
+            options={[
+              ...(selectedDecade === "custom"
+                ? [
+                    {
+                      value: "custom",
+                      label: `${effectiveYearFrom}–${effectiveYearTo}`,
+                    },
+                  ]
+                : []),
+              { value: "all", label: "All years" },
+              ...decades.map((decade) => ({
+                value: String(decade),
+                label: `${decade}s`,
+              })),
+            ]}
+          />
+          <GenreListCriterion
+            label="Include genres"
+            values={includedGenres}
+            onChange={setIncludedGenres}
+            genreOptions={genreOptions}
+            onRequestOptions={onRequestGenreOptions}
+            placeholder="Synthpop, scores"
+          />
+          <GenreListCriterion
+            label="Exclude genres"
+            values={excludedGenres}
+            onChange={setExcludedGenres}
+            genreOptions={genreOptions}
+            onRequestOptions={onRequestGenreOptions}
+            placeholder="Comedy, TV"
+          />
+          <button
+            className="secondary-button heatmap-reset-button"
+            type="button"
+            disabled={!hasActiveFilters}
+            onClick={resetFilters}
+          >
+            <RotateCcw size={15} />
+            <span>Reset</span>
+          </button>
+        </div>
+        <YearRangeSlider
+          minYear={minYear}
+          maxYear={maxYear}
+          yearFrom={effectiveYearFrom}
+          yearTo={effectiveYearTo}
+          scopeLabel="Year progress"
+          onChange={(range) => {
+            setYearFrom(range.from);
+            setYearTo(range.to);
+          }}
+        />
+        <div className="heatmap-selection-summary" aria-live="polite">
+          <span>
+            {isGenreLoading
+              ? "Updating genre totals…"
+              : `Showing ${formatNumber(visibleRows.length)} years · oldest first`}
+          </span>
+          <small>
+            {hasGenreFilters
+              ? "Genre filters use canonical album genres; scores includes film, TV, and game scores."
+              : "All canonical album genres included."}
+          </small>
+        </div>
+        {genreError ? (
+          <p className="year-progress-error" role="alert">
+            {genreError}
+          </p>
+        ) : null}
+      </div>
+      <YearProgressTable rows={visibleRows} />
+    </div>
+  );
+}
+
 function YearProgressTable({ rows }: { rows: YearProgressStats[] }) {
   if (rows.length === 0) {
     return (
@@ -6521,15 +6739,17 @@ function YearProgressTable({ rows }: { rows: YearProgressStats[] }) {
         <span role="columnheader">Year</span>
         <span role="columnheader">Albums</span>
         <span role="columnheader">Rated</span>
+        <span role="columnheader">Fully rated %</span>
         <span role="columnheader">Partial</span>
         <span role="columnheader">Hours</span>
         <span role="columnheader">Score</span>
       </div>
-      {rows.slice(0, 14).map((row) => (
+      {rows.map((row) => (
         <div className="stats-table-row" role="row" key={row.year}>
           <span role="cell">{row.year}</span>
           <span role="cell">{formatNumber(row.albumCount)}</span>
           <span role="cell">{formatNumber(row.ratedAlbumCount)}</span>
+          <span role="cell">{formatPercent(fullyRatedAlbumRatio(row))}</span>
           <span role="cell">{formatNumber(row.partialAlbumCount)}</span>
           <span role="cell">{formatHours(row.totalSeconds)}</span>
           <span role="cell">{formatAverage(row.averageAlbumScore, 1)}</span>
@@ -13201,7 +13421,11 @@ export default function App() {
                   </div>
                   <Clock3 size={18} />
                 </div>
-                <YearProgressTable rows={statistics?.yearProgress ?? []} />
+                <YearProgressExplorer
+                  rows={statistics?.yearProgress ?? []}
+                  genreOptions={genreSuggestionOptions}
+                  onRequestGenreOptions={requestGenreSuggestionRefresh}
+                />
               </section>
 
               <section className="stats-panel wide">

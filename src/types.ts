@@ -1378,6 +1378,11 @@ export type YearProgressStats = {
   averageAlbumScore: number | null;
 };
 
+export type YearProgressRequest = {
+  genres: string[];
+  excludedGenres: string[];
+};
+
 export type GenreProgressStats = {
   genre: string;
   albumCount: number;

@@ -1752,41 +1752,27 @@ const mockStatistics: StatisticsResponse = {
       averageAlbumScore: 87.8,
     },
   ],
-  yearProgress: [
-    {
-      year: 1987,
-      albumCount: 1250,
-      ratedAlbumCount: 420,
-      partialAlbumCount: 180,
-      unratedAlbumCount: 650,
-      trackCount: 14_620,
-      totalSeconds: 2_915_600,
-      lovedTracks: 332,
-      averageAlbumScore: 113.42,
-    },
-    {
-      year: 1986,
-      albumCount: 1184,
-      ratedAlbumCount: 388,
-      partialAlbumCount: 162,
-      unratedAlbumCount: 634,
-      trackCount: 13_940,
-      totalSeconds: 2_760_000,
-      lovedTracks: 301,
-      averageAlbumScore: 109.18,
-    },
-    {
-      year: 1985,
-      albumCount: 1168,
-      ratedAlbumCount: 364,
-      partialAlbumCount: 170,
-      unratedAlbumCount: 634,
-      trackCount: 13_804,
-      totalSeconds: 2_714_000,
-      lovedTracks: 286,
-      averageAlbumScore: 108.31,
-    },
-  ],
+  yearProgress: Array.from({ length: 18 }, (_, index) => {
+    const albumCount = 720 + ((index * 137) % 980);
+    const ratedAlbumCount = Math.round(
+      albumCount * (0.18 + (index % 5) * 0.035),
+    );
+    const partialAlbumCount = Math.round(
+      albumCount * (0.08 + (index % 3) * 0.018),
+    );
+    return {
+      year: 1970 + index * 3,
+      albumCount,
+      ratedAlbumCount,
+      partialAlbumCount,
+      unratedAlbumCount:
+        albumCount - ratedAlbumCount - partialAlbumCount,
+      trackCount: albumCount * (10 + (index % 4)),
+      totalSeconds: albumCount * (2_180 + (index % 6) * 75),
+      lovedTracks: Math.round(albumCount * (0.12 + (index % 4) * 0.03)),
+      averageAlbumScore: 82 + (index % 7) * 5.4,
+    };
+  }),
   genreProgress: [
     {
       genre: "Synthpop",

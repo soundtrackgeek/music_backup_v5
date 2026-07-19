@@ -28,6 +28,7 @@ use models::{
     MusicBrainzReleaseDecisionRequest, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, PerformanceProbeResponse,
     SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
+    YearProgressRequest, YearProgressStats,
 };
 #[cfg(not(test))]
 use models::{ImportRun, ImportSummary, LibraryStatus};
@@ -605,6 +606,18 @@ async fn get_statistics(app: AppHandle) -> Result<StatisticsResponse, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_year_progress(
+    app: AppHandle,
+    request: YearProgressRequest,
+) -> Result<Vec<YearProgressStats>, String> {
+    tauri::async_runtime::spawn_blocking(move || db::year_progress_for_app(&app, request))
+        .await
+        .map_err(|error| format!("Year progress task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_discovery(app: AppHandle) -> Result<DiscoveryResponse, String> {
     tauri::async_runtime::spawn_blocking(move || db::discovery_for_app(&app))
         .await
@@ -885,6 +898,7 @@ pub fn run() {
             export_musicbrainz_artist_releases,
             save_settings,
             get_statistics,
+            get_year_progress,
             get_discovery,
             import_musicbee_tsv,
             import_album_covers,

@@ -1469,6 +1469,15 @@ pub struct YearProgressStats {
     pub average_album_score: Option<f64>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct YearProgressRequest {
+    #[serde(default)]
+    pub genres: Vec<String>,
+    #[serde(default)]
+    pub excluded_genres: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreProgressStats {

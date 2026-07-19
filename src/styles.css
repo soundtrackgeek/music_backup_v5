@@ -1941,6 +1941,12 @@ button {
   min-width: 0;
 }
 
+.year-progress-explorer {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
 .heatmap-controls {
   display: grid;
   gap: 12px;
@@ -1961,6 +1967,14 @@ button {
   gap: 10px;
 }
 
+.year-progress-filter-grid {
+  grid-template-columns:
+    minmax(132px, 0.7fr)
+    minmax(210px, 1.3fr)
+    minmax(210px, 1.3fr)
+    auto;
+}
+
 .heatmap-filter-grid .criterion {
   min-width: 0;
 }
@@ -1970,6 +1984,13 @@ button {
   height: 38px;
   padding-right: 13px;
   padding-left: 13px;
+}
+
+.year-progress-error {
+  margin: 0;
+  color: #a43b32;
+  font-size: 11px;
+  line-height: 15px;
 }
 
 .heatmap-year-range {
@@ -2849,11 +2870,15 @@ button {
   white-space: nowrap;
 }
 
-.year-stats-table .stats-table-head,
-.year-stats-table .stats-table-row,
 .genre-stats-table .stats-table-head,
 .genre-stats-table .stats-table-row {
   grid-template-columns: minmax(96px, 1fr) repeat(5, minmax(72px, 0.72fr));
+}
+
+.year-stats-table .stats-table-head,
+.year-stats-table .stats-table-row {
+  grid-template-columns: minmax(76px, 0.8fr) repeat(6, minmax(86px, 0.8fr));
+  min-width: 740px;
 }
 
 .genre-stats-table .stats-table-head,

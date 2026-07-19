@@ -20,7 +20,8 @@ use crate::models::{
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress,
     MusicToolSummary, OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse,
     RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
-    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter, YearProgressStats,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
+    YearProgressRequest, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, Utc};
@@ -2361,6 +2362,15 @@ pub fn statistics_for_app(app: &AppHandle) -> Result<StatisticsResponse> {
 }
 
 #[cfg(not(test))]
+pub fn year_progress_for_app(
+    app: &AppHandle,
+    request: YearProgressRequest,
+) -> Result<Vec<YearProgressStats>> {
+    let (conn, _) = open(app)?;
+    year_progress_stats_filtered(&conn, &request)
+}
+
+#[cfg(not(test))]
 pub fn library_profile_for_app(
     app: &AppHandle,
     request: &LibraryProfileRequest,
@@ -3397,7 +3407,30 @@ fn format_album_detail(album: &DurationAlbumStat) -> String {
 }
 
 fn year_progress_stats(conn: &Connection) -> Result<Vec<YearProgressStats>> {
-    let mut stmt = conn.prepare(
+    year_progress_stats_filtered(conn, &YearProgressRequest::default())
+}
+
+fn year_progress_stats_filtered(
+    conn: &Connection,
+    request: &YearProgressRequest,
+) -> Result<Vec<YearProgressStats>> {
+    let mut conditions = vec!["year IS NOT NULL".to_string()];
+    let mut values = Vec::new();
+    add_text_list_condition(
+        &mut conditions,
+        &mut values,
+        "genre_normalized",
+        &request.genres,
+        false,
+    );
+    add_text_list_condition(
+        &mut conditions,
+        &mut values,
+        "genre_normalized",
+        &request.excluded_genres,
+        true,
+    );
+    let sql = format!(
         "
         SELECT
             year,
@@ -3410,14 +3443,16 @@ fn year_progress_stats(conn: &Connection) -> Result<Vec<YearProgressStats>> {
             COALESCE(SUM(loved_tracks), 0),
             AVG(album_score)
         FROM albums
-        WHERE year IS NOT NULL
+        WHERE {}
         GROUP BY year
-        ORDER BY year DESC
+        ORDER BY year ASC
         ",
-    )?;
+        conditions.join(" AND ")
+    );
+    let mut stmt = conn.prepare(&sql)?;
 
     let rows = stmt
-        .query_map([], |row| {
+        .query_map(params_from_iter(values.iter()), |row| {
             Ok(YearProgressStats {
                 year: row.get(0)?,
                 album_count: row.get(1)?,
@@ -12458,6 +12493,63 @@ mod tests {
             exclude_response.rows[0].canonical_genre.as_deref(),
             Some("Synthpop")
         );
+    }
+
+    #[test]
+    fn filters_year_progress_by_genre_groups_and_orders_oldest_first() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+            ) VALUES
+            (
+                'mb:year-score', 1, 'year-score', 'The Action Score', 'Example Composer',
+                'Action', 'action', 'Example', 2026, 2026,
+                12, 12, 1.0, 3600, 1, 900, 0.25, 90, 225.0
+            ),
+            (
+                'mb:year-rock', 1, 'year-rock', 'Early Rock', 'Example Band',
+                'Rock', 'rock', 'Example', 1970, 1970,
+                10, 5, 0.5, 3000, 0, 0, 0.0, 70, 35.0
+            )
+            ",
+            [],
+        )
+        .expect("insert year progress albums");
+
+        let scores = year_progress_stats_filtered(
+            &conn,
+            &YearProgressRequest {
+                genres: vec!["scores".to_string()],
+                excluded_genres: Vec::new(),
+            },
+        )
+        .expect("filter year progress to scores");
+        assert_eq!(scores.len(), 1);
+        assert_eq!(scores[0].year, 2026);
+        assert_eq!(scores[0].rated_album_count, 1);
+
+        let without_scores = year_progress_stats_filtered(
+            &conn,
+            &YearProgressRequest {
+                genres: Vec::new(),
+                excluded_genres: vec!["score".to_string()],
+            },
+        )
+        .expect("exclude scores from year progress");
+        assert_eq!(
+            without_scores
+                .iter()
+                .map(|row| row.year)
+                .collect::<Vec<_>>(),
+            vec![1970, 1987]
+        );
+        assert_eq!(without_scores[0].partial_album_count, 1);
+        assert_eq!(without_scores[1].rated_album_count, 1);
     }
 
     #[test]

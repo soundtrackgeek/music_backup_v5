@@ -140,6 +140,8 @@ import type {
   SavedSearch,
   ChartConfig,
   StatisticsResponse,
+  YearProgressRequest,
+  YearProgressStats,
   GenreListRequest,
   GenreListResponse,
   GenreSummary,
@@ -396,6 +398,66 @@ export async function getStatistics() {
   }
 
   return invoke<StatisticsResponse>("get_statistics");
+}
+
+export async function getYearProgress(request: YearProgressRequest) {
+  if (!isTauriRuntime()) {
+    const includedGenres = new Set(expandGenreFilterKeys(request.genres));
+    const excludedGenres = new Set(
+      expandGenreFilterKeys(request.excludedGenres),
+    );
+    const rowsByYear = new Map<
+      number,
+      YearProgressStats & { scoreTotal: number; scoredAlbumCount: number }
+    >();
+
+    mockRows.forEach((album) => {
+      if (album.trackId != null || album.year == null) return;
+      const genre = normalizeGenreKey(album.canonicalGenre);
+      if (includedGenres.size > 0 && !includedGenres.has(genre)) return;
+      if (excludedGenres.has(genre)) return;
+
+      const existing = rowsByYear.get(album.year) ?? {
+        year: album.year,
+        albumCount: 0,
+        ratedAlbumCount: 0,
+        partialAlbumCount: 0,
+        unratedAlbumCount: 0,
+        trackCount: 0,
+        totalSeconds: 0,
+        lovedTracks: 0,
+        averageAlbumScore: null,
+        scoreTotal: 0,
+        scoredAlbumCount: 0,
+      };
+      existing.albumCount += 1;
+      existing.trackCount += album.totalTracks ?? 0;
+      existing.totalSeconds += album.totalSeconds ?? 0;
+      existing.lovedTracks += album.lovedTracks ?? 0;
+      if ((album.ratingCompleteness ?? 0) >= 1) {
+        existing.ratedAlbumCount += 1;
+      } else if ((album.ratingCompleteness ?? 0) > 0) {
+        existing.partialAlbumCount += 1;
+      } else {
+        existing.unratedAlbumCount += 1;
+      }
+      if (album.albumScore != null) {
+        existing.scoreTotal += album.albumScore;
+        existing.scoredAlbumCount += 1;
+        existing.averageAlbumScore =
+          existing.scoreTotal / existing.scoredAlbumCount;
+      }
+      rowsByYear.set(album.year, existing);
+    });
+
+    return Array.from(rowsByYear.values())
+      .sort((left, right) => left.year - right.year)
+      .map(({ scoreTotal: _scoreTotal, scoredAlbumCount: _scoredCount, ...row }) =>
+        row,
+      );
+  }
+
+  return invoke<YearProgressStats[]>("get_year_progress", { request });
 }
 
 export async function getDiscovery() {

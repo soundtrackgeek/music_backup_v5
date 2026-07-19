@@ -351,7 +351,7 @@ npm run security:check
 
 ## Phase 4 Features
 
-- Statistics workspace with an aggregate-only Luna Library analyst plus library overview, health score, rating completion burndown, library shape by time, loved density, catalog concentration, duration analytics, aggregate outlier stats, decade progress timeline, genre portfolio matrix, metadata coverage, rating progress, year progress, genre progress, rating distributions, loved-track stats, import delta timeline, import history, and rating history dashboards.
+- Statistics workspace with an aggregate-only Luna Library analyst plus library overview, health score, rating completion burndown, library shape by time, loved density, catalog concentration, duration analytics, aggregate outlier stats, decade progress timeline, genre portfolio matrix, metadata coverage, rating progress, genre progress, rating distributions, loved-track stats, import delta timeline, import history, and rating history dashboards. Year progress includes an exact dual-ended year range, decade jumps, canonical genre include/exclude filters with the `scores` group, oldest-first auto-growing results, and a fully rated album percentage for every year.
 - SQLite schema version 4 with import delta counters, rating snapshots, and rating events recorded during imports.
 - Import history now tracks added, changed, and removed tracks and albums for each import.
 - Rating history captures completed, changed, added, and removed rated albums as import-time events.

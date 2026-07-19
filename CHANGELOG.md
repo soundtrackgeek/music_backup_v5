@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.66.0] - 2026-07-19
+### Added
+- Added Year progress controls for exact from/to selection with a dual-ended slider, decade jumps, and canonical genre include/exclude filters using the shared `scores` group for film, TV, animation, anime, and video-game score genres.
+- Added a fully rated album percentage column to every Year progress row.
+
+### Changed
+- Year progress now renders every selected year in oldest-first order and grows vertically with the result set instead of limiting the table to 14 years.
+- Added filtered SQLite Year progress aggregation, focused frontend/Rust coverage, and a long-range web preview dataset for rendered QA.
+- Bumped synchronized app metadata to `0.66.0`.
+
 ## [0.65.1] - 2026-07-19
 ### Fixed
 - Added the shared `scores` genre-group suggestion and expansion to Completion heatmap include/exclude filters, matching Search and Charts behavior for film, TV, animation, anime, and video-game score genres.
