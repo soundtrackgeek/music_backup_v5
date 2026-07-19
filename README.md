@@ -290,7 +290,7 @@ npm run security:check
 ## Phase 10 Discovery Features
 
 - Discovery workspace for exploration-oriented library views separate from Statistics.
-- Completion heatmap for top genre/year intersections, with each populated cell opening matching albums.
+- Completion heatmap with Top 12, 25, 50, and 100 genre-row presets; all-year and decade jumps; an exact dual-ended year range; genre include/exclude filters; and horizontally scrollable year columns. Rows are ranked by album population inside the selected range, and each populated cell opens its matching albums.
 - Backlog quest board for high-score partial albums, neglected decades, high-potential genre pockets, loved-track backlogs, artist deep dives, and unfinished high-TMOE albums.
 - Smart missions for generated shortcuts such as high-score partial decades, loved incomplete genres, unrated high-potential genres, loved decade cleanup, artist score sprints, and loved outliers.
 - Love-vs-rating scatter, Genre universe bubble chart, and Artist constellation bubble chart, with clickable points opening album result sets.

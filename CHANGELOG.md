@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.65.0] - 2026-07-19
+### Added
+- Added Completion heatmap controls for Top 12, Top 25, Top 50, and Top 100 genre rows, decade jumps, exact from/to year selection with a dual-ended slider, and genre include/exclude filters.
+- Added horizontally scrollable consecutive year columns with sticky genre labels, allowing custom ranges such as 1945–1959 without dropping lower-population years.
+
+### Changed
+- Ranked heatmap genres by album population inside the active year range and expanded the Discovery query from 12 genres across 16 popularity-selected years to every populated year for the library's top 100 genres.
+- Bumped synchronized app metadata to `0.65.0`.
+
 ## [0.64.0] - 2026-07-19
 ### Added
 - Added a dedicated **Wish List** workspace with separate artist and album sections, persistent SQLite storage, manual removal, and MusicBrainz links when available.

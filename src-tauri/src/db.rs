@@ -6535,14 +6535,7 @@ fn discovery_heatmap(conn: &Connection) -> Result<Vec<DiscoveryHeatmapCell>> {
             FROM album_projection
             GROUP BY genre_id
             ORDER BY COUNT(*) DESC, LOWER(MIN(genre)) ASC
-            LIMIT 12
-        ),
-        top_years AS (
-            SELECT year
-            FROM album_projection
-            GROUP BY year
-            ORDER BY COUNT(*) DESC, year DESC
-            LIMIT 16
+            LIMIT 100
         )
         SELECT
             genre_id,
@@ -6558,7 +6551,6 @@ fn discovery_heatmap(conn: &Connection) -> Result<Vec<DiscoveryHeatmapCell>> {
             AVG(album_score)
         FROM album_projection
         WHERE genre_id IN (SELECT genre_id FROM top_genres)
-          AND year IN (SELECT year FROM top_years)
         GROUP BY genre_id, year
         ORDER BY LOWER(MIN(genre)), year ASC
         ",
@@ -11332,6 +11324,30 @@ mod tests {
         .expect("insert track");
         rebuild_search_indexes(&conn).expect("rebuild search indexes");
         conn
+    }
+
+    #[test]
+    fn discovery_heatmap_returns_every_populated_year_for_top_genres() {
+        let conn = seeded_connection();
+        for year in 1945..=1964 {
+            insert_test_album(
+                &conn,
+                &format!("heatmap-rock-{year}"),
+                "Heatmap Artist",
+                &format!("Heatmap Album {year}"),
+                year,
+                10,
+            );
+        }
+
+        let rows = discovery_heatmap(&conn).expect("load discovery heatmap");
+        let rock_years = rows
+            .iter()
+            .filter(|cell| cell.genre_id == "rock")
+            .map(|cell| cell.year)
+            .collect::<Vec<_>>();
+
+        assert_eq!(rock_years, (1945..=1964).collect::<Vec<_>>());
     }
 
     #[test]

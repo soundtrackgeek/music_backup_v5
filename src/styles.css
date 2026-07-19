@@ -1935,23 +1935,186 @@ button {
   font-weight: 740;
 }
 
+.heatmap-explorer {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.heatmap-controls {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid #e2e9e6;
+  border-bottom: 1px solid #e2e9e6;
+  padding: 13px 0;
+}
+
+.heatmap-filter-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(112px, 0.55fr)
+    minmax(132px, 0.65fr)
+    minmax(190px, 1.25fr)
+    minmax(190px, 1.25fr)
+    auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.heatmap-filter-grid .criterion {
+  min-width: 0;
+}
+
+.heatmap-reset-button {
+  justify-content: center;
+  height: 38px;
+  padding-right: 13px;
+  padding-left: 13px;
+}
+
+.heatmap-year-range {
+  display: grid;
+  gap: 7px;
+}
+
+.heatmap-year-range-heading,
+.heatmap-selection-summary,
+.heatmap-year-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.heatmap-year-range-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.heatmap-year-range-heading span,
+.heatmap-year-input span {
+  color: #5f6e69;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 720;
+}
+
+.heatmap-year-range-heading strong {
+  color: #18352f;
+  font-size: 13px;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.heatmap-year-range-heading small,
+.heatmap-year-scale,
+.heatmap-selection-summary small {
+  color: #788680;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.heatmap-year-range-layout {
+  display: grid;
+  grid-template-columns: 92px minmax(180px, 1fr) 92px;
+  align-items: end;
+  gap: 12px;
+}
+
+.heatmap-year-input {
+  display: grid;
+  gap: 5px;
+}
+
+.heatmap-year-input input {
+  width: 100%;
+  height: 38px;
+  min-width: 0;
+  border: 1px solid #cfd9d5;
+  border-radius: 8px;
+  color: #22312d;
+  background: #fbfcfc;
+  padding: 0 9px;
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.heatmap-year-input input:focus-visible {
+  border-color: #0f766e;
+  outline: 3px solid rgba(15, 118, 110, 0.13);
+}
+
+.heatmap-year-slider {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding: 0 3px;
+}
+
+.heatmap-year-slider .range-control {
+  height: 38px;
+}
+
+.heatmap-year-scale span {
+  font-variant-numeric: tabular-nums;
+}
+
+.heatmap-selection-summary {
+  flex-wrap: wrap;
+  border-top: 1px dashed #dce5e1;
+  padding-top: 9px;
+}
+
+.heatmap-selection-summary > span {
+  color: #32443e;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 720;
+}
+
+.heatmap-filter-empty {
+  min-height: 116px;
+}
+
+.completion-heatmap-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 1px 1px 9px;
+  scrollbar-gutter: stable;
+}
+
+.completion-heatmap-scroll:focus-visible {
+  border-radius: 7px;
+  outline: 3px solid rgba(15, 118, 110, 0.13);
+  outline-offset: 2px;
+}
+
 .completion-heatmap {
   display: grid;
   grid-template-columns: minmax(124px, 170px) minmax(0, 1fr);
   gap: 6px 8px;
-  overflow: auto;
+  width: 100%;
+  min-width: calc(132px + var(--heatmap-columns) * 63px);
 }
 
 .heatmap-corner {
+  position: sticky;
+  z-index: 2;
+  left: 0;
   min-height: 22px;
+  border-right: 1px solid #e2e9e6;
+  background: #ffffff;
 }
 
 .heatmap-years,
 .heatmap-cells {
   display: grid;
-  grid-template-columns: repeat(var(--heatmap-columns), minmax(54px, 1fr));
+  grid-template-columns: repeat(var(--heatmap-columns), minmax(58px, 1fr));
   gap: 5px;
-  min-width: calc(var(--heatmap-columns) * 58px);
+  min-width: calc(var(--heatmap-columns) * 63px);
 }
 
 .heatmap-years span {
@@ -1967,13 +2130,34 @@ button {
 }
 
 .heatmap-genre {
-  display: flex;
-  align-items: center;
+  position: sticky;
+  z-index: 1;
+  left: 0;
+  display: grid;
+  align-content: center;
+  gap: 1px;
   min-height: 42px;
+  border-right: 1px solid #e2e9e6;
   color: #33413d;
+  background: #ffffff;
+  padding-right: 10px;
   font-size: 12px;
   line-height: 16px;
   font-weight: 720;
+}
+
+.heatmap-genre > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.heatmap-genre small {
+  color: #82908b;
+  font-size: 9px;
+  line-height: 12px;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
 }
 
 .heatmap-cell {
@@ -2002,6 +2186,11 @@ button {
 .heatmap-cell span {
   color: rgba(18, 49, 45, 0.7);
   font-weight: 720;
+}
+
+.heatmap-cell:active,
+.heatmap-reset-button:active {
+  transform: translateY(1px);
 }
 
 .scatter-shell {
@@ -5599,6 +5788,37 @@ button {
   background: #111815;
 }
 
+:root[data-theme="dark"] .heatmap-controls,
+:root[data-theme="dark"] .heatmap-selection-summary {
+  border-color: #35433e;
+}
+
+:root[data-theme="dark"] .heatmap-year-input input {
+  border-color: #35433e;
+  color: #dce7e3;
+  background: #111815;
+}
+
+:root[data-theme="dark"] .heatmap-year-range-heading span,
+:root[data-theme="dark"] .heatmap-year-input span,
+:root[data-theme="dark"] .heatmap-year-range-heading small,
+:root[data-theme="dark"] .heatmap-year-scale,
+:root[data-theme="dark"] .heatmap-selection-summary small,
+:root[data-theme="dark"] .heatmap-genre small {
+  color: #91a19b;
+}
+
+:root[data-theme="dark"] .heatmap-year-range-heading strong,
+:root[data-theme="dark"] .heatmap-selection-summary > span {
+  color: #dce7e3;
+}
+
+:root[data-theme="dark"] .heatmap-corner,
+:root[data-theme="dark"] .heatmap-genre {
+  border-color: #35433e;
+  background: #171f1c;
+}
+
 :root[data-theme="dark"] .genre-suggestions {
   border-color: #35433e;
   background: #111815;
@@ -6020,6 +6240,14 @@ button {
     grid-template-columns: repeat(2, minmax(150px, 1fr));
   }
 
+  .heatmap-filter-grid {
+    grid-template-columns: repeat(2, minmax(170px, 1fr));
+  }
+
+  .heatmap-reset-button {
+    justify-self: start;
+  }
+
   .chart-template-panel {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -6345,6 +6573,19 @@ button {
   .layout-setting-stack,
   .stat-pairs {
     grid-template-columns: 1fr;
+  }
+
+  .heatmap-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .heatmap-reset-button {
+    justify-self: stretch;
+  }
+
+  .heatmap-year-range-layout {
+    grid-template-columns: 72px minmax(120px, 1fr) 72px;
+    gap: 8px;
   }
 
   .layout-settings-panel,
