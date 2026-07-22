@@ -4200,9 +4200,25 @@ fn ensure_music_tool_data_for_request(
                 15,
                 "Preparing MusicBrainz collection comparison.",
             );
+            let preparation_pulse = start_music_tool_progress_pulse(
+                Some(app),
+                &request.tool_id,
+                &request.request_id,
+                "loading",
+                15,
+                if request.tool_id == "albums-not-on-musicbrainz-official-list" {
+                    88
+                } else {
+                    50
+                },
+                "Preparing MusicBrainz collection comparison.",
+            );
             let settings = settings_for_connection(conn)?;
-            prepare_missing_musicbrainz_artist_tool(conn, &settings.musicbrainz_cache_path)
-                .context("Could not prepare MusicBrainz collection coverage data")?;
+            let preparation_result =
+                prepare_missing_musicbrainz_artist_tool(conn, &settings.musicbrainz_cache_path)
+                    .context("Could not prepare MusicBrainz collection coverage data");
+            drop(preparation_pulse);
+            preparation_result?;
         }
         _ => {}
     }
@@ -4248,12 +4264,17 @@ struct MissingMusicBrainzReleaseGroup {
 }
 
 fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &str) -> Result<()> {
-    conn.execute_batch(
-        "
+    let transaction = conn
+        .transaction()
+        .context("Could not start MusicBrainz comparison preparation")?;
+    transaction
+        .execute_batch(
+            "
         DROP TABLE IF EXISTS temp.musicbrainz_tool_local_artists;
         DROP TABLE IF EXISTS temp.musicbrainz_tool_local_albums;
         DROP TABLE IF EXISTS temp.musicbrainz_tool_artist_cache;
         DROP TABLE IF EXISTS temp.musicbrainz_tool_release_groups;
+        DROP TABLE IF EXISTS temp.musicbrainz_tool_release_statuses;
 
         CREATE TEMP TABLE musicbrainz_tool_local_artists (
             artist_key TEXT PRIMARY KEY,
@@ -4293,6 +4314,21 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
             source TEXT NOT NULL
         );
 
+        CREATE TEMP TABLE musicbrainz_tool_release_statuses (
+            artist_mbid TEXT NOT NULL,
+            release_mbid TEXT NOT NULL,
+            has_official_release INTEGER NOT NULL,
+            PRIMARY KEY (artist_mbid, release_mbid)
+        ) WITHOUT ROWID;
+
+        INSERT OR REPLACE INTO musicbrainz_tool_release_statuses (
+            artist_mbid, release_mbid, has_official_release
+        )
+        SELECT LOWER(TRIM(artist_mbid)), release_mbid, has_official_release
+        FROM musicbrainz_release_status_cache
+        WHERE NULLIF(TRIM(artist_mbid), '') IS NOT NULL
+          AND NULLIF(TRIM(release_mbid), '') IS NOT NULL;
+
         CREATE INDEX temp.idx_musicbrainz_tool_local_albums_artist_title
             ON musicbrainz_tool_local_albums(artist_key, title_key);
         CREATE INDEX temp.idx_musicbrainz_tool_artist_cache_local
@@ -4306,12 +4342,12 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
         CREATE INDEX temp.idx_musicbrainz_tool_release_groups_title
             ON musicbrainz_tool_release_groups(artist_mbid, title_key);
         ",
-    )
-    .context("Could not create MusicBrainz artist tool temp tables")?;
+        )
+        .context("Could not create MusicBrainz artist tool temp tables")?;
 
-    let local_artists = musicbrainz_tool_local_artists(conn)?;
+    let local_artists = musicbrainz_tool_local_artists(&transaction)?;
     {
-        let mut stmt = conn
+        let mut stmt = transaction
             .prepare(
                 "
                 INSERT INTO musicbrainz_tool_local_artists (
@@ -4337,9 +4373,9 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
         }
     }
 
-    let local_albums = musicbrainz_tool_local_albums(conn)?;
+    let local_albums = musicbrainz_tool_local_albums(&transaction)?;
     {
-        let mut stmt = conn
+        let mut stmt = transaction
             .prepare(
                 "
                 INSERT INTO musicbrainz_tool_local_albums (
@@ -4363,7 +4399,7 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
 
     let cache_artists = musicbrainz_tool_cache_artists(cache_path)?;
     {
-        let mut stmt = conn
+        let mut stmt = transaction
             .prepare(
                 "
                 INSERT INTO musicbrainz_tool_artist_cache (
@@ -4376,9 +4412,10 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
         for artist in cache_artists {
             let local_name_key = normalize_artist_key(&artist.name);
             let musicbrainz_name_key = musicbrainz_text_key(&artist.name);
+            let normalized_mbid = artist.mbid.to_lowercase();
             stmt.execute(params![
                 artist.name,
-                artist.mbid,
+                normalized_mbid,
                 local_name_key,
                 musicbrainz_name_key,
                 artist.cached_name_count,
@@ -4388,11 +4425,16 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
         }
     }
 
-    let matched_mbids = musicbrainz_tool_matched_mbids(conn)?;
+    let matched_mbids = musicbrainz_tool_matched_mbids(&transaction)?;
     let release_groups = musicbrainz_tool_cache_release_groups(cache_path, &matched_mbids)?;
-    insert_musicbrainz_tool_release_groups(conn, release_groups)?;
-    let overlay_release_groups = musicbrainz_tool_overlay_release_groups(conn, &matched_mbids)?;
-    insert_musicbrainz_tool_release_groups(conn, overlay_release_groups)?;
+    insert_musicbrainz_tool_release_groups(&transaction, release_groups)?;
+    let overlay_release_groups =
+        musicbrainz_tool_overlay_release_groups(&transaction, &matched_mbids)?;
+    insert_musicbrainz_tool_release_groups(&transaction, overlay_release_groups)?;
+
+    transaction
+        .commit()
+        .context("Could not finish MusicBrainz comparison preparation")?;
 
     Ok(())
 }
@@ -4750,8 +4792,9 @@ fn insert_musicbrainz_tool_release_groups(
         .context("Could not prepare MusicBrainz release-group temp insert")?;
     for release_group in release_groups {
         let title_key = musicbrainz_text_key(&release_group.title);
+        let normalized_artist_mbid = release_group.artist_mbid.to_lowercase();
         stmt.execute(params![
-            release_group.artist_mbid,
+            normalized_artist_mbid,
             release_group.release_mbid,
             release_group.title,
             title_key,
@@ -7845,12 +7888,22 @@ fn list_music_tool_issues(
     progress_app: Option<ProgressApp<'_>>,
 ) -> Result<MusicToolIssueResponse> {
     let definition = music_tool_definition(&request.tool_id)?;
+    let has_musicbrainz_preparation = music_tool_has_musicbrainz_preparation(definition.id);
+    let is_official_list_tool = definition.id == "albums-not-on-musicbrainz-official-list";
+    let (summary_start, summary_cap, filter_start, filter_cap, rows_start, rows_cap) =
+        if is_official_list_tool {
+            (90, 96, 97, 98, 99, 99)
+        } else if has_musicbrainz_preparation {
+            (52, 72, 76, 86, 90, 98)
+        } else {
+            (5, 58, 62, 78, 82, 96)
+        };
     emit_music_tool_progress(
         progress_app,
         definition.id,
         &request.request_id,
         "starting",
-        5,
+        summary_start,
         "Starting validation count.",
     );
     let summary_pulse = start_music_tool_progress_pulse(
@@ -7858,11 +7911,17 @@ fn list_music_tool_issues(
         definition.id,
         &request.request_id,
         "counting",
-        5,
-        58,
-        "Counting selected validator issues.",
+        summary_start,
+        summary_cap,
+        if is_official_list_tool {
+            "Comparing local albums with MusicBrainz."
+        } else {
+            "Counting selected validator issues."
+        },
     );
-    let tool_result = music_tool_summary(conn, definition);
+    let raw_base_sql = music_tool_issue_sql(definition.id)?;
+    let base_sql = materialize_music_tool_issue_rows(conn, definition.id, raw_base_sql)?;
+    let tool_result = music_tool_summary(conn, definition, &base_sql);
     drop(summary_pulse);
     let tool = tool_result?;
     emit_music_tool_progress(
@@ -7870,11 +7929,10 @@ fn list_music_tool_issues(
         definition.id,
         &request.request_id,
         "counting",
-        62,
+        filter_start,
         "Applying filters to the selected tool.",
     );
 
-    let base_sql = music_tool_issue_sql(definition.id)?;
     let (where_sql, values) = music_tool_issue_search_where(&request.search_text);
     let limit = request.limit.clamp(1, max_limit);
     let offset = request.offset;
@@ -7885,8 +7943,8 @@ fn list_music_tool_issues(
         definition.id,
         &request.request_id,
         "counting",
-        62,
-        78,
+        filter_start,
+        filter_cap,
         "Counting filtered issue rows.",
     );
     let total_result = conn
@@ -7901,7 +7959,7 @@ fn list_music_tool_issues(
         definition.id,
         &request.request_id,
         "loading",
-        82,
+        rows_start,
         "Loading issue rows.",
     );
 
@@ -7917,8 +7975,8 @@ fn list_music_tool_issues(
         definition.id,
         &request.request_id,
         "loading",
-        82,
-        96,
+        rows_start,
+        rows_cap,
         "Loading issue rows.",
     );
     let rows_result = (|| -> Result<Vec<MusicToolIssueRow>> {
@@ -7955,8 +8013,8 @@ fn list_music_tool_issues(
 fn music_tool_summary(
     conn: &Connection,
     definition: MusicToolDefinition,
+    base_sql: &str,
 ) -> Result<MusicToolSummary> {
-    let base_sql = music_tool_issue_sql(definition.id)?;
     let sql = format!(
         "
         SELECT
@@ -7986,6 +8044,43 @@ fn music_tool_summary(
         album_count,
         track_count,
     })
+}
+
+fn music_tool_has_musicbrainz_preparation(tool_id: &str) -> bool {
+    matches!(
+        tool_id,
+        "artists-without-musicbrainz-data"
+            | "high-confidence-missing-musicbrainz-albums"
+            | "albums-not-on-musicbrainz-official-list"
+    )
+}
+
+fn materialize_music_tool_issue_rows(
+    conn: &Connection,
+    tool_id: &str,
+    base_sql: String,
+) -> Result<String> {
+    if tool_id != "albums-not-on-musicbrainz-official-list" {
+        return Ok(base_sql);
+    }
+
+    conn.execute_batch("DROP TABLE IF EXISTS temp.musicbrainz_tool_official_list_issues;")
+        .context("Could not clear the previous MusicBrainz official-list comparison")?;
+    conn.execute_batch(&format!(
+        "CREATE TEMP TABLE musicbrainz_tool_official_list_issues AS {base_sql};"
+    ))
+    .context("Could not materialize the MusicBrainz official-list comparison")?;
+    conn.execute_batch(
+        "
+        CREATE INDEX temp.idx_musicbrainz_tool_official_list_album
+            ON musicbrainz_tool_official_list_issues(album_artist_display, album);
+        CREATE INDEX temp.idx_musicbrainz_tool_official_list_year
+            ON musicbrainz_tool_official_list_issues(year);
+        ",
+    )
+    .context("Could not index the MusicBrainz official-list comparison")?;
+
+    Ok("SELECT * FROM temp.musicbrainz_tool_official_list_issues".to_string())
 }
 
 fn music_tool_catalog_summary(definition: MusicToolDefinition) -> MusicToolSummary {
@@ -8364,12 +8459,12 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             verified_links AS (
                 SELECT
                     link.local_artist_key AS artist_key,
-                    link.mbid,
+                    LOWER(link.mbid) AS mbid,
                     COALESCE(NULLIF(TRIM(link.canonical_name), ''), MIN(cache.name)) AS matched_name,
                     COALESCE(MAX(cache.release_group_count), 0) AS cache_release_group_count
                 FROM musicbrainz_artist_links link
                 LEFT JOIN temp.musicbrainz_tool_artist_cache cache
-                  ON LOWER(cache.mbid) = LOWER(link.mbid)
+                  ON cache.mbid = LOWER(link.mbid)
                 WHERE link.verification_state = 'verified'
                   AND link.ignored = 0
                   AND link.mbid IS NOT NULL
@@ -8377,9 +8472,9 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                 GROUP BY link.local_artist_key, link.mbid, link.canonical_name
             ),
             overlay_release_counts AS (
-                SELECT artist_mbid AS mbid, COUNT(*) AS release_group_count
+                SELECT LOWER(artist_mbid) AS mbid, COUNT(*) AS release_group_count
                 FROM musicbrainz_artist_release_groups
-                GROUP BY artist_mbid
+                GROUP BY LOWER(artist_mbid)
             ),
             resolved_artists AS (
                 SELECT
@@ -8401,7 +8496,7 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                   ON cache.artist_key = l.artist_key
                  AND verified.mbid IS NULL
                 LEFT JOIN overlay_release_counts overlay
-                  ON LOWER(overlay.mbid) = LOWER(COALESCE(verified.mbid, cache.mbid))
+                  ON overlay.mbid = COALESCE(verified.mbid, cache.mbid)
             )
             SELECT
                 'artists-without-musicbrainz-data:' || r.artist_key AS id,
@@ -8477,11 +8572,11 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             verified_links AS (
                 SELECT
                     link.local_artist_key AS artist_key,
-                    link.mbid,
+                    LOWER(link.mbid) AS mbid,
                     COALESCE(NULLIF(TRIM(link.canonical_name), ''), MIN(cache.name)) AS matched_name
                 FROM musicbrainz_artist_links link
                 LEFT JOIN temp.musicbrainz_tool_artist_cache cache
-                  ON LOWER(cache.mbid) = LOWER(link.mbid)
+                  ON cache.mbid = LOWER(link.mbid)
                 WHERE link.verification_state = 'verified'
                   AND link.ignored = 0
                   AND link.mbid IS NOT NULL
@@ -8524,10 +8619,10 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                 WHERE ignored.artist_key IS NULL
             ),
             overlay_counts AS (
-                SELECT LOWER(artist_mbid) AS mbid, COUNT(*) AS release_group_count
+                SELECT artist_mbid AS mbid, COUNT(*) AS release_group_count
                 FROM temp.musicbrainz_tool_release_groups
                 WHERE source = 'refreshed'
-                GROUP BY LOWER(artist_mbid)
+                GROUP BY artist_mbid
             ),
             artist_releases AS (
                 SELECT
@@ -8544,9 +8639,9 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                     releases.source
                 FROM trusted_artists artist
                 JOIN temp.musicbrainz_tool_release_groups releases
-                  ON LOWER(releases.artist_mbid) = LOWER(artist.mbid)
+                  ON releases.artist_mbid = artist.mbid
                 LEFT JOIN overlay_counts overlay
-                  ON overlay.mbid = LOWER(artist.mbid)
+                  ON overlay.mbid = artist.mbid
                 WHERE artist.high_confidence = 1
                   AND artist.mbid IS NOT NULL
                   AND releases.title_key <> ''
@@ -8584,8 +8679,8 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             LEFT JOIN musicbrainz_release_decisions decisions
               ON decisions.local_artist_key = ar.artist_key
              AND decisions.release_mbid = ar.release_mbid
-            LEFT JOIN musicbrainz_release_status_cache status
-              ON LOWER(status.artist_mbid) = LOWER(ar.mbid)
+            LEFT JOIN temp.musicbrainz_tool_release_statuses status
+              ON status.artist_mbid = ar.mbid
              AND status.release_mbid = ar.release_mbid
             WHERE owned.album_id IS NULL
               AND COALESCE(decisions.decision, '') NOT IN ('not-in-scope', 'ignored')
@@ -8636,11 +8731,11 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             verified_links AS (
                 SELECT
                     link.local_artist_key AS artist_key,
-                    link.mbid,
+                    LOWER(link.mbid) AS mbid,
                     COALESCE(NULLIF(TRIM(link.canonical_name), ''), MIN(cache.name)) AS matched_name
                 FROM musicbrainz_artist_links link
                 LEFT JOIN temp.musicbrainz_tool_artist_cache cache
-                  ON LOWER(cache.mbid) = LOWER(link.mbid)
+                  ON cache.mbid = LOWER(link.mbid)
                 WHERE link.verification_state = 'verified'
                   AND link.ignored = 0
                   AND link.mbid IS NOT NULL
@@ -8683,10 +8778,10 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                 WHERE ignored.artist_key IS NULL
             ),
             overlay_counts AS (
-                SELECT LOWER(artist_mbid) AS mbid, COUNT(*) AS release_group_count
+                SELECT artist_mbid AS mbid, COUNT(*) AS release_group_count
                 FROM temp.musicbrainz_tool_release_groups
                 WHERE source = 'refreshed'
-                GROUP BY LOWER(artist_mbid)
+                GROUP BY artist_mbid
             ),
             available_releases AS (
                 SELECT
@@ -8700,14 +8795,14 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                     releases.source
                 FROM trusted_artists artist
                 JOIN temp.musicbrainz_tool_release_groups releases
-                  ON LOWER(releases.artist_mbid) = LOWER(artist.mbid)
+                  ON releases.artist_mbid = artist.mbid
                 LEFT JOIN overlay_counts overlay
-                  ON overlay.mbid = LOWER(artist.mbid)
+                  ON overlay.mbid = artist.mbid
                 LEFT JOIN musicbrainz_release_decisions decisions
                   ON decisions.local_artist_key = artist.artist_key
                  AND decisions.release_mbid = releases.release_mbid
-                LEFT JOIN musicbrainz_release_status_cache status
-                  ON LOWER(status.artist_mbid) = LOWER(artist.mbid)
+                LEFT JOIN temp.musicbrainz_tool_release_statuses status
+                  ON status.artist_mbid = artist.mbid
                  AND status.release_mbid = releases.release_mbid
                 WHERE artist.high_confidence = 1
                   AND artist.mbid IS NOT NULL
@@ -12137,7 +12232,7 @@ mod tests {
             INSERT INTO musicbrainz_release_status_cache (
                 artist_mbid, release_mbid, has_official_release, checked_at
             ) VALUES (
-                'mbid-psb', 'release-demo', 0, '2026-07-06T00:00:00Z'
+                'MBID-PSB', 'release-demo', 0, '2026-07-06T00:00:00Z'
             )
             ",
             [],
@@ -12190,13 +12285,13 @@ mod tests {
         create_musicbrainz_tool_cache(
             &cache_path,
             &[
-                ("Pet Shop Boys", "mbid-psb", 0),
+                ("Pet Shop Boys", "MBID-PSB", 0),
                 ("Uncached Artist", "mbid-uncached", 0),
             ],
         );
         insert_musicbrainz_tool_cache_release(
             &cache_path,
-            "mbid-psb",
+            "MBID-PSB",
             "release-actually",
             "Actually",
             1987,
@@ -12230,6 +12325,17 @@ mod tests {
         );
 
         fs::remove_dir_all(temp_dir).expect("remove MusicBrainz tool temp dir");
+    }
+
+    #[test]
+    fn musicbrainz_official_list_query_keeps_mbid_joins_indexable() {
+        let sql = music_tool_issue_sql("albums-not-on-musicbrainz-official-list")
+            .expect("build MusicBrainz official-list query");
+
+        assert!(sql.contains("ON releases.artist_mbid = artist.mbid"));
+        assert!(sql.contains("temp.musicbrainz_tool_release_statuses status"));
+        assert!(!sql.contains("LOWER(releases.artist_mbid)"));
+        assert!(!sql.contains("LOWER(status.artist_mbid)"));
     }
 
     #[test]

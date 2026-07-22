@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.69.1] - 2026-07-22
+### Fixed
+- Fixed **Albums not on MusicBrainz official list** appearing to stop at 58% on large libraries by normalizing temporary MBIDs once, restoring indexed release/status joins, batching temporary-table writes in one transaction, and materializing the expensive comparison once per request.
+- Kept MusicBrainz preparation progress moving through the real work phases and added regression coverage for case-insensitive MBID matching plus indexable comparison SQL.
+
+### Changed
+- Bumped synchronized app metadata to `0.69.1`.
+
 ## [0.69.0] - 2026-07-22
 ### Added
 - Added an **Albums not on MusicBrainz official list** validator to Tools, listing local database albums absent from pure official MusicBrainz album lists for trusted artist matches.
