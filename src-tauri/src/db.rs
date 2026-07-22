@@ -204,6 +204,14 @@ const MUSIC_TOOLS: &[MusicToolDefinition] = &[
         scope: "albums",
     },
     MusicToolDefinition {
+        id: "albums-not-on-musicbrainz-official-list",
+        label: "Albums not on MusicBrainz official list",
+        description:
+            "Local albums absent from pure official MusicBrainz album lists for trusted artist matches.",
+        severity: "low",
+        scope: "albums",
+    },
+    MusicToolDefinition {
         id: "duplicates-within-album",
         label: "Duplicates within album",
         description: "Tracks that repeat a title or disc/track position inside one album.",
@@ -4181,7 +4189,9 @@ fn ensure_music_tool_data_for_request(
             import_billboard_singles(conn, &source_path)
                 .context("Could not prepare Missing Billboard Singles data from CSV_SINGLES")?;
         }
-        "artists-without-musicbrainz-data" | "high-confidence-missing-musicbrainz-albums" => {
+        "artists-without-musicbrainz-data"
+        | "high-confidence-missing-musicbrainz-albums"
+        | "albums-not-on-musicbrainz-official-list" => {
             emit_music_tool_progress(
                 Some(app),
                 &request.tool_id,
@@ -8586,6 +8596,191 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             ",
             threshold = MUSICBRAINZ_SUSPICIOUS_RELEASE_GROUP_THRESHOLD,
         )),
+        "albums-not-on-musicbrainz-official-list" => Ok(format!(
+            "
+            WITH cache_matches AS (
+                SELECT
+                    l.artist_key,
+                    c.name,
+                    c.mbid,
+                    c.cached_name_count,
+                    c.release_group_count,
+                    CASE
+                        WHEN c.local_name_key = l.artist_key THEN 'cache-name'
+                        ELSE 'normalized-cache-name'
+                    END AS match_method,
+                    COUNT(*) OVER (PARTITION BY l.artist_key) AS candidate_count,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY l.artist_key
+                        ORDER BY
+                            CASE WHEN c.local_name_key = l.artist_key THEN 0 ELSE 1 END,
+                            c.cached_name_count ASC,
+                            c.release_group_count DESC,
+                            LOWER(c.name) ASC
+                    ) AS match_rank
+                FROM temp.musicbrainz_tool_local_artists l
+                JOIN temp.musicbrainz_tool_artist_cache c
+                  ON c.local_name_key = l.artist_key
+                  OR (
+                        l.musicbrainz_name_key <> ''
+                    AND c.musicbrainz_name_key = l.musicbrainz_name_key
+                  )
+            ),
+            best_cache_matches AS (
+                SELECT
+                    artist_key, name, mbid, cached_name_count, release_group_count,
+                    match_method, candidate_count
+                FROM cache_matches
+                WHERE match_rank = 1
+            ),
+            verified_links AS (
+                SELECT
+                    link.local_artist_key AS artist_key,
+                    link.mbid,
+                    COALESCE(NULLIF(TRIM(link.canonical_name), ''), MIN(cache.name)) AS matched_name
+                FROM musicbrainz_artist_links link
+                LEFT JOIN temp.musicbrainz_tool_artist_cache cache
+                  ON LOWER(cache.mbid) = LOWER(link.mbid)
+                WHERE link.verification_state = 'verified'
+                  AND link.ignored = 0
+                  AND link.mbid IS NOT NULL
+                  AND TRIM(link.mbid) <> ''
+                GROUP BY link.local_artist_key, link.mbid, link.canonical_name
+            ),
+            ignored_links AS (
+                SELECT local_artist_key AS artist_key
+                FROM musicbrainz_artist_links
+                WHERE ignored <> 0
+            ),
+            trusted_artists AS (
+                SELECT
+                    l.artist_key,
+                    l.display_artist,
+                    COALESCE(verified.mbid, cache.mbid) AS mbid,
+                    COALESCE(verified.matched_name, cache.name, l.display_artist) AS matched_name,
+                    CASE
+                        WHEN verified.mbid IS NOT NULL THEN 'verified-link'
+                        WHEN cache.mbid IS NOT NULL THEN cache.match_method
+                        ELSE 'none'
+                    END AS match_method,
+                    CASE
+                        WHEN verified.mbid IS NOT NULL THEN 1
+                        WHEN cache.mbid IS NOT NULL
+                         AND cache.candidate_count = 1
+                         AND cache.cached_name_count <= 1
+                         AND cache.release_group_count < {threshold}
+                            THEN 1
+                        ELSE 0
+                    END AS high_confidence
+                FROM temp.musicbrainz_tool_local_artists l
+                LEFT JOIN verified_links verified
+                  ON verified.artist_key = l.artist_key
+                LEFT JOIN best_cache_matches cache
+                  ON cache.artist_key = l.artist_key
+                 AND verified.mbid IS NULL
+                LEFT JOIN ignored_links ignored
+                  ON ignored.artist_key = l.artist_key
+                WHERE ignored.artist_key IS NULL
+            ),
+            overlay_counts AS (
+                SELECT LOWER(artist_mbid) AS mbid, COUNT(*) AS release_group_count
+                FROM temp.musicbrainz_tool_release_groups
+                WHERE source = 'refreshed'
+                GROUP BY LOWER(artist_mbid)
+            ),
+            available_releases AS (
+                SELECT
+                    artist.artist_key,
+                    artist.display_artist,
+                    artist.mbid,
+                    artist.matched_name,
+                    artist.match_method,
+                    releases.release_mbid,
+                    releases.title_key,
+                    releases.source
+                FROM trusted_artists artist
+                JOIN temp.musicbrainz_tool_release_groups releases
+                  ON LOWER(releases.artist_mbid) = LOWER(artist.mbid)
+                LEFT JOIN overlay_counts overlay
+                  ON overlay.mbid = LOWER(artist.mbid)
+                LEFT JOIN musicbrainz_release_decisions decisions
+                  ON decisions.local_artist_key = artist.artist_key
+                 AND decisions.release_mbid = releases.release_mbid
+                LEFT JOIN musicbrainz_release_status_cache status
+                  ON LOWER(status.artist_mbid) = LOWER(artist.mbid)
+                 AND status.release_mbid = releases.release_mbid
+                WHERE artist.high_confidence = 1
+                  AND artist.mbid IS NOT NULL
+                  AND releases.title_key <> ''
+                  AND (
+                        releases.source = 'refreshed'
+                     OR COALESCE(overlay.release_group_count, 0) = 0
+                  )
+                  AND COALESCE(decisions.decision, '') NOT IN ('not-in-scope', 'ignored')
+                  AND (
+                        COALESCE(decisions.decision, '') = 'include'
+                     OR COALESCE(status.has_official_release, 1) <> 0
+                  )
+            ),
+            comparable_artists AS (
+                SELECT
+                    artist_key,
+                    display_artist,
+                    mbid,
+                    matched_name,
+                    match_method,
+                    MIN(source) AS release_source
+                FROM available_releases
+                GROUP BY artist_key, display_artist, mbid, matched_name, match_method
+            ),
+            official_titles AS (
+                SELECT DISTINCT artist_key, title_key
+                FROM available_releases
+            ),
+            representative_paths AS (
+                SELECT
+                    album_id,
+                    MIN(NULLIF(TRIM(filename), '')) AS filename,
+                    MIN(NULLIF(TRIM(file_path), '')) AS file_path
+                FROM tracks
+                GROUP BY album_id
+            )
+            SELECT
+                'albums-not-on-musicbrainz-official-list:' || local.album_id AS id,
+                'albums-not-on-musicbrainz-official-list' AS tool_id,
+                'low' AS severity,
+                'albums' AS entity_type,
+                local.album_id,
+                NULL AS track_id,
+                local.title AS album,
+                artist.display_artist AS album_artist_display,
+                NULL AS title,
+                albums.canonical_genre,
+                local.year,
+                'Local album not found on MusicBrainz pure official album list' AS detail,
+                printf(
+                    'MBID %s / %s / %s / matched %s',
+                    artist.mbid,
+                    artist.match_method,
+                    artist.release_source,
+                    artist.matched_name
+                ) AS value,
+                paths.filename,
+                paths.file_path
+            FROM temp.musicbrainz_tool_local_albums local
+            JOIN comparable_artists artist
+              ON artist.artist_key = local.artist_key
+            JOIN albums
+              ON albums.id = local.album_id
+            LEFT JOIN official_titles official
+              ON official.artist_key = local.artist_key
+             AND official.title_key = local.title_key
+            LEFT JOIN representative_paths paths
+              ON paths.album_id = local.album_id
+            WHERE official.title_key IS NULL
+            ",
+            threshold = MUSICBRAINZ_SUSPICIOUS_RELEASE_GROUP_THRESHOLD,
+        )),
         "duplicates-within-album" => Ok(
             "
             WITH duplicate_titles AS (
@@ -11969,6 +12164,65 @@ mod tests {
         assert_eq!(
             response.rows[0].detail.as_str(),
             "High-confidence MusicBrainz album missing from library"
+        );
+        assert_eq!(
+            response.rows[0].value.as_deref(),
+            Some("MBID mbid-psb / cache-name / cache / matched Pet Shop Boys")
+        );
+
+        fs::remove_dir_all(temp_dir).expect("remove MusicBrainz tool temp dir");
+    }
+
+    #[test]
+    fn lists_local_albums_not_on_musicbrainz_official_list() {
+        let mut conn = seeded_connection();
+        insert_test_album(&conn, "mb:please", "Pet Shop Boys", "Please", 1986, 10);
+        insert_test_album(
+            &conn,
+            "mb:no-snapshot",
+            "Uncached Artist",
+            "Private Press",
+            1988,
+            8,
+        );
+        let temp_dir = temp_test_dir("musicbrainz-tool-local-not-official");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_musicbrainz_tool_cache(
+            &cache_path,
+            &[
+                ("Pet Shop Boys", "mbid-psb", 0),
+                ("Uncached Artist", "mbid-uncached", 0),
+            ],
+        );
+        insert_musicbrainz_tool_cache_release(
+            &cache_path,
+            "mbid-psb",
+            "release-actually",
+            "Actually",
+            1987,
+        );
+
+        prepare_missing_musicbrainz_artist_tool(&mut conn, &cache_path.display().to_string())
+            .expect("prepare local MusicBrainz official-list comparison");
+        let mut request = MusicToolIssueRequest::default();
+        request.tool_id = "albums-not-on-musicbrainz-official-list".to_string();
+        let response = list_music_tool_issues(&conn, request, 50, None)
+            .expect("list local albums absent from MusicBrainz official list");
+
+        assert_eq!(response.tool.scope, "albums");
+        assert_eq!(response.tool.issue_count, 1);
+        assert_eq!(response.tool.album_count, 1);
+        assert_eq!(response.total, 1);
+        assert_eq!(response.rows[0].album_id, "mb:please");
+        assert_eq!(response.rows[0].album.as_deref(), Some("Please"));
+        assert_eq!(
+            response.rows[0].album_artist_display.as_deref(),
+            Some("Pet Shop Boys")
+        );
+        assert_eq!(response.rows[0].year, Some(1986));
+        assert_eq!(
+            response.rows[0].detail.as_str(),
+            "Local album not found on MusicBrainz pure official album list"
         );
         assert_eq!(
             response.rows[0].value.as_deref(),

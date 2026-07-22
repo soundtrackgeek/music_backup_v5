@@ -4462,6 +4462,12 @@ function MusicToolIssueTable({
       response.tool.id === "high-confidence-missing-musicbrainz-albums"
     ) {
       emptyMessage = "No high-confidence missing MusicBrainz albums found.";
+    } else if (
+      response.tool.id === "albums-not-on-musicbrainz-official-list" &&
+      response.tool.issueCount === 0
+    ) {
+      emptyMessage =
+        "Every comparable local album appears on its artist's pure official MusicBrainz album list.";
     }
 
     return (

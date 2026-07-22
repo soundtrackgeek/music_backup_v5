@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.69.0] - 2026-07-22
+### Added
+- Added an **Albums not on MusicBrainz official list** validator to Tools, listing local database albums absent from pure official MusicBrainz album lists for trusted artist matches.
+- Added normalized title comparison, refreshed-snapshot precedence, representative album file metadata, existing search/sort/export support, web-preview data, and focused Rust coverage.
+
+### Changed
+- Limited the inverse MusicBrainz audit to artists with trusted matches and usable official-album snapshots so unresolved or empty-cache artists are not mislabeled as missing.
+- Bumped synchronized app metadata to `0.69.0`.
+
 ## [0.68.0] - 2026-07-19
 ### Added
 - Added a responsive Genre Timeline directly below the Genre Index, with interval rows for every canonical genre's first and last release years observed in the local library.
