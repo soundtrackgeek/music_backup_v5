@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.70.0] - 2026-07-24
+### Changed
+- Reworked Search into a results-first workflow with six view-aware common filters and the album or track result table visible in the first screen at desktop and the supported 1040px minimum width.
+- Consolidated Search's filter-building and current-result Luna tools into one closed-by-default command area with task switching that preserves each panel's state.
+- Moved lifecycle, MusicBrainz, metadata, file, scoring, sort, row-limit, and table-column controls into a closed-by-default Advanced drawer with an active hidden-filter count.
+- Added focused disclosure and filter-summary coverage and synchronized app metadata at `0.70.0`.
+
 ## [0.69.2] - 2026-07-23
 ### Changed
 - Made the shell adaptive at 1280px and below by replacing the fixed details column with an accessible, closed-by-default overlay drawer that supports outside click, Escape, focus restoration, focus trapping, and page scroll locking.

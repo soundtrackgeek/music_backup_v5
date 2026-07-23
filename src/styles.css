@@ -607,6 +607,165 @@ button {
   margin-top: 14px;
 }
 
+.search-luna-command-area,
+.search-advanced-filters {
+  overflow: hidden;
+  border: 1px solid #d8e1dd;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.search-disclosure-header,
+.search-advanced-filters > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 58px;
+  padding: 10px 14px;
+}
+
+.search-disclosure-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.search-disclosure-heading > span:last-child {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.search-disclosure-heading strong {
+  color: #26342f;
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.search-disclosure-heading small {
+  color: #74817d;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.search-disclosure-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: #0c746c;
+  background: #e2f2ee;
+}
+
+.search-disclosure-toggle,
+.search-advanced-summary-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  color: #49605a;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+}
+
+.search-disclosure-toggle {
+  min-height: 34px;
+  border: 1px solid #cedad6;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #f8faf9;
+  cursor: pointer;
+}
+
+.search-disclosure-toggle svg,
+.search-advanced-summary-meta svg {
+  transition: transform 160ms ease;
+}
+
+.search-disclosure-toggle[aria-expanded="true"] svg,
+.search-advanced-filters[open] .search-advanced-summary-meta svg {
+  transform: rotate(180deg);
+}
+
+.search-luna-command-content {
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid #e1e8e5;
+  padding: 14px;
+}
+
+.search-luna-command-content[hidden],
+.search-luna-command-panel[hidden] {
+  display: none;
+}
+
+.search-luna-mode-control {
+  width: min(100%, 360px);
+}
+
+.search-luna-command-panel > .natural-query-panel {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.search-luna-command-panel > .natural-query-panel > .natural-query-heading {
+  display: none;
+}
+
+.search-common-filter-grid {
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+}
+
+.search-advanced-filters {
+  margin-top: 14px;
+  background: #f8faf9;
+}
+
+.search-advanced-filters > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.search-advanced-filters > summary::-webkit-details-marker {
+  display: none;
+}
+
+.search-advanced-summary-meta > span {
+  min-width: 58px;
+  text-align: right;
+}
+
+.search-advanced-filters[open] > summary {
+  border-bottom: 1px solid #dfe7e4;
+}
+
+.search-advanced-content {
+  padding: 0 14px 14px;
+}
+
+.search-advanced-filter-grid {
+  margin-top: 14px;
+}
+
+.search-advanced-content > .query-footer {
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  border-top: 1px solid #dfe7e4;
+  padding-top: 14px;
+}
+
+.search-workspace .query-panel {
+  padding: 16px;
+}
+
 .natural-query-panel {
   display: grid;
   gap: 14px;
@@ -5859,6 +6018,8 @@ button {
 :root[data-theme="dark"] .app-update-banner,
 :root[data-theme="dark"] .query-panel,
 :root[data-theme="dark"] .natural-query-panel,
+:root[data-theme="dark"] .search-luna-command-area,
+:root[data-theme="dark"] .search-advanced-filters,
 :root[data-theme="dark"] .import-panel,
 :root[data-theme="dark"] .table-panel,
 :root[data-theme="dark"] .artist-detail-shell,
@@ -5886,6 +6047,35 @@ button {
   border-color: #2f3d38;
   color: #dce7e3;
   background: #171f1c;
+}
+
+:root[data-theme="dark"] .search-disclosure-heading strong {
+  color: #dce7e3;
+}
+
+:root[data-theme="dark"] .search-disclosure-heading small {
+  color: #96a59f;
+}
+
+:root[data-theme="dark"] .search-disclosure-icon {
+  color: #82c9bb;
+  background: #19302b;
+}
+
+:root[data-theme="dark"] .search-disclosure-toggle {
+  border-color: #3a4944;
+  color: #c7d5d0;
+  background: #111815;
+}
+
+:root[data-theme="dark"] .search-luna-command-content,
+:root[data-theme="dark"] .search-advanced-filters[open] > summary,
+:root[data-theme="dark"] .search-advanced-content > .query-footer {
+  border-color: #34423d;
+}
+
+:root[data-theme="dark"] .search-advanced-summary-meta {
+  color: #aebcb7;
 }
 
 .musicbrainz-scope-action .icon-button.active {
@@ -6723,6 +6913,10 @@ button {
 
   .filter-grid {
     grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
+
+  .search-common-filter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .heatmap-filter-grid {

@@ -291,6 +291,7 @@ import {
   useAdaptiveDetailsLayout,
   workspaceHasUsefulDetails,
 } from "./app/adaptiveDetails";
+import { countAdvancedSearchFilters } from "./app/searchProgressive";
 import {
   formatMusicBrainzReviewState,
   MusicBrainzReviewState,
@@ -303,6 +304,10 @@ import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPane
 import { MusicResearchPanel } from "./components/MusicResearchPanel";
 import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
 import { GenreTimeline } from "./components/GenreTimeline";
+import {
+  SearchAdvancedFilters,
+  SearchLunaCommandArea,
+} from "./components/SearchProgressiveDisclosure";
 import {
   ArtistDetailTabs,
   artistDetailTabNeedsMusicBrainz,
@@ -8929,6 +8934,10 @@ export default function App() {
     request.view,
     settings.countryFlagDisplay,
   ]);
+  const advancedSearchFilterCount = countAdvancedSearchFilters(
+    currentFilters,
+    request.view,
+  );
 
   const albumChips = useMemo(() => {
     const nextChips: { key: string; label: ReactNode; remove: () => void }[] =
@@ -15782,16 +15791,23 @@ export default function App() {
               />
             </section>
 
-            <NaturalLanguageQueryPanel
-              target="search"
-              currentView={request.view}
-              onApply={(compiled) => {
-                setRequest(normalizeBrowseRequestForClient(compiled.request));
-                setBrowseError(null);
-              }}
+            <SearchLunaCommandArea
+              searchCommand={
+                <NaturalLanguageQueryPanel
+                  target="search"
+                  currentView={request.view}
+                  onApply={(compiled) => {
+                    setRequest(
+                      normalizeBrowseRequestForClient(compiled.request),
+                    );
+                    setBrowseError(null);
+                  }}
+                />
+              }
+              resultsCommand={
+                <CurrentViewQuestionPanel context="search" request={request} />
+              }
             />
-
-            <CurrentViewQuestionPanel context="search" request={request} />
 
             <section className="query-panel">
               <div className="search-row">
@@ -15830,28 +15846,39 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="filter-grid">
-                <TextCriterion
-                  label="Album title"
-                  filter={currentFilters.albumTitle}
-                  onChange={(filter) => updateFilter("albumTitle", filter)}
-                />
-                <TextCriterion
-                  label="Track title"
-                  filter={currentFilters.trackTitle}
-                  onChange={(filter) => updateFilter("trackTitle", filter)}
-                />
-                <TextCriterion
-                  label="Album artist"
-                  filter={currentFilters.albumArtist}
-                  onChange={(filter) => updateFilter("albumArtist", filter)}
-                />
-                <TextCriterion
-                  label="Display artist"
-                  filter={currentFilters.displayArtist}
-                  onChange={(filter) => updateFilter("displayArtist", filter)}
-                />
-
+              <div
+                className="filter-grid search-common-filter-grid"
+                aria-label="Common filters"
+              >
+                {request.view === "albums" ? (
+                  <>
+                    <TextCriterion
+                      label="Album title"
+                      filter={currentFilters.albumTitle}
+                      onChange={(filter) => updateFilter("albumTitle", filter)}
+                    />
+                    <TextCriterion
+                      label="Album artist"
+                      filter={currentFilters.albumArtist}
+                      onChange={(filter) => updateFilter("albumArtist", filter)}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <TextCriterion
+                      label="Track title"
+                      filter={currentFilters.trackTitle}
+                      onChange={(filter) => updateFilter("trackTitle", filter)}
+                    />
+                    <TextCriterion
+                      label="Display artist"
+                      filter={currentFilters.displayArtist}
+                      onChange={(filter) =>
+                        updateFilter("displayArtist", filter)
+                      }
+                    />
+                  </>
+                )}
                 <GenreListCriterion
                   label="Genres"
                   values={currentFilters.genres}
@@ -15860,6 +15887,72 @@ export default function App() {
                   onRequestOptions={requestGenreSuggestionRefresh}
                   placeholder="Synthpop, AOR"
                 />
+                <NumberField
+                  label="Year from"
+                  value={currentFilters.yearFrom}
+                  onChange={(value) => updateFilter("yearFrom", value)}
+                />
+                <NumberField
+                  label="Year to"
+                  value={currentFilters.yearTo}
+                  onChange={(value) => updateFilter("yearTo", value)}
+                />
+                <NumberField
+                  label={
+                    request.view === "albums"
+                      ? "Album rating min"
+                      : "Track rating min"
+                  }
+                  value={
+                    request.view === "albums"
+                      ? currentFilters.albumRatingMin
+                      : currentFilters.trackRatingMin
+                  }
+                  min={0}
+                  max={request.view === "albums" ? 100 : 5}
+                  onChange={(value) =>
+                    request.view === "albums"
+                      ? updateFilter("albumRatingMin", value)
+                      : updateFilter("trackRatingMin", value)
+                  }
+                />
+              </div>
+
+              <SearchAdvancedFilters
+                activeFilterCount={advancedSearchFilterCount}
+              >
+                <div className="filter-grid search-advanced-filter-grid">
+                  {request.view === "tracks" ? (
+                    <>
+                      <TextCriterion
+                        label="Album title"
+                        filter={currentFilters.albumTitle}
+                        onChange={(filter) => updateFilter("albumTitle", filter)}
+                      />
+                      <TextCriterion
+                        label="Album artist"
+                        filter={currentFilters.albumArtist}
+                        onChange={(filter) =>
+                          updateFilter("albumArtist", filter)
+                        }
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <TextCriterion
+                        label="Track title"
+                        filter={currentFilters.trackTitle}
+                        onChange={(filter) => updateFilter("trackTitle", filter)}
+                      />
+                      <TextCriterion
+                        label="Display artist"
+                        filter={currentFilters.displayArtist}
+                        onChange={(filter) =>
+                          updateFilter("displayArtist", filter)
+                        }
+                      />
+                    </>
+                  )}
                 <GenreListCriterion
                   label="Exclude genres"
                   values={currentFilters.excludedGenres}
@@ -15919,16 +16012,6 @@ export default function App() {
                   />
                 </label>
 
-                <NumberField
-                  label="Year from"
-                  value={currentFilters.yearFrom}
-                  onChange={(value) => updateFilter("yearFrom", value)}
-                />
-                <NumberField
-                  label="Year to"
-                  value={currentFilters.yearTo}
-                  onChange={(value) => updateFilter("yearTo", value)}
-                />
                 <NumberField
                   label={
                     request.view === "tracks"
@@ -16071,13 +16154,15 @@ export default function App() {
                   onChange={(value) => updateFilter("ratedTracksMax", value)}
                 />
 
-                <NumberField
-                  label="Album rating min"
-                  value={currentFilters.albumRatingMin}
-                  min={0}
-                  max={100}
-                  onChange={(value) => updateFilter("albumRatingMin", value)}
-                />
+                {request.view === "tracks" ? (
+                  <NumberField
+                    label="Album rating min"
+                    value={currentFilters.albumRatingMin}
+                    min={0}
+                    max={100}
+                    onChange={(value) => updateFilter("albumRatingMin", value)}
+                  />
+                ) : null}
                 <NumberField
                   label="Album rating max"
                   value={currentFilters.albumRatingMax}
@@ -16085,13 +16170,15 @@ export default function App() {
                   max={100}
                   onChange={(value) => updateFilter("albumRatingMax", value)}
                 />
-                <NumberField
-                  label="Track rating min"
-                  value={currentFilters.trackRatingMin}
-                  min={0}
-                  max={5}
-                  onChange={(value) => updateFilter("trackRatingMin", value)}
-                />
+                {request.view === "albums" ? (
+                  <NumberField
+                    label="Track rating min"
+                    value={currentFilters.trackRatingMin}
+                    min={0}
+                    max={5}
+                    onChange={(value) => updateFilter("trackRatingMin", value)}
+                  />
+                ) : null}
                 <NumberField
                   label="Track rating max"
                   value={currentFilters.trackRatingMax}
@@ -16322,6 +16409,7 @@ export default function App() {
                   />
                 </div>
               </div>
+              </SearchAdvancedFilters>
 
               <div className="chip-row" aria-label="Active filters">
                 {chips.length === 0 ? (
