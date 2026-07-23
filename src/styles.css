@@ -195,10 +195,6 @@ button {
   padding-left: 72px;
 }
 
-.right-sidebar-hidden .workspace {
-  padding-right: 120px;
-}
-
 .left-sidebar-hidden .app-update-banner {
   margin-left: 72px;
 }
@@ -234,6 +230,55 @@ button {
   border-color: #369b90;
   color: #087168;
   background: #e6f5f1;
+}
+
+.detail-drawer-backdrop {
+  position: fixed;
+  z-index: 55;
+  inset: 0;
+  border: 0;
+  background: rgba(16, 28, 25, 0.36);
+  cursor: pointer;
+}
+
+.details-drawer-layout {
+  --right-sidebar-width: 0px;
+}
+
+.details-drawer-layout .detail-column {
+  position: fixed;
+  z-index: 60;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, calc(100vw - 76px));
+  min-height: 100dvh;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(100%);
+  transition:
+    visibility 180ms ease,
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.details-drawer-layout .detail-column .detail-panel {
+  min-height: 100dvh;
+  padding-top: 72px;
+  box-shadow: -18px 0 42px rgba(21, 34, 31, 0.2);
+}
+
+.details-drawer-layout.details-drawer-open .detail-column {
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.details-drawer-layout.details-drawer-open .right-sidebar-toggle {
+  z-index: 70;
+}
+
+.details-drawer-layout.details-drawer-open .music-research-trigger {
+  visibility: hidden;
 }
 
 .workspace {
@@ -6994,14 +7039,6 @@ button {
     padding: 0;
   }
 
-  .detail-column {
-    display: none;
-  }
-
-  .right-sidebar-toggle {
-    display: none;
-  }
-
   .left-sidebar-hidden .workspace,
   .right-sidebar-hidden .workspace {
     padding-right: 12px;
@@ -8716,7 +8753,8 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .artist-detail-tab,
-  .artist-detail-tab-panel {
+  .artist-detail-tab-panel,
+  .details-drawer-layout .detail-column {
     transition: none;
     animation: none;
   }

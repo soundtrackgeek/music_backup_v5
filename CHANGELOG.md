@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.69.2] - 2026-07-23
+### Changed
+- Made the shell adaptive at 1280px and below by replacing the fixed details column with an accessible, closed-by-default overlay drawer that supports outside click, Escape, focus restoration, focus trapping, and page scroll locking.
+- Reclaimed the details column automatically when a workspace has no distinct contextual content, including static duplicate panels and selection-based views without an active selection.
+- Added focused layout-state coverage and synchronized app metadata at `0.69.2`.
+
 ## [0.69.1] - 2026-07-22
 ### Fixed
 - Fixed **Albums not on MusicBrainz official list** appearing to stop at 58% on large libraries by normalizing temporary MBIDs once, restoring indexed release/status joins, batching temporary-table writes in one transaction, and materializing the expensive comparison once per request.

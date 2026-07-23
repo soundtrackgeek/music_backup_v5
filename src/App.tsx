@@ -288,6 +288,10 @@ import {
 import { clampBackupRetention, numberValue } from "./app/input";
 import { useWorkspaceNavigation } from "./app/navigation";
 import {
+  useAdaptiveDetailsLayout,
+  workspaceHasUsefulDetails,
+} from "./app/adaptiveDetails";
+import {
   formatMusicBrainzReviewState,
   MusicBrainzReviewState,
 } from "./components/MusicBrainzReviewState";
@@ -7328,6 +7332,8 @@ export default function App() {
   const [rightSidebarMode, setRightSidebarMode] = useState<RightSidebarMode>(
     () => createDefaultRightSidebarMode(),
   );
+  const detailDrawerRef = useRef<HTMLElement | null>(null);
+  const detailToggleRef = useRef<HTMLButtonElement | null>(null);
   const [databaseBackups, setDatabaseBackups] = useState<DatabaseBackup[]>([]);
   const [backupError, setBackupError] = useState<string | null>(null);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
@@ -10750,7 +10756,28 @@ export default function App() {
     (statistics?.ratingProgress.ratedTracks ?? 0) +
     (statistics?.ratingProgress.unratedTracks ?? 0);
   const isLeftSidebarHidden = leftSidebarMode === "hidden";
-  const isRightSidebarHidden = rightSidebarMode === "hidden";
+  const hasUsefulDetailContent = workspaceHasUsefulDetails(activeSection, {
+    hasDiscovery: discovery != null,
+    hasSelectedAlbum: selectedAlbum != null,
+    hasSelectedArtist: selectedArtist != null,
+    hasSelectedGenre: selectedGenre != null,
+    hasSelectedTool: selectedTool != null,
+    hasStatistics: statistics != null,
+  });
+  const {
+    isDrawerLayout: isDetailsDrawerLayout,
+    isDrawerOpen: isDetailsDrawerOpen,
+    openDrawer: openDetailsDrawer,
+    closeDrawer: closeDetailsDrawer,
+  } = useAdaptiveDetailsLayout(activeSection, hasUsefulDetailContent);
+  const effectiveRightSidebarMode = hasUsefulDetailContent
+    ? rightSidebarMode
+    : "hidden";
+  const isRightSidebarHidden =
+    !hasUsefulDetailContent ||
+    (isDetailsDrawerLayout
+      ? !isDetailsDrawerOpen
+      : rightSidebarMode === "hidden");
   const musicBrainzMetricTone =
     musicBrainzStatus?.state === "available"
       ? "teal"
@@ -10866,11 +10893,111 @@ export default function App() {
     leftSidebarMode === "iconOnly"
       ? "left-sidebar-icon-only"
       : `left-sidebar-${leftSidebarMode}`;
-  const appShellClassName = `app-shell ${leftSidebarClass} right-sidebar-${rightSidebarMode}`;
+  const appShellClassName = [
+    "app-shell",
+    leftSidebarClass,
+    `right-sidebar-${effectiveRightSidebarMode}`,
+    hasUsefulDetailContent ? "has-detail-content" : "no-detail-content",
+    isDetailsDrawerLayout ? "details-drawer-layout" : "",
+    isDetailsDrawerOpen ? "details-drawer-open" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const leftIconOnlyToggleLabel =
     leftSidebarMode === "iconOnly"
       ? "Show navigation labels"
       : "Show navigation icons only";
+  const rightSidebarToggleLabel = isDetailsDrawerLayout
+    ? isDetailsDrawerOpen
+      ? "Close details drawer"
+      : "Open details drawer"
+    : isRightSidebarHidden
+      ? "Show details sidebar"
+      : "Hide details sidebar";
+
+  useEffect(() => {
+    if (!isDetailsDrawerLayout || !isDetailsDrawerOpen) {
+      return undefined;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const frameId = window.requestAnimationFrame(() => {
+      detailDrawerRef.current?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [isDetailsDrawerLayout, isDetailsDrawerOpen]);
+
+  function closeDetailDrawerAndRestoreFocus() {
+    closeDetailsDrawer();
+    window.requestAnimationFrame(() => detailToggleRef.current?.focus());
+  }
+
+  function toggleRightSidebar() {
+    if (isDetailsDrawerLayout) {
+      if (isDetailsDrawerOpen) {
+        closeDetailDrawerAndRestoreFocus();
+      } else {
+        setIsMusicResearchOpen(false);
+        openDetailsDrawer();
+      }
+      return;
+    }
+
+    setRightSidebarMode(isRightSidebarHidden ? "expanded" : "hidden");
+  }
+
+  function handleDetailDrawerKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (!isDetailsDrawerLayout || !isDetailsDrawerOpen) {
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeDetailDrawerAndRestoreFocus();
+      return;
+    }
+
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const focusableElements = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter(
+      (element) =>
+        element.getAttribute("aria-hidden") !== "true" &&
+        element.getClientRects().length > 0,
+    );
+    if (focusableElements.length === 0) {
+      event.preventDefault();
+      event.currentTarget.focus();
+      return;
+    }
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    if (
+      event.shiftKey &&
+      (document.activeElement === firstElement ||
+        document.activeElement === event.currentTarget)
+    ) {
+      event.preventDefault();
+      lastElement.focus();
+    } else if (
+      !event.shiftKey &&
+      (document.activeElement === lastElement ||
+        document.activeElement === event.currentTarget)
+    ) {
+      event.preventDefault();
+      firstElement.focus();
+    }
+  }
 
   return (
     <main className={appShellClassName}>
@@ -10891,34 +11018,47 @@ export default function App() {
         aria-label="Ask Luna about music"
         aria-pressed={isMusicResearchOpen}
         title="Ask Luna about music"
-        onClick={() => setIsMusicResearchOpen((previous) => !previous)}
+        onClick={() => {
+          if (!isMusicResearchOpen && isDetailsDrawerLayout) {
+            closeDetailsDrawer();
+          }
+          setIsMusicResearchOpen((previous) => !previous);
+        }}
       >
         <Sparkles size={18} />
       </button>
-      <button
-        className="icon-button edge-toggle right-sidebar-toggle"
-        type="button"
-        aria-label={
-          isRightSidebarHidden ? "Show details sidebar" : "Hide details sidebar"
-        }
-        title={
-          isRightSidebarHidden ? "Show details sidebar" : "Hide details sidebar"
-        }
-        onClick={() =>
-          setRightSidebarMode(isRightSidebarHidden ? "expanded" : "hidden")
-        }
-      >
-        {isRightSidebarHidden ? (
-          <ChevronLeft size={18} />
-        ) : (
-          <ChevronRight size={18} />
-        )}
-      </button>
+      {hasUsefulDetailContent ? (
+        <button
+          ref={detailToggleRef}
+          className="icon-button edge-toggle right-sidebar-toggle"
+          type="button"
+          aria-controls="workspace-details"
+          aria-expanded={!isRightSidebarHidden}
+          aria-label={rightSidebarToggleLabel}
+          title={rightSidebarToggleLabel}
+          onClick={toggleRightSidebar}
+        >
+          {isRightSidebarHidden ? (
+            <ChevronLeft size={18} />
+          ) : (
+            <ChevronRight size={18} />
+          )}
+        </button>
+      ) : null}
       <MusicResearchPanel
         isOpen={isMusicResearchOpen}
         context={musicResearchContext}
         onClose={() => setIsMusicResearchOpen(false)}
       />
+      {isDetailsDrawerLayout && isDetailsDrawerOpen ? (
+        <button
+          className="detail-drawer-backdrop"
+          type="button"
+          tabIndex={-1}
+          aria-hidden="true"
+          onClick={closeDetailDrawerAndRestoreFocus}
+        />
+      ) : null}
       <aside
         className="sidebar"
         aria-label="Main navigation"
@@ -16261,7 +16401,19 @@ export default function App() {
         )}
       </div>
 
-      <section className="detail-column" aria-hidden={isRightSidebarHidden}>
+      <section
+        ref={detailDrawerRef}
+        id="workspace-details"
+        className="detail-column"
+        role={isDetailsDrawerLayout && isDetailsDrawerOpen ? "dialog" : undefined}
+        aria-modal={isDetailsDrawerLayout && isDetailsDrawerOpen ? true : undefined}
+        aria-label={
+          isDetailsDrawerLayout && isDetailsDrawerOpen ? "Workspace details" : undefined
+        }
+        aria-hidden={isRightSidebarHidden}
+        tabIndex={isDetailsDrawerLayout ? -1 : undefined}
+        onKeyDown={handleDetailDrawerKeyDown}
+      >
         {activeSection === "Imports" ? (
           <aside className="detail-panel" aria-label="Selected import details">
             <div className="detail-header">
