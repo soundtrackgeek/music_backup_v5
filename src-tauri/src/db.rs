@@ -356,7 +356,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_six_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_seven_schema_exists(conn)?
+    {
         return Ok(());
     }
 
@@ -986,8 +987,6 @@ pub fn migrate(conn: &Connection) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_import_stage_tracks_identity
             ON import_stage_tracks(session_id, file_path, filename);
-        CREATE INDEX IF NOT EXISTS idx_tracks_file_identity
-            ON tracks(file_path, filename);
 
         CREATE TABLE IF NOT EXISTS import_stage_albums (
             session_id INTEGER NOT NULL REFERENCES import_sessions(id) ON DELETE CASCADE,
@@ -1086,8 +1085,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_origin_country_tables(conn)?;
     ensure_musicbrainz_artist_info_tables(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
-    conn.execute_batch("PRAGMA user_version = 26;")
-        .context("Could not update SQLite schema version")?;
+    conn.execute_batch(
+        "
+        DROP INDEX IF EXISTS idx_tracks_file_identity;
+        PRAGMA user_version = 27;
+        ",
+    )
+    .context("Could not update SQLite schema version")?;
     Ok(())
 }
 
@@ -1228,6 +1232,21 @@ fn schema_table_exists(conn: &Connection, name: &str) -> Result<bool> {
         |row| row.get::<_, bool>(0),
     )
     .with_context(|| format!("Could not inspect SQLite schema object {name}"))
+}
+
+fn schema_index_exists(conn: &Connection, name: &str) -> Result<bool> {
+    conn.query_row(
+        "
+        SELECT EXISTS(
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'index' AND name = ?1
+        )
+        ",
+        params![name],
+        |row| row.get::<_, bool>(0),
+    )
+    .with_context(|| format!("Could not inspect SQLite schema index {name}"))
 }
 
 fn ensure_import_run_change_columns(conn: &Connection) -> Result<()> {
@@ -14196,6 +14215,10 @@ mod tests {
         assert!(phase_nineteen_schema_exists(&conn).expect("phase nineteen schema exists"));
         assert!(migrations::phase_twenty_six_schema_exists(&conn)
             .expect("phase twenty-six schema exists"));
+        assert!(migrations::phase_twenty_seven_schema_exists(&conn)
+            .expect("phase twenty-seven schema exists"));
+        assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
+            .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
         assert!(schema_table_exists(&conn, "import_stage_tracks")
             .expect("import track staging table exists"));
@@ -14222,6 +14245,29 @@ mod tests {
         assert!(schema_table_exists(&conn, "saved_external_discoveries")
             .expect("saved external discovery table exists"));
         assert!(schema_table_exists(&conn, "wish_list_items").expect("wish list table exists"));
+    }
+
+    #[test]
+    fn schema_twenty_seven_removes_the_redundant_track_identity_index() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            CREATE INDEX idx_tracks_file_identity ON tracks(file_path, filename);
+            PRAGMA user_version = 26;
+            ",
+        )
+        .expect("simulate schema twenty-six identity index");
+
+        migrate(&conn).expect("migrate schema twenty-seven");
+
+        assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
+            .expect("inspect redundant identity index"));
+        let user_version = conn
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+            .expect("read migrated user version");
+        assert_eq!(user_version, 27);
     }
 
     #[test]

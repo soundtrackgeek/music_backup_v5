@@ -6,12 +6,15 @@ use crate::wishlist;
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
 use csv::{Position, StringRecord};
-use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use rusqlite::{params, Connection, InterruptHandle, OptionalExtension, Transaction};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 use std::time::Instant;
 use std::time::UNIX_EPOCH;
 #[cfg(not(test))]
@@ -19,8 +22,35 @@ use tauri::{AppHandle, Emitter};
 
 const IMPORT_STAGE_BATCH_SIZE: usize = 5_000;
 const IMPORT_SUSPICIOUS_EXAMPLE_LIMIT: i64 = 12;
+const IMPORT_STAGE_VACUUM_THRESHOLD_BYTES: i64 = 128 * 1024 * 1024;
+const ADDED_TRACKS_SQL: &str = "
+    SELECT COUNT(*)
+    FROM import_stage_tracks staged
+    LEFT JOIN tracks current
+      ON current.file_path IS NULLIF(staged.file_path, '')
+     AND current.filename IS NULLIF(staged.filename, '')
+    WHERE staged.session_id = ?1 AND current.id IS NULL
+";
+const CHANGED_TRACKS_SQL: &str = "
+    SELECT COUNT(*)
+    FROM import_stage_tracks staged
+    JOIN tracks current
+      ON current.file_path IS NULLIF(staged.file_path, '')
+     AND current.filename IS NULLIF(staged.filename, '')
+    WHERE staged.session_id = ?1 AND current.row_hash != staged.row_hash
+";
+const REMOVED_TRACKS_SQL: &str = "
+    SELECT COUNT(*)
+    FROM tracks current
+    LEFT JOIN import_stage_tracks staged
+      ON staged.session_id = ?1
+     AND staged.file_path = COALESCE(current.file_path, '')
+     AND staged.filename = COALESCE(current.filename, '')
+    WHERE staged.row_number IS NULL
+";
 static IMPORT_CANCEL_REQUESTED: AtomicBool = AtomicBool::new(false);
 static IMPORT_WORKFLOW_RUNNING: AtomicBool = AtomicBool::new(false);
+static IMPORT_INTERRUPT_HANDLE: Mutex<Option<InterruptHandle>> = Mutex::new(None);
 
 const REQUIRED_COLUMNS: [&str; 17] = [
     "Display Artist",
@@ -223,6 +253,7 @@ struct SourceFingerprint {
 }
 
 struct ImportWorkflowGuard;
+struct ImportInterruptGuard;
 
 impl ImportWorkflowGuard {
     fn acquire() -> Result<Self> {
@@ -242,6 +273,25 @@ impl Drop for ImportWorkflowGuard {
     }
 }
 
+impl ImportInterruptGuard {
+    fn register(conn: &Connection) -> Self {
+        let mut handle = IMPORT_INTERRUPT_HANDLE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *handle = Some(conn.get_interrupt_handle());
+        Self
+    }
+}
+
+impl Drop for ImportInterruptGuard {
+    fn drop(&mut self) {
+        let mut handle = IMPORT_INTERRUPT_HANDLE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        handle.take();
+    }
+}
+
 #[cfg(not(test))]
 pub fn get_import_preview(app: &AppHandle, source_path: String) -> Result<Option<ImportPreview>> {
     let (conn, _) = db::open(app)?;
@@ -254,6 +304,7 @@ pub fn prepare_import_preview(app: AppHandle, source_path: String) -> Result<Imp
     let _workflow_guard = ImportWorkflowGuard::acquire()?;
     IMPORT_CANCEL_REQUESTED.store(false, Ordering::SeqCst);
     let (mut conn, _) = db::open(&app)?;
+    let _interrupt_guard = ImportInterruptGuard::register(&conn);
     let fingerprint = source_fingerprint(&source_path)?;
     let progress = |status: &str,
                     session_id: Option<i64>,
@@ -282,6 +333,12 @@ pub fn prepare_import_preview(app: AppHandle, source_path: String) -> Result<Imp
 
 pub fn cancel_import_preview() {
     IMPORT_CANCEL_REQUESTED.store(true, Ordering::SeqCst);
+    let handle = IMPORT_INTERRUPT_HANDLE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(handle) = handle.as_ref() {
+        handle.interrupt();
+    }
 }
 
 #[cfg(not(test))]
@@ -349,6 +406,27 @@ pub fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSum
             wishlist::reconcile_for_connection(&conn)
                 .context("Could not reconcile the wish list after import")?;
             cleanup_completed_stage(&conn, session_id)?;
+            match completed_stage_storage_should_be_reclaimed(&conn) {
+                Ok(true) => {
+                    emit_progress(
+                        &app,
+                        "optimizing",
+                        Some(session_id),
+                        track_rows,
+                        session.source_size_bytes.max(0) as u64,
+                        session.source_size_bytes.max(0) as u64,
+                        album_count,
+                        "Reclaiming temporary staging space from the SQLite file.",
+                    );
+                    if let Err(error) = reclaim_completed_stage_storage(&conn) {
+                        eprintln!("Could not reclaim completed import staging space: {error:#}");
+                    }
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    eprintln!("Could not inspect completed import staging space: {error:#}");
+                }
+            }
             emit_progress(
                 &app,
                 "completed",
@@ -607,30 +685,59 @@ fn prepare_import_preview_for_connection(
     cancel_requested: &AtomicBool,
     progress: &ImportProgressCallback<'_>,
 ) -> Result<ImportPreview> {
-    let result = prepare_import_preview_inner(conn, fingerprint, cancel_requested, progress);
-    if let Err(error) = &result {
-        if let Ok(Some(session)) = latest_import_session(conn, &fingerprint.path_text) {
-            let status = if session.processed_rows > 0 {
-                "failed"
-            } else {
-                "failed"
-            };
-            let _ = conn.execute(
-                "
-                UPDATE import_sessions
-                SET status = ?1, updated_at = ?2, error_message = ?3
-                WHERE id = ?4
-                ",
-                params![
-                    status,
-                    Utc::now().to_rfc3339(),
-                    error.to_string(),
-                    session.id
-                ],
-            );
+    match prepare_import_preview_inner(conn, fingerprint, cancel_requested, progress) {
+        Ok(preview) => Ok(preview),
+        Err(error) => {
+            if cancel_requested.load(Ordering::SeqCst) {
+                return finish_cancelled_preparation(conn, fingerprint, progress);
+            }
+            if let Ok(Some(session)) = latest_import_session(conn, &fingerprint.path_text) {
+                let _ = conn.execute(
+                    "
+                    UPDATE import_sessions
+                    SET status = 'failed', updated_at = ?1, error_message = ?2
+                    WHERE id = ?3
+                    ",
+                    params![Utc::now().to_rfc3339(), error.to_string(), session.id],
+                );
+            }
+            Err(error)
         }
     }
-    result
+}
+
+fn finish_cancelled_preparation(
+    conn: &Connection,
+    fingerprint: &SourceFingerprint,
+    progress: &ImportProgressCallback<'_>,
+) -> Result<ImportPreview> {
+    let session = latest_import_session(conn, &fingerprint.path_text)?
+        .ok_or_else(|| anyhow!("Could not find the cancelled import checkpoint"))?;
+    conn.execute(
+        "
+        UPDATE import_sessions
+        SET status = 'cancelled', updated_at = ?1, error_message = NULL
+        WHERE id = ?2
+        ",
+        params![Utc::now().to_rfc3339(), session.id],
+    )?;
+    let session = load_import_session(conn, session.id)?;
+    progress(
+        "cancelled",
+        Some(session.id),
+        session.processed_rows.max(0) as u64,
+        session.processed_bytes.max(0) as u64,
+        session.album_count.max(0) as u64,
+        "Preparation cancelled. The checkpoint is safe to resume.",
+    );
+    preview_from_session(conn, session, Some(fingerprint))
+}
+
+fn ensure_preparation_not_cancelled(cancel_requested: &AtomicBool) -> Result<()> {
+    if cancel_requested.load(Ordering::SeqCst) {
+        bail!("Import preparation cancelled");
+    }
+    Ok(())
 }
 
 fn prepare_import_preview_inner(
@@ -774,27 +881,7 @@ fn prepare_import_preview_inner(
         }
 
         if cancel_requested.load(Ordering::SeqCst) {
-            conn.execute(
-                "
-                UPDATE import_sessions
-                SET status = 'cancelled', updated_at = ?1, error_message = NULL
-                WHERE id = ?2
-                ",
-                params![Utc::now().to_rfc3339(), session_id],
-            )?;
-            progress(
-                "cancelled",
-                Some(session_id),
-                processed_rows,
-                processed_bytes,
-                albums.len() as u64,
-                "Preparation cancelled. The checkpoint is safe to resume.",
-            );
-            return preview_from_session(
-                conn,
-                load_import_session(conn, session_id)?,
-                Some(fingerprint),
-            );
+            return finish_cancelled_preparation(conn, fingerprint, progress);
         }
     }
 
@@ -806,13 +893,18 @@ fn prepare_import_preview_inner(
         albums.len() as u64,
         "Comparing the staged snapshot with the active library.",
     );
+    ensure_preparation_not_cancelled(cancel_requested)?;
     let final_albums = albums
         .values()
         .map(AlbumAggregate::finalize)
         .collect::<Vec<_>>();
-    persist_stage_final_albums(conn, session_id, &final_albums)?;
-    let changes = calculate_staged_changes(conn, session_id, &final_albums)?;
-    let suspicious = find_suspicious_albums(conn, &final_albums)?;
+    ensure_preparation_not_cancelled(cancel_requested)?;
+    persist_stage_final_albums(conn, session_id, &final_albums, cancel_requested)?;
+    ensure_preparation_not_cancelled(cancel_requested)?;
+    let changes = calculate_staged_changes(conn, session_id, &final_albums, cancel_requested)?;
+    ensure_preparation_not_cancelled(cancel_requested)?;
+    let suspicious = find_suspicious_albums(conn, &final_albums, cancel_requested)?;
+    ensure_preparation_not_cancelled(cancel_requested)?;
     persist_import_delta(
         conn,
         session_id,
@@ -820,6 +912,7 @@ fn prepare_import_preview_inner(
         albums.len() as u64,
         &changes,
         &suspicious,
+        cancel_requested,
     )?;
 
     progress(
@@ -1046,6 +1139,7 @@ fn persist_stage_final_albums(
     conn: &mut Connection,
     session_id: i64,
     albums: &[FinalAlbum],
+    cancel_requested: &AtomicBool,
 ) -> Result<()> {
     let tx = conn
         .transaction()
@@ -1065,6 +1159,7 @@ fn persist_stage_final_albums(
             ",
         )?;
         for album in albums {
+            ensure_preparation_not_cancelled(cancel_requested)?;
             update.execute(params![
                 &album.album_artist_display,
                 album.rating_completeness,
@@ -1086,44 +1181,17 @@ fn calculate_staged_changes(
     conn: &Connection,
     session_id: i64,
     final_albums: &[FinalAlbum],
+    cancel_requested: &AtomicBool,
 ) -> Result<ImportChanges> {
-    let added_tracks = conn.query_row(
-        "
-        SELECT COUNT(*)
-        FROM import_stage_tracks staged
-        LEFT JOIN tracks current
-          ON COALESCE(current.file_path, '') = staged.file_path
-         AND COALESCE(current.filename, '') = staged.filename
-        WHERE staged.session_id = ?1 AND current.id IS NULL
-        ",
-        params![session_id],
-        |row| row.get(0),
-    )?;
-    let changed_tracks = conn.query_row(
-        "
-        SELECT COUNT(*)
-        FROM import_stage_tracks staged
-        JOIN tracks current
-          ON COALESCE(current.file_path, '') = staged.file_path
-         AND COALESCE(current.filename, '') = staged.filename
-        WHERE staged.session_id = ?1 AND current.row_hash != staged.row_hash
-        ",
-        params![session_id],
-        |row| row.get(0),
-    )?;
-    let removed_tracks = conn.query_row(
-        "
-        SELECT COUNT(*)
-        FROM tracks current
-        LEFT JOIN import_stage_tracks staged
-          ON staged.session_id = ?1
-         AND staged.file_path = COALESCE(current.file_path, '')
-         AND staged.filename = COALESCE(current.filename, '')
-        WHERE staged.row_number IS NULL
-        ",
-        params![session_id],
-        |row| row.get(0),
-    )?;
+    ensure_preparation_not_cancelled(cancel_requested)?;
+    let added_tracks = conn.query_row(ADDED_TRACKS_SQL, params![session_id], |row| row.get(0))?;
+    ensure_preparation_not_cancelled(cancel_requested)?;
+    let changed_tracks =
+        conn.query_row(CHANGED_TRACKS_SQL, params![session_id], |row| row.get(0))?;
+    ensure_preparation_not_cancelled(cancel_requested)?;
+    let removed_tracks =
+        conn.query_row(REMOVED_TRACKS_SQL, params![session_id], |row| row.get(0))?;
+    ensure_preparation_not_cancelled(cancel_requested)?;
 
     let mut previous_albums = load_previous_albums(conn)?;
     let mut changes = ImportChanges {
@@ -1133,6 +1201,7 @@ fn calculate_staged_changes(
         ..ImportChanges::default()
     };
     for album in final_albums {
+        ensure_preparation_not_cancelled(cancel_requested)?;
         match previous_albums.remove(&album.album_id) {
             Some(previous) if album_changed(&previous, album) => changes.changed_albums += 1,
             Some(_) => {}
@@ -1146,11 +1215,13 @@ fn calculate_staged_changes(
 fn find_suspicious_albums(
     conn: &Connection,
     final_albums: &[FinalAlbum],
+    cancel_requested: &AtomicBool,
 ) -> Result<Vec<ImportSuspiciousAlbum>> {
     let mut previous_albums = load_previous_albums(conn)?;
     let mut suspicious = Vec::new();
 
     for album in final_albums {
+        ensure_preparation_not_cancelled(cancel_requested)?;
         if let Some(previous) = previous_albums.remove(&album.album_id) {
             let missing_tracks = previous.total_tracks.saturating_sub(album.total_tracks);
             let material_drop = missing_tracks >= 3
@@ -1206,6 +1277,7 @@ fn find_suspicious_albums(
     }
 
     for previous in previous_albums.into_values() {
+        ensure_preparation_not_cancelled(cancel_requested)?;
         if previous.rated_tracks > 0
             || previous.loved_tracks > 0
             || previous.effective_album_rating.is_some()
@@ -1236,6 +1308,7 @@ fn persist_import_delta(
     album_count: u64,
     changes: &ImportChanges,
     suspicious: &[ImportSuspiciousAlbum],
+    cancel_requested: &AtomicBool,
 ) -> Result<()> {
     let tx = conn
         .transaction()
@@ -1254,6 +1327,7 @@ fn persist_import_delta(
             ",
         )?;
         for album in suspicious {
+            ensure_preparation_not_cancelled(cancel_requested)?;
             insert.execute(params![
                 session_id,
                 &album.album_id,
@@ -1516,6 +1590,19 @@ fn cleanup_completed_stage(conn: &Connection, session_id: i64) -> Result<()> {
         params![session_id],
     )?;
     Ok(())
+}
+
+#[cfg(not(test))]
+fn completed_stage_storage_should_be_reclaimed(conn: &Connection) -> Result<bool> {
+    let page_size = conn.query_row("PRAGMA page_size", [], |row| row.get::<_, i64>(0))?;
+    let free_pages = conn.query_row("PRAGMA freelist_count", [], |row| row.get::<_, i64>(0))?;
+    Ok(page_size.saturating_mul(free_pages) >= IMPORT_STAGE_VACUUM_THRESHOLD_BYTES)
+}
+
+#[cfg(not(test))]
+fn reclaim_completed_stage_storage(conn: &Connection) -> Result<()> {
+    conn.execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")
+        .context("Could not compact SQLite after removing completed import staging rows")
 }
 
 #[cfg(not(test))]
@@ -3206,6 +3293,236 @@ mod tests {
         );
 
         fs::remove_dir_all(&test_dir).expect("remove import test directory");
+    }
+
+    #[test]
+    fn final_track_delta_uses_indexed_null_safe_identity_lookups() {
+        let test_id = format!(
+            "music-library-import-delta-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        );
+        let test_dir = std::env::temp_dir().join(test_id);
+        fs::create_dir_all(&test_dir).expect("create delta test directory");
+        let source_path = test_dir.join("library.tsv");
+        let records = vec![
+            vec![
+                "Artist",
+                "",
+                "1",
+                "Unchanged Album",
+                "Rock",
+                "",
+                "Label",
+                "4",
+                "Unchanged Track",
+                "1",
+                "2026",
+                "2026",
+                "unchanged-album",
+                r"D:\Music\Unchanged Album",
+                "01.mp3",
+                "Artist",
+                "3:00",
+            ],
+            vec![
+                "Artist",
+                "",
+                "1",
+                "Null Identity Album",
+                "Rock",
+                "",
+                "Label",
+                "5",
+                "Changed Null Identity",
+                "1",
+                "2026",
+                "2026",
+                "null-identity-album",
+                "",
+                "",
+                "Artist",
+                "3:01",
+            ],
+            vec![
+                "Artist",
+                "",
+                "1",
+                "Added Album",
+                "Rock",
+                "",
+                "Label",
+                "3",
+                "Added Track",
+                "1",
+                "2026",
+                "2026",
+                "added-album",
+                r"D:\Music\Added Album",
+                "01.mp3",
+                "Artist",
+                "3:02",
+            ],
+        ];
+        let mut tsv = format!("{}\n", REQUIRED_COLUMNS.join("\t"));
+        for record in &records {
+            tsv.push_str(&record.join("\t"));
+            tsv.push('\n');
+        }
+        fs::write(&source_path, tsv).expect("write delta test TSV");
+
+        let headers = StringRecord::from(REQUIRED_COLUMNS.to_vec());
+        let header_map = HeaderMap::from_headers(&headers).expect("map delta test headers");
+        let unchanged = TrackRow::from_record(&StringRecord::from(records[0].clone()), &header_map)
+            .expect("parse unchanged track");
+
+        let mut conn = Connection::open_in_memory().expect("open delta test database");
+        crate::db::configure(&conn).expect("configure delta test database");
+        crate::db::migrate(&conn).expect("migrate delta test database");
+        conn.execute(
+            "INSERT INTO import_runs (source_path, started_at, status) VALUES ('old.tsv', ?1, 'completed')",
+            params![Utc::now().to_rfc3339()],
+        )
+        .expect("seed delta import run");
+        let import_run_id = conn.last_insert_rowid();
+        conn.execute(
+            "
+            INSERT INTO tracks (
+                import_run_id, album_id, file_path, filename, row_hash
+            ) VALUES (?1, ?2, ?3, ?4, ?5)
+            ",
+            params![
+                import_run_id,
+                &unchanged.album_id,
+                &unchanged.file_path,
+                &unchanged.filename,
+                &unchanged.row_hash
+            ],
+        )
+        .expect("seed unchanged track");
+        conn.execute(
+            "
+            INSERT INTO tracks (
+                import_run_id, album_id, file_path, filename, row_hash
+            ) VALUES (?1, 'mb:null-identity-album', NULL, NULL, 'old-null-hash')
+            ",
+            params![import_run_id],
+        )
+        .expect("seed null identity track");
+        conn.execute(
+            "
+            INSERT INTO tracks (
+                import_run_id, album_id, file_path, filename, row_hash
+            ) VALUES (?1, 'mb:removed-album', 'D:\\Music\\Removed', '01.mp3', 'removed-hash')
+            ",
+            params![import_run_id],
+        )
+        .expect("seed removed track");
+
+        let fingerprint =
+            source_fingerprint(&source_path.display().to_string()).expect("fingerprint delta TSV");
+        let ready = prepare_import_preview_for_connection(
+            &mut conn,
+            &fingerprint,
+            &AtomicBool::new(false),
+            &|_, _, _, _, _, _| {},
+        )
+        .expect("prepare indexed delta");
+        assert_eq!(ready.added_tracks, 1);
+        assert_eq!(ready.changed_tracks, 1);
+        assert_eq!(ready.removed_tracks, 1);
+
+        for sql in [ADDED_TRACKS_SQL, CHANGED_TRACKS_SQL] {
+            let explain = format!("EXPLAIN QUERY PLAN {sql}");
+            let mut statement = conn.prepare(&explain).expect("prepare delta query plan");
+            let details = statement
+                .query_map(params![ready.session_id], |row| row.get::<_, String>(3))
+                .expect("read delta query plan")
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .expect("collect delta query plan");
+            assert!(
+                details
+                    .iter()
+                    .any(|detail| detail.contains("idx_tracks_file")),
+                "expected indexed current-track lookup, got {details:?}"
+            );
+            assert!(
+                details
+                    .iter()
+                    .all(|detail| !detail.starts_with("SCAN current")),
+                "unexpected full current-track scan: {details:?}"
+            );
+        }
+
+        fs::remove_dir_all(&test_dir).expect("remove delta test directory");
+    }
+
+    #[test]
+    fn cancellation_during_final_analysis_returns_a_resumable_checkpoint() {
+        let test_id = format!(
+            "music-library-import-analysis-cancel-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        );
+        let test_dir = std::env::temp_dir().join(test_id);
+        fs::create_dir_all(&test_dir).expect("create analysis cancellation directory");
+        let source_path = test_dir.join("library.tsv");
+        let values = [
+            "Artist",
+            "",
+            "1",
+            "Album",
+            "Rock",
+            "",
+            "Label",
+            "4",
+            "Track",
+            "1",
+            "2026",
+            "2026",
+            "album",
+            r"D:\Music\Album",
+            "01.mp3",
+            "Artist",
+            "3:00",
+        ];
+        fs::write(
+            &source_path,
+            format!("{}\n{}\n", REQUIRED_COLUMNS.join("\t"), values.join("\t")),
+        )
+        .expect("write analysis cancellation TSV");
+
+        let mut conn = Connection::open_in_memory().expect("open analysis cancellation database");
+        crate::db::configure(&conn).expect("configure analysis cancellation database");
+        crate::db::migrate(&conn).expect("migrate analysis cancellation database");
+        let fingerprint = source_fingerprint(&source_path.display().to_string())
+            .expect("fingerprint analysis cancellation TSV");
+        let cancel = AtomicBool::new(false);
+        let progress = |status: &str, _: Option<i64>, _: u64, _: u64, _: u64, _: &str| {
+            if status == "analyzing" {
+                cancel.store(true, Ordering::SeqCst);
+            }
+        };
+
+        let cancelled =
+            prepare_import_preview_for_connection(&mut conn, &fingerprint, &cancel, &progress)
+                .expect("cancel final analysis");
+        assert_eq!(cancelled.status, "cancelled");
+        assert_eq!(cancelled.processed_rows, 1);
+        assert!(cancelled.can_resume);
+
+        cancel.store(false, Ordering::SeqCst);
+        let resumed = prepare_import_preview_for_connection(
+            &mut conn,
+            &fingerprint,
+            &cancel,
+            &|_, _, _, _, _, _| {},
+        )
+        .expect("resume final analysis");
+        assert_eq!(resumed.status, "ready");
+        assert_eq!(resumed.track_rows, 1);
+
+        fs::remove_dir_all(&test_dir).expect("remove analysis cancellation directory");
     }
 
     #[test]

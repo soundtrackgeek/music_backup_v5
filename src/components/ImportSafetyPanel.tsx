@@ -84,12 +84,17 @@ export function ImportSafetyPanel({
   const canResume = preview?.canResume && !preview.sourceChanged;
   const isBusy = isPreparing || isApplying;
   const percent = progressPercent(progress);
+  const preparationStatus = ["preparing", "resuming", "analyzing", "optimizing"].includes(
+    progress.status,
+  )
+    ? progress.status
+    : canResume
+      ? "resuming"
+      : "preparing";
   const status = isApplying
     ? "applying"
     : isPreparing
-      ? canResume
-        ? "resuming"
-        : "preparing"
+      ? preparationStatus
       : preview?.status ?? progress.status;
 
   return (
@@ -112,8 +117,9 @@ export function ImportSafetyPanel({
         <div>
           <strong>Your current library stays live during preparation.</strong>
           <span>
-            Checkpoints are saved every 5,000 rows. Apply is atomic and creates
-            its own rollback backup first.
+            Only resumable checkpoints are written, so the SQLite file can grow
+            temporarily. Apply creates a rollback backup before replacing the
+            active snapshot, then reclaims completed staging space.
           </span>
         </div>
       </div>

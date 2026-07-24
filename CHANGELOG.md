@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.76.2] - 2026-07-24
+### Fixed
+- Fixed the final pre-import track delta comparisons so the existing `(file_path, filename)` index is used instead of repeatedly scanning the entire active track table for every staged row.
+- Made cancellation interrupt an in-flight SQLite staging or analysis statement and return the last durable checkpoint as resumable instead of remaining on **Stopping safely**.
+- Showed the final comparison and completed-stage compaction phases as **Analyzing** and **Optimizing** instead of leaving the workflow labeled **Preparing**.
+- Reclaimed large completed import staging allocations after Apply so the main SQLite file does not permanently retain the temporary checkpoint growth.
+
+### Changed
+- Removed the redundant second active-track identity index in SQLite schema version 27.
+- Clarified that preparation writes only resumable checkpoint rows, can temporarily grow the SQLite file, leaves the active snapshot untouched, and creates the rollback backup immediately before Apply.
+- Bumped synchronized app metadata to `0.76.2`.
+
 ## [0.76.1] - 2026-07-24
 ### Changed
 - Promoted **Exclude genres** into the six always-visible Search filters and moved the displaced rating minimum controls into **Advanced filters**.

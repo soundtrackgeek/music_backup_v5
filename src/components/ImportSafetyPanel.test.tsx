@@ -137,6 +137,22 @@ describe("ImportSafetyPanel", () => {
     expect(handlers.onCancel).toHaveBeenCalledOnce();
   });
 
+  it("shows the final comparison as analyzing instead of preparing", () => {
+    renderPanel({
+      progress: {
+        ...progress,
+        status: "analyzing",
+        message: "Comparing the staged snapshot with the active library.",
+      },
+      isPreparing: true,
+    });
+
+    expect(screen.getByText("analyzing")).toBeVisible();
+    expect(
+      screen.getByText("Comparing the staged snapshot with the active library."),
+    ).toBeVisible();
+  });
+
   it("exposes one-click rollback for the exact generated backup", () => {
     const handlers = renderPanel({ latestAppliedRun: appliedRun });
 
