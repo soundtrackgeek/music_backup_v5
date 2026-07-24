@@ -226,6 +226,10 @@ button {
   right: 66px;
 }
 
+.no-detail-content .music-research-trigger {
+  right: 18px;
+}
+
 .music-research-trigger.active {
   border-color: #369b90;
   color: #087168;
@@ -311,6 +315,15 @@ button {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.right-sidebar-hidden.has-detail-content .topbar,
+.details-drawer-layout.has-detail-content .topbar {
+  padding-right: 96px;
+}
+
+.no-detail-content .topbar {
+  padding-right: 48px;
 }
 
 .topbar-actions,
@@ -8054,6 +8067,15 @@ button {
 @media (max-width: 640px) {
   .music-research-trigger {
     position: fixed;
+    top: 16px;
+    right: 16px;
+  }
+
+  .has-detail-content .music-research-trigger {
+    right: 64px;
+  }
+
+  .right-sidebar-toggle {
     top: 16px;
     right: 16px;
   }

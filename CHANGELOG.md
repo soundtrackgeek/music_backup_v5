@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.70.1] - 2026-07-24
+### Fixed
+- Reserved header-only space for Luna and details controls whenever the contextual sidebar is collapsed or drawer-based, preventing them from covering workspace actions without narrowing metrics or tables.
+- Kept the single Luna control aligned to the window edge on workspaces without useful detail content and separated both shell controls at compact widths.
+
+### Changed
+- Bumped synchronized app metadata to `0.70.1`.
+
 ## [0.70.0] - 2026-07-24
 ### Changed
 - Reworked Search into a results-first workflow with six view-aware common filters and the album or track result table visible in the first screen at desktop and the supported 1040px minimum width.
