@@ -1,9 +1,33 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { PlaylistBuilderWorkspace } from "./PlaylistBuilderWorkspace";
+import { createRequest } from "../app/requests";
 
 describe("playlist builder workspace", () => {
+  it("opens with a reviewable cohort prompt without calling Luna", () => {
+    const onLaunchConsumed = vi.fn();
+    render(
+      <PlaylistBuilderWorkspace
+        isAvailable
+        launch={{
+          id: 7,
+          cohortTitle: "1980s albums",
+          prompt: "Build only from albums released from 1980 through 1989.",
+          request: createRequest("albums"),
+        }}
+        onLaunchConsumed={onLaunchConsumed}
+      />,
+    );
+
+    expect(screen.getByLabelText("Playlist request")).toHaveValue(
+      "Build only from albums released from 1980 through 1989.",
+    );
+    expect(screen.getByText("1980s albums")).toBeInTheDocument();
+    expect(screen.queryByText("What Have I Done to Deserve This?")).toBeNull();
+    expect(onLaunchConsumed).toHaveBeenCalledOnce();
+  });
+
   it("builds a reviewable draft and explicitly stores its exact track order", async () => {
     const { container } = render(<PlaylistBuilderWorkspace isAvailable />);
 

@@ -128,6 +128,7 @@ export function OutsideLibraryDiscovery({
   const [wishListError, setWishListError] = useState<string | null>(null);
   const [wishListItemIds, setWishListItemIds] = useState<Set<string>>(new Set());
   const [addingWishListItemId, setAddingWishListItemId] = useState<string | null>(null);
+  const [isAddingAllToWishList, setIsAddingAllToWishList] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -269,6 +270,47 @@ export function OutsideLibraryDiscovery({
     }
   }
 
+  async function addAllMissingToWishList() {
+    if (!response || isAddingAllToWishList) return;
+    const items = response.items.filter(
+      (item) =>
+        item.entity !== "song" &&
+        !wishListItemIds.has(`${item.entity}:${item.id}`),
+    );
+    if (items.length === 0) return;
+    setIsAddingAllToWishList(true);
+    setWishListError(null);
+    const addedKeys: string[] = [];
+    try {
+      for (const item of items) {
+        if (item.entity === "song") continue;
+        await addWishListItem({
+          entity: item.entity,
+          title: item.title,
+          artist: item.entity === "artist" ? "" : item.artist,
+          year: item.year,
+          musicbrainzId: item.id,
+          musicbrainzUrl: item.url,
+          source: "MusicBrainz discovery",
+        });
+        addedKeys.push(`${item.entity}:${item.id}`);
+      }
+    } catch (addError) {
+      setWishListError(
+        addError instanceof Error ? addError.message : String(addError),
+      );
+    } finally {
+      if (addedKeys.length > 0) {
+        setWishListItemIds((previous) => {
+          const next = new Set(previous);
+          addedKeys.forEach((key) => next.add(key));
+          return next;
+        });
+      }
+      setIsAddingAllToWishList(false);
+    }
+  }
+
   const activeSavedDiscovery =
     saved.find((entry) => entry.id === activeSavedId) ?? undefined;
 
@@ -338,15 +380,51 @@ export function OutsideLibraryDiscovery({
                 />
                 <p>{response.summary}</p>
               </div>
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => void saveCurrent()}
-                disabled={!name.trim() || response.items.length === 0 || isSaving}
-              >
-                <Save size={16} />
-                {isSaving ? "Saving" : activeSavedId == null ? "Save list" : "Update saved"}
-              </button>
+              <div className="outside-library-cohort-actions">
+                {response.items.some((item) => item.entity !== "song") ? (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => void addAllMissingToWishList()}
+                    disabled={
+                      isAddingAllToWishList ||
+                      response.items
+                        .filter((item) => item.entity !== "song")
+                        .every((item) =>
+                          wishListItemIds.has(`${item.entity}:${item.id}`),
+                        )
+                    }
+                  >
+                    {response.items
+                      .filter((item) => item.entity !== "song")
+                      .every((item) =>
+                        wishListItemIds.has(`${item.entity}:${item.id}`),
+                      ) ? (
+                      <Check size={16} />
+                    ) : (
+                      <Heart size={16} />
+                    )}
+                    {isAddingAllToWishList
+                      ? "Adding"
+                      : response.items
+                            .filter((item) => item.entity !== "song")
+                            .every((item) =>
+                              wishListItemIds.has(`${item.entity}:${item.id}`),
+                            )
+                        ? "All on Wish List"
+                        : "Add missing items to Wish List"}
+                  </button>
+                ) : null}
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => void saveCurrent()}
+                  disabled={!name.trim() || response.items.length === 0 || isSaving}
+                >
+                  <Save size={16} />
+                  {isSaving ? "Saving" : activeSavedId == null ? "Save list" : "Update saved"}
+                </button>
+              </div>
             </header>
 
             <AiMarkdownExportButton
@@ -393,6 +471,7 @@ export function OutsideLibraryDiscovery({
                         aria-label={`${wishListItemIds.has(`${item.entity}:${item.id}`) ? "Added" : "Add"} ${item.title} to Wish List`}
                         title={wishListItemIds.has(`${item.entity}:${item.id}`) ? "Already on Wish List" : "Add to Wish List"}
                         disabled={
+                          isAddingAllToWishList ||
                           wishListItemIds.has(`${item.entity}:${item.id}`) ||
                           addingWishListItemId === `${item.entity}:${item.id}`
                         }

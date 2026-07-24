@@ -25,6 +25,7 @@ import {
 } from "./backend/normalization";
 import {
   createRequest,
+  normalizeBrowseRequestForClient,
   normalizeSavedChartForClient,
   normalizeSavedChartsForClient,
   normalizeSavedSearchForClient,
@@ -805,10 +806,20 @@ export async function exportAiMarkdown(input: AiMarkdownExportRequest) {
 
 export async function buildPlaylist(input: AiPlaylistBuildRequest) {
   if (!isTauriRuntime()) {
-    const request = createRequest("tracks");
+    const request = input.sourceRequest
+      ? normalizeBrowseRequestForClient({
+          ...input.sourceRequest,
+          view: "tracks",
+          offset: 0,
+        })
+      : createRequest("tracks");
+    request.view = "tracks";
     request.sort = { field: "trackRating", direction: "desc" };
     request.limit = 200;
-    const tracks = mockRows
+    const sourceRows = input.sourceRequest
+      ? (await searchLibrary(request)).rows
+      : mockRows;
+    const tracks = sourceRows
       .filter((row) => row.trackId != null)
       .map((row) => ({
         trackId: row.trackId!,

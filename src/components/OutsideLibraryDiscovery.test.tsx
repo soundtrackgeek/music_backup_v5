@@ -22,6 +22,14 @@ describe("outside-library discovery", () => {
         screen.getByRole("button", { name: "Added Porcupine Tree to Wish List" }),
       ).toBeDisabled();
     });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add missing items to Wish List" }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "All on Wish List" }),
+      ).toBeDisabled();
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Save list" }));
     await waitFor(() => {

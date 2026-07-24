@@ -11,6 +11,7 @@ import {
   Sparkles,
   Star,
   Trash2,
+  X,
 } from "lucide-react";
 
 import {
@@ -23,6 +24,7 @@ import {
 import type {
   AiPlaylist,
   AiPlaylistTrack,
+  BrowseRequest,
   ExportResult,
   SavedPlaylist,
 } from "../types";
@@ -32,6 +34,13 @@ import { ExportResultStatus } from "../components/ExportResultStatus";
 
 type PlaylistBuilderWorkspaceProps = {
   isAvailable: boolean;
+  launch?: {
+    id: number;
+    cohortTitle: string;
+    prompt: string;
+    request: BrowseRequest;
+  } | null;
+  onLaunchConsumed?: () => void;
 };
 
 const examplePrompts = [
@@ -66,6 +75,8 @@ function editedPlaylist(playlist: AiPlaylist, tracks: AiPlaylistTrack[]) {
 
 export function PlaylistBuilderWorkspace({
   isAvailable,
+  launch = null,
+  onLaunchConsumed,
 }: PlaylistBuilderWorkspaceProps) {
   const [prompt, setPrompt] = useState("");
   const [playlist, setPlaylist] = useState<AiPlaylist | null>(null);
@@ -77,6 +88,23 @@ export function PlaylistBuilderWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [savedError, setSavedError] = useState<string | null>(null);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  const [sourceCohortTitle, setSourceCohortTitle] = useState<string | null>(null);
+  const [sourceRequest, setSourceRequest] =
+    useState<BrowseRequest | null>(null);
+
+  useEffect(() => {
+    if (!launch) return;
+    setPrompt(launch.prompt);
+    setPlaylist(null);
+    setName("");
+    setActiveSavedId(null);
+    setError(null);
+    setSavedError(null);
+    setExportResult(null);
+    setSourceCohortTitle(launch.cohortTitle);
+    setSourceRequest(launch.request);
+    onLaunchConsumed?.();
+  }, [launch?.id]);
 
   useEffect(() => {
     let disposed = false;
@@ -105,7 +133,10 @@ export function PlaylistBuilderWorkspace({
     setSavedError(null);
     setExportResult(null);
     try {
-      const result = await buildPlaylist({ prompt: normalizedPrompt });
+      const result = await buildPlaylist({
+        prompt: normalizedPrompt,
+        sourceRequest,
+      });
       setPlaylist(result);
       setName(result.name);
       setActiveSavedId(null);
@@ -173,6 +204,8 @@ export function PlaylistBuilderWorkspace({
     setError(null);
     setSavedError(null);
     setExportResult(null);
+    setSourceRequest(null);
+    setSourceCohortTitle(null);
   }
 
   async function removeSaved(saved: SavedPlaylist) {
@@ -237,10 +270,33 @@ export function PlaylistBuilderWorkspace({
             <p>
               Luna receives your words and returns filters, targets, and repeat
               limits. SQLite finds and sequences the tracks; names and paths
-              never leave this device.
+              never leave this device. A launched insight cohort remains locked
+              as the local source.
             </p>
           </div>
         </div>
+
+        {sourceCohortTitle ? (
+          <div className="playlist-cohort-source" aria-label="Playlist source cohort">
+            <ListMusic size={16} />
+            <div>
+              <span>Source cohort</span>
+              <strong>{sourceCohortTitle}</strong>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Clear cohort source"
+              title="Clear cohort source"
+              onClick={() => {
+                setSourceCohortTitle(null);
+                setSourceRequest(null);
+              }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ) : null}
 
         <form className="playlist-prompt-form" onSubmit={createPlaylist}>
           <label>

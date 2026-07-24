@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.73.0] - 2026-07-24
+### Added
+- Added a consistent action dock for actionable Statistics and Discovery cohorts with **Open in Search**, **Save view**, and **Build playlist** handoffs.
+- Added operational cohort mappings for missions, heatmap cells, artists, genres, albums, decades, years, rating bands, rating progress, loved-density groups, metadata gaps, duration/track-count groups, catalog leaders, outliers, and rating events.
+- Added one-click bulk **Add missing items to Wish List** for verified outside-library artist and album results.
+- Added missing-metadata Search support for release year, publisher, track title, display artist, track/disc number, filename, and cover art so every metadata-coverage gap can open as a real cohort.
+
+### Changed
+- Locked Playlist Builder launches to the exact selected cohort request while still letting Luna plan targets and sequencing; users can explicitly clear the source badge before building.
+- Added keyboard-operable cohort selection, focused action/request coverage, and synchronized app metadata at `0.73.0`.
+
 ## [0.72.0] - 2026-07-24
 ### Added
 - Added a required pre-import MusicBee delta with added, changed, and removed track/album counts plus suspicious rated/loved album removals, material track-count drops, and disappearing identity metadata.

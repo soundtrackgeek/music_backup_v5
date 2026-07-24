@@ -753,6 +753,7 @@ export type AiPlaylistStrategy =
 
 export type AiPlaylistBuildRequest = {
   prompt: string;
+  sourceRequest?: BrowseRequest | null;
 };
 
 export type AiPlaylistTrack = {

@@ -311,6 +311,7 @@ import { MusicResearchPanel } from "./components/MusicResearchPanel";
 import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
 import { GenreTimeline } from "./components/GenreTimeline";
 import { ImportSafetyPanel } from "./components/ImportSafetyPanel";
+import { InsightActionDock } from "./components/InsightActionDock";
 import {
   ChartAdvancedControls,
   ChartLunaCommandArea,
@@ -367,6 +368,31 @@ import {
   toCompletenessFilterRange,
   type DiscoverySelection,
 } from "./app/requests";
+import {
+  albumsWithLovedTracksCohort,
+  catalogArtistCohort,
+  catalogGenreCohort,
+  decadeCohort,
+  discoveryAlbumCohort,
+  discoveryArtistCohort,
+  discoveryGenreCohort,
+  discoveryHeatmapCohort,
+  discoveryMissionCohort,
+  durationAlbumCohort,
+  genreCohort,
+  lovedDensityCohort,
+  lovedGenreCohort,
+  lovedTracksCohort,
+  lovedYearCohort,
+  missingMetadataCohort,
+  outlierCohort,
+  ratingBucketCohort,
+  ratingEventCohort,
+  ratingProgressCohort,
+  trackCountBucketCohort,
+  yearCohort,
+  type InsightCohort,
+} from "./app/insightCohorts";
 
 type AppUpdateStatus =
   | "idle"
@@ -5049,14 +5075,26 @@ function Meter({
   value,
   total,
   detail,
+  onSelect,
 }: {
   label: string;
   value: number;
   total: number;
   detail: string;
+  onSelect?: () => void;
 }) {
   return (
-    <div className="meter-row">
+    <div
+      className={`meter-row${onSelect ? " actionable-cohort" : ""}`}
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onClick={onSelect}
+      onKeyDown={
+        onSelect
+          ? (event) => discoveryKeyOpen(event, onSelect)
+          : undefined
+      }
+    >
       <div>
         <span>{label}</span>
         <strong>{formatNumber(value)}</strong>
@@ -5072,12 +5110,30 @@ function Meter({
   );
 }
 
-function DistributionBars({ buckets }: { buckets: RatingBucket[] }) {
+function DistributionBars({
+  buckets,
+  onSelect,
+}: {
+  buckets: RatingBucket[];
+  onSelect?: (bucket: RatingBucket) => void;
+}) {
   const maxCount = Math.max(1, ...buckets.map((bucket) => bucket.count));
   return (
     <div className="distribution-bars">
       {buckets.map((bucket) => (
-        <div className="distribution-row" key={bucket.label}>
+        <div
+          className={`distribution-row${onSelect ? " actionable-cohort" : ""}`}
+          role={onSelect ? "button" : undefined}
+          tabIndex={onSelect ? 0 : undefined}
+          key={bucket.label}
+          onClick={onSelect ? () => onSelect(bucket) : undefined}
+          onKeyDown={
+            onSelect
+              ? (event) =>
+                  discoveryKeyOpen(event, () => onSelect(bucket))
+              : undefined
+          }
+        >
           <span>{bucket.label}</span>
           <div className="meter-track" aria-hidden="true">
             <div
@@ -5162,8 +5218,10 @@ function nextMilestone(ratedTracks: number, totalTracks: number) {
 
 function RatingCompletionBurndown({
   statistics,
+  onSelect,
 }: {
   statistics: StatisticsResponse | null;
+  onSelect: (cohort: InsightCohort) => void;
 }) {
   const points = (statistics?.ratingHistory ?? []).slice(-10);
   if (!statistics || points.length === 0) {
@@ -5224,13 +5282,48 @@ function RatingCompletionBurndown({
         })}
       </svg>
       <div className="burndown-summary">
-        <div>
+        <div
+          className="actionable-cohort"
+          role="button"
+          tabIndex={0}
+          onClick={() =>
+            onSelect(
+              ratingProgressCohort("rated-tracks", latest.ratedTracks),
+            )
+          }
+          onKeyDown={(event) =>
+            discoveryKeyOpen(event, () =>
+              onSelect(
+                ratingProgressCohort("rated-tracks", latest.ratedTracks),
+              ),
+            )
+          }
+        >
           <span>Rated now</span>
           <strong>
             {formatPercent(ratioOf(latest.ratedTracks, totalTracks))}
           </strong>
         </div>
-        <div>
+        <div
+          className="actionable-cohort"
+          role="button"
+          tabIndex={0}
+          onClick={() =>
+            onSelect(
+              ratingProgressCohort("unrated-tracks", latest.unratedTracks),
+            )
+          }
+          onKeyDown={(event) =>
+            discoveryKeyOpen(event, () =>
+              onSelect(
+                ratingProgressCohort(
+                  "unrated-tracks",
+                  latest.unratedTracks,
+                ),
+              ),
+            )
+          }
+        >
           <span>Remaining</span>
           <strong>{formatNumber(latest.unratedTracks)}</strong>
         </div>
@@ -5247,7 +5340,13 @@ function RatingCompletionBurndown({
   );
 }
 
-function DecadeProgressTimeline({ rows }: { rows: DecadeProgressStats[] }) {
+function DecadeProgressTimeline({
+  rows,
+  onSelect,
+}: {
+  rows: DecadeProgressStats[];
+  onSelect: (cohort: InsightCohort) => void;
+}) {
   if (rows.length === 0) {
     return (
       <div className="empty-state">
@@ -5260,7 +5359,18 @@ function DecadeProgressTimeline({ rows }: { rows: DecadeProgressStats[] }) {
   return (
     <div className="decade-timeline">
       {rows.map((row) => (
-        <div className="decade-row" key={row.decade}>
+        <div
+          className="decade-row actionable-cohort"
+          role="button"
+          tabIndex={0}
+          key={row.decade}
+          onClick={() => onSelect(decadeCohort(row, "Decade progress"))}
+          onKeyDown={(event) =>
+            discoveryKeyOpen(event, () =>
+              onSelect(decadeCohort(row, "Decade progress")),
+            )
+          }
+        >
           <div>
             <strong>{row.decade}s</strong>
             <span>
@@ -5313,7 +5423,13 @@ function genreCompletionRatio(row: GenreProgressStats) {
   );
 }
 
-function GenrePortfolioMatrix({ rows }: { rows: GenreProgressStats[] }) {
+function GenrePortfolioMatrix({
+  rows,
+  onSelect,
+}: {
+  rows: GenreProgressStats[];
+  onSelect: (cohort: InsightCohort) => void;
+}) {
   const points = rows.slice(0, 24);
   if (points.length === 0) {
     return (
@@ -5363,7 +5479,16 @@ function GenrePortfolioMatrix({ rows }: { rows: GenreProgressStats[] }) {
             17;
         const fill = `hsl(${185 - completion * 40} 62% ${72 - completion * 18}%)`;
         return (
-          <g className="genre-portfolio-point" key={row.genre}>
+          <g
+            className="genre-portfolio-point actionable-cohort"
+            role="button"
+            tabIndex={0}
+            key={row.genre}
+            onClick={() => onSelect(genreCohort(row))}
+            onKeyDown={(event) =>
+              discoveryKeyOpen(event, () => onSelect(genreCohort(row)))
+            }
+          >
             <circle cx={x} cy={y} r={radius} style={{ fill }}>
               <title>
                 {row.genre}: {formatNumber(row.albumCount)} albums /{" "}
@@ -5444,8 +5569,10 @@ function ImportDeltaTimeline({ runs }: { runs: ImportRun[] }) {
 
 function MetadataCoveragePanel({
   metrics,
+  onSelect,
 }: {
   metrics: MetadataCoverageMetric[];
+  onSelect: (cohort: InsightCohort) => void;
 }) {
   if (metrics.length === 0) {
     return (
@@ -5460,8 +5587,21 @@ function MetadataCoveragePanel({
     <div className="metadata-coverage-list">
       {metrics.map((metric) => {
         const coverage = ratioOf(metric.coveredCount, metric.totalCount);
+        const insight = missingMetadataCohort(metric);
         return (
-          <div className="metadata-coverage-row" key={metric.id}>
+          <div
+            className={`metadata-coverage-row${insight ? " actionable-cohort" : ""}`}
+            role={insight ? "button" : undefined}
+            tabIndex={insight ? 0 : undefined}
+            key={metric.id}
+            onClick={insight ? () => onSelect(insight) : undefined}
+            onKeyDown={
+              insight
+                ? (event) =>
+                    discoveryKeyOpen(event, () => onSelect(insight))
+                : undefined
+            }
+          >
             <div>
               <strong>{metric.label}</strong>
               <span>{metric.scope}</span>
@@ -5485,8 +5625,10 @@ function MetadataCoveragePanel({
 
 function LibraryShapeByTime({
   statistics,
+  onSelect,
 }: {
   statistics: StatisticsResponse | null;
+  onSelect: (cohort: InsightCohort) => void;
 }) {
   const rows = statistics?.decadeProgress ?? [];
   if (!statistics || rows.length === 0) {
@@ -5529,7 +5671,18 @@ function LibraryShapeByTime({
       </div>
       <div className="shape-time-bars">
         {rows.map((row) => (
-          <div className="shape-time-row" key={row.decade}>
+          <div
+            className="shape-time-row actionable-cohort"
+            role="button"
+            tabIndex={0}
+            key={row.decade}
+            onClick={() => onSelect(decadeCohort(row, "Library shape"))}
+            onKeyDown={(event) =>
+              discoveryKeyOpen(event, () =>
+                onSelect(decadeCohort(row, "Library shape")),
+              )
+            }
+          >
             <strong>{row.decade}s</strong>
             <div>
               <span>Albums</span>
@@ -5567,7 +5720,13 @@ function LibraryShapeByTime({
   );
 }
 
-function LovedDensityPanel({ rows }: { rows: LovedDensityStat[] }) {
+function LovedDensityPanel({
+  rows,
+  onSelect,
+}: {
+  rows: LovedDensityStat[];
+  onSelect: (cohort: InsightCohort) => void;
+}) {
   if (rows.length === 0) {
     return (
       <div className="empty-state">
@@ -5580,8 +5739,22 @@ function LovedDensityPanel({ rows }: { rows: LovedDensityStat[] }) {
   const maxDensity = Math.max(1, ...rows.map((row) => row.lovedPer100Tracks));
   return (
     <div className="loved-density-list">
-      {rows.slice(0, 12).map((row) => (
-        <div className="loved-density-row" key={`${row.scope}:${row.label}`}>
+      {rows.slice(0, 12).map((row) => {
+        const insight = lovedDensityCohort(row);
+        return (
+        <div
+          className={`loved-density-row${insight ? " actionable-cohort" : ""}`}
+          role={insight ? "button" : undefined}
+          tabIndex={insight ? 0 : undefined}
+          key={`${row.scope}:${row.label}`}
+          onClick={insight ? () => onSelect(insight) : undefined}
+          onKeyDown={
+            insight
+              ? (event) =>
+                  discoveryKeyOpen(event, () => onSelect(insight))
+              : undefined
+          }
+        >
           <div>
             <strong>{row.label}</strong>
             <span>{row.scope}</span>
@@ -5599,7 +5772,7 @@ function LovedDensityPanel({ rows }: { rows: LovedDensityStat[] }) {
             {formatNumber(row.lovedTracks)} loved
           </small>
         </div>
-      ))}
+      )})}
     </div>
   );
 }
@@ -5638,8 +5811,10 @@ function ConcentrationBars({
 
 function CatalogConcentrationPanel({
   statistics,
+  onSelect,
 }: {
   statistics: StatisticsResponse | null;
+  onSelect: (cohort: InsightCohort) => void;
 }) {
   if (!statistics) {
     return (
@@ -5654,14 +5829,72 @@ function CatalogConcentrationPanel({
   return (
     <div className="catalog-concentration-panel">
       <div className="concentration-summary">
-        <div>
+        <div
+          className={
+            concentration.topArtist ? "actionable-cohort" : undefined
+          }
+          role={concentration.topArtist ? "button" : undefined}
+          tabIndex={concentration.topArtist ? 0 : undefined}
+          onClick={() => {
+            const artist = concentration.topArtist;
+            if (artist) {
+              onSelect(
+                catalogArtistCohort(
+                  artist,
+                  concentration.topArtistAlbumCount,
+                ),
+              );
+            }
+          }}
+          onKeyDown={(event) => {
+            const artist = concentration.topArtist;
+            if (artist) {
+              discoveryKeyOpen(event, () =>
+                onSelect(
+                  catalogArtistCohort(
+                    artist,
+                    concentration.topArtistAlbumCount,
+                  ),
+                ),
+              );
+            }
+          }}
+        >
           <span>Top artist</span>
           <strong>{concentration.topArtist ?? "Unknown"}</strong>
           <small>
             {formatNumber(concentration.topArtistAlbumCount)} albums
           </small>
         </div>
-        <div>
+        <div
+          className={concentration.topGenre ? "actionable-cohort" : undefined}
+          role={concentration.topGenre ? "button" : undefined}
+          tabIndex={concentration.topGenre ? 0 : undefined}
+          onClick={() => {
+            const genre = concentration.topGenre;
+            if (genre) {
+              onSelect(
+                catalogGenreCohort(
+                  genre,
+                  concentration.topGenreAlbumCount,
+                ),
+              );
+            }
+          }}
+          onKeyDown={(event) => {
+            const genre = concentration.topGenre;
+            if (genre) {
+              discoveryKeyOpen(event, () =>
+                onSelect(
+                  catalogGenreCohort(
+                    genre,
+                    concentration.topGenreAlbumCount,
+                  ),
+                ),
+              );
+            }
+          }}
+        >
           <span>Top genre</span>
           <strong>{concentration.topGenre ?? "Unknown"}</strong>
           <small>{formatNumber(concentration.topGenreAlbumCount)} albums</small>
@@ -5682,15 +5915,28 @@ function durationAlbumLabel(album: DurationAlbumStat) {
 function DurationAlbumList({
   title,
   albums,
+  onSelect,
 }: {
   title: string;
   albums: DurationAlbumStat[];
+  onSelect: (cohort: InsightCohort) => void;
 }) {
   return (
     <div className="duration-album-list">
       <span>{title}</span>
       {albums.slice(0, 4).map((album) => (
-        <div className="duration-album-row" key={album.albumId}>
+        <div
+          className="duration-album-row actionable-cohort"
+          role="button"
+          tabIndex={0}
+          key={album.albumId}
+          onClick={() => onSelect(durationAlbumCohort(album))}
+          onKeyDown={(event) =>
+            discoveryKeyOpen(event, () =>
+              onSelect(durationAlbumCohort(album)),
+            )
+          }
+        >
           <strong>{durationAlbumLabel(album) || "Untitled"}</strong>
           <small>
             {formatHours(album.totalSeconds)} /{" "}
@@ -5705,8 +5951,10 @@ function DurationAlbumList({
 
 function DurationAnalyticsPanel({
   statistics,
+  onSelect,
 }: {
   statistics: StatisticsResponse | null;
+  onSelect: (cohort: InsightCohort) => void;
 }) {
   if (!statistics) {
     return (
@@ -5730,20 +5978,34 @@ function DurationAnalyticsPanel({
           <strong>{formatMinutes(analytics.averageTrackSeconds)}</strong>
         </div>
       </div>
-      <DistributionBars buckets={analytics.trackCountBuckets} />
+      <DistributionBars
+        buckets={analytics.trackCountBuckets}
+        onSelect={(bucket) => {
+          const insight = trackCountBucketCohort(bucket);
+          if (insight) onSelect(insight);
+        }}
+      />
       <DurationAlbumList
         title="Longest albums"
         albums={analytics.longestAlbums}
+        onSelect={onSelect}
       />
       <DurationAlbumList
         title="Shortest albums"
         albums={analytics.shortestAlbums}
+        onSelect={onSelect}
       />
     </div>
   );
 }
 
-function OutlierStatsPanel({ rows }: { rows: OutlierStat[] }) {
+function OutlierStatsPanel({
+  rows,
+  onSelect,
+}: {
+  rows: OutlierStat[];
+  onSelect: (cohort: InsightCohort) => void;
+}) {
   if (rows.length === 0) {
     return (
       <div className="empty-state">
@@ -5755,13 +6017,27 @@ function OutlierStatsPanel({ rows }: { rows: OutlierStat[] }) {
 
   return (
     <div className="outlier-stat-grid">
-      {rows.map((row) => (
-        <article className="outlier-stat" key={row.id}>
+      {rows.map((row) => {
+        const insight = outlierCohort(row);
+        return (
+        <article
+          className={`outlier-stat${insight ? " actionable-cohort" : ""}`}
+          role={insight ? "button" : undefined}
+          tabIndex={insight ? 0 : undefined}
+          key={row.id}
+          onClick={insight ? () => onSelect(insight) : undefined}
+          onKeyDown={
+            insight
+              ? (event) =>
+                  discoveryKeyOpen(event, () => onSelect(insight))
+              : undefined
+          }
+        >
           <span>{row.label}</span>
           <strong>{row.value}</strong>
           <small>{row.detail}</small>
         </article>
-      ))}
+      )})}
     </div>
   );
 }
@@ -6555,10 +6831,12 @@ function YearProgressExplorer({
   rows,
   genreOptions,
   onRequestGenreOptions,
+  onSelect,
 }: {
   rows: YearProgressStats[];
   genreOptions: string[];
   onRequestGenreOptions?: () => void;
+  onSelect: (cohort: InsightCohort) => void;
 }) {
   const extent = useMemo(() => yearProgressExtent(rows), [rows]);
   const minYear = extent?.min ?? 0;
@@ -6671,7 +6949,16 @@ function YearProgressExplorer({
     setExcludedGenres([]);
   }
 
-  if (!extent) return <YearProgressTable rows={[]} />;
+  if (!extent) {
+    return (
+      <YearProgressTable
+        rows={[]}
+        genres={[]}
+        excludedGenres={[]}
+        onSelect={onSelect}
+      />
+    );
+  }
 
   return (
     <div className="year-progress-explorer">
@@ -6752,12 +7039,27 @@ function YearProgressExplorer({
           </p>
         ) : null}
       </div>
-      <YearProgressTable rows={visibleRows} />
+      <YearProgressTable
+        rows={visibleRows}
+        genres={includedGenres}
+        excludedGenres={excludedGenres}
+        onSelect={onSelect}
+      />
     </div>
   );
 }
 
-function YearProgressTable({ rows }: { rows: YearProgressStats[] }) {
+function YearProgressTable({
+  rows,
+  genres,
+  excludedGenres,
+  onSelect,
+}: {
+  rows: YearProgressStats[];
+  genres: string[];
+  excludedGenres: string[];
+  onSelect: (cohort: InsightCohort) => void;
+}) {
   if (rows.length === 0) {
     return (
       <div className="empty-state">
@@ -6779,7 +7081,18 @@ function YearProgressTable({ rows }: { rows: YearProgressStats[] }) {
         <span role="columnheader">Score</span>
       </div>
       {rows.map((row) => (
-        <div className="stats-table-row" role="row" key={row.year}>
+        <div
+          className="stats-table-row actionable-cohort"
+          role="row"
+          tabIndex={0}
+          key={row.year}
+          onClick={() => onSelect(yearCohort(row, genres, excludedGenres))}
+          onKeyDown={(event) =>
+            discoveryKeyOpen(event, () =>
+              onSelect(yearCohort(row, genres, excludedGenres)),
+            )
+          }
+        >
           <span role="cell">{row.year}</span>
           <span role="cell">{formatNumber(row.albumCount)}</span>
           <span role="cell">{formatNumber(row.ratedAlbumCount)}</span>
@@ -6798,11 +7111,13 @@ function GenreProgressExplorer({
   yearRows,
   genreOptions,
   onRequestGenreOptions,
+  onSelect,
 }: {
   rows: GenreProgressStats[];
   yearRows: YearProgressStats[];
   genreOptions: string[];
   onRequestGenreOptions?: () => void;
+  onSelect: (cohort: InsightCohort) => void;
 }) {
   const extent = useMemo(() => yearProgressExtent(yearRows), [yearRows]);
   const minYear = extent?.min ?? 0;
@@ -7030,7 +7345,14 @@ function GenreProgressExplorer({
           ) : null}
         </div>
       ) : null}
-      <GenreProgressTable rows={visibleRows} filtered={hasAggregationFilters} />
+      <GenreProgressTable
+        rows={visibleRows}
+        filtered={hasAggregationFilters}
+        yearFrom={hasYearFilter ? effectiveYearFrom : null}
+        yearTo={hasYearFilter ? effectiveYearTo : null}
+        excludedGenres={excludedGenres}
+        onSelect={onSelect}
+      />
     </div>
   );
 }
@@ -7038,9 +7360,17 @@ function GenreProgressExplorer({
 function GenreProgressTable({
   rows,
   filtered = false,
+  yearFrom,
+  yearTo,
+  excludedGenres,
+  onSelect,
 }: {
   rows: GenreProgressStats[];
   filtered?: boolean;
+  yearFrom: number | null;
+  yearTo: number | null;
+  excludedGenres: string[];
+  onSelect: (cohort: InsightCohort) => void;
 }) {
   if (rows.length === 0) {
     return (
@@ -7067,7 +7397,20 @@ function GenreProgressTable({
         <span role="columnheader">Score</span>
       </div>
       {rows.map((row) => (
-        <div className="stats-table-row" role="row" key={row.genre}>
+        <div
+          className="stats-table-row actionable-cohort"
+          role="row"
+          tabIndex={0}
+          key={row.genre}
+          onClick={() =>
+            onSelect(genreCohort(row, yearFrom, yearTo, excludedGenres))
+          }
+          onKeyDown={(event) =>
+            discoveryKeyOpen(event, () =>
+              onSelect(genreCohort(row, yearFrom, yearTo, excludedGenres)),
+            )
+          }
+        >
           <span role="cell">{row.genre}</span>
           <span role="cell">{formatNumber(row.albumCount)}</span>
           <span role="cell">{formatNumber(row.ratedAlbumCount)}</span>
@@ -7095,7 +7438,13 @@ function eventLabel(eventType: string) {
   return labels[eventType] ?? eventType;
 }
 
-function RatingEventList({ events }: { events: RatingEvent[] }) {
+function RatingEventList({
+  events,
+  onSelect,
+}: {
+  events: RatingEvent[];
+  onSelect: (cohort: InsightCohort) => void;
+}) {
   if (events.length === 0) {
     return (
       <div className="empty-state">
@@ -7108,7 +7457,18 @@ function RatingEventList({ events }: { events: RatingEvent[] }) {
   return (
     <div className="rating-event-list">
       {events.slice(0, 8).map((event) => (
-        <article className="rating-event" key={event.id}>
+        <article
+          className="rating-event actionable-cohort"
+          role="button"
+          tabIndex={0}
+          key={event.id}
+          onClick={() => onSelect(ratingEventCohort(event))}
+          onKeyDown={(keyboardEvent) =>
+            discoveryKeyOpen(keyboardEvent, () =>
+              onSelect(ratingEventCohort(event)),
+            )
+          }
+        >
           <strong>{eventLabel(event.eventType)}</strong>
           <span>
             {[event.albumArtistDisplay, event.album, event.year]
@@ -7129,6 +7489,16 @@ function RatingEventList({ events }: { events: RatingEvent[] }) {
 export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
   const [isMusicResearchOpen, setIsMusicResearchOpen] = useState(false);
+  const [statisticsCohort, setStatisticsCohort] =
+    useState<InsightCohort | null>(null);
+  const [discoveryCohort, setDiscoveryCohort] =
+    useState<InsightCohort | null>(null);
+  const [playlistLaunch, setPlaylistLaunch] = useState<{
+    id: number;
+    cohortTitle: string;
+    prompt: string;
+    request: BrowseRequest;
+  } | null>(null);
   useWorkspaceNavigation(activeSection, setActiveSection);
   const [sourcePath, setSourcePath] = useState(() =>
     createDefaultImportSourcePath(),
@@ -9589,6 +9959,32 @@ export default function App() {
     setSaveName("");
   }
 
+  function openInsightInSearch(cohort: InsightCohort) {
+    setRequest(normalizeBrowseRequestForClient(cohort.request));
+    setActiveSection("Search");
+  }
+
+  async function saveInsightView(cohort: InsightCohort) {
+    const saved = await saveSearch(
+      cohort.title,
+      normalizeBrowseRequestForClient(cohort.request),
+    );
+    setSavedSearches((previous) => [
+      saved,
+      ...previous.filter((search) => search.id !== saved.id),
+    ]);
+  }
+
+  function openInsightInPlaylist(cohort: InsightCohort) {
+    setPlaylistLaunch({
+      id: Date.now(),
+      cohortTitle: cohort.title,
+      prompt: cohort.playlistPrompt,
+      request: normalizeBrowseRequestForClient(cohort.request),
+    });
+    setActiveSection("Playlists");
+  }
+
   async function removeSavedSearch(id: number) {
     await deleteSavedSearch(id);
     setSavedSearches((previous) =>
@@ -10081,6 +10477,7 @@ export default function App() {
   }
 
   function openDiscoveryMission(mission: DiscoveryMission) {
+    setDiscoveryCohort(discoveryMissionCohort(mission));
     openDiscoveryAlbums(
       {
         title: mission.title,
@@ -10091,6 +10488,7 @@ export default function App() {
   }
 
   function openDiscoveryHeatmapCell(cell: DiscoveryHeatmapCell) {
+    setDiscoveryCohort(discoveryHeatmapCohort(cell));
     openDiscoveryAlbums(
       {
         title: `${cell.genre} / ${cell.year}`,
@@ -10101,6 +10499,7 @@ export default function App() {
   }
 
   function openDiscoveryAlbumPoint(point: DiscoveryAlbumPoint) {
+    setDiscoveryCohort(discoveryAlbumCohort(point));
     openDiscoveryAlbums(
       {
         title: point.album ?? "Untitled album",
@@ -10113,6 +10512,7 @@ export default function App() {
   }
 
   function openDiscoveryGenre(point: DiscoveryGenrePoint) {
+    setDiscoveryCohort(discoveryGenreCohort(point));
     openDiscoveryAlbums(
       {
         title: point.genre,
@@ -10123,6 +10523,7 @@ export default function App() {
   }
 
   function openDiscoveryArtist(point: DiscoveryArtistPoint) {
+    setDiscoveryCohort(discoveryArtistCohort(point));
     openDiscoveryAlbums(
       {
         title: point.artist,
@@ -12295,6 +12696,8 @@ export default function App() {
         ) : activeSection === "Playlists" ? (
           <PlaylistBuilderWorkspace
             isAvailable={Boolean(status?.hasDatabase && status.trackCount > 0)}
+            launch={playlistLaunch}
+            onLaunchConsumed={() => setPlaylistLaunch(null)}
           />
         ) : activeSection === "Discovery" ? (
           <section className="workspace discovery-workspace">
@@ -12363,6 +12766,14 @@ export default function App() {
               className="discovery-dashboard-grid"
               aria-label="Discovery charts"
             >
+              <InsightActionDock
+                cohort={discoveryCohort}
+                onOpenInSearch={openInsightInSearch}
+                onSaveView={saveInsightView}
+                onBuildPlaylist={openInsightInPlaylist}
+                onClear={() => setDiscoveryCohort(null)}
+              />
+
               <section className="discovery-panel wide">
                 <div className="panel-heading compact">
                   <div>
@@ -13773,6 +14184,14 @@ export default function App() {
               className="stats-dashboard-grid"
               aria-label="Statistics dashboards"
             >
+              <InsightActionDock
+                cohort={statisticsCohort}
+                onOpenInSearch={openInsightInSearch}
+                onSaveView={saveInsightView}
+                onBuildPlaylist={openInsightInPlaylist}
+                onClear={() => setStatisticsCohort(null)}
+              />
+
               <section className="stats-panel health-panel">
                 <div className="panel-heading compact">
                   <div>
@@ -13796,7 +14215,10 @@ export default function App() {
                   </div>
                   <Activity size={18} />
                 </div>
-                <RatingCompletionBurndown statistics={statistics} />
+                <RatingCompletionBurndown
+                  statistics={statistics}
+                  onSelect={setStatisticsCohort}
+                />
               </section>
 
               <section className="stats-panel wide">
@@ -13809,6 +14231,7 @@ export default function App() {
                 </div>
                 <DecadeProgressTimeline
                   rows={statistics?.decadeProgress ?? []}
+                  onSelect={setStatisticsCohort}
                 />
               </section>
 
@@ -13823,7 +14246,10 @@ export default function App() {
                   </div>
                   <Tags size={18} />
                 </div>
-                <GenrePortfolioMatrix rows={statistics?.genreProgress ?? []} />
+                <GenrePortfolioMatrix
+                  rows={statistics?.genreProgress ?? []}
+                  onSelect={setStatisticsCohort}
+                />
               </section>
 
               <section className="stats-panel wide">
@@ -13836,6 +14262,7 @@ export default function App() {
                 </div>
                 <MetadataCoveragePanel
                   metrics={statistics?.metadataCoverage ?? []}
+                  onSelect={setStatisticsCohort}
                 />
               </section>
 
@@ -13864,7 +14291,10 @@ export default function App() {
                   </div>
                   <Clock3 size={18} />
                 </div>
-                <LibraryShapeByTime statistics={statistics} />
+                <LibraryShapeByTime
+                  statistics={statistics}
+                  onSelect={setStatisticsCohort}
+                />
               </section>
 
               <section className="stats-panel wide">
@@ -13878,7 +14308,10 @@ export default function App() {
                   </div>
                   <Heart size={18} />
                 </div>
-                <LovedDensityPanel rows={statistics?.lovedDensity ?? []} />
+                <LovedDensityPanel
+                  rows={statistics?.lovedDensity ?? []}
+                  onSelect={setStatisticsCohort}
+                />
               </section>
 
               <section className="stats-panel wide">
@@ -13892,7 +14325,10 @@ export default function App() {
                   </div>
                   <UsersRound size={18} />
                 </div>
-                <CatalogConcentrationPanel statistics={statistics} />
+                <CatalogConcentrationPanel
+                  statistics={statistics}
+                  onSelect={setStatisticsCohort}
+                />
               </section>
 
               <section className="stats-panel wide">
@@ -13906,7 +14342,10 @@ export default function App() {
                   </div>
                   <Clock3 size={18} />
                 </div>
-                <DurationAnalyticsPanel statistics={statistics} />
+                <DurationAnalyticsPanel
+                  statistics={statistics}
+                  onSelect={setStatisticsCohort}
+                />
               </section>
 
               <section className="stats-panel wide">
@@ -13920,7 +14359,10 @@ export default function App() {
                   </div>
                   <Sparkles size={18} />
                 </div>
-                <OutlierStatsPanel rows={statistics?.outlierStats ?? []} />
+                <OutlierStatsPanel
+                  rows={statistics?.outlierStats ?? []}
+                  onSelect={setStatisticsCohort}
+                />
               </section>
 
               <section className="stats-panel rating-progress-panel">
@@ -13946,18 +14388,42 @@ export default function App() {
                       value={statistics.ratingProgress.fullyRatedAlbums}
                       total={ratingAlbumTotal}
                       detail={`${percentOf(statistics.ratingProgress.fullyRatedAlbums, ratingAlbumTotal).toFixed(1)}%`}
+                      onSelect={() =>
+                        setStatisticsCohort(
+                          ratingProgressCohort(
+                            "fully-rated",
+                            statistics.ratingProgress.fullyRatedAlbums,
+                          ),
+                        )
+                      }
                     />
                     <Meter
                       label="Partially rated albums"
                       value={statistics.ratingProgress.partiallyRatedAlbums}
                       total={ratingAlbumTotal}
                       detail={`${percentOf(statistics.ratingProgress.partiallyRatedAlbums, ratingAlbumTotal).toFixed(1)}%`}
+                      onSelect={() =>
+                        setStatisticsCohort(
+                          ratingProgressCohort(
+                            "partially-rated",
+                            statistics.ratingProgress.partiallyRatedAlbums,
+                          ),
+                        )
+                      }
                     />
                     <Meter
                       label="Rated tracks"
                       value={statistics.ratingProgress.ratedTracks}
                       total={ratingTrackTotal}
                       detail={`${percentOf(statistics.ratingProgress.ratedTracks, ratingTrackTotal).toFixed(1)}%`}
+                      onSelect={() =>
+                        setStatisticsCohort(
+                          ratingProgressCohort(
+                            "rated-tracks",
+                            statistics.ratingProgress.ratedTracks,
+                          ),
+                        )
+                      }
                     />
                   </div>
                 ) : (
@@ -13980,13 +14446,61 @@ export default function App() {
                   <Heart size={18} />
                 </div>
                 <div className="stat-pairs">
-                  <div>
+                  <div
+                    className={statistics ? "actionable-cohort" : undefined}
+                    role={statistics ? "button" : undefined}
+                    tabIndex={statistics ? 0 : undefined}
+                    onClick={() => {
+                      if (statistics) {
+                        setStatisticsCohort(
+                          lovedTracksCohort(
+                            statistics.lovedTracks.lovedTracks,
+                          ),
+                        );
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (statistics) {
+                        discoveryKeyOpen(event, () =>
+                          setStatisticsCohort(
+                            lovedTracksCohort(
+                              statistics.lovedTracks.lovedTracks,
+                            ),
+                          ),
+                        );
+                      }
+                    }}
+                  >
                     <span>Loved tracks</span>
                     <strong>
                       {formatNumber(statistics?.lovedTracks.lovedTracks)}
                     </strong>
                   </div>
-                  <div>
+                  <div
+                    className={statistics ? "actionable-cohort" : undefined}
+                    role={statistics ? "button" : undefined}
+                    tabIndex={statistics ? 0 : undefined}
+                    onClick={() => {
+                      if (statistics) {
+                        setStatisticsCohort(
+                          albumsWithLovedTracksCohort(
+                            statistics.lovedTracks.albumsWithLovedTracks,
+                          ),
+                        );
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (statistics) {
+                        discoveryKeyOpen(event, () =>
+                          setStatisticsCohort(
+                            albumsWithLovedTracksCohort(
+                              statistics.lovedTracks.albumsWithLovedTracks,
+                            ),
+                          ),
+                        );
+                      }
+                    }}
+                  >
                     <span>Albums with love</span>
                     <strong>
                       {formatNumber(
@@ -13994,16 +14508,95 @@ export default function App() {
                       )}
                     </strong>
                   </div>
-                  <div>
-                    <span>Average per album</span>
+                  <div
+                    className={
+                      statistics?.lovedTracks.topLovedGenre
+                        ? "actionable-cohort"
+                        : undefined
+                    }
+                    role={
+                      statistics?.lovedTracks.topLovedGenre
+                        ? "button"
+                        : undefined
+                    }
+                    tabIndex={
+                      statistics?.lovedTracks.topLovedGenre ? 0 : undefined
+                    }
+                    onClick={() => {
+                      const genre = statistics?.lovedTracks.topLovedGenre;
+                      if (genre) {
+                        const albumCount =
+                          statistics.genreProgress.find(
+                            (row) => row.genre === genre,
+                          )?.albumCount ?? null;
+                        setStatisticsCohort(
+                          lovedGenreCohort(genre, albumCount),
+                        );
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      const genre = statistics?.lovedTracks.topLovedGenre;
+                      if (genre) {
+                        const albumCount =
+                          statistics?.genreProgress.find(
+                            (row) => row.genre === genre,
+                          )?.albumCount ?? null;
+                        discoveryKeyOpen(event, () =>
+                          setStatisticsCohort(
+                            lovedGenreCohort(genre, albumCount),
+                          ),
+                        );
+                      }
+                    }}
+                  >
+                    <span>Top genre</span>
                     <strong>
-                      {formatAverage(
-                        statistics?.lovedTracks.averageLovedTracksPerAlbum,
-                        2,
-                      )}
+                      {statistics?.lovedTracks.topLovedGenre ?? ""}
                     </strong>
                   </div>
-                  <div>
+                  <div
+                    className={
+                      statistics?.lovedTracks.topLovedYear != null
+                        ? "actionable-cohort"
+                        : undefined
+                    }
+                    role={
+                      statistics?.lovedTracks.topLovedYear != null
+                        ? "button"
+                        : undefined
+                    }
+                    tabIndex={
+                      statistics?.lovedTracks.topLovedYear != null
+                        ? 0
+                        : undefined
+                    }
+                    onClick={() => {
+                      const year = statistics?.lovedTracks.topLovedYear;
+                      if (year != null) {
+                        const albumCount =
+                          statistics?.yearProgress.find(
+                            (row) => row.year === year,
+                          )?.albumCount ?? null;
+                        setStatisticsCohort(
+                          lovedYearCohort(year, albumCount),
+                        );
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      const year = statistics?.lovedTracks.topLovedYear;
+                      if (year != null) {
+                        const albumCount =
+                          statistics?.yearProgress.find(
+                            (row) => row.year === year,
+                          )?.albumCount ?? null;
+                        discoveryKeyOpen(event, () =>
+                          setStatisticsCohort(
+                            lovedYearCohort(year, albumCount),
+                          ),
+                        );
+                      }
+                    }}
+                  >
                     <span>Top year</span>
                     <strong>
                       {statistics?.lovedTracks.topLovedYear ?? ""}
@@ -14027,6 +14620,7 @@ export default function App() {
                   rows={statistics?.yearProgress ?? []}
                   genreOptions={genreSuggestionOptions}
                   onRequestGenreOptions={requestGenreSuggestionRefresh}
+                  onSelect={setStatisticsCohort}
                 />
               </section>
 
@@ -14046,6 +14640,7 @@ export default function App() {
                   yearRows={statistics?.yearProgress ?? []}
                   genreOptions={genreSuggestionOptions}
                   onRequestGenreOptions={requestGenreSuggestionRefresh}
+                  onSelect={setStatisticsCohort}
                 />
               </section>
 
@@ -14062,6 +14657,10 @@ export default function App() {
                 </div>
                 <DistributionBars
                   buckets={statistics?.trackRatingDistribution ?? []}
+                  onSelect={(bucket) => {
+                    const insight = ratingBucketCohort(bucket, "tracks");
+                    if (insight) setStatisticsCohort(insight);
+                  }}
                 />
               </section>
 
@@ -14080,6 +14679,10 @@ export default function App() {
                 </div>
                 <DistributionBars
                   buckets={statistics?.albumRatingDistribution ?? []}
+                  onSelect={(bucket) => {
+                    const insight = ratingBucketCohort(bucket, "albums");
+                    if (insight) setStatisticsCohort(insight);
+                  }}
                 />
               </section>
 
@@ -14158,6 +14761,7 @@ export default function App() {
                 </div>
                 <RatingEventList
                   events={statistics?.recentRatingEvents ?? []}
+                  onSelect={setStatisticsCohort}
                 />
               </section>
             </section>
@@ -17059,7 +17663,10 @@ export default function App() {
                   <p>Rating changes from imports</p>
                 </div>
               </div>
-              <RatingEventList events={statistics?.recentRatingEvents ?? []} />
+              <RatingEventList
+                events={statistics?.recentRatingEvents ?? []}
+                onSelect={setStatisticsCohort}
+              />
             </section>
           </aside>
         ) : activeSection === "Settings" ? (

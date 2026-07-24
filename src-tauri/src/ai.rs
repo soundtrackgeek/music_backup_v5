@@ -100,7 +100,7 @@ Rules:
 Condition encoding:
 - Put text filters in textConditions. Fields generalText, albumTitle, trackTitle, albumArtist, displayArtist, publisher, filePath, filename, hasTrackText, artistType, artistGender use contains, equals, or startsWith plus value.
 - Put list filters in listConditions. Fields genre, excludeGenre, originCountry, excludeOriginCountry use values.
-- Put missing metadata filters in missingFields using only album, albumArtist, genre, year, billboard, billboardSingle, rating, or time.
+- Put missing metadata filters in missingFields using only album, albumArtist, genre, year, releaseYear, publisher, trackTitle, displayArtist, trackNumber, discNumber, filename, coverArt, billboard, billboardSingle, rating, or time.
 - Put exact, minimum, and maximum numeric filters in numericConditions. Fields billboardRank, billboardSingleRank, year, releaseYear, totalMinutes, trackCount, ratedTracks, albumRating, trackRating, ratingCompleteness, lovedTracks, artistBornYear, artistDiedYear, artistFoundedYear, artistDissolvedYear use equals, gte, or lte plus value.
 - Put every "between", "from X to Y", or bounded numeric range in numericRangeConditions using minimum and maximum. Never split a bounded range into two conditions.
 - Put true boolean filters in booleanConditions. Fields missingOriginCountry, artistDied, artistDissolved, and notFullyRated need only the field name. notFullyRated means every album whose track-rating completeness is below 100%, including partially rated and unrated albums. Use it for selecting items described as "not fully rated", "not 100% complete", "haven't rated 100%", or "left to rate/finish"; do not approximate it with a numeric completeness maximum.
@@ -130,7 +130,7 @@ Rules:
 Condition encoding:
 - textConditions fields generalText, albumTitle, trackTitle, albumArtist, displayArtist, publisher, filePath, filename, hasTrackText, artistType, and artistGender use contains, equals, or startsWith plus value.
 - listConditions fields genre, excludeGenre, originCountry, and excludeOriginCountry use values.
-- missingFields supports album, albumArtist, genre, year, billboard, billboardSingle, rating, and time.
+- missingFields supports album, albumArtist, genre, year, releaseYear, publisher, trackTitle, displayArtist, trackNumber, discNumber, filename, coverArt, billboard, billboardSingle, rating, and time.
 - numericConditions fields billboardRank, billboardSingleRank, year, releaseYear, totalMinutes, trackCount, ratedTracks, albumRating, trackRating, ratingCompleteness, lovedTracks, artistBornYear, artistDiedYear, artistFoundedYear, and artistDissolvedYear use equals, gte, or lte.
 - numericRangeConditions use minimum and maximum for bounded numeric ranges.
 - booleanConditions supports missingOriginCountry, artistDied, and artistDissolved.
@@ -337,6 +337,8 @@ pub struct AiLibraryAnalysis {
 #[serde(rename_all = "camelCase")]
 pub struct AiPlaylistBuildRequest {
     pub prompt: String,
+    #[serde(default)]
+    pub source_request: Option<BrowseRequest>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -883,7 +885,26 @@ pub fn plan_playlist(input: AiPlaylistBuildRequest) -> Result<AiPlaylistPlan> {
     let output_text = extract_output_text(&payload)?;
     let document: PlaylistPlanDocument = serde_json::from_str(output_text)
         .context("Luna returned an invalid structured playlist recipe")?;
-    build_playlist_plan(prompt, document, usage_from_response(&payload))
+    let mut plan = build_playlist_plan(prompt, document, usage_from_response(&payload))?;
+    if let Some(source_request) = input.source_request {
+        plan.request = locked_playlist_source_request(source_request, &plan.request);
+        plan.description = format!(
+            "{} The selected insight cohort remains locked as the local source.",
+            plan.description.trim()
+        );
+    }
+    Ok(plan)
+}
+
+fn locked_playlist_source_request(
+    mut source_request: BrowseRequest,
+    planned_request: &BrowseRequest,
+) -> BrowseRequest {
+    source_request.view = "tracks".to_string();
+    source_request.offset = 0;
+    source_request.limit = planned_request.limit;
+    source_request.sort = planned_request.sort.clone();
+    source_request
 }
 
 pub fn plan_external_discovery(
@@ -2569,11 +2590,13 @@ fn query_plan_schema(target: &str) -> Value {
                 "items": {
                     "type": "string",
                     "enum": [
-                        "album", "albumArtist", "genre", "year", "billboard",
+                        "album", "albumArtist", "genre", "year", "releaseYear",
+                        "publisher", "trackTitle", "displayArtist", "trackNumber",
+                        "discNumber", "filename", "coverArt", "billboard",
                         "billboardSingle", "rating", "time"
                     ]
                 },
-                "maxItems": 8
+                "maxItems": 16
             },
             "numericConditions": {
                 "type": "array",
@@ -2782,6 +2805,30 @@ mod tests {
             second_number_value: None,
             values: Vec::new(),
         }
+    }
+
+    #[test]
+    fn locks_playlist_planning_to_the_selected_insight_cohort() {
+        let mut source = BrowseRequest::default();
+        source.view = "albums".to_string();
+        source.filters.year_from = Some(1980);
+        source.filters.year_to = Some(1989);
+        source.limit = 100;
+        source.offset = 50;
+
+        let mut planned = BrowseRequest::default();
+        planned.view = "tracks".to_string();
+        planned.limit = 240;
+        planned.sort.field = "random".to_string();
+
+        let locked = locked_playlist_source_request(source, &planned);
+
+        assert_eq!(locked.view, "tracks");
+        assert_eq!(locked.filters.year_from, Some(1980));
+        assert_eq!(locked.filters.year_to, Some(1989));
+        assert_eq!(locked.limit, 240);
+        assert_eq!(locked.offset, 0);
+        assert_eq!(locked.sort.field, "random");
     }
 
     #[test]
@@ -3445,6 +3492,7 @@ mod tests {
         let plan = plan_playlist(AiPlaylistBuildRequest {
             prompt: "Build 20 loved tracks from underexplored genres, no more than 2 per artist"
                 .to_string(),
+            source_request: None,
         })
         .unwrap();
 
@@ -3461,6 +3509,7 @@ mod tests {
     fn live_luna_plans_unrated_deep_cuts_from_highly_rated_albums() {
         let plan = plan_playlist(AiPlaylistBuildRequest {
             prompt: "Discover unrated deep cuts from highly rated albums".to_string(),
+            source_request: None,
         })
         .unwrap();
 

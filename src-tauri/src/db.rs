@@ -10858,6 +10858,59 @@ fn add_missing_field_conditions(conditions: &mut Vec<String>, is_tracks: bool, f
             } else {
                 "a.year IS NULL"
             }),
+            "releaseYear" => Some("a.release_year IS NULL"),
+            "publisher" => Some("NULLIF(TRIM(COALESCE(a.publisher, '')), '') IS NULL"),
+            "trackTitle" => Some(if is_tracks {
+                "NULLIF(TRIM(COALESCE(t.title, '')), '') IS NULL"
+            } else {
+                "EXISTS (
+                    SELECT 1 FROM tracks missing_track
+                    WHERE missing_track.album_id = a.id
+                      AND NULLIF(TRIM(COALESCE(missing_track.title, '')), '') IS NULL
+                )"
+            }),
+            "displayArtist" => Some(if is_tracks {
+                "NULLIF(TRIM(COALESCE(t.display_artist, '')), '') IS NULL"
+            } else {
+                "EXISTS (
+                    SELECT 1 FROM tracks missing_track
+                    WHERE missing_track.album_id = a.id
+                      AND NULLIF(TRIM(COALESCE(missing_track.display_artist, '')), '') IS NULL
+                )"
+            }),
+            "trackNumber" => Some(if is_tracks {
+                "(t.track_number IS NULL OR t.track_number <= 0)"
+            } else {
+                "EXISTS (
+                    SELECT 1 FROM tracks missing_track
+                    WHERE missing_track.album_id = a.id
+                      AND (missing_track.track_number IS NULL OR missing_track.track_number <= 0)
+                )"
+            }),
+            "discNumber" => Some(if is_tracks {
+                "(t.disc_number IS NULL OR t.disc_number <= 0)"
+            } else {
+                "EXISTS (
+                    SELECT 1 FROM tracks missing_track
+                    WHERE missing_track.album_id = a.id
+                      AND (missing_track.disc_number IS NULL OR missing_track.disc_number <= 0)
+                )"
+            }),
+            "filename" => Some(if is_tracks {
+                "NULLIF(TRIM(COALESCE(t.filename, '')), '') IS NULL"
+            } else {
+                "EXISTS (
+                    SELECT 1 FROM tracks missing_track
+                    WHERE missing_track.album_id = a.id
+                      AND NULLIF(TRIM(COALESCE(missing_track.filename, '')), '') IS NULL
+                )"
+            }),
+            "coverArt" => Some(
+                "NOT EXISTS (
+                    SELECT 1 FROM album_covers missing_cover
+                    WHERE missing_cover.album_id = a.id
+                )",
+            ),
             "billboard" => Some("a.billboard_rank IS NULL"),
             "billboardSingle" if is_tracks => Some("t.billboard_single_rank IS NULL"),
             "rating" => Some(if is_tracks {
@@ -11916,6 +11969,24 @@ mod tests {
             ),
             "ORDER BY RANDOM()"
         );
+    }
+
+    #[test]
+    fn filters_extended_missing_metadata_cohorts() {
+        let conn = seeded_connection();
+
+        let mut tracks = BrowseRequest::default();
+        tracks.view = "tracks".to_string();
+        tracks.filters.missing_fields = vec!["trackNumber".to_string()];
+        let track_response =
+            search_library(&conn, tracks, 50).expect("search missing track numbers");
+        assert_eq!(track_response.total, 1);
+
+        let mut albums = BrowseRequest::default();
+        albums.filters.missing_fields = vec!["coverArt".to_string()];
+        let album_response = search_library(&conn, albums, 50).expect("search missing cover art");
+        assert_eq!(album_response.total, 1);
+        assert_eq!(album_response.rows[0].album.as_deref(), Some("Actually"));
     }
 
     #[test]
