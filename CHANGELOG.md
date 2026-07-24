@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.77.0] - 2026-07-24
+### Added
+- Added 300×300 floating hover previews for compact album covers in Search, Charts table/list/grid views, and the shared album lists used by Albums, Artists, Genres, and Discovery.
+- Added viewport-aware preview placement, smooth row-to-row artwork handoff, animated entrance/exit treatment, and reduced-motion support without changing list row dimensions.
+
+### Changed
+- Bumped synchronized app metadata to `0.77.0`.
+
 ## [0.76.2] - 2026-07-24
 ### Fixed
 - Fixed the final pre-import track delta comparisons so the existing `(file_path, filename)` index is used instead of repeatedly scanning the entire active track table for every staged row.

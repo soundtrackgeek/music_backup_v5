@@ -70,7 +70,6 @@ import {
   exportSearch,
   fixMusicToolIssues,
   cacheSettings,
-  getAlbumCoverDataUrl,
   getDiscovery,
   getGenreProgress,
   getMusicBrainzArtistDiscography,
@@ -323,6 +322,7 @@ import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
 import { GenreTimeline } from "./components/GenreTimeline";
 import { ImportSafetyPanel } from "./components/ImportSafetyPanel";
 import { InsightActionDock } from "./components/InsightActionDock";
+import { AlbumCover } from "./components/AlbumCover";
 import {
   ChartAdvancedControls,
   ChartLunaCommandArea,
@@ -2193,69 +2193,6 @@ function ResultTable({
   );
 }
 
-function albumInitial(row: BrowseRow | null) {
-  return row?.album?.trim().slice(0, 1).toUpperCase() || "A";
-}
-
-function AlbumCover({
-  row,
-  className = "",
-  decorative = true,
-}: {
-  row: BrowseRow | null;
-  className?: string;
-  decorative?: boolean;
-}) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const coverPath = row?.coverPath ?? null;
-  const albumId = row?.albumId ?? null;
-
-  useEffect(() => {
-    setImageFailed(false);
-    setImageUrl(null);
-    if (!albumId || !coverPath) {
-      return;
-    }
-
-    let cancelled = false;
-    void getAlbumCoverDataUrl(albumId).then((nextImageUrl) => {
-      if (!cancelled) {
-        setImageUrl(nextImageUrl);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [albumId, coverPath]);
-
-  const displayImageUrl = imageFailed ? null : imageUrl;
-  const label = row?.album ? `${row.album} cover` : "Album cover";
-  const classes = [
-    "cover-placeholder",
-    displayImageUrl ? "cover-image" : "",
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  return (
-    <span className={classes} aria-hidden={decorative ? "true" : undefined}>
-      {displayImageUrl ? (
-        <img
-          src={displayImageUrl}
-          alt={decorative ? "" : label}
-          loading="lazy"
-          onError={() => setImageFailed(true)}
-        />
-      ) : (
-        <span>{albumInitial(row)}</span>
-      )}
-    </span>
-  );
-}
-
 function AlbumTitleContents({
   row,
   subtitle = formatMinutes(row.totalSeconds),
@@ -2268,7 +2205,7 @@ function AlbumTitleContents({
   const billboardLabel = formatBillboardRank(row);
   return (
     <>
-      <AlbumCover row={row} className="cover-mini" />
+      <AlbumCover row={row} className="cover-mini" previewOnHover />
       <span>
         <strong>
           <span>{row.album ?? "Untitled"}</span>
@@ -4791,7 +4728,7 @@ function ChartResults({
         {response.rows.map((row, index) => (
           <article className="chart-list-row" role="listitem" key={row.id}>
             <strong className="rank-number">{index + 1}</strong>
-            <AlbumCover row={row} className="cover-list" />
+            <AlbumCover row={row} className="cover-list" previewOnHover />
             <div>
               <h3>
                 <span>{row.album ?? "Untitled"}</span>
@@ -4836,7 +4773,11 @@ function ChartResults({
 
           return (
             <article className="chart-grid-item" role="listitem" key={row.id}>
-              <AlbumCover row={row} className="chart-grid-cover" />
+              <AlbumCover
+                row={row}
+                className="chart-grid-cover"
+                previewOnHover
+              />
               <div className="chart-grid-meta">
                 <strong className="chart-grid-rank">#{index + 1}</strong>
                 <h3 className="chart-grid-title" title={albumTitle}>

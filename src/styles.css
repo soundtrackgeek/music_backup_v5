@@ -1698,6 +1698,67 @@ button {
   font-size: 18px;
 }
 
+.cover-preview-trigger {
+  cursor: zoom-in;
+}
+
+.album-cover-preview {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: stretch;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.14), rgba(143, 100, 23, 0.18)),
+    #f3f6f5;
+  box-shadow:
+    0 28px 64px rgba(17, 31, 27, 0.3),
+    0 8px 20px rgba(17, 31, 27, 0.2);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  transition:
+    opacity 140ms ease,
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.album-cover-preview.is-visible {
+  opacity: 1;
+}
+
+.album-cover-preview-art {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  animation: album-cover-preview-reveal 150ms ease both;
+}
+
+.album-cover-preview-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-cover-preview-art span {
+  color: #0b625c;
+  font-size: 92px;
+  line-height: 1;
+  font-weight: 760;
+}
+
+@keyframes album-cover-preview-reveal {
+  from {
+    opacity: 0.25;
+    transform: scale(1.025);
+  }
+}
+
 .album-cover-large {
   margin-top: 24px;
 }
@@ -8131,7 +8192,8 @@ button {
   background: #24a397;
 }
 
-:root[data-theme="dark"] .cover-placeholder {
+:root[data-theme="dark"] .cover-placeholder,
+:root[data-theme="dark"] .album-cover-preview {
   color: #8ee4d8;
   background:
     linear-gradient(
@@ -8140,6 +8202,14 @@ button {
       rgba(242, 207, 132, 0.18)
     ),
     #13231f;
+}
+
+:root[data-theme="dark"] .album-cover-preview {
+  border-color: rgba(142, 228, 216, 0.28);
+}
+
+:root[data-theme="dark"] .album-cover-preview-art span {
+  color: #8ee4d8;
 }
 
 :root[data-theme="dark"] .artist-album-cover-card {
@@ -10973,6 +11043,8 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .artist-detail-tab,
+  .album-cover-preview,
+  .album-cover-preview-art,
   .artist-detail-tab-panel,
   .details-drawer-layout .detail-column {
     transition: none;
