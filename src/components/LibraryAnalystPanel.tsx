@@ -19,6 +19,8 @@ import { AiSnapshotHistory } from "./AiSnapshotHistory";
 
 type LibraryAnalystPanelProps = {
   isAvailable: boolean;
+  showSnapshotHistory?: boolean;
+  snapshotToOpen?: AiSnapshot | null;
 };
 
 const lensOptions: Array<{
@@ -83,6 +85,8 @@ function analystSnapshotCategory(snapshot: AiSnapshot) {
 
 export function LibraryAnalystPanel({
   isAvailable,
+  showSnapshotHistory = true,
+  snapshotToOpen = null,
 }: LibraryAnalystPanelProps) {
   const [lens, setLens] = useState<AiLibraryLens>("overview");
   const [focus, setFocus] = useState("");
@@ -114,6 +118,21 @@ export function LibraryAnalystPanel({
       disposed = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (
+      !snapshotToOpen ||
+      snapshotToOpen.content.kind !== "libraryAnalysis"
+    ) {
+      return;
+    }
+    setSnapshots((previous) =>
+      previous.some((snapshot) => snapshot.id === snapshotToOpen.id)
+        ? previous
+        : [snapshotToOpen, ...previous],
+    );
+    openSnapshot(snapshotToOpen);
+  }, [snapshotToOpen?.id]);
 
   const selectedLens =
     lensOptions.find((option) => option.value === lens) ?? lensOptions[0];
@@ -288,16 +307,18 @@ export function LibraryAnalystPanel({
         <p className="error-message library-analyst-note">{snapshotError}</p>
       ) : null}
 
-      <AiSnapshotHistory
-        tone="dark"
-        snapshots={snapshots}
-        activeSnapshotId={activeSnapshotId}
-        description="Exact reports are stored locally and reopen without token cost."
-        emptyMessage="Your next analyst report will be saved here automatically."
-        getCategoryLabel={analystSnapshotCategory}
-        onOpen={openSnapshot}
-        onDelete={(snapshot) => void removeSnapshot(snapshot)}
-      />
+      {showSnapshotHistory ? (
+        <AiSnapshotHistory
+          tone="dark"
+          snapshots={snapshots}
+          activeSnapshotId={activeSnapshotId}
+          description="Exact reports are stored locally and reopen without token cost."
+          emptyMessage="Your next analyst report will be saved here automatically."
+          getCategoryLabel={analystSnapshotCategory}
+          onOpen={openSnapshot}
+          onDelete={(snapshot) => void removeSnapshot(snapshot)}
+        />
+      ) : null}
 
       {result ? (
         <article className="library-analysis" aria-live="polite">

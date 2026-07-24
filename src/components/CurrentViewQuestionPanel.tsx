@@ -24,6 +24,8 @@ import { AiSnapshotHistory } from "./AiSnapshotHistory";
 type CurrentViewQuestionPanelProps = {
   context: AiQueryTarget;
   request: BrowseRequest;
+  showSnapshotHistory?: boolean;
+  snapshotToOpen?: AiSnapshot | null;
 };
 
 function usageLabel(usage: AiUsage) {
@@ -55,6 +57,8 @@ function answerSnapshotCategory(snapshot: AiSnapshot) {
 export function CurrentViewQuestionPanel({
   context,
   request,
+  showSnapshotHistory = true,
+  snapshotToOpen = null,
 }: CurrentViewQuestionPanelProps) {
   const [question, setQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -86,6 +90,22 @@ export function CurrentViewQuestionPanel({
       disposed = true;
     };
   }, [snapshotKind]);
+
+  useEffect(() => {
+    if (
+      !snapshotToOpen ||
+      (snapshotToOpen.content.kind !== "searchAnswer" &&
+        snapshotToOpen.content.kind !== "chartAnswer")
+    ) {
+      return;
+    }
+    setSnapshots((previous) =>
+      previous.some((snapshot) => snapshot.id === snapshotToOpen.id)
+        ? previous
+        : [snapshotToOpen, ...previous],
+    );
+    openSnapshot(snapshotToOpen);
+  }, [snapshotToOpen?.id]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -263,15 +283,17 @@ export function CurrentViewQuestionPanel({
       {snapshotError ? (
         <p className="error-message natural-query-message">{snapshotError}</p>
       ) : null}
-      <AiSnapshotHistory
-        snapshots={snapshots}
-        activeSnapshotId={activeSnapshotId}
-        description="Exact answers and their filtered-view request are stored locally; reopening costs no tokens."
-        emptyMessage="Your next current-view answer will be saved here automatically."
-        getCategoryLabel={answerSnapshotCategory}
-        onOpen={openSnapshot}
-        onDelete={(snapshot) => void removeSnapshot(snapshot)}
-      />
+      {showSnapshotHistory ? (
+        <AiSnapshotHistory
+          snapshots={snapshots}
+          activeSnapshotId={activeSnapshotId}
+          description="Exact answers and their filtered-view request are stored locally; reopening costs no tokens."
+          emptyMessage="Your next current-view answer will be saved here automatically."
+          getCategoryLabel={answerSnapshotCategory}
+          onOpen={openSnapshot}
+          onDelete={(snapshot) => void removeSnapshot(snapshot)}
+        />
+      ) : null}
     </section>
   );
 }

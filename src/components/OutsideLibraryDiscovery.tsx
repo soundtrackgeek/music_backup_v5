@@ -37,6 +37,7 @@ import { AiMarkdownExportButton } from "./AiMarkdownExportButton";
 
 type OutsideLibraryDiscoveryProps = {
   isAvailable: boolean;
+  savedDiscoveryToOpen?: SavedExternalDiscovery | null;
 };
 
 const examples = [
@@ -81,7 +82,7 @@ function SavedDiscoveryHistory({
   return (
     <aside className="outside-library-saved" aria-label="Saved discovery lists">
       <header>
-        <div><History size={16} /><span>Local snapshots</span></div>
+        <div><History size={16} /><span>Saved discovery library</span></div>
         <strong>{saved.length}</strong>
       </header>
       <h3>Saved discoveries</h3>
@@ -115,6 +116,7 @@ function SavedDiscoveryHistory({
 
 export function OutsideLibraryDiscovery({
   isAvailable,
+  savedDiscoveryToOpen = null,
 }: OutsideLibraryDiscoveryProps) {
   const [prompt, setPrompt] = useState("");
   const [response, setResponse] = useState<ExternalDiscoveryResponse | null>(null);
@@ -145,6 +147,16 @@ export function OutsideLibraryDiscovery({
       disposed = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!savedDiscoveryToOpen) return;
+    setSaved((previous) =>
+      previous.some((entry) => entry.id === savedDiscoveryToOpen.id)
+        ? previous
+        : [savedDiscoveryToOpen, ...previous],
+    );
+    openSaved(savedDiscoveryToOpen);
+  }, [savedDiscoveryToOpen?.id]);
 
   useEffect(() => {
     let disposed = false;

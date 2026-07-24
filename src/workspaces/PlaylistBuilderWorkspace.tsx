@@ -41,6 +41,7 @@ type PlaylistBuilderWorkspaceProps = {
     request: BrowseRequest;
   } | null;
   onLaunchConsumed?: () => void;
+  savedPlaylistToOpen?: SavedPlaylist | null;
 };
 
 const examplePrompts = [
@@ -77,6 +78,7 @@ export function PlaylistBuilderWorkspace({
   isAvailable,
   launch = null,
   onLaunchConsumed,
+  savedPlaylistToOpen = null,
 }: PlaylistBuilderWorkspaceProps) {
   const [prompt, setPrompt] = useState("");
   const [playlist, setPlaylist] = useState<AiPlaylist | null>(null);
@@ -123,6 +125,16 @@ export function PlaylistBuilderWorkspace({
       disposed = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!savedPlaylistToOpen) return;
+    setSavedPlaylists((previous) =>
+      previous.some((saved) => saved.id === savedPlaylistToOpen.id)
+        ? previous
+        : [savedPlaylistToOpen, ...previous],
+    );
+    openSaved(savedPlaylistToOpen);
+  }, [savedPlaylistToOpen?.id]);
 
   async function createPlaylist(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -517,7 +529,7 @@ export function PlaylistBuilderWorkspace({
         <aside className="playlist-saved-panel" aria-label="Saved playlists">
           <header>
             <div>
-              <span>Local snapshots</span>
+              <span>Saved playlist library</span>
               <h2>Saved playlists</h2>
             </div>
             <strong>{savedPlaylists.length}</strong>

@@ -1,7 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown, SlidersHorizontal, Sparkles } from "lucide-react";
 
 type LunaCommandMode = "build" | "results";
+export type LunaCommandLaunch = {
+  id: number;
+  mode: LunaCommandMode;
+};
 
 function LunaCommandArea({
   idPrefix,
@@ -11,6 +15,7 @@ function LunaCommandArea({
   resultsLabel,
   buildCommand,
   resultsCommand,
+  launch,
 }: {
   idPrefix: string;
   label: string;
@@ -19,6 +24,7 @@ function LunaCommandArea({
   resultsLabel: string;
   buildCommand: ReactNode;
   resultsCommand: ReactNode;
+  launch?: LunaCommandLaunch | null;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<LunaCommandMode>("build");
@@ -27,6 +33,12 @@ function LunaCommandArea({
   const buildPanelId = `${idPrefix}-luna-build-panel`;
   const resultsTabId = `${idPrefix}-luna-results-tab`;
   const resultsPanelId = `${idPrefix}-luna-results-panel`;
+
+  useEffect(() => {
+    if (!launch) return;
+    setMode(launch.mode);
+    setIsOpen(true);
+  }, [launch?.id]);
 
   return (
     <section className="search-luna-command-area" aria-label={label}>
@@ -112,9 +124,11 @@ function LunaCommandArea({
 export function SearchLunaCommandArea({
   searchCommand,
   resultsCommand,
+  launch,
 }: {
   searchCommand: ReactNode;
   resultsCommand: ReactNode;
+  launch?: LunaCommandLaunch | null;
 }) {
   return (
     <LunaCommandArea
@@ -125,6 +139,7 @@ export function SearchLunaCommandArea({
       resultsLabel="Ask these results"
       buildCommand={searchCommand}
       resultsCommand={resultsCommand}
+      launch={launch}
     />
   );
 }
@@ -132,9 +147,11 @@ export function SearchLunaCommandArea({
 export function ChartLunaCommandArea({
   chartCommand,
   resultsCommand,
+  launch,
 }: {
   chartCommand: ReactNode;
   resultsCommand: ReactNode;
+  launch?: LunaCommandLaunch | null;
 }) {
   return (
     <LunaCommandArea
@@ -145,6 +162,7 @@ export function ChartLunaCommandArea({
       resultsLabel="Ask this chart"
       buildCommand={chartCommand}
       resultsCommand={resultsCommand}
+      launch={launch}
     />
   );
 }

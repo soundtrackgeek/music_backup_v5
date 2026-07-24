@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.74.0] - 2026-07-24
+### Added
+- Added one contextual Luna command center with explicit Plan & filter, Ask this view, Analyze library, Build playlist, Discover outside, and Research music modes.
+- Added a visible attached-context badge and mode-specific privacy boundary so users can see what Luna will receive before launching a task.
+- Added one local Luna timeline that combines automatic AI snapshots with explicitly saved playlists and outside-library discoveries and reopens each item in its owning workflow.
+
+### Changed
+- Embedded Music Research inside the shared Luna panel and routed Search, Charts, Statistics, Playlist Builder, and Discovery launches through the same mental model.
+- Removed duplicate inline AI snapshot histories while keeping saved playlist and discovery libraries available as explicitly managed artifacts.
+- Added programmatic workspace handoffs for exact Search/Chart filters and answers, Library Analyst reports, saved playlists, and saved discovery lists.
+- Bumped synchronized app metadata to `0.74.0`.
+
 ## [0.73.1] - 2026-07-24
 ### Fixed
 - Opened genre rows from Statistics **Loved density** in the Tracks view with the genre and loved-track filters applied, using the loved-track count as the cohort result count.

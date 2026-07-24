@@ -30,6 +30,8 @@ type NaturalLanguageQueryPanelProps = {
   target: AiQueryTarget;
   currentView: BrowseView;
   onApply: (compiled: AiCompiledQuery) => void;
+  showSnapshotHistory?: boolean;
+  snapshotToOpen?: AiSnapshot | null;
 };
 
 function usageLabel(usage: AiUsage) {
@@ -53,6 +55,8 @@ export function NaturalLanguageQueryPanel({
   target,
   currentView,
   onApply,
+  showSnapshotHistory = true,
+  snapshotToOpen = null,
 }: NaturalLanguageQueryPanelProps) {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -86,6 +90,16 @@ export function NaturalLanguageQueryPanel({
       disposed = true;
     };
   }, [target]);
+
+  useEffect(() => {
+    if (!snapshotToOpen || snapshotToOpen.content.kind !== target) return;
+    setSnapshots((previous) =>
+      previous.some((snapshot) => snapshot.id === snapshotToOpen.id)
+        ? previous
+        : [snapshotToOpen, ...previous],
+    );
+    openSnapshot(snapshotToOpen);
+  }, [snapshotToOpen?.id, target]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -338,15 +352,17 @@ export function NaturalLanguageQueryPanel({
       {snapshotError ? (
         <p className="error-message natural-query-message">{snapshotError}</p>
       ) : null}
-      <AiSnapshotHistory
-        snapshots={snapshots}
-        activeSnapshotId={activeSnapshotId}
-        description="Reopen exact answers and compiled filters without another Luna call. Filters still use your current library."
-        emptyMessage="Your next Luna query will be saved here automatically."
-        getCategoryLabel={querySnapshotCategory}
-        onOpen={openSnapshot}
-        onDelete={(snapshot) => void removeSnapshot(snapshot)}
-      />
+      {showSnapshotHistory ? (
+        <AiSnapshotHistory
+          snapshots={snapshots}
+          activeSnapshotId={activeSnapshotId}
+          description="Reopen exact answers and compiled filters without another Luna call. Filters still use your current library."
+          emptyMessage="Your next Luna query will be saved here automatically."
+          getCategoryLabel={querySnapshotCategory}
+          onOpen={openSnapshot}
+          onDelete={(snapshot) => void removeSnapshot(snapshot)}
+        />
+      ) : null}
     </section>
   );
 }

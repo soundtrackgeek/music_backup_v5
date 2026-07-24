@@ -47,6 +47,9 @@ type MusicResearchPanelProps = {
   isOpen: boolean;
   context: AiMusicResearchContext;
   onClose: () => void;
+  embedded?: boolean;
+  showSnapshotHistory?: boolean;
+  snapshotToOpen?: AiSnapshot | null;
 };
 
 function usageLabel(usage: AiUsage) {
@@ -118,6 +121,9 @@ export function MusicResearchPanel({
   isOpen,
   context,
   onClose,
+  embedded = false,
+  showSnapshotHistory = true,
+  snapshotToOpen = null,
 }: MusicResearchPanelProps) {
   const [conversationContext, setConversationContext] = useState(context);
   const [question, setQuestion] = useState("");
@@ -180,6 +186,21 @@ export function MusicResearchPanel({
       disposed = true;
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (
+      !snapshotToOpen ||
+      snapshotToOpen.content.kind !== "musicResearch"
+    ) {
+      return;
+    }
+    setSnapshots((previous) =>
+      previous.some((snapshot) => snapshot.id === snapshotToOpen.id)
+        ? previous
+        : [snapshotToOpen, ...previous],
+    );
+    openSnapshot(snapshotToOpen);
+  }, [snapshotToOpen?.id]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -357,8 +378,8 @@ export function MusicResearchPanel({
 
   return (
     <section
-      className="music-research-panel"
-      role="dialog"
+      className={`music-research-panel${embedded ? " music-research-panel-embedded" : ""}`}
+      role={embedded ? "region" : "dialog"}
       aria-modal="false"
       aria-label="Ask Luna music research"
     >
@@ -371,18 +392,20 @@ export function MusicResearchPanel({
           <h2>Ask anything about music</h2>
         </div>
         <div className="music-research-header-actions">
-          <button
-            className="icon-button music-research-history-toggle"
-            type="button"
-            aria-label={isHistoryOpen ? "Hide saved research" : "Show saved research"}
-            aria-pressed={isHistoryOpen}
-            title="Saved research"
-            disabled={pendingQuestion != null}
-            onClick={() => setIsHistoryOpen((previous) => !previous)}
-          >
-            <History size={16} />
-            {snapshots.length > 0 ? <span>{snapshots.length}</span> : null}
-          </button>
+          {showSnapshotHistory ? (
+            <button
+              className="icon-button music-research-history-toggle"
+              type="button"
+              aria-label={isHistoryOpen ? "Hide saved research" : "Show saved research"}
+              aria-pressed={isHistoryOpen}
+              title="Saved research"
+              disabled={pendingQuestion != null}
+              onClick={() => setIsHistoryOpen((previous) => !previous)}
+            >
+              <History size={16} />
+              {snapshots.length > 0 ? <span>{snapshots.length}</span> : null}
+            </button>
+          ) : null}
           {exchanges.length > 0 ? (
             <button
               className="icon-button"
@@ -395,15 +418,17 @@ export function MusicResearchPanel({
               <Eraser size={16} />
             </button>
           ) : null}
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Close music research"
-            title="Close"
-            onClick={onClose}
-          >
-            <X size={17} />
-          </button>
+          {!embedded ? (
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Close music research"
+              title="Close"
+              onClick={onClose}
+            >
+              <X size={17} />
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -434,7 +459,7 @@ export function MusicResearchPanel({
             />
           </div>
         ) : null}
-        {isHistoryOpen ? (
+        {showSnapshotHistory && isHistoryOpen ? (
           <div className="music-research-history">
             <AiSnapshotHistory
               snapshots={snapshots}

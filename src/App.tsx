@@ -130,6 +130,7 @@ import {
 import type {
   AppSettings,
   AiMusicResearchContext,
+  AiSnapshot,
   ArtistListRequest,
   ArtistListResponse,
   ArtistSummary,
@@ -154,6 +155,8 @@ import type {
   DiscoveryHeatmapCell,
   DiscoveryMission,
   DiscoveryResponse,
+  SavedExternalDiscovery,
+  SavedPlaylist,
   ExportResult,
   GenreListRequest,
   GenreListResponse,
@@ -306,6 +309,11 @@ import { AiSettingsPanel } from "./components/AiSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
 import { ExportResultStatus } from "./components/ExportResultStatus";
 import { LibraryAnalystPanel } from "./components/LibraryAnalystPanel";
+import {
+  LunaPanel,
+  type LunaHistorySelection,
+  type LunaMode,
+} from "./components/LunaPanel";
 import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPanel";
 import { MusicResearchPanel } from "./components/MusicResearchPanel";
 import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
@@ -7488,7 +7496,24 @@ function RatingEventList({
 
 export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
-  const [isMusicResearchOpen, setIsMusicResearchOpen] = useState(false);
+  const [isLunaOpen, setIsLunaOpen] = useState(false);
+  const lunaLaunchIdRef = useRef(1);
+  const [searchLunaLaunch, setSearchLunaLaunch] = useState<{
+    id: number;
+    mode: "build" | "results";
+    snapshot: AiSnapshot | null;
+  } | null>(null);
+  const [chartLunaLaunch, setChartLunaLaunch] = useState<{
+    id: number;
+    mode: "build" | "results";
+    snapshot: AiSnapshot | null;
+  } | null>(null);
+  const [analystSnapshotToOpen, setAnalystSnapshotToOpen] =
+    useState<AiSnapshot | null>(null);
+  const [savedPlaylistToOpen, setSavedPlaylistToOpen] =
+    useState<SavedPlaylist | null>(null);
+  const [savedDiscoveryToOpen, setSavedDiscoveryToOpen] =
+    useState<SavedExternalDiscovery | null>(null);
   const [statisticsCohort, setStatisticsCohort] =
     useState<InsightCohort | null>(null);
   const [discoveryCohort, setDiscoveryCohort] =
@@ -11440,6 +11465,96 @@ export default function App() {
       selectedSubtitle: null,
     };
   })();
+
+  function nextLunaLaunchId() {
+    const id = lunaLaunchIdRef.current;
+    lunaLaunchIdRef.current += 1;
+    return id;
+  }
+
+  function openLunaMode(mode: Exclude<LunaMode, "research">) {
+    if (mode === "plan" || mode === "ask") {
+      const launch = {
+        id: nextLunaLaunchId(),
+        mode: mode === "plan" ? ("build" as const) : ("results" as const),
+        snapshot: null,
+      };
+      if (activeSection === "Charts") {
+        setChartLunaLaunch(launch);
+        setActiveSection("Charts");
+      } else {
+        setSearchLunaLaunch(launch);
+        setActiveSection("Search");
+      }
+    } else if (mode === "analyze") {
+      setActiveSection("Statistics");
+    } else if (mode === "playlist") {
+      setActiveSection("Playlists");
+    } else if (mode === "discover") {
+      setActiveSection("Discovery");
+    }
+    setIsLunaOpen(false);
+  }
+
+  function openLunaHistory(selection: LunaHistorySelection) {
+    if (selection.source === "playlist") {
+      setSavedPlaylistToOpen(selection.item);
+      setActiveSection("Playlists");
+      setIsLunaOpen(false);
+      return;
+    }
+    if (selection.source === "discovery") {
+      setSavedDiscoveryToOpen(selection.item);
+      setActiveSection("Discovery");
+      setIsLunaOpen(false);
+      return;
+    }
+
+    const snapshot = selection.item;
+    switch (snapshot.content.kind) {
+      case "search":
+        setSearchLunaLaunch({
+          id: nextLunaLaunchId(),
+          mode: "build",
+          snapshot,
+        });
+        setActiveSection("Search");
+        break;
+      case "chart":
+        setChartLunaLaunch({
+          id: nextLunaLaunchId(),
+          mode: "build",
+          snapshot,
+        });
+        setActiveSection("Charts");
+        break;
+      case "searchAnswer":
+        setRequest(normalizeBrowseRequestForClient(snapshot.content.request));
+        setSearchLunaLaunch({
+          id: nextLunaLaunchId(),
+          mode: "results",
+          snapshot,
+        });
+        setActiveSection("Search");
+        break;
+      case "chartAnswer":
+        setChartLunaLaunch({
+          id: nextLunaLaunchId(),
+          mode: "results",
+          snapshot,
+        });
+        setActiveSection("Charts");
+        break;
+      case "libraryAnalysis":
+        setAnalystSnapshotToOpen(snapshot);
+        setActiveSection("Statistics");
+        break;
+      case "musicResearch":
+        return;
+    }
+    setIsLunaOpen(false);
+  }
+
   const leftSidebarClass =
     leftSidebarMode === "iconOnly"
       ? "left-sidebar-icon-only"
@@ -11492,7 +11607,7 @@ export default function App() {
       if (isDetailsDrawerOpen) {
         closeDetailDrawerAndRestoreFocus();
       } else {
-        setIsMusicResearchOpen(false);
+        setIsLunaOpen(false);
         openDetailsDrawer();
       }
       return;
@@ -11564,16 +11679,16 @@ export default function App() {
         </button>
       ) : null}
       <button
-        className={`icon-button music-research-trigger${isMusicResearchOpen ? " active" : ""}`}
+        className={`icon-button music-research-trigger${isLunaOpen ? " active" : ""}`}
         type="button"
-        aria-label="Ask Luna about music"
-        aria-pressed={isMusicResearchOpen}
-        title="Ask Luna about music"
+        aria-label="Open Luna"
+        aria-pressed={isLunaOpen}
+        title="Open Luna"
         onClick={() => {
-          if (!isMusicResearchOpen && isDetailsDrawerLayout) {
+          if (!isLunaOpen && isDetailsDrawerLayout) {
             closeDetailsDrawer();
           }
-          setIsMusicResearchOpen((previous) => !previous);
+          setIsLunaOpen((previous) => !previous);
         }}
       >
         <Sparkles size={18} />
@@ -11596,10 +11711,28 @@ export default function App() {
           )}
         </button>
       ) : null}
-      <MusicResearchPanel
-        isOpen={isMusicResearchOpen}
-        context={musicResearchContext}
-        onClose={() => setIsMusicResearchOpen(false)}
+      <LunaPanel
+        isOpen={isLunaOpen}
+        activeSection={activeSection}
+        currentView={request.view}
+        currentResultCount={total}
+        chartResultCount={chartRows}
+        albumCount={status?.albumCount ?? 0}
+        trackCount={status?.trackCount ?? 0}
+        researchContext={musicResearchContext}
+        researchPanel={(snapshotToOpen) => (
+          <MusicResearchPanel
+            isOpen
+            embedded
+            showSnapshotHistory={false}
+            snapshotToOpen={snapshotToOpen}
+            context={musicResearchContext}
+            onClose={() => setIsLunaOpen(false)}
+          />
+        )}
+        onClose={() => setIsLunaOpen(false)}
+        onOpenMode={openLunaMode}
+        onOpenHistory={openLunaHistory}
       />
       {isDetailsDrawerLayout && isDetailsDrawerOpen ? (
         <button
@@ -12208,10 +12341,17 @@ export default function App() {
             </section>
 
             <ChartLunaCommandArea
+              launch={chartLunaLaunch}
               chartCommand={
                 <NaturalLanguageQueryPanel
                   target="chart"
                   currentView="albums"
+                  showSnapshotHistory={false}
+                  snapshotToOpen={
+                    chartLunaLaunch?.mode === "build"
+                      ? chartLunaLaunch.snapshot
+                      : null
+                  }
                   onApply={(compiled) => {
                     if (compiled.chartConfig) {
                       setChartConfig(
@@ -12227,6 +12367,12 @@ export default function App() {
                 <CurrentViewQuestionPanel
                   context="chart"
                   request={chartRequest}
+                  showSnapshotHistory={false}
+                  snapshotToOpen={
+                    chartLunaLaunch?.mode === "results"
+                      ? chartLunaLaunch.snapshot
+                      : null
+                  }
                 />
               }
             />
@@ -12698,6 +12844,7 @@ export default function App() {
             isAvailable={Boolean(status?.hasDatabase && status.trackCount > 0)}
             launch={playlistLaunch}
             onLaunchConsumed={() => setPlaylistLaunch(null)}
+            savedPlaylistToOpen={savedPlaylistToOpen}
           />
         ) : activeSection === "Discovery" ? (
           <section className="workspace discovery-workspace">
@@ -12731,6 +12878,7 @@ export default function App() {
 
             <OutsideLibraryDiscovery
               isAvailable={Boolean(status?.hasDatabase && status.trackCount > 0)}
+              savedDiscoveryToOpen={savedDiscoveryToOpen}
             />
 
             <section className="metric-grid" aria-label="Discovery summary">
@@ -14178,6 +14326,8 @@ export default function App() {
 
             <LibraryAnalystPanel
               isAvailable={Boolean(statistics && statistics.overview.albumCount > 0)}
+              showSnapshotHistory={false}
+              snapshotToOpen={analystSnapshotToOpen}
             />
 
             <section
@@ -16520,10 +16670,17 @@ export default function App() {
             </section>
 
             <SearchLunaCommandArea
+              launch={searchLunaLaunch}
               searchCommand={
                 <NaturalLanguageQueryPanel
                   target="search"
                   currentView={request.view}
+                  showSnapshotHistory={false}
+                  snapshotToOpen={
+                    searchLunaLaunch?.mode === "build"
+                      ? searchLunaLaunch.snapshot
+                      : null
+                  }
                   onApply={(compiled) => {
                     setRequest(
                       normalizeBrowseRequestForClient(compiled.request),
@@ -16533,7 +16690,16 @@ export default function App() {
                 />
               }
               resultsCommand={
-                <CurrentViewQuestionPanel context="search" request={request} />
+                <CurrentViewQuestionPanel
+                  context="search"
+                  request={request}
+                  showSnapshotHistory={false}
+                  snapshotToOpen={
+                    searchLunaLaunch?.mode === "results"
+                      ? searchLunaLaunch.snapshot
+                      : null
+                  }
+                />
               }
             />
 

@@ -29,6 +29,29 @@ describe("Search progressive disclosure", () => {
     expect(screen.getByText("Results command")).toBeVisible();
   });
 
+  it("opens the requested command when Luna launches a workspace mode", () => {
+    const { rerender } = render(
+      <SearchLunaCommandArea
+        searchCommand={<p>Search command</p>}
+        resultsCommand={<p>Results command</p>}
+      />,
+    );
+
+    rerender(
+      <SearchLunaCommandArea
+        launch={{ id: 1, mode: "results" }}
+        searchCommand={<p>Search command</p>}
+        resultsCommand={<p>Results command</p>}
+      />,
+    );
+
+    expect(screen.getByText("Search command")).not.toBeVisible();
+    expect(screen.getByText("Results command")).toBeVisible();
+    expect(
+      screen.getByRole("tab", { name: "Ask these results" }),
+    ).toHaveAttribute("aria-selected", "true");
+  });
+
   it("summarizes active filters while keeping advanced controls collapsed", () => {
     render(
       <SearchAdvancedFilters activeFilterCount={3}>

@@ -8067,6 +8067,425 @@ button {
   }
 }
 
+/* Global Luna command center */
+.luna-panel {
+  position: fixed;
+  z-index: 70;
+  top: 76px;
+  right: 18px;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(660px, calc(100vw - 36px));
+  max-height: calc(100vh - 94px);
+  overflow: hidden;
+  border: 1px solid #c7d8d3;
+  border-radius: 15px;
+  color: #17211f;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 72px rgba(20, 42, 36, 0.24);
+  backdrop-filter: blur(18px);
+}
+
+.luna-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+}
+
+.luna-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.luna-panel-title > span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #bcd5cf;
+  border-radius: 10px;
+  color: #0b756d;
+  background: #e8f5f2;
+}
+
+.luna-panel-title > div {
+  display: grid;
+  gap: 1px;
+}
+
+.luna-panel-title strong {
+  font-size: 18px;
+  line-height: 22px;
+}
+
+.luna-panel-title small {
+  color: #6d7c77;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.luna-panel-tabs {
+  display: flex;
+  gap: 5px;
+  padding: 0 16px 12px;
+  border-bottom: 1px solid #dce5e1;
+}
+
+.luna-panel-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0 11px;
+  color: #5c6c67;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.luna-panel-tabs button.active {
+  border-color: #bcd6d0;
+  color: #087168;
+  background: #e8f5f2;
+}
+
+.luna-panel-tabs button > span {
+  min-width: 18px;
+  border-radius: 999px;
+  padding: 1px 5px;
+  color: #ffffff;
+  background: #168277;
+  font-size: 9px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.luna-mode-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+  padding: 12px 16px 8px;
+}
+
+.luna-modes {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.luna-mode-strip button {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 55px;
+  border: 1px solid #d8e2de;
+  border-radius: 9px;
+  padding: 8px 4px;
+  color: #667570;
+  background: #f8faf9;
+  font: inherit;
+  cursor: pointer;
+}
+
+.luna-mode-strip button span {
+  overflow: hidden;
+  width: 100%;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.luna-mode-strip button.active {
+  border-color: #55a89e;
+  color: #086f67;
+  background: #e6f4f1;
+  box-shadow: inset 0 0 0 1px rgba(22, 130, 119, 0.08);
+}
+
+.luna-context-badge {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 4px 16px 10px;
+  border: 1px solid #c8ded8;
+  border-radius: 9px;
+  padding: 9px 11px;
+  color: #174d48;
+  background: #f0f8f6;
+}
+
+.luna-context-badge > span {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 8px;
+  color: #0b756d;
+  background: #dcefeb;
+}
+
+.luna-context-badge > div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.luna-context-badge small {
+  color: #63807a;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.luna-context-badge strong {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.luna-mode-detail {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 220px;
+  padding: 16px;
+  overflow: auto;
+}
+
+.luna-mode-detail-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.luna-mode-detail-heading > span {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: #0b756d;
+  background: #e8f5f2;
+}
+
+.luna-mode-detail h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 23px;
+}
+
+.luna-mode-detail p {
+  margin: 3px 0 0;
+  color: #697873;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.luna-privacy-boundary {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid #e0e6e3;
+  border-radius: 9px;
+  padding: 11px;
+  color: #53635e;
+  background: #fafcfb;
+}
+
+.luna-privacy-boundary svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #168277;
+}
+
+.luna-privacy-boundary > div {
+  display: grid;
+  gap: 2px;
+}
+
+.luna-privacy-boundary strong {
+  color: #2d3a36;
+  font-size: 11px;
+}
+
+.luna-privacy-boundary span {
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.luna-mode-action {
+  justify-self: start;
+}
+
+.luna-history {
+  min-height: 0;
+  padding: 15px 16px 16px;
+  overflow: auto;
+}
+
+.luna-history > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.luna-history h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 22px;
+}
+
+.luna-history header p {
+  max-width: 430px;
+  margin: 3px 0 0;
+  color: #697873;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.luna-history > header > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #d4dfdb;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #5f716b;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.luna-history-list {
+  display: grid;
+  gap: 7px;
+}
+
+.luna-history-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  overflow: hidden;
+  border: 1px solid #dce5e1;
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.luna-history-list article > button {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.luna-history-list article > button:first-child {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 9px;
+  padding: 10px;
+  text-align: left;
+}
+
+.luna-history-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #0b756d;
+  background: #e8f5f2;
+}
+
+.luna-history-list article > button:first-child > span:last-child {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.luna-history-list small {
+  color: #168277;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.luna-history-list strong,
+.luna-history-list span,
+.luna-history-list time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.luna-history-list strong {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.luna-history-list span,
+.luna-history-list time {
+  color: #71807b;
+  font-size: 9px;
+  line-height: 13px;
+}
+
+.luna-history-list article > button:last-child {
+  display: grid;
+  place-items: center;
+  border-left: 1px solid #e2e9e6;
+  color: #8d514c;
+}
+
+.luna-history-list article > button:hover,
+.luna-history-list article > button:focus-visible {
+  background: #f1f8f6;
+}
+
+.luna-history-empty {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 34px 18px;
+  border: 1px dashed #d2ddd9;
+  border-radius: 10px;
+  color: #70807b;
+  text-align: center;
+}
+
+.luna-history-empty strong {
+  color: #33423d;
+  font-size: 12px;
+}
+
+.luna-history-empty span {
+  max-width: 380px;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.luna-research-host {
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* Global Luna music research */
 .music-research-panel {
   position: fixed;
@@ -8084,6 +8503,18 @@ button {
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 24px 72px rgba(20, 42, 36, 0.24);
   backdrop-filter: blur(18px);
+}
+
+.music-research-panel.music-research-panel-embedded {
+  position: static;
+  width: 100%;
+  max-height: none;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .music-research-header {
@@ -8597,6 +9028,102 @@ button {
   box-shadow: 0 28px 78px rgba(0, 0, 0, 0.5);
 }
 
+:root[data-theme="dark"] .luna-panel {
+  border-color: #38504a;
+  color: #ecf5f2;
+  background: rgba(18, 27, 24, 0.98);
+  box-shadow: 0 28px 78px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="dark"] .luna-panel-title > span,
+:root[data-theme="dark"] .luna-mode-detail-heading > span,
+:root[data-theme="dark"] .luna-history-icon {
+  border-color: #3f645b;
+  color: #93e5d9;
+  background: #18372f;
+}
+
+:root[data-theme="dark"] .luna-panel-title small,
+:root[data-theme="dark"] .luna-mode-detail p,
+:root[data-theme="dark"] .luna-history header p,
+:root[data-theme="dark"] .luna-history-list span,
+:root[data-theme="dark"] .luna-history-list time,
+:root[data-theme="dark"] .luna-history-empty {
+  color: #93a39e;
+}
+
+:root[data-theme="dark"] .luna-panel-tabs {
+  border-color: #304039;
+}
+
+:root[data-theme="dark"] .luna-panel-tabs button {
+  color: #a5b5b0;
+}
+
+:root[data-theme="dark"] .luna-panel-tabs button.active,
+:root[data-theme="dark"] .luna-mode-strip button.active {
+  border-color: #3f766d;
+  color: #9de3d9;
+  background: #193a32;
+}
+
+:root[data-theme="dark"] .luna-mode-strip button {
+  border-color: #344841;
+  color: #a0afa9;
+  background: #151f1c;
+}
+
+:root[data-theme="dark"] .luna-context-badge {
+  border-color: #365c53;
+  color: #c8eee7;
+  background: #162e28;
+}
+
+:root[data-theme="dark"] .luna-context-badge > span {
+  color: #91ddd2;
+  background: #21433b;
+}
+
+:root[data-theme="dark"] .luna-context-badge small {
+  color: #79aaa1;
+}
+
+:root[data-theme="dark"] .luna-privacy-boundary {
+  border-color: #34463f;
+  color: #9dafaa;
+  background: #111815;
+}
+
+:root[data-theme="dark"] .luna-privacy-boundary strong,
+:root[data-theme="dark"] .luna-history-empty strong {
+  color: #e4eeeb;
+}
+
+:root[data-theme="dark"] .luna-history > header > span,
+:root[data-theme="dark"] .luna-history-list article,
+:root[data-theme="dark"] .luna-history-empty {
+  border-color: #344841;
+}
+
+:root[data-theme="dark"] .luna-history-list article {
+  background: #151f1c;
+}
+
+:root[data-theme="dark"] .luna-history-list article > button:last-child {
+  border-color: #344841;
+  color: #d5948e;
+}
+
+:root[data-theme="dark"] .luna-history-list article > button:hover,
+:root[data-theme="dark"] .luna-history-list article > button:focus-visible {
+  background: #1b2e29;
+}
+
+:root[data-theme="dark"] .music-research-panel.music-research-panel-embedded {
+  background: transparent;
+  box-shadow: none;
+}
+
 :root[data-theme="dark"] .music-research-mark {
   border-color: #3f645b;
   color: #93e5d9;
@@ -8734,6 +9261,17 @@ button {
     right: 10px;
     width: calc(100vw - 20px);
     max-height: calc(100vh - 74px);
+  }
+
+  .luna-panel {
+    top: 64px;
+    right: 10px;
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 74px);
+  }
+
+  .luna-mode-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .music-research-form small {
