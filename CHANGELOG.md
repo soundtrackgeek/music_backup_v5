@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.71.0] - 2026-07-24
+### Changed
+- Reworked Charts into a ranking-first workflow with search, view mode, ranking, direction, limit, genre, and year controls visible while the current chart begins in the first screen at desktop and the supported 1040px minimum width.
+- Consolidated chart-building and current-ranking Luna tools into one closed-by-default command area with task switching that preserves each panel's state.
+- Moved built-in presets, lifecycle, MusicBrainz, scoring, completeness, column, cover-size, and export controls into a closed-by-default Advanced drawer with an active hidden-control count.
+- Added focused progressive-disclosure and hidden-control summary coverage and synchronized app metadata at `0.71.0`.
+
 ## [0.70.1] - 2026-07-24
 ### Fixed
 - Reserved header-only space for Luna and details controls whenever the contextual sidebar is collapsed or drawer-based, preventing them from covering workspace actions without narrowing metrics or tables.

@@ -1,20 +1,35 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, SlidersHorizontal, Sparkles } from "lucide-react";
 
-type LunaCommandMode = "search" | "results";
+type LunaCommandMode = "build" | "results";
 
-export function SearchLunaCommandArea({
-  searchCommand,
+function LunaCommandArea({
+  idPrefix,
+  label,
+  description,
+  buildLabel,
+  resultsLabel,
+  buildCommand,
   resultsCommand,
 }: {
-  searchCommand: ReactNode;
+  idPrefix: string;
+  label: string;
+  description: string;
+  buildLabel: string;
+  resultsLabel: string;
+  buildCommand: ReactNode;
   resultsCommand: ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [mode, setMode] = useState<LunaCommandMode>("search");
+  const [mode, setMode] = useState<LunaCommandMode>("build");
+  const contentId = `${idPrefix}-luna-command-content`;
+  const buildTabId = `${idPrefix}-luna-build-tab`;
+  const buildPanelId = `${idPrefix}-luna-build-panel`;
+  const resultsTabId = `${idPrefix}-luna-results-tab`;
+  const resultsPanelId = `${idPrefix}-luna-results-panel`;
 
   return (
-    <section className="search-luna-command-area" aria-label="Luna commands">
+    <section className="search-luna-command-area" aria-label={label}>
       <header className="search-disclosure-header">
         <div className="search-disclosure-heading">
           <span className="search-disclosure-icon" aria-hidden="true">
@@ -22,13 +37,13 @@ export function SearchLunaCommandArea({
           </span>
           <span>
             <strong>Luna commands</strong>
-            <small>Build a search or ask about the current results.</small>
+            <small>{description}</small>
           </span>
         </div>
         <button
           className="search-disclosure-toggle"
           type="button"
-          aria-controls="search-luna-command-content"
+          aria-controls={contentId}
           aria-expanded={isOpen}
           onClick={() => setIsOpen((previous) => !previous)}
         >
@@ -38,7 +53,7 @@ export function SearchLunaCommandArea({
       </header>
 
       <div
-        id="search-luna-command-content"
+        id={contentId}
         className="search-luna-command-content"
         hidden={!isOpen}
       >
@@ -48,49 +63,128 @@ export function SearchLunaCommandArea({
           aria-label="Luna command"
         >
           <button
-            id="search-luna-search-tab"
-            className={mode === "search" ? "active" : ""}
+            id={buildTabId}
+            className={mode === "build" ? "active" : ""}
             type="button"
             role="tab"
-            aria-controls="search-luna-search-panel"
-            aria-selected={mode === "search"}
-            onClick={() => setMode("search")}
+            aria-controls={buildPanelId}
+            aria-selected={mode === "build"}
+            onClick={() => setMode("build")}
           >
-            Find and filter
+            {buildLabel}
           </button>
           <button
-            id="search-luna-results-tab"
+            id={resultsTabId}
             className={mode === "results" ? "active" : ""}
             type="button"
             role="tab"
-            aria-controls="search-luna-results-panel"
+            aria-controls={resultsPanelId}
             aria-selected={mode === "results"}
             onClick={() => setMode("results")}
           >
-            Ask these results
+            {resultsLabel}
           </button>
         </div>
 
         <div
-          id="search-luna-search-panel"
+          id={buildPanelId}
           className="search-luna-command-panel"
           role="tabpanel"
-          aria-labelledby="search-luna-search-tab"
-          hidden={mode !== "search"}
+          aria-labelledby={buildTabId}
+          hidden={mode !== "build"}
         >
-          {searchCommand}
+          {buildCommand}
         </div>
         <div
-          id="search-luna-results-panel"
+          id={resultsPanelId}
           className="search-luna-command-panel"
           role="tabpanel"
-          aria-labelledby="search-luna-results-tab"
+          aria-labelledby={resultsTabId}
           hidden={mode !== "results"}
         >
           {resultsCommand}
         </div>
       </div>
     </section>
+  );
+}
+
+export function SearchLunaCommandArea({
+  searchCommand,
+  resultsCommand,
+}: {
+  searchCommand: ReactNode;
+  resultsCommand: ReactNode;
+}) {
+  return (
+    <LunaCommandArea
+      idPrefix="search"
+      label="Luna commands"
+      description="Build a search or ask about the current results."
+      buildLabel="Find and filter"
+      resultsLabel="Ask these results"
+      buildCommand={searchCommand}
+      resultsCommand={resultsCommand}
+    />
+  );
+}
+
+export function ChartLunaCommandArea({
+  chartCommand,
+  resultsCommand,
+}: {
+  chartCommand: ReactNode;
+  resultsCommand: ReactNode;
+}) {
+  return (
+    <LunaCommandArea
+      idPrefix="chart"
+      label="Chart Luna commands"
+      description="Build a chart or ask about the current ranking."
+      buildLabel="Build a chart"
+      resultsLabel="Ask this chart"
+      buildCommand={chartCommand}
+      resultsCommand={resultsCommand}
+    />
+  );
+}
+
+function AdvancedDisclosure({
+  className,
+  title,
+  description,
+  activeCount,
+  children,
+}: {
+  className?: string;
+  title: string;
+  description: string;
+  activeCount: number;
+  children: ReactNode;
+}) {
+  return (
+    <details
+      className={["search-advanced-filters", className]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <summary>
+        <span className="search-disclosure-heading">
+          <span className="search-disclosure-icon" aria-hidden="true">
+            <SlidersHorizontal size={18} />
+          </span>
+          <span>
+            <strong>{title}</strong>
+            <small>{description}</small>
+          </span>
+        </span>
+        <span className="search-advanced-summary-meta">
+          <span>{activeCount > 0 ? `${activeCount} active` : "Optional"}</span>
+          <ChevronDown size={17} aria-hidden="true" />
+        </span>
+      </summary>
+      <div className="search-advanced-content">{children}</div>
+    </details>
   );
 }
 
@@ -102,25 +196,31 @@ export function SearchAdvancedFilters({
   children: ReactNode;
 }) {
   return (
-    <details className="search-advanced-filters">
-      <summary>
-        <span className="search-disclosure-heading">
-          <span className="search-disclosure-icon" aria-hidden="true">
-            <SlidersHorizontal size={18} />
-          </span>
-          <span>
-            <strong>Advanced filters</strong>
-            <small>
-              Lifecycle, MusicBrainz, metadata, file, and scoring controls.
-            </small>
-          </span>
-        </span>
-        <span className="search-advanced-summary-meta">
-          <span>{activeFilterCount > 0 ? `${activeFilterCount} active` : "Optional"}</span>
-          <ChevronDown size={17} aria-hidden="true" />
-        </span>
-      </summary>
-      <div className="search-advanced-content">{children}</div>
-    </details>
+    <AdvancedDisclosure
+      title="Advanced filters"
+      description="Lifecycle, MusicBrainz, metadata, file, and scoring controls."
+      activeCount={activeFilterCount}
+    >
+      {children}
+    </AdvancedDisclosure>
+  );
+}
+
+export function ChartAdvancedControls({
+  activeControlCount,
+  children,
+}: {
+  activeControlCount: number;
+  children: ReactNode;
+}) {
+  return (
+    <AdvancedDisclosure
+      className="chart-advanced-controls"
+      title="Advanced chart controls"
+      description="Presets, lifecycle, scoring, columns, and export settings."
+      activeCount={activeControlCount}
+    >
+      {children}
+    </AdvancedDisclosure>
   );
 }

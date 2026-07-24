@@ -291,6 +291,7 @@ import {
   useAdaptiveDetailsLayout,
   workspaceHasUsefulDetails,
 } from "./app/adaptiveDetails";
+import { countAdvancedChartControls } from "./app/chartProgressive";
 import { countAdvancedSearchFilters } from "./app/searchProgressive";
 import {
   formatMusicBrainzReviewState,
@@ -305,6 +306,8 @@ import { MusicResearchPanel } from "./components/MusicResearchPanel";
 import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
 import { GenreTimeline } from "./components/GenreTimeline";
 import {
+  ChartAdvancedControls,
+  ChartLunaCommandArea,
   SearchAdvancedFilters,
   SearchLunaCommandArea,
 } from "./components/SearchProgressiveDisclosure";
@@ -10727,6 +10730,8 @@ export default function App() {
     chartConfig.gridCoverSize,
   );
   const currentChartCompletenessRange = chartCompletenessRange(chartConfig);
+  const advancedChartControlCount =
+    countAdvancedChartControls(chartConfig);
   const discoveryMissionTotal =
     (discovery?.backlogMissions.length ?? 0) +
     (discovery?.smartMissions.length ?? 0);
@@ -11708,43 +11713,29 @@ export default function App() {
               />
             </section>
 
-            <NaturalLanguageQueryPanel
-              target="chart"
-              currentView="albums"
-              onApply={(compiled) => {
-                if (compiled.chartConfig) {
-                  setChartConfig(
-                    normalizeChartConfigForClient(compiled.chartConfig),
-                  );
-                  setChartTableSort(null);
-                  setChartError(null);
-                }
-              }}
+            <ChartLunaCommandArea
+              chartCommand={
+                <NaturalLanguageQueryPanel
+                  target="chart"
+                  currentView="albums"
+                  onApply={(compiled) => {
+                    if (compiled.chartConfig) {
+                      setChartConfig(
+                        normalizeChartConfigForClient(compiled.chartConfig),
+                      );
+                      setChartTableSort(null);
+                      setChartError(null);
+                    }
+                  }}
+                />
+              }
+              resultsCommand={
+                <CurrentViewQuestionPanel
+                  context="chart"
+                  request={chartRequest}
+                />
+              }
             />
-
-            <CurrentViewQuestionPanel context="chart" request={chartRequest} />
-
-            <section
-              className="chart-template-panel"
-              aria-label="Built-in charts"
-            >
-              {chartTemplates.map((template) => {
-                const Icon = template.icon;
-                return (
-                  <button
-                    type="button"
-                    key={template.id}
-                    onClick={() => applyChartTemplate(template)}
-                  >
-                    <Icon size={17} />
-                    <span>
-                      <strong>{template.label}</strong>
-                      <small>{template.description}</small>
-                    </span>
-                  </button>
-                );
-              })}
-            </section>
 
             <section className="query-panel chart-builder">
               <div className="search-row">
@@ -11787,7 +11778,48 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="filter-grid">
+              <div
+                className="filter-grid chart-common-filter-grid"
+                aria-label="Common chart controls"
+              >
+                <SelectField
+                  label="Ranking"
+                  value={chartConfig.rankingMetric}
+                  onChange={(rankingMetric) =>
+                    updateChartConfig({ rankingMetric })
+                  }
+                  options={rankingOptions}
+                />
+                <SelectField
+                  label="Direction"
+                  value={chartConfig.sortDirection}
+                  onChange={(sortDirection) =>
+                    updateChartConfig({
+                      sortDirection: sortDirection as "asc" | "desc",
+                    })
+                  }
+                  options={[
+                    { value: "desc", label: "Descending" },
+                    { value: "asc", label: "Ascending" },
+                  ]}
+                />
+                <NumberField
+                  label="Limit"
+                  value={chartConfig.resultLimit}
+                  min={10}
+                  max={500}
+                  onChange={(value) =>
+                    updateChartConfig({ resultLimit: value ?? 50 })
+                  }
+                />
+                <GenreListCriterion
+                  label="Genres"
+                  values={chartConfig.request.filters.genres}
+                  onChange={(genres) => updateChartFilters({ genres })}
+                  genreOptions={genreSuggestionOptions}
+                  onRequestOptions={requestGenreSuggestionRefresh}
+                  placeholder="Synthpop, AOR"
+                />
                 <NumberField
                   label="Year from"
                   value={chartConfig.request.filters.yearFrom}
@@ -11798,6 +11830,42 @@ export default function App() {
                   value={chartConfig.request.filters.yearTo}
                   onChange={(value) => updateChartFilters({ yearTo: value })}
                 />
+              </div>
+
+              <ChartAdvancedControls
+                activeControlCount={advancedChartControlCount}
+              >
+                <div className="chart-advanced-section-heading">
+                  <div>
+                    <strong>Built-in charts</strong>
+                    <small>
+                      Start from a focused ranking, then refine any control.
+                    </small>
+                  </div>
+                </div>
+                <section
+                  className="chart-template-panel"
+                  aria-label="Built-in charts"
+                >
+                  {chartTemplates.map((template) => {
+                    const Icon = template.icon;
+                    return (
+                      <button
+                        type="button"
+                        key={template.id}
+                        onClick={() => applyChartTemplate(template)}
+                      >
+                        <Icon size={17} />
+                        <span>
+                          <strong>{template.label}</strong>
+                          <small>{template.description}</small>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </section>
+
+                <div className="filter-grid chart-advanced-filter-grid">
                 <NumberField
                   label="Billboard min"
                   value={chartConfig.request.filters.billboardRankMin}
@@ -11813,14 +11881,6 @@ export default function App() {
                   onChange={(value) =>
                     updateChartFilters({ billboardRankMax: value })
                   }
-                />
-                <GenreListCriterion
-                  label="Genres"
-                  values={chartConfig.request.filters.genres}
-                  onChange={(genres) => updateChartFilters({ genres })}
-                  genreOptions={genreSuggestionOptions}
-                  onRequestOptions={requestGenreSuggestionRefresh}
-                  placeholder="Synthpop, AOR"
                 />
                 <GenreListCriterion
                   label="Exclude genres"
@@ -11992,36 +12052,6 @@ export default function App() {
                     updateChartFilters({ lovedTracksMax: value })
                   }
                 />
-                <SelectField
-                  label="Ranking"
-                  value={chartConfig.rankingMetric}
-                  onChange={(rankingMetric) =>
-                    updateChartConfig({ rankingMetric })
-                  }
-                  options={rankingOptions}
-                />
-                <SelectField
-                  label="Direction"
-                  value={chartConfig.sortDirection}
-                  onChange={(sortDirection) =>
-                    updateChartConfig({
-                      sortDirection: sortDirection as "asc" | "desc",
-                    })
-                  }
-                  options={[
-                    { value: "desc", label: "Descending" },
-                    { value: "asc", label: "Ascending" },
-                  ]}
-                />
-                <NumberField
-                  label="Limit"
-                  value={chartConfig.resultLimit}
-                  min={10}
-                  max={500}
-                  onChange={(value) =>
-                    updateChartConfig({ resultLimit: value ?? 50 })
-                  }
-                />
                 <CompletenessRangeCriterion
                   minValue={currentChartCompletenessRange.min}
                   maxValue={currentChartCompletenessRange.max}
@@ -12135,6 +12165,7 @@ export default function App() {
                   <span>Origin country export column</span>
                 </label>
               </div>
+              </ChartAdvancedControls>
             </section>
 
             <section className="table-panel" aria-label="Chart results">
