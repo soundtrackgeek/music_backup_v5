@@ -19,7 +19,6 @@ export function countAdvancedSearchFilters(
     view === "albums"
       ? hasText(filters.displayArtist)
       : hasText(filters.albumArtist),
-    filters.excludedGenres.length > 0,
     hasText(filters.publisher),
     filters.hasTrackText.trim().length > 0,
     hasRange(filters.billboardRankMin, filters.billboardRankMax),
@@ -32,12 +31,8 @@ export function countAdvancedSearchFilters(
     hasRange(filters.totalMinutesMin, filters.totalMinutesMax),
     hasRange(filters.trackCountMin, filters.trackCountMax),
     hasRange(filters.ratedTracksMin, filters.ratedTracksMax),
-    view === "albums"
-      ? filters.albumRatingMax != null
-      : hasRange(filters.albumRatingMin, filters.albumRatingMax),
-    view === "tracks"
-      ? filters.trackRatingMax != null
-      : hasRange(filters.trackRatingMin, filters.trackRatingMax),
+    hasRange(filters.albumRatingMin, filters.albumRatingMax),
+    hasRange(filters.trackRatingMin, filters.trackRatingMax),
     hasRange(
       filters.ratingCompletenessMin,
       filters.ratingCompletenessMax,

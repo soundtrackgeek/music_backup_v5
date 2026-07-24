@@ -13,6 +13,7 @@ const defaultVisibleColumns = [
   "loved",
 ];
 const defaultExportColumns = ["calculated"];
+const defaultResultLimit = 50;
 
 function hasText(filter: TextFilter) {
   return filter.value.trim().length > 0;
@@ -33,8 +34,8 @@ export function countAdvancedChartControls(config: ChartConfig) {
   const filters = config.request.filters;
   const completeness = chartCompletenessRange(config);
   const advancedGroups = [
+    config.resultLimit !== defaultResultLimit,
     hasRange(filters.billboardRankMin, filters.billboardRankMax),
-    filters.excludedGenres.length > 0,
     filters.originCountryCodes.length > 0,
     filters.excludedOriginCountryCodes.length > 0,
     filters.artistType.trim().length > 0,

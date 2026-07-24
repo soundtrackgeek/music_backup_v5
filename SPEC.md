@@ -3,7 +3,7 @@
 Last updated: 2026-07-24
 Status: Living product and implementation contract
 Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, an aggregate-only Statistics Library analyst, a reviewable local Playlist Builder, verified outside-library artist/album/song Discovery, and global context-aware Music Research with cited web search are implemented through Luna-generated typed recipes/function calls, bounded external tools, and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
-Current package version: 0.76.0
+Current package version: 0.76.1
 SQLite schema version: 26
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.

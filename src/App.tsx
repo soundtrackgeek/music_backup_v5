@@ -12465,15 +12465,6 @@ export default function App() {
                     { value: "asc", label: "Ascending" },
                   ]}
                 />
-                <NumberField
-                  label="Limit"
-                  value={chartConfig.resultLimit}
-                  min={10}
-                  max={500}
-                  onChange={(value) =>
-                    updateChartConfig({ resultLimit: value ?? 50 })
-                  }
-                />
                 <GenreListCriterion
                   label="Genres"
                   values={chartConfig.request.filters.genres}
@@ -12491,6 +12482,15 @@ export default function App() {
                   label="Year to"
                   value={chartConfig.request.filters.yearTo}
                   onChange={(value) => updateChartFilters({ yearTo: value })}
+                />
+                <GenreListCriterion
+                  label="Exclude genres"
+                  values={chartConfig.request.filters.excludedGenres}
+                  onChange={(excludedGenres) =>
+                    updateChartFilters({ excludedGenres })
+                  }
+                  genreOptions={genreSuggestionOptions}
+                  onRequestOptions={requestGenreSuggestionRefresh}
                 />
               </div>
 
@@ -12529,6 +12529,15 @@ export default function App() {
 
                 <div className="filter-grid chart-advanced-filter-grid">
                 <NumberField
+                  label="Limit"
+                  value={chartConfig.resultLimit}
+                  min={10}
+                  max={500}
+                  onChange={(value) =>
+                    updateChartConfig({ resultLimit: value ?? 50 })
+                  }
+                />
+                <NumberField
                   label="Billboard min"
                   value={chartConfig.request.filters.billboardRankMin}
                   min={1}
@@ -12543,15 +12552,6 @@ export default function App() {
                   onChange={(value) =>
                     updateChartFilters({ billboardRankMax: value })
                   }
-                />
-                <GenreListCriterion
-                  label="Exclude genres"
-                  values={chartConfig.request.filters.excludedGenres}
-                  onChange={(excludedGenres) =>
-                    updateChartFilters({ excludedGenres })
-                  }
-                  genreOptions={genreSuggestionOptions}
-                  onRequestOptions={requestGenreSuggestionRefresh}
                 />
                 <CountryListCriterion
                   label="Origin countries"
@@ -16836,24 +16836,14 @@ export default function App() {
                   value={currentFilters.yearTo}
                   onChange={(value) => updateFilter("yearTo", value)}
                 />
-                <NumberField
-                  label={
-                    request.view === "albums"
-                      ? "Album rating min"
-                      : "Track rating min"
+                <GenreListCriterion
+                  label="Exclude genres"
+                  values={currentFilters.excludedGenres}
+                  onChange={(excludedGenres) =>
+                    updateFilter("excludedGenres", excludedGenres)
                   }
-                  value={
-                    request.view === "albums"
-                      ? currentFilters.albumRatingMin
-                      : currentFilters.trackRatingMin
-                  }
-                  min={0}
-                  max={request.view === "albums" ? 100 : 5}
-                  onChange={(value) =>
-                    request.view === "albums"
-                      ? updateFilter("albumRatingMin", value)
-                      : updateFilter("trackRatingMin", value)
-                  }
+                  genreOptions={genreSuggestionOptions}
+                  onRequestOptions={requestGenreSuggestionRefresh}
                 />
               </div>
 
@@ -16892,15 +16882,6 @@ export default function App() {
                       />
                     </>
                   )}
-                <GenreListCriterion
-                  label="Exclude genres"
-                  values={currentFilters.excludedGenres}
-                  onChange={(excludedGenres) =>
-                    updateFilter("excludedGenres", excludedGenres)
-                  }
-                  genreOptions={genreSuggestionOptions}
-                  onRequestOptions={requestGenreSuggestionRefresh}
-                />
                 <CountryListCriterion
                   label="Origin countries"
                   values={currentFilters.originCountryCodes}
@@ -17093,15 +17074,13 @@ export default function App() {
                   onChange={(value) => updateFilter("ratedTracksMax", value)}
                 />
 
-                {request.view === "tracks" ? (
-                  <NumberField
-                    label="Album rating min"
-                    value={currentFilters.albumRatingMin}
-                    min={0}
-                    max={100}
-                    onChange={(value) => updateFilter("albumRatingMin", value)}
-                  />
-                ) : null}
+                <NumberField
+                  label="Album rating min"
+                  value={currentFilters.albumRatingMin}
+                  min={0}
+                  max={100}
+                  onChange={(value) => updateFilter("albumRatingMin", value)}
+                />
                 <NumberField
                   label="Album rating max"
                   value={currentFilters.albumRatingMax}
@@ -17109,15 +17088,13 @@ export default function App() {
                   max={100}
                   onChange={(value) => updateFilter("albumRatingMax", value)}
                 />
-                {request.view === "albums" ? (
-                  <NumberField
-                    label="Track rating min"
-                    value={currentFilters.trackRatingMin}
-                    min={0}
-                    max={5}
-                    onChange={(value) => updateFilter("trackRatingMin", value)}
-                  />
-                ) : null}
+                <NumberField
+                  label="Track rating min"
+                  value={currentFilters.trackRatingMin}
+                  min={0}
+                  max={5}
+                  onChange={(value) => updateFilter("trackRatingMin", value)}
+                />
                 <NumberField
                   label="Track rating max"
                   value={currentFilters.trackRatingMax}

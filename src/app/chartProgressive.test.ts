@@ -10,12 +10,21 @@ describe("progressive Charts control summary", () => {
 
     config.rankingMetric = "lovedTracks";
     config.sortDirection = "asc";
-    config.resultLimit = 25;
     config.request.filters.genres = ["Synthpop"];
     config.request.filters.yearFrom = 1980;
     config.request.filters.yearTo = 1989;
+    config.request.filters.excludedGenres = ["Comedy"];
 
     expect(countAdvancedChartControls(config)).toBe(baseline);
+  });
+
+  it("counts the result limit as an advanced control", () => {
+    const config = createChartConfig();
+    const baseline = countAdvancedChartControls(config);
+
+    config.resultLimit = 25;
+
+    expect(countAdvancedChartControls(config)).toBe(baseline + 1);
   });
 
   it("counts grouped long-tail chart filters once per control group", () => {

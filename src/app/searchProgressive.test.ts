@@ -11,7 +11,7 @@ describe("progressive Search filter summary", () => {
     filters.genres = ["Synthpop"];
     filters.yearFrom = 1987;
     filters.yearTo = 1987;
-    filters.albumRatingMin = 80;
+    filters.excludedGenres = ["Comedy"];
 
     expect(countAdvancedSearchFilters(filters, "albums")).toBe(0);
   });
@@ -27,13 +27,16 @@ describe("progressive Search filter summary", () => {
     expect(countAdvancedSearchFilters(filters, "albums")).toBe(4);
   });
 
-  it("treats track rating minimum as common and its maximum as advanced", () => {
+  it("counts rating ranges as advanced controls", () => {
     const filters = createFilters();
     filters.trackRatingMin = 3;
 
-    expect(countAdvancedSearchFilters(filters, "tracks")).toBe(0);
+    expect(countAdvancedSearchFilters(filters, "tracks")).toBe(1);
 
     filters.trackRatingMax = 5;
     expect(countAdvancedSearchFilters(filters, "tracks")).toBe(1);
+
+    filters.albumRatingMin = 80;
+    expect(countAdvancedSearchFilters(filters, "tracks")).toBe(2);
   });
 });

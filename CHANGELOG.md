@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.76.1] - 2026-07-24
+### Changed
+- Promoted **Exclude genres** into the six always-visible Search filters and moved the displaced rating minimum controls into **Advanced filters**.
+- Matched Charts to the Search layout with **Genres** in the top-right, **Year from**, **Year to**, and **Exclude genres** on the second row, and **Limit** in **Advanced chart controls**.
+- Updated hidden-control summaries and synchronized app metadata at `0.76.1`.
+
 ## [0.76.0] - 2026-07-24
 ### Added
 - Added guided Whitespace Anomalies repair with exact affected-row before/after diffs, per-repair high-confidence labels, and an explicit warning that MusicBee TSV rows and audio tags remain unchanged.
