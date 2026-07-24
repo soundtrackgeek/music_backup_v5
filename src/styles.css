@@ -5330,6 +5330,508 @@ button {
   text-align: right;
 }
 
+.music-tool-repair-panel {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 14px;
+  border: 1px solid #cfe0da;
+  border-radius: 12px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(34, 145, 132, 0.09), transparent 34%),
+    #f8fbfa;
+}
+
+.music-tool-repair-panel.report-only {
+  gap: 12px;
+  background:
+    radial-gradient(circle at top right, rgba(184, 138, 52, 0.08), transparent 32%),
+    #fbfcfb;
+}
+
+.music-tool-repair-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.details-drawer-layout .music-tool-repair-heading {
+  padding-right: 52px;
+}
+
+.music-tool-repair-heading > div {
+  min-width: 0;
+}
+
+.music-tool-repair-heading .eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: #0d756c;
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.music-tool-repair-heading h3 {
+  margin: 0;
+  color: #25342f;
+  font-size: 17px;
+  line-height: 23px;
+}
+
+.music-tool-repair-heading p {
+  max-width: 760px;
+  margin: 4px 0 0;
+  color: #687570;
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.repair-confidence {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #bcdcd4;
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: #09675f;
+  background: #e9f6f2;
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.repair-confidence.manual {
+  border-color: #e5d8b9;
+  color: #72591f;
+  background: #faf3df;
+}
+
+.repair-steps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.repair-steps > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid #dbe5e1;
+  border-radius: 9px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.repair-steps > div > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #70807a;
+  background: #edf2f0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.repair-steps > div.complete {
+  border-color: #bcdcd4;
+  background: #eef8f5;
+}
+
+.repair-steps > div.complete > span {
+  color: #ffffff;
+  background: #168277;
+}
+
+.repair-steps strong,
+.repair-steps small {
+  display: block;
+}
+
+.repair-steps strong {
+  color: #2c3935;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.repair-steps small {
+  margin-top: 1px;
+  color: #77847f;
+  font-size: 9px;
+  line-height: 12px;
+}
+
+.repair-steps > svg {
+  color: #91a19b;
+}
+
+.repair-source-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #ead8a8;
+  border-radius: 9px;
+  padding: 11px 12px;
+  color: #715719;
+  background: #fff8e8;
+}
+
+.repair-source-warning svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.repair-source-warning strong,
+.repair-source-warning span {
+  display: block;
+}
+
+.repair-source-warning strong {
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.repair-source-warning span {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.repair-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.repair-actions button,
+.repair-history-list button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  border: 1px solid #cddbd6;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #31403b;
+  background: #ffffff;
+  font: inherit;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.repair-actions button.primary {
+  border-color: #168277;
+  color: #ffffff;
+  background: #168277;
+}
+
+.repair-actions button:disabled,
+.repair-history-list button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.repair-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #c9ded8;
+  border-radius: 9px;
+  padding: 11px 12px;
+  color: #24534d;
+  background: #eff8f5;
+}
+
+.repair-summary.applied {
+  border-color: #a9d6cc;
+  background: #e8f7f2;
+}
+
+.repair-summary > svg {
+  margin-top: 1px;
+}
+
+.repair-summary strong,
+.repair-summary span,
+.repair-summary small {
+  display: block;
+}
+
+.repair-summary strong {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.repair-summary span {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.repair-summary small {
+  margin-top: 3px;
+  color: #5e716b;
+  font-size: 9px;
+  line-height: 13px;
+  overflow-wrap: anywhere;
+}
+
+.repair-summary > .repair-confidence {
+  display: inline-flex;
+  margin: 0;
+}
+
+.repair-diff-list {
+  display: grid;
+  gap: 8px;
+}
+
+.repair-diff-list article {
+  border: 1px solid #d7e2de;
+  border-radius: 9px;
+  padding: 11px;
+  background: #ffffff;
+}
+
+.repair-diff-list article > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+
+.repair-diff-list article > header strong,
+.repair-diff-list article > header span {
+  display: block;
+}
+
+.repair-diff-list article > header strong {
+  color: #2c3935;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.repair-diff-list article > header span:not(.repair-confidence) {
+  margin-top: 1px;
+  color: #71807b;
+  font-size: 9px;
+  line-height: 13px;
+}
+
+.repair-field-diffs {
+  display: grid;
+  gap: 5px;
+}
+
+.repair-field-diffs > div {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.repair-field-diffs > div > span {
+  color: #65736e;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.repair-field-diffs code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: #39433f;
+  background: #f2f5f4;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 9px;
+  line-height: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repair-field-diffs code:last-child {
+  color: #0b665e;
+  background: #eaf6f2;
+}
+
+.repair-field-diffs svg {
+  color: #879690;
+}
+
+.repair-diff-limit {
+  margin: 2px 0 0;
+  color: #6d7b76;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.music-tool-repair-error {
+  margin: 0;
+}
+
+.repair-history {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #dbe5e1;
+  padding-top: 12px;
+}
+
+.repair-history-heading,
+.repair-history-heading > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.repair-history-heading > div {
+  justify-content: flex-start;
+}
+
+.repair-history-heading strong,
+.repair-history-heading span {
+  display: block;
+}
+
+.repair-history-heading strong {
+  color: #2d3a36;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.repair-history-heading span {
+  color: #77847f;
+  font-size: 9px;
+  line-height: 13px;
+}
+
+.repair-history-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #73817c;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.repair-history-list {
+  display: grid;
+  gap: 6px;
+}
+
+.repair-history-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #dce5e2;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.repair-history-list strong,
+.repair-history-list span,
+.repair-history-list small {
+  display: block;
+}
+
+.repair-history-list strong {
+  color: #2e3b37;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.repair-history-list article > div > span,
+.repair-history-list small {
+  color: #75827d;
+  font-size: 9px;
+  line-height: 13px;
+}
+
+.repair-history-status {
+  border-radius: 999px;
+  padding: 4px 7px;
+  color: #0c675f;
+  background: #e7f5f1;
+  font-size: 9px;
+  line-height: 12px;
+  font-weight: 760;
+  text-transform: capitalize;
+}
+
+.repair-history-status.undone {
+  color: #68736f;
+  background: #edf1ef;
+}
+
+.repair-history-list button {
+  min-height: 30px;
+  padding: 0 9px;
+}
+
+@media (max-width: 900px) {
+  .music-tool-repair-heading {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .repair-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .repair-steps > svg {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .repair-summary {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .repair-summary > .repair-confidence {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .repair-field-diffs > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .repair-field-diffs svg {
+    transform: rotate(90deg);
+  }
+
+  .repair-history-list article {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .repair-history-list button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
 .settings-grid {
   display: block;
 }
@@ -9312,6 +9814,111 @@ button {
 
 :root[data-theme="dark"] .settings-section-heading {
   border-color: #304039;
+}
+
+:root[data-theme="dark"] .music-tool-repair-panel {
+  border-color: #304a42;
+  background:
+    radial-gradient(circle at top right, rgba(45, 166, 150, 0.12), transparent 34%),
+    #131d1a;
+}
+
+:root[data-theme="dark"] .music-tool-repair-panel.report-only {
+  background:
+    radial-gradient(circle at top right, rgba(193, 148, 62, 0.1), transparent 32%),
+    #151d1a;
+}
+
+:root[data-theme="dark"] .music-tool-repair-heading h3,
+:root[data-theme="dark"] .repair-steps strong,
+:root[data-theme="dark"] .repair-diff-list article > header strong,
+:root[data-theme="dark"] .repair-history-heading strong,
+:root[data-theme="dark"] .repair-history-list strong {
+  color: #e4eeeb;
+}
+
+:root[data-theme="dark"] .music-tool-repair-heading p,
+:root[data-theme="dark"] .repair-steps small,
+:root[data-theme="dark"] .repair-diff-list article > header span:not(.repair-confidence),
+:root[data-theme="dark"] .repair-history-heading span,
+:root[data-theme="dark"] .repair-history-list article > div > span,
+:root[data-theme="dark"] .repair-history-list small,
+:root[data-theme="dark"] .repair-history-empty {
+  color: #91a19b;
+}
+
+:root[data-theme="dark"] .repair-steps > div,
+:root[data-theme="dark"] .repair-diff-list article,
+:root[data-theme="dark"] .repair-history-list article {
+  border-color: #31463f;
+  background: #17221e;
+}
+
+:root[data-theme="dark"] .repair-steps > div.complete {
+  border-color: #386a60;
+  background: #19342d;
+}
+
+:root[data-theme="dark"] .repair-steps > div > span {
+  color: #9aaba5;
+  background: #26342f;
+}
+
+:root[data-theme="dark"] .repair-source-warning {
+  border-color: #6a562d;
+  color: #e6ca87;
+  background: #2c2618;
+}
+
+:root[data-theme="dark"] .repair-actions button,
+:root[data-theme="dark"] .repair-history-list button {
+  border-color: #3a4d46;
+  color: #d6e2de;
+  background: #1b2723;
+}
+
+:root[data-theme="dark"] .repair-actions button.primary {
+  border-color: #239589;
+  color: #f4fffc;
+  background: #168277;
+}
+
+:root[data-theme="dark"] .repair-summary {
+  border-color: #35655b;
+  color: #b9e4da;
+  background: #18332d;
+}
+
+:root[data-theme="dark"] .repair-summary small {
+  color: #9db0a9;
+}
+
+:root[data-theme="dark"] .repair-field-diffs > div > span {
+  color: #95a59f;
+}
+
+:root[data-theme="dark"] .repair-field-diffs code {
+  color: #d4dfdc;
+  background: #202d28;
+}
+
+:root[data-theme="dark"] .repair-field-diffs code:last-child {
+  color: #a9e8dc;
+  background: #193a32;
+}
+
+:root[data-theme="dark"] .repair-history {
+  border-color: #304039;
+}
+
+:root[data-theme="dark"] .repair-history-status {
+  color: #a9e8dc;
+  background: #193a32;
+}
+
+:root[data-theme="dark"] .repair-history-status.undone {
+  color: #a4b0ac;
+  background: #27322e;
 }
 
 :root[data-theme="dark"] .music-research-mark {

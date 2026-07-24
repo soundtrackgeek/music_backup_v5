@@ -1,10 +1,10 @@
 # Music Library Living Specification and Roadmap
 
-Last updated: 2026-07-17
+Last updated: 2026-07-24
 Status: Living product and implementation contract
 Current implementation: Natural-language Search and Charts, bounded questions about the active filtered view, an aggregate-only Statistics Library analyst, a reviewable local Playlist Builder, verified outside-library artist/album/song Discovery, and global context-aware Music Research with cited web search are implemented through Luna-generated typed recipes/function calls, bounded external tools, and local SQLite execution, with secure Windows API-key storage and the existing MusicBrainz/test architecture slices complete
-Current package version: 0.62.0
-SQLite schema version: 23
+Current package version: 0.76.0
+SQLite schema version: 26
 
 This document is the source of truth for what the app is, what is already implemented, and what should happen next. Keep `README.md` focused on how to install, run, test, and understand the released feature set. Keep `CHANGELOG.md` focused on dated release changes. Keep this file focused on product intent, behavioral contracts, architecture boundaries, and the roadmap.
 
@@ -59,7 +59,7 @@ Core principles:
 | Albums | Implemented | Album index, album filters, detail drill-down, track lists, and album-level exports. |
 | Artists | Implemented | Album-artist index, artist summary stats, album lists, cover board, MusicBrainz pure-official-album discography status, and exports. |
 | Genres | Implemented | Canonical-genre index, genre summary stats, album lists, and exports. |
-| Tools | Implemented | Query-backed validation issue lists, severity, progress, pagination, sorting, counts, exports, and guarded whitespace cleanup. |
+| Tools | Implemented | Query-backed validation issue lists, severity, progress, pagination, sorting, counts, exports, and guided whitespace repair with exact diffs, history, and undo. |
 | Imports | Implemented | MusicBee TSV import, cover art import, Billboard album CSV import, Billboard singles CSV import, progress, and import history. |
 | Settings | Implemented | Secure Windows OpenAI key storage, theme, backup retention, backup restore, Performance Proof diagnostics, MusicBrainz cache status, country flag display, and default left/right sidebar visibility. |
 
@@ -447,7 +447,8 @@ Expected next backend modularization:
 - Query-backed issue counts and affected rows.
 - Severity, progress, filtering, sorting, pagination, affected album/track counts, and exports.
 - Validators for duplicate albums, missing cover image records, missing Billboard albums/singles, duplicates within album, invalid times, non-numeric ratings, missing tags, non-MP3 files, year anomalies, ratings out of range, track/disc issues, inconsistent metadata, whitespace anomalies, genre normalization issues, conflicting album artists, and multiple years per album.
-- Whitespace Anomalies can preview and apply a guarded local database cleanup for visible issue rows.
+- Whitespace Anomalies provides a guided local repair with exact field-level diffs, high-confidence labels, source-vs-local warnings, backup-before-apply, persistent history, and conflict-aware undo.
+- Validators without a deterministic safe repair remain report-only and direct corrections to MusicBee or the audio-tag source.
 
 ### Phase 9: Cover Art
 
@@ -690,20 +691,17 @@ Candidate work:
 - Audit indexes after Billboard and Discovery growth.
 - Add developer log export.
 
-#### Phase 22: Expanded Music Tools Fix Actions
+#### Phase 22: Guided Music Tools Repair (completed in 0.76.0)
 
-Expected outcome:
+Delivered:
 
 - Music Tools can move from detection to guided cleanup without risking the library.
-
-Candidate work:
-
-- More dry-run fix plans.
-- Backups before every mutating fix action.
-- Reviewable affected-row lists.
-- Fix history.
-- Undo/restore path.
-- Safe fixes for duplicate position reports and metadata normalization suggestions.
+- Whitespace Anomalies previews exact track and affected-album field changes before any write.
+- Repairs expose high-confidence labels and warn that the app-local SQLite change does not modify MusicBee TSV rows or audio tags.
+- Apply is locked to the reviewed affected-row set and creates a pre-fix database backup.
+- SQLite schema version 26 persists repair history, counts, timestamps, backup paths, status, and exact before/after diffs.
+- One-click undo creates a pre-undo safety backup and restores only recorded fields that still match the repair result; later edits cause a conflict instead of being overwritten.
+- Ambiguous validators stay report-only with source-repair guidance rather than receiving speculative automatic fixes.
 
 #### Phase 23: Local MusicBrainz Discography Enrichment
 

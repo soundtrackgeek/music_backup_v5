@@ -150,12 +150,15 @@ import type {
   GenreListResponse,
   GenreSummary,
   MusicToolFixRequest,
+  MusicToolFixDiff,
+  MusicToolFixHistoryEntry,
   MusicToolFixSummary,
   MusicToolIssueRequest,
   MusicToolIssueResponse,
   MusicToolIssueRow,
   MusicToolProgress,
   MusicToolSummary,
+  MusicToolUndoSummary,
   MusicBrainzArtistDiscographyResponse,
   MusicBrainzArtistExportRequest,
   MusicBrainzArtistInfoImportProgress,
@@ -185,6 +188,14 @@ let mockWishListItems: WishListItem[] = [];
 let mockPreparedImport: ImportPreview | null = null;
 let mockImportCancellationRequested = false;
 const mockImportProgressHandlers = new Set<(progress: ImportProgress) => void>();
+let mockMusicToolFixHistory: MusicToolFixHistoryEntry[] = [];
+let mockMusicToolFixSequence = 1;
+const mockMusicToolFixSnapshots = new Map<
+  number,
+  { issues: MusicToolIssueRow[]; diffs: MusicToolFixDiff[] }
+>();
+const mockMusicToolSourceWarning =
+  "This repair changes only the app-local SQLite library. MusicBee TSV rows and audio tags remain unchanged, so re-importing the same source can restore the original spacing.";
 
 function emitMockImportProgress(progress: ImportProgress) {
   for (const handler of mockImportProgressHandlers) {
@@ -2409,6 +2420,85 @@ export async function fixMusicToolIssues(input: MusicToolFixRequest) {
       );
     }
 
+    const compact = (value: string | null | undefined) =>
+      value == null ? null : value.replace(/\s+/g, " ");
+    const countLabel = (count: number, singular: string, plural: string) =>
+      `${count} ${count === 1 ? singular : plural}`;
+    const diffs: MusicToolFixDiff[] = fixableRows.flatMap((issue) => {
+      const trackCandidates: Array<
+        [string, string, string | null | undefined]
+      > = [
+        ["album_artist_display", "Album artist", issue.albumArtistDisplay],
+        ["album", "Album", issue.album],
+        ["title", "Track title", issue.title],
+        ["canonical_genre", "Canonical genre", issue.canonicalGenre],
+        ["file_path", "File path", issue.filePath],
+        ["filename", "Filename", issue.filename],
+      ];
+      const trackChanges = trackCandidates.flatMap(
+        ([field, label, before]) => {
+          const after = compact(before);
+          return before !== after
+            ? [{ field, label, before: before ?? null, after }]
+            : [];
+        },
+      );
+      const albumCandidates: Array<
+        [string, string, string | null | undefined]
+      > = [
+        ["album_artist_display", "Album artist", issue.albumArtistDisplay],
+        ["album", "Album", issue.album],
+        ["canonical_genre", "Canonical genre", issue.canonicalGenre],
+      ];
+      const albumChanges = albumCandidates.flatMap(
+        ([field, label, before]) => {
+          const after = compact(before);
+          return before !== after
+            ? [{ field, label, before: before ?? null, after }]
+            : [];
+        },
+      );
+      return [
+        ...(trackChanges.length > 0
+          ? [
+              {
+                id: `tracks:${issue.trackId}`,
+                entityType: "tracks" as const,
+                entityId: String(issue.trackId),
+                albumId: issue.albumId,
+                trackId: issue.trackId,
+                label: issue.title ?? issue.filename ?? "Affected track",
+                context: [issue.albumArtistDisplay, issue.album]
+                  .filter(Boolean)
+                  .join(" / "),
+                confidence: "high" as const,
+                sourceWarning: mockMusicToolSourceWarning,
+                changes: trackChanges,
+              },
+            ]
+          : []),
+        ...(albumChanges.length > 0
+          ? [
+              {
+                id: `albums:${issue.albumId}`,
+                entityType: "albums" as const,
+                entityId: issue.albumId,
+                albumId: issue.albumId,
+                trackId: null,
+                label: issue.album ?? "Affected album",
+                context: issue.albumArtistDisplay,
+                confidence: "high" as const,
+                sourceWarning: `Derived app-local album metadata will be updated. ${mockMusicToolSourceWarning}`,
+                changes: albumChanges,
+              },
+            ]
+          : []),
+      ];
+    });
+    const repairId =
+      input.apply && fixableRows.length > 0
+        ? mockMusicToolFixSequence++
+        : null;
     if (input.apply) {
       setMockMusicToolIssues(
         mockMusicToolIssues.filter(
@@ -2426,14 +2516,56 @@ export async function fixMusicToolIssues(input: MusicToolFixRequest) {
                 trackCount: Math.max(0, tool.trackCount - fixableRows.length),
               }
             : tool,
-        ),
+          ),
       );
+      if (repairId != null) {
+        const now = new Date().toISOString();
+        const message = `Compacted whitespace for ${countLabel(fixableRows.length, "track", "tracks")} and ${countLabel(fixableRows.length > 0 ? 1 : 0, "album", "albums")}.`;
+        mockMusicToolFixSnapshots.set(repairId, {
+          issues: fixableRows.map((issue) => ({ ...issue })),
+          diffs,
+        });
+        mockMusicToolFixHistory = [
+          {
+            id: repairId,
+            toolId: input.toolId,
+            toolLabel: "Whitespace anomalies",
+            action: "compact-whitespace",
+            status: "applied",
+            confidence: "high",
+            requestedCount: requestedIds.size,
+            fixableCount: fixableRows.length,
+            affectedAlbumCount: new Set(
+              fixableRows.map((issue) => issue.albumId),
+            ).size,
+            affectedTrackCount: new Set(
+              fixableRows
+                .map((issue) => issue.trackId)
+                .filter((trackId) => trackId != null),
+            ).size,
+            changedAlbumCount: fixableRows.length > 0 ? 1 : 0,
+            changedTrackCount: fixableRows.length,
+            diffCount: diffs.length,
+            backupPath: null,
+            undoBackupPath: null,
+            sourceWarning: mockMusicToolSourceWarning,
+            message,
+            createdAt: now,
+            undoneAt: null,
+            canUndo: true,
+          },
+          ...mockMusicToolFixHistory,
+        ];
+      }
     }
 
     return {
+      repairId,
       toolId: input.toolId,
       action: "compact-whitespace",
       applied: input.apply,
+      confidence: "high",
+      sourceWarning: mockMusicToolSourceWarning,
       requestedCount: requestedIds.size,
       fixableCount: fixableRows.length,
       affectedAlbumCount: new Set(fixableRows.map((issue) => issue.albumId))
@@ -2448,12 +2580,87 @@ export async function fixMusicToolIssues(input: MusicToolFixRequest) {
       skippedCount: Math.max(0, requestedIds.size - fixableRows.length),
       backupPath: null,
       message: input.apply
-        ? `Compacted whitespace for ${fixableRows.length} tracks and ${fixableRows.length > 0 ? 1 : 0} albums.`
-        : `Preview found ${fixableRows.length} visible whitespace issue rows that can be compacted.`,
+        ? `Compacted whitespace for ${countLabel(fixableRows.length, "track", "tracks")} and ${countLabel(fixableRows.length > 0 ? 1 : 0, "album", "albums")}.`
+        : `Preview found ${countLabel(fixableRows.length, "visible issue row", "visible issue rows")} across ${countLabel(diffs.length, "exact affected-row diff", "exact affected-row diffs")}.`,
+      diffs,
     } satisfies MusicToolFixSummary;
   }
 
   return invoke<MusicToolFixSummary>("fix_music_tool_issues", { input });
+}
+
+export async function listMusicToolFixHistory(toolId?: string) {
+  if (!isTauriRuntime()) {
+    return mockMusicToolFixHistory.filter(
+      (entry) => !toolId || entry.toolId === toolId,
+    );
+  }
+
+  return invoke<MusicToolFixHistoryEntry[]>("list_music_tool_fix_history", {
+    toolId: toolId ?? null,
+  });
+}
+
+export async function undoMusicToolFix(runId: number) {
+  if (!isTauriRuntime()) {
+    const index = mockMusicToolFixHistory.findIndex(
+      (entry) => entry.id === runId,
+    );
+    const history = mockMusicToolFixHistory[index];
+    const snapshot = mockMusicToolFixSnapshots.get(runId);
+    if (!history || history.status !== "applied" || !snapshot) {
+      throw new Error("This Music Tool repair is no longer available to undo.");
+    }
+
+    const restoredIds = new Set(snapshot.issues.map((issue) => issue.id));
+    setMockMusicToolIssues([
+      ...mockMusicToolIssues.filter((issue) => !restoredIds.has(issue.id)),
+      ...snapshot.issues.map((issue) => ({ ...issue })),
+    ]);
+    setMockMusicTools(
+      mockMusicTools.map((tool) =>
+        tool.id === history.toolId
+          ? {
+              ...tool,
+              issueCount: tool.issueCount + snapshot.issues.length,
+              albumCount:
+                tool.albumCount +
+                new Set(snapshot.issues.map((issue) => issue.albumId)).size,
+              trackCount:
+                tool.trackCount +
+                new Set(
+                  snapshot.issues
+                    .map((issue) => issue.trackId)
+                    .filter((trackId) => trackId != null),
+                ).size,
+            }
+          : tool,
+      ),
+    );
+    const countLabel = (count: number, singular: string, plural: string) =>
+      `${count} ${count === 1 ? singular : plural}`;
+    const message = `Restored ${countLabel(history.changedTrackCount, "track", "tracks")} and ${countLabel(history.changedAlbumCount, "album", "albums")} from repair #${runId}.`;
+    const undone: MusicToolFixHistoryEntry = {
+      ...history,
+      status: "undone",
+      message,
+      undoneAt: new Date().toISOString(),
+      canUndo: false,
+    };
+    mockMusicToolFixHistory = mockMusicToolFixHistory.map((entry) =>
+      entry.id === runId ? undone : entry,
+    );
+    mockMusicToolFixSnapshots.delete(runId);
+    return {
+      run: undone,
+      restoredAlbumCount: history.changedAlbumCount,
+      restoredTrackCount: history.changedTrackCount,
+      backupPath: null,
+      message,
+    } satisfies MusicToolUndoSummary;
+  }
+
+  return invoke<MusicToolUndoSummary>("undo_music_tool_fix", { runId });
 }
 
 export async function listSavedSearches() {

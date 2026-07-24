@@ -16,11 +16,12 @@ use crate::models::{
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
     GenreProgressRequest, GenreProgressStats, GenreSummary, ImportRun, LibraryHealthScore,
     LibraryOverviewStats, LibraryShapeStats, LibraryStatus, LovedDensityStat, LovedTrackStats,
-    MetadataCoverageMetric, MusicBrainzOriginCountryOption, MusicToolFixRequest,
-    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
-    MusicToolProgress, MusicToolSummary, OutlierStat, PerformanceProbeOperation,
-    PerformanceProbeResponse, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
-    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
+    MetadataCoverageMetric, MusicBrainzOriginCountryOption, MusicToolFieldDiff, MusicToolFixDiff,
+    MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest,
+    MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress, MusicToolSummary,
+    MusicToolUndoSummary, OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse,
+    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
     YearProgressRequest, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
@@ -157,6 +158,14 @@ const WHITESPACE_ANOMALY_CONDITION_SQL: &str = "
     COALESCE(t.file_path, '') GLOB '*  *' OR
     COALESCE(t.filename, '') GLOB '*  *'
 ";
+
+const MUSIC_TOOL_FIX_CONFIDENCE: &str = "high";
+const MUSIC_TOOL_SOURCE_WARNING: &str =
+    "This repair changes only the app-local SQLite library. MusicBee TSV rows and audio tags remain unchanged, so re-importing the same source can restore the original spacing.";
+
+fn music_tool_count_label(count: usize, singular: &str, plural: &str) -> String {
+    format!("{count} {}", if count == 1 { singular } else { plural })
+}
 
 const MUSIC_TOOLS: &[MusicToolDefinition] = &[
     MusicToolDefinition {
@@ -347,7 +356,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_five_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_six_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -1026,6 +1035,30 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_import_suspicious_albums_session
             ON import_suspicious_albums(session_id, id);
 
+        CREATE TABLE IF NOT EXISTS music_tool_fix_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tool_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            status TEXT NOT NULL,
+            confidence TEXT NOT NULL,
+            requested_count INTEGER NOT NULL DEFAULT 0,
+            fixable_count INTEGER NOT NULL DEFAULT 0,
+            affected_album_count INTEGER NOT NULL DEFAULT 0,
+            affected_track_count INTEGER NOT NULL DEFAULT 0,
+            changed_album_count INTEGER NOT NULL DEFAULT 0,
+            changed_track_count INTEGER NOT NULL DEFAULT 0,
+            backup_path TEXT,
+            undo_backup_path TEXT,
+            source_warning TEXT NOT NULL,
+            diff_json TEXT NOT NULL,
+            message TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            undone_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_music_tool_fix_runs_created
+            ON music_tool_fix_runs(created_at DESC, id DESC);
+
         INSERT OR IGNORE INTO app_settings (
             id, backup_retention, dark_mode, updated_at
         ) VALUES (
@@ -1053,7 +1086,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_origin_country_tables(conn)?;
     ensure_musicbrainz_artist_info_tables(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
-    conn.execute_batch("PRAGMA user_version = 25;")
+    conn.execute_batch("PRAGMA user_version = 26;")
         .context("Could not update SQLite schema version")?;
     Ok(())
 }
@@ -4253,6 +4286,21 @@ pub fn fix_music_tool_issues_for_app(
 ) -> Result<MusicToolFixSummary> {
     let (mut conn, db_path) = open(app)?;
     fix_music_tool_issues(&mut conn, Some(db_path.as_path()), input)
+}
+
+#[cfg(not(test))]
+pub fn list_music_tool_fix_history_for_app(
+    app: &AppHandle,
+    tool_id: Option<String>,
+) -> Result<Vec<MusicToolFixHistoryEntry>> {
+    let (conn, _) = open(app)?;
+    list_music_tool_fix_history(&conn, tool_id.as_deref())
+}
+
+#[cfg(not(test))]
+pub fn undo_music_tool_fix_for_app(app: &AppHandle, run_id: i64) -> Result<MusicToolUndoSummary> {
+    let (mut conn, db_path) = open(app)?;
+    undo_music_tool_fix(&mut conn, Some(db_path.as_path()), run_id)
 }
 
 #[cfg(not(test))]
@@ -7686,6 +7734,28 @@ struct MusicToolAlbumTextFields {
     publisher: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+struct MusicToolFixHistoryRow {
+    id: i64,
+    tool_id: String,
+    action: String,
+    status: String,
+    confidence: String,
+    requested_count: i64,
+    fixable_count: i64,
+    affected_album_count: i64,
+    affected_track_count: i64,
+    changed_album_count: i64,
+    changed_track_count: i64,
+    backup_path: Option<String>,
+    undo_backup_path: Option<String>,
+    source_warning: String,
+    diff_json: String,
+    message: String,
+    created_at: String,
+    undone_at: Option<String>,
+}
+
 impl MusicToolAlbumTextFields {
     fn compacted(&self) -> Self {
         Self {
@@ -7696,6 +7766,240 @@ impl MusicToolAlbumTextFields {
             publisher: compact_optional_whitespace(&self.publisher),
         }
     }
+}
+
+fn push_music_tool_field_diff(
+    changes: &mut Vec<MusicToolFieldDiff>,
+    field: &str,
+    label: &str,
+    before: &Option<String>,
+    after: &Option<String>,
+) {
+    if before != after {
+        changes.push(MusicToolFieldDiff {
+            field: field.to_string(),
+            label: label.to_string(),
+            before: before.clone(),
+            after: after.clone(),
+        });
+    }
+}
+
+fn load_music_tool_track_fields(
+    conn: &Connection,
+    track_id: i64,
+) -> Result<Option<(String, MusicToolTrackTextFields)>> {
+    conn.query_row(
+        "
+        SELECT
+            album_id,
+            display_artist,
+            album_artist_display,
+            album,
+            title,
+            genre,
+            canonical_genre,
+            publisher,
+            file_path,
+            filename
+        FROM tracks
+        WHERE id = ?1
+        ",
+        params![track_id],
+        |row| {
+            Ok((
+                row.get(0)?,
+                MusicToolTrackTextFields {
+                    display_artist: row.get(1)?,
+                    album_artist_display: row.get(2)?,
+                    album: row.get(3)?,
+                    title: row.get(4)?,
+                    genre: row.get(5)?,
+                    canonical_genre: row.get(6)?,
+                    publisher: row.get(7)?,
+                    file_path: row.get(8)?,
+                    filename: row.get(9)?,
+                },
+            ))
+        },
+    )
+    .optional()
+    .with_context(|| format!("Could not load track {track_id} for Music Tool repair"))
+}
+
+fn load_music_tool_album_fields(
+    conn: &Connection,
+    album_id: &str,
+) -> Result<Option<MusicToolAlbumTextFields>> {
+    conn.query_row(
+        "
+        SELECT
+            album,
+            album_artist_display,
+            canonical_genre,
+            genre_normalized,
+            publisher
+        FROM albums
+        WHERE id = ?1
+        ",
+        params![album_id],
+        |row| {
+            Ok(MusicToolAlbumTextFields {
+                album: row.get(0)?,
+                album_artist_display: row.get(1)?,
+                canonical_genre: row.get(2)?,
+                genre_normalized: row.get(3)?,
+                publisher: row.get(4)?,
+            })
+        },
+    )
+    .optional()
+    .with_context(|| format!("Could not load album {album_id} for Music Tool repair"))
+}
+
+fn whitespace_fix_diffs(
+    conn: &Connection,
+    affected_track_ids: &HashSet<i64>,
+    affected_album_ids: &HashSet<String>,
+) -> Result<Vec<MusicToolFixDiff>> {
+    let mut diffs = Vec::new();
+    let mut track_ids = affected_track_ids.iter().copied().collect::<Vec<_>>();
+    track_ids.sort_unstable();
+
+    for track_id in track_ids {
+        let Some((album_id, current)) = load_music_tool_track_fields(conn, track_id)? else {
+            continue;
+        };
+        let next = current.compacted();
+        let mut changes = Vec::new();
+        for (field, label, before, after) in [
+            (
+                "display_artist",
+                "Display artist",
+                &current.display_artist,
+                &next.display_artist,
+            ),
+            (
+                "album_artist_display",
+                "Album artist",
+                &current.album_artist_display,
+                &next.album_artist_display,
+            ),
+            ("album", "Album", &current.album, &next.album),
+            ("title", "Track title", &current.title, &next.title),
+            ("genre", "Source genre", &current.genre, &next.genre),
+            (
+                "canonical_genre",
+                "Canonical genre",
+                &current.canonical_genre,
+                &next.canonical_genre,
+            ),
+            (
+                "publisher",
+                "Publisher",
+                &current.publisher,
+                &next.publisher,
+            ),
+            (
+                "file_path",
+                "File path",
+                &current.file_path,
+                &next.file_path,
+            ),
+            ("filename", "Filename", &current.filename, &next.filename),
+        ] {
+            push_music_tool_field_diff(&mut changes, field, label, before, after);
+        }
+
+        if changes.is_empty() {
+            continue;
+        }
+        let label = current
+            .title
+            .clone()
+            .or_else(|| current.filename.clone())
+            .unwrap_or_else(|| format!("Track {track_id}"));
+        let context = [current.album_artist_display.clone(), current.album.clone()]
+            .into_iter()
+            .flatten()
+            .filter(|value| !value.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join(" / ");
+        diffs.push(MusicToolFixDiff {
+            id: format!("tracks:{track_id}"),
+            entity_type: "tracks".to_string(),
+            entity_id: track_id.to_string(),
+            album_id,
+            track_id: Some(track_id),
+            label,
+            context: (!context.is_empty()).then_some(context),
+            confidence: MUSIC_TOOL_FIX_CONFIDENCE.to_string(),
+            source_warning: MUSIC_TOOL_SOURCE_WARNING.to_string(),
+            changes,
+        });
+    }
+
+    let mut album_ids = affected_album_ids.iter().cloned().collect::<Vec<_>>();
+    album_ids.sort();
+    for album_id in album_ids {
+        let Some(current) = load_music_tool_album_fields(conn, &album_id)? else {
+            continue;
+        };
+        let next = current.compacted();
+        let mut changes = Vec::new();
+        for (field, label, before, after) in [
+            ("album", "Album", &current.album, &next.album),
+            (
+                "album_artist_display",
+                "Album artist",
+                &current.album_artist_display,
+                &next.album_artist_display,
+            ),
+            (
+                "canonical_genre",
+                "Canonical genre",
+                &current.canonical_genre,
+                &next.canonical_genre,
+            ),
+            (
+                "genre_normalized",
+                "Normalized genre",
+                &current.genre_normalized,
+                &next.genre_normalized,
+            ),
+            (
+                "publisher",
+                "Publisher",
+                &current.publisher,
+                &next.publisher,
+            ),
+        ] {
+            push_music_tool_field_diff(&mut changes, field, label, before, after);
+        }
+
+        if changes.is_empty() {
+            continue;
+        }
+        diffs.push(MusicToolFixDiff {
+            id: format!("albums:{album_id}"),
+            entity_type: "albums".to_string(),
+            entity_id: album_id.clone(),
+            album_id,
+            track_id: None,
+            label: current
+                .album
+                .clone()
+                .unwrap_or_else(|| "Untitled album".to_string()),
+            context: current.album_artist_display.clone(),
+            confidence: MUSIC_TOOL_FIX_CONFIDENCE.to_string(),
+            source_warning: format!(
+                "Derived app-local album metadata will be updated. {MUSIC_TOOL_SOURCE_WARNING}"
+            ),
+            changes,
+        });
+    }
+
+    Ok(diffs)
 }
 
 fn fix_music_tool_issues(
@@ -7719,9 +8023,12 @@ fn fix_music_tool_issues(
     let action = "compact-whitespace".to_string();
     if requested_count == 0 {
         return Ok(MusicToolFixSummary {
+            repair_id: None,
             tool_id,
             action,
             applied: apply,
+            confidence: MUSIC_TOOL_FIX_CONFIDENCE.to_string(),
+            source_warning: MUSIC_TOOL_SOURCE_WARNING.to_string(),
             requested_count,
             fixable_count: 0,
             affected_album_count: 0,
@@ -7731,6 +8038,7 @@ fn fix_music_tool_issues(
             skipped_count: 0,
             backup_path: None,
             message: "No visible issue rows were selected for fixing.".to_string(),
+            diffs: Vec::new(),
         });
     }
 
@@ -7747,12 +8055,16 @@ fn fix_music_tool_issues(
         whitespace_fix_targets(conn, &selected_track_ids)?;
     let fixable_count = affected_track_ids.len();
     let skipped_count = requested_count.saturating_sub(fixable_count);
+    let diffs = whitespace_fix_diffs(conn, &affected_track_ids, &affected_album_ids)?;
 
     if !apply {
         return Ok(MusicToolFixSummary {
+            repair_id: None,
             tool_id,
             action,
             applied: false,
+            confidence: MUSIC_TOOL_FIX_CONFIDENCE.to_string(),
+            source_warning: MUSIC_TOOL_SOURCE_WARNING.to_string(),
             requested_count,
             fixable_count,
             affected_album_count: affected_album_ids.len(),
@@ -7762,8 +8074,15 @@ fn fix_music_tool_issues(
             skipped_count,
             backup_path: None,
             message: format!(
-                "Preview found {fixable_count} visible whitespace issue rows that can be compacted."
+                "Preview found {} across {}.",
+                music_tool_count_label(fixable_count, "visible issue row", "visible issue rows"),
+                music_tool_count_label(
+                    diffs.len(),
+                    "exact affected-row diff",
+                    "exact affected-row diffs"
+                )
             ),
+            diffs,
         });
     }
 
@@ -7776,9 +8095,12 @@ fn fix_music_tool_issues(
         None
     };
 
+    let backup_path_text = backup_path.as_ref().map(|path| path.display().to_string());
     let mut changed_track_count = 0_usize;
     let mut changed_album_count = 0_usize;
-    {
+    let repair_id = if fixable_count > 0 {
+        let diff_json =
+            serde_json::to_string(&diffs).context("Could not serialize Music Tool repair diffs")?;
         let tx = conn
             .transaction()
             .context("Could not start Music Tool fix transaction")?;
@@ -7795,18 +8117,60 @@ fn fix_music_tool_issues(
             }
         }
 
+        let message = format!(
+            "Compacted whitespace for {} and {}.",
+            music_tool_count_label(changed_track_count, "track", "tracks"),
+            music_tool_count_label(changed_album_count, "album", "albums")
+        );
+        tx.execute(
+            "
+            INSERT INTO music_tool_fix_runs (
+                tool_id, action, status, confidence, requested_count, fixable_count,
+                affected_album_count, affected_track_count, changed_album_count,
+                changed_track_count, backup_path, source_warning, diff_json,
+                message, created_at
+            ) VALUES (
+                ?1, ?2, 'applied', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
+                ?12, ?13, ?14
+            )
+            ",
+            params![
+                &tool_id,
+                &action,
+                MUSIC_TOOL_FIX_CONFIDENCE,
+                requested_count as i64,
+                fixable_count as i64,
+                affected_album_ids.len() as i64,
+                affected_track_ids.len() as i64,
+                changed_album_count as i64,
+                changed_track_count as i64,
+                backup_path_text.as_deref(),
+                MUSIC_TOOL_SOURCE_WARNING,
+                diff_json,
+                message,
+                Utc::now().to_rfc3339(),
+            ],
+        )
+        .context("Could not save Music Tool repair history")?;
+        let repair_id = tx.last_insert_rowid();
         tx.commit()
             .context("Could not commit Music Tool whitespace fix")?;
-    }
+        Some(repair_id)
+    } else {
+        None
+    };
 
     if changed_track_count > 0 || changed_album_count > 0 {
         rebuild_search_indexes(conn)?;
     }
 
     Ok(MusicToolFixSummary {
+        repair_id,
         tool_id,
         action,
         applied: true,
+        confidence: MUSIC_TOOL_FIX_CONFIDENCE.to_string(),
+        source_warning: MUSIC_TOOL_SOURCE_WARNING.to_string(),
         requested_count,
         fixable_count,
         affected_album_count: affected_album_ids.len(),
@@ -7814,10 +8178,13 @@ fn fix_music_tool_issues(
         changed_album_count,
         changed_track_count,
         skipped_count,
-        backup_path: backup_path.map(|path| path.display().to_string()),
+        backup_path: backup_path_text,
         message: format!(
-            "Compacted whitespace for {changed_track_count} tracks and {changed_album_count} albums."
+            "Compacted whitespace for {} and {}.",
+            music_tool_count_label(changed_track_count, "track", "tracks"),
+            music_tool_count_label(changed_album_count, "album", "albums")
         ),
+        diffs,
     })
 }
 
@@ -7984,6 +8351,290 @@ fn compact_album_whitespace(conn: &Connection, album_id: &str) -> Result<bool> {
 
 fn compact_optional_whitespace(value: &Option<String>) -> Option<String> {
     value.as_deref().map(compact_whitespace)
+}
+
+fn music_tool_fix_history_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MusicToolFixHistoryRow> {
+    Ok(MusicToolFixHistoryRow {
+        id: row.get(0)?,
+        tool_id: row.get(1)?,
+        action: row.get(2)?,
+        status: row.get(3)?,
+        confidence: row.get(4)?,
+        requested_count: row.get(5)?,
+        fixable_count: row.get(6)?,
+        affected_album_count: row.get(7)?,
+        affected_track_count: row.get(8)?,
+        changed_album_count: row.get(9)?,
+        changed_track_count: row.get(10)?,
+        backup_path: row.get(11)?,
+        undo_backup_path: row.get(12)?,
+        source_warning: row.get(13)?,
+        diff_json: row.get(14)?,
+        message: row.get(15)?,
+        created_at: row.get(16)?,
+        undone_at: row.get(17)?,
+    })
+}
+
+fn music_tool_fix_history_entry(
+    row: MusicToolFixHistoryRow,
+) -> Result<(MusicToolFixHistoryEntry, Vec<MusicToolFixDiff>)> {
+    let diffs = serde_json::from_str::<Vec<MusicToolFixDiff>>(&row.diff_json)
+        .context("Could not read Music Tool repair diffs")?;
+    let tool_label = MUSIC_TOOLS
+        .iter()
+        .find(|definition| definition.id == row.tool_id)
+        .map(|definition| definition.label)
+        .unwrap_or(row.tool_id.as_str())
+        .to_string();
+    let status = row.status;
+    let can_undo = status == "applied";
+    Ok((
+        MusicToolFixHistoryEntry {
+            id: row.id,
+            tool_id: row.tool_id,
+            tool_label,
+            action: row.action,
+            status,
+            confidence: row.confidence,
+            requested_count: row.requested_count.max(0) as usize,
+            fixable_count: row.fixable_count.max(0) as usize,
+            affected_album_count: row.affected_album_count.max(0) as usize,
+            affected_track_count: row.affected_track_count.max(0) as usize,
+            changed_album_count: row.changed_album_count.max(0) as usize,
+            changed_track_count: row.changed_track_count.max(0) as usize,
+            diff_count: diffs.len(),
+            backup_path: row.backup_path,
+            undo_backup_path: row.undo_backup_path,
+            source_warning: row.source_warning,
+            message: row.message,
+            created_at: row.created_at,
+            undone_at: row.undone_at,
+            can_undo,
+        },
+        diffs,
+    ))
+}
+
+fn list_music_tool_fix_history(
+    conn: &Connection,
+    tool_id: Option<&str>,
+) -> Result<Vec<MusicToolFixHistoryEntry>> {
+    let mut statement = conn
+        .prepare(
+            "
+            SELECT
+                id, tool_id, action, status, confidence, requested_count,
+                fixable_count, affected_album_count, affected_track_count,
+                changed_album_count, changed_track_count, backup_path,
+                undo_backup_path, source_warning, diff_json, message,
+                created_at, undone_at
+            FROM music_tool_fix_runs
+            WHERE ?1 IS NULL OR tool_id = ?1
+            ORDER BY id DESC
+            LIMIT 24
+            ",
+        )
+        .context("Could not prepare Music Tool repair history")?;
+    let rows = statement
+        .query_map(params![tool_id], music_tool_fix_history_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load Music Tool repair history")?;
+    rows.into_iter()
+        .map(|row| music_tool_fix_history_entry(row).map(|(entry, _)| entry))
+        .collect()
+}
+
+fn load_music_tool_fix_history_run(
+    conn: &Connection,
+    run_id: i64,
+) -> Result<(MusicToolFixHistoryEntry, Vec<MusicToolFixDiff>)> {
+    let row = conn
+        .query_row(
+            "
+            SELECT
+                id, tool_id, action, status, confidence, requested_count,
+                fixable_count, affected_album_count, affected_track_count,
+                changed_album_count, changed_track_count, backup_path,
+                undo_backup_path, source_warning, diff_json, message,
+                created_at, undone_at
+            FROM music_tool_fix_runs
+            WHERE id = ?1
+            ",
+            params![run_id],
+            music_tool_fix_history_row,
+        )
+        .optional()
+        .context("Could not load Music Tool repair history entry")?
+        .ok_or_else(|| anyhow!("Music Tool repair history entry {run_id} was not found"))?;
+    music_tool_fix_history_entry(row)
+}
+
+fn validate_music_tool_diff_field(entity_type: &str, field: &str) -> Result<&'static str> {
+    let allowed = match entity_type {
+        "tracks" => matches!(
+            field,
+            "display_artist"
+                | "album_artist_display"
+                | "album"
+                | "title"
+                | "genre"
+                | "canonical_genre"
+                | "publisher"
+                | "file_path"
+                | "filename"
+        ),
+        "albums" => matches!(
+            field,
+            "album" | "album_artist_display" | "canonical_genre" | "genre_normalized" | "publisher"
+        ),
+        _ => false,
+    };
+    if !allowed {
+        bail!("Unsupported Music Tool undo field {entity_type}.{field}");
+    }
+    Ok(if entity_type == "tracks" {
+        "tracks"
+    } else {
+        "albums"
+    })
+}
+
+fn music_tool_diff_current_value(
+    conn: &Connection,
+    diff: &MusicToolFixDiff,
+    change: &MusicToolFieldDiff,
+) -> Result<Option<String>> {
+    let table = validate_music_tool_diff_field(&diff.entity_type, &change.field)?;
+    let sql = format!("SELECT {} FROM {table} WHERE id = ?1", change.field);
+    let current = if table == "tracks" {
+        let track_id = diff
+            .track_id
+            .or_else(|| diff.entity_id.parse::<i64>().ok())
+            .ok_or_else(|| anyhow!("Repair diff {} has no valid track id", diff.id))?;
+        conn.query_row(&sql, params![track_id], |row| {
+            row.get::<_, Option<String>>(0)
+        })
+        .optional()
+        .with_context(|| format!("Could not validate undo value for {}", diff.id))?
+    } else {
+        conn.query_row(&sql, params![&diff.entity_id], |row| {
+            row.get::<_, Option<String>>(0)
+        })
+        .optional()
+        .with_context(|| format!("Could not validate undo value for {}", diff.id))?
+    };
+    current.ok_or_else(|| anyhow!("Affected row {} no longer exists", diff.id))
+}
+
+fn restore_music_tool_diff_field(
+    conn: &Connection,
+    diff: &MusicToolFixDiff,
+    change: &MusicToolFieldDiff,
+) -> Result<()> {
+    let table = validate_music_tool_diff_field(&diff.entity_type, &change.field)?;
+    let sql = format!("UPDATE {table} SET {} = ?1 WHERE id = ?2", change.field);
+    if table == "tracks" {
+        let track_id = diff
+            .track_id
+            .or_else(|| diff.entity_id.parse::<i64>().ok())
+            .ok_or_else(|| anyhow!("Repair diff {} has no valid track id", diff.id))?;
+        conn.execute(&sql, params![change.before.as_deref(), track_id])
+            .with_context(|| format!("Could not restore {}", diff.id))?;
+    } else {
+        conn.execute(&sql, params![change.before.as_deref(), &diff.entity_id])
+            .with_context(|| format!("Could not restore {}", diff.id))?;
+    }
+    Ok(())
+}
+
+fn undo_music_tool_fix(
+    conn: &mut Connection,
+    db_path: Option<&Path>,
+    run_id: i64,
+) -> Result<MusicToolUndoSummary> {
+    let (history, diffs) = load_music_tool_fix_history_run(conn, run_id)?;
+    if history.status != "applied" {
+        bail!("This Music Tool repair has already been undone");
+    }
+    if diffs.is_empty() {
+        bail!("This Music Tool repair has no affected-row diffs to restore");
+    }
+
+    for diff in &diffs {
+        for change in &diff.changes {
+            let current = music_tool_diff_current_value(conn, diff, change)?;
+            if current != change.after {
+                bail!(
+                    "Undo stopped because {} / {} changed after this repair. Re-run the validator before making another repair.",
+                    diff.label,
+                    change.label
+                );
+            }
+        }
+    }
+
+    let backup_path = match db_path {
+        Some(path) => create_database_file_backup(path, "music-tool-undo")?,
+        None => None,
+    };
+    let backup_path_text = backup_path.as_ref().map(|path| path.display().to_string());
+    let restored_track_ids = diffs
+        .iter()
+        .filter(|diff| diff.entity_type == "tracks")
+        .map(|diff| diff.entity_id.as_str())
+        .collect::<HashSet<_>>();
+    let restored_album_ids = diffs
+        .iter()
+        .filter(|diff| diff.entity_type == "albums")
+        .map(|diff| diff.entity_id.as_str())
+        .collect::<HashSet<_>>();
+    let restored_track_count = restored_track_ids.len();
+    let restored_album_count = restored_album_ids.len();
+    let message = format!(
+        "Restored {} and {} from repair #{run_id}.",
+        music_tool_count_label(restored_track_count, "track", "tracks"),
+        music_tool_count_label(restored_album_count, "album", "albums")
+    );
+
+    {
+        let tx = conn
+            .transaction()
+            .context("Could not start Music Tool undo transaction")?;
+        for diff in &diffs {
+            for change in &diff.changes {
+                restore_music_tool_diff_field(&tx, diff, change)?;
+            }
+        }
+        tx.execute(
+            "
+            UPDATE music_tool_fix_runs
+            SET status = 'undone',
+                undo_backup_path = ?1,
+                message = ?2,
+                undone_at = ?3
+            WHERE id = ?4 AND status = 'applied'
+            ",
+            params![
+                backup_path_text.as_deref(),
+                &message,
+                Utc::now().to_rfc3339(),
+                run_id
+            ],
+        )
+        .context("Could not update Music Tool repair history after undo")?;
+        tx.commit()
+            .context("Could not commit Music Tool repair undo")?;
+    }
+    rebuild_search_indexes(conn)?;
+    let (run, _) = load_music_tool_fix_history_run(conn, run_id)?;
+    Ok(MusicToolUndoSummary {
+        run,
+        restored_album_count,
+        restored_track_count,
+        backup_path: backup_path_text,
+        message,
+    })
 }
 
 fn list_music_tools(conn: &Connection) -> Result<Vec<MusicToolSummary>> {
@@ -13332,6 +13983,14 @@ mod tests {
         assert!(!preview.applied);
         assert_eq!(preview.fixable_count, 1);
         assert_eq!(preview.changed_track_count, 0);
+        assert_eq!(preview.confidence, "high");
+        assert_eq!(preview.diffs.len(), 2);
+        assert!(preview.diffs.iter().any(|diff| diff.entity_type == "tracks"
+            && diff.changes.iter().any(|change| {
+                change.field == "title"
+                    && change.before.as_deref() == Some("What  Have I Done?")
+                    && change.after.as_deref() == Some("What Have I Done?")
+            })));
 
         let still_dirty = list_music_tool_issues(&conn, request.clone(), 50, None)
             .expect("list whitespace issues after preview");
@@ -13353,8 +14012,9 @@ mod tests {
         assert_eq!(summary.changed_track_count, 1);
         assert_eq!(summary.changed_album_count, 1);
         assert!(summary.backup_path.is_none());
+        let repair_id = summary.repair_id.expect("repair history id");
 
-        let clean = list_music_tool_issues(&conn, request, 50, None)
+        let clean = list_music_tool_issues(&conn, request.clone(), 50, None)
             .expect("list whitespace issues after fix");
         assert_eq!(clean.total, 0);
 
@@ -13413,6 +14073,70 @@ mod tests {
         assert_eq!(album_title.as_deref(), Some("Actually Deluxe"));
         assert_eq!(album_artist.as_deref(), Some("Pet Shop Boys"));
         assert_eq!(album_genre.as_deref(), Some("Synthpop Dance"));
+
+        let history =
+            list_music_tool_fix_history(&conn, None).expect("list Music Tool repair history");
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].id, repair_id);
+        assert_eq!(history[0].status, "applied");
+        assert!(history[0].can_undo);
+        assert_eq!(history[0].diff_count, 2);
+
+        let undo = undo_music_tool_fix(&mut conn, None, repair_id).expect("undo whitespace repair");
+        assert_eq!(undo.restored_track_count, 1);
+        assert_eq!(undo.restored_album_count, 1);
+        assert_eq!(undo.run.status, "undone");
+        assert!(!undo.run.can_undo);
+
+        let dirty_again = list_music_tool_issues(&conn, request, 50, None)
+            .expect("list whitespace issues after undo");
+        assert_eq!(dirty_again.total, 1);
+        let restored_title: Option<String> = conn
+            .query_row("SELECT title FROM tracks WHERE id = 1", [], |row| {
+                row.get(0)
+            })
+            .expect("load restored title");
+        assert_eq!(restored_title.as_deref(), Some("What  Have I Done?"));
+    }
+
+    #[test]
+    fn stops_music_tool_undo_when_a_repaired_field_changed_later() {
+        let mut conn = seeded_connection();
+        conn.execute(
+            "UPDATE tracks SET title = 'What  Have I Done?' WHERE id = 1",
+            [],
+        )
+        .expect("make whitespace issue");
+        rebuild_search_indexes(&conn).expect("rebuild search indexes");
+
+        let mut request = MusicToolIssueRequest::default();
+        request.tool_id = "whitespace-anomalies".to_string();
+        let response =
+            list_music_tool_issues(&conn, request, 50, None).expect("list whitespace issues");
+        let summary = fix_music_tool_issues(
+            &mut conn,
+            None,
+            MusicToolFixRequest {
+                tool_id: "whitespace-anomalies".to_string(),
+                issue_ids: response.rows.into_iter().map(|row| row.id).collect(),
+                apply: true,
+            },
+        )
+        .expect("apply whitespace repair");
+        let repair_id = summary.repair_id.expect("repair history id");
+
+        conn.execute(
+            "UPDATE tracks SET title = 'Manual title after repair' WHERE id = 1",
+            [],
+        )
+        .expect("change repaired field");
+        let error = undo_music_tool_fix(&mut conn, None, repair_id)
+            .expect_err("reject stale Music Tool undo");
+        assert!(error.to_string().contains("changed after this repair"));
+        let history =
+            list_music_tool_fix_history(&conn, None).expect("list Music Tool repair history");
+        assert_eq!(history[0].status, "applied");
+        assert!(history[0].can_undo);
     }
 
     #[test]
@@ -13470,11 +14194,13 @@ mod tests {
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
         assert!(phase_nineteen_schema_exists(&conn).expect("phase nineteen schema exists"));
-        assert!(migrations::phase_twenty_five_schema_exists(&conn)
-            .expect("phase twenty-five schema exists"));
+        assert!(migrations::phase_twenty_six_schema_exists(&conn)
+            .expect("phase twenty-six schema exists"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
         assert!(schema_table_exists(&conn, "import_stage_tracks")
             .expect("import track staging table exists"));
+        assert!(schema_table_exists(&conn, "music_tool_fix_runs")
+            .expect("Music Tool fix history table exists"));
         assert!(schema_table_exists(&conn, "musicbrainz_origin_countries")
             .expect("origin country table exists"));
         assert!(

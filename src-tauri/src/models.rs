@@ -1229,12 +1229,39 @@ pub struct MusicToolFixRequest {
     pub apply: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicToolFieldDiff {
+    pub field: String,
+    pub label: String,
+    pub before: Option<String>,
+    pub after: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicToolFixDiff {
+    pub id: String,
+    pub entity_type: String,
+    pub entity_id: String,
+    pub album_id: String,
+    pub track_id: Option<i64>,
+    pub label: String,
+    pub context: Option<String>,
+    pub confidence: String,
+    pub source_warning: String,
+    pub changes: Vec<MusicToolFieldDiff>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolFixSummary {
+    pub repair_id: Option<i64>,
     pub tool_id: String,
     pub action: String,
     pub applied: bool,
+    pub confidence: String,
+    pub source_warning: String,
     pub requested_count: usize,
     pub fixable_count: usize,
     pub affected_album_count: usize,
@@ -1242,6 +1269,42 @@ pub struct MusicToolFixSummary {
     pub changed_album_count: usize,
     pub changed_track_count: usize,
     pub skipped_count: usize,
+    pub backup_path: Option<String>,
+    pub message: String,
+    pub diffs: Vec<MusicToolFixDiff>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicToolFixHistoryEntry {
+    pub id: i64,
+    pub tool_id: String,
+    pub tool_label: String,
+    pub action: String,
+    pub status: String,
+    pub confidence: String,
+    pub requested_count: usize,
+    pub fixable_count: usize,
+    pub affected_album_count: usize,
+    pub affected_track_count: usize,
+    pub changed_album_count: usize,
+    pub changed_track_count: usize,
+    pub diff_count: usize,
+    pub backup_path: Option<String>,
+    pub undo_backup_path: Option<String>,
+    pub source_warning: String,
+    pub message: String,
+    pub created_at: String,
+    pub undone_at: Option<String>,
+    pub can_undo: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicToolUndoSummary {
+    pub run: MusicToolFixHistoryEntry,
+    pub restored_album_count: usize,
+    pub restored_track_count: usize,
     pub backup_path: Option<String>,
     pub message: String,
 }

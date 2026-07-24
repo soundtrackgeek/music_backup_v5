@@ -1216,10 +1216,35 @@ export type MusicToolFixRequest = {
   apply: boolean;
 };
 
+export type MusicToolFixConfidence = "high" | "medium" | "low";
+
+export type MusicToolFieldDiff = {
+  field: string;
+  label: string;
+  before: string | null;
+  after: string | null;
+};
+
+export type MusicToolFixDiff = {
+  id: string;
+  entityType: "tracks" | "albums";
+  entityId: string;
+  albumId: string;
+  trackId: number | null;
+  label: string;
+  context: string | null;
+  confidence: MusicToolFixConfidence;
+  sourceWarning: string;
+  changes: MusicToolFieldDiff[];
+};
+
 export type MusicToolFixSummary = {
+  repairId: number | null;
   toolId: string;
   action: string;
   applied: boolean;
+  confidence: MusicToolFixConfidence;
+  sourceWarning: string;
   requestedCount: number;
   fixableCount: number;
   affectedAlbumCount: number;
@@ -1227,6 +1252,38 @@ export type MusicToolFixSummary = {
   changedAlbumCount: number;
   changedTrackCount: number;
   skippedCount: number;
+  backupPath: string | null;
+  message: string;
+  diffs: MusicToolFixDiff[];
+};
+
+export type MusicToolFixHistoryEntry = {
+  id: number;
+  toolId: string;
+  toolLabel: string;
+  action: string;
+  status: "applied" | "undone";
+  confidence: MusicToolFixConfidence;
+  requestedCount: number;
+  fixableCount: number;
+  affectedAlbumCount: number;
+  affectedTrackCount: number;
+  changedAlbumCount: number;
+  changedTrackCount: number;
+  diffCount: number;
+  backupPath: string | null;
+  undoBackupPath: string | null;
+  sourceWarning: string;
+  message: string;
+  createdAt: string;
+  undoneAt: string | null;
+  canUndo: boolean;
+};
+
+export type MusicToolUndoSummary = {
+  run: MusicToolFixHistoryEntry;
+  restoredAlbumCount: number;
+  restoredTrackCount: number;
   backupPath: string | null;
   message: string;
 };

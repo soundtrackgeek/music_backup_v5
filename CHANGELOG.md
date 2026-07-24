@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.76.0] - 2026-07-24
+### Added
+- Added guided Whitespace Anomalies repair with exact affected-row before/after diffs, per-repair high-confidence labels, and an explicit warning that MusicBee TSV rows and audio tags remain unchanged.
+- Added persistent Music Tools fix history in SQLite schema version 26, including repair counts, generated backup paths, timestamps, status, and the exact field changes needed for undo.
+- Added one-click, conflict-aware undo that creates a fresh pre-undo database backup and restores only fields that still match the reviewed repair.
+
+### Changed
+- Reframed report-only Music Tools with source-review guidance instead of offering unsafe inferred fixes.
+- Required a fresh preview before repair apply and kept the reviewed affected-row set fixed between preview and apply.
+- Bumped synchronized app metadata to `0.76.0`.
+
 ## [0.75.0] - 2026-07-24
 ### Added
 - Added six focused Settings sections: General, AI, Data & Backups, MusicBrainz, Updates, and Diagnostics.

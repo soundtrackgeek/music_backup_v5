@@ -26,10 +26,10 @@ use models::{
     MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
     MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryStatus,
     MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
-    MusicBrainzReleaseDecisionRequest, MusicToolFixRequest, MusicToolFixSummary,
-    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, PerformanceProbeResponse,
-    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse,
-    YearProgressRequest, YearProgressStats,
+    MusicBrainzReleaseDecisionRequest, MusicToolFixHistoryEntry, MusicToolFixRequest,
+    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary,
+    MusicToolUndoSummary, PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest,
+    SavedChart, SavedSearch, StatisticsResponse, YearProgressRequest, YearProgressStats,
 };
 #[cfg(not(test))]
 use models::{ImportPreview, ImportRun, ImportSummary, LibraryStatus};
@@ -819,6 +819,29 @@ async fn fix_music_tool_issues(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn list_music_tool_fix_history(
+    app: AppHandle,
+    tool_id: Option<String>,
+) -> Result<Vec<MusicToolFixHistoryEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::list_music_tool_fix_history_for_app(&app, tool_id)
+    })
+    .await
+    .map_err(|error| format!("Music Tool repair history task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn undo_music_tool_fix(app: AppHandle, run_id: i64) -> Result<MusicToolUndoSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || db::undo_music_tool_fix_for_app(&app, run_id))
+        .await
+        .map_err(|error| format!("Music Tool undo task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn list_saved_searches(app: AppHandle) -> Result<Vec<SavedSearch>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_saved_searches_for_app(&app))
         .await
@@ -973,6 +996,8 @@ pub fn run() {
             list_music_tools,
             list_music_tool_issues,
             fix_music_tool_issues,
+            list_music_tool_fix_history,
+            undo_music_tool_fix,
             list_saved_searches,
             save_search,
             delete_saved_search,

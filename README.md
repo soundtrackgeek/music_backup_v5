@@ -275,10 +275,12 @@ npm run security:check
 
 ## Phase 13 Music Tools Fix Features
 
-- Whitespace Anomalies can preview and apply a local cleanup for the currently visible issue rows.
-- Applying the cleanup compacts repeated whitespace in selected track metadata fields and affected album display fields, then rebuilds search indexes.
-- Desktop apply actions create a pre-fix SQLite backup before mutating the local database.
-- The cleanup is app-local: re-importing a TSV with the same source whitespace can reintroduce those issues.
+- Whitespace Anomalies is a three-step guided repair: choose the visible issue rows, preview exact field-level before/after changes, then apply the reviewed set.
+- Every proposed row carries a high-confidence label and an explicit source-vs-local warning. The repair changes app-local SQLite only; MusicBee TSV rows and audio tags remain unchanged, so re-importing the same source can reintroduce the issue.
+- Applying the cleanup compacts repeated whitespace in selected track metadata fields and affected album display fields, rebuilds search indexes, and creates a pre-fix SQLite backup.
+- SQLite schema version 26 records repair counts, timestamps, status, backup path, and the exact field diffs in Fix history.
+- One-click Undo creates a pre-undo safety backup and restores only the recorded fields. Undo stops with a conflict instead of overwriting a field changed after the repair.
+- Validators without a deterministic safe fix remain report-only and guide the user back to MusicBee or audio-tag sources.
 
 ## Phase 12 Restore Features
 
@@ -323,7 +325,7 @@ npm run security:check
 - Tool catalog renders immediately; selected validator counts show live percentage progress while affected rows load on demand.
 - Initial validation suite for duplicate albums, albums without embedded cover image records, imported Billboard albums missing from the library, duplicates within an album, invalid times, non-numeric ratings, missing tags, non-MP3 files, year anomalies, ratings outside accepted values, track/disc numbering issues, inconsistent album metadata, whitespace anomalies, genre normalization issues, conflicting album artists, and multiple years per album.
 - Tool-level severity, issue counts, affected album counts, affected track counts, filterable issue rows, pagination, sorting, and direct issue-result exports to CSV, TSV, XLSX, JSON, and TXT that preserve the active filter and sort.
-- Whitespace Anomalies includes a guarded preview/apply action for compacting local database whitespace issues.
+- Whitespace Anomalies includes guided preview/apply repair with exact diffs, confidence and source warnings, persistent fix history, and conflict-aware undo.
 - Web-only preview mock data covers Tools alongside Search, Charts, Statistics, Albums, Artists, Genres, and Imports.
 
 ## Phase 7 Genres Features

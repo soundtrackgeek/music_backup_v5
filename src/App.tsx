@@ -95,6 +95,7 @@ import {
   listGenres,
   listGenreSuggestions,
   listMusicToolIssues,
+  listMusicToolFixHistory,
   listMusicTools,
   listImportRuns,
   listMusicBrainzOverlaySyncLog,
@@ -126,6 +127,7 @@ import {
   restoreDatabaseBackup,
   rollbackImportRun,
   runPerformanceProbe,
+  undoMusicToolFix,
 } from "./backend";
 import type {
   AppSettings,
@@ -175,6 +177,7 @@ import type {
   RatingEvent,
   RightSidebarMode,
   MusicToolFixSummary,
+  MusicToolFixHistoryEntry,
   MusicBrainzArtistExportRequest,
   MusicBrainzArtistOriginCountryUpdate,
   MusicBrainzArtistRefreshResult,
@@ -340,6 +343,7 @@ import {
 } from "./workspaces/SettingsWorkspace";
 import { PlaylistBuilderWorkspace } from "./workspaces/PlaylistBuilderWorkspace";
 import { WishListWorkspace } from "./workspaces/WishListWorkspace";
+import { MusicToolRepairPanel } from "./workspaces/MusicToolRepairPanel";
 import {
   checkForAppUpdate,
   installAppUpdate,
@@ -4619,75 +4623,6 @@ function MusicToolExportControls({
   );
 }
 
-function MusicToolFixControls({
-  tool,
-  response,
-  isPending,
-  fixSummary,
-  fixError,
-  onPreview,
-  onApply,
-}: {
-  tool: MusicToolSummary | null;
-  response: MusicToolIssueResponse | null;
-  isPending: boolean;
-  fixSummary: MusicToolFixSummary | null;
-  fixError: string | null;
-  onPreview: () => Promise<void>;
-  onApply: () => Promise<void>;
-}) {
-  const canFix = tool?.id === "whitespace-anomalies";
-  if (!canFix) {
-    return null;
-  }
-
-  const rowCount = response?.rows.length ?? 0;
-  const isDisabled = isPending || rowCount === 0;
-  const matchingSummary = fixSummary?.toolId === tool?.id ? fixSummary : null;
-
-  return (
-    <div
-      className="tool-fix-controls"
-      aria-label="Fix visible validation issues"
-    >
-      <div className="export-strip">
-        <button
-          type="button"
-          disabled={isDisabled}
-          aria-label={`Preview fixes for ${tool.label}`}
-          onClick={() => void onPreview()}
-        >
-          <FileSearch size={15} />
-          <span>Preview</span>
-        </button>
-        <button
-          type="button"
-          disabled={isDisabled}
-          aria-label={`Apply fixes for ${tool.label}`}
-          onClick={() => void onApply()}
-        >
-          <Wrench size={15} />
-          <span>Apply</span>
-        </button>
-      </div>
-      {matchingSummary ? (
-        <div className="export-result tool-fix-result">
-          <Check size={17} />
-          <span>
-            {matchingSummary.message}
-            {matchingSummary.backupPath
-              ? ` Backup: ${matchingSummary.backupPath}`
-              : ""}
-          </span>
-        </div>
-      ) : null}
-      {fixError ? (
-        <p className="error-message tool-fix-error">{fixError}</p>
-      ) : null}
-    </div>
-  );
-}
-
 function MusicToolDetailPanel({
   tool,
   progress,
@@ -4792,7 +4727,7 @@ function MusicToolDetailPanel({
           <ShieldCheck size={17} />
           <span>
             {tool.id === "whitespace-anomalies"
-              ? "Whitespace rows can be compacted"
+              ? "Guided repair includes exact diffs, backup, history, and undo"
               : "Issue rows are read-only"}
           </span>
         </div>
@@ -7698,8 +7633,18 @@ export default function App() {
   );
   const [toolFixSummary, setToolFixSummary] =
     useState<MusicToolFixSummary | null>(null);
+  const [toolFixIssueIds, setToolFixIssueIds] = useState<string[]>([]);
+  const [toolFixHistory, setToolFixHistory] = useState<
+    MusicToolFixHistoryEntry[]
+  >([]);
+  const [toolFixHistoryError, setToolFixHistoryError] = useState<string | null>(
+    null,
+  );
   const [toolFixError, setToolFixError] = useState<string | null>(null);
   const [isToolFixing, setIsToolFixing] = useState(false);
+  const [undoingToolFixRunId, setUndoingToolFixRunId] = useState<number | null>(
+    null,
+  );
   const [chartConfig, setChartConfig] = useState<ChartConfig>(() =>
     createChartConfig(),
   );
@@ -8698,6 +8643,34 @@ export default function App() {
       return;
     }
 
+    let cancelled = false;
+    setToolFixHistoryError(null);
+    void listMusicToolFixHistory()
+      .then((history) => {
+        if (!cancelled) {
+          setToolFixHistory(history);
+        }
+      })
+      .catch((historyError) => {
+        if (!cancelled) {
+          setToolFixHistoryError(
+            historyError instanceof Error
+              ? historyError.message
+              : String(historyError),
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (activeSection !== "Tools") {
+      return;
+    }
+
     if (musicTools.length === 0) {
       setSelectedToolId(null);
       setToolIssueResponse(null);
@@ -8803,13 +8776,18 @@ export default function App() {
 
   useEffect(() => {
     setToolExportResult(null);
-    setToolFixSummary(null);
+    setToolFixSummary((previous) =>
+      previous?.applied ? previous : null,
+    );
+    setToolFixIssueIds([]);
     setToolFixError(null);
   }, [
     toolIssueRequest.toolId,
     toolIssueRequest.searchText,
     toolIssueRequest.sort.field,
     toolIssueRequest.sort.direction,
+    toolIssueRequest.limit,
+    toolIssueRequest.offset,
   ]);
 
   useEffect(() => {
@@ -10335,23 +10313,37 @@ export default function App() {
     setToolExportResult(result);
   }
 
+  async function refreshToolFixHistory() {
+    setToolFixHistoryError(null);
+    try {
+      setToolFixHistory(await listMusicToolFixHistory());
+    } catch (error) {
+      setToolFixHistoryError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
   async function runToolFix(apply: boolean) {
     if (!selectedTool || !currentToolIssueResponse) {
       return;
     }
 
-    const issueIds = currentToolIssueResponse.rows.map((row) => row.id);
+    const issueIds = apply
+      ? toolFixIssueIds
+      : currentToolIssueResponse.rows.map((row) => row.id);
     if (issueIds.length === 0) {
       return;
     }
 
-    if (apply) {
-      const confirmed = window.confirm(
-        `Apply whitespace cleanup to ${formatNumber(issueIds.length)} visible issue rows? A database backup is created first in the desktop app.`,
-      );
-      if (!confirmed) {
-        return;
-      }
+    if (
+      apply &&
+      (!toolFixSummary ||
+        toolFixSummary.toolId !== selectedTool.id ||
+        toolFixSummary.applied)
+    ) {
+      setToolFixError("Preview this repair again before applying it.");
+      return;
     }
 
     setIsToolFixing(true);
@@ -10363,8 +10355,10 @@ export default function App() {
         apply,
       });
       setToolFixSummary(summary);
+      setToolFixIssueIds(apply ? [] : issueIds);
       if (apply) {
         setToolExportResult(null);
+        await refreshToolFixHistory();
         setToolIssueRequest((previous) =>
           renewMusicToolIssueRequest(previous, {
             offset: 0,
@@ -10375,6 +10369,31 @@ export default function App() {
       setToolFixError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsToolFixing(false);
+    }
+  }
+
+  async function runToolUndo(runId: number) {
+    if (undoingToolFixRunId != null) {
+      return;
+    }
+
+    setUndoingToolFixRunId(runId);
+    setToolFixError(null);
+    try {
+      await undoMusicToolFix(runId);
+      setToolFixSummary(null);
+      setToolFixIssueIds([]);
+      setToolExportResult(null);
+      await refreshToolFixHistory();
+      setToolIssueRequest((previous) =>
+        renewMusicToolIssueRequest(previous, {
+          offset: 0,
+        }),
+      );
+    } catch (error) {
+      setToolFixError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setUndoingToolFixRunId(null);
     }
   }
 
@@ -13677,7 +13696,10 @@ export default function App() {
             <header className="topbar">
               <div>
                 <h1>Tools</h1>
-                <p>Validation issue lists for library cleanup checks.</p>
+                <p>
+                  Validate the library, review exact repair diffs, and undo
+                  app-local fixes safely.
+                </p>
               </div>
               <div className="topbar-actions">
                 <button
@@ -13832,7 +13854,7 @@ export default function App() {
             <section className="table-panel" aria-label="Validation tool index">
               <div className="panel-heading compact">
                 <div>
-                  <h2>Validation suite</h2>
+                  <h2>Validation &amp; repair suite</h2>
                   <p>
                     {isToolsLoading
                       ? "Loading tools"
@@ -13864,15 +13886,6 @@ export default function App() {
                   <p>{toolIssuePanelCaption}</p>
                 </div>
                 <div className="panel-actions">
-                  <MusicToolFixControls
-                    tool={selectedTool}
-                    response={currentToolIssueResponse}
-                    isPending={isToolRunPending}
-                    fixSummary={toolFixSummary}
-                    fixError={toolFixError}
-                    onPreview={() => runToolFix(false)}
-                    onApply={() => runToolFix(true)}
-                  />
                   <MusicToolExportControls
                     tool={selectedTool}
                     isPending={isToolRunPending}
@@ -13919,6 +13932,20 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              <MusicToolRepairPanel
+                tool={selectedTool}
+                response={currentToolIssueResponse}
+                isPending={isToolRunPending}
+                fixSummary={toolFixSummary}
+                fixHistory={toolFixHistory}
+                fixError={toolFixError}
+                historyError={toolFixHistoryError}
+                undoingRunId={undoingToolFixRunId}
+                onPreview={() => runToolFix(false)}
+                onApply={() => runToolFix(true)}
+                onUndo={runToolUndo}
+              />
 
               {toolIssueError ? (
                 <p className="error-message">{toolIssueError}</p>
