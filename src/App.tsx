@@ -84,7 +84,9 @@ import {
   importAlbumCovers,
   importBillboardCharts,
   importBillboardSingles,
-  importMusicBeeTsv,
+  applyImportPreview,
+  cancelImportPreview,
+  getImportPreview,
   importMusicBrainzArtistInfos,
   importMusicBrainzOriginCountries,
   isTauriRuntime,
@@ -111,6 +113,7 @@ import {
   saveSettings,
   previewMusicBrainzArtistInfoImport,
   previewMusicBrainzOriginCountryImport,
+  prepareImportPreview,
   refreshMusicBrainzArtistInfo,
   setMusicBrainzArtistLink,
   setMusicBrainzArtistOriginCountry,
@@ -121,6 +124,7 @@ import {
   searchLibrary,
   exportMusicToolIssues,
   restoreDatabaseBackup,
+  rollbackImportRun,
   runPerformanceProbe,
 } from "./backend";
 import type {
@@ -155,6 +159,7 @@ import type {
   GenreListResponse,
   GenreSummary,
   DurationAlbumStat,
+  ImportPreview,
   ImportRun,
   ImportSummary,
   LovedDensityStat,
@@ -305,6 +310,7 @@ import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPane
 import { MusicResearchPanel } from "./components/MusicResearchPanel";
 import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
 import { GenreTimeline } from "./components/GenreTimeline";
+import { ImportSafetyPanel } from "./components/ImportSafetyPanel";
 import {
   ChartAdvancedControls,
   ChartLunaCommandArea,
@@ -7136,8 +7142,15 @@ export default function App() {
   const [status, setStatus] = useState<LibraryStatus | null>(null);
   const [runs, setRuns] = useState<ImportRun[]>([]);
   const [progress, setProgress] = useState(defaultProgress);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(
+    null,
+  );
+  const [latestAppliedImport, setLatestAppliedImport] =
+    useState<ImportRun | null>(null);
   const [coverProgress, setCoverProgress] = useState(defaultCoverProgress);
   const [isImporting, setIsImporting] = useState(false);
+  const [isApplyingImport, setIsApplyingImport] = useState(false);
+  const [isCancellingImport, setIsCancellingImport] = useState(false);
   const [isImportingCovers, setIsImportingCovers] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [coverImportError, setCoverImportError] = useState<string | null>(null);
@@ -7491,6 +7504,11 @@ export default function App() {
     ]);
     setStatus(nextStatus);
     setRuns(nextRuns);
+    setLatestAppliedImport(
+      nextRuns.find(
+        (run) => run.status === "completed" && Boolean(run.backupPath),
+      ) ?? null,
+    );
     setDatabaseBackups(nextBackups);
     setBackupError(null);
     setSavedSearches(nextSavedSearches);
@@ -7499,6 +7517,13 @@ export default function App() {
     settingsRef.current = nextSettings;
     setSettings(nextSettings);
     setSourcePath(nextSettings.importSourcePath || defaultImportSourcePath);
+    void getImportPreview(
+      nextSettings.importSourcePath || defaultImportSourcePath,
+    )
+      .then(setImportPreview)
+      .catch(() => {
+        // A missing or moved TSV should not prevent the rest of the app from loading.
+      });
     setCoverSourcePath(nextSettings.coverSourcePath || defaultCoverSourcePath);
     setBillboardSourcePath(
       nextSettings.billboardSourcePath || defaultBillboardSourcePath,
@@ -8465,15 +8490,6 @@ export default function App() {
     };
   }, [activeSection, discoveryAlbumRequest, discoverySelection]);
 
-  const progressPercent = useMemo(() => {
-    if (progress.status === "completed") return 100;
-    if (progress.processedRows === 0) return isImporting ? 6 : 0;
-    return Math.min(
-      96,
-      Math.max(8, (progress.processedRows / 1_130_882) * 100),
-    );
-  }, [isImporting, progress.processedRows, progress.status]);
-
   const coverProgressPercent = useMemo(() => {
     if (coverProgress.status === "completed") return 100;
     if (coverProgress.scannedAlbums === 0) return isImportingCovers ? 4 : 0;
@@ -9309,36 +9325,156 @@ export default function App() {
     }
   }
 
-  async function startImport() {
+  async function prepareLibraryImport() {
     setIsImporting(true);
     setImportError(null);
     setProgress({
+      ...defaultProgress,
       status: "starting",
-      processedRows: 0,
-      albumCount: 0,
-      message: "Creating a database backup before import.",
+      message:
+        importPreview?.canResume && !importPreview.sourceChanged
+          ? "Opening the last durable TSV checkpoint."
+          : "Starting a resumable pre-import scan.",
     });
 
     try {
-      const summary: ImportSummary = await importMusicBeeTsv(sourcePath);
+      const preview = await prepareImportPreview(sourcePath);
+      setImportPreview(preview);
+      setProgress({
+        status: preview.status,
+        sessionId: preview.sessionId,
+        processedRows: preview.processedRows,
+        processedBytes: preview.processedBytes,
+        totalBytes: preview.sourceSizeBytes,
+        albumCount: preview.albumCount,
+        message:
+          preview.status === "ready"
+            ? "Delta ready. Review it before applying the atomic import."
+            : "Preparation stopped at a durable checkpoint.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setImportError(message);
+      setProgress((previous) => ({
+        ...previous,
+        status: "failed",
+        message,
+      }));
+    } finally {
+      setIsImporting(false);
+      setIsCancellingImport(false);
+    }
+  }
+
+  async function cancelLibraryImportPreparation() {
+    setIsCancellingImport(true);
+    setImportError(null);
+    try {
+      await cancelImportPreview();
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error));
+      setIsCancellingImport(false);
+    }
+  }
+
+  async function applyPreparedLibraryImport() {
+    if (!importPreview || importPreview.status !== "ready") {
+      return;
+    }
+    const confirmed = window.confirm(
+      [
+        "Apply this prepared MusicBee import?",
+        "",
+        `${formatNumber(importPreview.addedAlbums)} added albums`,
+        `${formatNumber(importPreview.changedAlbums)} changed albums`,
+        `${formatNumber(importPreview.removedAlbums)} removed albums`,
+        `${formatNumber(importPreview.suspiciousAlbumCount)} suspicious albums`,
+        "",
+        "A rollback backup will be created before the atomic replacement.",
+      ].join("\n"),
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsApplyingImport(true);
+    setImportError(null);
+    setProgress((previous) => ({
+      ...previous,
+      status: "applying",
+      message: "Creating the rollback backup before the atomic apply.",
+    }));
+    try {
+      const summary: ImportSummary = await applyImportPreview(
+        importPreview.sessionId,
+      );
+      setLatestAppliedImport(summary.importRun);
+      setImportPreview({
+        ...importPreview,
+        status: "completed",
+        completedAt: summary.importRun.completedAt,
+        importRunId: summary.importRun.id,
+      });
       setProgress({
         status: "completed",
+        sessionId: importPreview.sessionId,
         processedRows: summary.trackRows,
+        processedBytes: importPreview.sourceSizeBytes,
+        totalBytes: importPreview.sourceSizeBytes,
         albumCount: summary.albumCount,
-        message: "Import completed and album calculations refreshed.",
+        message:
+          "Import applied. The generated backup is ready for one-click rollback.",
       });
       await loadData();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setImportError(message);
-      setProgress({
+      setProgress((previous) => ({
+        ...previous,
         status: "failed",
-        processedRows: progress.processedRows,
-        albumCount: progress.albumCount,
         message,
-      });
+      }));
     } finally {
-      setIsImporting(false);
+      setIsApplyingImport(false);
+    }
+  }
+
+  async function rollbackCompletedImport(run: ImportRun) {
+    if (!run.backupPath || isRestoringBackup) {
+      return;
+    }
+    const confirmed = window.confirm(
+      [
+        `Roll back import from ${formatDate(run.startedAt)}?`,
+        "",
+        run.backupPath,
+        "",
+        "The current database will be copied to a pre-rollback safety backup first.",
+      ].join("\n"),
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsRestoringBackup(true);
+    setImportError(null);
+    setBackupError(null);
+    try {
+      const summary = await rollbackImportRun(run.id);
+      clearCoverImageCache();
+      setRestoreSummary(summary);
+      setLatestAppliedImport(null);
+      setImportPreview(null);
+      setProgress({
+        ...defaultProgress,
+        status: "completed",
+        message: `Rolled back to ${formatDate(run.startedAt)} backup.`,
+      });
+      await loadData();
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsRestoringBackup(false);
     }
   }
 
@@ -11265,72 +11401,29 @@ export default function App() {
               <p className="error-message">{settingsError}</p>
             ) : null}
 
-            <section className="import-panel">
-              <div className="panel-heading">
-                <div>
-                  <h2>musicbee-library.tsv</h2>
-                  <p>
-                    Streaming import validates headers and refreshes calculated
-                    album fields.
-                  </p>
-                </div>
-                <RunStatus status={progress.status} />
-              </div>
-
-              <label className="source-input">
-                <span>TSV source path</span>
-                <input
-                  value={sourcePath}
-                  onChange={(event) => setSourcePath(event.target.value)}
-                  placeholder="C:\\Music\\musicbee-library.tsv"
-                  disabled={isImporting}
-                />
-              </label>
-
-              <div className="progress-block" aria-live="polite">
-                <div className="progress-row">
-                  <span>{progress.message}</span>
-                  <strong>{formatNumber(progress.processedRows)} rows</strong>
-                </div>
-                <div className="progress-track">
-                  <div
-                    className="progress-fill"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-                <div className="progress-meta">
-                  <span>
-                    {formatNumber(progress.albumCount)} album keys observed
-                  </span>
-                  <span>Backup ready before data replacement</span>
-                </div>
-              </div>
-
-              {importError ? (
-                <p className="error-message">{importError}</p>
-              ) : null}
-
-              <div className="action-row">
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={startImport}
-                  disabled={isImporting || !sourcePath.trim() || !canImport}
-                  title={
-                    canImport
-                      ? "Start import"
-                      : "Open the Tauri desktop app to import"
-                  }
-                >
-                  <Play size={17} fill="currentColor" />
-                  <span>{isImporting ? "Importing" : "Start import"}</span>
-                </button>
-                <span className="db-path">
-                  {status?.dbPath ??
-                    "Database path will appear after initialization."}
-                </span>
-              </div>
-            </section>
+            <ImportSafetyPanel
+              sourcePath={sourcePath}
+              preview={importPreview}
+              progress={progress}
+              latestAppliedRun={latestAppliedImport}
+              databasePath={status?.dbPath ?? null}
+              error={importError}
+              isPreparing={isImporting}
+              isApplying={isApplyingImport}
+              isCancelling={isCancellingImport}
+              onSourcePathChange={(value) => {
+                setSourcePath(value);
+                if (importPreview?.sourcePath !== value) {
+                  setImportPreview(null);
+                  setProgress(defaultProgress);
+                  setImportError(null);
+                }
+              }}
+              onPrepare={() => void prepareLibraryImport()}
+              onCancel={() => void cancelLibraryImportPreparation()}
+              onApply={() => void applyPreparedLibraryImport()}
+              onRollback={(run) => void rollbackCompletedImport(run)}
+            />
 
             <section className="import-panel">
               <div className="panel-heading">

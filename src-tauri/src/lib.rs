@@ -32,7 +32,7 @@ use models::{
     YearProgressRequest, YearProgressStats,
 };
 #[cfg(not(test))]
-use models::{ImportRun, ImportSummary, LibraryStatus};
+use models::{ImportPreview, ImportRun, ImportSummary, LibraryStatus};
 #[cfg(not(test))]
 use tauri::AppHandle;
 #[cfg(not(test))]
@@ -640,10 +640,53 @@ async fn get_discovery(app: AppHandle) -> Result<DiscoveryResponse, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
-async fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<ImportSummary, String> {
-    tauri::async_runtime::spawn_blocking(move || importer::import_musicbee_tsv(app, source_path))
+async fn get_import_preview(
+    app: AppHandle,
+    source_path: String,
+) -> Result<Option<ImportPreview>, String> {
+    tauri::async_runtime::spawn_blocking(move || importer::get_import_preview(&app, source_path))
         .await
-        .map_err(|error| format!("Import task failed: {error}"))?
+        .map_err(|error| format!("Import preview lookup task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn prepare_import_preview(
+    app: AppHandle,
+    source_path: String,
+) -> Result<ImportPreview, String> {
+    tauri::async_runtime::spawn_blocking(move || importer::prepare_import_preview(app, source_path))
+        .await
+        .map_err(|error| format!("Import preview task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn cancel_import_preview() -> Result<(), String> {
+    importer::cancel_import_preview();
+    Ok(())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || importer::apply_import_preview(app, session_id))
+        .await
+        .map_err(|error| format!("Prepared import apply task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn rollback_import_run(
+    app: AppHandle,
+    import_run_id: i64,
+) -> Result<models::DatabaseRestoreSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || importer::rollback_import_run(&app, import_run_id))
+        .await
+        .map_err(|error| format!("Import rollback task failed: {error}"))?
         .map_err(|error| error.to_string())
 }
 
@@ -914,7 +957,11 @@ pub fn run() {
             get_year_progress,
             get_genre_progress,
             get_discovery,
-            import_musicbee_tsv,
+            get_import_preview,
+            prepare_import_preview,
+            cancel_import_preview,
+            apply_import_preview,
+            rollback_import_run,
             import_album_covers,
             import_billboard_charts,
             import_billboard_singles,

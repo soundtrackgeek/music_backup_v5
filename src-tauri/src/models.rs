@@ -92,9 +92,53 @@ pub struct DatabaseRestoreSummary {
 #[serde(rename_all = "camelCase")]
 pub struct ImportProgress {
     pub status: String,
+    pub session_id: Option<i64>,
     pub processed_rows: u64,
+    pub processed_bytes: u64,
+    pub total_bytes: u64,
     pub album_count: u64,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportSuspiciousAlbum {
+    pub album_id: String,
+    pub album: Option<String>,
+    pub album_artist_display: Option<String>,
+    pub year: Option<i32>,
+    pub reason: String,
+    pub previous_track_count: Option<i64>,
+    pub current_track_count: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportPreview {
+    pub session_id: i64,
+    pub source_path: String,
+    pub source_size_bytes: i64,
+    pub source_modified_ms: i64,
+    pub status: String,
+    pub processed_rows: i64,
+    pub processed_bytes: i64,
+    pub track_rows: i64,
+    pub album_count: i64,
+    pub added_tracks: i64,
+    pub changed_tracks: i64,
+    pub removed_tracks: i64,
+    pub added_albums: i64,
+    pub changed_albums: i64,
+    pub removed_albums: i64,
+    pub suspicious_album_count: i64,
+    pub suspicious_albums: Vec<ImportSuspiciousAlbum>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub completed_at: Option<String>,
+    pub import_run_id: Option<i64>,
+    pub error_message: Option<String>,
+    pub can_resume: bool,
+    pub source_changed: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

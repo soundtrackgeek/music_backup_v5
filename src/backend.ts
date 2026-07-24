@@ -133,6 +133,7 @@ import type {
   DiscoveryResponse,
   ExportResult,
   ImportProgress,
+  ImportPreview,
   ImportRun,
   ImportSummary,
   LibraryStatus,
@@ -180,6 +181,15 @@ import type {
 let mockSavedPlaylists: SavedPlaylist[] = [];
 let mockSavedExternalDiscoveries: SavedExternalDiscovery[] = [];
 let mockWishListItems: WishListItem[] = [];
+let mockPreparedImport: ImportPreview | null = null;
+let mockImportCancellationRequested = false;
+const mockImportProgressHandlers = new Set<(progress: ImportProgress) => void>();
+
+function emitMockImportProgress(progress: ImportProgress) {
+  for (const handler of mockImportProgressHandlers) {
+    handler(progress);
+  }
+}
 
 type RawExportResult = Omit<ExportResult, "pathCopied">;
 
@@ -1861,14 +1871,197 @@ export async function saveSettings(settings: AppSettings) {
   return saved;
 }
 
-export async function importMusicBeeTsv(sourcePath: string) {
+export async function getImportPreview(sourcePath: string) {
   if (!isTauriRuntime()) {
-    throw new Error(
-      "Start import from the Tauri desktop app to access local files and SQLite.",
-    );
+    return mockPreparedImport?.sourcePath === sourcePath
+      ? mockPreparedImport
+      : null;
   }
 
-  return invoke<ImportSummary>("import_musicbee_tsv", { sourcePath });
+  return invoke<ImportPreview | null>("get_import_preview", { sourcePath });
+}
+
+export async function prepareImportPreview(sourcePath: string) {
+  if (!isTauriRuntime()) {
+    mockImportCancellationRequested = false;
+    emitMockImportProgress({
+      status: "preparing",
+      sessionId: 42,
+      processedRows: 612_000,
+      processedBytes: 131_000_000,
+      totalBytes: 240_000_000,
+      albumCount: 41_820,
+      message: "Staging rows and saving a resumable checkpoint.",
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 180));
+    const wasCancelled = mockImportCancellationRequested;
+    mockPreparedImport = {
+      sessionId: 42,
+      sourcePath,
+      sourceSizeBytes: 240_000_000,
+      sourceModifiedMs: Date.now(),
+      status: wasCancelled ? "cancelled" : "ready",
+      processedRows: wasCancelled ? 612_000 : 1_136_420,
+      processedBytes: wasCancelled ? 131_000_000 : 240_000_000,
+      trackRows: wasCancelled ? 612_000 : 1_136_420,
+      albumCount: wasCancelled ? 41_820 : 77_104,
+      addedTracks: 6_128,
+      changedTracks: 1_442,
+      removedTracks: 590,
+      addedAlbums: 418,
+      changedAlbums: 236,
+      removedAlbums: 103,
+      suspiciousAlbumCount: 7,
+      suspiciousAlbums: [
+        {
+          albumId: "mock:removed",
+          album: "Northern Static",
+          albumArtistDisplay: "The Long Signal",
+          year: 1998,
+          reason: "Rated or loved album would be removed",
+          previousTrackCount: 11,
+          currentTrackCount: 0,
+        },
+        {
+          albumId: "mock:tracks",
+          album: "Low Season",
+          albumArtistDisplay: "Glass Harbour",
+          year: 2007,
+          reason: "Track count falls from 14 to 8",
+          previousTrackCount: 14,
+          currentTrackCount: 8,
+        },
+        {
+          albumId: "mock:artist",
+          album: "Collected Works",
+          albumArtistDisplay: null,
+          year: 1984,
+          reason: "Album artist metadata would disappear",
+          previousTrackCount: 18,
+          currentTrackCount: 18,
+        },
+      ],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      completedAt: null,
+      importRunId: null,
+      errorMessage: null,
+      canResume: wasCancelled,
+      sourceChanged: false,
+    };
+    emitMockImportProgress({
+      status: mockPreparedImport.status,
+      sessionId: 42,
+      processedRows: mockPreparedImport.processedRows,
+      processedBytes: mockPreparedImport.processedBytes,
+      totalBytes: mockPreparedImport.sourceSizeBytes,
+      albumCount: mockPreparedImport.albumCount,
+      message: wasCancelled
+        ? "Preparation cancelled. The checkpoint is safe to resume."
+        : "Delta ready. Review it before applying the atomic import.",
+    });
+    return mockPreparedImport;
+  }
+
+  return invoke<ImportPreview>("prepare_import_preview", { sourcePath });
+}
+
+export async function cancelImportPreview() {
+  if (!isTauriRuntime()) {
+    mockImportCancellationRequested = true;
+    if (mockPreparedImport) {
+      mockPreparedImport = {
+        ...mockPreparedImport,
+        status: "cancelled",
+        canResume: true,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return;
+  }
+
+  await invoke<void>("cancel_import_preview");
+}
+
+export async function applyImportPreview(sessionId: number) {
+  if (!isTauriRuntime()) {
+    if (!mockPreparedImport || mockPreparedImport.sessionId !== sessionId) {
+      throw new Error("Prepare the import delta before applying this import.");
+    }
+    const run: ImportRun = {
+      ...mockImportRuns[0],
+      id: 42,
+      startedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      trackRows: mockPreparedImport.trackRows,
+      albumCount: mockPreparedImport.albumCount,
+      addedTracks: mockPreparedImport.addedTracks,
+      changedTracks: mockPreparedImport.changedTracks,
+      removedTracks: mockPreparedImport.removedTracks,
+      addedAlbums: mockPreparedImport.addedAlbums,
+      changedAlbums: mockPreparedImport.changedAlbums,
+      removedAlbums: mockPreparedImport.removedAlbums,
+      backupPath: "Preview runtime rollback-42.sqlite3",
+    };
+    mockPreparedImport = {
+      ...mockPreparedImport,
+      status: "completed",
+      completedAt: run.completedAt,
+      importRunId: run.id,
+    };
+    mockImportRuns.unshift(run);
+    emitMockImportProgress({
+      status: "completed",
+      sessionId,
+      processedRows: run.trackRows,
+      processedBytes: mockPreparedImport.sourceSizeBytes,
+      totalBytes: mockPreparedImport.sourceSizeBytes,
+      albumCount: run.albumCount,
+      message: "Import applied. The generated backup is ready for rollback.",
+    });
+    return {
+      importRun: run,
+      trackRows: run.trackRows,
+      albumCount: run.albumCount,
+      durationMs: 8_420,
+      backupPath: run.backupPath,
+    } satisfies ImportSummary;
+  }
+
+  return invoke<ImportSummary>("apply_import_preview", { sessionId });
+}
+
+export async function rollbackImportRun(importRunId: number) {
+  if (!isTauriRuntime()) {
+    const run = mockImportRuns.find((candidate) => candidate.id === importRunId);
+    if (!run?.backupPath) {
+      throw new Error("This import does not have a rollback backup.");
+    }
+    return {
+      restoredBackup: {
+        id: importRunId,
+        createdAt: run.startedAt,
+        operation: "import",
+        sourcePath: run.sourcePath,
+        sourceSizeBytes: run.sourceSizeBytes,
+        backupPath: run.backupPath,
+        fileSizeBytes: 64_000_000,
+        trackRows: run.trackRows,
+        albumCount: run.albumCount,
+        schemaVersion: 25,
+        exists: true,
+        canRestore: true,
+      },
+      preRestoreBackupPath: "Preview runtime before-rollback.sqlite3",
+      trackCount: run.trackRows,
+      albumCount: run.albumCount,
+      schemaVersion: 25,
+    } satisfies DatabaseRestoreSummary;
+  }
+
+  return invoke<DatabaseRestoreSummary>("rollback_import_run", {
+    importRunId,
+  });
 }
 
 export async function importAlbumCovers(request: CoverImportRequest) {
@@ -2421,7 +2614,8 @@ export async function listenToImportProgress(
   handler: (progress: ImportProgress) => void,
 ) {
   if (!isTauriRuntime()) {
-    return (() => undefined) satisfies UnlistenFn;
+    mockImportProgressHandlers.add(handler);
+    return (() => mockImportProgressHandlers.delete(handler)) satisfies UnlistenFn;
   }
 
   return listen<ImportProgress>("import-progress", (event) => {

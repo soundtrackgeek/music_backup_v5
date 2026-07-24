@@ -347,7 +347,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_four_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_five_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -913,6 +913,119 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_musicbrainz_artist_info_import_runs_started
             ON musicbrainz_artist_info_import_runs(started_at);
 
+        CREATE TABLE IF NOT EXISTS import_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_path TEXT NOT NULL,
+            source_size_bytes INTEGER NOT NULL,
+            source_modified_ms INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            processed_rows INTEGER NOT NULL DEFAULT 0,
+            processed_bytes INTEGER NOT NULL DEFAULT 0,
+            track_rows INTEGER NOT NULL DEFAULT 0,
+            album_count INTEGER NOT NULL DEFAULT 0,
+            added_tracks INTEGER NOT NULL DEFAULT 0,
+            changed_tracks INTEGER NOT NULL DEFAULT 0,
+            removed_tracks INTEGER NOT NULL DEFAULT 0,
+            added_albums INTEGER NOT NULL DEFAULT 0,
+            changed_albums INTEGER NOT NULL DEFAULT 0,
+            removed_albums INTEGER NOT NULL DEFAULT 0,
+            suspicious_album_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            completed_at TEXT,
+            import_run_id INTEGER REFERENCES import_runs(id),
+            error_message TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_import_sessions_source
+            ON import_sessions(source_path, id DESC);
+
+        CREATE TABLE IF NOT EXISTS import_stage_tracks (
+            session_id INTEGER NOT NULL REFERENCES import_sessions(id) ON DELETE CASCADE,
+            row_number INTEGER NOT NULL,
+            display_artist TEXT NOT NULL,
+            album_rating_raw TEXT NOT NULL,
+            disc_number_raw TEXT NOT NULL,
+            album TEXT NOT NULL,
+            genre TEXT NOT NULL,
+            canonical_genre TEXT NOT NULL,
+            genre_normalized TEXT NOT NULL,
+            love TEXT NOT NULL,
+            publisher TEXT NOT NULL,
+            rating_raw TEXT NOT NULL,
+            title TEXT NOT NULL,
+            track_number_raw TEXT NOT NULL,
+            year_raw TEXT NOT NULL,
+            release_year_raw TEXT NOT NULL,
+            album_unique_id TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            album_artist_display TEXT NOT NULL,
+            time_raw TEXT NOT NULL,
+            normalized_rating INTEGER,
+            track_rating_value INTEGER,
+            album_rating INTEGER,
+            disc_number INTEGER,
+            track_number INTEGER,
+            year INTEGER,
+            release_year INTEGER,
+            time_seconds INTEGER,
+            album_id TEXT NOT NULL,
+            row_hash TEXT NOT NULL,
+            PRIMARY KEY (session_id, row_number)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_import_stage_tracks_identity
+            ON import_stage_tracks(session_id, file_path, filename);
+        CREATE INDEX IF NOT EXISTS idx_tracks_file_identity
+            ON tracks(file_path, filename);
+
+        CREATE TABLE IF NOT EXISTS import_stage_albums (
+            session_id INTEGER NOT NULL REFERENCES import_sessions(id) ON DELETE CASCADE,
+            album_id TEXT NOT NULL,
+            album_unique_id TEXT,
+            album TEXT,
+            album_artist_display TEXT,
+            single_display_artist TEXT,
+            single_display_artist_key TEXT,
+            has_multiple_display_artists INTEGER NOT NULL DEFAULT 0,
+            canonical_genre TEXT,
+            genre_normalized TEXT,
+            publisher TEXT,
+            year INTEGER,
+            release_year INTEGER,
+            album_rating INTEGER,
+            total_tracks INTEGER NOT NULL DEFAULT 0,
+            rated_tracks INTEGER NOT NULL DEFAULT 0,
+            normalized_rating_sum INTEGER NOT NULL DEFAULT 0,
+            total_seconds INTEGER NOT NULL DEFAULT 0,
+            loved_tracks INTEGER NOT NULL DEFAULT 0,
+            tmoe_seconds INTEGER NOT NULL DEFAULT 0,
+            final_album_artist_display TEXT,
+            rating_completeness REAL,
+            ae_ratio REAL,
+            calculated_album_rating INTEGER,
+            effective_album_rating INTEGER,
+            album_score REAL,
+            album_artist_display_inferred INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (session_id, album_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS import_suspicious_albums (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL REFERENCES import_sessions(id) ON DELETE CASCADE,
+            album_id TEXT NOT NULL,
+            album TEXT,
+            album_artist_display TEXT,
+            year INTEGER,
+            reason TEXT NOT NULL,
+            previous_track_count INTEGER,
+            current_track_count INTEGER
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_import_suspicious_albums_session
+            ON import_suspicious_albums(session_id, id);
+
         INSERT OR IGNORE INTO app_settings (
             id, backup_retention, dark_mode, updated_at
         ) VALUES (
@@ -940,7 +1053,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_origin_country_tables(conn)?;
     ensure_musicbrainz_artist_info_tables(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
-    conn.execute_batch("PRAGMA user_version = 24;")
+    conn.execute_batch("PRAGMA user_version = 25;")
         .context("Could not update SQLite schema version")?;
     Ok(())
 }
@@ -13286,6 +13399,11 @@ mod tests {
 
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
         assert!(phase_nineteen_schema_exists(&conn).expect("phase nineteen schema exists"));
+        assert!(migrations::phase_twenty_five_schema_exists(&conn)
+            .expect("phase twenty-five schema exists"));
+        assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
+        assert!(schema_table_exists(&conn, "import_stage_tracks")
+            .expect("import track staging table exists"));
         assert!(schema_table_exists(&conn, "musicbrainz_origin_countries")
             .expect("origin country table exists"));
         assert!(

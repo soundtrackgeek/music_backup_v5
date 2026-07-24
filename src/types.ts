@@ -76,9 +76,49 @@ export type DatabaseRestoreSummary = {
 
 export type ImportProgress = {
   status: string;
+  sessionId: number | null;
   processedRows: number;
+  processedBytes: number;
+  totalBytes: number;
   albumCount: number;
   message: string;
+};
+
+export type ImportSuspiciousAlbum = {
+  albumId: string;
+  album: string | null;
+  albumArtistDisplay: string | null;
+  year: number | null;
+  reason: string;
+  previousTrackCount: number | null;
+  currentTrackCount: number | null;
+};
+
+export type ImportPreview = {
+  sessionId: number;
+  sourcePath: string;
+  sourceSizeBytes: number;
+  sourceModifiedMs: number;
+  status: string;
+  processedRows: number;
+  processedBytes: number;
+  trackRows: number;
+  albumCount: number;
+  addedTracks: number;
+  changedTracks: number;
+  removedTracks: number;
+  addedAlbums: number;
+  changedAlbums: number;
+  removedAlbums: number;
+  suspiciousAlbumCount: number;
+  suspiciousAlbums: ImportSuspiciousAlbum[];
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  importRunId: number | null;
+  errorMessage: string | null;
+  canResume: boolean;
+  sourceChanged: boolean;
 };
 
 export type ImportSummary = {

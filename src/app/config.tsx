@@ -195,7 +195,10 @@ export const maxGenreSuggestions = 5;
 
 export const defaultProgress: ImportProgress = {
   status: "idle",
+  sessionId: null,
   processedRows: 0,
+  processedBytes: 0,
+  totalBytes: 0,
   albumCount: 0,
   message: "Ready to import a MusicBee TSV export.",
 };

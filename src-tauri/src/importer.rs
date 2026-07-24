@@ -1,19 +1,26 @@
-#[cfg(not(test))]
 use crate::db;
+use crate::models::{ImportPreview, ImportSuspiciousAlbum};
 #[cfg(not(test))]
 use crate::models::{ImportProgress, ImportSummary};
 use crate::wishlist;
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
-use csv::StringRecord;
-use rusqlite::{params, Connection, Transaction};
+use csv::{Position, StringRecord};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
+use std::time::UNIX_EPOCH;
 #[cfg(not(test))]
 use tauri::{AppHandle, Emitter};
+
+const IMPORT_STAGE_BATCH_SIZE: usize = 5_000;
+const IMPORT_SUSPICIOUS_EXAMPLE_LIMIT: i64 = 12;
+static IMPORT_CANCEL_REQUESTED: AtomicBool = AtomicBool::new(false);
+static IMPORT_WORKFLOW_RUNNING: AtomicBool = AtomicBool::new(false);
 
 const REQUIRED_COLUMNS: [&str; 17] = [
     "Display Artist",
@@ -112,6 +119,7 @@ struct AlbumAggregate {
     tmoe_seconds: i64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct FinalAlbum {
     album_id: String,
@@ -154,6 +162,7 @@ struct PreviousAlbum {
     album_score: Option<f64>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 struct ImportChanges {
     added_tracks: i64,
@@ -180,7 +189,1337 @@ struct RatingEventRecord {
     current_effective_album_rating: Option<i32>,
 }
 
+#[derive(Debug, Clone)]
+struct ImportSessionRecord {
+    id: i64,
+    source_path: String,
+    source_size_bytes: i64,
+    source_modified_ms: i64,
+    status: String,
+    processed_rows: i64,
+    processed_bytes: i64,
+    track_rows: i64,
+    album_count: i64,
+    added_tracks: i64,
+    changed_tracks: i64,
+    removed_tracks: i64,
+    added_albums: i64,
+    changed_albums: i64,
+    removed_albums: i64,
+    suspicious_album_count: i64,
+    created_at: String,
+    updated_at: String,
+    completed_at: Option<String>,
+    import_run_id: Option<i64>,
+    error_message: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct SourceFingerprint {
+    path: PathBuf,
+    path_text: String,
+    size_bytes: i64,
+    modified_ms: i64,
+}
+
+struct ImportWorkflowGuard;
+
+impl ImportWorkflowGuard {
+    fn acquire() -> Result<Self> {
+        if IMPORT_WORKFLOW_RUNNING
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            bail!("Another library import workflow is already running");
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for ImportWorkflowGuard {
+    fn drop(&mut self) {
+        IMPORT_WORKFLOW_RUNNING.store(false, Ordering::SeqCst);
+    }
+}
+
 #[cfg(not(test))]
+pub fn get_import_preview(app: &AppHandle, source_path: String) -> Result<Option<ImportPreview>> {
+    let (conn, _) = db::open(app)?;
+    let fingerprint = source_fingerprint(&source_path).ok();
+    latest_import_preview(&conn, source_path.trim(), fingerprint.as_ref())
+}
+
+#[cfg(not(test))]
+pub fn prepare_import_preview(app: AppHandle, source_path: String) -> Result<ImportPreview> {
+    let _workflow_guard = ImportWorkflowGuard::acquire()?;
+    IMPORT_CANCEL_REQUESTED.store(false, Ordering::SeqCst);
+    let (mut conn, _) = db::open(&app)?;
+    let fingerprint = source_fingerprint(&source_path)?;
+    let progress = |status: &str,
+                    session_id: Option<i64>,
+                    processed_rows: u64,
+                    processed_bytes: u64,
+                    album_count: u64,
+                    message: &str| {
+        emit_progress(
+            &app,
+            status,
+            session_id,
+            processed_rows,
+            processed_bytes,
+            fingerprint.size_bytes.max(0) as u64,
+            album_count,
+            message,
+        );
+    };
+    prepare_import_preview_for_connection(
+        &mut conn,
+        &fingerprint,
+        &IMPORT_CANCEL_REQUESTED,
+        &progress,
+    )
+}
+
+pub fn cancel_import_preview() {
+    IMPORT_CANCEL_REQUESTED.store(true, Ordering::SeqCst);
+}
+
+#[cfg(not(test))]
+pub fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSummary> {
+    let _workflow_guard = ImportWorkflowGuard::acquire()?;
+    IMPORT_CANCEL_REQUESTED.store(false, Ordering::SeqCst);
+    let started = Instant::now();
+    let (mut conn, db_path) = db::open(&app)?;
+    let session = load_import_session(&conn, session_id)?;
+    if session.status != "ready" {
+        bail!("Prepare the import delta before applying this import");
+    }
+    let fingerprint = source_fingerprint(&session.source_path)?;
+    ensure_session_source_matches(&session, &fingerprint)?;
+    let settings = db::settings_for_connection(&conn)?;
+
+    emit_progress(
+        &app,
+        "applying",
+        Some(session_id),
+        session.track_rows.max(0) as u64,
+        session.source_size_bytes.max(0) as u64,
+        session.source_size_bytes.max(0) as u64,
+        session.album_count.max(0) as u64,
+        "Creating the rollback backup before the atomic apply.",
+    );
+    let backup_path = create_backup(
+        &conn,
+        &db_path,
+        &fingerprint.path,
+        fingerprint.size_bytes,
+        settings.backup_retention as usize,
+    )?;
+    let backup_path_text = backup_path.as_ref().map(|path| path.display().to_string());
+
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "
+        INSERT INTO import_runs (
+            source_path, source_size_bytes, started_at, status, backup_path,
+            added_tracks, changed_tracks, removed_tracks,
+            added_albums, changed_albums, removed_albums
+        ) VALUES (?1, ?2, ?3, 'running', ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        ",
+        params![
+            &session.source_path,
+            session.source_size_bytes,
+            &now,
+            &backup_path_text,
+            session.added_tracks,
+            session.changed_tracks,
+            session.removed_tracks,
+            session.added_albums,
+            session.changed_albums,
+            session.removed_albums,
+        ],
+    )
+    .context("Could not create import run for the prepared delta")?;
+    let import_run_id = conn.last_insert_rowid();
+
+    let result = apply_staged_import(&mut conn, &session, import_run_id, started);
+    match result {
+        Ok((track_rows, album_count, rating_events_count)) => {
+            let duration_ms = started.elapsed().as_millis();
+            wishlist::reconcile_for_connection(&conn)
+                .context("Could not reconcile the wish list after import")?;
+            cleanup_completed_stage(&conn, session_id)?;
+            emit_progress(
+                &app,
+                "completed",
+                Some(session_id),
+                track_rows,
+                session.source_size_bytes.max(0) as u64,
+                session.source_size_bytes.max(0) as u64,
+                album_count,
+                "Import applied. The generated backup is ready for one-click rollback.",
+            );
+            let import_run = db::get_import_run(&conn, import_run_id)?;
+            debug_assert_eq!(import_run.rating_events_count, rating_events_count);
+            Ok(ImportSummary {
+                import_run,
+                track_rows,
+                album_count,
+                duration_ms,
+                backup_path: backup_path_text,
+            })
+        }
+        Err(error) => {
+            let message = error.to_string();
+            let _ = conn.execute(
+                "
+                UPDATE import_runs
+                SET completed_at = ?1, status = 'failed', duration_ms = ?2, error_message = ?3
+                WHERE id = ?4
+                ",
+                params![
+                    Utc::now().to_rfc3339(),
+                    started.elapsed().as_millis() as i64,
+                    &message,
+                    import_run_id
+                ],
+            );
+            let _ = conn.execute(
+                "UPDATE import_sessions SET status = 'ready', updated_at = ?1, error_message = ?2 WHERE id = ?3",
+                params![Utc::now().to_rfc3339(), &message, session_id],
+            );
+            emit_progress(
+                &app,
+                "failed",
+                Some(session_id),
+                session.processed_rows.max(0) as u64,
+                session.processed_bytes.max(0) as u64,
+                session.source_size_bytes.max(0) as u64,
+                session.album_count.max(0) as u64,
+                "Atomic apply failed; the active library was left unchanged.",
+            );
+            Err(error)
+        }
+    }
+}
+
+#[cfg(not(test))]
+pub fn rollback_import_run(
+    app: &AppHandle,
+    import_run_id: i64,
+) -> Result<crate::models::DatabaseRestoreSummary> {
+    let (conn, _) = db::open(app)?;
+    let run = db::get_import_run(&conn, import_run_id)?;
+    if run.status != "completed" {
+        bail!("Only completed imports can be rolled back");
+    }
+    let backup_path = run
+        .backup_path
+        .ok_or_else(|| anyhow!("This import does not have a rollback backup"))?;
+    drop(conn);
+    db::restore_database_backup_for_app(app, backup_path)
+}
+
+fn source_fingerprint(source_path: &str) -> Result<SourceFingerprint> {
+    let path = resolve_source_path(source_path)?;
+    let metadata = fs::metadata(&path)
+        .with_context(|| format!("Could not read metadata for {}", path.display()))?;
+    let modified_ms = metadata
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|value| value.as_millis().min(i64::MAX as u128) as i64)
+        .unwrap_or_default();
+    Ok(SourceFingerprint {
+        path_text: path.display().to_string(),
+        path,
+        size_bytes: metadata.len().min(i64::MAX as u64) as i64,
+        modified_ms,
+    })
+}
+
+fn ensure_session_source_matches(
+    session: &ImportSessionRecord,
+    fingerprint: &SourceFingerprint,
+) -> Result<()> {
+    if session.source_path != fingerprint.path_text
+        || session.source_size_bytes != fingerprint.size_bytes
+        || session.source_modified_ms != fingerprint.modified_ms
+    {
+        bail!("The TSV changed after its delta was prepared. Prepare a new delta before importing");
+    }
+    Ok(())
+}
+
+fn import_session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ImportSessionRecord> {
+    Ok(ImportSessionRecord {
+        id: row.get(0)?,
+        source_path: row.get(1)?,
+        source_size_bytes: row.get(2)?,
+        source_modified_ms: row.get(3)?,
+        status: row.get(4)?,
+        processed_rows: row.get(5)?,
+        processed_bytes: row.get(6)?,
+        track_rows: row.get(7)?,
+        album_count: row.get(8)?,
+        added_tracks: row.get(9)?,
+        changed_tracks: row.get(10)?,
+        removed_tracks: row.get(11)?,
+        added_albums: row.get(12)?,
+        changed_albums: row.get(13)?,
+        removed_albums: row.get(14)?,
+        suspicious_album_count: row.get(15)?,
+        created_at: row.get(16)?,
+        updated_at: row.get(17)?,
+        completed_at: row.get(18)?,
+        import_run_id: row.get(19)?,
+        error_message: row.get(20)?,
+    })
+}
+
+fn import_session_select_sql() -> &'static str {
+    "
+    SELECT id, source_path, source_size_bytes, source_modified_ms, status,
+           processed_rows, processed_bytes, track_rows, album_count,
+           added_tracks, changed_tracks, removed_tracks,
+           added_albums, changed_albums, removed_albums,
+           suspicious_album_count, created_at, updated_at, completed_at,
+           import_run_id, error_message
+    FROM import_sessions
+    "
+}
+
+fn load_import_session(conn: &Connection, session_id: i64) -> Result<ImportSessionRecord> {
+    let sql = format!("{} WHERE id = ?1", import_session_select_sql());
+    conn.query_row(&sql, params![session_id], import_session_from_row)
+        .with_context(|| format!("Could not load import session {session_id}"))
+}
+
+fn latest_import_session(
+    conn: &Connection,
+    source_path: &str,
+) -> Result<Option<ImportSessionRecord>> {
+    let sql = format!(
+        "{} WHERE source_path = ?1 AND status != 'completed' ORDER BY id DESC LIMIT 1",
+        import_session_select_sql()
+    );
+    conn.query_row(&sql, params![source_path], import_session_from_row)
+        .optional()
+        .context("Could not load the latest import session")
+}
+
+fn suspicious_albums_for_session(
+    conn: &Connection,
+    session_id: i64,
+) -> Result<Vec<ImportSuspiciousAlbum>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT album_id, album, album_artist_display, year, reason,
+               previous_track_count, current_track_count
+        FROM import_suspicious_albums
+        WHERE session_id = ?1
+        ORDER BY id
+        LIMIT ?2
+        ",
+    )?;
+    let rows = stmt.query_map(
+        params![session_id, IMPORT_SUSPICIOUS_EXAMPLE_LIMIT],
+        |row| {
+            Ok(ImportSuspiciousAlbum {
+                album_id: row.get(0)?,
+                album: row.get(1)?,
+                album_artist_display: row.get(2)?,
+                year: row.get(3)?,
+                reason: row.get(4)?,
+                previous_track_count: row.get(5)?,
+                current_track_count: row.get(6)?,
+            })
+        },
+    )?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load suspicious import albums")
+}
+
+fn preview_from_session(
+    conn: &Connection,
+    session: ImportSessionRecord,
+    fingerprint: Option<&SourceFingerprint>,
+) -> Result<ImportPreview> {
+    let source_changed = fingerprint
+        .map(|current| {
+            current.path_text != session.source_path
+                || current.size_bytes != session.source_size_bytes
+                || current.modified_ms != session.source_modified_ms
+        })
+        .unwrap_or(true);
+    let can_resume = !source_changed
+        && session.processed_rows > 0
+        && matches!(
+            session.status.as_str(),
+            "cancelled" | "failed" | "preparing"
+        );
+    Ok(ImportPreview {
+        session_id: session.id,
+        source_path: session.source_path,
+        source_size_bytes: session.source_size_bytes,
+        source_modified_ms: session.source_modified_ms,
+        status: session.status,
+        processed_rows: session.processed_rows,
+        processed_bytes: session.processed_bytes,
+        track_rows: session.track_rows,
+        album_count: session.album_count,
+        added_tracks: session.added_tracks,
+        changed_tracks: session.changed_tracks,
+        removed_tracks: session.removed_tracks,
+        added_albums: session.added_albums,
+        changed_albums: session.changed_albums,
+        removed_albums: session.removed_albums,
+        suspicious_album_count: session.suspicious_album_count,
+        suspicious_albums: suspicious_albums_for_session(conn, session.id)?,
+        created_at: session.created_at,
+        updated_at: session.updated_at,
+        completed_at: session.completed_at,
+        import_run_id: session.import_run_id,
+        error_message: session.error_message,
+        can_resume,
+        source_changed,
+    })
+}
+
+fn latest_import_preview(
+    conn: &Connection,
+    source_path: &str,
+    fingerprint: Option<&SourceFingerprint>,
+) -> Result<Option<ImportPreview>> {
+    let lookup_path = fingerprint
+        .map(|value| value.path_text.as_str())
+        .unwrap_or(source_path);
+    latest_import_session(conn, lookup_path)?
+        .map(|session| preview_from_session(conn, session, fingerprint))
+        .transpose()
+}
+
+type ImportProgressCallback<'a> = dyn Fn(&str, Option<i64>, u64, u64, u64, &str) + 'a;
+
+fn prepare_import_preview_for_connection(
+    conn: &mut Connection,
+    fingerprint: &SourceFingerprint,
+    cancel_requested: &AtomicBool,
+    progress: &ImportProgressCallback<'_>,
+) -> Result<ImportPreview> {
+    let result = prepare_import_preview_inner(conn, fingerprint, cancel_requested, progress);
+    if let Err(error) = &result {
+        if let Ok(Some(session)) = latest_import_session(conn, &fingerprint.path_text) {
+            let status = if session.processed_rows > 0 {
+                "failed"
+            } else {
+                "failed"
+            };
+            let _ = conn.execute(
+                "
+                UPDATE import_sessions
+                SET status = ?1, updated_at = ?2, error_message = ?3
+                WHERE id = ?4
+                ",
+                params![
+                    status,
+                    Utc::now().to_rfc3339(),
+                    error.to_string(),
+                    session.id
+                ],
+            );
+        }
+    }
+    result
+}
+
+fn prepare_import_preview_inner(
+    conn: &mut Connection,
+    fingerprint: &SourceFingerprint,
+    cancel_requested: &AtomicBool,
+    progress: &ImportProgressCallback<'_>,
+) -> Result<ImportPreview> {
+    let existing = latest_import_session(conn, &fingerprint.path_text)?;
+    if let Some(session) = existing.as_ref() {
+        if session.source_size_bytes == fingerprint.size_bytes
+            && session.source_modified_ms == fingerprint.modified_ms
+            && session.status == "ready"
+        {
+            return preview_from_session(conn, session.clone(), Some(fingerprint));
+        }
+    }
+
+    let session_id = if let Some(session) = existing.filter(|session| {
+        session.source_size_bytes == fingerprint.size_bytes
+            && session.source_modified_ms == fingerprint.modified_ms
+            && matches!(
+                session.status.as_str(),
+                "preparing" | "cancelled" | "failed"
+            )
+    }) {
+        conn.execute(
+            "
+            UPDATE import_sessions
+            SET status = 'preparing', updated_at = ?1, error_message = NULL
+            WHERE id = ?2
+            ",
+            params![Utc::now().to_rfc3339(), session.id],
+        )?;
+        session.id
+    } else {
+        let cleanup = conn.transaction()?;
+        cleanup.execute(
+            "DELETE FROM import_sessions WHERE status != 'completed'",
+            [],
+        )?;
+        let now = Utc::now().to_rfc3339();
+        cleanup.execute(
+            "
+            INSERT INTO import_sessions (
+                source_path, source_size_bytes, source_modified_ms, status,
+                created_at, updated_at
+            ) VALUES (?1, ?2, ?3, 'preparing', ?4, ?4)
+            ",
+            params![
+                &fingerprint.path_text,
+                fingerprint.size_bytes,
+                fingerprint.modified_ms,
+                &now
+            ],
+        )?;
+        let id = cleanup.last_insert_rowid();
+        cleanup.commit()?;
+        id
+    };
+
+    let session = load_import_session(conn, session_id)?;
+    progress(
+        if session.processed_rows > 0 {
+            "resuming"
+        } else {
+            "preparing"
+        },
+        Some(session_id),
+        session.processed_rows.max(0) as u64,
+        session.processed_bytes.max(0) as u64,
+        session.album_count.max(0) as u64,
+        if session.processed_rows > 0 {
+            "Resuming from the last durable TSV checkpoint."
+        } else {
+            "Staging the TSV while the active library stays untouched."
+        },
+    );
+
+    let mut reader = musicbee_tsv_reader_builder()
+        .from_path(&fingerprint.path)
+        .with_context(|| format!("Could not open TSV source {}", fingerprint.path.display()))?;
+    let headers = reader
+        .headers()
+        .context("Could not read TSV header")?
+        .clone();
+    let header_map = HeaderMap::from_headers(&headers)?;
+    if session.processed_bytes > 0 {
+        let mut position = Position::new();
+        position
+            .set_byte(session.processed_bytes as u64)
+            .set_record(session.processed_rows.max(0) as u64 + 1);
+        reader
+            .seek(position)
+            .context("Could not seek to the saved TSV checkpoint")?;
+    }
+
+    let mut albums = load_stage_album_aggregates(conn, session_id)?;
+    let mut processed_rows = session.processed_rows.max(0) as u64;
+    let mut processed_bytes = session.processed_bytes.max(0) as u64;
+    let mut reached_end = false;
+
+    while !reached_end {
+        let mut chunk = Vec::with_capacity(IMPORT_STAGE_BATCH_SIZE);
+        let mut record = StringRecord::new();
+        while chunk.len() < IMPORT_STAGE_BATCH_SIZE {
+            if cancel_requested.load(Ordering::SeqCst) {
+                break;
+            }
+            if !reader
+                .read_record(&mut record)
+                .context("Could not read TSV record")?
+            {
+                reached_end = true;
+                break;
+            }
+            let track = TrackRow::from_record(&record, &header_map)?;
+            processed_rows += 1;
+            processed_bytes = reader.position().byte();
+            chunk.push(track);
+        }
+
+        if !chunk.is_empty() {
+            persist_stage_chunk(
+                conn,
+                session_id,
+                processed_rows - chunk.len() as u64 + 1,
+                &chunk,
+                &mut albums,
+                processed_rows,
+                processed_bytes,
+            )?;
+            progress(
+                "preparing",
+                Some(session_id),
+                processed_rows,
+                processed_bytes,
+                albums.len() as u64,
+                "Staging rows and saving a resumable checkpoint.",
+            );
+        }
+
+        if cancel_requested.load(Ordering::SeqCst) {
+            conn.execute(
+                "
+                UPDATE import_sessions
+                SET status = 'cancelled', updated_at = ?1, error_message = NULL
+                WHERE id = ?2
+                ",
+                params![Utc::now().to_rfc3339(), session_id],
+            )?;
+            progress(
+                "cancelled",
+                Some(session_id),
+                processed_rows,
+                processed_bytes,
+                albums.len() as u64,
+                "Preparation cancelled. The checkpoint is safe to resume.",
+            );
+            return preview_from_session(
+                conn,
+                load_import_session(conn, session_id)?,
+                Some(fingerprint),
+            );
+        }
+    }
+
+    progress(
+        "analyzing",
+        Some(session_id),
+        processed_rows,
+        processed_bytes,
+        albums.len() as u64,
+        "Comparing the staged snapshot with the active library.",
+    );
+    let final_albums = albums
+        .values()
+        .map(AlbumAggregate::finalize)
+        .collect::<Vec<_>>();
+    persist_stage_final_albums(conn, session_id, &final_albums)?;
+    let changes = calculate_staged_changes(conn, session_id, &final_albums)?;
+    let suspicious = find_suspicious_albums(conn, &final_albums)?;
+    persist_import_delta(
+        conn,
+        session_id,
+        processed_rows,
+        albums.len() as u64,
+        &changes,
+        &suspicious,
+    )?;
+
+    progress(
+        "ready",
+        Some(session_id),
+        processed_rows,
+        fingerprint.size_bytes.max(0) as u64,
+        albums.len() as u64,
+        "Delta ready. Review it before applying the atomic import.",
+    );
+    preview_from_session(
+        conn,
+        load_import_session(conn, session_id)?,
+        Some(fingerprint),
+    )
+}
+
+fn load_stage_album_aggregates(
+    conn: &Connection,
+    session_id: i64,
+) -> Result<HashMap<String, AlbumAggregate>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT album_id, album_unique_id, album, album_artist_display,
+               single_display_artist, single_display_artist_key,
+               has_multiple_display_artists, canonical_genre, genre_normalized,
+               publisher, year, release_year, album_rating, total_tracks,
+               rated_tracks, normalized_rating_sum, total_seconds, loved_tracks,
+               tmoe_seconds
+        FROM import_stage_albums
+        WHERE session_id = ?1
+        ",
+    )?;
+    let rows = stmt.query_map(params![session_id], |row| {
+        let album_id: String = row.get(0)?;
+        Ok((
+            album_id.clone(),
+            AlbumAggregate {
+                album_id,
+                album_unique_id: row.get(1)?,
+                album: row.get(2)?,
+                album_artist_display: row.get(3)?,
+                single_display_artist: row.get(4)?,
+                single_display_artist_key: row.get(5)?,
+                has_multiple_display_artists: row.get(6)?,
+                canonical_genre: row.get(7)?,
+                genre_normalized: row.get(8)?,
+                publisher: row.get(9)?,
+                year: row.get(10)?,
+                release_year: row.get(11)?,
+                album_rating: row.get(12)?,
+                total_tracks: row.get::<_, i64>(13)? as u32,
+                rated_tracks: row.get::<_, i64>(14)? as u32,
+                normalized_rating_sum: row.get(15)?,
+                total_seconds: row.get(16)?,
+                loved_tracks: row.get::<_, i64>(17)? as u32,
+                tmoe_seconds: row.get(18)?,
+            },
+        ))
+    })?;
+    rows.collect::<rusqlite::Result<HashMap<_, _>>>()
+        .context("Could not load staged album checkpoints")
+}
+
+fn persist_stage_chunk(
+    conn: &mut Connection,
+    session_id: i64,
+    first_row_number: u64,
+    chunk: &[TrackRow],
+    albums: &mut HashMap<String, AlbumAggregate>,
+    processed_rows: u64,
+    processed_bytes: u64,
+) -> Result<()> {
+    let mut dirty_album_ids = HashSet::new();
+    for track in chunk {
+        albums
+            .entry(track.album_id.clone())
+            .or_insert_with(|| AlbumAggregate::new(track))
+            .apply(track);
+        dirty_album_ids.insert(track.album_id.clone());
+    }
+
+    let tx = conn
+        .transaction()
+        .context("Could not save import checkpoint")?;
+    {
+        let mut insert = tx.prepare(
+            "
+            INSERT INTO import_stage_tracks (
+                session_id, row_number, display_artist, album_rating_raw,
+                disc_number_raw, album, genre, canonical_genre, genre_normalized,
+                love, publisher, rating_raw, title, track_number_raw, year_raw,
+                release_year_raw, album_unique_id, file_path, filename,
+                album_artist_display, time_raw, normalized_rating,
+                track_rating_value, album_rating, disc_number, track_number,
+                year, release_year, time_seconds, album_id, row_hash
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
+                ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24,
+                ?25, ?26, ?27, ?28, ?29, ?30, ?31
+            )
+            ",
+        )?;
+        for (index, track) in chunk.iter().enumerate() {
+            insert.execute(params![
+                session_id,
+                (first_row_number + index as u64) as i64,
+                &track.display_artist,
+                &track.album_rating_raw,
+                &track.disc_number_raw,
+                &track.album,
+                &track.genre,
+                &track.canonical_genre,
+                &track.genre_normalized,
+                &track.love,
+                &track.publisher,
+                &track.rating_raw,
+                &track.title,
+                &track.track_number_raw,
+                &track.year_raw,
+                &track.release_year_raw,
+                &track.album_unique_id,
+                &track.file_path,
+                &track.filename,
+                &track.album_artist_display,
+                &track.time_raw,
+                track.normalized_rating,
+                track.track_rating_value,
+                track.album_rating,
+                track.disc_number,
+                track.track_number,
+                track.year,
+                track.release_year,
+                track.time_seconds,
+                &track.album_id,
+                &track.row_hash,
+            ])?;
+        }
+    }
+    {
+        let mut upsert = tx.prepare(
+            "
+            INSERT INTO import_stage_albums (
+                session_id, album_id, album_unique_id, album,
+                album_artist_display, single_display_artist,
+                single_display_artist_key, has_multiple_display_artists,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                album_rating, total_tracks, rated_tracks, normalized_rating_sum,
+                total_seconds, loved_tracks, tmoe_seconds
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
+                ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20
+            )
+            ON CONFLICT(session_id, album_id) DO UPDATE SET
+                album_unique_id = excluded.album_unique_id,
+                album = excluded.album,
+                album_artist_display = excluded.album_artist_display,
+                single_display_artist = excluded.single_display_artist,
+                single_display_artist_key = excluded.single_display_artist_key,
+                has_multiple_display_artists = excluded.has_multiple_display_artists,
+                canonical_genre = excluded.canonical_genre,
+                genre_normalized = excluded.genre_normalized,
+                publisher = excluded.publisher,
+                year = excluded.year,
+                release_year = excluded.release_year,
+                album_rating = excluded.album_rating,
+                total_tracks = excluded.total_tracks,
+                rated_tracks = excluded.rated_tracks,
+                normalized_rating_sum = excluded.normalized_rating_sum,
+                total_seconds = excluded.total_seconds,
+                loved_tracks = excluded.loved_tracks,
+                tmoe_seconds = excluded.tmoe_seconds
+            ",
+        )?;
+        for album_id in dirty_album_ids {
+            let album = albums
+                .get(&album_id)
+                .ok_or_else(|| anyhow!("Missing staged album accumulator {album_id}"))?;
+            upsert.execute(params![
+                session_id,
+                &album.album_id,
+                &album.album_unique_id,
+                &album.album,
+                &album.album_artist_display,
+                &album.single_display_artist,
+                &album.single_display_artist_key,
+                album.has_multiple_display_artists,
+                &album.canonical_genre,
+                &album.genre_normalized,
+                &album.publisher,
+                album.year,
+                album.release_year,
+                album.album_rating,
+                album.total_tracks,
+                album.rated_tracks,
+                album.normalized_rating_sum,
+                album.total_seconds,
+                album.loved_tracks,
+                album.tmoe_seconds,
+            ])?;
+        }
+    }
+    tx.execute(
+        "
+        UPDATE import_sessions
+        SET status = 'preparing', processed_rows = ?1, processed_bytes = ?2,
+            track_rows = ?1, album_count = ?3, updated_at = ?4,
+            error_message = NULL
+        WHERE id = ?5
+        ",
+        params![
+            processed_rows as i64,
+            processed_bytes as i64,
+            albums.len() as i64,
+            Utc::now().to_rfc3339(),
+            session_id
+        ],
+    )?;
+    tx.commit().context("Could not commit import checkpoint")?;
+    Ok(())
+}
+
+fn persist_stage_final_albums(
+    conn: &mut Connection,
+    session_id: i64,
+    albums: &[FinalAlbum],
+) -> Result<()> {
+    let tx = conn
+        .transaction()
+        .context("Could not start staged album finalization")?;
+    {
+        let mut update = tx.prepare(
+            "
+            UPDATE import_stage_albums
+            SET final_album_artist_display = ?1,
+                rating_completeness = ?2,
+                ae_ratio = ?3,
+                calculated_album_rating = ?4,
+                effective_album_rating = ?5,
+                album_score = ?6,
+                album_artist_display_inferred = ?7
+            WHERE session_id = ?8 AND album_id = ?9
+            ",
+        )?;
+        for album in albums {
+            update.execute(params![
+                &album.album_artist_display,
+                album.rating_completeness,
+                album.ae_ratio,
+                album.calculated_album_rating,
+                album.effective_album_rating,
+                album.album_score,
+                album.album_artist_display_inferred,
+                session_id,
+                &album.album_id,
+            ])?;
+        }
+    }
+    tx.commit()
+        .context("Could not finalize staged album calculations")
+}
+
+fn calculate_staged_changes(
+    conn: &Connection,
+    session_id: i64,
+    final_albums: &[FinalAlbum],
+) -> Result<ImportChanges> {
+    let added_tracks = conn.query_row(
+        "
+        SELECT COUNT(*)
+        FROM import_stage_tracks staged
+        LEFT JOIN tracks current
+          ON COALESCE(current.file_path, '') = staged.file_path
+         AND COALESCE(current.filename, '') = staged.filename
+        WHERE staged.session_id = ?1 AND current.id IS NULL
+        ",
+        params![session_id],
+        |row| row.get(0),
+    )?;
+    let changed_tracks = conn.query_row(
+        "
+        SELECT COUNT(*)
+        FROM import_stage_tracks staged
+        JOIN tracks current
+          ON COALESCE(current.file_path, '') = staged.file_path
+         AND COALESCE(current.filename, '') = staged.filename
+        WHERE staged.session_id = ?1 AND current.row_hash != staged.row_hash
+        ",
+        params![session_id],
+        |row| row.get(0),
+    )?;
+    let removed_tracks = conn.query_row(
+        "
+        SELECT COUNT(*)
+        FROM tracks current
+        LEFT JOIN import_stage_tracks staged
+          ON staged.session_id = ?1
+         AND staged.file_path = COALESCE(current.file_path, '')
+         AND staged.filename = COALESCE(current.filename, '')
+        WHERE staged.row_number IS NULL
+        ",
+        params![session_id],
+        |row| row.get(0),
+    )?;
+
+    let mut previous_albums = load_previous_albums(conn)?;
+    let mut changes = ImportChanges {
+        added_tracks,
+        changed_tracks,
+        removed_tracks,
+        ..ImportChanges::default()
+    };
+    for album in final_albums {
+        match previous_albums.remove(&album.album_id) {
+            Some(previous) if album_changed(&previous, album) => changes.changed_albums += 1,
+            Some(_) => {}
+            None => changes.added_albums += 1,
+        }
+    }
+    changes.removed_albums = previous_albums.len() as i64;
+    Ok(changes)
+}
+
+fn find_suspicious_albums(
+    conn: &Connection,
+    final_albums: &[FinalAlbum],
+) -> Result<Vec<ImportSuspiciousAlbum>> {
+    let mut previous_albums = load_previous_albums(conn)?;
+    let mut suspicious = Vec::new();
+
+    for album in final_albums {
+        if let Some(previous) = previous_albums.remove(&album.album_id) {
+            let missing_tracks = previous.total_tracks.saturating_sub(album.total_tracks);
+            let material_drop = missing_tracks >= 3
+                || (previous.total_tracks >= 4
+                    && album.total_tracks * 4 < previous.total_tracks * 3);
+            if material_drop {
+                suspicious.push(ImportSuspiciousAlbum {
+                    album_id: album.album_id.clone(),
+                    album: album.album.clone(),
+                    album_artist_display: album.album_artist_display.clone(),
+                    year: album.year,
+                    reason: format!(
+                        "Track count falls from {} to {}",
+                        previous.total_tracks, album.total_tracks
+                    ),
+                    previous_track_count: Some(i64::from(previous.total_tracks)),
+                    current_track_count: Some(i64::from(album.total_tracks)),
+                });
+            } else if previous.album_artist_display.is_some()
+                && album.album_artist_display.is_none()
+            {
+                suspicious.push(ImportSuspiciousAlbum {
+                    album_id: album.album_id.clone(),
+                    album: album.album.clone(),
+                    album_artist_display: None,
+                    year: album.year,
+                    reason: "Album artist metadata would disappear".to_string(),
+                    previous_track_count: Some(i64::from(previous.total_tracks)),
+                    current_track_count: Some(i64::from(album.total_tracks)),
+                });
+            } else if previous.year.is_some() && album.year.is_none() {
+                suspicious.push(ImportSuspiciousAlbum {
+                    album_id: album.album_id.clone(),
+                    album: album.album.clone(),
+                    album_artist_display: album.album_artist_display.clone(),
+                    year: None,
+                    reason: "Release year metadata would disappear".to_string(),
+                    previous_track_count: Some(i64::from(previous.total_tracks)),
+                    current_track_count: Some(i64::from(album.total_tracks)),
+                });
+            }
+        } else if album.album.is_none() || album.album_artist_display.is_none() {
+            suspicious.push(ImportSuspiciousAlbum {
+                album_id: album.album_id.clone(),
+                album: album.album.clone(),
+                album_artist_display: album.album_artist_display.clone(),
+                year: album.year,
+                reason: "New album has incomplete identity metadata".to_string(),
+                previous_track_count: None,
+                current_track_count: Some(i64::from(album.total_tracks)),
+            });
+        }
+    }
+
+    for previous in previous_albums.into_values() {
+        if previous.rated_tracks > 0
+            || previous.loved_tracks > 0
+            || previous.effective_album_rating.is_some()
+        {
+            suspicious.push(ImportSuspiciousAlbum {
+                album_id: previous.album_id,
+                album: previous.album,
+                album_artist_display: previous.album_artist_display,
+                year: previous.year,
+                reason: "Rated or loved album would be removed".to_string(),
+                previous_track_count: Some(i64::from(previous.total_tracks)),
+                current_track_count: Some(0),
+            });
+        }
+    }
+    suspicious.sort_by(|left, right| {
+        left.reason
+            .cmp(&right.reason)
+            .then_with(|| left.album.cmp(&right.album))
+    });
+    Ok(suspicious)
+}
+
+fn persist_import_delta(
+    conn: &mut Connection,
+    session_id: i64,
+    track_rows: u64,
+    album_count: u64,
+    changes: &ImportChanges,
+    suspicious: &[ImportSuspiciousAlbum],
+) -> Result<()> {
+    let tx = conn
+        .transaction()
+        .context("Could not save the prepared import delta")?;
+    tx.execute(
+        "DELETE FROM import_suspicious_albums WHERE session_id = ?1",
+        params![session_id],
+    )?;
+    {
+        let mut insert = tx.prepare(
+            "
+            INSERT INTO import_suspicious_albums (
+                session_id, album_id, album, album_artist_display, year, reason,
+                previous_track_count, current_track_count
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            ",
+        )?;
+        for album in suspicious {
+            insert.execute(params![
+                session_id,
+                &album.album_id,
+                &album.album,
+                &album.album_artist_display,
+                album.year,
+                &album.reason,
+                album.previous_track_count,
+                album.current_track_count,
+            ])?;
+        }
+    }
+    let now = Utc::now().to_rfc3339();
+    tx.execute(
+        "
+        UPDATE import_sessions
+        SET status = 'ready', processed_rows = ?1, processed_bytes = source_size_bytes,
+            track_rows = ?1, album_count = ?2,
+            added_tracks = ?3, changed_tracks = ?4, removed_tracks = ?5,
+            added_albums = ?6, changed_albums = ?7, removed_albums = ?8,
+            suspicious_album_count = ?9, updated_at = ?10, error_message = NULL
+        WHERE id = ?11
+        ",
+        params![
+            track_rows as i64,
+            album_count as i64,
+            changes.added_tracks,
+            changes.changed_tracks,
+            changes.removed_tracks,
+            changes.added_albums,
+            changes.changed_albums,
+            changes.removed_albums,
+            suspicious.len() as i64,
+            &now,
+            session_id,
+        ],
+    )?;
+    tx.commit()
+        .context("Could not commit the prepared import delta")
+}
+
+fn load_stage_final_albums(conn: &Connection, session_id: i64) -> Result<Vec<FinalAlbum>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT album_id, album_unique_id, album, final_album_artist_display,
+               canonical_genre, genre_normalized, publisher, year, release_year,
+               total_tracks, rated_tracks, rating_completeness, total_seconds,
+               loved_tracks, tmoe_seconds, ae_ratio, album_rating,
+               calculated_album_rating, effective_album_rating, album_score,
+               album_artist_display_inferred
+        FROM import_stage_albums
+        WHERE session_id = ?1
+        ORDER BY album_id
+        ",
+    )?;
+    let rows = stmt.query_map(params![session_id], |row| {
+        Ok(FinalAlbum {
+            album_id: row.get(0)?,
+            album_unique_id: row.get(1)?,
+            album: row.get(2)?,
+            album_artist_display: row.get(3)?,
+            canonical_genre: row.get(4)?,
+            genre_normalized: row.get(5)?,
+            publisher: row.get(6)?,
+            year: row.get(7)?,
+            release_year: row.get(8)?,
+            total_tracks: row.get::<_, i64>(9)? as u32,
+            rated_tracks: row.get::<_, i64>(10)? as u32,
+            rating_completeness: row.get(11)?,
+            total_seconds: row.get(12)?,
+            loved_tracks: row.get::<_, i64>(13)? as u32,
+            tmoe_seconds: row.get(14)?,
+            ae_ratio: row.get(15)?,
+            album_rating: row.get(16)?,
+            calculated_album_rating: row.get(17)?,
+            effective_album_rating: row.get(18)?,
+            album_score: row.get(19)?,
+            album_artist_display_inferred: row.get(20)?,
+        })
+    })?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load finalized staged albums")
+}
+
+fn apply_staged_import(
+    conn: &mut Connection,
+    session: &ImportSessionRecord,
+    import_run_id: i64,
+    started: Instant,
+) -> Result<(u64, u64, i64)> {
+    let final_albums = load_stage_final_albums(conn, session.id)?;
+    let mut previous_albums = load_previous_albums(conn)?;
+    let mut rating_events = Vec::new();
+    for album in &final_albums {
+        match previous_albums.remove(&album.album_id) {
+            Some(previous) => {
+                if let Some(event) = rating_event_for_changed_album(&previous, album) {
+                    rating_events.push(event);
+                }
+            }
+            None => {
+                if let Some(event) = rating_event_for_added_album(album) {
+                    rating_events.push(event);
+                }
+            }
+        }
+    }
+    for previous in previous_albums.values() {
+        if let Some(event) = rating_event_for_removed_album(previous) {
+            rating_events.push(event);
+        }
+    }
+
+    let tx = conn
+        .transaction()
+        .context("Could not start atomic staged import")?;
+    tx.execute_batch(
+        "
+        DELETE FROM raw_tracks;
+        DELETE FROM tracks;
+        DELETE FROM albums;
+        ",
+    )
+    .context("Could not clear the previous import tables")?;
+    tx.execute(
+        "
+        INSERT INTO raw_tracks (
+            import_run_id, row_number, display_artist, album_rating, disc_number,
+            album, genre, love, publisher, rating, title, track_number,
+            year_value, release_year, album_unique_id, file_path, filename,
+            album_artist_display, time_value, row_hash
+        )
+        SELECT ?1, row_number, NULLIF(display_artist, ''),
+               NULLIF(album_rating_raw, ''), NULLIF(disc_number_raw, ''),
+               NULLIF(album, ''), NULLIF(genre, ''), NULLIF(love, ''),
+               NULLIF(publisher, ''), NULLIF(rating_raw, ''), NULLIF(title, ''),
+               NULLIF(track_number_raw, ''), NULLIF(year_raw, ''),
+               NULLIF(release_year_raw, ''), NULLIF(album_unique_id, ''),
+               NULLIF(file_path, ''), NULLIF(filename, ''),
+               NULLIF(album_artist_display, ''), NULLIF(time_raw, ''), row_hash
+        FROM import_stage_tracks
+        WHERE session_id = ?2
+        ORDER BY row_number
+        ",
+        params![import_run_id, session.id],
+    )
+    .context("Could not copy staged raw tracks")?;
+    tx.execute(
+        "
+        INSERT INTO tracks (
+            import_run_id, album_id, album_unique_id, display_artist,
+            album_artist_display, album, title, genre, canonical_genre,
+            genre_normalized, publisher, love, rating_raw, normalized_rating,
+            album_rating_raw, album_rating, disc_number, track_number, year,
+            release_year, time_seconds, file_path, filename, row_hash
+        )
+        SELECT ?1, album_id, NULLIF(album_unique_id, ''),
+               NULLIF(display_artist, ''), NULLIF(album_artist_display, ''),
+               NULLIF(album, ''), NULLIF(title, ''), NULLIF(genre, ''),
+               NULLIF(canonical_genre, ''), NULLIF(genre_normalized, ''),
+               NULLIF(publisher, ''), NULLIF(love, ''), NULLIF(rating_raw, ''),
+               normalized_rating, NULLIF(album_rating_raw, ''), album_rating,
+               disc_number, track_number, year, release_year, time_seconds,
+               NULLIF(file_path, ''), NULLIF(filename, ''), row_hash
+        FROM import_stage_tracks
+        WHERE session_id = ?2
+        ORDER BY row_number
+        ",
+        params![import_run_id, session.id],
+    )
+    .context("Could not copy staged normalized tracks")?;
+    tx.execute(
+        "
+        UPDATE tracks
+        SET album_artist_display = (
+            SELECT staged.final_album_artist_display
+            FROM import_stage_albums staged
+            WHERE staged.session_id = ?1 AND staged.album_id = tracks.album_id
+        )
+        WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM import_stage_albums staged
+              WHERE staged.session_id = ?1
+                AND staged.album_id = tracks.album_id
+                AND staged.album_artist_display_inferred = 1
+          )
+        ",
+        params![session.id],
+    )
+    .context("Could not apply inferred album artists to staged tracks")?;
+    tx.execute(
+        "
+        INSERT INTO albums (
+            id, import_run_id, album_unique_id, album, album_artist_display,
+            canonical_genre, genre_normalized, publisher, year, release_year,
+            total_tracks, rated_tracks, rating_completeness, total_seconds,
+            loved_tracks, tmoe_seconds, ae_ratio, album_rating,
+            calculated_album_rating, effective_album_rating, album_score
+        )
+        SELECT album_id, ?1, album_unique_id, album, final_album_artist_display,
+               canonical_genre, genre_normalized, publisher, year, release_year,
+               total_tracks, rated_tracks, rating_completeness, total_seconds,
+               loved_tracks, tmoe_seconds, ae_ratio, album_rating,
+               calculated_album_rating, effective_album_rating, album_score
+        FROM import_stage_albums
+        WHERE session_id = ?2
+        ",
+        params![import_run_id, session.id],
+    )
+    .context("Could not copy staged albums")?;
+
+    insert_rating_events(&tx, import_run_id, &rating_events)?;
+    insert_rating_snapshot(&tx, import_run_id, &final_albums)?;
+    db::rebuild_search_indexes(&tx)?;
+    let completed_at = Utc::now().to_rfc3339();
+    let duration_ms = started.elapsed().as_millis() as i64;
+    tx.execute(
+        "
+        UPDATE import_runs
+        SET completed_at = ?1, status = 'completed', track_rows = ?2,
+            album_count = ?3, duration_ms = ?4, rating_events_count = ?5
+        WHERE id = ?6
+        ",
+        params![
+            &completed_at,
+            session.track_rows,
+            session.album_count,
+            duration_ms,
+            rating_events.len() as i64,
+            import_run_id,
+        ],
+    )?;
+    tx.execute(
+        "
+        UPDATE import_sessions
+        SET status = 'completed', updated_at = ?1, completed_at = ?1,
+            import_run_id = ?2, error_message = NULL
+        WHERE id = ?3
+        ",
+        params![&completed_at, import_run_id, session.id],
+    )?;
+    tx.commit()
+        .context("Could not commit the atomic staged import")?;
+    Ok((
+        session.track_rows.max(0) as u64,
+        session.album_count.max(0) as u64,
+        rating_events.len() as i64,
+    ))
+}
+
+#[cfg(not(test))]
+fn cleanup_completed_stage(conn: &Connection, session_id: i64) -> Result<()> {
+    conn.execute(
+        "DELETE FROM import_stage_tracks WHERE session_id = ?1",
+        params![session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM import_stage_albums WHERE session_id = ?1",
+        params![session_id],
+    )?;
+    Ok(())
+}
+
+#[cfg(not(test))]
+#[allow(dead_code)]
 pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<ImportSummary> {
     let started = Instant::now();
     let (mut conn, db_path) = db::open(&app)?;
@@ -193,7 +1532,10 @@ pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<Import
     emit_progress(
         &app,
         "starting",
+        None,
         0,
+        0,
+        source_size_bytes.max(0) as u64,
         0,
         "Creating a database backup before import.",
     );
@@ -268,7 +1610,10 @@ pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<Import
             emit_progress(
                 &app,
                 "completed",
+                None,
                 track_rows,
+                source_size_bytes.max(0) as u64,
+                source_size_bytes.max(0) as u64,
                 album_count,
                 "Import completed and album calculations refreshed.",
             );
@@ -295,13 +1640,23 @@ pub fn import_musicbee_tsv(app: AppHandle, source_path: String) -> Result<Import
                 ",
                 params![Utc::now().to_rfc3339(), duration_ms, message, import_run_id],
             );
-            emit_progress(&app, "failed", 0, 0, "Import failed.");
+            emit_progress(
+                &app,
+                "failed",
+                None,
+                0,
+                0,
+                source_size_bytes.max(0) as u64,
+                0,
+                "Import failed.",
+            );
             Err(error)
         }
     }
 }
 
 #[cfg(not(test))]
+#[allow(dead_code)]
 fn run_import(
     app: &AppHandle,
     conn: &mut Connection,
@@ -440,7 +1795,10 @@ fn run_import(
                 emit_progress(
                     app,
                     "running",
+                    None,
                     processed_rows,
+                    0,
+                    0,
                     albums.len() as u64,
                     "Streaming TSV rows into SQLite.",
                 );
@@ -552,6 +1910,7 @@ fn run_import(
 }
 
 #[cfg(not(test))]
+#[allow(dead_code)]
 fn load_previous_track_hashes(conn: &Connection) -> Result<HashMap<String, String>> {
     let mut stmt = conn.prepare(
         "
@@ -570,7 +1929,6 @@ fn load_previous_track_hashes(conn: &Connection) -> Result<HashMap<String, Strin
     Ok(rows)
 }
 
-#[cfg(not(test))]
 fn load_previous_albums(conn: &Connection) -> Result<HashMap<String, PreviousAlbum>> {
     let mut stmt = conn.prepare(
         "
@@ -618,11 +1976,11 @@ fn load_previous_albums(conn: &Connection) -> Result<HashMap<String, PreviousAlb
 }
 
 #[cfg(not(test))]
+#[allow(dead_code)]
 fn track_identity(file_path: &str, filename: &str) -> String {
     format!("{file_path}\u{1f}{filename}")
 }
 
-#[cfg(not(test))]
 fn album_changed(previous: &PreviousAlbum, current: &FinalAlbum) -> bool {
     previous.album != current.album
         || previous.album_artist_display != current.album_artist_display
@@ -638,7 +1996,6 @@ fn album_changed(previous: &PreviousAlbum, current: &FinalAlbum) -> bool {
         || optional_float_changed(previous.album_score, current.album_score)
 }
 
-#[cfg(not(test))]
 fn rating_event_for_changed_album(
     previous: &PreviousAlbum,
     current: &FinalAlbum,
@@ -678,7 +2035,6 @@ fn rating_event_for_changed_album(
     })
 }
 
-#[cfg(not(test))]
 fn rating_event_for_added_album(current: &FinalAlbum) -> Option<RatingEventRecord> {
     if current.rated_tracks == 0 && current.effective_album_rating.is_none() {
         return None;
@@ -703,7 +2059,6 @@ fn rating_event_for_added_album(current: &FinalAlbum) -> Option<RatingEventRecor
     })
 }
 
-#[cfg(not(test))]
 fn rating_event_for_removed_album(previous: &PreviousAlbum) -> Option<RatingEventRecord> {
     if previous.rated_tracks == 0 && previous.effective_album_rating.is_none() {
         return None;
@@ -724,7 +2079,6 @@ fn rating_event_for_removed_album(previous: &PreviousAlbum) -> Option<RatingEven
     })
 }
 
-#[cfg(not(test))]
 fn insert_rating_events(
     tx: &Transaction<'_>,
     import_run_id: i64,
@@ -765,7 +2119,6 @@ fn insert_rating_events(
     Ok(())
 }
 
-#[cfg(not(test))]
 fn insert_rating_snapshot(
     tx: &Transaction<'_>,
     import_run_id: i64,
@@ -832,12 +2185,10 @@ fn insert_rating_snapshot(
     Ok(())
 }
 
-#[cfg(not(test))]
 fn float_changed(previous: f64, current: f64) -> bool {
     (previous - current).abs() > 0.000_001
 }
 
-#[cfg(not(test))]
 fn optional_float_changed(previous: Option<f64>, current: Option<f64>) -> bool {
     match (previous, current) {
         (Some(previous), Some(current)) => float_changed(previous, current),
@@ -846,7 +2197,6 @@ fn optional_float_changed(previous: Option<f64>, current: Option<f64>) -> bool {
     }
 }
 
-#[cfg(not(test))]
 fn average_i32(values: impl Iterator<Item = i32>) -> Option<f64> {
     let mut count = 0_u64;
     let mut total = 0_i64;
@@ -862,7 +2212,6 @@ fn average_i32(values: impl Iterator<Item = i32>) -> Option<f64> {
     }
 }
 
-#[cfg(not(test))]
 fn average_f64(values: impl Iterator<Item = f64>) -> Option<f64> {
     let mut count = 0_u64;
     let mut total = 0.0;
@@ -1228,7 +2577,6 @@ fn enforce_backup_retention(backup_dir: &Path, backup_retention: usize) -> Resul
     Ok(())
 }
 
-#[cfg(not(test))]
 fn resolve_source_path(source_path: &str) -> Result<PathBuf> {
     let trimmed = source_path.trim();
     if trimmed.is_empty() {
@@ -1458,7 +2806,10 @@ fn row_hash(values: &[&str]) -> String {
 fn emit_progress(
     app: &AppHandle,
     status: &str,
+    session_id: Option<i64>,
     processed_rows: u64,
+    processed_bytes: u64,
+    total_bytes: u64,
     album_count: u64,
     message: &str,
 ) {
@@ -1466,7 +2817,10 @@ fn emit_progress(
         "import-progress",
         ImportProgress {
             status: status.to_string(),
+            session_id,
             processed_rows,
+            processed_bytes,
+            total_bytes,
             album_count,
             message: message.to_string(),
         },
@@ -1748,5 +3102,226 @@ mod tests {
                 .map(|score| (score * 1000.0).round() / 1000.0),
             Some(206.649)
         );
+    }
+
+    #[test]
+    fn cancelled_preparation_resumes_from_the_durable_checkpoint() {
+        use std::sync::atomic::AtomicU64;
+
+        let test_id = format!(
+            "music-library-import-resume-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        );
+        let test_dir = std::env::temp_dir().join(test_id);
+        fs::create_dir_all(&test_dir).expect("create import test directory");
+        let source_path = test_dir.join("library.tsv");
+        let mut tsv = String::new();
+        tsv.push_str(&REQUIRED_COLUMNS.join("\t"));
+        tsv.push('\n');
+        for index in 0..5_001 {
+            let values = [
+                "Checkpoint Artist".to_string(),
+                String::new(),
+                "1".to_string(),
+                format!("Checkpoint Album {index}"),
+                "Rock".to_string(),
+                String::new(),
+                "Label".to_string(),
+                "4".to_string(),
+                format!("Track {index}"),
+                "1".to_string(),
+                "2026".to_string(),
+                "2026".to_string(),
+                format!("checkpoint-{index}"),
+                format!(r"D:\Music\Checkpoint {index}"),
+                format!("{index:05}.mp3"),
+                "Checkpoint Artist".to_string(),
+                "3:00".to_string(),
+            ];
+            tsv.push_str(&values.join("\t"));
+            tsv.push('\n');
+        }
+        fs::write(&source_path, tsv).expect("write import test TSV");
+
+        let mut conn = Connection::open_in_memory().expect("open import test database");
+        crate::db::configure(&conn).expect("configure import test database");
+        crate::db::migrate(&conn).expect("migrate import test database");
+        let fingerprint =
+            source_fingerprint(&source_path.display().to_string()).expect("fingerprint test TSV");
+        let cancel = AtomicBool::new(false);
+        let last_checkpoint = AtomicU64::new(0);
+        let first_progress = |_: &str, _: Option<i64>, rows: u64, _: u64, _: u64, _: &str| {
+            last_checkpoint.store(rows, Ordering::SeqCst);
+            if rows >= IMPORT_STAGE_BATCH_SIZE as u64 {
+                cancel.store(true, Ordering::SeqCst);
+            }
+        };
+
+        let cancelled = prepare_import_preview_for_connection(
+            &mut conn,
+            &fingerprint,
+            &cancel,
+            &first_progress,
+        )
+        .expect("cancel staged import");
+        assert_eq!(cancelled.status, "cancelled");
+        assert_eq!(cancelled.processed_rows, IMPORT_STAGE_BATCH_SIZE as i64);
+        assert!(cancelled.can_resume);
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM import_stage_tracks WHERE session_id = ?1",
+                params![cancelled.session_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("count checkpoint tracks"),
+            IMPORT_STAGE_BATCH_SIZE as i64
+        );
+
+        cancel.store(false, Ordering::SeqCst);
+        let resumed = prepare_import_preview_for_connection(
+            &mut conn,
+            &fingerprint,
+            &cancel,
+            &|_, _, _, _, _, _| {},
+        )
+        .expect("resume staged import");
+        assert_eq!(resumed.status, "ready");
+        assert_eq!(resumed.track_rows, 5_001);
+        assert_eq!(resumed.album_count, 5_001);
+        assert_eq!(resumed.added_tracks, 5_001);
+        assert_eq!(resumed.added_albums, 5_001);
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM import_stage_tracks WHERE session_id = ?1",
+                params![resumed.session_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("count resumed tracks"),
+            5_001
+        );
+        assert_eq!(
+            last_checkpoint.load(Ordering::SeqCst),
+            IMPORT_STAGE_BATCH_SIZE as u64
+        );
+
+        fs::remove_dir_all(&test_dir).expect("remove import test directory");
+    }
+
+    #[test]
+    fn failed_atomic_apply_keeps_the_active_library_unchanged() {
+        let test_id = format!(
+            "music-library-import-atomic-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        );
+        let test_dir = std::env::temp_dir().join(test_id);
+        fs::create_dir_all(&test_dir).expect("create atomic import test directory");
+        let source_path = test_dir.join("library.tsv");
+        let values = [
+            "New Artist",
+            "",
+            "1",
+            "New Album",
+            "Rock",
+            "",
+            "Label",
+            "4",
+            "New Track",
+            "1",
+            "2026",
+            "2026",
+            "new-album",
+            r"D:\Music\New Album",
+            "01.mp3",
+            "New Artist",
+            "3:00",
+        ];
+        fs::write(
+            &source_path,
+            format!("{}\n{}\n", REQUIRED_COLUMNS.join("\t"), values.join("\t")),
+        )
+        .expect("write atomic import test TSV");
+
+        let mut conn = Connection::open_in_memory().expect("open atomic import database");
+        crate::db::configure(&conn).expect("configure atomic import database");
+        crate::db::migrate(&conn).expect("migrate atomic import database");
+        conn.execute(
+            "INSERT INTO import_runs (source_path, started_at, status) VALUES ('old.tsv', ?1, 'completed')",
+            params![Utc::now().to_rfc3339()],
+        )
+        .expect("seed old import run");
+        let old_run_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO raw_tracks (import_run_id, row_number, row_hash) VALUES (?1, 1, 'old-hash')",
+            params![old_run_id],
+        )
+        .expect("seed old raw track");
+        conn.execute(
+            "INSERT INTO tracks (import_run_id, album_id, title, row_hash) VALUES (?1, 'old-album', 'Old Track', 'old-hash')",
+            params![old_run_id],
+        )
+        .expect("seed old track");
+        conn.execute(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album, album_artist_display, total_tracks,
+                rated_tracks, rating_completeness, total_seconds, loved_tracks,
+                tmoe_seconds, ae_ratio
+            ) VALUES ('old-album', ?1, 'Old Album', 'Old Artist', 1, 0, 0, 180, 0, 0, 0)
+            ",
+            params![old_run_id],
+        )
+        .expect("seed old album");
+
+        let fingerprint =
+            source_fingerprint(&source_path.display().to_string()).expect("fingerprint atomic TSV");
+        let ready = prepare_import_preview_for_connection(
+            &mut conn,
+            &fingerprint,
+            &AtomicBool::new(false),
+            &|_, _, _, _, _, _| {},
+        )
+        .expect("prepare atomic import");
+        assert_eq!(ready.status, "ready");
+
+        conn.execute(
+            "INSERT INTO import_runs (source_path, started_at, status) VALUES (?1, ?2, 'running')",
+            params![&ready.source_path, Utc::now().to_rfc3339()],
+        )
+        .expect("seed applying import run");
+        let applying_run_id = conn.last_insert_rowid();
+        conn.execute_batch(
+            "
+            CREATE TRIGGER reject_new_album
+            BEFORE INSERT ON albums
+            WHEN NEW.album = 'New Album'
+            BEGIN
+                SELECT RAISE(ABORT, 'simulated apply failure');
+            END;
+            ",
+        )
+        .expect("create apply failure trigger");
+        let session = load_import_session(&conn, ready.session_id).expect("load ready session");
+        let error = apply_staged_import(&mut conn, &session, applying_run_id, Instant::now())
+            .expect_err("atomic apply should fail");
+        assert!(error.to_string().contains("Could not copy staged albums"));
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM tracks", [], |row| row
+                .get::<_, i64>(0))
+                .expect("count active tracks after failed apply"),
+            1
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT album FROM albums WHERE id = 'old-album'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .expect("load active album after failed apply"),
+            "Old Album"
+        );
+
+        fs::remove_dir_all(&test_dir).expect("remove atomic import test directory");
     }
 }
