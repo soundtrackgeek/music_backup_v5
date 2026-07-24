@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.75.0] - 2026-07-24
+### Added
+- Added six focused Settings sections: General, AI, Data & Backups, MusicBrainz, Updates, and Diagnostics.
+- Added a sticky, keyboard-operable section switcher that keeps all section state mounted while showing only the selected controls.
+- Added responsive section navigation that changes from one row on wide desktops to a readable three-by-two grid at the supported 1040px minimum width.
+
+### Changed
+- Moved the Settings summary into General and grouped cache, origin-country, artist-information, and overlay-sync tools under MusicBrainz.
+- Reduced the default web-preview Settings height from roughly 3,580px to about 950px while preserving drafts and in-progress panel state across section changes.
+- Bumped synchronized app metadata to `0.75.0`.
+
 ## [0.74.0] - 2026-07-24
 ### Added
 - Added one contextual Luna command center with explicit Plan & filter, Ask this view, Analyze library, Build playlist, Discover outside, and Research music modes.

@@ -334,7 +334,10 @@ import {
   type ArtistDetailTab,
 } from "./workspaces/ArtistsWorkspace";
 import { SearchWorkspace } from "./workspaces/SearchWorkspace";
-import { SettingsWorkspace } from "./workspaces/SettingsWorkspace";
+import {
+  SettingsSection,
+  SettingsWorkspace,
+} from "./workspaces/SettingsWorkspace";
 import { PlaylistBuilderWorkspace } from "./workspaces/PlaylistBuilderWorkspace";
 import { WishListWorkspace } from "./workspaces/WishListWorkspace";
 import {
@@ -14930,43 +14933,6 @@ export default function App() {
             }
           >
 
-            <section className="metric-grid" aria-label="Settings summary">
-              <Metric
-                label="Rolling backups"
-                value={formatNumber(settings.backupRetention)}
-                tone="teal"
-                icon={Database}
-              />
-              <Metric
-                label="Theme"
-                value={settings.darkMode ? "Dark" : "Light"}
-                tone="amber"
-                icon={Moon}
-              />
-              <Metric
-                label="Navigation"
-                value={leftSidebarModeLabels[settings.leftSidebarDefault]}
-                icon={Library}
-              />
-              <Metric
-                label="Details"
-                value={rightSidebarModeLabels[settings.rightSidebarDefault]}
-                icon={SlidersHorizontal}
-              />
-              <Metric
-                label="MusicBrainz"
-                value={musicBrainzStatusLabel}
-                tone={musicBrainzMetricTone}
-                icon={ShieldCheck}
-              />
-              <Metric
-                label="Updates"
-                value={appUpdateMetricValue}
-                tone="teal"
-                icon={Download}
-              />
-            </section>
-
             {settingsError ? (
               <p className="error-message">{settingsError}</p>
             ) : null}
@@ -14975,16 +14941,19 @@ export default function App() {
               className="settings-grid"
               aria-label="Application settings"
             >
-              <AiSettingsPanel />
+              <SettingsSection id="ai">
+                <AiSettingsPanel />
+              </SettingsSection>
 
-              <section className="settings-panel update-settings-panel">
-                <div className="panel-heading compact">
-                  <div>
-                    <h2>App Updates</h2>
-                    <p>{appUpdatePanelText}</p>
+              <SettingsSection id="updates">
+                <section className="settings-panel update-settings-panel">
+                  <div className="panel-heading compact">
+                    <div>
+                      <h2>App Updates</h2>
+                      <p>{appUpdatePanelText}</p>
+                    </div>
+                    <Download size={18} />
                   </div>
-                  <Download size={18} />
-                </div>
 
                 <div className="app-update-settings-toolbar">
                   <label className="criterion setting-number app-update-interval">
@@ -15071,19 +15040,21 @@ export default function App() {
                     <div style={{ width: `${appUpdateProgress.percent}%` }} />
                   </div>
                 ) : null}
-              </section>
+                </section>
+              </SettingsSection>
 
-              <section className="settings-panel backup-settings-panel">
-                <div className="panel-heading compact">
-                  <div>
-                    <h2>Backups</h2>
-                    <p>
-                      {formatNumber(databaseBackups.length)} available /{" "}
-                      {settings.backupRetention} retained
-                    </p>
+              <SettingsSection id="data">
+                <section className="settings-panel backup-settings-panel">
+                  <div className="panel-heading compact">
+                    <div>
+                      <h2>Backups</h2>
+                      <p>
+                        {formatNumber(databaseBackups.length)} available /{" "}
+                        {settings.backupRetention} retained
+                      </p>
+                    </div>
+                    <Database size={18} />
                   </div>
-                  <Database size={18} />
-                </div>
 
                 <div className="backup-settings-toolbar">
                   <label className="criterion setting-number">
@@ -15198,9 +15169,11 @@ export default function App() {
                     ))}
                   </div>
                 )}
-              </section>
+                </section>
+              </SettingsSection>
 
-              <section className="settings-panel musicbrainz-settings-panel">
+              <SettingsSection id="musicbrainz">
+                <section className="settings-panel musicbrainz-settings-panel">
                 <div className="panel-heading compact">
                   <div>
                     <h2>MusicBrainz Cache</h2>
@@ -15352,9 +15325,9 @@ export default function App() {
                     <span>No MusicBrainz cache check has run yet.</span>
                   </div>
                 )}
-              </section>
+                </section>
 
-              <section className="settings-panel musicbrainz-origin-settings-panel">
+                <section className="settings-panel musicbrainz-origin-settings-panel">
                 <div className="panel-heading compact">
                   <div>
                     <h2>MusicBrainz Origin Countries</h2>
@@ -15794,9 +15767,9 @@ export default function App() {
                     ) : null}
                   </section>
                 ) : null}
-              </section>
+                </section>
 
-              <section className="settings-panel musicbrainz-origin-settings-panel musicbrainz-artist-info-settings-panel">
+                <section className="settings-panel musicbrainz-origin-settings-panel musicbrainz-artist-info-settings-panel">
                 <div className="panel-heading compact">
                   <div>
                     <h2>MusicBrainz Artist Information</h2>
@@ -16291,9 +16264,9 @@ export default function App() {
                     ) : null}
                   </section>
                 ) : null}
-              </section>
+                </section>
 
-              <section className="settings-panel musicbrainz-sync-settings-panel">
+                <section className="settings-panel musicbrainz-sync-settings-panel">
                 <div className="panel-heading compact">
                   <div>
                     <h2>MusicBrainz Overlay Sync</h2>
@@ -16397,9 +16370,11 @@ export default function App() {
                 <small className="performance-database-path">
                   {settings.musicBrainzOverlaySyncPath || "Not configured"}
                 </small>
-              </section>
+                </section>
+              </SettingsSection>
 
-              <section className="settings-panel performance-settings-panel">
+              <SettingsSection id="diagnostics">
+                <section className="settings-panel performance-settings-panel">
                 <div className="panel-heading compact">
                   <div>
                     <h2>Performance Proof</h2>
@@ -16504,9 +16479,51 @@ export default function App() {
                     </small>
                   </>
                 ) : null}
-              </section>
+                </section>
+              </SettingsSection>
 
-              <section className="settings-panel">
+              <SettingsSection id="general">
+                <section
+                  className="metric-grid settings-summary-grid"
+                  aria-label="Settings summary"
+                >
+                  <Metric
+                    label="Rolling backups"
+                    value={formatNumber(settings.backupRetention)}
+                    tone="teal"
+                    icon={Database}
+                  />
+                  <Metric
+                    label="Theme"
+                    value={settings.darkMode ? "Dark" : "Light"}
+                    tone="amber"
+                    icon={Moon}
+                  />
+                  <Metric
+                    label="Navigation"
+                    value={leftSidebarModeLabels[settings.leftSidebarDefault]}
+                    icon={Library}
+                  />
+                  <Metric
+                    label="Details"
+                    value={rightSidebarModeLabels[settings.rightSidebarDefault]}
+                    icon={SlidersHorizontal}
+                  />
+                  <Metric
+                    label="MusicBrainz"
+                    value={musicBrainzStatusLabel}
+                    tone={musicBrainzMetricTone}
+                    icon={ShieldCheck}
+                  />
+                  <Metric
+                    label="Updates"
+                    value={appUpdateMetricValue}
+                    tone="teal"
+                    icon={Download}
+                  />
+                </section>
+
+                <section className="settings-panel">
                 <div className="panel-heading compact">
                   <div>
                     <h2>Appearance</h2>
@@ -16529,9 +16546,9 @@ export default function App() {
                     <small>{settings.darkMode ? "On" : "Off"}</small>
                   </span>
                 </label>
-              </section>
+                </section>
 
-              <section className="settings-panel layout-settings-panel">
+                <section className="settings-panel layout-settings-panel">
                 <div className="panel-heading compact">
                   <div>
                     <h2>Layout</h2>
@@ -16617,7 +16634,8 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-              </section>
+                </section>
+              </SettingsSection>
             </section>
           </SettingsWorkspace>
         ) : (
