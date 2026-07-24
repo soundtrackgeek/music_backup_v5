@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.77.1] - 2026-07-24
+### Fixed
+- Fixed Imports source paths so edits save automatically and exact Windows paths, including trailing backslashes, survive an app restart without reintroducing stale or doubled folder segments.
+- Kept the Imports saved-state indicator tied to backend-confirmed values, leaving **Save paths** available for retry when persistence fails instead of incorrectly reporting success.
+- Prevented a completed settings write from overwriting newer path text entered while that write was in flight.
+
+### Changed
+- Bumped synchronized app metadata to `0.77.1`.
+
 ## [0.77.0] - 2026-07-24
 ### Added
 - Added 300×300 floating hover previews for compact album covers in Search, Charts table/list/grid views, and the shared album lists used by Albums, Artists, Genres, and Discovery.

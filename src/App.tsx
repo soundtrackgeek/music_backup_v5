@@ -7624,10 +7624,12 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(() =>
     createDefaultSettings(),
   );
+  const [persistedSettings, setPersistedSettings] = useState(settings);
   const settingsRef = useRef(settings);
   const settingsSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const settingsSaveSequenceRef = useRef(0);
   const pendingSettingsSaveCountRef = useRef(0);
+  const lastAutoSavedImportPathsRef = useRef<string | null>(null);
   const appUpdateRef = useRef<AppUpdateCheckResult["update"] | null>(null);
   const isAppUpdateCheckingRef = useRef(false);
   const isAppUpdateInstallingRef = useRef(false);
@@ -7800,6 +7802,7 @@ export default function App() {
     setStatistics(nextStatistics);
     settingsRef.current = nextSettings;
     setSettings(nextSettings);
+    setPersistedSettings(nextSettings);
     setSourcePath(nextSettings.importSourcePath || defaultImportSourcePath);
     void getImportPreview(
       nextSettings.importSourcePath || defaultImportSourcePath,
@@ -8936,29 +8939,65 @@ export default function App() {
     );
   }, [musicBrainzArtistInfoPreview]);
 
-  const importPathsDirty = useMemo(
-    () =>
-      textSettingValue(sourcePath, defaultImportSourcePath) !==
-        settings.importSourcePath ||
-      textSettingValue(coverSourcePath, defaultCoverSourcePath) !==
-        settings.coverSourcePath ||
-      textSettingValue(billboardSourcePath, defaultBillboardSourcePath) !==
-        settings.billboardSourcePath ||
-      textSettingValue(
+  const normalizedImportPaths = useMemo(
+    () => ({
+      importSourcePath: textSettingValue(
+        sourcePath,
+        defaultImportSourcePath,
+      ),
+      coverSourcePath: textSettingValue(
+        coverSourcePath,
+        defaultCoverSourcePath,
+      ),
+      billboardSourcePath: textSettingValue(
+        billboardSourcePath,
+        defaultBillboardSourcePath,
+      ),
+      billboardSinglesSourcePath: textSettingValue(
         billboardSinglesSourcePath,
         defaultBillboardSinglesSourcePath,
-      ) !== settings.billboardSinglesSourcePath,
+      ),
+    }),
     [
       billboardSinglesSourcePath,
       billboardSourcePath,
       coverSourcePath,
-      settings.billboardSinglesSourcePath,
-      settings.billboardSourcePath,
-      settings.coverSourcePath,
-      settings.importSourcePath,
       sourcePath,
     ],
   );
+  const importPathsKey = useMemo(
+    () => JSON.stringify(normalizedImportPaths),
+    [normalizedImportPaths],
+  );
+  const importPathsDirty =
+    normalizedImportPaths.importSourcePath !==
+      persistedSettings.importSourcePath ||
+    normalizedImportPaths.coverSourcePath !==
+      persistedSettings.coverSourcePath ||
+    normalizedImportPaths.billboardSourcePath !==
+      persistedSettings.billboardSourcePath ||
+    normalizedImportPaths.billboardSinglesSourcePath !==
+      persistedSettings.billboardSinglesSourcePath;
+
+  useEffect(() => {
+    if (
+      !importPathsDirty ||
+      lastAutoSavedImportPathsRef.current === importPathsKey
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      lastAutoSavedImportPathsRef.current = importPathsKey;
+      void saveAppSettings(normalizedImportPaths);
+    }, 600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    importPathsDirty,
+    importPathsKey,
+    normalizedImportPaths,
+  ]);
 
   const chips = useMemo(() => {
     const nextChips: { key: string; label: ReactNode; remove: () => void }[] =
@@ -10593,6 +10632,7 @@ export default function App() {
       .catch(() => undefined)
       .then(async () => {
         const saved = await saveSettings(nextSettings);
+        setPersistedSettings(saved);
         if (saveSequence === settingsSaveSequenceRef.current) {
           settingsRef.current = saved;
           setSettings(saved);
@@ -10624,15 +10664,30 @@ export default function App() {
           if (
             Object.prototype.hasOwnProperty.call(values, "importSourcePath")
           ) {
-            setSourcePath(saved.importSourcePath);
+            setSourcePath((current) =>
+              textSettingValue(current, defaultImportSourcePath) ===
+              nextSettings.importSourcePath
+                ? saved.importSourcePath
+                : current,
+            );
           }
           if (Object.prototype.hasOwnProperty.call(values, "coverSourcePath")) {
-            setCoverSourcePath(saved.coverSourcePath);
+            setCoverSourcePath((current) =>
+              textSettingValue(current, defaultCoverSourcePath) ===
+              nextSettings.coverSourcePath
+                ? saved.coverSourcePath
+                : current,
+            );
           }
           if (
             Object.prototype.hasOwnProperty.call(values, "billboardSourcePath")
           ) {
-            setBillboardSourcePath(saved.billboardSourcePath);
+            setBillboardSourcePath((current) =>
+              textSettingValue(current, defaultBillboardSourcePath) ===
+              nextSettings.billboardSourcePath
+                ? saved.billboardSourcePath
+                : current,
+            );
           }
           if (
             Object.prototype.hasOwnProperty.call(
@@ -10640,7 +10695,14 @@ export default function App() {
               "billboardSinglesSourcePath",
             )
           ) {
-            setBillboardSinglesSourcePath(saved.billboardSinglesSourcePath);
+            setBillboardSinglesSourcePath((current) =>
+              textSettingValue(
+                current,
+                defaultBillboardSinglesSourcePath,
+              ) === nextSettings.billboardSinglesSourcePath
+                ? saved.billboardSinglesSourcePath
+                : current,
+            );
           }
         }
       });
@@ -10669,12 +10731,7 @@ export default function App() {
   }
 
   async function saveImportPathSettings() {
-    await saveAppSettings({
-      importSourcePath: sourcePath,
-      coverSourcePath,
-      billboardSourcePath,
-      billboardSinglesSourcePath,
-    });
+    await saveAppSettings(normalizedImportPaths);
   }
 
   async function restoreBackup(backup: DatabaseBackup) {
@@ -11830,6 +11887,7 @@ export default function App() {
                 <h1>Imports</h1>
                 <p>
                   Build the local SQLite database from a MusicBee TSV export.
+                  Path edits save automatically.
                 </p>
               </div>
               <div className="topbar-actions">
@@ -11840,7 +11898,7 @@ export default function App() {
                   onClick={() => void saveImportPathSettings()}
                   title={
                     importPathsDirty
-                      ? "Save import paths"
+                      ? "Save import paths now"
                       : "Import paths are saved"
                   }
                 >

@@ -14941,7 +14941,7 @@ mod tests {
                 left_sidebar_default: "iconOnly".to_string(),
                 right_sidebar_default: "hidden".to_string(),
                 import_source_path: r"D:\Exports\musicbee-library.tsv".to_string(),
-                cover_source_path: r"D:\Covers".to_string(),
+                cover_source_path: "C:\\_code\\music_backup_v5\\AlbumCovers\\".to_string(),
                 billboard_source_path: r"D:\Charts\Albums".to_string(),
                 billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
                 musicbrainz_cache_path: "MusicBrainz/custom-cache.db".to_string(),
@@ -14960,7 +14960,10 @@ mod tests {
         assert_eq!(saved.left_sidebar_default, "iconOnly");
         assert_eq!(saved.right_sidebar_default, "hidden");
         assert_eq!(saved.import_source_path, r"D:\Exports\musicbee-library.tsv");
-        assert_eq!(saved.cover_source_path, r"D:\Covers");
+        assert_eq!(
+            saved.cover_source_path,
+            "C:\\_code\\music_backup_v5\\AlbumCovers\\"
+        );
         assert_eq!(saved.billboard_source_path, r"D:\Charts\Albums");
         assert_eq!(saved.billboard_singles_source_path, r"D:\Charts\Singles");
         assert_eq!(saved.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
@@ -14987,7 +14990,10 @@ mod tests {
             loaded.import_source_path,
             r"D:\Exports\musicbee-library.tsv"
         );
-        assert_eq!(loaded.cover_source_path, r"D:\Covers");
+        assert_eq!(
+            loaded.cover_source_path,
+            "C:\\_code\\music_backup_v5\\AlbumCovers\\"
+        );
         assert_eq!(loaded.billboard_source_path, r"D:\Charts\Albums");
         assert_eq!(loaded.billboard_singles_source_path, r"D:\Charts\Singles");
         assert_eq!(loaded.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
