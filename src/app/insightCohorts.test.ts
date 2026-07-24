@@ -56,6 +56,25 @@ describe("insight cohort requests", () => {
     ).toMatchObject({ albumRatingMin: 80, albumRatingMax: 89 });
     expect(
       lovedDensityCohort({
+        scope: "Genre",
+        label: "Boy Band",
+        albumCount: 11,
+        trackCount: 139,
+        lovedTracks: 8,
+        lovedPer100Tracks: 5.76,
+      }),
+    ).toMatchObject({
+      title: "Boy Band loved tracks",
+      description:
+        "11 albums and 139 total tracks in the density calculation.",
+      count: 8,
+      request: {
+        view: "tracks",
+        filters: { genres: ["Boy Band"], lovedTracksMin: 1 },
+      },
+    });
+    expect(
+      lovedDensityCohort({
         scope: "Decade",
         label: "1990s",
         albumCount: 90,

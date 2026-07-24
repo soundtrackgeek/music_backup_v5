@@ -58,7 +58,7 @@ export function InsightActionDock({
         <small>
           {cohort.count == null
             ? cohort.description
-            : `${cohort.count.toLocaleString()} items · ${cohort.description}`}
+            : `${cohort.count.toLocaleString()} ${cohort.request.view} · ${cohort.description}`}
         </small>
       </div>
       <div className="insight-action-buttons">

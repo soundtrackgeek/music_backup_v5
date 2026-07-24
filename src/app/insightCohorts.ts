@@ -237,9 +237,10 @@ export function lovedDensityCohort(row: LovedDensityStat) {
   if (row.scope === "Genre") {
     return cohort({
       id: `statistics-loved-genre:${row.label}`,
-      title: `${row.label} with loved tracks`,
-      description: `${row.lovedTracks.toLocaleString()} loved tracks across ${row.trackCount.toLocaleString()} tracks.`,
-      count: row.albumCount,
+      title: `${row.label} loved tracks`,
+      description: `${row.albumCount.toLocaleString()} albums and ${row.trackCount.toLocaleString()} total tracks in the density calculation.`,
+      count: row.lovedTracks,
+      view: "tracks",
       filters: { genres: [row.label], lovedTracksMin: 1 },
     });
   }

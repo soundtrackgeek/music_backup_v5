@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.73.1] - 2026-07-24
+### Fixed
+- Opened genre rows from Statistics **Loved density** in the Tracks view with the genre and loved-track filters applied, using the loved-track count as the cohort result count.
+- Replaced ambiguous action-dock “items” counts with explicit album or track labels and clarified that Loved Density album/track totals describe the aggregate behind the selected cohort.
+
+### Changed
+- Bumped synchronized app metadata to `0.73.1`.
+
 ## [0.73.0] - 2026-07-24
 ### Added
 - Added a consistent action dock for actionable Statistics and Discovery cohorts with **Open in Search**, **Save view**, and **Build playlist** handoffs.

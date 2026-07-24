@@ -30,6 +30,9 @@ describe("InsightActionDock", () => {
       />,
     );
 
+    expect(
+      screen.getByText("120 albums · A focused decade cohort."),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open in Search" }));
     fireEvent.click(screen.getByRole("button", { name: "Save view" }));
     fireEvent.click(screen.getByRole("button", { name: "Build playlist" }));
