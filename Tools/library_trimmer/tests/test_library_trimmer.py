@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import csv
 import importlib.util
+import io
 import json
 import sqlite3
 import tempfile
 import unittest
 from argparse import Namespace
-from contextlib import closing
+from contextlib import closing, redirect_stderr, redirect_stdout
 from pathlib import Path
 
 
@@ -16,6 +17,47 @@ SPEC = importlib.util.spec_from_file_location("library_trimmer", MODULE_PATH)
 assert SPEC and SPEC.loader
 trimmer = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(trimmer)
+
+
+class ProgressReporterTests(unittest.TestCase):
+    def test_reports_stages_counts_rate_and_eta(self) -> None:
+        stream = io.StringIO()
+        progress = trimmer.ProgressReporter("scan", stream=stream)
+        progress.stage("Loading database")
+        progress.begin_items("Discogs", 2, "classifying albums")
+        progress.item(1, 2, "Artist — First: keep")
+        progress.item(2, 2, "Artist — Second: move_candidate")
+        progress.done("scan complete")
+
+        output = stream.getvalue()
+        self.assertIn("[scan +", output)
+        self.assertIn("Loading database", output)
+        self.assertIn("Discogs 1/2", output)
+        self.assertIn("50.0%", output)
+        self.assertIn("/s", output)
+        self.assertIn("ETA", output)
+        self.assertIn("Done: scan complete", output)
+
+    def test_json_output_stays_clean_while_progress_uses_stderr(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = trimmer.main(
+                    [
+                        "--json",
+                        "doctor",
+                        "--db",
+                        str(Path(temp) / "missing.sqlite3"),
+                        "--skip-network",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout.getvalue())
+        self.assertFalse(payload["ok"])
+        self.assertIn("[doctor +", stderr.getvalue())
+        self.assertNotIn("[doctor +", stdout.getvalue())
 
 
 class DiscogsClassificationTests(unittest.TestCase):

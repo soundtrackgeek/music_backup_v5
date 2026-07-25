@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.79.1] - 2026-07-25
+### Added
+- Added continuous stderr progress across every Music Library Trimmer command and long-running stage, including elapsed time, item counts, percentages, rates, ETAs, cache/network source, checkpoints, CSV review work, move preflight, hashing, verified moves, and undo.
+
+### Fixed
+- Fixed Windows library-root and quarantine containment checks when temporary paths use different short-name and long-name forms, which caused the `0.79.0` GitHub CI and release workflows to fail despite passing locally.
+- Kept the million-track library-root pass fast by using lexical path checks normally and cached filesystem canonicalization only for Windows path aliases.
+- Kept `--json` stdout machine-readable while all status and progress output remains on stderr.
+
+### Changed
+- Bumped synchronized app metadata to `0.79.1`.
+
 ## [0.79.0] - 2026-07-25
 ### Added
 - Added a standard-library Python Music Library Trimmer under `Tools/library_trimmer` with read-only app/MusicBrainz candidate discovery, cached and resumable Discogs classification, editable CSV review decisions, manifest-driven quarantine moves, and journal-based undo.

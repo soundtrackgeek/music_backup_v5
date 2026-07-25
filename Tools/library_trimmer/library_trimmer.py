@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import functools
 import hashlib
 import json
 import os
@@ -22,10 +23,10 @@ from collections import defaultdict
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Sequence
+from typing import Any, Callable, Iterable, Iterator, Sequence
 
 
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.1.0"
 MANIFEST_SCHEMA_VERSION = 1
 JOURNAL_SCHEMA_VERSION = 1
 DISCOGS_API_ROOT = "https://api.discogs.com"
@@ -88,6 +89,108 @@ class TrimmerError(RuntimeError):
 
 class CacheMiss(TrimmerError):
     """Raised when offline mode cannot satisfy an HTTP request."""
+
+
+def format_duration(seconds: float) -> str:
+    total_seconds = max(int(seconds), 0)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours:d}h {minutes:02d}m {seconds:02d}s"
+    if minutes:
+        return f"{minutes:d}m {seconds:02d}s"
+    return f"{seconds:d}s"
+
+
+class ProgressReporter:
+    """Consistent human progress on stderr without disturbing JSON stdout."""
+
+    def __init__(self, command: str, stream: Any | None = None) -> None:
+        self.command = command
+        self.stream = stream if stream is not None else sys.stderr
+        self.started_at = time.monotonic()
+        self.items_started_at = self.started_at
+        self.item_label = "Items"
+        self.last_width = 0
+        self.line_open = False
+
+    def _interactive(self) -> bool:
+        isatty = getattr(self.stream, "isatty", None)
+        return bool(isatty and isatty())
+
+    def _finish_line(self) -> None:
+        if self.line_open:
+            print(file=self.stream, flush=True)
+            self.line_open = False
+            self.last_width = 0
+
+    def stage(self, message: str) -> None:
+        self._finish_line()
+        elapsed = format_duration(time.monotonic() - self.started_at)
+        print(
+            f"[{self.command} +{elapsed}] {message}",
+            file=self.stream,
+            flush=True,
+        )
+
+    def begin_items(self, label: str, total: int, message: str | None = None) -> None:
+        self.item_label = label
+        self.items_started_at = time.monotonic()
+        detail = message or f"{total:,} item(s)"
+        self.stage(f"{label}: {detail}")
+
+    def item(
+        self,
+        current: int,
+        total: int,
+        message: str,
+        *,
+        every: int = 1,
+    ) -> None:
+        current = max(current, 0)
+        total = max(total, 0)
+        should_emit = (
+            self._interactive()
+            or current <= 1
+            or current >= total
+            or current % max(every, 1) == 0
+        )
+        if not should_emit:
+            return
+        elapsed = max(time.monotonic() - self.items_started_at, 0.001)
+        rate = current / elapsed if current else 0.0
+        percentage = (current / total * 100.0) if total else 100.0
+        sample_is_ready = current > 1 or elapsed >= 0.2
+        if not sample_is_ready and current < total:
+            eta = "ETA calculating"
+            rate_text = "rate calculating"
+        elif rate > 0 and current < total:
+            eta = f"ETA {format_duration((total - current) / rate)}"
+            rate_text = f"{rate:.2f}/s" if rate < 10 else f"{rate:.1f}/s"
+        elif current >= total:
+            eta = "ETA 0s"
+            rate_text = f"{rate:.2f}/s" if rate < 10 else f"{rate:.1f}/s"
+        else:
+            eta = "ETA calculating"
+            rate_text = "rate calculating"
+        line = (
+            f"[{self.command}] {self.item_label} {current:,}/{total:,} "
+            f"({percentage:5.1f}%) | {rate_text} | {eta} | {message}"
+        )
+        if self._interactive():
+            padded = line.ljust(self.last_width)
+            print(f"\r{padded}", end="", file=self.stream, flush=True)
+            self.last_width = max(self.last_width, len(line))
+            self.line_open = current < total
+            if current >= total:
+                print(file=self.stream, flush=True)
+                self.line_open = False
+                self.last_width = 0
+        else:
+            print(line, file=self.stream, flush=True)
+
+    def done(self, message: str) -> None:
+        self.stage(f"Done: {message}")
 
 
 def utc_now() -> str:
@@ -382,11 +485,39 @@ def load_albums(connection: sqlite3.Connection) -> list[dict[str, Any]]:
     return albums
 
 
+def lexical_absolute_path(path: Path) -> str:
+    return os.path.normcase(
+        os.path.normpath(os.path.abspath(path.expanduser()))
+    )
+
+
+@functools.lru_cache(maxsize=262_144)
+def canonical_path_for_compare(path_text: str) -> str:
+    return os.path.normcase(
+        os.path.normpath(
+            str(Path(path_text).expanduser().resolve(strict=False))
+        )
+    )
+
+
 def path_is_within(path: Path, root: Path) -> bool:
-    normalized_path = os.path.normcase(os.path.abspath(path))
-    normalized_root = os.path.normcase(os.path.abspath(root))
+    normalized_path = lexical_absolute_path(path)
+    normalized_root = lexical_absolute_path(root)
     try:
-        return os.path.commonpath([normalized_path, normalized_root]) == normalized_root
+        if (
+            os.path.commonpath([normalized_path, normalized_root])
+            == normalized_root
+        ):
+            return True
+    except ValueError:
+        return False
+    canonical_path = canonical_path_for_compare(normalized_path)
+    canonical_root = canonical_path_for_compare(normalized_root)
+    try:
+        return (
+            os.path.commonpath([canonical_path, canonical_root])
+            == canonical_root
+        )
     except ValueError:
         return False
 
@@ -395,6 +526,7 @@ def scope_albums_to_library_root(
     connection: sqlite3.Connection,
     albums: list[dict[str, Any]],
     library_root: Path | None,
+    progress: ProgressReporter | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if library_root is None:
         return albums, {
@@ -405,17 +537,28 @@ def scope_albums_to_library_root(
             "mixedLocationAlbumCount": 0,
             "albumsWithoutTrackPathsCount": 0,
         }
-    root = library_root.expanduser().resolve()
+    root = Path(lexical_absolute_path(library_root))
     if not root.is_dir():
         raise TrimmerError(f"Library root is not an existing directory: {root}")
 
     states: dict[str, list[Any]] = {}
-    for row in connection.execute(
+    track_path_count = int(
+        connection.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
+    )
+    if progress:
+        progress.begin_items(
+            "Track paths",
+            track_path_count,
+            f"checking every track against {root}",
+        )
+    for index, row in enumerate(
+        connection.execute(
         """
         SELECT album_id, file_path
         FROM tracks
-        ORDER BY album_id
         """
+        ),
+        start=1,
     ):
         album_id = str(row["album_id"])
         state = states.setdefault(album_id, [True, False, 0])
@@ -424,6 +567,13 @@ def scope_albums_to_library_root(
         state[0] = bool(state[0]) and inside
         state[1] = bool(state[1]) or inside
         state[2] = int(state[2]) + 1
+        if progress:
+            progress.item(
+                index,
+                track_path_count,
+                directory_text or "(missing track path)",
+                every=max(track_path_count // 100, 1),
+            )
 
     scoped: list[dict[str, Any]] = []
     outside = 0
@@ -541,7 +691,10 @@ def load_musicbrainz_candidates(
     app_connection: sqlite3.Connection,
     musicbrainz_connection: sqlite3.Connection,
     albums: list[dict[str, Any]],
+    progress: ProgressReporter | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if progress:
+        progress.stage(f"Indexing artists for {len(albums):,} scoped albums")
     artists: dict[str, dict[str, str]] = {}
     artists_by_text_key: dict[str, set[str]] = defaultdict(set)
     for album in albums:
@@ -556,6 +709,11 @@ def load_musicbrainz_candidates(
         if album["artistTextKey"]:
             artists_by_text_key[album["artistTextKey"]].add(artist_key)
 
+    if progress:
+        progress.stage(
+            f"Resolving trusted MusicBrainz identities for {len(artists):,} "
+            "local artists"
+        )
     ignored = {
         normalize_artist_key(str(row["local_artist_key"]))
         for row in app_connection.execute(
@@ -579,6 +737,8 @@ def load_musicbrainz_candidates(
             or artists.get(artist_key, {}).get("display", ""),
         }
 
+    if progress:
+        progress.stage("Reading MusicBrainz artist-name and release-group counts")
     name_counts = {
         str(row["mbid"]).lower(): int(row["name_count"])
         for row in musicbrainz_connection.execute(
@@ -602,6 +762,8 @@ def load_musicbrainz_candidates(
         )
     }
 
+    if progress:
+        progress.stage("Matching local artist names against the MusicBrainz cache")
     cache_matches: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in musicbrainz_connection.execute(
         """
@@ -634,6 +796,8 @@ def load_musicbrainz_candidates(
                 }
             )
 
+    if progress:
+        progress.stage("Selecting unambiguous or manually verified artist matches")
     trusted: dict[str, dict[str, Any]] = {}
     for artist_key, artist in artists.items():
         if artist_key in ignored:
@@ -670,6 +834,11 @@ def load_musicbrainz_candidates(
             }
 
     matched_mbids = {row["mbid"] for row in trusted.values()}
+    if progress:
+        progress.stage(
+            f"Loading pure official album lists for {len(matched_mbids):,} "
+            "trusted MusicBrainz artists"
+        )
     cache_pure: dict[str, list[dict[str, Any]]] = defaultdict(list)
     pure_sql = """
         SELECT
@@ -694,6 +863,8 @@ def load_musicbrainz_candidates(
         release = release_group_dict(row, "cache")
         cache_pure[release["artistMbid"]].append(release)
 
+    if progress:
+        progress.stage("Applying refreshed app overlays and manual decisions")
     overlay_pure: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in app_connection.execute(
         """
@@ -766,6 +937,8 @@ def load_musicbrainz_candidates(
                 official_titles[artist_key].setdefault(title_key, release)
                 release_source_by_artist[artist_key] = release["source"]
 
+    if progress:
+        progress.stage("Comparing local album titles with official album lists")
     candidates = [
         album
         for album in albums
@@ -778,6 +951,11 @@ def load_musicbrainz_candidates(
         match = trusted[album["artistKey"]]
         candidate_titles_by_mbid[match["mbid"]].add(album["titleKey"])
 
+    if progress:
+        progress.stage(
+            f"Loading exact MusicBrainz evidence for {len(candidates):,} "
+            "candidate albums"
+        )
     overlay_all: dict[str, list[dict[str, Any]]] = defaultdict(list)
     overlay_mbids: set[str] = set()
     for row in app_connection.execute(
@@ -833,7 +1011,13 @@ def load_musicbrainz_candidates(
             for release in releases:
                 exact_by_mbid_title[(mbid, release["titleKey"])].append(release)
 
-    for album in candidates:
+    if progress:
+        progress.begin_items(
+            "MusicBrainz evidence",
+            len(candidates),
+            f"attaching exact release-group evidence to {len(candidates):,} candidates",
+        )
+    for index, album in enumerate(candidates, start=1):
         match = trusted[album["artistKey"]]
         mbid = match["mbid"]
         exact_releases = exact_by_mbid_title.get((mbid, album["titleKey"]), [])
@@ -871,6 +1055,13 @@ def load_musicbrainz_candidates(
                 else None
             ),
         }
+        if progress:
+            progress.item(
+                index,
+                len(candidates),
+                f"{album['artist']} — {album['title']}",
+                every=max(len(candidates) // 100, 1),
+            )
 
     official_match_count = sum(
         1
@@ -1482,6 +1673,7 @@ def build_album_manifest_row(
 
 
 def scan_command(args: argparse.Namespace) -> dict[str, Any]:
+    progress = ProgressReporter("scan")
     database_path = Path(args.db).expanduser().resolve()
     output_path = Path(args.out).expanduser().resolve()
     library_root = (
@@ -1489,23 +1681,62 @@ def scan_command(args: argparse.Namespace) -> dict[str, Any]:
         if args.library_root
         else None
     )
+    progress.stage(f"Opening app database read-only: {database_path}")
     with open_sqlite_read_only(database_path) as app_connection:
+        progress.stage("Validating the app database schema")
         validate_app_schema(app_connection)
+        progress.stage("Locating the configured MusicBrainz cache")
         musicbrainz_path = resolve_musicbrainz_cache_path(
             app_connection,
             Path(args.musicbrainz_cache) if args.musicbrainz_cache else None,
         )
+        progress.stage(f"Opening MusicBrainz cache read-only: {musicbrainz_path}")
         with open_sqlite_read_only(musicbrainz_path) as mb_connection:
+            progress.stage("Validating the MusicBrainz cache schema")
             validate_musicbrainz_schema(mb_connection)
+            progress.stage("Loading album metadata from the app database")
             all_albums = load_albums(app_connection)
+            progress.stage(f"Loaded {len(all_albums):,} albums")
+            if library_root:
+                progress.stage(
+                    "Applying the library-root filter to every recorded track: "
+                    f"{library_root}"
+                )
+            else:
+                progress.stage("Library-root filter is disabled")
             root_scoped_albums, root_scope_summary = scope_albums_to_library_root(
-                app_connection, all_albums, library_root
+                app_connection, all_albums, library_root, progress
+            )
+            progress.stage(
+                f"Library-root scope retained {len(root_scoped_albums):,} albums; "
+                f"excluded {root_scope_summary['outsideRootAlbumCount']:,} "
+                "outside and "
+                f"{root_scope_summary['mixedLocationAlbumCount']:,} mixed-location"
+            )
+            expanded_genres = sorted(expand_genre_exclusions(args.exclude_genre))
+            progress.stage(
+                "Applying genre exclusions: "
+                + (", ".join(expanded_genres) if expanded_genres else "none")
             )
             albums, genre_scope_summary = scope_albums_by_genre(
                 root_scoped_albums, args.exclude_genre
             )
+            progress.stage(
+                f"Genre scope retained {len(albums):,} albums and excluded "
+                f"{genre_scope_summary['excludedGenreAlbumCount']:,}"
+            )
+            progress.stage(
+                "Comparing scoped albums with trusted official MusicBrainz "
+                "release groups"
+            )
             candidates, metadata = load_musicbrainz_candidates(
-                app_connection, mb_connection, albums
+                app_connection, mb_connection, albums, progress
+            )
+            progress.stage(
+                f"MusicBrainz comparison found {len(candidates):,} Discogs "
+                f"candidate(s) and "
+                f"{metadata['musicBrainzOfficialAlbumMatchCount']:,} "
+                "official match(es)"
             )
             metadata = {
                 **root_scope_summary,
@@ -1514,6 +1745,7 @@ def scan_command(args: argparse.Namespace) -> dict[str, Any]:
             }
 
         if output_path.exists():
+            progress.stage(f"Loading resumable manifest: {output_path}")
             if not args.resume:
                 raise TrimmerError(
                     f"Manifest already exists; use --resume: {output_path}"
@@ -1541,6 +1773,7 @@ def scan_command(args: argparse.Namespace) -> dict[str, Any]:
                     "The existing manifest uses different --exclude-genre values"
                 )
         else:
+            progress.stage(f"Creating a new manifest: {output_path}")
             manifest = new_manifest(
                 database_path, musicbrainz_path, metadata, library_root
             )
@@ -1574,15 +1807,39 @@ def scan_command(args: argparse.Namespace) -> dict[str, Any]:
         if limit < 0:
             raise TrimmerError("--limit cannot be negative")
         selected = pending if limit == 0 else pending[:limit]
+        progress.stage(
+            f"Prepared this batch: {len(selected):,} selected, "
+            f"{len(pending):,} pending, {len(existing):,} already recorded"
+        )
         client = DiscogsClient(
             Path(args.cache_dir),
             offline=bool(args.offline),
             refresh=bool(args.refresh),
         )
+        progress.stage(
+            f"Discogs mode: auth={client.auth_source}, "
+            f"offline={'yes' if args.offline else 'no'}, "
+            f"refresh={'yes' if args.refresh else 'no'}"
+        )
+        progress.begin_items(
+            "Discogs",
+            len(selected),
+            (
+                f"classifying {len(selected):,} album(s); "
+                f"overall manifest {len(existing):,}/{len(candidates):,}"
+            ),
+        )
         processed_this_run = 0
         for index, album in enumerate(selected, start=1):
+            cache_hits_before = client.cache_hits
+            network_requests_before = client.network_requests
+            lookup_source = "unknown"
             try:
                 payload = client.search_release(album["artist"], album["title"])
+                if client.cache_hits > cache_hits_before:
+                    lookup_source = "cache"
+                elif client.network_requests > network_requests_before:
+                    lookup_source = "network"
                 discogs = classify_discogs_search(
                     payload,
                     artist=album["artist"],
@@ -1609,6 +1866,7 @@ def scan_command(args: argparse.Namespace) -> dict[str, Any]:
                     lookup_state="pending",
                     lookup_error=str(error),
                 )
+                lookup_source = "offline cache miss"
             except TrimmerError as error:
                 discogs = {
                     "classification": "review",
@@ -1623,6 +1881,7 @@ def scan_command(args: argparse.Namespace) -> dict[str, Any]:
                     lookup_state="error",
                     lookup_error=str(error),
                 )
+                lookup_source = "lookup error"
 
             if album["albumId"] in existing:
                 position = next(
@@ -1637,14 +1896,19 @@ def scan_command(args: argparse.Namespace) -> dict[str, Any]:
             processed_this_run += 1
             manifest["updatedAt"] = utc_now()
             manifest["summary"] = manifest_summary(manifest)
+            checkpointed = False
             if index % int(args.checkpoint_every) == 0:
                 write_json_atomic(output_path, manifest)
-            print(
+                checkpointed = True
+            progress.item(
+                index,
+                len(selected),
                 (
-                    f"[{index}/{len(selected)}] {album['artist']} — "
-                    f"{album['title']}: {row['automatedClassification']}"
+                    f"overall {len(existing):,}/{len(candidates):,} | "
+                    f"{lookup_source} | {album['artist']} — {album['title']}: "
+                    f"{row['automatedClassification']}"
+                    + (" | checkpoint saved" if checkpointed else "")
                 ),
-                file=sys.stderr,
             )
 
         summary = manifest_summary(manifest)
@@ -1656,7 +1920,13 @@ def scan_command(args: argparse.Namespace) -> dict[str, Any]:
         manifest["status"] = "complete" if complete else "partial"
         manifest["updatedAt"] = utc_now()
         manifest["summary"] = summary
+        progress.stage(f"Writing final manifest checkpoint: {output_path}")
         write_json_atomic(output_path, manifest)
+        progress.done(
+            f"scan {manifest['status']}; "
+            f"{summary['processedAlbumCount']:,}/"
+            f"{summary['candidateAlbumCount']:,} candidates recorded"
+        )
         return {
             "ok": True,
             "command": "scan",
@@ -1675,29 +1945,63 @@ def scan_command(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def candidate_command(args: argparse.Namespace) -> dict[str, Any]:
+    progress = ProgressReporter("candidates")
     database_path = Path(args.db).expanduser().resolve()
     library_root = (
         Path(args.library_root).expanduser().resolve()
         if args.library_root
         else None
     )
+    progress.stage(f"Opening app database read-only: {database_path}")
     with open_sqlite_read_only(database_path) as app_connection:
+        progress.stage("Validating the app database schema")
         validate_app_schema(app_connection)
+        progress.stage("Locating the configured MusicBrainz cache")
         musicbrainz_path = resolve_musicbrainz_cache_path(
             app_connection,
             Path(args.musicbrainz_cache) if args.musicbrainz_cache else None,
         )
+        progress.stage(f"Opening MusicBrainz cache read-only: {musicbrainz_path}")
         with open_sqlite_read_only(musicbrainz_path) as mb_connection:
+            progress.stage("Validating the MusicBrainz cache schema")
             validate_musicbrainz_schema(mb_connection)
+            progress.stage("Loading album metadata from the app database")
             all_albums = load_albums(app_connection)
+            progress.stage(f"Loaded {len(all_albums):,} albums")
+            if library_root:
+                progress.stage(
+                    "Applying the library-root filter to every recorded track: "
+                    f"{library_root}"
+                )
+            else:
+                progress.stage("Library-root filter is disabled")
             root_scoped_albums, root_scope_summary = scope_albums_to_library_root(
-                app_connection, all_albums, library_root
+                app_connection, all_albums, library_root, progress
+            )
+            progress.stage(
+                f"Library-root scope retained {len(root_scoped_albums):,} albums; "
+                f"excluded {root_scope_summary['outsideRootAlbumCount']:,} "
+                "outside and "
+                f"{root_scope_summary['mixedLocationAlbumCount']:,} mixed-location"
+            )
+            expanded_genres = sorted(expand_genre_exclusions(args.exclude_genre))
+            progress.stage(
+                "Applying genre exclusions: "
+                + (", ".join(expanded_genres) if expanded_genres else "none")
             )
             albums, genre_scope_summary = scope_albums_by_genre(
                 root_scoped_albums, args.exclude_genre
             )
+            progress.stage(
+                f"Genre scope retained {len(albums):,} albums and excluded "
+                f"{genre_scope_summary['excludedGenreAlbumCount']:,}"
+            )
+            progress.stage(
+                "Comparing scoped albums with trusted official MusicBrainz "
+                "release groups"
+            )
             candidates, metadata = load_musicbrainz_candidates(
-                app_connection, mb_connection, albums
+                app_connection, mb_connection, albums, progress
             )
             metadata = {
                 **root_scope_summary,
@@ -1705,6 +2009,10 @@ def candidate_command(args: argparse.Namespace) -> dict[str, Any]:
                 **metadata,
             }
     candidate_artists = len({album["artistKey"] for album in candidates})
+    progress.done(
+        f"found {len(candidates):,} candidate albums across "
+        f"{candidate_artists:,} artists"
+    )
     return {
         "ok": True,
         "command": "candidates",
@@ -1745,18 +2053,34 @@ REVIEW_FIELDS = [
 
 
 def export_review_command(args: argparse.Namespace) -> dict[str, Any]:
+    progress = ProgressReporter("export-review")
     manifest_path = Path(args.manifest).expanduser().resolve()
     output_path = Path(args.out).expanduser().resolve()
+    progress.stage(f"Loading manifest: {manifest_path}")
     manifest = read_json(manifest_path)
+    progress.stage("Validating the manifest schema")
     validate_manifest(manifest)
+    eligible_albums = [
+        album
+        for album in manifest["albums"]
+        if args.include_keep
+        or album.get("automatedClassification") != "keep"
+    ]
+    progress.stage(
+        f"Preparing {len(eligible_albums):,} review row(s) from "
+        f"{len(manifest['albums']):,} manifest album(s)"
+    )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     rows = 0
+    progress.begin_items(
+        "CSV export",
+        len(eligible_albums),
+        f"writing review rows to {output_path}",
+    )
     with output_path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=REVIEW_FIELDS)
         writer.writeheader()
-        for album in manifest["albums"]:
-            if not args.include_keep and album.get("automatedClassification") == "keep":
-                continue
+        for index, album in enumerate(eligible_albums, start=1):
             exact = (
                 album.get("musicbrainz", {}).get("exactReleaseGroup")
                 or {}
@@ -1798,6 +2122,13 @@ def export_review_command(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
             rows += 1
+            progress.item(
+                index,
+                len(eligible_albums),
+                f"{album.get('artist')} — {album.get('title')}",
+                every=max(len(eligible_albums) // 20, 1),
+            )
+    progress.done(f"wrote {rows:,} review row(s) to {output_path}")
     return {
         "ok": True,
         "command": "export-review",
@@ -1816,9 +2147,12 @@ def parse_approval(value: str | None) -> bool:
 
 
 def import_review_command(args: argparse.Namespace) -> dict[str, Any]:
+    progress = ProgressReporter("import-review")
     manifest_path = Path(args.manifest).expanduser().resolve()
     review_path = Path(args.review).expanduser().resolve()
+    progress.stage(f"Loading manifest: {manifest_path}")
     manifest = read_json(manifest_path)
+    progress.stage("Validating the manifest schema")
     validate_manifest(manifest)
     albums = {
         str(album.get("albumId")): album
@@ -1827,6 +2161,7 @@ def import_review_command(args: argparse.Namespace) -> dict[str, Any]:
     }
     changed = 0
     seen: set[str] = set()
+    progress.stage(f"Reading review CSV: {review_path}")
     with review_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         required = {"albumId", "reviewDecision", "approved"}
@@ -1835,47 +2170,72 @@ def import_review_command(args: argparse.Namespace) -> dict[str, Any]:
             raise TrimmerError(
                 f"Review CSV is missing columns: {', '.join(sorted(missing))}"
             )
-        for row in reader:
-            album_id = str(row.get("albumId") or "").strip()
-            if not album_id:
-                continue
-            if album_id in seen:
-                raise TrimmerError(f"Review CSV repeats albumId {album_id}")
-            seen.add(album_id)
-            album = albums.get(album_id)
-            if not album:
-                raise TrimmerError(
-                    f"Review CSV contains an album not present in the manifest: {album_id}"
-                )
-            decision = normalize_space(row.get("reviewDecision"))
-            if decision not in {"", "move", "keep", "review"}:
-                raise TrimmerError(
-                    f"Unsupported reviewDecision for {album_id}: {decision!r}"
-                )
-            approved = parse_approval(row.get("approved"))
-            if approved and decision not in {"move", ""}:
-                raise TrimmerError(
-                    f"Only move decisions can be approved ({album_id})"
-                )
-            if approved and decision == "" and album.get(
-                "automatedClassification"
-            ) != "move_candidate":
-                raise TrimmerError(
-                    f"Set reviewDecision=move before approving {album_id}"
-                )
-            next_decision = decision or None
-            if (
-                album.get("reviewDecision") != next_decision
-                or bool(album.get("approved")) != approved
-            ):
-                album["reviewDecision"] = next_decision
-                album["approved"] = approved
-                changed += 1
+        review_rows = list(reader)
+    progress.begin_items(
+        "CSV import",
+        len(review_rows),
+        f"validating {len(review_rows):,} review row(s)",
+    )
+    for index, row in enumerate(review_rows, start=1):
+        album_id = str(row.get("albumId") or "").strip()
+        if not album_id:
+            progress.item(
+                index,
+                len(review_rows),
+                "skipped row without an albumId",
+                every=max(len(review_rows) // 20, 1),
+            )
+            continue
+        if album_id in seen:
+            raise TrimmerError(f"Review CSV repeats albumId {album_id}")
+        seen.add(album_id)
+        album = albums.get(album_id)
+        if not album:
+            raise TrimmerError(
+                f"Review CSV contains an album not present in the manifest: {album_id}"
+            )
+        decision = normalize_space(row.get("reviewDecision"))
+        if decision not in {"", "move", "keep", "review"}:
+            raise TrimmerError(
+                f"Unsupported reviewDecision for {album_id}: {decision!r}"
+            )
+        approved = parse_approval(row.get("approved"))
+        if approved and decision not in {"move", ""}:
+            raise TrimmerError(
+                f"Only move decisions can be approved ({album_id})"
+            )
+        if approved and decision == "" and album.get(
+            "automatedClassification"
+        ) != "move_candidate":
+            raise TrimmerError(
+                f"Set reviewDecision=move before approving {album_id}"
+            )
+        next_decision = decision or None
+        if (
+            album.get("reviewDecision") != next_decision
+            or bool(album.get("approved")) != approved
+        ):
+            album["reviewDecision"] = next_decision
+            album["approved"] = approved
+            changed += 1
+        progress.item(
+            index,
+            len(review_rows),
+            f"{album.get('artist')} — {album.get('title')}: "
+            f"{next_decision or 'automatic'}, "
+            f"approved={'yes' if approved else 'no'}",
+            every=max(len(review_rows) // 20, 1),
+        )
 
+    progress.stage(f"Creating a backup of the manifest: {manifest_path}")
     backup = backup_file(manifest_path)
     manifest["updatedAt"] = utc_now()
     manifest["summary"] = manifest_summary(manifest)
+    progress.stage(f"Writing imported review decisions: {manifest_path}")
     write_json_atomic(manifest_path, manifest)
+    progress.done(
+        f"updated {changed:,} album(s); backup written to {backup}"
+    )
     return {
         "ok": True,
         "command": "import-review",
@@ -1923,13 +2283,23 @@ def validate_quarantine_root(quarantine_root: Path) -> None:
         raise TrimmerError(f"Quarantine path is not a directory: {resolved}")
 
 
-def safe_move_file(source: Path, destination: Path) -> dict[str, Any]:
+def safe_move_file(
+    source: Path,
+    destination: Path,
+    stage_callback: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    def report(message: str) -> None:
+        if stage_callback:
+            stage_callback(message)
+
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         raise TrimmerError(f"Destination already exists: {destination}")
     source_size = source.stat().st_size
     if is_same_volume(source, destination.parent):
+        report("renaming on the same volume")
         os.replace(source, destination)
+        report("calculating the destination SHA-256")
         destination_hash = sha256_file(destination)
         return {
             "method": "rename",
@@ -1941,13 +2311,17 @@ def safe_move_file(source: Path, destination: Path) -> dict[str, Any]:
         f".{destination.name}.{uuid.uuid4().hex}.partial"
     )
     try:
+        report("calculating the source SHA-256")
         source_hash = sha256_file(source)
+        report("copying to a temporary file on the destination volume")
         shutil.copy2(source, temporary)
+        report("calculating and comparing the copied SHA-256")
         destination_hash = sha256_file(temporary)
         if destination_hash != source_hash:
             raise TrimmerError(
                 f"SHA-256 verification failed while copying {source}"
             )
+        report("publishing the verified copy and removing the source")
         os.replace(temporary, destination)
         source.unlink()
         return {
@@ -2028,8 +2402,11 @@ def approved_move_plan(
     return albums, moves
 
 
-def preflight_moves(moves: list[dict[str, Any]]) -> None:
-    for move in moves:
+def preflight_moves(
+    moves: list[dict[str, Any]],
+    progress: ProgressReporter | None = None,
+) -> None:
+    for index, move in enumerate(moves, start=1):
         source = Path(move["source"])
         destination = Path(move["destination"])
         if not source.is_file():
@@ -2051,13 +2428,24 @@ def preflight_moves(moves: list[dict[str, Any]]) -> None:
             str(destination.resolve(strict=False))
         ):
             raise TrimmerError(f"Source and destination are identical: {source}")
+        if progress:
+            progress.item(
+                index,
+                len(moves),
+                str(source),
+                every=max(len(moves) // 20, 1),
+            )
 
 
 def apply_command(args: argparse.Namespace) -> dict[str, Any]:
+    progress = ProgressReporter("apply")
     manifest_path = Path(args.manifest).expanduser().resolve()
     quarantine_root = Path(args.quarantine).expanduser().resolve()
+    progress.stage(f"Validating quarantine destination: {quarantine_root}")
     validate_quarantine_root(quarantine_root)
+    progress.stage(f"Loading manifest: {manifest_path}")
     manifest = read_json(manifest_path)
+    progress.stage("Validating the manifest schema and library-root boundary")
     validate_manifest(manifest)
     manifest_library_root = manifest.get("libraryRoot")
     if manifest_library_root and path_is_within(
@@ -2067,13 +2455,23 @@ def apply_command(args: argparse.Namespace) -> dict[str, Any]:
             "Choose a quarantine directory outside the manifest library root "
             f"({manifest_library_root})"
         )
+    progress.stage("Building the explicitly approved move plan")
     albums, moves = approved_move_plan(manifest, quarantine_root)
-    preflight_moves(moves)
+    progress.begin_items(
+        "Preflight",
+        len(moves),
+        f"checking {len(moves):,} source and destination path(s)",
+    )
+    preflight_moves(moves, progress)
     total_bytes = sum(
         parse_int(move.get("expectedSizeBytes")) or 0 for move in moves
     )
     preview = not bool(args.execute)
     if preview:
+        progress.done(
+            f"previewed {len(albums):,} album(s), {len(moves):,} file(s), "
+            f"{total_bytes:,} byte(s); no files moved"
+        )
         return {
             "ok": True,
             "command": "apply",
@@ -2092,6 +2490,7 @@ def apply_command(args: argparse.Namespace) -> dict[str, Any]:
     if not moves:
         raise TrimmerError("The manifest contains no approved move decisions")
 
+    progress.stage("Validating the execution confirmation")
     journal_path = (
         Path(args.journal).expanduser().resolve()
         if args.journal
@@ -2101,6 +2500,7 @@ def apply_command(args: argparse.Namespace) -> dict[str, Any]:
     )
     if journal_path.exists():
         raise TrimmerError(f"Journal already exists: {journal_path}")
+    progress.stage(f"Creating recoverable move journal: {journal_path}")
     journal: dict[str, Any] = {
         "schemaVersion": JOURNAL_SCHEMA_VERSION,
         "tool": "music-library-trimmer",
@@ -2117,13 +2517,23 @@ def apply_command(args: argparse.Namespace) -> dict[str, Any]:
         "error": None,
     }
     write_json_atomic(journal_path, journal)
+    progress.begin_items(
+        "Move",
+        len(moves),
+        f"quarantining {len(moves):,} verified file(s)",
+    )
     try:
         for index, move in enumerate(moves, start=1):
             journal["activeMove"] = move
             journal["updatedAt"] = utc_now()
             write_json_atomic(journal_path, journal)
             result = safe_move_file(
-                Path(move["source"]), Path(move["destination"])
+                Path(move["source"]),
+                Path(move["destination"]),
+                lambda message, index=index, move=move: progress.stage(
+                    f"File {index:,}/{len(moves):,}: {message} — "
+                    f"{Path(move['source']).name}"
+                ),
             )
             journal["completedMoves"].append(
                 {
@@ -2135,9 +2545,10 @@ def apply_command(args: argparse.Namespace) -> dict[str, Any]:
             journal["activeMove"] = None
             journal["updatedAt"] = utc_now()
             write_json_atomic(journal_path, journal)
-            print(
-                f"[{index}/{len(moves)}] moved {move['source']}",
-                file=sys.stderr,
+            progress.item(
+                index,
+                len(moves),
+                f"{result['method']} verified | {move['source']}",
             )
     except Exception as error:
         journal["status"] = "failed"
@@ -2151,7 +2562,12 @@ def apply_command(args: argparse.Namespace) -> dict[str, Any]:
     journal["status"] = "completed"
     journal["completedAt"] = utc_now()
     journal["updatedAt"] = journal["completedAt"]
+    progress.stage(f"Finalizing move journal: {journal_path}")
     write_json_atomic(journal_path, journal)
+    progress.done(
+        f"moved and verified {len(moves):,} file(s) from "
+        f"{len(albums):,} album(s)"
+    )
     return {
         "ok": True,
         "command": "apply",
@@ -2181,8 +2597,11 @@ def cleanup_empty_parents(start: Path, stop: Path) -> None:
 
 
 def undo_command(args: argparse.Namespace) -> dict[str, Any]:
+    progress = ProgressReporter("undo")
     journal_path = Path(args.journal).expanduser().resolve()
+    progress.stage(f"Loading move journal: {journal_path}")
     journal = read_json(journal_path)
+    progress.stage("Validating journal state")
     if journal.get("schemaVersion") != JOURNAL_SCHEMA_VERSION:
         raise TrimmerError("Unsupported apply journal schema version")
     if journal.get("status") not in {"completed", "failed"}:
@@ -2195,6 +2614,10 @@ def undo_command(args: argparse.Namespace) -> dict[str, Any]:
         original = Path(str(active.get("source") or ""))
         quarantined = Path(str(active.get("destination") or ""))
         if quarantined.is_file() and not original.exists():
+            progress.stage(
+                "Reconciling an interrupted active move by hashing its "
+                f"quarantined file: {quarantined}"
+            )
             completed.append(
                 {
                     **active,
@@ -2211,7 +2634,12 @@ def undo_command(args: argparse.Namespace) -> dict[str, Any]:
                 "and destination before undoing."
             )
     quarantine_root = Path(str(journal.get("quarantineRoot") or "")).resolve()
-    for move in completed:
+    progress.begin_items(
+        "Undo preflight",
+        len(completed),
+        f"verifying {len(completed):,} quarantined file(s)",
+    )
+    for index, move in enumerate(completed, start=1):
         original = Path(str(move["source"]))
         quarantined = Path(str(move["destination"]))
         if not quarantined.is_file():
@@ -2224,12 +2652,27 @@ def undo_command(args: argparse.Namespace) -> dict[str, Any]:
                 f"Quarantined file size changed: {quarantined}"
             )
         expected_hash = str(move.get("sha256") or "")
-        if expected_hash and sha256_file(quarantined) != expected_hash:
-            raise TrimmerError(
-                f"Quarantined file hash changed: {quarantined}"
+        if expected_hash:
+            progress.stage(
+                f"Undo preflight {index:,}/{len(completed):,}: "
+                f"calculating SHA-256 — {quarantined.name}"
             )
+            if sha256_file(quarantined) != expected_hash:
+                raise TrimmerError(
+                    f"Quarantined file hash changed: {quarantined}"
+                )
+        progress.item(
+            index,
+            len(completed),
+            str(quarantined),
+            every=max(len(completed) // 20, 1),
+        )
 
     if not args.execute:
+        progress.done(
+            f"previewed restoration of {len(completed):,} file(s); "
+            "no files restored"
+        )
         return {
             "ok": True,
             "command": "undo",
@@ -2242,19 +2685,35 @@ def undo_command(args: argparse.Namespace) -> dict[str, Any]:
         raise TrimmerError(
             f"Execution requires --confirm {UNDO_CONFIRMATION}"
         )
+    progress.stage("Execution confirmation accepted")
+    progress.begin_items(
+        "Restore",
+        len(completed),
+        f"restoring {len(completed):,} verified file(s)",
+    )
     for index, move in enumerate(reversed(completed), start=1):
         original = Path(str(move["source"]))
         quarantined = Path(str(move["destination"]))
-        safe_move_file(quarantined, original)
+        result = safe_move_file(
+            quarantined,
+            original,
+            lambda message, index=index, original=original: progress.stage(
+                f"File {index:,}/{len(completed):,}: {message} — "
+                f"{original.name}"
+            ),
+        )
         cleanup_empty_parents(quarantined.parent, quarantine_root)
-        print(
-            f"[{index}/{len(completed)}] restored {original}",
-            file=sys.stderr,
+        progress.item(
+            index,
+            len(completed),
+            f"{result['method']} verified | {original}",
         )
     journal["status"] = "undone"
     journal["undoneAt"] = utc_now()
     journal["updatedAt"] = journal["undoneAt"]
+    progress.stage(f"Recording completed undo state: {journal_path}")
     write_json_atomic(journal_path, journal)
+    progress.done(f"restored and verified {len(completed):,} file(s)")
     return {
         "ok": True,
         "command": "undo",
@@ -2265,14 +2724,17 @@ def undo_command(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def doctor_command(args: argparse.Namespace) -> dict[str, Any]:
+    progress = ProgressReporter("doctor")
     database_path = Path(args.db).expanduser().resolve()
     checks: list[dict[str, Any]] = []
     musicbrainz_path: Path | None = None
     album_count = 0
     track_count = 0
+    progress.stage(f"Checking app database: {database_path}")
     try:
         with open_sqlite_read_only(database_path) as connection:
             validate_app_schema(connection)
+            progress.stage("Counting albums and tracks")
             album_count = int(
                 connection.execute("SELECT COUNT(*) FROM albums").fetchone()[0]
             )
@@ -2285,6 +2747,10 @@ def doctor_command(args: argparse.Namespace) -> dict[str, Any]:
                 if args.musicbrainz_cache
                 else None,
             )
+        progress.stage(
+            f"App database is healthy: {album_count:,} albums, "
+            f"{track_count:,} tracks"
+        )
         checks.append(
             {
                 "name": "app_database",
@@ -2295,6 +2761,7 @@ def doctor_command(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
     except TrimmerError as error:
+        progress.stage(f"App database check failed: {error}")
         checks.append(
             {
                 "name": "app_database",
@@ -2305,9 +2772,11 @@ def doctor_command(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     if musicbrainz_path:
+        progress.stage(f"Checking MusicBrainz cache: {musicbrainz_path}")
         try:
             with open_sqlite_read_only(musicbrainz_path) as connection:
                 validate_musicbrainz_schema(connection)
+            progress.stage("MusicBrainz cache schema is healthy")
             checks.append(
                 {
                     "name": "musicbrainz_cache",
@@ -2316,6 +2785,7 @@ def doctor_command(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
         except TrimmerError as error:
+            progress.stage(f"MusicBrainz cache check failed: {error}")
             checks.append(
                 {
                     "name": "musicbrainz_cache",
@@ -2325,6 +2795,7 @@ def doctor_command(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
 
+    progress.stage("Checking Discogs credential configuration")
     client = DiscogsClient(Path(args.cache_dir), offline=False)
     credentials_ok = client.auth_source != "incomplete-consumer-key-secret"
     checks.append(
@@ -2341,8 +2812,10 @@ def doctor_command(args: argparse.Namespace) -> dict[str, Any]:
         }
     )
     if not args.skip_network:
+        progress.stage(f"Testing Discogs endpoint: {DISCOGS_API_ROOT}")
         try:
             client.get("/")
+            progress.stage("Discogs endpoint responded successfully")
             checks.append(
                 {
                     "name": "discogs_endpoint",
@@ -2351,6 +2824,7 @@ def doctor_command(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
         except TrimmerError as error:
+            progress.stage(f"Discogs endpoint check failed: {error}")
             checks.append(
                 {
                     "name": "discogs_endpoint",
@@ -2359,7 +2833,13 @@ def doctor_command(args: argparse.Namespace) -> dict[str, Any]:
                     "message": str(error),
                 }
             )
+    else:
+        progress.stage("Skipping the Discogs endpoint test as requested")
     ok = all(bool(check["ok"]) for check in checks)
+    progress.done(
+        f"{sum(1 for check in checks if check['ok']):,}/{len(checks):,} "
+        f"check(s) passed"
+    )
     return {
         "ok": ok,
         "command": "doctor",
@@ -2371,6 +2851,8 @@ def doctor_command(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def request_command(args: argparse.Namespace) -> dict[str, Any]:
+    progress = ProgressReporter("request")
+    progress.stage("Validating the read-only raw request")
     if args.method.lower() != "get":
         raise TrimmerError("The raw request command supports GET only")
     if "?" in args.path or "#" in args.path:
@@ -2395,12 +2877,23 @@ def request_command(args: argparse.Namespace) -> dict[str, Any]:
                 "Pass Discogs credentials through environment variables, not --param"
             )
         params[key] = value
+    progress.stage(
+        f"Preparing Discogs GET {args.path} with {len(params):,} query parameter(s)"
+    )
     client = DiscogsClient(
         Path(args.cache_dir),
         offline=bool(args.offline),
         refresh=bool(args.refresh),
     )
+    progress.stage(
+        f"Discogs mode: auth={client.auth_source}, "
+        f"offline={'yes' if args.offline else 'no'}, "
+        f"refresh={'yes' if args.refresh else 'no'}"
+    )
+    progress.stage(f"Fetching {args.path}")
     data = client.get(args.path, params)
+    source = "cache" if client.cache_hits else "network"
+    progress.done(f"GET {args.path} completed from {source}")
     return {
         "ok": True,
         "command": "request",

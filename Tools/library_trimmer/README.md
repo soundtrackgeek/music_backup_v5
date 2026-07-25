@@ -22,6 +22,25 @@ The default app database is:
 %APPDATA%\com.local.musiclibrary\music-library.sqlite3
 ```
 
+## Progress output
+
+Every command continuously explains its current stage on stderr, including
+database and cache validation, album loading, root and genre filtering,
+MusicBrainz comparison, Discogs classification, manifest checkpoints, CSV
+review work, move preflight, hashing and verification, journal writes, and
+undo.
+
+Counted work displays the completed and total items, percentage, processing
+rate, and ETA. Discogs progress also shows whether each result came from the
+local HTTP cache or the network and reports the overall manifest count during
+resumed batches. Interactive terminals update a live status line where
+practical; redirected output receives periodic durable log lines.
+
+Progress always uses stderr. With `--json`, stdout therefore contains only the
+documented JSON result and remains safe to pipe to another command or file.
+The progress implementation uses only Python's standard library and does not
+require `tqdm` or another package.
+
 ## Discogs authentication
 
 Public read-only lookups work at the lower anonymous rate limit. For an

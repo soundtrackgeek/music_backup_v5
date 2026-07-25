@@ -92,6 +92,8 @@ py Tools\library_trimmer\library_trimmer.py scan `
 
 Public Discogs reads work without credentials. For authenticated limits, set `DISCOGS_TOKEN`, or set both `DISCOGS_CONSUMER_KEY` and `DISCOGS_CONSUMER_SECRET`; credentials remain in environment variables and are never saved in repository files, manifests, caches, CSV files, journals, or output. The personal token takes precedence when both methods are present.
 
+Every trimmer command reports what it is currently doing to stderr. Long stages show live counts, percentage, processing rate, and ETA; Discogs rows also identify cache versus network work, and file operations identify preflight, hashing, move, verification, journal, and undo stages. Interactive terminals reuse one live status line where practical, while redirected logs receive periodic checkpoints. `--json` remains clean on stdout.
+
 The complete review, apply, undo, credential, JSON-output, and raw read-only request workflow is documented in [Tools/library_trimmer/README.md](Tools/library_trimmer/README.md). `apply` previews by default; moving files additionally requires imported CSV approvals, `--execute`, and `--confirm MOVE_APPROVED`. The quarantine must be outside the selected library root. After accepting the result, rescan in MusicBee, export a fresh TSV, and use the app's normal import preview/apply workflow.
 
 ## Luna Search, Charts, Current-view Questions, Library Analyst, Playlists, Discovery, and Music Research
