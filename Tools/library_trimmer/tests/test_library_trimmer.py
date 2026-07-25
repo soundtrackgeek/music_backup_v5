@@ -60,6 +60,57 @@ class ProgressReporterTests(unittest.TestCase):
         self.assertNotIn("[doctor +", stdout.getvalue())
 
 
+class ReviewCsvTests(unittest.TestCase):
+    def test_accepts_excel_windows_1252_csv(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "review.csv"
+            path.write_bytes(
+                (
+                    "albumId,reviewDecision,approved,note\r\n"
+                    "album-1,move,yes,Recorded at 30°\r\n"
+                ).encode("cp1252")
+            )
+
+            rows, fields, encoding, delimiter = trimmer.parse_review_csv(path)
+
+        self.assertEqual(encoding, "Windows-1252")
+        self.assertEqual(delimiter, "comma")
+        self.assertEqual(
+            fields,
+            ["albumId", "reviewDecision", "approved", "note"],
+        )
+        self.assertEqual(rows[0]["note"], "Recorded at 30°")
+
+    def test_accepts_excel_utf_16_semicolon_csv(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "review.csv"
+            path.write_bytes(
+                (
+                    "albumId;reviewDecision;approved\r\n"
+                    "album-1;move;yes\r\n"
+                ).encode("utf-16")
+            )
+
+            rows, _, encoding, delimiter = trimmer.parse_review_csv(path)
+
+        self.assertEqual(encoding, "UTF-16")
+        self.assertEqual(delimiter, "semicolon")
+        self.assertEqual(rows[0]["reviewDecision"], "move")
+
+    def test_rejects_unexpected_nul_characters_without_a_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "review.csv"
+            path.write_bytes(
+                b"albumId,reviewDecision,approved\x00\nalbum-1,move,yes\n"
+            )
+
+            with self.assertRaisesRegex(
+                trimmer.TrimmerError,
+                "unexpected NUL characters",
+            ):
+                trimmer.parse_review_csv(path)
+
+
 class DiscogsClassificationTests(unittest.TestCase):
     def test_keeps_strong_pure_album_match(self) -> None:
         payload = {
@@ -430,10 +481,19 @@ class MoveAndReviewTests(unittest.TestCase):
             manifest["albums"][0]["approved"] = False
             trimmer.write_json_atomic(manifest_path, manifest)
             review_path = root / "review.csv"
-            with review_path.open("w", encoding="utf-8", newline="") as handle:
+            with review_path.open(
+                "w",
+                encoding="cp1252",
+                newline="",
+            ) as handle:
                 writer = csv.DictWriter(
                     handle,
-                    fieldnames=["albumId", "reviewDecision", "approved"],
+                    fieldnames=[
+                        "albumId",
+                        "reviewDecision",
+                        "approved",
+                        "note",
+                    ],
                 )
                 writer.writeheader()
                 writer.writerow(
@@ -441,12 +501,14 @@ class MoveAndReviewTests(unittest.TestCase):
                         "albumId": "album-live",
                         "reviewDecision": "move",
                         "approved": "yes",
+                        "note": "Recorded at 30°",
                     }
                 )
             result = trimmer.import_review_command(
                 Namespace(manifest=str(manifest_path), review=str(review_path))
             )
             self.assertEqual(result["changedAlbumCount"], 1)
+            self.assertEqual(result["reviewEncoding"], "Windows-1252")
             updated = trimmer.read_json(manifest_path)
             self.assertEqual(updated["albums"][0]["reviewDecision"], "move")
             self.assertTrue(updated["albums"][0]["approved"])

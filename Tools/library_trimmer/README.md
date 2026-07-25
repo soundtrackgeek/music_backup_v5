@@ -144,7 +144,15 @@ Run all commands from the repository root.
      --review trim-review.csv
    ```
 
-   Import creates a timestamped backup of the manifest before changing it.
+   Import detects and reports UTF-8 (with or without BOM), Excel UTF-16/UTF-32,
+   or Excel Windows-1252 text automatically. Comma, semicolon, and tab
+   delimiters are supported, including an optional Excel `sep=` first line.
+   This allows the exported sheet to be opened, edited, and saved normally in
+   Excel without first converting it back to UTF-8.
+
+   The complete review file is decoded, parsed, and validated before any
+   manifest change. Import then creates a timestamped backup of the manifest
+   before writing decisions atomically.
 
 7. Preview the exact move:
 

@@ -7,6 +7,7 @@ import argparse
 import csv
 import functools
 import hashlib
+import io
 import json
 import os
 import re
@@ -26,7 +27,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, Sequence
 
 
-TOOL_VERSION = "1.1.0"
+TOOL_VERSION = "1.1.1"
 MANIFEST_SCHEMA_VERSION = 1
 JOURNAL_SCHEMA_VERSION = 1
 DISCOGS_API_ROOT = "https://api.discogs.com"
@@ -2146,6 +2147,95 @@ def parse_approval(value: str | None) -> bool:
     return normalize_space(value) in {"1", "true", "yes", "y", "x"}
 
 
+def decode_review_csv(raw: bytes, path: Path) -> tuple[str, str]:
+    if raw.startswith((b"\xff\xfe\x00\x00", b"\x00\x00\xfe\xff")):
+        encoding = "utf-32"
+        label = "UTF-32"
+    elif raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        encoding = "utf-16"
+        label = "UTF-16"
+    elif raw.startswith(b"\xef\xbb\xbf"):
+        encoding = "utf-8-sig"
+        label = "UTF-8 with BOM"
+    else:
+        try:
+            text = raw.decode("utf-8")
+            label = "UTF-8"
+        except UnicodeDecodeError:
+            encoding = "cp1252"
+            label = "Windows-1252"
+        else:
+            encoding = None
+    if encoding:
+        try:
+            text = raw.decode(encoding)
+        except UnicodeDecodeError as error:
+            raise TrimmerError(
+                f"Review CSV cannot be decoded as {label}: {path} "
+                f"(byte offset {error.start})"
+            ) from error
+    if "\x00" in text:
+        raise TrimmerError(
+            "Review CSV contains unexpected NUL characters. Save it in Excel "
+            "as CSV UTF-8, CSV, or Unicode Text and try again."
+        )
+    return text, label
+
+
+def review_delimiter_name(delimiter: str) -> str:
+    return {
+        ",": "comma",
+        ";": "semicolon",
+        "\t": "tab",
+    }.get(delimiter, repr(delimiter))
+
+
+def parse_review_csv(
+    path: Path,
+) -> tuple[list[dict[str, str]], list[str], str, str]:
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        raise TrimmerError(f"Could not read review CSV {path}: {error}") from error
+    text, encoding = decode_review_csv(raw, path)
+    lines = text.splitlines(keepends=True)
+    delimiter_hint: str | None = None
+    if lines:
+        first = lines[0].rstrip("\r\n")
+        if first.lower().startswith("sep=") and first[4:] in {",", ";", "\t"}:
+            delimiter_hint = first[4:]
+            text = "".join(lines[1:])
+    header = next(
+        (line for line in text.splitlines() if line.strip()),
+        "",
+    )
+    if not header:
+        raise TrimmerError(f"Review CSV is empty: {path}")
+    if delimiter_hint:
+        delimiter = delimiter_hint
+    else:
+        counts = {
+            candidate: header.count(candidate)
+            for candidate in (",", ";", "\t")
+        }
+        delimiter = max(counts, key=counts.get)
+        if counts[delimiter] == 0:
+            raise TrimmerError(
+                "Could not detect the review CSV delimiter. Save it as a "
+                "comma-, semicolon-, or tab-delimited file."
+            )
+    try:
+        reader = csv.DictReader(
+            io.StringIO(text, newline=""),
+            delimiter=delimiter,
+        )
+        fieldnames = list(reader.fieldnames or [])
+        rows = list(reader)
+    except csv.Error as error:
+        raise TrimmerError(f"Review CSV parsing failed: {error}") from error
+    return rows, fieldnames, encoding, review_delimiter_name(delimiter)
+
+
 def import_review_command(args: argparse.Namespace) -> dict[str, Any]:
     progress = ProgressReporter("import-review")
     manifest_path = Path(args.manifest).expanduser().resolve()
@@ -2162,15 +2252,18 @@ def import_review_command(args: argparse.Namespace) -> dict[str, Any]:
     changed = 0
     seen: set[str] = set()
     progress.stage(f"Reading review CSV: {review_path}")
-    with review_path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        required = {"albumId", "reviewDecision", "approved"}
-        missing = required - set(reader.fieldnames or [])
-        if missing:
-            raise TrimmerError(
-                f"Review CSV is missing columns: {', '.join(sorted(missing))}"
-            )
-        review_rows = list(reader)
+    review_rows, fieldnames, review_encoding, review_delimiter = parse_review_csv(
+        review_path
+    )
+    progress.stage(
+        f"Detected {review_encoding} with {review_delimiter} delimiter"
+    )
+    required = {"albumId", "reviewDecision", "approved"}
+    missing = required - set(fieldnames)
+    if missing:
+        raise TrimmerError(
+            f"Review CSV is missing columns: {', '.join(sorted(missing))}"
+        )
     progress.begin_items(
         "CSV import",
         len(review_rows),
@@ -2241,6 +2334,8 @@ def import_review_command(args: argparse.Namespace) -> dict[str, Any]:
         "command": "import-review",
         "manifestPath": str(manifest_path),
         "backupPath": str(backup),
+        "reviewEncoding": review_encoding,
+        "reviewDelimiter": review_delimiter,
         "changedAlbumCount": changed,
         "summary": manifest["summary"],
     }

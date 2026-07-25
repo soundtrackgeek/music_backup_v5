@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.79.2] - 2026-07-25
+### Fixed
+- Made Music Library Trimmer review imports accept Excel-saved Windows-1252 CSV files in addition to UTF-8 with or without BOM and UTF-16/UTF-32 Excel exports.
+- Added automatic comma, semicolon, and tab delimiter detection, including Excel `sep=` directives, and report the detected review format before validation.
+- Converted review-file decoding, read, and CSV parsing failures into normal safe CLI errors instead of Python tracebacks.
+
+### Changed
+- Bumped synchronized app metadata to `0.79.2` and the standalone trimmer version to `1.1.1`.
+
 ## [0.79.1] - 2026-07-25
 ### Added
 - Added continuous stderr progress across every Music Library Trimmer command and long-running stage, including elapsed time, item counts, percentages, rates, ETAs, cache/network source, checkpoints, CSV review work, move preflight, hashing, verified moves, and undo.
