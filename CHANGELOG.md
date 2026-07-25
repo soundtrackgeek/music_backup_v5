@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.78.1] - 2026-07-25
+### Fixed
+- Bundled MapLibre's GeoJSON worker explicitly and start it through a WebView-compatible classic Blob URL so country circles, area clusters, precise-area dots, and their labels render in the packaged Tauri app.
+- Made location drill-down load only artists from the selected country or area and resolve representative covers only for the top 24 artists, removing the minute-long inspector delay on large places such as London.
+- Showed an immediate loading state when changing locations and prevented stale or initial detail requests from replacing the latest selection.
+
+### Changed
+- Bumped synchronized app metadata to `0.78.1`.
+
 ## [0.78.0] - 2026-07-25
 ### Added
 - Added a Music Map workspace backed by the local MusicBrainz origin-country and begin-area data, with country aggregates at world scale and exact MusicBrainz areas revealed as the map zooms in.

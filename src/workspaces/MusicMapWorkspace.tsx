@@ -26,14 +26,17 @@ import {
   type MapLayerMouseEvent,
   Map as MapLibre,
   NavigationControl,
+  setWorkerUrl,
   type StyleSpecification,
 } from "maplibre-gl";
+import mapLibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import {
   getAlbumCoverDataUrl,
   getMusicMap,
   getMusicMapLocationDetails,
+  isTauriRuntime,
   refreshMusicMapLocations,
 } from "../backend";
 import { formatNumber } from "../app/display";
@@ -61,6 +64,35 @@ const AREA_LAYER_IDS = [
   "music-map-area-circles",
   "music-map-area-labels",
 ];
+
+let mapLibreWorkerReady: Promise<void> | null = null;
+
+function prepareMapLibreWorker() {
+  mapLibreWorkerReady ??= fetch(mapLibreWorkerUrl)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(
+          `Map worker could not be loaded (${response.status}).`,
+        );
+      }
+      return response.text();
+    })
+    .then((workerSource) => {
+      const workerBlobUrl = URL.createObjectURL(
+        new Blob([workerSource], { type: "text/javascript" }),
+      );
+      // MapLibre treats every URL except *.cjs as an ES module worker. WebView2
+      // cannot import a blob URL from MapLibre's module-worker wrapper, so mark
+      // the self-contained bundle as classic in Tauri while keeping the normal
+      // module-worker path for browser development and automated previews.
+      setWorkerUrl(
+        isTauriRuntime()
+          ? `${workerBlobUrl}#maplibre-worker.cjs`
+          : workerBlobUrl,
+      );
+    });
+  return mapLibreWorkerReady;
+}
 
 const musicMapStyle: StyleSpecification = {
   version: 8,
@@ -150,6 +182,8 @@ export function MusicMapWorkspace({ onOpenArtist }: MusicMapWorkspaceProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const selectLocationRef = useRef<(locationKey: string) => void>(() => {});
+  const detailRequestRef = useRef(0);
+  const initialLocationRequestedRef = useRef(false);
   const [data, setData] = useState<MusicMapResponse | null>(null);
   const [details, setDetails] = useState<MusicMapLocationDetails | null>(null);
   const [metric, setMetric] = useState<MusicMapMetric>("artistCount");
@@ -184,17 +218,27 @@ export function MusicMapWorkspace({ onOpenArtist }: MusicMapWorkspaceProps) {
   }, [loadMapData]);
 
   const selectLocation = useCallback(async (locationKey: string) => {
+    const requestId = ++detailRequestRef.current;
     setIsDetailLoading(true);
+    setDetails(null);
+    setError(null);
     try {
-      setDetails(await getMusicMapLocationDetails(locationKey));
+      const nextDetails = await getMusicMapLocationDetails(locationKey);
+      if (detailRequestRef.current === requestId) {
+        setDetails(nextDetails);
+      }
     } catch (detailError) {
-      setError(
-        detailError instanceof Error
-          ? detailError.message
-          : "The location details could not be loaded.",
-      );
+      if (detailRequestRef.current === requestId) {
+        setError(
+          detailError instanceof Error
+            ? detailError.message
+            : "The location details could not be loaded.",
+        );
+      }
     } finally {
-      setIsDetailLoading(false);
+      if (detailRequestRef.current === requestId) {
+        setIsDetailLoading(false);
+      }
     }
   }, []);
 
@@ -203,217 +247,264 @@ export function MusicMapWorkspace({ onOpenArtist }: MusicMapWorkspaceProps) {
   };
 
   useEffect(() => {
-    if (!data || details || !data.countries.length) {
+    if (
+      !data ||
+      initialLocationRequestedRef.current ||
+      !data.countries.length
+    ) {
       return;
     }
+    initialLocationRequestedRef.current = true;
     const initialPoint =
       data.areas.find((point) => point.name === "Oslo") ?? data.countries[0];
     void selectLocation(initialPoint.id);
-  }, [data, details, selectLocation]);
+  }, [data, selectLocation]);
 
   useEffect(() => {
     if (!data || !mapContainerRef.current || mapRef.current) {
       return;
     }
 
-    const map = new MapLibre({
-      container: mapContainerRef.current,
-      style: musicMapStyle,
-      center: [5, 18],
-      zoom: 0.75,
-      minZoom: 0.5,
-      maxZoom: 14,
-      attributionControl: false,
-    });
-    mapRef.current = map;
-    map.addControl(
-      new NavigationControl({ showCompass: false }),
-      "top-right",
-    );
-    map.addControl(
-      new AttributionControl({ compact: true }),
-      "bottom-left",
-    );
+    let disposed = false;
+    let map: MapLibreMap | null = null;
 
-    map.on("load", () => {
-      try {
-        map.addSource(COUNTRY_SOURCE_ID, {
-        type: "geojson",
-        data: pointCollection(data.countries, metric),
-      });
-      map.addSource(AREA_SOURCE_ID, {
-        type: "geojson",
-        data: pointCollection(data.areas, metric),
-        cluster: true,
-        clusterMaxZoom: 8,
-        clusterRadius: 36,
-      });
-      map.addLayer({
-        id: "music-map-country-circles",
-        type: "circle",
-        source: COUNTRY_SOURCE_ID,
-        paint: {
-          "circle-color": ["to-color", ["get", "color"]],
-          "circle-radius": [
-            "interpolate",
-            ["linear"],
-            ["to-number", ["get", "metricValue"]],
-            1,
-            5,
-            500,
-            12,
-            5000,
-            22,
-          ],
-          "circle-stroke-color": "#f7fffdd9",
-          "circle-stroke-width": 1.2,
-          "circle-opacity": 0.9,
-        },
-      });
-      map.addLayer({
-        id: "music-map-country-labels",
-        type: "symbol",
-        source: COUNTRY_SOURCE_ID,
-        minzoom: 1.5,
-        layout: {
-          "text-field": ["get", "name"],
-          "text-size": 11,
-          "text-offset": [0, 1.55],
-          "text-anchor": "top",
-          "text-allow-overlap": false,
-        },
-        paint: {
-          "text-color": "#f5faf8",
-          "text-halo-color": "#111d23",
-          "text-halo-width": 1.2,
-        },
-      });
-      map.addLayer({
-        id: "music-map-area-clusters",
-        type: "circle",
-        source: AREA_SOURCE_ID,
-        filter: ["has", "point_count"],
-        paint: {
-          "circle-color": "#d7fff2",
-          "circle-radius": [
-            "step",
-            ["get", "point_count"],
-            13,
-            10,
-            17,
-            50,
-            22,
-          ],
-          "circle-stroke-color": "#27443e",
-          "circle-stroke-width": 2,
-        },
-      });
-      map.addLayer({
-        id: "music-map-area-cluster-count",
-        type: "symbol",
-        source: AREA_SOURCE_ID,
-        filter: ["has", "point_count"],
-        layout: {
-          "text-field": ["get", "point_count_abbreviated"],
-          "text-size": 11,
-        },
-        paint: { "text-color": "#17352f" },
-      });
-      map.addLayer({
-        id: "music-map-area-circles",
-        type: "circle",
-        source: AREA_SOURCE_ID,
-        filter: ["!", ["has", "point_count"]],
-        paint: {
-          "circle-color": ["to-color", ["get", "color"]],
-          "circle-radius": [
-            "interpolate",
-            ["linear"],
-            ["to-number", ["get", "metricValue"]],
-            1,
-            5,
-            50,
-            9,
-            1000,
-            16,
-          ],
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 1.4,
-        },
-      });
-      map.addLayer({
-        id: "music-map-area-labels",
-        type: "symbol",
-        source: AREA_SOURCE_ID,
-        filter: ["!", ["has", "point_count"]],
-        minzoom: 5,
-        layout: {
-          "text-field": ["get", "name"],
-          "text-size": 11,
-          "text-offset": [0, 1.45],
-          "text-anchor": "top",
-          "text-allow-overlap": false,
-        },
-        paint: {
-          "text-color": "#f5faf8",
-          "text-halo-color": "#111d23",
-          "text-halo-width": 1.2,
-        },
-      });
-
-      const openFeature = (event: MapLayerMouseEvent) => {
-        const properties = propertiesFromEvent(event);
-        if (!properties) return;
-        selectLocationRef.current(properties.id);
-        map.flyTo({
-          center: event.lngLat,
-          zoom: Math.max(map.getZoom(), properties.precision === "country" ? 4 : 7),
-          duration: 850,
+    void prepareMapLibreWorker()
+      .then(() => {
+        if (disposed || !mapContainerRef.current) {
+          return;
+        }
+        const initializedMap = new MapLibre({
+          container: mapContainerRef.current,
+          style: musicMapStyle,
+          center: [5, 18],
+          zoom: 0.75,
+          minZoom: 0.5,
+          maxZoom: 14,
+          attributionControl: false,
         });
-      };
-      map.on("click", "music-map-country-circles", openFeature);
-      map.on("click", "music-map-area-circles", openFeature);
-      map.on("click", "music-map-area-clusters", (event: MapLayerMouseEvent) => {
-        const feature = event.features?.[0];
-        if (!feature || feature.geometry.type !== "Point") return;
-        const clusterId = feature.properties?.cluster_id;
-        const coordinates = feature.geometry.coordinates as [number, number];
-        const source = map.getSource(AREA_SOURCE_ID) as GeoJSONSource;
-        void source
-          .getClusterExpansionZoom(clusterId)
-          .then((expansionZoom) => {
-            map.easeTo({
-              center: coordinates,
-              zoom: expansionZoom,
-            });
-          });
-      });
-      for (const layerId of [
-        "music-map-country-circles",
-        "music-map-area-circles",
-        "music-map-area-clusters",
-      ]) {
-        map.on("mouseenter", layerId, () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
-        map.on("mouseleave", layerId, () => {
-          map.getCanvas().style.cursor = "";
-        });
-      }
-        setMapReady(true);
-      } catch (layerError) {
-        setError(
-          layerError instanceof Error
-            ? `The geography layers could not be drawn: ${layerError.message}`
-            : "The geography layers could not be drawn.",
+        map = initializedMap;
+        mapRef.current = initializedMap;
+        initializedMap.addControl(
+          new NavigationControl({ showCompass: false }),
+          "top-right",
         );
-      }
-    });
-    map.on("zoom", () => setZoom(map.getZoom()));
+        initializedMap.addControl(
+          new AttributionControl({ compact: true }),
+          "bottom-left",
+        );
+
+        initializedMap.on("load", () => {
+          try {
+            initializedMap.addSource(COUNTRY_SOURCE_ID, {
+              type: "geojson",
+              data: pointCollection(data.countries, metric),
+            });
+            initializedMap.addSource(AREA_SOURCE_ID, {
+              type: "geojson",
+              data: pointCollection(data.areas, metric),
+              cluster: true,
+              clusterMaxZoom: 8,
+              clusterRadius: 36,
+            });
+            initializedMap.addLayer({
+              id: "music-map-country-circles",
+              type: "circle",
+              source: COUNTRY_SOURCE_ID,
+              paint: {
+                "circle-color": ["to-color", ["get", "color"]],
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["to-number", ["get", "metricValue"]],
+                  1,
+                  5,
+                  500,
+                  12,
+                  5000,
+                  22,
+                ],
+                "circle-stroke-color": "#f7fffdd9",
+                "circle-stroke-width": 1.2,
+                "circle-opacity": 0.9,
+              },
+            });
+            initializedMap.addLayer({
+              id: "music-map-country-labels",
+              type: "symbol",
+              source: COUNTRY_SOURCE_ID,
+              minzoom: 1.5,
+              layout: {
+                "text-field": ["get", "name"],
+                "text-size": 11,
+                "text-offset": [0, 1.55],
+                "text-anchor": "top",
+                "text-allow-overlap": false,
+              },
+              paint: {
+                "text-color": "#f5faf8",
+                "text-halo-color": "#111d23",
+                "text-halo-width": 1.2,
+              },
+            });
+            initializedMap.addLayer({
+              id: "music-map-area-clusters",
+              type: "circle",
+              source: AREA_SOURCE_ID,
+              filter: ["has", "point_count"],
+              paint: {
+                "circle-color": "#d7fff2",
+                "circle-radius": [
+                  "step",
+                  ["get", "point_count"],
+                  13,
+                  10,
+                  17,
+                  50,
+                  22,
+                ],
+                "circle-stroke-color": "#27443e",
+                "circle-stroke-width": 2,
+              },
+            });
+            initializedMap.addLayer({
+              id: "music-map-area-cluster-count",
+              type: "symbol",
+              source: AREA_SOURCE_ID,
+              filter: ["has", "point_count"],
+              layout: {
+                "text-field": ["get", "point_count_abbreviated"],
+                "text-size": 11,
+              },
+              paint: { "text-color": "#17352f" },
+            });
+            initializedMap.addLayer({
+              id: "music-map-area-circles",
+              type: "circle",
+              source: AREA_SOURCE_ID,
+              filter: ["!", ["has", "point_count"]],
+              paint: {
+                "circle-color": ["to-color", ["get", "color"]],
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["to-number", ["get", "metricValue"]],
+                  1,
+                  5,
+                  50,
+                  9,
+                  1000,
+                  16,
+                ],
+                "circle-stroke-color": "#ffffff",
+                "circle-stroke-width": 1.4,
+              },
+            });
+            initializedMap.addLayer({
+              id: "music-map-area-labels",
+              type: "symbol",
+              source: AREA_SOURCE_ID,
+              filter: ["!", ["has", "point_count"]],
+              minzoom: 5,
+              layout: {
+                "text-field": ["get", "name"],
+                "text-size": 11,
+                "text-offset": [0, 1.45],
+                "text-anchor": "top",
+                "text-allow-overlap": false,
+              },
+              paint: {
+                "text-color": "#f5faf8",
+                "text-halo-color": "#111d23",
+                "text-halo-width": 1.2,
+              },
+            });
+
+            const openFeature = (event: MapLayerMouseEvent) => {
+              const properties = propertiesFromEvent(event);
+              if (!properties) return;
+              selectLocationRef.current(properties.id);
+              initializedMap.flyTo({
+                center: event.lngLat,
+                zoom: Math.max(
+                  initializedMap.getZoom(),
+                  properties.precision === "country" ? 4 : 7,
+                ),
+                duration: 850,
+              });
+            };
+            initializedMap.on(
+              "click",
+              "music-map-country-circles",
+              openFeature,
+            );
+            initializedMap.on(
+              "click",
+              "music-map-area-circles",
+              openFeature,
+            );
+            initializedMap.on(
+              "click",
+              "music-map-area-clusters",
+              (event: MapLayerMouseEvent) => {
+                const feature = event.features?.[0];
+                if (!feature || feature.geometry.type !== "Point") return;
+                const clusterId = feature.properties?.cluster_id;
+                const coordinates = feature.geometry.coordinates as [
+                  number,
+                  number,
+                ];
+                const source = initializedMap.getSource(
+                  AREA_SOURCE_ID,
+                ) as GeoJSONSource;
+                void source
+                  .getClusterExpansionZoom(clusterId)
+                  .then((expansionZoom) => {
+                    initializedMap.easeTo({
+                      center: coordinates,
+                      zoom: expansionZoom,
+                    });
+                  });
+              },
+            );
+            for (const layerId of [
+              "music-map-country-circles",
+              "music-map-area-circles",
+              "music-map-area-clusters",
+            ]) {
+              initializedMap.on("mouseenter", layerId, () => {
+                initializedMap.getCanvas().style.cursor = "pointer";
+              });
+              initializedMap.on("mouseleave", layerId, () => {
+                initializedMap.getCanvas().style.cursor = "";
+              });
+            }
+            setMapReady(true);
+          } catch (layerError) {
+            setError(
+              layerError instanceof Error
+                ? `The geography layers could not be drawn: ${layerError.message}`
+                : "The geography layers could not be drawn.",
+            );
+          }
+        });
+        initializedMap.on("zoom", () => setZoom(initializedMap.getZoom()));
+      })
+      .catch((workerError) => {
+        if (!disposed) {
+          setError(
+            workerError instanceof Error
+              ? workerError.message
+              : "The map worker could not be loaded.",
+          );
+        }
+      });
 
     return () => {
-      map.remove();
-      mapRef.current = null;
+      disposed = true;
+      map?.remove();
+      if (mapRef.current === map) {
+        mapRef.current = null;
+      }
       setMapReady(false);
     };
   }, [data, metric]);

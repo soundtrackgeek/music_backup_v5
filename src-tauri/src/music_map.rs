@@ -3,9 +3,9 @@ use crate::models::{
     MusicMapArtist, MusicMapGenreStat, MusicMapLocationDetails, MusicMapPoint,
     MusicMapRefreshSummary, MusicMapResponse, MusicMapSummary,
 };
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use chrono::Utc;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 #[cfg(not(test))]
@@ -16,7 +16,7 @@ use tauri::AppHandle;
 #[cfg(not(test))]
 const WIKIDATA_SPARQL_URL: &str = "https://query.wikidata.org/sparql";
 #[cfg(not(test))]
-const MAP_USER_AGENT: &str = "music-backup-v5/0.78.0 (local desktop app)";
+const MAP_USER_AGENT: &str = "music-backup-v5/0.78.1 (local desktop app)";
 const UNKNOWN_GENRE: &str = "Unknown";
 
 #[derive(Debug, Clone)]
@@ -236,31 +236,41 @@ pub fn music_map_location_details_for_connection(
     conn: &Connection,
     location_key: &str,
 ) -> Result<MusicMapLocationDetails> {
-    let map = music_map_for_connection(conn)?;
-    let point = map
-        .countries
-        .iter()
-        .chain(map.areas.iter())
-        .find(|point| point.id == location_key)
-        .cloned()
+    db::ensure_musicbrainz_map_location_tables(conn)?;
+    let mut matching = load_located_artists_for_location(conn, location_key)?;
+    let sample = matching
+        .first()
         .with_context(|| format!("Music map location {location_key} was not found"))?;
-    let artists = load_located_artists(conn)?;
-    let matching = artists
-        .into_iter()
-        .filter(|artist| {
-            if point.precision == "area" {
-                artist
-                    .area_location
-                    .as_ref()
-                    .is_some_and(|location| location.id == location_key)
-            } else {
-                artist
-                    .country_location
-                    .as_ref()
-                    .is_some_and(|location| location.id == location_key)
-            }
-        })
-        .collect::<Vec<_>>();
+    let (location, precision) = if location_key.starts_with("area:") {
+        (
+            sample
+                .area_location
+                .as_ref()
+                .with_context(|| format!("Music map area {location_key} was not found"))?,
+            "area",
+        )
+    } else {
+        (
+            sample
+                .country_location
+                .as_ref()
+                .with_context(|| format!("Music map country {location_key} was not found"))?,
+            "country",
+        )
+    };
+    let mut point_accumulator = PointAccumulator {
+        name: location.label.clone(),
+        country_code: sample.country_code.clone(),
+        country_name: sample.country_name.clone(),
+        precision: precision.to_string(),
+        latitude: location.latitude,
+        longitude: location.longitude,
+        ..PointAccumulator::default()
+    };
+    for artist in &matching {
+        add_artist_to_point(&mut point_accumulator, artist);
+    }
+    let point = finish_point(location_key.to_string(), point_accumulator);
 
     let mut genre_counts = HashMap::<String, (i64, HashSet<String>)>::new();
     for artist in &matching {
@@ -293,7 +303,16 @@ pub fn music_map_location_details_for_connection(
             .then_with(|| left.genre.cmp(&right.genre))
     });
 
-    let mut artist_rows = matching
+    matching.sort_by(|left, right| {
+        right
+            .loved_tracks
+            .cmp(&left.loved_tracks)
+            .then_with(|| right.album_count.cmp(&left.album_count))
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
+    matching.truncate(24);
+
+    let artist_rows = matching
         .into_iter()
         .map(|artist| {
             let representative = representative_album(conn, &artist.artist_key)?;
@@ -310,14 +329,6 @@ pub fn music_map_location_details_for_connection(
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    artist_rows.sort_by(|left, right| {
-        right
-            .loved_tracks
-            .cmp(&left.loved_tracks)
-            .then_with(|| right.album_count.cmp(&left.album_count))
-            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
-    });
-    artist_rows.truncate(24);
 
     Ok(MusicMapLocationDetails {
         point,
@@ -327,7 +338,27 @@ pub fn music_map_location_details_for_connection(
 }
 
 fn load_located_artists(conn: &Connection) -> Result<Vec<LocatedArtist>> {
+    load_located_artists_with_filter(conn, None)
+}
+
+fn load_located_artists_for_location(
+    conn: &Connection,
+    location_key: &str,
+) -> Result<Vec<LocatedArtist>> {
+    load_located_artists_with_filter(conn, Some(location_key))
+}
+
+fn load_located_artists_with_filter(
+    conn: &Connection,
+    location_key: Option<&str>,
+) -> Result<Vec<LocatedArtist>> {
     let artist_key = db::artist_key_sql("a.album_artist_display");
+    let location_filter = match location_key {
+        None => "",
+        Some(key) if key.starts_with("area:") => "WHERE area_location.location_key = ?1",
+        Some(key) if key.starts_with("country:") => "WHERE country_location.location_key = ?1",
+        Some(key) => bail!("Unknown music map location key: {key}"),
+    };
     let sql = format!(
         "
         SELECT
@@ -356,6 +387,7 @@ fn load_located_artists(conn: &Connection) -> Result<Vec<LocatedArtist>> {
         LEFT JOIN musicbrainz_map_locations area_location
           ON area_location.location_key = 'area:' || origin.begin_area_mbid
          AND area_location.resolution_status = 'resolved'
+        {location_filter}
         GROUP BY
             {artist_key},
             COALESCE(NULLIF(TRIM(a.canonical_genre), ''), '{UNKNOWN_GENRE}')
@@ -364,7 +396,7 @@ fn load_located_artists(conn: &Connection) -> Result<Vec<LocatedArtist>> {
     );
     let mut statement = conn.prepare(&sql)?;
     let rows = statement
-        .query_map([], |row| {
+        .query_map(params_from_iter(location_key), |row| {
             let country_id = row.get::<_, Option<String>>(8)?;
             let area_id = row.get::<_, Option<String>>(12)?;
             Ok((
@@ -454,20 +486,7 @@ fn add_artist_to_point(point: &mut PointAccumulator, artist: &LocatedArtist) {
 fn finish_points(points: HashMap<String, PointAccumulator>) -> Vec<MusicMapPoint> {
     let mut values = points
         .into_iter()
-        .map(|(id, point)| MusicMapPoint {
-            id,
-            name: point.name,
-            country_code: point.country_code,
-            country_name: point.country_name,
-            precision: point.precision,
-            latitude: point.latitude,
-            longitude: point.longitude,
-            artist_count: point.artist_count,
-            album_count: point.album_count,
-            track_count: point.track_count,
-            loved_tracks: point.loved_tracks,
-            top_genre: dominant_genre(&point.genre_counts),
-        })
+        .map(|(id, point)| finish_point(id, point))
         .collect::<Vec<_>>();
     values.sort_by(|left, right| {
         right
@@ -476,6 +495,23 @@ fn finish_points(points: HashMap<String, PointAccumulator>) -> Vec<MusicMapPoint
             .then_with(|| left.name.cmp(&right.name))
     });
     values
+}
+
+fn finish_point(id: String, point: PointAccumulator) -> MusicMapPoint {
+    MusicMapPoint {
+        id,
+        name: point.name,
+        country_code: point.country_code,
+        country_name: point.country_name,
+        precision: point.precision,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        artist_count: point.artist_count,
+        album_count: point.album_count,
+        track_count: point.track_count,
+        loved_tracks: point.loved_tracks,
+        top_genre: dominant_genre(&point.genre_counts),
+    }
 }
 
 fn dominant_genre(counts: &HashMap<String, i64>) -> String {
@@ -901,6 +937,50 @@ mod tests {
             details.artists[0].representative_album_id.as_deref(),
             Some("a1")
         );
+    }
+
+    #[test]
+    fn location_details_rank_before_limiting_representative_artists() {
+        let conn = test_connection();
+        insert_location(
+            &conn,
+            "country:GB",
+            "GB",
+            "United Kingdom",
+            "country",
+            54.0,
+            -2.0,
+        );
+        insert_location(
+            &conn,
+            "area:london-mbid",
+            "london-mbid",
+            "London",
+            "area",
+            51.5072,
+            -0.1276,
+        );
+        for index in 0..30 {
+            let artist = format!("London Artist {index:02}");
+            let album_id = format!("london-album-{index:02}");
+            let artist_key = format!("london artist {index:02}");
+            insert_album(&conn, &album_id, &artist, "Rock", 10, index);
+            insert_origin(
+                &conn,
+                &artist_key,
+                &artist,
+                "GB",
+                "United Kingdom",
+                Some("london-mbid"),
+                Some("London"),
+            );
+        }
+
+        let details = music_map_location_details_for_connection(&conn, "area:london-mbid").unwrap();
+        assert_eq!(details.point.artist_count, 30);
+        assert_eq!(details.artists.len(), 24);
+        assert_eq!(details.artists[0].name, "London Artist 29");
+        assert_eq!(details.artists[23].name, "London Artist 06");
     }
 
     #[test]
