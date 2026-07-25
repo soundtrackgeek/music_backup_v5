@@ -4,6 +4,8 @@ A local-first desktop app for importing, searching, browsing, and analyzing a Mu
 
 The current build runs on a Tauri, React, TypeScript, Rust, and SQLite foundation with hardened release/security checks and automated GitHub release operations. The app can stage `musicbee-library.tsv` into durable 5,000-row checkpoints while the active library remains untouched, use indexed whole-library comparisons to show added/changed/removed track and album deltas plus suspicious rated/loved removals or metadata regressions before apply, safely interrupt staging or final analysis and resume from the saved TSV byte offset, atomically apply the reviewed snapshot after generating a rollback backup, reclaim completed staging space, roll back the exact completed import in one click, store raw track rows, calculate album aggregates with single-artist Album Artist inference when MusicBee exports a blank album artist, keep configurable rolling SQLite backups, list and restore local database backups with a pre-restore safety copy, run a Performance Proof probe against the active SQLite database, validate a local read-only MusicBrainz cache from Settings, preview and import app-owned MusicBrainz artist Origin Country rows from attached or cached MusicBrainz MBIDs with live progress counters, an activity log, and a filterable coverage report, preview and import app-owned MusicBrainz artist information rows for type, gender, life-span dates, and begin/end areas with the same live import workflow, compare a selected artist against MusicBrainz pure official albums with cached official-release verification, artist match review, app-owned not-in-scope release decisions, explicit MBID-based MusicBrainz artist updates stored in an app-owned overlay with selected-artist Origin Country refresh, manual Artist-page Origin Country saves, sync app-owned MusicBrainz overlay rows through a user-selected shared SQLite file with manual/auto sync and local sync logs, and CSV/XLSX export of the visible selected-artist MusicBrainz rows, import and display real album cover art, import Billboard year-end album and singles CSV rankings, save custom Imports source paths, browse sortable album and track tables, save searches, filter Search albums by rated-track, album-rating, loved-track, Billboard rank, Origin Country include/exclude lists, missing-origin ranges, and MusicBrainz artist type/gender/lifecycle fields, filter Search tracks by imported Billboard singles rank ranges, exact loved min/max ranges, Origin Country include/exclude lists, and MusicBrainz artist type/gender/lifecycle fields, build ranked album charts with include/exclude genre filters, album-rating and loved-track ranges, min/max rating-completeness ranges, MusicBrainz Origin Country include/exclude filters, MusicBrainz artist type/gender/lifecycle filters, Billboard rank templates, and in-place genre suggestions, display-only table-header sorting inside the current ranked set, resizable square cover-grid artwork, and smooth 300×300 hover previews for compact album covers throughout Search, Charts, and related album lists, save chart configurations, expand the `scores` genre group in include/exclude genre filters, export filtered result sets with optional Search export columns for IDs, cover metadata, Origin Country, and representative album filename/path data, find verified MusicBrainz artists, albums, and songs that are absent from the local library and save exact Discovery lists, keep wanted artists and albums in a persistent Wish List with MusicBrainz links and automatic post-import collection reconciliation, explore discovery dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions, analyze library health, rating burndown, time shape, loved density, catalog concentration, duration, outlier, decade progress, genre portfolio, metadata coverage, rating, and import dashboards, manage settings, switch between light and dark mode, remember the desktop window position and size between launches, choose default sidebar visibility and Origin Country flag/name display, drill into dedicated album detail pages with ordered track lists and origin-country provenance, browse album artists with artist-level summary stats, a MusicBrainz Artist Info box for MBID, origin country, type, gender, life-span, and area details, album lists, MusicBrainz owned/missing pure album status, and cover boards, browse canonical genres with genre-level summary stats and album lists, and review Music Tools validation issue lists, including high-confidence collection-wide missing MusicBrainz albums, local albums absent from comparable pure official MusicBrainz album lists, library artists without usable MusicBrainz cache or overlay data, albums missing imported cover image records, and imported Billboard albums or singles missing from the library, with exports and a guarded whitespace cleanup action.
 
+The repository also includes a standalone Python **Music Library Trimmer** under `Tools/library_trimmer`. It reads the app database and MusicBrainz cache without modifying either, limits work to an optional library root such as `D:\MUSIC`, excludes repeatable canonical genres with exact `scores` group expansion, enriches only MusicBrainz official-list candidates through cached and resumable Discogs searches, exports a human approval CSV, moves exact approved audio files into an external quarantine, and writes a per-file journal for undo. It never moves complete source directories or sidecar files.
+
 The desktop app checks GitHub Releases for signed updates when it starts. Settings also has a manual Check now button, an Update now action when a version is available, and an Auto minutes interval for recurring background checks; installing an update closes, updates, and relaunches the app. An amber download badge appears on both the Windows taskbar icon and system tray icon while an update is available. The tray tooltip includes the available version, and left-clicking the tray icon restores and focuses the app.
 
 The sidebar currently enables Search, Charts, Discovery, Music Map, Wish List, Playlists, Statistics, Albums, Artists, Genres, Tools, Imports, and Settings. Press `1` through `9` to jump through the established numbered sections, `0` for Settings, `M` for Music Map, `P` for Playlists, or `W` for Wish List; keys still type normally while focus is inside text fields or other editable controls. Selecting a workspace by click or shortcut opens it at the top. The left navigation can be shown in full, icon-only, or hidden mode. On wide desktops the contextual detail sidebar follows the user's shown/hidden preference; at 1280px and below it becomes a closed overlay drawer so metrics and tables retain the full workspace width. The drawer closes on Escape, outside click, or workspace changes, and restores focus to its toggle. Details are omitted entirely when the current workspace or selection has no distinct contextual content, including Music Map, Playlists, Wish List, Settings, and selection-based views before an item is selected. The Imports workspace requires a pre-import MusicBee delta review, supports safe cancellation and checkpoint resume during TSV staging, applies the staged snapshot atomically, exposes the generated import backup for immediate rollback, saves custom source paths, scans an `AlbumCovers` folder for folder-named images, links matching source images directly, skips covers that are already imported, extracts missing embedded MP3 artwork into the same `AlbumCovers` folder, imports yearly Billboard album chart CSV files from `CSV/`, and imports yearly Billboard singles chart CSV files from `CSV_SINGLES/`. The Settings workspace can save and check a local MusicBrainz cache path, defaulting to `MusicBrainz/musicbrainz_cache.db`, preview/import app-owned MusicBrainz artist Origin Country rows with live done/left/succeeded/skipped/unresolved/failed feedback and a searchable coverage report, preview/import MusicBrainz artist information rows for type, gender, born/founded, and died/dissolved data with a live import window, sync app-owned MusicBrainz overlay rows after the user chooses a shared `.sqlite3` path, and manage app update checks.
@@ -22,6 +24,7 @@ The first **Enrich places** run resolves exact MusicBrainz area IDs and ISO coun
 
 - Node.js 20 or newer
 - Rust toolchain compatible with Tauri 2
+- Python 3.10 or newer for the optional Music Library Trimmer companion CLI
 - A MusicBee TSV export with the columns listed in `SPEC.md`
 - Internet access is required to load Music Map tiles and to enrich new MusicBrainz area/country coordinates
 - An OpenAI API key is optional and only required for Ask Luna search, chart, current-view questions, Library analyst reports, Playlist Builder recipes, outside-library Discovery recipes, and global Music Research
@@ -49,6 +52,47 @@ npm run tauri:dev
 ```
 
 The desktop dev shell loads Vite from `http://127.0.0.1:1420/`, matching the loopback host used by `npm run dev`. Vite ignores the local `musicbee-library.tsv` export, `AlbumCovers/` archive, `CSV/` album chart folder, `CSV_SINGLES/` singles chart folder, and `MusicBrainz/` cache folder during development so large library data cannot stall the dev server watcher. If the Tauri window opens but stays blank, make sure port `1420` is free and restart `npm run tauri:dev`.
+
+## Music Library Trimmer
+
+The companion CLI uses only Python's standard library. Validate the real app database and configured MusicBrainz cache without making any changes:
+
+```powershell
+py Tools\library_trimmer\library_trimmer.py --json doctor
+```
+
+Preview the candidate count for the intended cleanup scope without calling Discogs:
+
+```powershell
+py Tools\library_trimmer\library_trimmer.py --json candidates `
+  --library-root "D:\MUSIC" `
+  --exclude-genre scores `
+  --exclude-genre soundtrack `
+  --exclude-genre synthwave
+```
+
+Run or resume the first 500-candidate Discogs batch with the same scope:
+
+```powershell
+py Tools\library_trimmer\library_trimmer.py scan `
+  --library-root "D:\MUSIC" `
+  --exclude-genre scores `
+  --exclude-genre soundtrack `
+  --exclude-genre synthwave `
+  --out trim-manifest.json
+
+py Tools\library_trimmer\library_trimmer.py scan `
+  --library-root "D:\MUSIC" `
+  --exclude-genre scores `
+  --exclude-genre soundtrack `
+  --exclude-genre synthwave `
+  --out trim-manifest.json `
+  --resume
+```
+
+Public Discogs reads work without credentials. For authenticated limits, set `DISCOGS_TOKEN`, or set both `DISCOGS_CONSUMER_KEY` and `DISCOGS_CONSUMER_SECRET`; credentials remain in environment variables and are never saved in repository files, manifests, caches, CSV files, journals, or output. The personal token takes precedence when both methods are present.
+
+The complete review, apply, undo, credential, JSON-output, and raw read-only request workflow is documented in [Tools/library_trimmer/README.md](Tools/library_trimmer/README.md). `apply` previews by default; moving files additionally requires imported CSV approvals, `--execute`, and `--confirm MOVE_APPROVED`. The quarantine must be outside the selected library root. After accepting the result, rescan in MusicBee, export a fresh TSV, and use the app's normal import preview/apply workflow.
 
 ## Luna Search, Charts, Current-view Questions, Library Analyst, Playlists, Discovery, and Music Research
 
@@ -150,6 +194,12 @@ Run the Rust backend unit tests:
 ```powershell
 cd src-tauri
 cargo test
+```
+
+Run the standalone Music Library Trimmer tests:
+
+```powershell
+npm run test:tools
 ```
 
 Run the full local verification gate without packaging:

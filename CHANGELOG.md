@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.79.0] - 2026-07-25
+### Added
+- Added a standard-library Python Music Library Trimmer under `Tools/library_trimmer` with read-only app/MusicBrainz candidate discovery, cached and resumable Discogs classification, editable CSV review decisions, manifest-driven quarantine moves, and journal-based undo.
+- Added optional `D:\MUSIC`-style library-root scoping that requires every album track path to remain beneath the selected root, reports mixed/outside locations, and prevents quarantine destinations inside the scanned root.
+- Added repeatable canonical-genre exclusions with exact expansion of the app's `scores` umbrella plus explicit `Soundtrack` and `Synthwave` support before any MusicBrainz or Discogs work.
+- Added Discogs personal-token and Consumer Key/Consumer Secret authentication through environment variables, anonymous fallback, throttling, response caching, resumable 500-album batches, a read-only raw request command, stable JSON output, and focused Python tests.
+
+### Changed
+- Bumped synchronized app metadata to `0.79.0`.
+
 ## [0.78.1] - 2026-07-25
 ### Fixed
 - Bundled MapLibre's GeoJSON worker explicitly and start it through a WebView-compatible classic Blob URL so country circles, area clusters, precise-area dots, and their labels render in the packaged Tauri app.
