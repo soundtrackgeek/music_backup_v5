@@ -67,5 +67,10 @@ describe("workspace navigation", () => {
     expect(screen.getByLabelText("Active workspace")).toHaveTextContent(
       "Wish List",
     );
+
+    fireEvent.keyDown(window, { key: "m" });
+    expect(screen.getByLabelText("Active workspace")).toHaveTextContent(
+      "Music Map",
+    );
   });
 });

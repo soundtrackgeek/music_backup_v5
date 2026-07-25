@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.78.0] - 2026-07-25
+### Added
+- Added a Music Map workspace backed by the local MusicBrainz origin-country and begin-area data, with country aggregates at world scale and exact MusicBrainz areas revealed as the map zooms in.
+- Added album-weighted dominant-genre colors for every resolved country and area, circle sizing by artists, albums, or loved tracks, location/genre search, clustered area markers, and a country/area layer override.
+- Added location drill-down with genre shares, library counts, representative artists, and handoff to the existing Artists workspace.
+- Added an app-owned SQLite coordinate cache in schema version 28 plus explicit Wikidata enrichment by exact MusicBrainz area ID and ISO country code; unresolved refreshes preserve previously resolved coordinates.
+- Added an OpenFreeMap/OpenStreetMap basemap, responsive light/dark layouts, the `M` workspace shortcut, web-preview fixtures, focused frontend helpers, and Rust aggregation/cache tests.
+
+### Changed
+- Bumped synchronized app metadata to `0.78.0`.
+
 ## [0.77.1] - 2026-07-24
 ### Fixed
 - Fixed Imports source paths so edits save automatically and exact Windows paths, including trailing backslashes, survive an app restart without reintroducing stale or doubled folder segments.

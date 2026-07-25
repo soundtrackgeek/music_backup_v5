@@ -344,6 +344,7 @@ import {
 import { PlaylistBuilderWorkspace } from "./workspaces/PlaylistBuilderWorkspace";
 import { WishListWorkspace } from "./workspaces/WishListWorkspace";
 import { MusicToolRepairPanel } from "./workspaces/MusicToolRepairPanel";
+import { MusicMapWorkspace } from "./workspaces/MusicMapWorkspace";
 import {
   checkForAppUpdate,
   installAppUpdate,
@@ -9621,6 +9622,18 @@ export default function App() {
     setArtistExportResult(null);
   }
 
+  function openArtistFromMusicMap(artistKey: string, artistName: string) {
+    resetDeferredArtistDetails();
+    setArtistRequest((previous) => ({
+      ...createArtistListRequest(),
+      searchText: artistName,
+      limit: previous.limit,
+    }));
+    setSelectedArtistId(artistKey);
+    setArtistExportResult(null);
+    setActiveSection("Artists");
+  }
+
   function selectArtistAlbum(albumId: string) {
     setSelectedArtistAlbumId(albumId);
     setArtistAlbumTracksResponse(null);
@@ -13105,6 +13118,8 @@ export default function App() {
               </section>
             </section>
           </section>
+        ) : activeSection === "Music Map" ? (
+          <MusicMapWorkspace onOpenArtist={openArtistFromMusicMap} />
         ) : activeSection === "Wish List" ? (
           <WishListWorkspace />
         ) : activeSection === "Artists" ? (

@@ -1603,3 +1603,72 @@ export type RatingEvent = {
   previousEffectiveAlbumRating: number | null;
   currentEffectiveAlbumRating: number | null;
 };
+
+export type MusicMapSummary = {
+  totalArtists: number;
+  mappedArtists: number;
+  preciseArtistCount: number;
+  countryFallbackArtistCount: number;
+  areaCount: number;
+  countryCount: number;
+  unresolvedArtistCount: number;
+  candidateAreaCount: number;
+  lastRefreshedAt: string | null;
+  needsRefresh: boolean;
+};
+
+export type MusicMapPoint = {
+  id: string;
+  name: string;
+  countryCode: string | null;
+  countryName: string | null;
+  precision: "area" | "country";
+  latitude: number;
+  longitude: number;
+  artistCount: number;
+  albumCount: number;
+  trackCount: number;
+  lovedTracks: number;
+  topGenre: string;
+};
+
+export type MusicMapResponse = {
+  summary: MusicMapSummary;
+  countries: MusicMapPoint[];
+  areas: MusicMapPoint[];
+  generatedAt: string;
+};
+
+export type MusicMapGenreStat = {
+  genre: string;
+  albumCount: number;
+  artistCount: number;
+  percentage: number;
+};
+
+export type MusicMapArtist = {
+  artistKey: string;
+  name: string;
+  albumCount: number;
+  trackCount: number;
+  lovedTracks: number;
+  topGenre: string;
+  representativeAlbumId: string | null;
+  representativeAlbumTitle: string | null;
+  coverPath: string | null;
+};
+
+export type MusicMapLocationDetails = {
+  point: MusicMapPoint;
+  genres: MusicMapGenreStat[];
+  artists: MusicMapArtist[];
+};
+
+export type MusicMapRefreshSummary = {
+  candidateAreas: number;
+  resolvedAreas: number;
+  candidateCountries: number;
+  resolvedCountries: number;
+  unresolvedLocations: number;
+  fetchedAt: string;
+};

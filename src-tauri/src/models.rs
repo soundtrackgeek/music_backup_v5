@@ -1762,6 +1762,89 @@ fn default_backup_retention() -> u32 {
     3
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicMapSummary {
+    pub total_artists: i64,
+    pub mapped_artists: i64,
+    pub precise_artist_count: i64,
+    pub country_fallback_artist_count: i64,
+    pub area_count: i64,
+    pub country_count: i64,
+    pub unresolved_artist_count: i64,
+    pub candidate_area_count: i64,
+    pub last_refreshed_at: Option<String>,
+    pub needs_refresh: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicMapPoint {
+    pub id: String,
+    pub name: String,
+    pub country_code: Option<String>,
+    pub country_name: Option<String>,
+    pub precision: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub artist_count: i64,
+    pub album_count: i64,
+    pub track_count: i64,
+    pub loved_tracks: i64,
+    pub top_genre: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicMapResponse {
+    pub summary: MusicMapSummary,
+    pub countries: Vec<MusicMapPoint>,
+    pub areas: Vec<MusicMapPoint>,
+    pub generated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicMapGenreStat {
+    pub genre: String,
+    pub album_count: i64,
+    pub artist_count: i64,
+    pub percentage: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicMapArtist {
+    pub artist_key: String,
+    pub name: String,
+    pub album_count: i64,
+    pub track_count: i64,
+    pub loved_tracks: i64,
+    pub top_genre: String,
+    pub representative_album_id: Option<String>,
+    pub representative_album_title: Option<String>,
+    pub cover_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicMapLocationDetails {
+    pub point: MusicMapPoint,
+    pub genres: Vec<MusicMapGenreStat>,
+    pub artists: Vec<MusicMapArtist>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicMapRefreshSummary {
+    pub candidate_areas: usize,
+    pub resolved_areas: usize,
+    pub candidate_countries: usize,
+    pub resolved_countries: usize,
+    pub unresolved_locations: usize,
+    pub fetched_at: String,
+}
+
 fn default_left_sidebar_default() -> String {
     "expanded".to_string()
 }

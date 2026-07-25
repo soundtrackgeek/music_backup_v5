@@ -356,7 +356,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_seven_schema_exists(conn)?
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_eight_schema_exists(conn)?
     {
         return Ok(());
     }
@@ -1084,11 +1084,12 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_artist_release_groups(conn)?;
     ensure_musicbrainz_origin_country_tables(conn)?;
     ensure_musicbrainz_artist_info_tables(conn)?;
+    ensure_musicbrainz_map_location_tables(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 27;
+        PRAGMA user_version = 28;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -1569,6 +1570,37 @@ pub fn ensure_musicbrainz_origin_country_tables(conn: &Connection) -> Result<()>
         ",
     )
     .context("Could not create MusicBrainz artist origin-country tables")?;
+
+    Ok(())
+}
+
+pub fn ensure_musicbrainz_map_location_tables(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS musicbrainz_map_locations (
+            location_key TEXT PRIMARY KEY,
+            area_mbid TEXT,
+            country_code TEXT,
+            label TEXT NOT NULL,
+            latitude REAL,
+            longitude REAL,
+            precision TEXT NOT NULL,
+            resolution_status TEXT NOT NULL DEFAULT 'unresolved',
+            source TEXT NOT NULL DEFAULT 'wikidata',
+            wikidata_id TEXT,
+            fetched_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_map_locations_area
+            ON musicbrainz_map_locations(area_mbid);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_map_locations_country
+            ON musicbrainz_map_locations(country_code);
+        CREATE INDEX IF NOT EXISTS idx_musicbrainz_map_locations_status
+            ON musicbrainz_map_locations(resolution_status, precision);
+        ",
+    )
+    .context("Could not create MusicBrainz map location cache")?;
 
     Ok(())
 }
@@ -14217,6 +14249,8 @@ mod tests {
             .expect("phase twenty-six schema exists"));
         assert!(migrations::phase_twenty_seven_schema_exists(&conn)
             .expect("phase twenty-seven schema exists"));
+        assert!(migrations::phase_twenty_eight_schema_exists(&conn)
+            .expect("phase twenty-eight schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -14245,6 +14279,8 @@ mod tests {
         assert!(schema_table_exists(&conn, "saved_external_discoveries")
             .expect("saved external discovery table exists"));
         assert!(schema_table_exists(&conn, "wish_list_items").expect("wish list table exists"));
+        assert!(schema_table_exists(&conn, "musicbrainz_map_locations")
+            .expect("MusicBrainz map location cache exists"));
     }
 
     #[test]
@@ -14260,14 +14296,14 @@ mod tests {
         )
         .expect("simulate schema twenty-six identity index");
 
-        migrate(&conn).expect("migrate schema twenty-seven");
+        migrate(&conn).expect("migrate current schema");
 
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("inspect redundant identity index"));
         let user_version = conn
             .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
             .expect("read migrated user version");
-        assert_eq!(user_version, 27);
+        assert_eq!(user_version, LATEST_SCHEMA_VERSION);
     }
 
     #[test]

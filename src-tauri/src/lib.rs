@@ -7,6 +7,7 @@ mod db;
 mod external_discovery;
 mod importer;
 mod models;
+mod music_map;
 mod musicbrainz;
 mod musicbrainz_sync;
 mod wishlist;
@@ -26,10 +27,11 @@ use models::{
     MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
     MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryStatus,
     MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
-    MusicBrainzReleaseDecisionRequest, MusicToolFixHistoryEntry, MusicToolFixRequest,
-    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary,
-    MusicToolUndoSummary, PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest,
-    SavedChart, SavedSearch, StatisticsResponse, YearProgressRequest, YearProgressStats,
+    MusicBrainzReleaseDecisionRequest, MusicMapLocationDetails, MusicMapRefreshSummary,
+    MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
+    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
+    PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch,
+    StatisticsResponse, YearProgressRequest, YearProgressStats,
 };
 #[cfg(not(test))]
 use models::{ImportPreview, ImportRun, ImportSummary, LibraryStatus};
@@ -607,6 +609,40 @@ async fn get_statistics(app: AppHandle) -> Result<StatisticsResponse, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_music_map(app: AppHandle) -> Result<MusicMapResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || music_map::music_map_for_app(&app))
+        .await
+        .map_err(|error| format!("Music map task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_music_map_location_details(
+    app: AppHandle,
+    location_key: String,
+) -> Result<MusicMapLocationDetails, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        music_map::music_map_location_details_for_app(&app, &location_key)
+    })
+    .await
+    .map_err(|error| format!("Music map location task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn refresh_music_map_locations(app: AppHandle) -> Result<MusicMapRefreshSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        music_map::refresh_music_map_locations_for_app(&app)
+    })
+    .await
+    .map_err(|error| format!("Music map enrichment task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_year_progress(
     app: AppHandle,
     request: YearProgressRequest,
@@ -977,6 +1013,9 @@ pub fn run() {
             export_musicbrainz_artist_releases,
             save_settings,
             get_statistics,
+            get_music_map,
+            get_music_map_location_details,
+            refresh_music_map_locations,
             get_year_progress,
             get_genre_progress,
             get_discovery,

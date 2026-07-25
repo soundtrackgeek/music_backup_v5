@@ -1,10 +1,15 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 27;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 28;
 
 const LEGACY_DEVELOPER_OVERLAY_SYNC_PATH: &str =
     r"C:\Users\jtill\OneDrive\_musicbackup\musicbrainz-overlay-sync.sqlite3";
+
+pub(super) fn phase_twenty_eight_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_twenty_seven_schema_exists(conn)?
+        && super::schema_table_exists(conn, "musicbrainz_map_locations")?)
+}
 
 pub(super) fn phase_twenty_seven_schema_exists(conn: &Connection) -> Result<bool> {
     Ok(phase_twenty_six_schema_exists(conn)?

@@ -76,6 +76,11 @@ import {
   setMockSettings,
   type MusicBrainzArtistInfoFields,
 } from "./backend/webPreview";
+import {
+  mockMusicMap,
+  mockMusicMapDetails,
+  mockMusicMapRefresh,
+} from "./backend/musicMapPreview";
 export {
   defaultBillboardSinglesSourcePath,
   defaultBillboardSourcePath,
@@ -179,6 +184,9 @@ import type {
   MusicBrainzOriginCountryStatus,
   MusicBrainzOverlaySyncLogEntry,
   MusicBrainzOverlaySyncResult,
+  MusicMapLocationDetails,
+  MusicMapRefreshSummary,
+  MusicMapResponse,
   PerformanceProbeResponse,
 } from "./types";
 
@@ -422,6 +430,32 @@ export async function getStatistics() {
   }
 
   return invoke<StatisticsResponse>("get_statistics");
+}
+
+export async function getMusicMap() {
+  if (!isTauriRuntime()) {
+    return mockMusicMap;
+  }
+
+  return invoke<MusicMapResponse>("get_music_map");
+}
+
+export async function getMusicMapLocationDetails(locationKey: string) {
+  if (!isTauriRuntime()) {
+    return mockMusicMapDetails(locationKey);
+  }
+
+  return invoke<MusicMapLocationDetails>("get_music_map_location_details", {
+    locationKey,
+  });
+}
+
+export async function refreshMusicMapLocations() {
+  if (!isTauriRuntime()) {
+    return mockMusicMapRefresh;
+  }
+
+  return invoke<MusicMapRefreshSummary>("refresh_music_map_locations");
 }
 
 export async function getYearProgress(request: YearProgressRequest) {
