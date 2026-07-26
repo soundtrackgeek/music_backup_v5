@@ -5,6 +5,7 @@ import {
   isTauriRuntime,
   listen,
   openUrl,
+  selectDirectory,
   type UnlistenFn,
 } from "./backend/tauriClient";
 export { isTauriRuntime } from "./backend/tauriClient";
@@ -32,6 +33,7 @@ import {
   normalizeSavedSearchesForClient,
 } from "./app/requests";
 import { scoreGenreGroup } from "./app/genreGroups";
+import { normalizeAllowedExternalUrl } from "./backend/externalUrl";
 import {
   applyMockArtistOriginCountry,
   coverDataUrlCache,
@@ -118,6 +120,10 @@ import type {
   SavePlaylistRequest,
   SavedExternalDiscovery,
   AddWishListItemRequest,
+  DeemixAlbumSearchRequest,
+  DeemixAlbumSearchResponse,
+  DeemixConnectionTest,
+  DeemixCredentialStatus,
   WishListItem,
   WishListResponse,
   SavedPlaylist,
@@ -237,27 +243,7 @@ async function finalizeExport(result: RawExportResult): Promise<ExportResult> {
 }
 
 export async function openExternalUrl(url: string) {
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(url);
-  } catch {
-    throw new Error("Invalid external URL.");
-  }
-
-  const isAllowedMusicBrainzUrl =
-    parsedUrl.protocol === "https:" &&
-    parsedUrl.hostname === "musicbrainz.org" &&
-    ["/artist/", "/release-group/", "/recording/"].some((prefix) =>
-      parsedUrl.pathname.startsWith(prefix),
-    );
-
-  if (!isAllowedMusicBrainzUrl) {
-    throw new Error(
-      "Only MusicBrainz artist, release-group, and recording URLs can be opened from this view.",
-    );
-  }
-
-  const normalizedUrl = parsedUrl.toString();
+  const normalizedUrl = normalizeAllowedExternalUrl(url);
 
   if (!isTauriRuntime()) {
     window.open(normalizedUrl, "_blank", "noopener,noreferrer");
@@ -650,6 +636,48 @@ export async function testOpenAiConnection() {
   }
 
   return invoke<AiConnectionTest>("test_openai_connection");
+}
+
+export async function getDeemixCredentialStatus() {
+  if (!isTauriRuntime()) {
+    return {
+      configured: false,
+      source: "none",
+    } satisfies DeemixCredentialStatus;
+  }
+  return invoke<DeemixCredentialStatus>("get_deemix_credential_status");
+}
+
+export async function saveDeemixArl(arl: string) {
+  if (!isTauriRuntime()) {
+    throw new Error(
+      "Deemix credentials can only be stored by the Tauri desktop app.",
+    );
+  }
+  return invoke<DeemixConnectionTest>("save_deemix_arl", { arl });
+}
+
+export async function deleteDeemixArl() {
+  if (!isTauriRuntime()) {
+    throw new Error(
+      "Deemix credentials can only be removed by the Tauri desktop app.",
+    );
+  }
+  return invoke<DeemixCredentialStatus>("delete_deemix_arl");
+}
+
+export async function testDeemixConnection() {
+  if (!isTauriRuntime()) {
+    throw new Error("Deemix connection tests require the Tauri desktop app.");
+  }
+  return invoke<DeemixConnectionTest>("test_deemix_connection");
+}
+
+export async function selectDeemixDownloadDirectory(defaultPath?: string) {
+  if (!isTauriRuntime()) {
+    return null;
+  }
+  return selectDirectory(defaultPath);
 }
 
 export async function compileNaturalLanguageQuery(input: AiCompileRequest) {
@@ -1161,6 +1189,18 @@ export async function removeWishListItem(id: number) {
     return;
   }
   return invoke<void>("remove_wish_list_item", { id });
+}
+
+export async function searchDeemixAlbums(input: DeemixAlbumSearchRequest) {
+  if (!isTauriRuntime()) {
+    return {
+      query: `${input.artist} ${input.title}`.trim(),
+      total: 0,
+      matches: [],
+      searchedAt: new Date().toISOString(),
+    } satisfies DeemixAlbumSearchResponse;
+  }
+  return invoke<DeemixAlbumSearchResponse>("search_deemix_albums", { input });
 }
 
 export async function exportPlaylist(input: ExportPlaylistRequest) {

@@ -6583,7 +6583,7 @@ button {
   z-index: 20;
   top: 8px;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 8px;
   margin: -6px;
   border: 1px solid rgba(216, 225, 221, 0.82);
@@ -7293,11 +7293,34 @@ button {
   grid-column: span 2;
 }
 
+.deemix-settings-panel {
+  grid-column: span 2;
+}
+
 .ai-settings-toolbar {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto auto auto;
   align-items: end;
   gap: 10px;
+}
+
+.deemix-settings-toolbar {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) auto auto auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.deemix-download-toolbar {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) auto auto;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.deemix-download-field input {
+  cursor: default;
 }
 
 .ai-key-input {
@@ -7333,6 +7356,41 @@ button {
 
 .ai-settings-result {
   margin-top: 12px;
+}
+
+.deemix-account-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid #b8dbd3;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #236a5f;
+  background: #eff9f6;
+}
+
+.deemix-account-card > div {
+  display: grid;
+  min-width: 0;
+}
+
+.deemix-account-card strong,
+.deemix-account-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deemix-account-card strong {
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.deemix-account-card span {
+  color: #4c776f;
+  font-size: 10px;
+  line-height: 15px;
 }
 
 .performance-summary.musicbrainz-artist-info-summary {
@@ -9056,6 +9114,11 @@ button {
     grid-template-columns: 1fr 1fr;
   }
 
+  .deemix-settings-toolbar,
+  .deemix-download-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .tool-export-controls,
   .musicbrainz-export-controls {
     justify-items: stretch;
@@ -9332,6 +9395,7 @@ button {
 
   .layout-settings-panel,
   .ai-settings-panel,
+  .deemix-settings-panel,
   .update-settings-panel,
   .backup-settings-panel,
   .performance-settings-panel,
@@ -9345,6 +9409,8 @@ button {
   .natural-query-form,
   .natural-query-result,
   .ai-settings-toolbar,
+  .deemix-settings-toolbar,
+  .deemix-download-toolbar,
   .library-analyst-form {
     grid-template-columns: 1fr;
   }
@@ -11402,22 +11468,180 @@ button {
   line-height: 16px;
 }
 
+.deemix-search-results {
+  overflow: hidden;
+  border: 1px solid #ccdcd6;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.deemix-search-results > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #e0e8e5;
+  padding: 13px 14px;
+}
+
+.deemix-search-results > header > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.deemix-search-results h2,
+.deemix-search-results p {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deemix-search-results h2 {
+  color: #1c302b;
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.deemix-search-results p {
+  color: #71807b;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.deemix-search-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: #276c62;
+  background: #edf7f4;
+}
+
+.deemix-search-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 100px;
+  padding: 22px;
+  color: #61736d;
+  font-size: 11px;
+}
+
+.deemix-search-state.empty {
+  flex-direction: column;
+  gap: 5px;
+  text-align: center;
+}
+
+.deemix-search-state.empty strong {
+  color: #455b54;
+  font-size: 12px;
+}
+
+.deemix-match-list {
+  display: grid;
+}
+
+.deemix-match-list article {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  border-bottom: 1px solid #e5ebe8;
+  padding: 11px 12px;
+}
+
+.deemix-match-list article:last-child {
+  border-bottom: 0;
+}
+
+.deemix-match-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #d8deda;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #65746f;
+  background: #f7f9f8;
+  font-size: 9px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.deemix-match-badge.exact {
+  border-color: #9ed0c4;
+  color: #176b5e;
+  background: #eaf8f4;
+}
+
+.deemix-match-badge.likely {
+  border-color: #d7c596;
+  color: #755c19;
+  background: #fff9e8;
+}
+
+.deemix-match-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.deemix-match-copy strong,
+.deemix-match-copy span,
+.deemix-match-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deemix-match-copy strong {
+  color: #20352f;
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.deemix-match-copy span,
+.deemix-match-copy small {
+  color: #6d7b76;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.deemix-open-button {
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
 :root[data-theme="dark"] .wish-list-summary,
-:root[data-theme="dark"] .wish-list-group {
+:root[data-theme="dark"] .wish-list-group,
+:root[data-theme="dark"] .deemix-search-results {
   border-color: #33463f;
   background: #151e1b;
 }
 
 :root[data-theme="dark"] .wish-list-summary > div + div,
 :root[data-theme="dark"] .wish-list-group > header,
-:root[data-theme="dark"] .wish-list-items article {
+:root[data-theme="dark"] .wish-list-items article,
+:root[data-theme="dark"] .deemix-search-results > header,
+:root[data-theme="dark"] .deemix-match-list article {
   border-color: #2e403a;
 }
 
 :root[data-theme="dark"] .wish-list-summary strong,
 :root[data-theme="dark"] .wish-list-group h2,
 :root[data-theme="dark"] .wish-list-item-copy strong,
-:root[data-theme="dark"] .wish-list-empty strong {
+:root[data-theme="dark"] .wish-list-empty strong,
+:root[data-theme="dark"] .deemix-search-results h2,
+:root[data-theme="dark"] .deemix-match-copy strong,
+:root[data-theme="dark"] .deemix-search-state.empty strong {
   color: #dce9e5;
 }
 
@@ -11425,12 +11649,17 @@ button {
 :root[data-theme="dark"] .wish-list-group p,
 :root[data-theme="dark"] .wish-list-item-copy span,
 :root[data-theme="dark"] .wish-list-item-copy small,
-:root[data-theme="dark"] .wish-list-empty {
+:root[data-theme="dark"] .wish-list-empty,
+:root[data-theme="dark"] .deemix-search-results p,
+:root[data-theme="dark"] .deemix-match-copy span,
+:root[data-theme="dark"] .deemix-match-copy small,
+:root[data-theme="dark"] .deemix-search-state {
   color: #93a8a1;
 }
 
 :root[data-theme="dark"] .wish-list-group-icon,
-:root[data-theme="dark"] .wish-list-item-mark {
+:root[data-theme="dark"] .wish-list-item-mark,
+:root[data-theme="dark"] .deemix-search-icon {
   color: #d395a1;
   background: #38252a;
 }
@@ -11438,6 +11667,39 @@ button {
 :root[data-theme="dark"] .wish-list-group-icon.album {
   color: #7ed0c0;
   background: #19352f;
+}
+
+:root[data-theme="dark"] .deemix-search-icon {
+  color: #7ed0c0;
+  background: #19352f;
+}
+
+:root[data-theme="dark"] .deemix-match-badge {
+  border-color: #40534d;
+  color: #9eb0aa;
+  background: #1c2824;
+}
+
+:root[data-theme="dark"] .deemix-match-badge.exact {
+  border-color: #37665c;
+  color: #88d7c8;
+  background: #17352f;
+}
+
+:root[data-theme="dark"] .deemix-match-badge.likely {
+  border-color: #6f613d;
+  color: #dec783;
+  background: #332c19;
+}
+
+:root[data-theme="dark"] .deemix-account-card {
+  border-color: #37665c;
+  color: #88d7c8;
+  background: #17352f;
+}
+
+:root[data-theme="dark"] .deemix-account-card span {
+  color: #93bdb5;
 }
 
 :root[data-theme="dark"] .wish-list-reconciled {
@@ -11477,6 +11739,18 @@ button {
 
   .outside-library-wish-button span {
     display: none;
+  }
+
+  .deemix-match-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .deemix-match-badge {
+    justify-self: start;
+  }
+
+  .deemix-open-button {
+    justify-self: stretch;
   }
 }
 

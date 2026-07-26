@@ -13,6 +13,7 @@ export const defaultBillboardSinglesSourcePath = "CSV_SINGLES";
 export const defaultMusicBrainzCachePath =
   "MusicBrainz/musicbrainz_cache.db";
 export const defaultMusicBrainzOverlaySyncPath = "";
+export const defaultDeemixDownloadPath = "";
 
 export function normalizeSettings(
   settings: Partial<AppSettings>,
@@ -54,6 +55,7 @@ export function normalizeSettings(
       settings.billboardSinglesSourcePath,
       defaultBillboardSinglesSourcePath,
     ),
+    deemixDownloadPath: normalizeOptionalPath(settings.deemixDownloadPath),
     musicBrainzCachePath: normalizeMusicBrainzCachePath(
       settings.musicBrainzCachePath,
     ),
@@ -144,4 +146,8 @@ function normalizeCountryFlagDisplay(value: unknown): CountryFlagDisplay {
 function normalizeImportPath(value: unknown, fallback: string) {
   const normalized = typeof value === "string" ? value.trim() : "";
   return normalized || fallback;
+}
+
+function normalizeOptionalPath(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }

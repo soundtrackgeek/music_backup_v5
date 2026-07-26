@@ -1,31 +1,44 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Album,
+  CheckCircle2,
   ExternalLink,
   Heart,
   RefreshCw,
+  Search,
   Sparkles,
   Trash2,
   UsersRound,
+  X,
 } from "lucide-react";
 
 import {
   listWishList,
   openExternalUrl,
   removeWishListItem,
+  searchDeemixAlbums,
 } from "../backend";
-import type { WishListEntity, WishListItem } from "../types";
+import type {
+  DeemixAlbumMatch,
+  DeemixAlbumSearchResponse,
+  WishListEntity,
+  WishListItem,
+} from "../types";
 
 function WishListGroup({
   entity,
   items,
   onOpen,
   onRemove,
+  onSearch,
+  searchingId,
 }: {
   entity: WishListEntity;
   items: WishListItem[];
   onOpen: (item: WishListItem) => void;
   onRemove: (item: WishListItem) => void;
+  onSearch: (item: WishListItem) => void;
+  searchingId: number | null;
 }) {
   const isArtist = entity === "artist";
   const Icon = isArtist ? UsersRound : Album;
@@ -70,6 +83,21 @@ function WishListGroup({
                 <small>Added from {item.source}</small>
               </div>
               <div className="wish-list-item-actions">
+                {!isArtist ? (
+                  <button
+                    className="icon-button"
+                    type="button"
+                    title="Search with Deemix"
+                    aria-label={`Search ${item.title} with Deemix`}
+                    disabled={searchingId !== null}
+                    onClick={() => onSearch(item)}
+                  >
+                    <Search
+                      size={16}
+                      className={searchingId === item.id ? "spin" : ""}
+                    />
+                  </button>
+                ) : null}
                 {item.musicbrainzUrl ? (
                   <button
                     className="icon-button"
@@ -103,6 +131,10 @@ export function WishListWorkspace() {
   const [items, setItems] = useState<WishListItem[]>([]);
   const [autoRemovedCount, setAutoRemovedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchingId, setSearchingId] = useState<number | null>(null);
+  const [searchedItem, setSearchedItem] = useState<WishListItem | null>(null);
+  const [deemixResults, setDeemixResults] =
+    useState<DeemixAlbumSearchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -136,8 +168,44 @@ export function WishListWorkspace() {
     try {
       await removeWishListItem(item.id);
       setItems((previous) => previous.filter((entry) => entry.id !== item.id));
+      if (searchedItem?.id === item.id) {
+        setSearchedItem(null);
+        setDeemixResults(null);
+      }
     } catch (removeError) {
       setError(removeError instanceof Error ? removeError.message : String(removeError));
+    }
+  }
+
+  async function searchItemWithDeemix(item: WishListItem) {
+    if (item.entity !== "album") return;
+    setSearchingId(item.id);
+    setSearchedItem(item);
+    setDeemixResults(null);
+    setError(null);
+    try {
+      const response = await searchDeemixAlbums({
+        title: item.title,
+        artist: item.artist,
+        year: item.year,
+        limit: 8,
+      });
+      setDeemixResults(response);
+    } catch (searchError) {
+      setError(
+        searchError instanceof Error ? searchError.message : String(searchError),
+      );
+    } finally {
+      setSearchingId(null);
+    }
+  }
+
+  async function openDeezerMatch(match: DeemixAlbumMatch) {
+    setError(null);
+    try {
+      await openExternalUrl(match.deezerUrl);
+    } catch (openError) {
+      setError(openError instanceof Error ? openError.message : String(openError));
     }
   }
 
@@ -206,14 +274,101 @@ export function WishListWorkspace() {
           items={grouped.artists}
           onOpen={(item) => void openItem(item)}
           onRemove={(item) => void removeItem(item)}
+          onSearch={(item) => void searchItemWithDeemix(item)}
+          searchingId={searchingId}
         />
         <WishListGroup
           entity="album"
           items={grouped.albums}
           onOpen={(item) => void openItem(item)}
           onRemove={(item) => void removeItem(item)}
+          onSearch={(item) => void searchItemWithDeemix(item)}
+          searchingId={searchingId}
         />
       </div>
+
+      {searchedItem ? (
+        <section className="deemix-search-results" aria-live="polite">
+          <header>
+            <div>
+              <span className="deemix-search-icon">
+                <Search size={18} aria-hidden="true" />
+              </span>
+              <div>
+                <h2>Deemix matches</h2>
+                <p>
+                  {searchedItem.artist} · {searchedItem.title}
+                  {searchedItem.year ? ` · ${searchedItem.year}` : ""}
+                </p>
+              </div>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              title="Close Deemix results"
+              aria-label="Close Deemix results"
+              onClick={() => {
+                setSearchedItem(null);
+                setDeemixResults(null);
+              }}
+            >
+              <X size={16} />
+            </button>
+          </header>
+
+          {searchingId === searchedItem.id ? (
+            <div className="deemix-search-state">
+              <RefreshCw size={19} className="spin" aria-hidden="true" />
+              <span>Validating the stored ARL and searching Deezer…</span>
+            </div>
+          ) : deemixResults?.matches.length ? (
+            <div className="deemix-match-list">
+              {deemixResults.matches.map((match) => (
+                <article key={match.id}>
+                  <span
+                    className={`deemix-match-badge ${match.matchLevel}`}
+                    title={`${match.matchScore}% metadata match`}
+                  >
+                    {match.matchLevel === "exact" ? (
+                      <CheckCircle2 size={15} aria-hidden="true" />
+                    ) : (
+                      <Search size={15} aria-hidden="true" />
+                    )}
+                    {match.matchLevel}
+                  </span>
+                  <div className="deemix-match-copy">
+                    <strong>{match.title}</strong>
+                    <span>
+                      {match.artist}
+                      {match.year ? ` · ${match.year}` : ""}
+                      {match.trackCount ? ` · ${match.trackCount} tracks` : ""}
+                    </span>
+                    <small>
+                      {match.recordType ?? "album"}
+                      {match.explicit ? " · explicit" : ""}
+                      {` · ${match.matchScore}% match`}
+                    </small>
+                  </div>
+                  <button
+                    className="secondary-button deemix-open-button"
+                    type="button"
+                    onClick={() => void openDeezerMatch(match)}
+                  >
+                    <ExternalLink size={15} />
+                    <span>Open in Deezer</span>
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : deemixResults ? (
+            <div className="deemix-search-state empty">
+              <Search size={19} aria-hidden="true" />
+              <strong>No Deezer album matches found</strong>
+              <span>This wish remains on the list for another provider.</span>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
     </section>
   );
 }

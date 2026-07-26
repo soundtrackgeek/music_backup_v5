@@ -230,6 +230,8 @@ pub struct AppSettings {
     pub billboard_source_path: String,
     #[serde(default = "default_billboard_singles_source_path")]
     pub billboard_singles_source_path: String,
+    #[serde(default = "default_deemix_download_path")]
+    pub deemix_download_path: String,
     #[serde(
         default = "default_musicbrainz_cache_path",
         rename = "musicBrainzCachePath",
@@ -1869,6 +1871,10 @@ fn default_billboard_singles_source_path() -> String {
     "CSV_SINGLES".to_string()
 }
 
+fn default_deemix_download_path() -> String {
+    String::new()
+}
+
 fn default_musicbrainz_cache_path() -> String {
     "MusicBrainz/musicbrainz_cache.db".to_string()
 }
@@ -1906,6 +1912,7 @@ mod tests {
             cover_source_path: r"D:\Covers".to_string(),
             billboard_source_path: r"D:\Charts\Albums".to_string(),
             billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
+            deemix_download_path: r"D:\Music\Incoming".to_string(),
             musicbrainz_cache_path: r"C:\Sync\musicbrainz_cache.db".to_string(),
             musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3".to_string(),
             musicbrainz_overlay_auto_sync_minutes: 15,
@@ -1947,6 +1954,10 @@ mod tests {
             serialized.get("billboardSinglesSourcePath"),
             Some(&json!(r"D:\Charts\Singles"))
         );
+        assert_eq!(
+            serialized.get("deemixDownloadPath"),
+            Some(&json!(r"D:\Music\Incoming"))
+        );
         assert!(serialized
             .get("musicbrainzOverlayAutoSyncMinutes")
             .is_none());
@@ -1956,6 +1967,7 @@ mod tests {
             "coverSourcePath": r"D:\Covers",
             "billboardSourcePath": r"D:\Charts\Albums",
             "billboardSinglesSourcePath": r"D:\Charts\Singles",
+            "deemixDownloadPath": r"D:\Music\Incoming",
             "countryFlagDisplay": "flag",
             "musicBrainzCachePath": r"C:\Sync\musicbrainz_cache.db",
             "musicBrainzOverlaySyncPath": r"C:\Sync\musicbrainz-overlay-sync.sqlite3",
@@ -1967,6 +1979,7 @@ mod tests {
         assert_eq!(decoded.cover_source_path, r"D:\Covers");
         assert_eq!(decoded.billboard_source_path, r"D:\Charts\Albums");
         assert_eq!(decoded.billboard_singles_source_path, r"D:\Charts\Singles");
+        assert_eq!(decoded.deemix_download_path, r"D:\Music\Incoming");
         assert_eq!(decoded.country_flag_display, "flag");
         assert_eq!(decoded.musicbrainz_overlay_auto_sync_minutes, 15);
         assert_eq!(decoded.update_auto_check_minutes, 30);

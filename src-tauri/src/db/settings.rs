@@ -2,8 +2,9 @@
 use super::open;
 use super::{
     DEFAULT_BACKUP_RETENTION, DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH, DEFAULT_BILLBOARD_SOURCE_PATH,
-    DEFAULT_COUNTRY_FLAG_DISPLAY, DEFAULT_COVER_SOURCE_PATH, DEFAULT_IMPORT_SOURCE_PATH,
-    DEFAULT_MUSICBRAINZ_CACHE_PATH, DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH, MAX_BACKUP_RETENTION,
+    DEFAULT_COUNTRY_FLAG_DISPLAY, DEFAULT_COVER_SOURCE_PATH, DEFAULT_DEEMIX_DOWNLOAD_PATH,
+    DEFAULT_IMPORT_SOURCE_PATH, DEFAULT_MUSICBRAINZ_CACHE_PATH,
+    DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH, MAX_BACKUP_RETENTION,
     MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES, MAX_UPDATE_AUTO_CHECK_MINUTES, MIN_BACKUP_RETENTION,
 };
 use crate::models::AppSettings;
@@ -32,7 +33,7 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
             SELECT backup_retention, dark_mode, country_flag_display,
                    left_sidebar_default, right_sidebar_default,
                    import_source_path, cover_source_path, billboard_source_path,
-                   billboard_singles_source_path, musicbrainz_cache_path,
+                   billboard_singles_source_path, deemix_download_path, musicbrainz_cache_path,
                    musicbrainz_overlay_sync_path, musicbrainz_overlay_auto_sync_minutes,
                    update_auto_check_minutes, updated_at
             FROM app_settings
@@ -58,6 +59,7 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
                 cover_source_path: DEFAULT_COVER_SOURCE_PATH.to_string(),
                 billboard_source_path: DEFAULT_BILLBOARD_SOURCE_PATH.to_string(),
                 billboard_singles_source_path: DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH.to_string(),
+                deemix_download_path: DEFAULT_DEEMIX_DOWNLOAD_PATH.to_string(),
                 musicbrainz_cache_path: DEFAULT_MUSICBRAINZ_CACHE_PATH.to_string(),
                 musicbrainz_overlay_sync_path: DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH.to_string(),
                 musicbrainz_overlay_auto_sync_minutes: 0,
@@ -79,10 +81,11 @@ pub(super) fn save_settings_for_connection(
         INSERT INTO app_settings (
             id, backup_retention, dark_mode, country_flag_display, left_sidebar_default, right_sidebar_default,
             import_source_path, cover_source_path, billboard_source_path,
-            billboard_singles_source_path, musicbrainz_cache_path, musicbrainz_overlay_sync_path,
+            billboard_singles_source_path, deemix_download_path, musicbrainz_cache_path,
+            musicbrainz_overlay_sync_path,
             musicbrainz_overlay_auto_sync_minutes, update_auto_check_minutes, updated_at
         )
-        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
         ON CONFLICT(id) DO UPDATE SET
             backup_retention = excluded.backup_retention,
             dark_mode = excluded.dark_mode,
@@ -93,6 +96,7 @@ pub(super) fn save_settings_for_connection(
             cover_source_path = excluded.cover_source_path,
             billboard_source_path = excluded.billboard_source_path,
             billboard_singles_source_path = excluded.billboard_singles_source_path,
+            deemix_download_path = excluded.deemix_download_path,
             musicbrainz_cache_path = excluded.musicbrainz_cache_path,
             musicbrainz_overlay_sync_path = excluded.musicbrainz_overlay_sync_path,
             musicbrainz_overlay_auto_sync_minutes = excluded.musicbrainz_overlay_auto_sync_minutes,
@@ -109,6 +113,7 @@ pub(super) fn save_settings_for_connection(
             settings.cover_source_path,
             settings.billboard_source_path,
             settings.billboard_singles_source_path,
+            settings.deemix_download_path,
             settings.musicbrainz_cache_path,
             settings.musicbrainz_overlay_sync_path,
             i64::from(settings.musicbrainz_overlay_auto_sync_minutes),
@@ -134,11 +139,12 @@ fn settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppSettings> {
         cover_source_path: row.get(6)?,
         billboard_source_path: row.get(7)?,
         billboard_singles_source_path: row.get(8)?,
-        musicbrainz_cache_path: row.get(9)?,
-        musicbrainz_overlay_sync_path: row.get(10)?,
-        musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(11)?.max(0) as u32,
-        update_auto_check_minutes: row.get::<_, i64>(12)?.max(0) as u32,
-        updated_at: row.get(13)?,
+        deemix_download_path: row.get(9)?,
+        musicbrainz_cache_path: row.get(10)?,
+        musicbrainz_overlay_sync_path: row.get(11)?,
+        musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(12)?.max(0) as u32,
+        update_auto_check_minutes: row.get::<_, i64>(13)?.max(0) as u32,
+        updated_at: row.get(14)?,
     })
 }
 
@@ -162,6 +168,7 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
         &settings.billboard_singles_source_path,
         DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH,
     );
+    settings.deemix_download_path = settings.deemix_download_path.trim().to_string();
     settings.musicbrainz_cache_path =
         normalize_musicbrainz_cache_path(&settings.musicbrainz_cache_path);
     settings.musicbrainz_overlay_sync_path =

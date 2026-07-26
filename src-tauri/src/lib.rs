@@ -4,6 +4,7 @@ mod ai;
 #[cfg(not(test))]
 mod covers;
 mod db;
+mod deemix;
 mod external_discovery;
 mod importer;
 mod models;
@@ -134,6 +135,53 @@ async fn test_openai_connection() -> Result<ai::AiConnectionTest, String> {
     tauri::async_runtime::spawn_blocking(ai::test_connection)
         .await
         .map_err(|error| format!("AI connection task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_deemix_credential_status() -> Result<deemix::DeemixCredentialStatus, String> {
+    tauri::async_runtime::spawn_blocking(deemix::credential_status)
+        .await
+        .map_err(|error| format!("Deemix credential status task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn save_deemix_arl(arl: String) -> Result<deemix::DeemixConnectionTest, String> {
+    tauri::async_runtime::spawn_blocking(move || deemix::save_arl(arl))
+        .await
+        .map_err(|error| format!("Deemix credential save task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn delete_deemix_arl() -> Result<deemix::DeemixCredentialStatus, String> {
+    tauri::async_runtime::spawn_blocking(deemix::delete_arl)
+        .await
+        .map_err(|error| format!("Deemix credential removal task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn test_deemix_connection() -> Result<deemix::DeemixConnectionTest, String> {
+    tauri::async_runtime::spawn_blocking(deemix::test_connection)
+        .await
+        .map_err(|error| format!("Deemix connection task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn search_deemix_albums(
+    input: deemix::DeemixAlbumSearchRequest,
+) -> Result<deemix::DeemixAlbumSearchResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || deemix::search_albums(input))
+        .await
+        .map_err(|error| format!("Deemix album search task failed: {error}"))?
         .map_err(|error| error.to_string())
 }
 
@@ -955,6 +1003,7 @@ async fn export_music_tool_issues(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -974,6 +1023,11 @@ pub fn run() {
             save_openai_api_key,
             delete_openai_api_key,
             test_openai_connection,
+            get_deemix_credential_status,
+            save_deemix_arl,
+            delete_deemix_arl,
+            test_deemix_connection,
+            search_deemix_albums,
             compile_natural_language_query,
             ask_current_view,
             research_music,

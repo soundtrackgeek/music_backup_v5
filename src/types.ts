@@ -191,6 +191,7 @@ export type AppSettings = {
   coverSourcePath: string;
   billboardSourcePath: string;
   billboardSinglesSourcePath: string;
+  deemixDownloadPath: string;
   musicBrainzCachePath: string;
   musicBrainzOverlaySyncPath: string;
   musicBrainzOverlayAutoSyncMinutes: number;
@@ -896,6 +897,49 @@ export type WishListItem = AddWishListItemRequest & {
 export type WishListResponse = {
   items: WishListItem[];
   autoRemovedCount: number;
+};
+
+export type DeemixCredentialSource = "windowsCredentialManager" | "none";
+
+export type DeemixCredentialStatus = {
+  configured: boolean;
+  source: DeemixCredentialSource;
+};
+
+export type DeemixConnectionTest = {
+  accountName: string;
+  userId: string;
+  country: string | null;
+  canStreamHq: boolean;
+  canStreamLossless: boolean;
+  message: string;
+};
+
+export type DeemixAlbumSearchRequest = {
+  title: string;
+  artist: string;
+  year: number | null;
+  limit?: number;
+};
+
+export type DeemixAlbumMatch = {
+  id: string;
+  title: string;
+  artist: string;
+  year: number | null;
+  trackCount: number | null;
+  recordType: string | null;
+  explicit: boolean;
+  deezerUrl: string;
+  matchScore: number;
+  matchLevel: "exact" | "likely" | "possible";
+};
+
+export type DeemixAlbumSearchResponse = {
+  query: string;
+  total: number;
+  matches: DeemixAlbumMatch[];
+  searchedAt: string;
 };
 
 export type AiConnectionTest = {

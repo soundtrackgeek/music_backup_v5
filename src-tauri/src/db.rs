@@ -70,6 +70,7 @@ const DEFAULT_IMPORT_SOURCE_PATH: &str = "musicbee-library.tsv";
 const DEFAULT_COVER_SOURCE_PATH: &str = "AlbumCovers";
 const DEFAULT_BILLBOARD_SOURCE_PATH: &str = "CSV";
 const DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES";
+const DEFAULT_DEEMIX_DOWNLOAD_PATH: &str = "";
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH: &str = "";
 const DEFAULT_COUNTRY_FLAG_DISPLAY: &str = "flagAndName";
@@ -356,8 +357,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_eight_schema_exists(conn)?
-    {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_nine_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -701,6 +701,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             cover_source_path TEXT NOT NULL DEFAULT 'AlbumCovers',
             billboard_source_path TEXT NOT NULL DEFAULT 'CSV',
             billboard_singles_source_path TEXT NOT NULL DEFAULT 'CSV_SINGLES',
+            deemix_download_path TEXT NOT NULL DEFAULT '',
             musicbrainz_cache_path TEXT NOT NULL DEFAULT 'MusicBrainz/musicbrainz_cache.db',
             musicbrainz_overlay_sync_path TEXT NOT NULL DEFAULT '',
             musicbrainz_overlay_auto_sync_minutes INTEGER NOT NULL DEFAULT 0,
@@ -1069,6 +1070,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_import_run_change_columns(conn)?;
     ensure_app_settings_layout_columns(conn)?;
     ensure_app_settings_import_columns(conn)?;
+    ensure_app_settings_deemix_columns(conn)?;
     ensure_album_billboard_columns(conn)?;
     ensure_billboard_chart_entries_table(conn)?;
     ensure_track_billboard_single_columns(conn)?;
@@ -1089,7 +1091,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 28;
+        PRAGMA user_version = 29;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -1303,6 +1305,17 @@ fn ensure_app_settings_import_columns(conn: &Connection) -> Result<()> {
             conn.execute_batch(&sql)
                 .with_context(|| format!("Could not add app_settings.{name}"))?;
         }
+    }
+
+    Ok(())
+}
+
+fn ensure_app_settings_deemix_columns(conn: &Connection) -> Result<()> {
+    if !schema_column_exists(conn, "app_settings", "deemix_download_path")? {
+        conn.execute_batch(
+            "ALTER TABLE app_settings ADD COLUMN deemix_download_path TEXT NOT NULL DEFAULT '';",
+        )
+        .context("Could not add app_settings.deemix_download_path")?;
     }
 
     Ok(())
@@ -14251,6 +14264,8 @@ mod tests {
             .expect("phase twenty-seven schema exists"));
         assert!(migrations::phase_twenty_eight_schema_exists(&conn)
             .expect("phase twenty-eight schema exists"));
+        assert!(migrations::phase_twenty_nine_schema_exists(&conn)
+            .expect("phase twenty-nine schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -14304,6 +14319,35 @@ mod tests {
             .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
             .expect("read migrated user version");
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn schema_twenty_nine_adds_the_deemix_download_path() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            ALTER TABLE app_settings DROP COLUMN deemix_download_path;
+            PRAGMA user_version = 28;
+            ",
+        )
+        .expect("simulate schema twenty-eight settings");
+
+        migrate(&conn).expect("migrate current schema");
+
+        assert!(
+            schema_column_exists(&conn, "app_settings", "deemix_download_path")
+                .expect("Deemix download path exists")
+        );
+        let saved_path: String = conn
+            .query_row(
+                "SELECT deemix_download_path FROM app_settings WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read default Deemix path");
+        assert_eq!(saved_path, "");
     }
 
     #[test]
@@ -14980,6 +15024,7 @@ mod tests {
                 cover_source_path: "C:\\_code\\music_backup_v5\\AlbumCovers\\".to_string(),
                 billboard_source_path: r"D:\Charts\Albums".to_string(),
                 billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
+                deemix_download_path: r"D:\Music\Incoming".to_string(),
                 musicbrainz_cache_path: "MusicBrainz/custom-cache.db".to_string(),
                 musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
                     .to_string(),
@@ -15002,6 +15047,7 @@ mod tests {
         );
         assert_eq!(saved.billboard_source_path, r"D:\Charts\Albums");
         assert_eq!(saved.billboard_singles_source_path, r"D:\Charts\Singles");
+        assert_eq!(saved.deemix_download_path, r"D:\Music\Incoming");
         assert_eq!(saved.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
         assert_eq!(
             saved.musicbrainz_overlay_sync_path,
@@ -15032,6 +15078,7 @@ mod tests {
         );
         assert_eq!(loaded.billboard_source_path, r"D:\Charts\Albums");
         assert_eq!(loaded.billboard_singles_source_path, r"D:\Charts\Singles");
+        assert_eq!(loaded.deemix_download_path, r"D:\Music\Incoming");
         assert_eq!(loaded.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
         assert_eq!(
             loaded.musicbrainz_overlay_sync_path,

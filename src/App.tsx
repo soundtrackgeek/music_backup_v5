@@ -308,6 +308,7 @@ import {
   MusicBrainzReviewState,
 } from "./components/MusicBrainzReviewState";
 import { AiSettingsPanel } from "./components/AiSettingsPanel";
+import { DeemixSettingsPanel } from "./components/DeemixSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
 import { ExportResultStatus } from "./components/ExportResultStatus";
 import { LibraryAnalystPanel } from "./components/LibraryAnalystPanel";
@@ -10619,6 +10620,9 @@ export default function App() {
           baseSettings.billboardSinglesSourcePath,
         defaultBillboardSinglesSourcePath,
       ),
+      deemixDownloadPath: (
+        values.deemixDownloadPath ?? baseSettings.deemixDownloadPath
+      ).trim(),
       musicBrainzCachePath: textSettingValue(
         values.musicBrainzCachePath ?? baseSettings.musicBrainzCachePath,
         defaultMusicBrainzCachePath,
@@ -10726,12 +10730,14 @@ export default function App() {
 
     try {
       await saveTask;
+      return true;
     } catch (error) {
       if (saveSequence === settingsSaveSequenceRef.current) {
         setSettingsError(
           error instanceof Error ? error.message : String(error),
         );
       }
+      return false;
     } finally {
       pendingSettingsSaveCountRef.current = Math.max(
         0,
@@ -14984,6 +14990,15 @@ export default function App() {
             >
               <SettingsSection id="ai">
                 <AiSettingsPanel />
+              </SettingsSection>
+
+              <SettingsSection id="providers">
+                <DeemixSettingsPanel
+                  downloadPath={settings.deemixDownloadPath}
+                  onDownloadPathChange={(path) =>
+                    saveAppSettings({ deemixDownloadPath: path })
+                  }
+                />
               </SettingsSection>
 
               <SettingsSection id="updates">

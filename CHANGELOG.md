@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.80.0] - 2026-07-26
+### Added
+- Added a Providers settings section with Deemix ARL validation, secure Windows Credential Manager storage, connection testing, account capability status, credential replacement, and removal without returning the ARL to the frontend.
+- Added authenticated Deemix/Deezer searches for album wishes, including exact/likely/possible artist-title-year scoring, bounded results, constructed Deezer album links, and empty/error states.
+- Added a self-contained Rust provider boundary with HTTPS-only requests, zeroized credential buffers, sanitized service failures, input validation, and focused backend/frontend tests; no Deemix GUI or separate service is required for this proof of concept.
+- Added a persisted Deemix download-folder preference with a native Windows folder picker, clear action, and SQLite schema version 29 so later download work has an explicit destination.
+
+### Changed
+- Bumped synchronized app metadata to `0.80.0`.
+
 ## [0.79.2] - 2026-07-25
 ### Fixed
 - Made Music Library Trimmer review imports accept Excel-saved Windows-1252 CSV files in addition to UTF-8 with or without BOM and UTF-16/UTF-32 Excel exports.

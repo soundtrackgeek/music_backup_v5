@@ -16,6 +16,9 @@ function SettingsFixture() {
           <input />
         </label>
       </SettingsSection>
+      <SettingsSection id="providers">
+        <p>Provider content</p>
+      </SettingsSection>
       <SettingsSection id="data">
         <p>Data content</p>
       </SettingsSection>
@@ -33,11 +36,11 @@ function SettingsFixture() {
 }
 
 describe("SettingsWorkspace", () => {
-  it("shows one of six explicit settings sections at a time", async () => {
+  it("shows one of seven explicit settings sections at a time", async () => {
     const user = userEvent.setup();
     render(<SettingsFixture />);
 
-    expect(screen.getAllByRole("tab")).toHaveLength(6);
+    expect(screen.getAllByRole("tab")).toHaveLength(7);
     expect(
       screen.getByRole("tab", { name: /General/ }),
     ).toHaveAttribute("aria-selected", "true");
@@ -75,8 +78,8 @@ describe("SettingsWorkspace", () => {
     generalTab.focus();
 
     await user.keyboard("{ArrowRight}");
-    expect(screen.getByRole("tab", { name: /^AI/ })).toHaveFocus();
-    expect(screen.getByLabelText("API key draft")).toBeVisible();
+    expect(screen.getByRole("tab", { name: /Providers/ })).toHaveFocus();
+    expect(screen.getByText("Provider content")).toBeVisible();
 
     await user.keyboard("{End}");
     expect(

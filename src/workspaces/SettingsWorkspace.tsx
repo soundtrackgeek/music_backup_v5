@@ -9,6 +9,7 @@ import {
   Activity,
   Database,
   Download,
+  Plug,
   Radio,
   SlidersHorizontal,
   Sparkles,
@@ -17,6 +18,7 @@ import {
 
 export type SettingsSectionId =
   | "general"
+  | "providers"
   | "ai"
   | "data"
   | "musicbrainz"
@@ -36,6 +38,12 @@ const settingsSections: SettingsSectionDefinition[] = [
     label: "General",
     description: "Appearance and workspace defaults",
     icon: SlidersHorizontal,
+  },
+  {
+    id: "providers",
+    label: "Providers",
+    description: "Deemix and external catalog connections",
+    icon: Plug,
   },
   {
     id: "ai",
