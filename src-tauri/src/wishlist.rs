@@ -18,7 +18,7 @@ const MAX_MUSICBRAINZ_SEARCH_QUERY_LENGTH: usize = 200;
 #[cfg(not(test))]
 const MUSICBRAINZ_SEARCH_LIMIT: usize = 8;
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.83.0 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.83.1 (local desktop app)";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1274,6 +1274,32 @@ mod tests {
             )
             .expect("insert official release status");
         }
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_artist_release_groups (
+                artist_mbid, release_mbid, title, year, type,
+                secondary_types, status, source, fetched_at
+            ) VALUES (
+                'engine-alley-mbid', 'engine-live-release', 'Live at the Olympia',
+                1996, 'Album', 'Live', 'Official', 'musicbrainz-live',
+                '2026-07-27T10:00:00Z'
+            )
+            ",
+            [],
+        )
+        .expect("insert secondary-type album");
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_release_status_cache (
+                artist_mbid, release_mbid, has_official_release, checked_at
+            ) VALUES (
+                'engine-alley-mbid', 'engine-live-release', 1,
+                '2026-07-27T10:00:00Z'
+            )
+            ",
+            [],
+        )
+        .expect("insert secondary-type official status");
         conn.execute(
             "
             INSERT INTO albums (

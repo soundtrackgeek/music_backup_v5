@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.83.1] - 2026-07-26
+### Fixed
+- Fixed Wish List artist summaries and Deezer discovery including MusicBrainz Album release groups with secondary types such as Compilation, Live, Remix, DJ-mix, or Soundtrack. Only official pure Album release groups now count, including when an existing cached snapshot is used.
+
+### Changed
+- Bumped synchronized app metadata to `0.83.1`.
+
 ## [0.83.0] - 2026-07-26
 ### Added
 - Added per-artist official-album completion summaries to the Wish List, including singular/plural missing counts and an eye control that reveals missing titles and years on hover or keyboard focus.

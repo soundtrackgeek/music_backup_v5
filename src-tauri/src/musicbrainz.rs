@@ -43,7 +43,7 @@ const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.83.0 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.83.1 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 const MUSICBRAINZ_RATE_LIMIT_DELAY_MS: u64 = 1100;
@@ -3266,6 +3266,7 @@ fn filter_official_album_release_groups(
         .into_iter()
         .filter(|row| {
             row.primary_type.eq_ignore_ascii_case("album")
+                && row.secondary_types.trim().is_empty()
                 && official_ids.contains(&row.release_mbid)
         })
         .map(|row| WishListOfficialAlbum {
@@ -3308,6 +3309,7 @@ pub(crate) fn cached_official_album_release_groups_for_wishlist(
             FROM musicbrainz_artist_release_groups
             WHERE artist_mbid = ?1
               AND LOWER(COALESCE(type, '')) = 'album'
+              AND TRIM(COALESCE(secondary_types, '')) = ''
             ",
             params![artist_mbid],
             |row| row.get(0),
@@ -3327,6 +3329,7 @@ pub(crate) fn cached_official_album_release_groups_for_wishlist(
              AND release_status.release_mbid = release_group.release_mbid
             WHERE release_group.artist_mbid = ?1
               AND LOWER(COALESCE(release_group.type, '')) = 'album'
+              AND TRIM(COALESCE(release_group.secondary_types, '')) = ''
             ",
             params![artist_mbid],
             |row| row.get(0),
@@ -3359,6 +3362,7 @@ pub(crate) fn cached_official_album_release_groups_for_wishlist(
              AND release_status.release_mbid = release_group.release_mbid
             WHERE release_group.artist_mbid = ?1
               AND LOWER(COALESCE(release_group.type, '')) = 'album'
+              AND TRIM(COALESCE(release_group.secondary_types, '')) = ''
               AND release_status.has_official_release = 1
             ORDER BY COALESCE(release_group.year, 9999), LOWER(release_group.title),
                      release_group.release_mbid
@@ -3367,7 +3371,7 @@ pub(crate) fn cached_official_album_release_groups_for_wishlist(
         .context("Could not prepare the cached Wish List artist album lookup")?;
     let albums = statement
         .query_map(params![artist_mbid], |row| {
-            let secondary_types = row.get::<_, String>(3)?;
+            let secondary_types = row.get::<_, Option<String>>(3)?.unwrap_or_default();
             Ok(WishListOfficialAlbum {
                 release_mbid: row.get(0)?,
                 title: row.get(1)?,
@@ -4974,7 +4978,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn wish_list_artist_discovery_keeps_only_official_primary_albums() {
+    fn wish_list_artist_discovery_keeps_only_pure_official_albums() {
         let rows = vec![
             RefreshedReleaseGroup {
                 release_mbid: "official-album".to_string(),
@@ -4986,11 +4990,29 @@ mod tests {
                 status: "Official".to_string(),
             },
             RefreshedReleaseGroup {
-                release_mbid: "unofficial-album".to_string(),
-                title: "Unauthorized".to_string(),
-                year: Some(1988),
+                release_mbid: "official-compilation".to_string(),
+                title: "PopArt: The Hits".to_string(),
+                year: Some(2003),
                 primary_type: "Album".to_string(),
                 secondary_types: "Compilation".to_string(),
+                track_count: None,
+                status: "Official".to_string(),
+            },
+            RefreshedReleaseGroup {
+                release_mbid: "official-live".to_string(),
+                title: "Discovery Live in Rio 1994".to_string(),
+                year: Some(1995),
+                primary_type: "Album".to_string(),
+                secondary_types: "Live".to_string(),
+                track_count: None,
+                status: "Official".to_string(),
+            },
+            RefreshedReleaseGroup {
+                release_mbid: "official-remix".to_string(),
+                title: "Disco 2".to_string(),
+                year: Some(1994),
+                primary_type: "Album".to_string(),
+                secondary_types: "Remix".to_string(),
                 track_count: None,
                 status: "Official".to_string(),
             },
@@ -5004,8 +5026,13 @@ mod tests {
                 status: "Official".to_string(),
             },
         ];
-        let official_ids =
-            HashSet::from(["official-album".to_string(), "official-single".to_string()]);
+        let official_ids = HashSet::from([
+            "official-album".to_string(),
+            "official-compilation".to_string(),
+            "official-live".to_string(),
+            "official-remix".to_string(),
+            "official-single".to_string(),
+        ]);
 
         let albums = filter_official_album_release_groups(rows, &official_ids);
 
