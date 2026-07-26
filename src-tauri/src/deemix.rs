@@ -12,7 +12,7 @@ const KEYRING_USER: &str = "arl";
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_ALBUM_SEARCH_URL: &str = "https://api.deezer.com/search/album";
 const DEEMIX_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.80";
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.81";
 const MAX_SEARCH_LENGTH: usize = 300;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -83,6 +83,10 @@ fn stored_arl() -> Result<Option<Zeroizing<String>>> {
 
 fn require_stored_arl() -> Result<Zeroizing<String>> {
     stored_arl()?.context("No Deemix ARL is configured. Add it in Settings > Providers.")
+}
+
+pub(crate) fn stored_arl_for_download() -> Result<Zeroizing<String>> {
+    require_stored_arl()
 }
 
 fn normalize_arl(value: String) -> Result<Zeroizing<String>> {

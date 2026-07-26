@@ -7319,6 +7319,17 @@ button {
   margin-bottom: 14px;
 }
 
+.deemix-preference-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.deemix-preference-grid select {
+  width: 100%;
+}
+
 .deemix-download-field input {
   cursor: default;
 }
@@ -9115,7 +9126,8 @@ button {
   }
 
   .deemix-settings-toolbar,
-  .deemix-download-toolbar {
+  .deemix-download-toolbar,
+  .deemix-preference-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -9411,6 +9423,7 @@ button {
   .ai-settings-toolbar,
   .deemix-settings-toolbar,
   .deemix-download-toolbar,
+  .deemix-preference-grid,
   .library-analyst-form {
     grid-template-columns: 1fr;
   }
@@ -11620,6 +11633,66 @@ button {
   padding: 6px 10px;
 }
 
+.deemix-match-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.deemix-download-button,
+.deemix-open-button {
+  white-space: nowrap;
+}
+
+.deemix-download-progress,
+.deemix-download-complete {
+  margin: 14px 16px 16px;
+  border: 1px solid #d6dfdc;
+  border-radius: 10px;
+  background: #f8faf9;
+  padding: 12px 14px;
+}
+
+.deemix-download-progress > div,
+.deemix-download-complete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.deemix-download-progress > div > div,
+.deemix-download-complete > div {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+
+.deemix-download-progress strong,
+.deemix-download-progress span,
+.deemix-download-complete strong,
+.deemix-download-complete span,
+.deemix-download-complete small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deemix-download-progress progress {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin-top: 10px;
+  accent-color: #367665;
+}
+
+.deemix-download-complete {
+  border-color: #b9d7ca;
+  color: #245e4f;
+  background: #eff8f3;
+}
+
 :root[data-theme="dark"] .wish-list-summary,
 :root[data-theme="dark"] .wish-list-group,
 :root[data-theme="dark"] .deemix-search-results {
@@ -11698,6 +11771,22 @@ button {
   background: #17352f;
 }
 
+:root[data-theme="dark"] .deemix-download-progress {
+  border-color: #33463f;
+  color: #dce9e5;
+  background: #18221f;
+}
+
+:root[data-theme="dark"] .deemix-download-progress span {
+  color: #93a8a1;
+}
+
+:root[data-theme="dark"] .deemix-download-complete {
+  border-color: #37665c;
+  color: #88d7c8;
+  background: #17352f;
+}
+
 :root[data-theme="dark"] .deemix-account-card span {
   color: #93bdb5;
 }
@@ -11751,6 +11840,11 @@ button {
 
   .deemix-open-button {
     justify-self: stretch;
+  }
+
+  .deemix-match-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

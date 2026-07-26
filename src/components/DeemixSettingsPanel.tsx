@@ -19,6 +19,8 @@ import {
 import type {
   DeemixConnectionTest,
   DeemixCredentialStatus,
+  DeemixDownloadOrganization,
+  DeemixDownloadQuality,
 } from "../types";
 
 function sourceLabel(status: DeemixCredentialStatus | null) {
@@ -38,18 +40,30 @@ type DeemixSettingsPanelProps = {
   onDownloadPathChange?: (
     path: string,
   ) => Promise<boolean | void> | boolean | void;
+  quality?: DeemixDownloadQuality;
+  organization?: DeemixDownloadOrganization;
+  onQualityChange?: (
+    quality: DeemixDownloadQuality,
+  ) => Promise<boolean | void> | boolean | void;
+  onOrganizationChange?: (
+    organization: DeemixDownloadOrganization,
+  ) => Promise<boolean | void> | boolean | void;
 };
 
 export function DeemixSettingsPanel({
   downloadPath = "",
   onDownloadPathChange,
+  quality = "mp3_320",
+  organization = "flat_artist_album_year",
+  onQualityChange,
+  onOrganizationChange,
 }: DeemixSettingsPanelProps) {
   const desktopRuntime = isTauriRuntime();
   const [status, setStatus] = useState<DeemixCredentialStatus | null>(null);
   const [connection, setConnection] = useState<DeemixConnectionTest | null>(null);
   const [arl, setArl] = useState("");
   const [busyAction, setBusyAction] = useState<
-    "save" | "test" | "remove" | "folder" | null
+    "save" | "test" | "remove" | "folder" | "preference" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -161,6 +175,44 @@ export function DeemixSettingsPanel({
     }
   }
 
+  async function saveQuality(nextQuality: DeemixDownloadQuality) {
+    setBusyAction("preference");
+    setError(null);
+    setMessage(null);
+    try {
+      const saved = await onQualityChange?.(nextQuality);
+      if (saved !== false) setMessage("Deemix audio quality saved.");
+    } catch (preferenceError) {
+      setError(
+        preferenceError instanceof Error
+          ? preferenceError.message
+          : String(preferenceError),
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function saveOrganization(
+    nextOrganization: DeemixDownloadOrganization,
+  ) {
+    setBusyAction("preference");
+    setError(null);
+    setMessage(null);
+    try {
+      const saved = await onOrganizationChange?.(nextOrganization);
+      if (saved !== false) setMessage("Deemix folder organization saved.");
+    } catch (preferenceError) {
+      setError(
+        preferenceError instanceof Error
+          ? preferenceError.message
+          : String(preferenceError),
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   const isBusy = busyAction !== null;
 
   return (
@@ -171,6 +223,43 @@ export function DeemixSettingsPanel({
           <p>{sourceLabel(status)}</p>
         </div>
         <Radio size={18} />
+      </div>
+
+      <div className="deemix-preference-grid">
+        <label className="criterion">
+          <span>Audio quality</span>
+          <select
+            aria-label="Deemix audio quality"
+            value={quality}
+            disabled={isBusy}
+            onChange={(event) =>
+              void saveQuality(event.target.value as DeemixDownloadQuality)
+            }
+          >
+            <option value="mp3_320">MP3 · 320 kbps</option>
+            <option value="mp3_128">MP3 · 128 kbps</option>
+          </select>
+        </label>
+        <label className="criterion">
+          <span>Folder organization</span>
+          <select
+            aria-label="Deemix folder organization"
+            value={organization}
+            disabled={isBusy}
+            onChange={(event) =>
+              void saveOrganization(
+                event.target.value as DeemixDownloadOrganization,
+              )
+            }
+          >
+            <option value="flat_artist_album_year">
+              Artist - Album (Year)
+            </option>
+            <option value="artist_album_year_folders">
+              Artist / Album (Year)
+            </option>
+          </select>
+        </label>
       </div>
 
       <div className="deemix-download-toolbar">
@@ -259,7 +348,8 @@ export function DeemixSettingsPanel({
       <div className="ai-settings-notes deemix-settings-notes">
         <span>The ARL is validated before it is stored.</span>
         <span>It is never written to SQLite, browser storage, logs, or backups.</span>
-        <span>The download folder is an ordinary local preference; searches do not write files.</span>
+        <span>Downloads use the exact selected bitrate; unavailable tracks are not silently downgraded.</span>
+        <span>Album art is embedded in every MP3 and saved beside the tracks as cover.jpg or cover.png.</span>
         <span>Connection and searches go directly from the Rust backend to Deezer; the Deemix GUI is not used.</span>
       </div>
 

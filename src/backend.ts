@@ -120,6 +120,9 @@ import type {
   SavePlaylistRequest,
   SavedExternalDiscovery,
   AddWishListItemRequest,
+  DeemixAlbumDownloadProgress,
+  DeemixAlbumDownloadRequest,
+  DeemixAlbumDownloadSummary,
   DeemixAlbumSearchRequest,
   DeemixAlbumSearchResponse,
   DeemixConnectionTest,
@@ -198,10 +201,26 @@ import type {
 
 let mockSavedPlaylists: SavedPlaylist[] = [];
 let mockSavedExternalDiscoveries: SavedExternalDiscovery[] = [];
-let mockWishListItems: WishListItem[] = [];
+let mockWishListItems: WishListItem[] = [
+  {
+    id: 1,
+    entity: "album",
+    title: "Meantime",
+    artist: "Helmet",
+    year: 1992,
+    musicbrainzId: "f3cd5c58-4f20-3c84-8d7f-cf12e6ba4ec8",
+    musicbrainzUrl:
+      "https://musicbrainz.org/release-group/f3cd5c58-4f20-3c84-8d7f-cf12e6ba4ec8",
+    source: "Preview",
+    createdAt: "2026-07-26T12:00:00Z",
+  },
+];
 let mockPreparedImport: ImportPreview | null = null;
 let mockImportCancellationRequested = false;
 const mockImportProgressHandlers = new Set<(progress: ImportProgress) => void>();
+const mockDeemixDownloadProgressHandlers = new Set<
+  (progress: DeemixAlbumDownloadProgress) => void
+>();
 let mockMusicToolFixHistory: MusicToolFixHistoryEntry[] = [];
 let mockMusicToolFixSequence = 1;
 const mockMusicToolFixSnapshots = new Map<
@@ -1195,12 +1214,95 @@ export async function searchDeemixAlbums(input: DeemixAlbumSearchRequest) {
   if (!isTauriRuntime()) {
     return {
       query: `${input.artist} ${input.title}`.trim(),
-      total: 0,
-      matches: [],
+      total: 1,
+      matches: [
+        {
+          id: "240766",
+          title: input.title,
+          artist: input.artist,
+          year: input.year,
+          trackCount: 10,
+          recordType: "album",
+          explicit: false,
+          deezerUrl: "https://www.deezer.com/album/240766",
+          matchScore: 100,
+          matchLevel: "exact",
+        },
+      ],
       searchedAt: new Date().toISOString(),
     } satisfies DeemixAlbumSearchResponse;
   }
   return invoke<DeemixAlbumSearchResponse>("search_deemix_albums", { input });
+}
+
+function emitMockDeemixDownloadProgress(
+  progress: DeemixAlbumDownloadProgress,
+) {
+  for (const handler of mockDeemixDownloadProgressHandlers) {
+    handler(progress);
+  }
+}
+
+export async function downloadDeemixAlbum(input: DeemixAlbumDownloadRequest) {
+  if (!isTauriRuntime()) {
+    const steps: DeemixAlbumDownloadProgress[] = [
+      {
+        requestId: input.requestId,
+        albumId: input.albumId,
+        phase: "metadata",
+        message: "Validating Deezer and loading album metadata…",
+        currentTrack: null,
+        completedTracks: 0,
+        totalTracks: 10,
+      },
+      {
+        requestId: input.requestId,
+        albumId: input.albumId,
+        phase: "downloading",
+        message: "Downloading track 6 of 10…",
+        currentTrack: "Unsung",
+        completedTracks: 5,
+        totalTracks: 10,
+      },
+      {
+        requestId: input.requestId,
+        albumId: input.albumId,
+        phase: "tagging",
+        message: "Tagging track 10 of 10…",
+        currentTrack: "Role Model",
+        completedTracks: 9,
+        totalTracks: 10,
+      },
+    ];
+    for (const progress of steps) {
+      emitMockDeemixDownloadProgress(progress);
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
+    }
+    const summary = {
+      requestId: input.requestId,
+      albumId: input.albumId,
+      artist: "Helmet",
+      album: "Meantime",
+      year: 1992,
+      quality: "mp3_320",
+      destinationPath: "D:\\Music\\Incoming\\Helmet - Meantime (1992)",
+      coverPath:
+        "D:\\Music\\Incoming\\Helmet - Meantime (1992)\\cover.jpg",
+      trackCount: 10,
+      completedAt: new Date().toISOString(),
+    } satisfies DeemixAlbumDownloadSummary;
+    emitMockDeemixDownloadProgress({
+      requestId: input.requestId,
+      albumId: input.albumId,
+      phase: "complete",
+      message: "Downloaded and tagged 10 tracks as MP3 320 kbps.",
+      currentTrack: null,
+      completedTracks: 10,
+      totalTracks: 10,
+    });
+    return summary;
+  }
+  return invoke<DeemixAlbumDownloadSummary>("download_deemix_album", { input });
 }
 
 export async function exportPlaylist(input: ExportPlaylistRequest) {
@@ -2913,6 +3015,24 @@ export async function listenToImportProgress(
   return listen<ImportProgress>("import-progress", (event) => {
     handler(event.payload);
   });
+}
+
+export async function listenToDeemixDownloadProgress(
+  handler: (progress: DeemixAlbumDownloadProgress) => void,
+) {
+  if (!isTauriRuntime()) {
+    mockDeemixDownloadProgressHandlers.add(handler);
+    return (() => {
+      mockDeemixDownloadProgressHandlers.delete(handler);
+    }) satisfies UnlistenFn;
+  }
+
+  return listen<DeemixAlbumDownloadProgress>(
+    "deemix-download-progress",
+    (event) => {
+      handler(event.payload);
+    },
+  );
 }
 
 export async function listenToCoverImportProgress(

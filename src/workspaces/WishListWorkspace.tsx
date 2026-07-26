@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Album,
   CheckCircle2,
+  Download,
   ExternalLink,
   Heart,
   RefreshCw,
@@ -14,12 +15,16 @@ import {
 
 import {
   listWishList,
+  downloadDeemixAlbum,
+  listenToDeemixDownloadProgress,
   openExternalUrl,
   removeWishListItem,
   searchDeemixAlbums,
 } from "../backend";
 import type {
   DeemixAlbumMatch,
+  DeemixAlbumDownloadProgress,
+  DeemixAlbumDownloadSummary,
   DeemixAlbumSearchResponse,
   WishListEntity,
   WishListItem,
@@ -135,6 +140,12 @@ export function WishListWorkspace() {
   const [searchedItem, setSearchedItem] = useState<WishListItem | null>(null);
   const [deemixResults, setDeemixResults] =
     useState<DeemixAlbumSearchResponse | null>(null);
+  const [downloadingAlbumId, setDownloadingAlbumId] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] =
+    useState<DeemixAlbumDownloadProgress | null>(null);
+  const [downloadSummary, setDownloadSummary] =
+    useState<DeemixAlbumDownloadSummary | null>(null);
+  const activeDownloadRequest = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -154,6 +165,23 @@ export function WishListWorkspace() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listenToDeemixDownloadProgress((progress) => {
+      if (progress.requestId === activeDownloadRequest.current) {
+        setDownloadProgress(progress);
+      }
+    }).then((nextUnlisten) => {
+      if (disposed) nextUnlisten();
+      else unlisten = nextUnlisten;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   const grouped = useMemo(
     () => ({
@@ -182,6 +210,8 @@ export function WishListWorkspace() {
     setSearchingId(item.id);
     setSearchedItem(item);
     setDeemixResults(null);
+    setDownloadProgress(null);
+    setDownloadSummary(null);
     setError(null);
     try {
       const response = await searchDeemixAlbums({
@@ -197,6 +227,44 @@ export function WishListWorkspace() {
       );
     } finally {
       setSearchingId(null);
+    }
+  }
+
+  async function downloadMatch(match: DeemixAlbumMatch) {
+    if (downloadingAlbumId) return;
+    const requestId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `download-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    activeDownloadRequest.current = requestId;
+    setDownloadingAlbumId(match.id);
+    setDownloadProgress({
+      requestId,
+      albumId: match.id,
+      phase: "metadata",
+      message: "Preparing the album download…",
+      currentTrack: null,
+      completedTracks: 0,
+      totalTracks: match.trackCount ?? 0,
+    });
+    setDownloadSummary(null);
+    setError(null);
+    try {
+      const summary = await downloadDeemixAlbum({
+        albumId: match.id,
+        requestId,
+      });
+      setDownloadSummary(summary);
+    } catch (downloadError) {
+      setDownloadProgress(null);
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : String(downloadError),
+      );
+    } finally {
+      activeDownloadRequest.current = null;
+      setDownloadingAlbumId(null);
     }
   }
 
@@ -308,9 +376,13 @@ export function WishListWorkspace() {
               title="Close Deemix results"
               aria-label="Close Deemix results"
               onClick={() => {
+                if (downloadingAlbumId) return;
                 setSearchedItem(null);
                 setDeemixResults(null);
+                setDownloadProgress(null);
+                setDownloadSummary(null);
               }}
+              disabled={downloadingAlbumId !== null}
             >
               <X size={16} />
             </button>
@@ -349,14 +421,35 @@ export function WishListWorkspace() {
                       {` · ${match.matchScore}% match`}
                     </small>
                   </div>
-                  <button
-                    className="secondary-button deemix-open-button"
-                    type="button"
-                    onClick={() => void openDeezerMatch(match)}
-                  >
-                    <ExternalLink size={15} />
-                    <span>Open in Deezer</span>
-                  </button>
+                  <div className="deemix-match-actions">
+                    <button
+                      className="primary-button deemix-download-button"
+                      type="button"
+                      disabled={downloadingAlbumId !== null}
+                      aria-label={`Download ${match.title}`}
+                      onClick={() => void downloadMatch(match)}
+                    >
+                      {downloadingAlbumId === match.id ? (
+                        <RefreshCw size={15} className="spin" />
+                      ) : (
+                        <Download size={15} />
+                      )}
+                      <span>
+                        {downloadingAlbumId === match.id
+                          ? "Downloading"
+                          : "Download album"}
+                      </span>
+                    </button>
+                    <button
+                      className="secondary-button deemix-open-button"
+                      type="button"
+                      disabled={downloadingAlbumId !== null}
+                      onClick={() => void openDeezerMatch(match)}
+                    >
+                      <ExternalLink size={15} />
+                      <span>Open in Deezer</span>
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
@@ -365,6 +458,45 @@ export function WishListWorkspace() {
               <Search size={19} aria-hidden="true" />
               <strong>No Deezer album matches found</strong>
               <span>This wish remains on the list for another provider.</span>
+            </div>
+          ) : null}
+
+          {downloadProgress && !downloadSummary ? (
+            <div className="deemix-download-progress" role="status">
+              <div>
+                <RefreshCw size={17} className="spin" aria-hidden="true" />
+                <div>
+                  <strong>{downloadProgress.message}</strong>
+                  {downloadProgress.currentTrack ? (
+                    <span>{downloadProgress.currentTrack}</span>
+                  ) : null}
+                </div>
+                {downloadProgress.totalTracks > 0 ? (
+                  <small>
+                    {downloadProgress.completedTracks}/{downloadProgress.totalTracks}
+                  </small>
+                ) : null}
+              </div>
+              <progress
+                aria-label="Deemix album download progress"
+                max={Math.max(downloadProgress.totalTracks, 1)}
+                value={downloadProgress.completedTracks}
+              />
+            </div>
+          ) : null}
+
+          {downloadSummary ? (
+            <div className="deemix-download-complete" role="status">
+              <CheckCircle2 size={19} aria-hidden="true" />
+              <div>
+                <strong>
+                  Downloaded and tagged {downloadSummary.trackCount} tracks
+                </strong>
+                <span>{downloadSummary.destinationPath}</span>
+                <small>
+                  Cover embedded and saved as {downloadSummary.coverPath.split(/[\\/]/).pop()}
+                </small>
+              </div>
             </div>
           ) : null}
         </section>

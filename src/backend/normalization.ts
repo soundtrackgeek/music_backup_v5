@@ -1,6 +1,8 @@
 import type {
   AppSettings,
   CountryFlagDisplay,
+  DeemixDownloadOrganization,
+  DeemixDownloadQuality,
   LeftSidebarMode,
   RightSidebarMode,
 } from "../types";
@@ -14,6 +16,9 @@ export const defaultMusicBrainzCachePath =
   "MusicBrainz/musicbrainz_cache.db";
 export const defaultMusicBrainzOverlaySyncPath = "";
 export const defaultDeemixDownloadPath = "";
+export const defaultDeemixDownloadQuality: DeemixDownloadQuality = "mp3_320";
+export const defaultDeemixDownloadOrganization: DeemixDownloadOrganization =
+  "flat_artist_album_year";
 
 export function normalizeSettings(
   settings: Partial<AppSettings>,
@@ -56,6 +61,12 @@ export function normalizeSettings(
       defaultBillboardSinglesSourcePath,
     ),
     deemixDownloadPath: normalizeOptionalPath(settings.deemixDownloadPath),
+    deemixDownloadQuality: normalizeDeemixDownloadQuality(
+      settings.deemixDownloadQuality,
+    ),
+    deemixDownloadOrganization: normalizeDeemixDownloadOrganization(
+      settings.deemixDownloadOrganization,
+    ),
     musicBrainzCachePath: normalizeMusicBrainzCachePath(
       settings.musicBrainzCachePath,
     ),
@@ -146,6 +157,23 @@ function normalizeCountryFlagDisplay(value: unknown): CountryFlagDisplay {
 function normalizeImportPath(value: unknown, fallback: string) {
   const normalized = typeof value === "string" ? value.trim() : "";
   return normalized || fallback;
+}
+
+export function normalizeDeemixDownloadQuality(
+  value: unknown,
+): DeemixDownloadQuality {
+  return value === "mp3_128" || value === "mp3_320"
+    ? value
+    : defaultDeemixDownloadQuality;
+}
+
+export function normalizeDeemixDownloadOrganization(
+  value: unknown,
+): DeemixDownloadOrganization {
+  return value === "artist_album_year_folders" ||
+    value === "flat_artist_album_year"
+    ? value
+    : defaultDeemixDownloadOrganization;
 }
 
 function normalizeOptionalPath(value: unknown) {

@@ -99,4 +99,32 @@ describe("DeemixSettingsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     await waitFor(() => expect(onDownloadPathChange).toHaveBeenCalledWith(""));
   });
+
+  it("saves exact quality and album-folder organization preferences", async () => {
+    const onQualityChange = vi.fn().mockResolvedValue(true);
+    const onOrganizationChange = vi.fn().mockResolvedValue(true);
+    render(
+      <DeemixSettingsPanel
+        quality="mp3_320"
+        organization="flat_artist_album_year"
+        onQualityChange={onQualityChange}
+        onOrganizationChange={onOrganizationChange}
+      />,
+    );
+    await screen.findByText("No Deezer ARL configured");
+
+    fireEvent.change(screen.getByLabelText("Deemix audio quality"), {
+      target: { value: "mp3_128" },
+    });
+    await waitFor(() => expect(onQualityChange).toHaveBeenCalledWith("mp3_128"));
+
+    fireEvent.change(screen.getByLabelText("Deemix folder organization"), {
+      target: { value: "artist_album_year_folders" },
+    });
+    await waitFor(() =>
+      expect(onOrganizationChange).toHaveBeenCalledWith(
+        "artist_album_year_folders",
+      ),
+    );
+  });
 });

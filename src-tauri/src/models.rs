@@ -232,6 +232,10 @@ pub struct AppSettings {
     pub billboard_singles_source_path: String,
     #[serde(default = "default_deemix_download_path")]
     pub deemix_download_path: String,
+    #[serde(default = "default_deemix_download_quality")]
+    pub deemix_download_quality: String,
+    #[serde(default = "default_deemix_download_organization")]
+    pub deemix_download_organization: String,
     #[serde(
         default = "default_musicbrainz_cache_path",
         rename = "musicBrainzCachePath",
@@ -1875,6 +1879,14 @@ fn default_deemix_download_path() -> String {
     String::new()
 }
 
+fn default_deemix_download_quality() -> String {
+    "mp3_320".to_string()
+}
+
+fn default_deemix_download_organization() -> String {
+    "flat_artist_album_year".to_string()
+}
+
 fn default_musicbrainz_cache_path() -> String {
     "MusicBrainz/musicbrainz_cache.db".to_string()
 }
@@ -1913,6 +1925,8 @@ mod tests {
             billboard_source_path: r"D:\Charts\Albums".to_string(),
             billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
             deemix_download_path: r"D:\Music\Incoming".to_string(),
+            deemix_download_quality: "mp3_320".to_string(),
+            deemix_download_organization: "flat_artist_album_year".to_string(),
             musicbrainz_cache_path: r"C:\Sync\musicbrainz_cache.db".to_string(),
             musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3".to_string(),
             musicbrainz_overlay_auto_sync_minutes: 15,
@@ -1958,6 +1972,14 @@ mod tests {
             serialized.get("deemixDownloadPath"),
             Some(&json!(r"D:\Music\Incoming"))
         );
+        assert_eq!(
+            serialized.get("deemixDownloadQuality"),
+            Some(&json!("mp3_320"))
+        );
+        assert_eq!(
+            serialized.get("deemixDownloadOrganization"),
+            Some(&json!("flat_artist_album_year"))
+        );
         assert!(serialized
             .get("musicbrainzOverlayAutoSyncMinutes")
             .is_none());
@@ -1968,6 +1990,8 @@ mod tests {
             "billboardSourcePath": r"D:\Charts\Albums",
             "billboardSinglesSourcePath": r"D:\Charts\Singles",
             "deemixDownloadPath": r"D:\Music\Incoming",
+            "deemixDownloadQuality": "mp3_128",
+            "deemixDownloadOrganization": "artist_album_year_folders",
             "countryFlagDisplay": "flag",
             "musicBrainzCachePath": r"C:\Sync\musicbrainz_cache.db",
             "musicBrainzOverlaySyncPath": r"C:\Sync\musicbrainz-overlay-sync.sqlite3",
@@ -1980,6 +2004,11 @@ mod tests {
         assert_eq!(decoded.billboard_source_path, r"D:\Charts\Albums");
         assert_eq!(decoded.billboard_singles_source_path, r"D:\Charts\Singles");
         assert_eq!(decoded.deemix_download_path, r"D:\Music\Incoming");
+        assert_eq!(decoded.deemix_download_quality, "mp3_128");
+        assert_eq!(
+            decoded.deemix_download_organization,
+            "artist_album_year_folders"
+        );
         assert_eq!(decoded.country_flag_display, "flag");
         assert_eq!(decoded.musicbrainz_overlay_auto_sync_minutes, 15);
         assert_eq!(decoded.update_auto_check_minutes, 30);

@@ -181,6 +181,12 @@ export type RightSidebarMode = "expanded" | "hidden";
 
 export type CountryFlagDisplay = "flagAndName" | "name" | "flag";
 
+export type DeemixDownloadQuality = "mp3_128" | "mp3_320";
+
+export type DeemixDownloadOrganization =
+  | "flat_artist_album_year"
+  | "artist_album_year_folders";
+
 export type AppSettings = {
   backupRetention: number;
   darkMode: boolean;
@@ -192,6 +198,8 @@ export type AppSettings = {
   billboardSourcePath: string;
   billboardSinglesSourcePath: string;
   deemixDownloadPath: string;
+  deemixDownloadQuality: DeemixDownloadQuality;
+  deemixDownloadOrganization: DeemixDownloadOrganization;
   musicBrainzCachePath: string;
   musicBrainzOverlaySyncPath: string;
   musicBrainzOverlayAutoSyncMinutes: number;
@@ -940,6 +948,42 @@ export type DeemixAlbumSearchResponse = {
   total: number;
   matches: DeemixAlbumMatch[];
   searchedAt: string;
+};
+
+export type DeemixAlbumDownloadRequest = {
+  albumId: string;
+  requestId: string;
+};
+
+export type DeemixAlbumDownloadPhase =
+  | "metadata"
+  | "artwork"
+  | "downloading"
+  | "tagging"
+  | "complete"
+  | "failed";
+
+export type DeemixAlbumDownloadProgress = {
+  requestId: string;
+  albumId: string;
+  phase: DeemixAlbumDownloadPhase;
+  message: string;
+  currentTrack: string | null;
+  completedTracks: number;
+  totalTracks: number;
+};
+
+export type DeemixAlbumDownloadSummary = {
+  requestId: string;
+  albumId: string;
+  artist: string;
+  album: string;
+  year: number | null;
+  quality: DeemixDownloadQuality;
+  destinationPath: string;
+  coverPath: string;
+  trackCount: number;
+  completedAt: string;
 };
 
 export type AiConnectionTest = {

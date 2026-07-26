@@ -71,6 +71,8 @@ const DEFAULT_COVER_SOURCE_PATH: &str = "AlbumCovers";
 const DEFAULT_BILLBOARD_SOURCE_PATH: &str = "CSV";
 const DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES";
 const DEFAULT_DEEMIX_DOWNLOAD_PATH: &str = "";
+const DEFAULT_DEEMIX_DOWNLOAD_QUALITY: &str = "mp3_320";
+const DEFAULT_DEEMIX_DOWNLOAD_ORGANIZATION: &str = "flat_artist_album_year";
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH: &str = "";
 const DEFAULT_COUNTRY_FLAG_DISPLAY: &str = "flagAndName";
@@ -357,7 +359,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_twenty_nine_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -702,6 +704,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             billboard_source_path TEXT NOT NULL DEFAULT 'CSV',
             billboard_singles_source_path TEXT NOT NULL DEFAULT 'CSV_SINGLES',
             deemix_download_path TEXT NOT NULL DEFAULT '',
+            deemix_download_quality TEXT NOT NULL DEFAULT 'mp3_320',
+            deemix_download_organization TEXT NOT NULL DEFAULT 'flat_artist_album_year',
             musicbrainz_cache_path TEXT NOT NULL DEFAULT 'MusicBrainz/musicbrainz_cache.db',
             musicbrainz_overlay_sync_path TEXT NOT NULL DEFAULT '',
             musicbrainz_overlay_auto_sync_minutes INTEGER NOT NULL DEFAULT 0,
@@ -1091,7 +1095,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 29;
+        PRAGMA user_version = 30;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -1316,6 +1320,20 @@ fn ensure_app_settings_deemix_columns(conn: &Connection) -> Result<()> {
             "ALTER TABLE app_settings ADD COLUMN deemix_download_path TEXT NOT NULL DEFAULT '';",
         )
         .context("Could not add app_settings.deemix_download_path")?;
+    }
+
+    if !schema_column_exists(conn, "app_settings", "deemix_download_quality")? {
+        conn.execute_batch(
+            "ALTER TABLE app_settings ADD COLUMN deemix_download_quality TEXT NOT NULL DEFAULT 'mp3_320';",
+        )
+        .context("Could not add app_settings.deemix_download_quality")?;
+    }
+
+    if !schema_column_exists(conn, "app_settings", "deemix_download_organization")? {
+        conn.execute_batch(
+            "ALTER TABLE app_settings ADD COLUMN deemix_download_organization TEXT NOT NULL DEFAULT 'flat_artist_album_year';",
+        )
+        .context("Could not add app_settings.deemix_download_organization")?;
     }
 
     Ok(())
@@ -14351,6 +14369,33 @@ mod tests {
     }
 
     #[test]
+    fn schema_thirty_adds_deemix_download_preferences() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            ALTER TABLE app_settings DROP COLUMN deemix_download_quality;
+            ALTER TABLE app_settings DROP COLUMN deemix_download_organization;
+            PRAGMA user_version = 29;
+            ",
+        )
+        .expect("simulate schema twenty-nine settings");
+
+        migrate(&conn).expect("migrate current schema");
+
+        let preferences: (String, String) = conn
+            .query_row(
+                "SELECT deemix_download_quality, deemix_download_organization FROM app_settings WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read default Deemix preferences");
+        assert_eq!(preferences.0, "mp3_320");
+        assert_eq!(preferences.1, "flat_artist_album_year");
+    }
+
+    #[test]
     fn saves_lists_and_deletes_typed_luna_snapshots() {
         let conn = seeded_connection();
         conn.execute(
@@ -15025,6 +15070,8 @@ mod tests {
                 billboard_source_path: r"D:\Charts\Albums".to_string(),
                 billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
                 deemix_download_path: r"D:\Music\Incoming".to_string(),
+                deemix_download_quality: "mp3_128".to_string(),
+                deemix_download_organization: "artist_album_year_folders".to_string(),
                 musicbrainz_cache_path: "MusicBrainz/custom-cache.db".to_string(),
                 musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
                     .to_string(),
@@ -15048,6 +15095,11 @@ mod tests {
         assert_eq!(saved.billboard_source_path, r"D:\Charts\Albums");
         assert_eq!(saved.billboard_singles_source_path, r"D:\Charts\Singles");
         assert_eq!(saved.deemix_download_path, r"D:\Music\Incoming");
+        assert_eq!(saved.deemix_download_quality, "mp3_128");
+        assert_eq!(
+            saved.deemix_download_organization,
+            "artist_album_year_folders"
+        );
         assert_eq!(saved.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
         assert_eq!(
             saved.musicbrainz_overlay_sync_path,
@@ -15079,6 +15131,11 @@ mod tests {
         assert_eq!(loaded.billboard_source_path, r"D:\Charts\Albums");
         assert_eq!(loaded.billboard_singles_source_path, r"D:\Charts\Singles");
         assert_eq!(loaded.deemix_download_path, r"D:\Music\Incoming");
+        assert_eq!(loaded.deemix_download_quality, "mp3_128");
+        assert_eq!(
+            loaded.deemix_download_organization,
+            "artist_album_year_folders"
+        );
         assert_eq!(loaded.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
         assert_eq!(
             loaded.musicbrainz_overlay_sync_path,

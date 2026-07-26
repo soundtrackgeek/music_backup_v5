@@ -5,6 +5,7 @@ mod ai;
 mod covers;
 mod db;
 mod deemix;
+mod deemix_download;
 mod external_discovery;
 mod importer;
 mod models;
@@ -183,6 +184,20 @@ async fn search_deemix_albums(
         .await
         .map_err(|error| format!("Deemix album search task failed: {error}"))?
         .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn download_deemix_album(
+    app: AppHandle,
+    input: deemix_download::DeemixAlbumDownloadRequest,
+) -> Result<deemix_download::DeemixAlbumDownloadSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        deemix_download::download_album_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Deemix album download task failed: {error}"))?
+    .map_err(|error| error.to_string())
 }
 
 #[cfg(not(test))]
@@ -1028,6 +1043,7 @@ pub fn run() {
             delete_deemix_arl,
             test_deemix_connection,
             search_deemix_albums,
+            download_deemix_album,
             compile_natural_language_query,
             ask_current_view,
             research_music,

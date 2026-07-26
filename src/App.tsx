@@ -14995,8 +14995,16 @@ export default function App() {
               <SettingsSection id="providers">
                 <DeemixSettingsPanel
                   downloadPath={settings.deemixDownloadPath}
+                  quality={settings.deemixDownloadQuality}
+                  organization={settings.deemixDownloadOrganization}
                   onDownloadPathChange={(path) =>
                     saveAppSettings({ deemixDownloadPath: path })
+                  }
+                  onQualityChange={(quality) =>
+                    saveAppSettings({ deemixDownloadQuality: quality })
+                  }
+                  onOrganizationChange={(organization) =>
+                    saveAppSettings({ deemixDownloadOrganization: organization })
                   }
                 />
               </SettingsSection>

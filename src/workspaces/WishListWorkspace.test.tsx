@@ -4,12 +4,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WishListWorkspace } from "./WishListWorkspace";
 
 const listWishList = vi.fn();
+const downloadDeemixAlbum = vi.fn();
+const listenToDeemixDownloadProgress = vi.fn();
 const openExternalUrl = vi.fn();
 const removeWishListItem = vi.fn();
 const searchDeemixAlbums = vi.fn();
 
 vi.mock("../backend", () => ({
+  downloadDeemixAlbum: (...args: unknown[]) => downloadDeemixAlbum(...args),
   listWishList: (...args: unknown[]) => listWishList(...args),
+  listenToDeemixDownloadProgress: (...args: unknown[]) =>
+    listenToDeemixDownloadProgress(...args),
   openExternalUrl: (...args: unknown[]) => openExternalUrl(...args),
   removeWishListItem: (...args: unknown[]) => removeWishListItem(...args),
   searchDeemixAlbums: (...args: unknown[]) => searchDeemixAlbums(...args),
@@ -18,6 +23,7 @@ vi.mock("../backend", () => ({
 describe("WishListWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    listenToDeemixDownloadProgress.mockResolvedValue(() => undefined);
     listWishList.mockResolvedValue({
       autoRemovedCount: 1,
       items: [
@@ -65,6 +71,18 @@ describe("WishListWorkspace", () => {
           matchLevel: "exact",
         },
       ],
+    });
+    downloadDeemixAlbum.mockResolvedValue({
+      requestId: "request-1",
+      albumId: "123",
+      artist: "Helmet",
+      album: "Meantime",
+      year: 1992,
+      quality: "mp3_320",
+      destinationPath: "D:\\Music\\Helmet - Meantime (1992)",
+      coverPath: "D:\\Music\\Helmet - Meantime (1992)\\cover.jpg",
+      trackCount: 10,
+      completedAt: "2026-07-26T12:30:00Z",
     });
   });
 
@@ -115,5 +133,27 @@ describe("WishListWorkspace", () => {
         "https://www.deezer.com/album/123",
       );
     });
+  });
+
+  it("downloads an exact result and reports its tagged destination", async () => {
+    render(<WishListWorkspace />);
+    await screen.findByText("Stereolab");
+    fireEvent.click(screen.getByLabelText("Search Meantime with Deemix"));
+    await screen.findByText(/100% match/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Download Meantime" }));
+    await waitFor(() => {
+      expect(downloadDeemixAlbum).toHaveBeenCalledWith({
+        albumId: "123",
+        requestId: expect.any(String),
+      });
+    });
+    expect(
+      await screen.findByText("Downloaded and tagged 10 tracks"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("D:\\Music\\Helmet - Meantime (1992)"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/cover.jpg/)).toBeInTheDocument();
   });
 });

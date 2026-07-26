@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.81.0] - 2026-07-26
+### Added
+- Added direct Deemix album downloads from Wish List matches with authenticated Deezer media authorization, exact MP3 320/128 quality selection, striped-stream decryption, live per-track progress, and a completed destination summary without requiring the Deemix GUI or a separate service.
+- Added comprehensive ID3v2.4 tagging for title, track artists, album artist, album, publisher, genres, release date/year, disc and track numbers/totals, ISRC, copyright, duration, composer/production credits, barcode, explicit status, and Deezer source identifiers.
+- Added embedded front-cover artwork plus a sibling `cover.jpg` or `cover.png`, determined from the verified image content.
+- Added persisted folder-organization preferences for flat `Artist - Album (Year)` folders and nested `Artist/Album (Year)` folders, with the flat layout as the default and SQLite schema version 30.
+
+### Changed
+- Deemix album jobs now write into an app-owned staging folder, sanitize generated Windows names, reject unexpected CDN hosts, avoid silent bitrate fallback and existing-folder overwrite, and publish the completed album folder only after every track is downloaded and tagged.
+- Bumped synchronized app metadata to `0.81.0`.
+
 ## [0.80.0] - 2026-07-26
 ### Added
 - Added a Providers settings section with Deemix ARL validation, secure Windows Credential Manager storage, connection testing, account capability status, credential replacement, and removal without returning the ARL to the frontend.
