@@ -900,11 +900,43 @@ export type AddWishListItemRequest = {
 export type WishListItem = AddWishListItemRequest & {
   id: number;
   createdAt: string;
+  downloadedDeezerAlbumId: string | null;
+  downloadedPath: string | null;
+  downloadedAt: string | null;
 };
 
 export type WishListResponse = {
   items: WishListItem[];
   autoRemovedCount: number;
+};
+
+export type WishListArtistAlbumDiscoveryRequest = {
+  wishListItemId: number;
+};
+
+export type WishListArtistAlbumDiscoveryRow = {
+  releaseGroupId: string;
+  title: string;
+  year: number | null;
+  secondaryTypes: string[];
+  musicbrainzUrl: string;
+  deemixMatches: DeemixAlbumMatch[];
+  deemixError: string | null;
+  downloadedDeezerAlbumId: string | null;
+  downloadedPath: string | null;
+  downloadedAt: string | null;
+};
+
+export type WishListArtistAlbumDiscoveryResponse = {
+  wishListItemId: number;
+  artist: string;
+  musicbrainzId: string;
+  officialAlbumCount: number;
+  searchedAlbumCount: number;
+  matchedAlbumCount: number;
+  truncated: boolean;
+  albums: WishListArtistAlbumDiscoveryRow[];
+  searchedAt: string;
 };
 
 export type DeemixCredentialSource = "windowsCredentialManager" | "none";
@@ -941,6 +973,8 @@ export type DeemixAlbumMatch = {
   deezerUrl: string;
   matchScore: number;
   matchLevel: "exact" | "likely" | "possible";
+  downloadedAt: string | null;
+  downloadedPath: string | null;
 };
 
 export type DeemixAlbumSearchResponse = {
@@ -953,6 +987,28 @@ export type DeemixAlbumSearchResponse = {
 export type DeemixAlbumDownloadRequest = {
   albumId: string;
   requestId: string;
+  wishListItemId: number | null;
+  musicbrainzReleaseGroupId: string | null;
+  expectedArtist: string;
+  expectedAlbum: string;
+  expectedYear: number | null;
+  allowDuplicate: boolean;
+};
+
+export type DeemixAlbumDownloadPreflightRequest = {
+  albumId: string;
+  wishListItemId: number | null;
+  musicbrainzReleaseGroupId: string | null;
+  artist: string;
+  album: string;
+  year: number | null;
+};
+
+export type DeemixAlbumDownloadPreflight = {
+  alreadyDownloaded: boolean;
+  destinationPath: string | null;
+  downloadedAt: string | null;
+  message: string;
 };
 
 export type DeemixAlbumDownloadPhase =

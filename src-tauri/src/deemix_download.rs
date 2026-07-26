@@ -7,6 +7,7 @@ use cookie_store::CookieStore;
 use id3::frame::{ExtendedText, InvolvedPeopleList, InvolvedPeopleListItem, Picture, PictureType};
 use id3::{Tag, TagLike, Version};
 use md5::{Digest, Md5};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -23,7 +24,7 @@ use zeroize::Zeroizing;
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_MEDIA_URL: &str = "https://media.deezer.com/v1/get_url";
 const DEEMIX_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.81.1";
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.82.0";
 const DOWNLOAD_EVENT: &str = "deemix-download-progress";
 const STREAM_CHUNK_SIZE: usize = 2048;
 const MAX_ARTWORK_BYTES: u64 = 20 * 1024 * 1024;
@@ -36,6 +37,39 @@ static DOWNLOAD_LOCK: Mutex<()> = Mutex::new(());
 pub struct DeemixAlbumDownloadRequest {
     pub album_id: String,
     pub request_id: String,
+    #[serde(default)]
+    pub wish_list_item_id: Option<i64>,
+    #[serde(default)]
+    pub musicbrainz_release_group_id: Option<String>,
+    #[serde(default)]
+    pub expected_artist: String,
+    #[serde(default)]
+    pub expected_album: String,
+    pub expected_year: Option<i32>,
+    #[serde(default)]
+    pub allow_duplicate: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeemixAlbumDownloadPreflightRequest {
+    pub album_id: String,
+    #[serde(default)]
+    pub wish_list_item_id: Option<i64>,
+    #[serde(default)]
+    pub musicbrainz_release_group_id: Option<String>,
+    pub artist: String,
+    pub album: String,
+    pub year: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DeemixAlbumDownloadPreflight {
+    pub already_downloaded: bool,
+    pub destination_path: Option<String>,
+    pub downloaded_at: Option<String>,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -63,6 +97,12 @@ pub struct DeemixAlbumDownloadSummary {
     pub cover_path: String,
     pub track_count: usize,
     pub completed_at: String,
+}
+
+#[derive(Debug, Clone)]
+struct KnownDownload {
+    destination_path: String,
+    downloaded_at: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,6 +195,167 @@ struct Artwork {
     extension: &'static str,
 }
 
+fn known_download_for_connection(
+    conn: &Connection,
+    album_id: &str,
+    wish_list_item_id: Option<i64>,
+    musicbrainz_release_group_id: Option<&str>,
+) -> Result<Option<KnownDownload>> {
+    let mut statement = conn.prepare(
+        "
+        SELECT destination_path, completed_at
+        FROM deemix_downloads
+        WHERE deezer_album_id = ?1
+           OR (?2 IS NOT NULL AND musicbrainz_release_group_id = ?2)
+           OR (?2 IS NULL AND ?3 IS NOT NULL AND wish_list_item_id = ?3)
+        ORDER BY completed_at DESC, id DESC
+        ",
+    )?;
+    let rows = statement.query_map(
+        params![album_id, musicbrainz_release_group_id, wish_list_item_id],
+        |row| {
+            Ok(KnownDownload {
+                destination_path: row.get(0)?,
+                downloaded_at: row.get(1)?,
+            })
+        },
+    )?;
+    for row in rows {
+        let download = row?;
+        if Path::new(&download.destination_path).is_dir() {
+            return Ok(Some(download));
+        }
+    }
+    Ok(None)
+}
+
+fn record_download_receipt(
+    conn: &Connection,
+    input: &DeemixAlbumDownloadPreflightRequest,
+    quality: &str,
+    destination_path: &Path,
+    cover_path: Option<&Path>,
+    track_count: usize,
+    completed_at: &str,
+    source: &str,
+) -> Result<()> {
+    conn.execute(
+        "
+        INSERT INTO deemix_downloads (
+            deezer_album_id, wish_list_item_id, musicbrainz_release_group_id,
+            artist, album, year, quality, destination_path, cover_path,
+            track_count, completed_at, source
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+        ON CONFLICT(deezer_album_id, destination_path) DO UPDATE SET
+            wish_list_item_id = COALESCE(excluded.wish_list_item_id, deemix_downloads.wish_list_item_id),
+            musicbrainz_release_group_id = COALESCE(excluded.musicbrainz_release_group_id, deemix_downloads.musicbrainz_release_group_id),
+            artist = excluded.artist,
+            album = excluded.album,
+            year = excluded.year,
+            quality = excluded.quality,
+            cover_path = COALESCE(excluded.cover_path, deemix_downloads.cover_path),
+            track_count = MAX(excluded.track_count, deemix_downloads.track_count),
+            completed_at = excluded.completed_at,
+            source = excluded.source
+        ",
+        params![
+            &input.album_id,
+            input.wish_list_item_id,
+            input.musicbrainz_release_group_id.as_deref(),
+            &input.artist,
+            &input.album,
+            input.year,
+            quality,
+            destination_path.to_string_lossy().as_ref(),
+            cover_path.map(|path| path.to_string_lossy().into_owned()),
+            track_count,
+            completed_at,
+            source,
+        ],
+    )
+    .context("Could not record the Deemix download receipt")?;
+    Ok(())
+}
+
+fn preflight_for_connection(
+    conn: &Connection,
+    root: &Path,
+    organization: &str,
+    quality: &str,
+    input: &DeemixAlbumDownloadPreflightRequest,
+    record_detected: bool,
+) -> Result<DeemixAlbumDownloadPreflight> {
+    if let Some(download) = known_download_for_connection(
+        conn,
+        &input.album_id,
+        input.wish_list_item_id,
+        input.musicbrainz_release_group_id.as_deref(),
+    )? {
+        return Ok(DeemixAlbumDownloadPreflight {
+            already_downloaded: true,
+            message: format!(
+                "This album is already in the configured download folder: {}",
+                download.destination_path
+            ),
+            destination_path: Some(download.destination_path),
+            downloaded_at: Some(download.downloaded_at),
+        });
+    }
+
+    let expected =
+        destination_path_from_parts(root, &input.artist, &input.album, input.year, organization)?;
+    if expected.is_dir() {
+        let detected_at = Utc::now().to_rfc3339();
+        if record_detected {
+            record_download_receipt(
+                conn,
+                input,
+                quality,
+                &expected,
+                None,
+                0,
+                &detected_at,
+                "detected",
+            )?;
+        }
+        return Ok(DeemixAlbumDownloadPreflight {
+            already_downloaded: true,
+            message: format!(
+                "This album is already in the configured download folder: {}",
+                expected.display()
+            ),
+            destination_path: Some(expected.to_string_lossy().into_owned()),
+            downloaded_at: Some(detected_at),
+        });
+    }
+
+    Ok(DeemixAlbumDownloadPreflight {
+        already_downloaded: false,
+        destination_path: None,
+        downloaded_at: None,
+        message: "This album is not currently in the configured download folder.".to_string(),
+    })
+}
+
+#[cfg(not(test))]
+pub fn preflight_album_for_app(
+    app: &AppHandle,
+    mut input: DeemixAlbumDownloadPreflightRequest,
+) -> Result<DeemixAlbumDownloadPreflight> {
+    validate_preflight_request(&mut input)?;
+    let settings = crate::db::settings_for_app(app)?;
+    let root = validate_download_root(&settings.deemix_download_path)?;
+    let (conn, _) = crate::db::open(app)?;
+    preflight_for_connection(
+        &conn,
+        &root,
+        &settings.deemix_download_organization,
+        &settings.deemix_download_quality,
+        &input,
+        true,
+    )
+}
+
 #[cfg(not(test))]
 pub fn download_album_for_app(
     app: &AppHandle,
@@ -167,6 +368,23 @@ pub fn download_album_for_app(
     let settings = crate::db::settings_for_app(app)?;
     let quality = DownloadQuality::from_setting(&settings.deemix_download_quality);
     let root = validate_download_root(&settings.deemix_download_path)?;
+    let preflight_input = preflight_request_from_download(&input);
+    let (preflight_conn, _) = crate::db::open(app)?;
+    let preflight = preflight_for_connection(
+        &preflight_conn,
+        &root,
+        &settings.deemix_download_organization,
+        quality.setting_value(),
+        &preflight_input,
+        true,
+    )?;
+    drop(preflight_conn);
+    if preflight.already_downloaded && !input.allow_duplicate {
+        bail!(format!(
+            "{} Use Download another copy if you intentionally want a second folder.",
+            preflight.message
+        ));
+    }
 
     emit_progress(
         app,
@@ -185,7 +403,12 @@ pub fn download_album_for_app(
         );
     }
     let album = fetch_album(&mut session, &input.album_id, quality)?;
-    let destination = destination_path(&root, &album, &settings.deemix_download_organization)?;
+    let base_destination = destination_path(&root, &album, &settings.deemix_download_organization)?;
+    let destination = if input.allow_duplicate {
+        next_available_destination(&base_destination)?
+    } else {
+        base_destination
+    };
     if destination.exists() {
         bail!(
             "The destination album folder already exists: {}. Existing files were not changed.",
@@ -230,6 +453,25 @@ pub fn download_album_for_app(
 
     match result {
         Ok(summary) => {
+            let receipt_input = DeemixAlbumDownloadPreflightRequest {
+                album_id: summary.album_id.clone(),
+                wish_list_item_id: input.wish_list_item_id,
+                musicbrainz_release_group_id: input.musicbrainz_release_group_id.clone(),
+                artist: summary.artist.clone(),
+                album: summary.album.clone(),
+                year: summary.year,
+            };
+            let (conn, _) = crate::db::open(app)?;
+            record_download_receipt(
+                &conn,
+                &receipt_input,
+                &summary.quality,
+                Path::new(&summary.destination_path),
+                Some(Path::new(&summary.cover_path)),
+                summary.track_count,
+                &summary.completed_at,
+                "download",
+            )?;
             emit_progress(
                 app,
                 &input,
@@ -348,17 +590,15 @@ fn emit_progress(
 }
 
 fn validate_request(input: &mut DeemixAlbumDownloadRequest) -> Result<()> {
-    input.album_id = input.album_id.trim().to_string();
+    let mut preflight = preflight_request_from_download(input);
+    validate_preflight_request(&mut preflight)?;
+    input.album_id = preflight.album_id;
+    input.wish_list_item_id = preflight.wish_list_item_id;
+    input.musicbrainz_release_group_id = preflight.musicbrainz_release_group_id;
+    input.expected_artist = preflight.artist;
+    input.expected_album = preflight.album;
+    input.expected_year = preflight.year;
     input.request_id = input.request_id.trim().to_string();
-    if input.album_id.is_empty()
-        || input.album_id.len() > 20
-        || !input
-            .album_id
-            .chars()
-            .all(|character| character.is_ascii_digit())
-    {
-        bail!("The selected Deezer album ID is invalid.");
-    }
     if input.request_id.is_empty()
         || input.request_id.len() > 64
         || !input
@@ -369,6 +609,67 @@ fn validate_request(input: &mut DeemixAlbumDownloadRequest) -> Result<()> {
         bail!("The Deemix download request ID is invalid.");
     }
     Ok(())
+}
+
+fn preflight_request_from_download(
+    input: &DeemixAlbumDownloadRequest,
+) -> DeemixAlbumDownloadPreflightRequest {
+    DeemixAlbumDownloadPreflightRequest {
+        album_id: input.album_id.clone(),
+        wish_list_item_id: input.wish_list_item_id,
+        musicbrainz_release_group_id: input.musicbrainz_release_group_id.clone(),
+        artist: input.expected_artist.clone(),
+        album: input.expected_album.clone(),
+        year: input.expected_year,
+    }
+}
+
+fn validate_preflight_request(input: &mut DeemixAlbumDownloadPreflightRequest) -> Result<()> {
+    input.album_id = input.album_id.trim().to_string();
+    if input.album_id.is_empty()
+        || input.album_id.len() > 20
+        || !input
+            .album_id
+            .chars()
+            .all(|character| character.is_ascii_digit())
+    {
+        bail!("The selected Deezer album ID is invalid.");
+    }
+    if input.wish_list_item_id.is_some_and(|id| id <= 0) {
+        bail!("The Wish List download context is invalid.");
+    }
+    input.musicbrainz_release_group_id = input
+        .musicbrainz_release_group_id
+        .take()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| !value.is_empty());
+    if input
+        .musicbrainz_release_group_id
+        .as_deref()
+        .is_some_and(|value| !is_uuid(value))
+    {
+        bail!("The MusicBrainz release-group context is invalid.");
+    }
+    input.artist = input.artist.trim().chars().take(300).collect();
+    input.album = input.album.trim().chars().take(300).collect();
+    if input.artist.is_empty() || input.album.is_empty() {
+        bail!("The selected album needs an artist and title for the download preflight.");
+    }
+    if input
+        .year
+        .is_some_and(|year| !(1000..=3000).contains(&year))
+    {
+        bail!("The selected album year is outside the supported range.");
+    }
+    Ok(())
+}
+
+fn is_uuid(value: &str) -> bool {
+    value.len() == 36
+        && value.chars().enumerate().all(|(index, character)| {
+            matches!(index, 8 | 13 | 18 | 23) && character == '-'
+                || !matches!(index, 8 | 13 | 18 | 23) && character.is_ascii_hexdigit()
+        })
 }
 
 #[cfg(not(test))]
@@ -974,12 +1275,19 @@ fn write_mp3_tags(
 }
 
 fn destination_path(root: &Path, album: &AlbumMetadata, organization: &str) -> Result<PathBuf> {
-    let artist = safe_windows_segment(&album.artist);
-    let album_name = safe_windows_segment(&album.title);
-    let year_suffix = album
-        .year
-        .map(|year| format!(" ({year})"))
-        .unwrap_or_default();
+    destination_path_from_parts(root, &album.artist, &album.title, album.year, organization)
+}
+
+fn destination_path_from_parts(
+    root: &Path,
+    artist: &str,
+    album: &str,
+    year: Option<i32>,
+    organization: &str,
+) -> Result<PathBuf> {
+    let artist = safe_windows_segment(artist);
+    let album_name = safe_windows_segment(album);
+    let year_suffix = year.map(|year| format!(" ({year})")).unwrap_or_default();
     let destination = if organization == "artist_album_year_folders" {
         root.join(artist).join(format!("{album_name}{year_suffix}"))
     } else {
@@ -989,6 +1297,29 @@ fn destination_path(root: &Path, album: &AlbumMetadata, organization: &str) -> R
         bail!("The generated album path is too long for reliable Windows file handling.");
     }
     Ok(destination)
+}
+
+fn next_available_destination(base: &Path) -> Result<PathBuf> {
+    if !base.exists() {
+        return Ok(base.to_path_buf());
+    }
+    let parent = base
+        .parent()
+        .context("The generated album destination has no parent folder")?;
+    let name = base
+        .file_name()
+        .and_then(|value| value.to_str())
+        .context("The generated album destination name is invalid")?;
+    for copy_number in 2..=999 {
+        let candidate = parent.join(format!("{name} [{copy_number}]"));
+        if candidate.to_string_lossy().chars().count() > 245 {
+            bail!("The generated duplicate album path is too long for reliable Windows file handling.");
+        }
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    bail!("Could not choose a free folder name for another copy of this album.")
 }
 
 fn unique_track_filename(
@@ -1292,12 +1623,24 @@ mod tests {
         let mut valid = DeemixAlbumDownloadRequest {
             album_id: " 240766 ".to_string(),
             request_id: "request-123_abc".to_string(),
+            wish_list_item_id: Some(12),
+            musicbrainz_release_group_id: Some("f3cd5c58-4f20-3c84-8d7f-cf12e6ba4ec8".to_string()),
+            expected_artist: "Helmet".to_string(),
+            expected_album: "Meantime".to_string(),
+            expected_year: Some(1992),
+            allow_duplicate: false,
         };
         validate_request(&mut valid).expect("valid request");
         assert_eq!(valid.album_id, "240766");
         let mut invalid = DeemixAlbumDownloadRequest {
             album_id: "240766".to_string(),
             request_id: "../escape".to_string(),
+            wish_list_item_id: None,
+            musicbrainz_release_group_id: None,
+            expected_artist: "Helmet".to_string(),
+            expected_album: "Meantime".to_string(),
+            expected_year: Some(1992),
+            allow_duplicate: false,
         };
         assert!(validate_request(&mut invalid).is_err());
     }
@@ -1464,6 +1807,116 @@ mod tests {
             .expect("nested"),
             PathBuf::from(r"D:\Downloads\Helmet\Meantime (1992)")
         );
+    }
+
+    #[test]
+    fn preflight_detects_and_records_an_existing_album_folder() {
+        let root = std::env::temp_dir().join(format!(
+            "music-library-deemix-preflight-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        fs::create_dir_all(&root).expect("create preflight root");
+        let expected = destination_path_from_parts(
+            &root,
+            "Helmet",
+            "Meantime",
+            Some(1992),
+            "flat_artist_album_year",
+        )
+        .expect("expected destination");
+        fs::create_dir_all(&expected).expect("create existing album folder");
+
+        let conn = Connection::open_in_memory().expect("open database");
+        crate::db::configure(&conn).expect("configure database");
+        crate::db::migrate(&conn).expect("migrate database");
+        let input = DeemixAlbumDownloadPreflightRequest {
+            album_id: "240766".to_string(),
+            wish_list_item_id: Some(7),
+            musicbrainz_release_group_id: Some("f3cd5c58-4f20-3c84-8d7f-cf12e6ba4ec8".to_string()),
+            artist: "Helmet".to_string(),
+            album: "Meantime".to_string(),
+            year: Some(1992),
+        };
+        let result = preflight_for_connection(
+            &conn,
+            &root,
+            "flat_artist_album_year",
+            "mp3_320",
+            &input,
+            true,
+        )
+        .expect("run preflight");
+
+        assert!(result.already_downloaded);
+        assert_eq!(result.destination_path.as_deref(), expected.to_str());
+        let receipt_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM deemix_downloads", [], |row| {
+                row.get(0)
+            })
+            .expect("count detected receipt");
+        assert_eq!(receipt_count, 1);
+        fs::remove_dir_all(&root).expect("remove preflight root");
+    }
+
+    #[test]
+    fn chooses_a_numbered_folder_for_another_copy() {
+        let root = std::env::temp_dir().join(format!(
+            "music-library-deemix-duplicate-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        fs::create_dir_all(&root).expect("create duplicate root");
+        let base = root.join("Helmet - Meantime (1992)");
+        fs::create_dir_all(&base).expect("create base album folder");
+        fs::create_dir_all(root.join("Helmet - Meantime (1992) [2]"))
+            .expect("create second album folder");
+
+        assert_eq!(
+            next_available_destination(&base).expect("duplicate destination"),
+            root.join("Helmet - Meantime (1992) [3]")
+        );
+        fs::remove_dir_all(&root).expect("remove duplicate root");
+    }
+
+    #[test]
+    fn artist_wish_receipts_do_not_mark_other_release_groups_downloaded() {
+        let root = std::env::temp_dir().join(format!(
+            "music-library-deemix-artist-receipt-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        let downloaded = root.join("Pet Shop Boys - Please (1986)");
+        fs::create_dir_all(&downloaded).expect("create downloaded album folder");
+        let conn = Connection::open_in_memory().expect("open database");
+        crate::db::configure(&conn).expect("configure database");
+        crate::db::migrate(&conn).expect("migrate database");
+        conn.execute(
+            "
+            INSERT INTO deemix_downloads (
+                deezer_album_id, wish_list_item_id, musicbrainz_release_group_id,
+                artist, album, year, quality, destination_path, track_count,
+                completed_at, source
+            ) VALUES (?1, 9, ?2, 'Pet Shop Boys', 'Please', 1986, 'mp3_320', ?3, 11,
+                '2026-07-26T12:00:00Z', 'download')
+            ",
+            params![
+                "101",
+                "00000000-0000-4000-8000-000000000001",
+                downloaded.to_string_lossy().as_ref()
+            ],
+        )
+        .expect("insert artist album receipt");
+
+        let other = known_download_for_connection(
+            &conn,
+            "102",
+            Some(9),
+            Some("00000000-0000-4000-8000-000000000002"),
+        )
+        .expect("look up other release group");
+        assert!(other.is_none());
+        fs::remove_dir_all(&root).expect("remove artist receipt root");
     }
 
     #[test]

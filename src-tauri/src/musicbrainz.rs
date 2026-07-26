@@ -3250,6 +3250,59 @@ struct RefreshedReleaseGroup {
     status: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct WishListOfficialAlbum {
+    pub release_mbid: String,
+    pub title: String,
+    pub year: Option<i32>,
+    pub secondary_types: Vec<String>,
+}
+
+fn filter_official_album_release_groups(
+    rows: Vec<RefreshedReleaseGroup>,
+    official_ids: &HashSet<String>,
+) -> Vec<WishListOfficialAlbum> {
+    let mut albums = rows
+        .into_iter()
+        .filter(|row| {
+            row.primary_type.eq_ignore_ascii_case("album")
+                && official_ids.contains(&row.release_mbid)
+        })
+        .map(|row| WishListOfficialAlbum {
+            release_mbid: row.release_mbid,
+            title: row.title,
+            year: row.year,
+            secondary_types: row
+                .secondary_types
+                .split(" + ")
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+    albums.sort_by(|left, right| {
+        left.year
+            .unwrap_or(i32::MAX)
+            .cmp(&right.year.unwrap_or(i32::MAX))
+            .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
+            .then_with(|| left.release_mbid.cmp(&right.release_mbid))
+    });
+    albums
+}
+
+#[cfg(not(test))]
+pub(crate) fn official_album_release_groups_for_wishlist(
+    artist_mbid: &str,
+) -> Result<Vec<WishListOfficialAlbum>> {
+    let artist_mbid = required_mbid(Some(artist_mbid))?;
+    let rows = fetch_artist_release_groups(&artist_mbid)?;
+    thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
+    let official_ids = fetch_official_release_group_ids(&artist_mbid)?
+        .context("MusicBrainz could not verify official album releases")?;
+    Ok(filter_official_album_release_groups(rows, &official_ids))
+}
+
 fn empty_discography_response(
     artist_key: String,
     artist_name: String,
@@ -4808,6 +4861,47 @@ fn invalid_status(
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn wish_list_artist_discovery_keeps_only_official_primary_albums() {
+        let rows = vec![
+            RefreshedReleaseGroup {
+                release_mbid: "official-album".to_string(),
+                title: "Actually".to_string(),
+                year: Some(1987),
+                primary_type: "Album".to_string(),
+                secondary_types: String::new(),
+                track_count: None,
+                status: "Official".to_string(),
+            },
+            RefreshedReleaseGroup {
+                release_mbid: "unofficial-album".to_string(),
+                title: "Unauthorized".to_string(),
+                year: Some(1988),
+                primary_type: "Album".to_string(),
+                secondary_types: "Compilation".to_string(),
+                track_count: None,
+                status: "Official".to_string(),
+            },
+            RefreshedReleaseGroup {
+                release_mbid: "official-single".to_string(),
+                title: "West End Girls".to_string(),
+                year: Some(1985),
+                primary_type: "Single".to_string(),
+                secondary_types: String::new(),
+                track_count: None,
+                status: "Official".to_string(),
+            },
+        ];
+        let official_ids =
+            HashSet::from(["official-album".to_string(), "official-single".to_string()]);
+
+        let albums = filter_official_album_release_groups(rows, &official_ids);
+
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].release_mbid, "official-album");
+        assert_eq!(albums[0].title, "Actually");
+    }
 
     #[test]
     fn reports_valid_cache_with_warning_examples() {

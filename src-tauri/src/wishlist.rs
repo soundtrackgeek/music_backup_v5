@@ -11,6 +11,7 @@ use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const MAX_TITLE_LENGTH: usize = 300;
 const MAX_ARTIST_LENGTH: usize = 300;
+const MAX_ARTIST_DISCOVERY_ALBUMS: usize = 100;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,6 +39,9 @@ pub struct WishListItem {
     pub musicbrainz_url: Option<String>,
     pub source: String,
     pub created_at: String,
+    pub downloaded_deezer_album_id: Option<String>,
+    pub downloaded_path: Option<String>,
+    pub downloaded_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -45,6 +49,48 @@ pub struct WishListItem {
 pub struct WishListResponse {
     pub items: Vec<WishListItem>,
     pub auto_removed_count: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WishListArtistAlbumDiscoveryRequest {
+    pub wish_list_item_id: i64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WishListArtistAlbumDiscoveryRow {
+    pub release_group_id: String,
+    pub title: String,
+    pub year: Option<i32>,
+    pub secondary_types: Vec<String>,
+    pub musicbrainz_url: String,
+    pub deemix_matches: Vec<crate::deemix::DeemixAlbumMatch>,
+    pub deemix_error: Option<String>,
+    pub downloaded_deezer_album_id: Option<String>,
+    pub downloaded_path: Option<String>,
+    pub downloaded_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WishListArtistAlbumDiscoveryResponse {
+    pub wish_list_item_id: i64,
+    pub artist: String,
+    pub musicbrainz_id: String,
+    pub official_album_count: usize,
+    pub searched_album_count: usize,
+    pub matched_album_count: usize,
+    pub truncated: bool,
+    pub albums: Vec<WishListArtistAlbumDiscoveryRow>,
+    pub searched_at: String,
+}
+
+#[derive(Debug, Clone)]
+struct DownloadReceiptSummary {
+    deezer_album_id: String,
+    destination_path: String,
+    completed_at: String,
 }
 
 #[derive(Debug, Default)]
@@ -178,12 +224,33 @@ fn item_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WishListItem> {
         musicbrainz_url: row.get(6)?,
         source: row.get(7)?,
         created_at: row.get(8)?,
+        downloaded_deezer_album_id: row.get(9)?,
+        downloaded_path: row.get(10)?,
+        downloaded_at: row.get(11)?,
     })
 }
 
 fn load_item(conn: &Connection, id: i64) -> Result<WishListItem> {
     conn.query_row(
-        "SELECT id, entity, title, artist, year, musicbrainz_id, musicbrainz_url, source, created_at FROM wish_list_items WHERE id = ?1",
+        "
+        SELECT wish.id, wish.entity, wish.title, wish.artist, wish.year,
+               wish.musicbrainz_id, wish.musicbrainz_url, wish.source, wish.created_at,
+               download.deezer_album_id, download.destination_path, download.completed_at
+        FROM wish_list_items wish
+        LEFT JOIN deemix_downloads download ON download.id = (
+            SELECT latest.id
+            FROM deemix_downloads latest
+            WHERE latest.wish_list_item_id = wish.id
+               OR (
+                    wish.entity = 'album'
+                    AND wish.musicbrainz_id IS NOT NULL
+                    AND latest.musicbrainz_release_group_id = wish.musicbrainz_id
+               )
+            ORDER BY latest.completed_at DESC, latest.id DESC
+            LIMIT 1
+        )
+        WHERE wish.id = ?1
+        ",
         params![id],
         item_from_row,
     )
@@ -192,7 +259,25 @@ fn load_item(conn: &Connection, id: i64) -> Result<WishListItem> {
 
 fn all_items(conn: &Connection) -> Result<Vec<WishListItem>> {
     let mut statement = conn.prepare(
-        "SELECT id, entity, title, artist, year, musicbrainz_id, musicbrainz_url, source, created_at FROM wish_list_items ORDER BY created_at DESC, id DESC",
+        "
+        SELECT wish.id, wish.entity, wish.title, wish.artist, wish.year,
+               wish.musicbrainz_id, wish.musicbrainz_url, wish.source, wish.created_at,
+               download.deezer_album_id, download.destination_path, download.completed_at
+        FROM wish_list_items wish
+        LEFT JOIN deemix_downloads download ON download.id = (
+            SELECT latest.id
+            FROM deemix_downloads latest
+            WHERE latest.wish_list_item_id = wish.id
+               OR (
+                    wish.entity = 'album'
+                    AND wish.musicbrainz_id IS NOT NULL
+                    AND latest.musicbrainz_release_group_id = wish.musicbrainz_id
+               )
+            ORDER BY latest.completed_at DESC, latest.id DESC
+            LIMIT 1
+        )
+        ORDER BY wish.created_at DESC, wish.id DESC
+        ",
     )?;
     let items = statement
         .query_map([], item_from_row)?
@@ -298,6 +383,9 @@ fn add(conn: &Connection, mut input: AddWishListItemRequest) -> Result<WishListI
         musicbrainz_url: input.musicbrainz_url.clone(),
         source: input.source.clone(),
         created_at: String::new(),
+        downloaded_deezer_album_id: None,
+        downloaded_path: None,
+        downloaded_at: None,
     };
     if load_owned_library(conn)?.contains(&proposed) {
         bail!("This item is already in your library.")
@@ -326,6 +414,117 @@ fn add(conn: &Connection, mut input: AddWishListItemRequest) -> Result<WishListI
 fn remove(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM wish_list_items WHERE id = ?1", params![id])?;
     Ok(())
+}
+
+fn download_receipt_for_release(
+    conn: &Connection,
+    release_group_id: &str,
+) -> Result<Option<DownloadReceiptSummary>> {
+    conn.query_row(
+        "
+        SELECT deezer_album_id, destination_path, completed_at
+        FROM deemix_downloads
+        WHERE musicbrainz_release_group_id = ?1
+        ORDER BY completed_at DESC, id DESC
+        LIMIT 1
+        ",
+        params![release_group_id],
+        |row| {
+            Ok(DownloadReceiptSummary {
+                deezer_album_id: row.get(0)?,
+                destination_path: row.get(1)?,
+                completed_at: row.get(2)?,
+            })
+        },
+    )
+    .optional()
+    .context("Could not load the Deemix download receipt")
+}
+
+#[cfg(not(test))]
+pub fn discover_artist_albums_for_app(
+    app: &AppHandle,
+    request: WishListArtistAlbumDiscoveryRequest,
+) -> Result<WishListArtistAlbumDiscoveryResponse> {
+    if request.wish_list_item_id <= 0 {
+        bail!("The Wish List artist selection is invalid.")
+    }
+    let (conn, _) = db::open(app)?;
+    let item = load_item(&conn, request.wish_list_item_id)?;
+    if item.entity != "artist" {
+        bail!("Artist album discovery requires an artist Wish List item.")
+    }
+    let musicbrainz_id = item
+        .musicbrainz_id
+        .clone()
+        .context("This artist has no MusicBrainz ID to verify official albums.")?;
+
+    crate::deemix::validate_search_connection()?;
+    let official_albums =
+        crate::musicbrainz::official_album_release_groups_for_wishlist(&musicbrainz_id)?;
+    let official_album_count = official_albums.len();
+    let truncated = official_album_count > MAX_ARTIST_DISCOVERY_ALBUMS;
+    let selected_albums = official_albums
+        .into_iter()
+        .take(MAX_ARTIST_DISCOVERY_ALBUMS)
+        .collect::<Vec<_>>();
+    let searched_album_count = selected_albums.len();
+    let mut rows = Vec::with_capacity(searched_album_count);
+
+    for album in selected_albums {
+        let receipt = download_receipt_for_release(&conn, &album.release_mbid)?;
+        let search = crate::deemix::search_albums_after_validation(
+            crate::deemix::DeemixAlbumSearchRequest {
+                title: album.title.clone(),
+                artist: item.title.clone(),
+                year: album.year,
+                limit: Some(4),
+            },
+        );
+        let (mut matches, deemix_error) = match search {
+            Ok(response) => (response.matches, None),
+            Err(error) => (Vec::new(), Some(error.to_string())),
+        };
+        if let Some(receipt) = &receipt {
+            for album_match in &mut matches {
+                if album_match.id == receipt.deezer_album_id {
+                    album_match.downloaded_at = Some(receipt.completed_at.clone());
+                    album_match.downloaded_path = Some(receipt.destination_path.clone());
+                }
+            }
+        }
+        rows.push(WishListArtistAlbumDiscoveryRow {
+            release_group_id: album.release_mbid.clone(),
+            title: album.title,
+            year: album.year,
+            secondary_types: album.secondary_types,
+            musicbrainz_url: format!(
+                "https://musicbrainz.org/release-group/{}",
+                album.release_mbid
+            ),
+            deemix_matches: matches,
+            deemix_error,
+            downloaded_deezer_album_id: receipt.as_ref().map(|value| value.deezer_album_id.clone()),
+            downloaded_path: receipt.as_ref().map(|value| value.destination_path.clone()),
+            downloaded_at: receipt.map(|value| value.completed_at),
+        });
+    }
+
+    let matched_album_count = rows
+        .iter()
+        .filter(|album| !album.deemix_matches.is_empty())
+        .count();
+    Ok(WishListArtistAlbumDiscoveryResponse {
+        wish_list_item_id: item.id,
+        artist: item.title,
+        musicbrainz_id,
+        official_album_count,
+        searched_album_count,
+        matched_album_count,
+        truncated,
+        albums: rows,
+        searched_at: Utc::now().to_rfc3339(),
+    })
 }
 
 #[cfg(not(test))]
@@ -418,5 +617,41 @@ mod tests {
         let response = list(&conn).expect("reconcile list");
         assert_eq!(response.auto_removed_count, 2);
         assert!(response.items.is_empty());
+    }
+
+    #[test]
+    fn lists_the_latest_download_receipt_on_an_album_wish() {
+        let conn = connection();
+        let item =
+            add(&conn, album_request("release-3", "Wish", "The Artist")).expect("add album wish");
+        conn.execute(
+            "
+            INSERT INTO deemix_downloads (
+                deezer_album_id, wish_list_item_id, musicbrainz_release_group_id,
+                artist, album, year, quality, destination_path, cover_path,
+                track_count, completed_at, source
+            ) VALUES (
+                '123', ?1, 'release-3', 'The Artist', 'Wish', 1992, 'mp3_320',
+                'D:\\Music\\The Artist - Wish (1992)', NULL, 10,
+                '2026-07-26T12:00:00Z', 'download'
+            )
+            ",
+            params![item.id],
+        )
+        .expect("insert download receipt");
+
+        let response = list(&conn).expect("list wish with receipt");
+        assert_eq!(
+            response.items[0].downloaded_deezer_album_id.as_deref(),
+            Some("123")
+        );
+        assert_eq!(
+            response.items[0].downloaded_path.as_deref(),
+            Some(r"D:\Music\The Artist - Wish (1992)")
+        );
+        assert_eq!(
+            response.items[0].downloaded_at.as_deref(),
+            Some("2026-07-26T12:00:00Z")
+        );
     }
 }

@@ -202,6 +202,20 @@ async fn download_deemix_album(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn preflight_deemix_album_download(
+    app: AppHandle,
+    input: deemix_download::DeemixAlbumDownloadPreflightRequest,
+) -> Result<deemix_download::DeemixAlbumDownloadPreflight, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        deemix_download::preflight_album_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Deemix album preflight task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn compile_natural_language_query(
     input: ai::AiCompileRequest,
 ) -> Result<ai::AiCompiledQuery, String> {
@@ -447,6 +461,20 @@ async fn get_musicbrainz_cache_status(
     })
     .await
     .map_err(|error| format!("MusicBrainz cache status task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn discover_wish_list_artist_albums(
+    app: AppHandle,
+    input: wishlist::WishListArtistAlbumDiscoveryRequest,
+) -> Result<wishlist::WishListArtistAlbumDiscoveryResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        wishlist::discover_artist_albums_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Wish List artist album discovery task failed: {error}"))?
     .map_err(|error| error.to_string())
 }
 
@@ -1043,6 +1071,7 @@ pub fn run() {
             delete_deemix_arl,
             test_deemix_connection,
             search_deemix_albums,
+            preflight_deemix_album_download,
             download_deemix_album,
             compile_natural_language_query,
             ask_current_view,
@@ -1062,6 +1091,7 @@ pub fn run() {
             save_external_discovery,
             delete_saved_external_discovery,
             list_wish_list,
+            discover_wish_list_artist_albums,
             add_wish_list_item,
             remove_wish_list_item,
             get_musicbrainz_cache_status,

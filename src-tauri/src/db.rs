@@ -359,7 +359,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_one_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -640,6 +640,30 @@ pub fn migrate(conn: &Connection) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_wish_list_items_entity_created
             ON wish_list_items(entity, created_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS deemix_downloads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            deezer_album_id TEXT NOT NULL,
+            wish_list_item_id INTEGER,
+            musicbrainz_release_group_id TEXT,
+            artist TEXT NOT NULL,
+            album TEXT NOT NULL,
+            year INTEGER,
+            quality TEXT NOT NULL,
+            destination_path TEXT NOT NULL,
+            cover_path TEXT,
+            track_count INTEGER NOT NULL DEFAULT 0,
+            completed_at TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'download',
+            UNIQUE(deezer_album_id, destination_path)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_deemix_downloads_wish_list_item
+            ON deemix_downloads(wish_list_item_id, completed_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_deemix_downloads_musicbrainz_release
+            ON deemix_downloads(musicbrainz_release_group_id, completed_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_deemix_downloads_deezer_album
+            ON deemix_downloads(deezer_album_id, completed_at DESC);
 
         CREATE TABLE IF NOT EXISTS exports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1095,7 +1119,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 30;
+        PRAGMA user_version = 31;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -14284,6 +14308,9 @@ mod tests {
             .expect("phase twenty-eight schema exists"));
         assert!(migrations::phase_twenty_nine_schema_exists(&conn)
             .expect("phase twenty-nine schema exists"));
+        assert!(migrations::phase_thirty_schema_exists(&conn).expect("phase thirty schema exists"));
+        assert!(migrations::phase_thirty_one_schema_exists(&conn)
+            .expect("phase thirty-one schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -14393,6 +14420,29 @@ mod tests {
             .expect("read default Deemix preferences");
         assert_eq!(preferences.0, "mp3_320");
         assert_eq!(preferences.1, "flat_artist_album_year");
+    }
+
+    #[test]
+    fn schema_thirty_one_adds_deemix_download_receipts() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            DROP TABLE deemix_downloads;
+            PRAGMA user_version = 30;
+            ",
+        )
+        .expect("simulate schema thirty");
+
+        migrate(&conn).expect("migrate current schema");
+
+        assert!(schema_table_exists(&conn, "deemix_downloads")
+            .expect("Deemix download receipt table exists"));
+        let user_version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("read schema version");
+        assert_eq!(user_version, 31);
     }
 
     #[test]

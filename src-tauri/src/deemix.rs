@@ -12,7 +12,7 @@ const KEYRING_USER: &str = "arl";
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_ALBUM_SEARCH_URL: &str = "https://api.deezer.com/search/album";
 const DEEMIX_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.81";
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.82";
 const MAX_SEARCH_LENGTH: usize = 300;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -55,6 +55,8 @@ pub struct DeemixAlbumMatch {
     pub deezer_url: String,
     pub match_score: u8,
     pub match_level: String,
+    pub downloaded_at: Option<String>,
+    pub downloaded_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -347,6 +349,8 @@ fn parse_album_matches(
                 explicit: flexible_bool(album.get("explicit_lyrics")),
                 match_score,
                 match_level,
+                downloaded_at: None,
+                downloaded_path: None,
             })
         })
         .collect::<Vec<_>>();
@@ -420,10 +424,16 @@ pub fn test_connection() -> Result<DeemixConnectionTest> {
     gateway_profile_with_arl(&arl)
 }
 
-pub fn search_albums(mut request: DeemixAlbumSearchRequest) -> Result<DeemixAlbumSearchResponse> {
-    let limit = validate_search_request(&mut request)?;
+pub(crate) fn validate_search_connection() -> Result<()> {
     let arl = require_stored_arl()?;
     gateway_profile_with_arl(&arl)?;
+    Ok(())
+}
+
+pub(crate) fn search_albums_after_validation(
+    mut request: DeemixAlbumSearchRequest,
+) -> Result<DeemixAlbumSearchResponse> {
+    let limit = validate_search_request(&mut request)?;
     let query = format!("{} {}", request.artist, request.title);
     let limit_text = limit.to_string();
     let response = http_agent()
@@ -450,6 +460,11 @@ pub fn search_albums(mut request: DeemixAlbumSearchRequest) -> Result<DeemixAlbu
         matches,
         searched_at: Utc::now().to_rfc3339(),
     })
+}
+
+pub fn search_albums(request: DeemixAlbumSearchRequest) -> Result<DeemixAlbumSearchResponse> {
+    validate_search_connection()?;
+    search_albums_after_validation(request)
 }
 
 #[cfg(test)]

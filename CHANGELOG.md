@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.82.0] - 2026-07-26
+### Added
+- Added persistent Deemix download receipts and **Downloaded** badges for album wishes and artist-discography results.
+- Added a fast duplicate-folder preflight with the existing destination path plus an explicit **Download another copy** action that chooses a numbered sibling folder without overwriting files.
+- Added artist Wish List discovery that verifies primary Album release groups with at least one Official MusicBrainz release, searches Deezer for each bounded album, and renders an **Albums found** panel.
+- Added a sequential Deemix album queue with per-album queue states, individual enqueue actions, and **Download all albums** for missing matched artist releases.
+
+### Changed
+- Bumped the SQLite schema to version 31 and synchronized app metadata at `0.82.0`.
+
 ## [0.81.1] - 2026-07-26
 ### Fixed
 - Fixed Deemix album downloads failing during authenticated metadata loading by retaining the ARL and Deezer-issued session cookies in one ephemeral cookie jar for account, album, track-list, and media requests.

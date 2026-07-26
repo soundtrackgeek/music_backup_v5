@@ -121,6 +121,8 @@ import type {
   SavedExternalDiscovery,
   AddWishListItemRequest,
   DeemixAlbumDownloadProgress,
+  DeemixAlbumDownloadPreflight,
+  DeemixAlbumDownloadPreflightRequest,
   DeemixAlbumDownloadRequest,
   DeemixAlbumDownloadSummary,
   DeemixAlbumSearchRequest,
@@ -128,6 +130,7 @@ import type {
   DeemixConnectionTest,
   DeemixCredentialStatus,
   WishListItem,
+  WishListArtistAlbumDiscoveryResponse,
   WishListResponse,
   SavedPlaylist,
   SaveAiSnapshotRequest,
@@ -205,16 +208,38 @@ let mockWishListItems: WishListItem[] = [
   {
     id: 1,
     entity: "album",
-    title: "Meantime",
-    artist: "Helmet",
-    year: 1992,
-    musicbrainzId: "f3cd5c58-4f20-3c84-8d7f-cf12e6ba4ec8",
+    title: "Release",
+    artist: "Pet Shop Boys",
+    year: 2002,
+    musicbrainzId: "3d5ca740-5f1b-3b6c-87f3-88a7fca8bcea",
     musicbrainzUrl:
-      "https://musicbrainz.org/release-group/f3cd5c58-4f20-3c84-8d7f-cf12e6ba4ec8",
+      "https://musicbrainz.org/release-group/3d5ca740-5f1b-3b6c-87f3-88a7fca8bcea",
     source: "Preview",
     createdAt: "2026-07-26T12:00:00Z",
+    downloadedDeezerAlbumId: null,
+    downloadedPath: null,
+    downloadedAt: null,
+  },
+  {
+    id: 2,
+    entity: "artist",
+    title: "Pet Shop Boys",
+    artist: "",
+    year: null,
+    musicbrainzId: "056e4f3e-d505-4dad-8ec1-d04f521cbb56",
+    musicbrainzUrl:
+      "https://musicbrainz.org/artist/056e4f3e-d505-4dad-8ec1-d04f521cbb56",
+    source: "Preview",
+    createdAt: "2026-07-26T11:00:00Z",
+    downloadedDeezerAlbumId: null,
+    downloadedPath: null,
+    downloadedAt: null,
   },
 ];
+const mockDeemixDownloads = new Map<
+  string,
+  { destinationPath: string; downloadedAt: string }
+>();
 let mockPreparedImport: ImportPreview | null = null;
 let mockImportCancellationRequested = false;
 const mockImportProgressHandlers = new Set<(progress: ImportProgress) => void>();
@@ -1195,6 +1220,9 @@ export async function addWishListItem(input: AddWishListItemRequest) {
       ...input,
       id: mockWishListItems.reduce((largest, entry) => Math.max(largest, entry.id), 0) + 1,
       createdAt: new Date().toISOString(),
+      downloadedDeezerAlbumId: null,
+      downloadedPath: null,
+      downloadedAt: null,
     } satisfies WishListItem;
     mockWishListItems = [item, ...mockWishListItems];
     return item;
@@ -1227,12 +1255,96 @@ export async function searchDeemixAlbums(input: DeemixAlbumSearchRequest) {
           deezerUrl: "https://www.deezer.com/album/240766",
           matchScore: 100,
           matchLevel: "exact",
+          downloadedAt: mockDeemixDownloads.get("240766")?.downloadedAt ?? null,
+          downloadedPath:
+            mockDeemixDownloads.get("240766")?.destinationPath ?? null,
         },
       ],
       searchedAt: new Date().toISOString(),
     } satisfies DeemixAlbumSearchResponse;
   }
   return invoke<DeemixAlbumSearchResponse>("search_deemix_albums", { input });
+}
+
+export async function discoverWishListArtistAlbums(wishListItemId: number) {
+  if (!isTauriRuntime()) {
+    const item = mockWishListItems.find(
+      (entry) => entry.id === wishListItemId && entry.entity === "artist",
+    );
+    if (!item?.musicbrainzId) {
+      throw new Error("This artist has no MusicBrainz ID to verify official albums.");
+    }
+    const fixtures = [
+      { id: "102001", title: "Please", year: 1986, tracks: 11 },
+      { id: "102002", title: "Actually", year: 1987, tracks: 10 },
+      { id: "102003", title: "Behaviour", year: 1990, tracks: 10 },
+      { id: "240766", title: "Release", year: 2002, tracks: 10 },
+    ];
+    return {
+      wishListItemId,
+      artist: item.title,
+      musicbrainzId: item.musicbrainzId,
+      officialAlbumCount: fixtures.length,
+      searchedAlbumCount: fixtures.length,
+      matchedAlbumCount: fixtures.length,
+      truncated: false,
+      albums: fixtures.map((album, index) => {
+        const receipt = mockDeemixDownloads.get(album.id);
+        return {
+          releaseGroupId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+          title: album.title,
+          year: album.year,
+          secondaryTypes: [],
+          musicbrainzUrl: `https://musicbrainz.org/release-group/00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+          deemixMatches: [
+            {
+              id: album.id,
+              title: album.title,
+              artist: item.title,
+              year: album.year,
+              trackCount: album.tracks,
+              recordType: "album",
+              explicit: false,
+              deezerUrl: `https://www.deezer.com/album/${album.id}`,
+              matchScore: 100,
+              matchLevel: "exact" as const,
+              downloadedAt: receipt?.downloadedAt ?? null,
+              downloadedPath: receipt?.destinationPath ?? null,
+            },
+          ],
+          deemixError: null,
+          downloadedDeezerAlbumId: receipt ? album.id : null,
+          downloadedPath: receipt?.destinationPath ?? null,
+          downloadedAt: receipt?.downloadedAt ?? null,
+        };
+      }),
+      searchedAt: new Date().toISOString(),
+    } satisfies WishListArtistAlbumDiscoveryResponse;
+  }
+  return invoke<WishListArtistAlbumDiscoveryResponse>(
+    "discover_wish_list_artist_albums",
+    { input: { wishListItemId } },
+  );
+}
+
+export async function preflightDeemixAlbumDownload(
+  input: DeemixAlbumDownloadPreflightRequest,
+) {
+  if (!isTauriRuntime()) {
+    const receipt = mockDeemixDownloads.get(input.albumId);
+    return {
+      alreadyDownloaded: Boolean(receipt),
+      destinationPath: receipt?.destinationPath ?? null,
+      downloadedAt: receipt?.downloadedAt ?? null,
+      message: receipt
+        ? `This album is already in the configured download folder: ${receipt.destinationPath}`
+        : "This album is not currently in the configured download folder.",
+    } satisfies DeemixAlbumDownloadPreflight;
+  }
+  return invoke<DeemixAlbumDownloadPreflight>(
+    "preflight_deemix_album_download",
+    { input },
+  );
 }
 
 function emitMockDeemixDownloadProgress(
@@ -1278,19 +1390,37 @@ export async function downloadDeemixAlbum(input: DeemixAlbumDownloadRequest) {
       emitMockDeemixDownloadProgress(progress);
       await new Promise((resolve) => window.setTimeout(resolve, 120));
     }
+    const destinationName = `${input.expectedArtist} - ${input.expectedAlbum}${input.expectedYear ? ` (${input.expectedYear})` : ""}${input.allowDuplicate ? " [2]" : ""}`;
+    const completedAt = new Date().toISOString();
     const summary = {
       requestId: input.requestId,
       albumId: input.albumId,
-      artist: "Helmet",
-      album: "Meantime",
-      year: 1992,
+      artist: input.expectedArtist,
+      album: input.expectedAlbum,
+      year: input.expectedYear,
       quality: "mp3_320",
-      destinationPath: "D:\\Music\\Incoming\\Helmet - Meantime (1992)",
+      destinationPath: `D:\\Music\\Incoming\\${destinationName}`,
       coverPath:
-        "D:\\Music\\Incoming\\Helmet - Meantime (1992)\\cover.jpg",
+        `D:\\Music\\Incoming\\${destinationName}\\cover.jpg`,
       trackCount: 10,
-      completedAt: new Date().toISOString(),
+      completedAt,
     } satisfies DeemixAlbumDownloadSummary;
+    mockDeemixDownloads.set(input.albumId, {
+      destinationPath: summary.destinationPath,
+      downloadedAt: completedAt,
+    });
+    if (input.wishListItemId != null) {
+      mockWishListItems = mockWishListItems.map((item) =>
+        item.id === input.wishListItemId && item.entity === "album"
+          ? {
+              ...item,
+              downloadedDeezerAlbumId: input.albumId,
+              downloadedPath: summary.destinationPath,
+              downloadedAt: completedAt,
+            }
+          : item,
+      );
+    }
     emitMockDeemixDownloadProgress({
       requestId: input.requestId,
       albumId: input.albumId,
