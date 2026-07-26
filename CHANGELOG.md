@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.81.1] - 2026-07-26
+### Fixed
+- Fixed Deemix album downloads failing during authenticated metadata loading by retaining the ARL and Deezer-issued session cookies in one ephemeral cookie jar for account, album, track-list, and media requests.
+- Added one bounded CSRF/API-token refresh retry for Deezer gateway responses and clearer sanitized messages for expired sessions, rate limits, album-detail failures, and track-list failures.
+
+### Changed
+- Bumped synchronized app metadata to `0.81.1`.
+
 ## [0.81.0] - 2026-07-26
 ### Added
 - Added direct Deemix album downloads from Wish List matches with authenticated Deezer media authorization, exact MP3 320/128 quality selection, striped-stream decryption, live per-track progress, and a completed destination summary without requiring the Deemix GUI or a separate service.

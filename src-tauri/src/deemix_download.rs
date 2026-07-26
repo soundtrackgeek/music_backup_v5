@@ -2,6 +2,8 @@ use anyhow::{anyhow, bail, Context, Result};
 use blowfish::Blowfish;
 use cbc::cipher::{block_padding::NoPadding, BlockDecryptMut, KeyIvInit};
 use chrono::Utc;
+use cookie::Cookie;
+use cookie_store::CookieStore;
 use id3::frame::{ExtendedText, InvolvedPeopleList, InvolvedPeopleListItem, Picture, PictureType};
 use id3::{Tag, TagLike, Version};
 use md5::{Digest, Md5};
@@ -21,7 +23,7 @@ use zeroize::Zeroizing;
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_MEDIA_URL: &str = "https://media.deezer.com/v1/get_url";
 const DEEMIX_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.81";
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.81.1";
 const DOWNLOAD_EVENT: &str = "deemix-download-progress";
 const STREAM_CHUNK_SIZE: usize = 2048;
 const MAX_ARTWORK_BYTES: u64 = 20 * 1024 * 1024;
@@ -107,7 +109,7 @@ impl DownloadQuality {
 }
 
 struct AuthenticatedSession {
-    arl: Zeroizing<String>,
+    agent: ureq::Agent,
     api_token: Zeroizing<String>,
     license_token: Zeroizing<String>,
     can_stream_hq: bool,
@@ -176,13 +178,13 @@ pub fn download_album_for_app(
         0,
     );
 
-    let session = authenticate()?;
+    let mut session = authenticate()?;
     if quality == DownloadQuality::Mp3_320 && !session.can_stream_hq {
         bail!(
             "This Deezer account does not report high-quality streaming. Choose MP3 128 kbps or reconnect an account with HQ access."
         );
     }
-    let album = fetch_album(&session, &input.album_id, quality)?;
+    let album = fetch_album(&mut session, &input.album_id, quality)?;
     let destination = destination_path(&root, &album, &settings.deemix_download_organization)?;
     if destination.exists() {
         bail!(
@@ -388,67 +390,152 @@ fn validate_download_root(value: &str) -> Result<PathBuf> {
 
 fn authenticate() -> Result<AuthenticatedSession> {
     let arl = crate::deemix::stored_arl_for_download()?;
-    let payload = gateway_request(&arl, "null", "deezer.getUserData", json!({}))?;
-    let user_id = scalar_string(payload.pointer("/results/USER/USER_ID")).unwrap_or_default();
+    let agent = authenticated_api_agent(&arl)?;
+    let payload = gateway_request(&agent, "null", "deezer.getUserData", json!({}))?;
+    if has_api_error(payload.get("error")) {
+        bail!(gateway_failure_message(
+            "deezer.getUserData",
+            payload.get("error"),
+            false
+        ));
+    }
+    let user_data = gateway_results(&payload)?;
+    let user_id = scalar_string(user_data.pointer("/USER/USER_ID")).unwrap_or_default();
     if user_id.is_empty() || user_id == "0" {
         bail!("The stored Deezer ARL is invalid or expired.");
     }
-    let api_token = required_string(payload.pointer("/results/checkForm"), "Deezer API token")?;
+    let api_token = required_string(user_data.get("checkForm"), "Deezer API token")?;
     let license_token = required_string(
-        payload.pointer("/results/USER/OPTIONS/license_token"),
+        user_data.pointer("/USER/OPTIONS/license_token"),
         "Deezer media license",
     )?;
-    let options = payload
-        .pointer("/results/USER/OPTIONS")
-        .unwrap_or(&Value::Null);
+    let options = user_data.pointer("/USER/OPTIONS").unwrap_or(&Value::Null);
     let can_stream_hq =
         flexible_bool(options.get("web_hq")) || flexible_bool(options.get("mobile_hq"));
     Ok(AuthenticatedSession {
-        arl,
+        agent,
         api_token: Zeroizing::new(api_token),
         license_token: Zeroizing::new(license_token),
         can_stream_hq,
     })
 }
 
-fn gateway_request(arl: &str, api_token: &str, method: &str, args: Value) -> Result<Value> {
-    let cookie = Zeroizing::new(format!("arl={arl}"));
-    let response = api_agent()
-        .post(DEEZER_GATEWAY_URL)
+fn gateway_request(
+    agent: &ureq::Agent,
+    api_token: &str,
+    method: &str,
+    args: Value,
+) -> Result<Value> {
+    gateway_request_at(agent, DEEZER_GATEWAY_URL, api_token, method, args)
+}
+
+fn gateway_request_at(
+    agent: &ureq::Agent,
+    endpoint: &str,
+    api_token: &str,
+    method: &str,
+    args: Value,
+) -> Result<Value> {
+    let response = agent
+        .post(endpoint)
         .query("api_version", "1.0")
         .query("api_token", api_token)
         .query("input", "3")
         .query("method", method)
         .set("Accept", "application/json")
         .set("Content-Type", "application/json")
-        .set("Cookie", cookie.as_str())
         .set("User-Agent", DEEMIX_USER_AGENT)
         .send_json(args)
         .map_err(|error| network_error(error, "Deezer gateway"))?;
-    let payload = response
+    response
         .into_json::<Value>()
-        .context("Deezer gateway returned an unreadable response")?;
-    if has_api_error(payload.get("error")) {
-        bail!("Deezer rejected the authenticated metadata request.");
-    }
-    Ok(payload)
+        .context("Deezer gateway returned an unreadable response")
 }
 
-fn gateway_call(session: &AuthenticatedSession, method: &str, args: Value) -> Result<Value> {
-    let payload = gateway_request(&session.arl, &session.api_token, method, args)?;
+fn gateway_results(payload: &Value) -> Result<Value> {
     payload
         .get("results")
         .cloned()
         .context("Deezer returned no result for the authenticated metadata request")
 }
 
+fn gateway_call(session: &mut AuthenticatedSession, method: &str, args: Value) -> Result<Value> {
+    gateway_call_at(session, DEEZER_GATEWAY_URL, method, args)
+}
+
+fn gateway_call_at(
+    session: &mut AuthenticatedSession,
+    endpoint: &str,
+    method: &str,
+    args: Value,
+) -> Result<Value> {
+    let mut refreshed_token = false;
+    loop {
+        let payload = gateway_request_at(
+            &session.agent,
+            endpoint,
+            &session.api_token,
+            method,
+            args.clone(),
+        )?;
+        let error = payload.get("error");
+        if !has_api_error(error) {
+            return gateway_results(&payload);
+        }
+        if !refreshed_token && gateway_requires_token_refresh(error) {
+            refresh_authenticated_session_at(session, endpoint)?;
+            refreshed_token = true;
+            continue;
+        }
+        bail!(gateway_failure_message(method, error, refreshed_token));
+    }
+}
+
+fn refresh_authenticated_session_at(
+    session: &mut AuthenticatedSession,
+    endpoint: &str,
+) -> Result<()> {
+    let payload = gateway_request_at(
+        &session.agent,
+        endpoint,
+        "null",
+        "deezer.getUserData",
+        json!({}),
+    )?;
+    if has_api_error(payload.get("error")) {
+        bail!(gateway_failure_message(
+            "deezer.getUserData",
+            payload.get("error"),
+            true
+        ));
+    }
+    let user_data = gateway_results(&payload)?;
+    let user_id = scalar_string(user_data.pointer("/USER/USER_ID")).unwrap_or_default();
+    if user_id.is_empty() || user_id == "0" {
+        bail!("The stored Deezer ARL is invalid or expired. Reconnect it in Settings > Providers.");
+    }
+    session.api_token = Zeroizing::new(required_string(
+        user_data.get("checkForm"),
+        "refreshed Deezer API token",
+    )?);
+    session.license_token = Zeroizing::new(required_string(
+        user_data.pointer("/USER/OPTIONS/license_token"),
+        "refreshed Deezer media license",
+    )?);
+    let options = user_data.pointer("/USER/OPTIONS").unwrap_or(&Value::Null);
+    session.can_stream_hq =
+        flexible_bool(options.get("web_hq")) || flexible_bool(options.get("mobile_hq"));
+    Ok(())
+}
+
 fn fetch_album(
-    session: &AuthenticatedSession,
+    session: &mut AuthenticatedSession,
     album_id: &str,
     quality: DownloadQuality,
 ) -> Result<AlbumMetadata> {
     let url = format!("https://api.deezer.com/album/{album_id}");
-    let response = api_agent()
+    let response = session
+        .agent
         .get(&url)
         .set("Accept", "application/json")
         .set("User-Agent", DEEMIX_USER_AGENT)
@@ -648,12 +735,11 @@ fn fetch_media_url(
     track: &TrackMetadata,
     quality: DownloadQuality,
 ) -> Result<String> {
-    let cookie = Zeroizing::new(format!("arl={}", session.arl.as_str()));
-    let response = api_agent()
+    let response = session
+        .agent
         .post(DEEZER_MEDIA_URL)
         .set("Accept", "application/json")
         .set("Content-Type", "application/json")
-        .set("Cookie", cookie.as_str())
         .set("User-Agent", DEEMIX_USER_AGENT)
         .send_json(json!({
             "license_token": session.license_token.as_str(),
@@ -984,11 +1070,24 @@ fn validate_deezer_cdn_url(value: &str, artwork: bool) -> Result<()> {
     Ok(())
 }
 
-fn api_agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
+fn authenticated_api_agent(arl: &str) -> Result<ureq::Agent> {
+    let deezer_url = Url::parse("https://www.deezer.com/")
+        .context("Could not initialize the authenticated Deezer session")?;
+    let arl_cookie = Cookie::build(("arl", arl.to_string()))
+        .domain(".deezer.com")
+        .path("/")
+        .secure(true)
+        .http_only(true)
+        .build();
+    let mut cookie_store = CookieStore::default();
+    cookie_store
+        .insert_raw(&arl_cookie, &deezer_url)
+        .context("Could not initialize the authenticated Deezer cookie jar")?;
+    Ok(ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(45))
         .redirects(0)
-        .build()
+        .cookie_store(cookie_store)
+        .build())
 }
 
 fn download_agent() -> ureq::Agent {
@@ -1014,6 +1113,59 @@ fn has_api_error(value: Option<&Value>) -> bool {
         Some(Value::Object(values)) => !values.is_empty(),
         Some(Value::String(value)) => !value.trim().is_empty(),
         Some(_) => true,
+    }
+}
+
+fn gateway_requires_token_refresh(value: Option<&Value>) -> bool {
+    let Some(value) = value else {
+        return false;
+    };
+    let normalized = serde_json::to_string(value)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    normalized.contains("invalid api token")
+        || normalized.contains("invalid csrf token")
+        || normalized.contains("valid_token_required")
+}
+
+fn gateway_is_rate_limited(value: Option<&Value>) -> bool {
+    let Some(value) = value else {
+        return false;
+    };
+    let normalized = serde_json::to_string(value)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    normalized.contains("rate limit")
+        || normalized.contains("too many request")
+        || normalized.contains("quota")
+}
+
+fn gateway_failure_message(method: &str, error: Option<&Value>, refreshed_token: bool) -> String {
+    if gateway_requires_token_refresh(error) {
+        return if refreshed_token {
+            "Deezer rejected the refreshed authenticated session. Reconnect the ARL in Settings > Providers and try again."
+                .to_string()
+        } else {
+            "Deezer rejected the authenticated session. Reconnect the ARL in Settings > Providers and try again."
+                .to_string()
+        };
+    }
+    if gateway_is_rate_limited(error) {
+        return "Deezer temporarily rate-limited the album metadata request. Try again in a moment."
+            .to_string();
+    }
+    match method {
+        "deezer.getUserData" => {
+            "Deezer could not validate the stored ARL session. Reconnect it in Settings > Providers."
+                .to_string()
+        }
+        "album.getData" => {
+            "Deezer could not load authenticated album details for this release.".to_string()
+        }
+        "song.getListByAlbum" => {
+            "Deezer could not load the authenticated track list for this release.".to_string()
+        }
+        _ => "Deezer rejected the authenticated metadata request.".to_string(),
     }
 }
 
@@ -1132,6 +1284,8 @@ mod tests {
     use super::*;
     use cbc::cipher::{BlockEncryptMut, KeyIvInit};
     use std::io::Cursor;
+    use std::net::TcpListener;
+    use std::thread;
 
     #[test]
     fn validates_ids_and_rejects_staging_path_characters() {
@@ -1146,6 +1300,144 @@ mod tests {
             request_id: "../escape".to_string(),
         };
         assert!(validate_request(&mut invalid).is_err());
+    }
+
+    #[test]
+    fn authenticated_agent_seeds_the_arl_cookie() {
+        let arl = "ab".repeat(48);
+        let agent = authenticated_api_agent(&arl).expect("authenticated agent");
+        let url = Url::parse(DEEZER_GATEWAY_URL).expect("gateway URL");
+        let cookies = agent.cookie_store();
+        let stored_arl = cookies
+            .get_request_values(&url)
+            .find_map(|(name, value)| (name == "arl").then_some(value));
+        assert_eq!(stored_arl, Some(arl.as_str()));
+    }
+
+    #[test]
+    fn shared_cookie_session_refreshes_an_invalid_csrf_token_once() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock Deezer gateway");
+        let endpoint = format!(
+            "http://{}/gw-light.php",
+            listener.local_addr().expect("address")
+        );
+        let server = thread::spawn(move || {
+            for request_index in 0..3 {
+                let (mut stream, _) = listener.accept().expect("accept mock request");
+                let mut request = Vec::new();
+                let mut buffer = [0u8; 4096];
+                loop {
+                    let count = stream.read(&mut buffer).expect("read mock request");
+                    if count == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&buffer[..count]);
+                    if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+                let request = String::from_utf8_lossy(&request);
+                let request_line = request.lines().next().unwrap_or_default();
+                let cookie_header = request
+                    .lines()
+                    .find(|line| line.to_ascii_lowercase().starts_with("cookie:"))
+                    .unwrap_or_default();
+                assert!(cookie_header.contains("arl=test-arl"));
+
+                let (body, set_cookie) = match request_index {
+                    0 => {
+                        assert!(request_line.contains("method=album.getData"));
+                        assert!(request_line.contains("api_token=stale-token"));
+                        (
+                            r#"{"error":{"VALID_TOKEN_REQUIRED":"Invalid CSRF token"}}"#,
+                            "Set-Cookie: sid=session-123; Path=/; HttpOnly\r\n",
+                        )
+                    }
+                    1 => {
+                        assert!(request_line.contains("method=deezer.getUserData"));
+                        assert!(request_line.contains("api_token=null"));
+                        assert!(cookie_header.contains("sid=session-123"));
+                        (
+                            r#"{"error":[],"results":{"checkForm":"fresh-token","USER":{"USER_ID":"123","OPTIONS":{"license_token":"fresh-license","web_hq":true}}}}"#,
+                            "",
+                        )
+                    }
+                    _ => {
+                        assert!(request_line.contains("method=album.getData"));
+                        assert!(request_line.contains("api_token=fresh-token"));
+                        assert!(cookie_header.contains("sid=session-123"));
+                        (r#"{"error":[],"results":{"ALB_ID":"42"}}"#, "")
+                    }
+                };
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n{}\r\n{}",
+                    body.len(),
+                    set_cookie,
+                    body
+                );
+                stream
+                    .write_all(response.as_bytes())
+                    .expect("write mock response");
+            }
+        });
+
+        let endpoint_url = Url::parse(&endpoint).expect("mock endpoint URL");
+        let mut cookie_store = CookieStore::default();
+        cookie_store
+            .insert_raw(
+                &Cookie::build(("arl", "test-arl")).path("/").build(),
+                &endpoint_url,
+            )
+            .expect("seed mock ARL");
+        let mut session = AuthenticatedSession {
+            agent: ureq::AgentBuilder::new()
+                .timeout(Duration::from_secs(5))
+                .redirects(0)
+                .cookie_store(cookie_store)
+                .build(),
+            api_token: Zeroizing::new("stale-token".to_string()),
+            license_token: Zeroizing::new("stale-license".to_string()),
+            can_stream_hq: false,
+        };
+        let result = gateway_call_at(
+            &mut session,
+            &endpoint,
+            "album.getData",
+            json!({ "ALB_ID": "42" }),
+        )
+        .expect("retry authenticated metadata request");
+        assert_eq!(result.get("ALB_ID"), Some(&json!("42")));
+        assert_eq!(session.api_token.as_str(), "fresh-token");
+        assert_eq!(session.license_token.as_str(), "fresh-license");
+        assert!(session.can_stream_hq);
+        server.join().expect("mock server");
+    }
+
+    #[test]
+    fn gateway_errors_are_classified_without_echoing_provider_payloads() {
+        let error = json!({ "VALID_TOKEN_REQUIRED": "Invalid CSRF token" });
+        assert!(gateway_requires_token_refresh(Some(&error)));
+        let message = gateway_failure_message("album.getData", Some(&error), true);
+        assert!(message.contains("refreshed authenticated session"));
+        assert!(!message.contains("VALID_TOKEN_REQUIRED"));
+        assert!(!message.contains("Invalid CSRF token"));
+
+        let rate_limit = json!({ "GATEWAY_ERROR": "Too many requests" });
+        assert!(gateway_is_rate_limited(Some(&rate_limit)));
+        assert!(
+            gateway_failure_message("album.getData", Some(&rate_limit), false)
+                .contains("temporarily rate-limited")
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a configured Windows Credential Manager ARL and makes live Deezer metadata requests"]
+    fn live_authenticated_album_metadata_session() {
+        let mut session = authenticate().expect("authenticate the configured Deezer ARL");
+        let album = fetch_album(&mut session, "240766", DownloadQuality::Mp3_320)
+            .expect("load authenticated album metadata");
+        assert_eq!(album.id, "240766");
+        assert!(!album.tracks.is_empty());
     }
 
     #[test]
