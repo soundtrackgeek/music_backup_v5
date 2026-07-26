@@ -61,6 +61,9 @@ function interpretationLabel(response: ExternalDiscoveryResponse) {
   const parts = [`${plan.count} ${entityLabel(plan.entity, plan.count)}`];
   if (plan.year > 0) {
     parts.push(plan.yearMeaning === "formedYear" ? `formed in ${plan.year}` : `releases from ${plan.year}`);
+  } else if ((plan.yearFrom ?? 0) > 0 && (plan.yearTo ?? 0) > 0) {
+    const range = `${plan.yearFrom}–${plan.yearTo}`;
+    parts.push(plan.yearMeaning === "formedYear" ? `formed ${range}` : `releases from ${range}`);
   }
   if (plan.genres.length) parts.push(plan.genres.join(" + "));
   return parts.join(" · ");

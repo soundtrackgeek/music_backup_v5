@@ -207,6 +207,9 @@ fn build_discovery_response(
     let mut seen = HashSet::new();
     let mut items = Vec::new();
     for item in candidates {
+        if !matches_plan_year(&plan, item.year) {
+            continue;
+        }
         if !seen.insert(item.id.clone()) {
             continue;
         }
@@ -419,12 +422,38 @@ fn fetch_catalog_candidates(plan: &AiExternalDiscoveryPlan) -> Result<Vec<Extern
     let limit = ((plan.count as usize).saturating_mul(12))
         .max(25)
         .min(MAX_CATALOG_CANDIDATES);
-    match (plan.entity.as_str(), plan.year_meaning.as_str(), plan.year) {
-        ("artist", "formedYear", _) | ("artist", _, 0) => fetch_artists(plan, limit),
-        ("artist", _, _) => fetch_artists_by_release(plan, limit),
-        ("album", _, _) => fetch_albums(plan, limit),
-        ("song", _, _) => fetch_songs(plan, limit),
+    match (plan.entity.as_str(), plan.year_meaning.as_str()) {
+        ("artist", "formedYear") => fetch_artists(plan, limit),
+        ("artist", _) if plan_year_bounds(plan).is_none() => fetch_artists(plan, limit),
+        ("artist", _) => fetch_artists_by_release(plan, limit),
+        ("album", _) => fetch_albums(plan, limit),
+        ("song", _) => fetch_songs(plan, limit),
         _ => bail!("The external-discovery recipe is not supported."),
+    }
+}
+
+fn plan_year_bounds(plan: &AiExternalDiscoveryPlan) -> Option<(i32, i32)> {
+    if plan.year > 0 {
+        Some((plan.year, plan.year))
+    } else if plan.year_from > 0 && plan.year_to > 0 {
+        Some((plan.year_from, plan.year_to))
+    } else {
+        None
+    }
+}
+
+fn matches_plan_year(plan: &AiExternalDiscoveryPlan, year: Option<i32>) -> bool {
+    let Some((year_from, year_to)) = plan_year_bounds(plan) else {
+        return true;
+    };
+    year.is_some_and(|year| (year_from..=year_to).contains(&year))
+}
+
+fn append_plan_year_clause(clauses: &mut Vec<String>, field: &str, plan: &AiExternalDiscoveryPlan) {
+    if plan.year > 0 {
+        clauses.push(format!("{field}:{}", plan.year));
+    } else if plan.year_from > 0 && plan.year_to > 0 {
+        clauses.push(format!("{field}:[{} TO {}]", plan.year_from, plan.year_to));
     }
 }
 
@@ -433,8 +462,10 @@ fn fetch_artists(
     limit: usize,
 ) -> Result<Vec<ExternalDiscoveryItem>> {
     let mut clauses = Vec::new();
-    if plan.year_meaning == "formedYear" && plan.year > 0 {
-        clauses.push(format!("begin:{}", plan.year));
+    if plan.year_meaning == "formedYear" {
+        append_plan_year_clause(&mut clauses, "begin", plan);
+    }
+    if plan.year_meaning == "formedYear" && plan_year_bounds(plan).is_some() {
         clauses.push("type:group".to_string());
     }
     append_common_clauses(&mut clauses, plan, true);
@@ -481,9 +512,7 @@ fn fetch_artists_by_release(
     limit: usize,
 ) -> Result<Vec<ExternalDiscoveryItem>> {
     let mut clauses = vec!["status:official".to_string()];
-    if plan.year > 0 {
-        clauses.push(format!("firstreleasedate:{}", plan.year));
-    }
+    append_plan_year_clause(&mut clauses, "firstreleasedate", plan);
     append_common_clauses(&mut clauses, plan, false);
     let payload: ReleaseGroupSearchResponse = musicbrainz_search(
         MUSICBRAINZ_RELEASE_GROUP_SEARCH_URL,
@@ -543,9 +572,7 @@ fn fetch_albums(
         "primarytype:album".to_string(),
         "status:official".to_string(),
     ];
-    if plan.year > 0 {
-        clauses.push(format!("firstreleasedate:{}", plan.year));
-    }
+    append_plan_year_clause(&mut clauses, "firstreleasedate", plan);
     append_common_clauses(&mut clauses, plan, false);
     let payload: ReleaseGroupSearchResponse = musicbrainz_search(
         MUSICBRAINZ_RELEASE_GROUP_SEARCH_URL,
@@ -582,9 +609,7 @@ fn fetch_albums(
 
 fn fetch_songs(plan: &AiExternalDiscoveryPlan, limit: usize) -> Result<Vec<ExternalDiscoveryItem>> {
     let mut clauses = vec!["status:official".to_string(), "-video:true".to_string()];
-    if plan.year > 0 {
-        clauses.push(format!("firstreleasedate:{}", plan.year));
-    }
+    append_plan_year_clause(&mut clauses, "firstreleasedate", plan);
     append_common_clauses(&mut clauses, plan, true);
     let payload: RecordingSearchResponse = musicbrainz_search(
         MUSICBRAINZ_RECORDING_SEARCH_URL,
@@ -928,6 +953,8 @@ mod tests {
             entity: entity.to_string(),
             count,
             year: 1992,
+            year_from: 0,
+            year_to: 0,
             year_meaning: "releaseYear".to_string(),
             genres: Vec::new(),
             countries: Vec::new(),
@@ -1031,6 +1058,33 @@ mod tests {
         .unwrap();
         assert_eq!(song_response.items[0].title, "New Song");
         assert_eq!(song_response.excluded_owned_count, 2);
+    }
+
+    #[test]
+    fn applies_inclusive_year_ranges_to_queries_and_verified_results() {
+        let mut decade_plan = plan("album", 2);
+        decade_plan.year = 0;
+        decade_plan.year_from = 1980;
+        decade_plan.year_to = 1989;
+
+        let mut clauses = Vec::new();
+        append_plan_year_clause(&mut clauses, "firstreleasedate", &decade_plan);
+        assert_eq!(clauses, vec!["firstreleasedate:[1980 TO 1989]"]);
+
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::configure(&conn).unwrap();
+        crate::db::migrate(&conn).unwrap();
+        let mut before = candidate("before", "album", "Before", "Artist");
+        before.year = Some(1979);
+        let mut within = candidate("within", "album", "Within", "Artist");
+        within.year = Some(1986);
+        let mut after = candidate("after", "album", "After", "Artist");
+        after.year = Some(1990);
+
+        let response =
+            build_discovery_response(&conn, decade_plan, vec![before, within.clone(), after])
+                .unwrap();
+        assert_eq!(response.items, vec![within]);
     }
 
     #[test]

@@ -829,6 +829,8 @@ export type ExternalDiscoveryPlan = {
   entity: ExternalDiscoveryEntity;
   count: number;
   year: number;
+  yearFrom: number;
+  yearTo: number;
   yearMeaning: "releaseYear" | "formedYear";
   genres: string[];
   countries: string[];

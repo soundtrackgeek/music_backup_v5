@@ -50,6 +50,14 @@ describe("outside-library discovery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Discover" }));
     expect(await screen.findByText("Images and Words")).toBeInTheDocument();
 
+    fireEvent.change(prompt, {
+      target: { value: "Find 5 AOR albums from the 80s that I don't have" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Discover" }));
+    expect(
+      await screen.findByText("5 albums · releases from 1980–1989 · AOR"),
+    ).toBeInTheDocument();
+
     fireEvent.click(screen.getByText("Artists outside my library").closest("button")!);
     expect(screen.getByText("Porcupine Tree")).toBeInTheDocument();
     expect(screen.queryByText("Images and Words")).not.toBeInTheDocument();

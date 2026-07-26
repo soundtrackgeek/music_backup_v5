@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.84.0] - 2026-07-26
+### Added
+- Added inclusive year-range recipes to outside-library Discovery, including natural decade wording such as `1980s`, `80s`, `'80s`, and `’80s` plus bounded requests such as `from 1982 through 1987`.
+
+### Fixed
+- Fixed decade Discovery requests retaining the decade only in their title and summary while silently querying MusicBrainz without a year constraint. MusicBrainz now receives the inclusive range, every returned item is checked against it locally, and the active range appears in the verified-result badge.
+
+### Changed
+- Bumped synchronized app metadata to `0.84.0`.
+
 ## [0.83.1] - 2026-07-26
 ### Fixed
 - Fixed Wish List artist summaries and Deezer discovery including MusicBrainz Album release groups with secondary types such as Compilation, Live, Remix, DJ-mix, or Soundtrack. Only official pure Album release groups now count, including when an existing cached snapshot is used.

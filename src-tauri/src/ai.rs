@@ -143,7 +143,10 @@ You never receive or inspect library rows, owned artist names, owned album names
 Rules:
 - entity must be artist, album, or song. Infer the entity from the user's wording; use artist only when it is genuinely unclear.
 - count must reflect an explicit requested count, otherwise default to 5. It must be between 1 and 25.
-- year is the requested four-digit year, or 0 when no year was requested.
+- year is an explicitly requested single four-digit year, or 0 when the request uses a range, a decade, or no year filter.
+- yearFrom and yearTo are the inclusive bounds for a requested year range. Set both to 0 when no range was requested; never combine them with a non-zero year.
+- Translate decade wording into an inclusive range: 1980s, '80s, ’80s, and 80s all mean yearFrom 1980 and yearTo 1989. Interpret 00s, 10s, and 20s as 2000-2009, 2010-2019, and 2020-2029; interpret 30s through 90s as 1930-1939 through 1990-1999.
+- Translate bounded wording such as "from 1982 through 1987" or "between 1982 and 1987" into yearFrom 1982 and yearTo 1987.
 - yearMeaning is releaseYear unless the user explicitly says an artist was formed, founded, or started in that year. Only artist recipes may use formedYear.
 - For an artist request such as "artists from 1992", use releaseYear: it means artists with a verified release from 1992.
 - Preserve explicitly requested genres as short genre or style labels. Do not invent genres from general knowledge.
@@ -438,6 +441,10 @@ pub struct AiExternalDiscoveryPlan {
     pub entity: String,
     pub count: u32,
     pub year: i32,
+    #[serde(default)]
+    pub year_from: i32,
+    #[serde(default)]
+    pub year_to: i32,
     pub year_meaning: String,
     pub genres: Vec<String>,
     pub countries: Vec<String>,
@@ -634,6 +641,8 @@ struct ExternalDiscoveryPlanDocument {
     entity: String,
     count: u32,
     year: i32,
+    year_from: i32,
+    year_to: i32,
     year_meaning: String,
     genres: Vec<String>,
     countries: Vec<String>,
@@ -948,9 +957,14 @@ pub fn plan_external_discovery(
 
 fn build_external_discovery_plan(
     prompt: &str,
-    document: ExternalDiscoveryPlanDocument,
+    mut document: ExternalDiscoveryPlanDocument,
     usage: AiUsage,
 ) -> Result<AiExternalDiscoveryPlan> {
+    if let Some((year_from, year_to)) = explicit_decade_range(prompt) {
+        document.year = 0;
+        document.year_from = year_from;
+        document.year_to = year_to;
+    }
     if !matches!(document.entity.as_str(), "artist" | "album" | "song") {
         bail!("Luna returned an unsupported external-discovery entity.")
     }
@@ -959,6 +973,23 @@ fn build_external_discovery_plan(
     }
     if document.year != 0 && !(1_000..=3_000).contains(&document.year) {
         bail!("Luna returned an unsupported external-discovery year.")
+    }
+    if [document.year_from, document.year_to]
+        .into_iter()
+        .any(|year| year != 0 && !(1_000..=3_000).contains(&year))
+    {
+        bail!("Luna returned an unsupported external-discovery year range.")
+    }
+    let has_year_range = document.year_from != 0 || document.year_to != 0;
+    if has_year_range
+        && (document.year_from == 0
+            || document.year_to == 0
+            || document.year_from > document.year_to)
+    {
+        bail!("Luna returned an incomplete external-discovery year range.")
+    }
+    if document.year != 0 && has_year_range {
+        bail!("Luna returned conflicting external-discovery year filters.")
     }
     if !matches!(document.year_meaning.as_str(), "releaseYear" | "formedYear") {
         bail!("Luna returned an unsupported year interpretation.")
@@ -1004,6 +1035,8 @@ fn build_external_discovery_plan(
         entity: document.entity,
         count: document.count,
         year: document.year,
+        year_from: document.year_from,
+        year_to: document.year_to,
         year_meaning: document.year_meaning,
         genres,
         countries,
@@ -1013,6 +1046,43 @@ fn build_external_discovery_plan(
         model: OPENAI_MODEL.to_string(),
         usage,
     })
+}
+
+fn explicit_decade_range(prompt: &str) -> Option<(i32, i32)> {
+    for raw_token in prompt.split_whitespace() {
+        let token = raw_token
+            .trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && !matches!(ch, '\'' | '’'))
+            .to_ascii_lowercase();
+        let Some(without_s) = token.strip_suffix('s') else {
+            continue;
+        };
+        let digits = without_s.trim_matches(|ch| matches!(ch, '\'' | '’'));
+        if !digits.chars().all(|ch| ch.is_ascii_digit()) {
+            continue;
+        }
+
+        let decade = match digits.len() {
+            4 => digits
+                .parse::<i32>()
+                .ok()
+                .filter(|year| (1_000..=2_990).contains(year) && year % 10 == 0),
+            2 => digits.parse::<i32>().ok().and_then(|year| {
+                if year % 10 != 0 {
+                    return None;
+                }
+                Some(if year <= 20 {
+                    2_000 + year
+                } else {
+                    1_900 + year
+                })
+            }),
+            _ => None,
+        };
+        if let Some(decade) = decade {
+            return Some((decade, decade + 9));
+        }
+    }
+    None
 }
 
 fn build_playlist_plan(
@@ -2770,6 +2840,8 @@ fn external_discovery_plan_schema() -> Value {
             "entity": { "type": "string", "enum": ["artist", "album", "song"] },
             "count": { "type": "integer", "minimum": 1, "maximum": 25 },
             "year": { "type": "integer", "minimum": 0, "maximum": 3000 },
+            "yearFrom": { "type": "integer", "minimum": 0, "maximum": 3000 },
+            "yearTo": { "type": "integer", "minimum": 0, "maximum": 3000 },
             "yearMeaning": { "type": "string", "enum": ["releaseYear", "formedYear"] },
             "genres": {
                 "type": "array",
@@ -2786,7 +2858,7 @@ fn external_discovery_plan_schema() -> Value {
             "summary": { "type": "string", "maxLength": 500 }
         },
         "required": [
-            "entity", "count", "year", "yearMeaning", "genres", "countries",
+            "entity", "count", "year", "yearFrom", "yearTo", "yearMeaning", "genres", "countries",
             "keywords", "title", "summary"
         ]
     })
@@ -3382,6 +3454,8 @@ mod tests {
                 entity: "artist".to_string(),
                 count: 5,
                 year: 1992,
+                year_from: 0,
+                year_to: 0,
                 year_meaning: "releaseYear".to_string(),
                 genres: vec!["AOR".to_string(), "aor".to_string()],
                 countries: vec![],
@@ -3400,9 +3474,71 @@ mod tests {
         assert_eq!(plan.entity, "artist");
         assert_eq!(plan.count, 5);
         assert_eq!(plan.year, 1992);
+        assert_eq!(plan.year_from, 0);
+        assert_eq!(plan.year_to, 0);
         assert_eq!(plan.year_meaning, "releaseYear");
         assert_eq!(plan.genres, vec!["AOR"]);
         assert!(plan.keywords.is_empty());
+    }
+
+    #[test]
+    fn normalizes_natural_decade_wording_into_an_inclusive_range() {
+        for prompt in [
+            "Find 5 AOR albums from the 1980s",
+            "Find 5 AOR albums from the 80s",
+            "Find 5 AOR albums from the '80s",
+            "Find 5 AOR albums from the ’80s",
+        ] {
+            let plan = build_external_discovery_plan(
+                prompt,
+                ExternalDiscoveryPlanDocument {
+                    entity: "album".to_string(),
+                    count: 5,
+                    year: 0,
+                    year_from: 0,
+                    year_to: 0,
+                    year_meaning: "releaseYear".to_string(),
+                    genres: vec!["AOR".to_string()],
+                    countries: vec![],
+                    keywords: String::new(),
+                    title: "1980s AOR Albums".to_string(),
+                    summary: "Five AOR albums from the 1980s.".to_string(),
+                },
+                AiUsage {
+                    input_tokens: None,
+                    cached_input_tokens: None,
+                    output_tokens: None,
+                },
+            )
+            .unwrap();
+
+            assert_eq!((plan.year, plan.year_from, plan.year_to), (0, 1980, 1989));
+        }
+    }
+
+    #[test]
+    fn reopens_legacy_external_discovery_plans_without_range_fields() {
+        let plan = serde_json::from_value::<AiExternalDiscoveryPlan>(json!({
+            "prompt": "Find albums from 1992",
+            "entity": "album",
+            "count": 5,
+            "year": 1992,
+            "yearMeaning": "releaseYear",
+            "genres": [],
+            "countries": [],
+            "keywords": "",
+            "title": "1992 albums",
+            "summary": "Five albums from 1992.",
+            "model": "gpt-5.6-luna",
+            "usage": {
+                "inputTokens": null,
+                "cachedInputTokens": null,
+                "outputTokens": null
+            }
+        }))
+        .unwrap();
+
+        assert_eq!((plan.year, plan.year_from, plan.year_to), (1992, 0, 0));
     }
 
     #[test]
@@ -3414,12 +3550,22 @@ mod tests {
             json!(["artist", "album", "song"])
         );
         assert_eq!(schema["properties"]["count"]["maximum"], 25);
+        assert_eq!(schema["properties"]["yearFrom"]["minimum"], 0);
+        assert_eq!(schema["properties"]["yearTo"]["maximum"], 3000);
         assert_eq!(schema["properties"]["genres"]["maxItems"], 5);
         assert_eq!(schema["properties"]["countries"]["maxItems"], 5);
         assert!(schema["required"]
             .as_array()
             .unwrap()
             .contains(&json!("yearMeaning")));
+        assert!(schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("yearFrom")));
+        assert!(schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("yearTo")));
     }
 
     #[test]

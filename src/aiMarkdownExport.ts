@@ -485,6 +485,11 @@ export function externalDiscoveryMarkdown(
   response: ExternalDiscoveryResponse,
   saved?: SavedExternalDiscovery,
 ) {
+  const requestedYears = response.plan.year > 0
+    ? String(response.plan.year)
+    : (response.plan.yearFrom ?? 0) > 0 && (response.plan.yearTo ?? 0) > 0
+      ? `${response.plan.yearFrom}–${response.plan.yearTo}`
+      : "not specified";
   const results = response.items.flatMap((item, index) => [
     `### ${index + 1}. ${item.title}`,
     "",
@@ -510,7 +515,7 @@ export function externalDiscoveryMarkdown(
     "",
     `- Entity: ${response.plan.entity}`,
     `- Requested count: ${response.plan.count}`,
-    `- Year: ${response.plan.year || "not specified"}`,
+    `- Year: ${requestedYears}`,
     `- Year meaning: ${response.plan.yearMeaning}`,
     `- Genres: ${response.plan.genres.join(", ") || "none"}`,
     `- Countries: ${response.plan.countries.join(", ") || "none"}`,

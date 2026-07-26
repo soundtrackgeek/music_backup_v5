@@ -1120,44 +1120,58 @@ function previewDiscoveryCount(prompt: string) {
   return Math.min(25, Math.max(1, value));
 }
 
+function previewDiscoveryYears(prompt: string) {
+  const exactYear = Number(prompt.match(/\b(?:1\d|20)\d{2}\b/)?.[0] ?? 0);
+  if (exactYear) return { year: exactYear, yearFrom: 0, yearTo: 0 };
+
+  const longDecade = Number(prompt.match(/\b((?:1\d|20)\d0)['’]?s\b/i)?.[1] ?? 0);
+  const shortDecade = Number(prompt.match(/(?:^|[^\d])['’]?(\d{2})['’]?s\b/i)?.[1] ?? 0);
+  const decade = longDecade || (shortDecade ? (shortDecade <= 20 ? 2000 : 1900) + shortDecade : 0);
+  return decade
+    ? { year: 0, yearFrom: decade, yearTo: decade + 9 }
+    : { year: 0, yearFrom: 0, yearTo: 0 };
+}
+
 export async function discoverOutsideLibrary(input: { prompt: string }) {
   if (!isTauriRuntime()) {
     const prompt = input.prompt.trim();
     const entity = previewDiscoveryEntity(prompt);
     const count = previewDiscoveryCount(prompt);
-    const year = Number(prompt.match(/\b(19|20)\d{2}\b/)?.[0] ?? 0);
+    const { year, yearFrom, yearTo } = previewDiscoveryYears(prompt);
     const formedYear =
       entity === "artist" && /\b(formed|founded|started)\b/i.test(prompt);
     const entityLabel = entity === "song" ? "songs" : `${entity}s`;
     const rows = previewExternalCatalog[entity].slice(0, count);
     const path = entity === "album" ? "release-group" : entity === "song" ? "recording" : "artist";
-    const items = rows.map(([title, artistOrAnchor, id]) => ({
+    const items = rows.map(([title, artistOrAnchor, id], index) => ({
       id,
       entity,
       title,
       artist: entity === "artist" ? title : artistOrAnchor,
       anchor: entity === "artist" ? artistOrAnchor : null,
-      year: year || 1992,
+      year: year || (yearFrom ? yearFrom + (index % (yearTo - yearFrom + 1)) : 1992),
       country: null,
       itemType: entity === "artist" ? "Group" : entity === "album" ? "Album" : "Recording",
       tags: [],
       score: 100,
       evidence:
         entity === "artist"
-          ? `MusicBrainz verifies the release “${artistOrAnchor}” in ${year || 1992}.`
-          : `MusicBrainz verifies this ${entity}'s first release in ${year || 1992}.`,
+          ? `MusicBrainz verifies the release “${artistOrAnchor}” in ${year || (yearFrom ? yearFrom + index : 1992)}.`
+          : `MusicBrainz verifies this ${entity}'s first release in ${year || (yearFrom ? yearFrom + index : 1992)}.`,
       url: `https://musicbrainz.org/${path}/${id}`,
     })) satisfies ExternalDiscoveryItem[];
     const title = `${entityLabel[0].toUpperCase()}${entityLabel.slice(1)} outside my library`;
     return {
       prompt,
       title,
-      summary: `${count} verified ${entityLabel}${year ? ` tied to ${year}` : ""}, excluding local-library matches.`,
+      summary: `${count} verified ${entityLabel}${year ? ` tied to ${year}` : yearFrom ? ` from ${yearFrom}–${yearTo}` : ""}, excluding local-library matches.`,
       plan: {
         prompt,
         entity,
         count,
         year,
+        yearFrom,
+        yearTo,
         yearMeaning: formedYear ? "formedYear" : "releaseYear",
         genres: /\baor\b/i.test(prompt) ? ["AOR"] : [],
         countries: [],
