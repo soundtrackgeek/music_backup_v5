@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.83.0] - 2026-07-26
+### Added
+- Added per-artist official-album completion summaries to the Wish List, including singular/plural missing counts and an eye control that reveals missing titles and years on hover or keyboard focus.
+- Added persisted MusicBrainz official-album snapshots with sequential background loading for artists that do not have a cached summary yet.
+- Added an **Add artist or album** flow directly on the Wish List page with MusicBrainz artist and Album release-group search, catalog-match selection, selected-album existence/type confirmation, and accessible result states.
+
+### Changed
+- Artist wishes now remain as persistent discography trackers after any of the artist's music enters the library; automatic reconciliation continues to remove acquired album wishes only.
+- Missing counts now combine normalized albums in the imported library with completed Deemix receipts, update immediately after a queued download completes, and prevent **Download all albums** from queueing releases already in the library.
+- Artist additions now verify the full official-album snapshot before saving and explain without adding when the collection already contains every official album or MusicBrainz has no official albums for the artist.
+- Bumped synchronized app metadata to `0.83.0`.
+
 ## [0.82.0] - 2026-07-26
 ### Added
 - Added persistent Deemix download receipts and **Downloaded** badges for album wishes and artist-discography results.

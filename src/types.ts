@@ -903,11 +903,58 @@ export type WishListItem = AddWishListItemRequest & {
   downloadedDeezerAlbumId: string | null;
   downloadedPath: string | null;
   downloadedAt: string | null;
+  artistAlbumSummary: WishListArtistAlbumSummary | null;
+};
+
+export type WishListMissingAlbum = {
+  releaseGroupId: string;
+  title: string;
+  year: number | null;
+  musicbrainzUrl: string;
+};
+
+export type WishListArtistAlbumSummary = {
+  officialAlbumCount: number;
+  ownedAlbumCount: number;
+  missingAlbumCount: number;
+  missingAlbums: WishListMissingAlbum[];
+  updatedAt: string;
 };
 
 export type WishListResponse = {
   items: WishListItem[];
   autoRemovedCount: number;
+};
+
+export type WishListMusicBrainzSearchRequest = {
+  entity: WishListEntity;
+  query: string;
+};
+
+export type WishListMusicBrainzCandidate = {
+  entity: WishListEntity;
+  title: string;
+  artist: string;
+  year: number | null;
+  musicbrainzId: string;
+  musicbrainzUrl: string;
+  disambiguation: string | null;
+  country: string | null;
+  score: number;
+};
+
+export type WishListMusicBrainzSearchResponse = {
+  entity: WishListEntity;
+  query: string;
+  candidates: WishListMusicBrainzCandidate[];
+  searchedAt: string;
+};
+
+export type AddWishListMusicBrainzCandidateResponse = {
+  added: boolean;
+  item: WishListItem | null;
+  message: string;
+  artistAlbumSummary: WishListArtistAlbumSummary | null;
 };
 
 export type WishListArtistAlbumDiscoveryRequest = {
@@ -925,6 +972,7 @@ export type WishListArtistAlbumDiscoveryRow = {
   downloadedDeezerAlbumId: string | null;
   downloadedPath: string | null;
   downloadedAt: string | null;
+  inLibrary: boolean;
 };
 
 export type WishListArtistAlbumDiscoveryResponse = {
@@ -936,6 +984,7 @@ export type WishListArtistAlbumDiscoveryResponse = {
   matchedAlbumCount: number;
   truncated: boolean;
   albums: WishListArtistAlbumDiscoveryRow[];
+  albumSummary: WishListArtistAlbumSummary;
   searchedAt: string;
 };
 

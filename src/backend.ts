@@ -120,6 +120,7 @@ import type {
   SavePlaylistRequest,
   SavedExternalDiscovery,
   AddWishListItemRequest,
+  AddWishListMusicBrainzCandidateResponse,
   DeemixAlbumDownloadProgress,
   DeemixAlbumDownloadPreflight,
   DeemixAlbumDownloadPreflightRequest,
@@ -130,8 +131,12 @@ import type {
   DeemixConnectionTest,
   DeemixCredentialStatus,
   WishListItem,
+  WishListArtistAlbumSummary,
   WishListArtistAlbumDiscoveryResponse,
   WishListResponse,
+  WishListMusicBrainzCandidate,
+  WishListMusicBrainzSearchRequest,
+  WishListMusicBrainzSearchResponse,
   SavedPlaylist,
   SaveAiSnapshotRequest,
   ArtistListRequest,
@@ -219,6 +224,7 @@ let mockWishListItems: WishListItem[] = [
     downloadedDeezerAlbumId: null,
     downloadedPath: null,
     downloadedAt: null,
+    artistAlbumSummary: null,
   },
   {
     id: 2,
@@ -234,6 +240,28 @@ let mockWishListItems: WishListItem[] = [
     downloadedDeezerAlbumId: null,
     downloadedPath: null,
     downloadedAt: null,
+    artistAlbumSummary: {
+      officialAlbumCount: 4,
+      ownedAlbumCount: 2,
+      missingAlbumCount: 2,
+      missingAlbums: [
+        {
+          releaseGroupId: "00000000-0000-4000-8000-000000000001",
+          title: "Please",
+          year: 1986,
+          musicbrainzUrl:
+            "https://musicbrainz.org/release-group/00000000-0000-4000-8000-000000000001",
+        },
+        {
+          releaseGroupId: "00000000-0000-4000-8000-000000000003",
+          title: "Behaviour",
+          year: 1990,
+          musicbrainzUrl:
+            "https://musicbrainz.org/release-group/00000000-0000-4000-8000-000000000003",
+        },
+      ],
+      updatedAt: "2026-07-27T10:00:00Z",
+    },
   },
 ];
 const mockDeemixDownloads = new Map<
@@ -1206,6 +1234,120 @@ export async function listWishList() {
   return invoke<WishListResponse>("list_wish_list");
 }
 
+export async function searchWishListMusicBrainz(
+  input: WishListMusicBrainzSearchRequest,
+) {
+  if (!isTauriRuntime()) {
+    const title = input.query.trim();
+    const isArtist = input.entity === "artist";
+    return {
+      entity: input.entity,
+      query: title,
+      candidates: title
+        ? [
+            {
+              entity: input.entity,
+              title,
+              artist: isArtist ? "" : "Pet Shop Boys",
+              year: isArtist ? null : 2002,
+              musicbrainzId: isArtist
+                ? "11111111-1111-4111-8111-111111111111"
+                : "22222222-2222-4222-8222-222222222222",
+              musicbrainzUrl: isArtist
+                ? "https://musicbrainz.org/artist/11111111-1111-4111-8111-111111111111"
+                : "https://musicbrainz.org/release-group/22222222-2222-4222-8222-222222222222",
+              disambiguation: isArtist ? "Irish alternative rock band" : null,
+              country: isArtist ? "IE" : null,
+              score: 100,
+            },
+          ]
+        : [],
+      searchedAt: new Date().toISOString(),
+    } satisfies WishListMusicBrainzSearchResponse;
+  }
+  return invoke<WishListMusicBrainzSearchResponse>(
+    "search_wish_list_musicbrainz",
+    { input },
+  );
+}
+
+export async function addWishListMusicBrainzCandidate(
+  candidate: WishListMusicBrainzCandidate,
+) {
+  if (!isTauriRuntime()) {
+    if (candidate.entity === "artist") {
+      const complete = candidate.title.toLowerCase().includes("complete");
+      const summary = {
+        officialAlbumCount: complete ? 2 : 4,
+        ownedAlbumCount: 2,
+        missingAlbumCount: complete ? 0 : 2,
+        missingAlbums: complete
+          ? []
+          : [
+              {
+                releaseGroupId: "33333333-3333-4333-8333-333333333333",
+                title: "Engine Alley",
+                year: 1995,
+                musicbrainzUrl:
+                  "https://musicbrainz.org/release-group/33333333-3333-4333-8333-333333333333",
+              },
+              {
+                releaseGroupId: "44444444-4444-4444-8444-444444444444",
+                title: "Showroom",
+                year: 2018,
+                musicbrainzUrl:
+                  "https://musicbrainz.org/release-group/44444444-4444-4444-8444-444444444444",
+              },
+            ],
+        updatedAt: new Date().toISOString(),
+      } satisfies WishListArtistAlbumSummary;
+      if (complete) {
+        return {
+          added: false,
+          item: null,
+          message: `You already have all 2 official albums by ${candidate.title}. The artist was not added.`,
+          artistAlbumSummary: summary,
+        } satisfies AddWishListMusicBrainzCandidateResponse;
+      }
+      const item = await addWishListItem({
+        entity: "artist",
+        title: candidate.title,
+        artist: "",
+        year: null,
+        musicbrainzId: candidate.musicbrainzId,
+        musicbrainzUrl: candidate.musicbrainzUrl,
+        source: "MusicBrainz search",
+      });
+      item.artistAlbumSummary = summary;
+      return {
+        added: true,
+        item,
+        message: `Added ${candidate.title} with 2 albums missing.`,
+        artistAlbumSummary: summary,
+      } satisfies AddWishListMusicBrainzCandidateResponse;
+    }
+    const item = await addWishListItem({
+      entity: "album",
+      title: candidate.title,
+      artist: candidate.artist,
+      year: candidate.year,
+      musicbrainzId: candidate.musicbrainzId,
+      musicbrainzUrl: candidate.musicbrainzUrl,
+      source: "MusicBrainz search",
+    });
+    return {
+      added: true,
+      item,
+      message: `Added ${candidate.title} by ${candidate.artist}.`,
+      artistAlbumSummary: null,
+    } satisfies AddWishListMusicBrainzCandidateResponse;
+  }
+  return invoke<AddWishListMusicBrainzCandidateResponse>(
+    "add_wish_list_musicbrainz_candidate",
+    { input: { candidate } },
+  );
+}
+
 export async function addWishListItem(input: AddWishListItemRequest) {
   if (!isTauriRuntime()) {
     const existing = mockWishListItems.find((item) =>
@@ -1223,6 +1365,7 @@ export async function addWishListItem(input: AddWishListItemRequest) {
       downloadedDeezerAlbumId: null,
       downloadedPath: null,
       downloadedAt: null,
+      artistAlbumSummary: null,
     } satisfies WishListItem;
     mockWishListItems = [item, ...mockWishListItems];
     return item;
@@ -1264,6 +1407,29 @@ export async function searchDeemixAlbums(input: DeemixAlbumSearchRequest) {
     } satisfies DeemixAlbumSearchResponse;
   }
   return invoke<DeemixAlbumSearchResponse>("search_deemix_albums", { input });
+}
+
+export async function refreshWishListArtistAlbumSummary(wishListItemId: number) {
+  if (!isTauriRuntime()) {
+    const item = mockWishListItems.find(
+      (entry) => entry.id === wishListItemId && entry.entity === "artist",
+    );
+    if (!item?.musicbrainzId) {
+      throw new Error("This artist has no MusicBrainz ID to verify official albums.");
+    }
+    if (item.artistAlbumSummary) return item.artistAlbumSummary;
+    return {
+      officialAlbumCount: 0,
+      ownedAlbumCount: 0,
+      missingAlbumCount: 0,
+      missingAlbums: [],
+      updatedAt: new Date().toISOString(),
+    } satisfies WishListArtistAlbumSummary;
+  }
+  return invoke<WishListArtistAlbumSummary>(
+    "refresh_wish_list_artist_album_summary",
+    { input: { wishListItemId } },
+  );
 }
 
 export async function discoverWishListArtistAlbums(wishListItemId: number) {
@@ -1316,8 +1482,23 @@ export async function discoverWishListArtistAlbums(wishListItemId: number) {
           downloadedDeezerAlbumId: receipt ? album.id : null,
           downloadedPath: receipt?.destinationPath ?? null,
           downloadedAt: receipt?.downloadedAt ?? null,
+          inLibrary: index === 1 || index === 3,
         };
       }),
+      albumSummary:
+        item.artistAlbumSummary ??
+        ({
+          officialAlbumCount: fixtures.length,
+          ownedAlbumCount: 0,
+          missingAlbumCount: fixtures.length,
+          missingAlbums: fixtures.map((album, index) => ({
+            releaseGroupId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+            title: album.title,
+            year: album.year,
+            musicbrainzUrl: `https://musicbrainz.org/release-group/00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+          })),
+          updatedAt: new Date().toISOString(),
+        } satisfies WishListArtistAlbumSummary),
       searchedAt: new Date().toISOString(),
     } satisfies WishListArtistAlbumDiscoveryResponse;
   }

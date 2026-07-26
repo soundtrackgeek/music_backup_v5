@@ -431,6 +431,31 @@ async fn add_wish_list_item(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn search_wish_list_musicbrainz(
+    input: wishlist::WishListMusicBrainzSearchRequest,
+) -> Result<wishlist::WishListMusicBrainzSearchResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || wishlist::search_musicbrainz_for_wishlist(input))
+        .await
+        .map_err(|error| format!("Wish List MusicBrainz search task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn add_wish_list_musicbrainz_candidate(
+    app: AppHandle,
+    input: wishlist::AddWishListMusicBrainzCandidateRequest,
+) -> Result<wishlist::AddWishListMusicBrainzCandidateResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        wishlist::add_musicbrainz_candidate_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Add MusicBrainz Wish List item task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn remove_wish_list_item(app: AppHandle, id: i64) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || wishlist::remove_for_app(&app, id))
         .await
@@ -475,6 +500,20 @@ async fn discover_wish_list_artist_albums(
     })
     .await
     .map_err(|error| format!("Wish List artist album discovery task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn refresh_wish_list_artist_album_summary(
+    app: AppHandle,
+    input: wishlist::WishListArtistAlbumDiscoveryRequest,
+) -> Result<wishlist::WishListArtistAlbumSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        wishlist::refresh_artist_album_summary_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Wish List artist album summary task failed: {error}"))?
     .map_err(|error| error.to_string())
 }
 
@@ -1092,6 +1131,9 @@ pub fn run() {
             delete_saved_external_discovery,
             list_wish_list,
             discover_wish_list_artist_albums,
+            refresh_wish_list_artist_album_summary,
+            search_wish_list_musicbrainz,
+            add_wish_list_musicbrainz_candidate,
             add_wish_list_item,
             remove_wish_list_item,
             get_musicbrainz_cache_status,

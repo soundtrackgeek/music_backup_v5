@@ -5,9 +5,11 @@ import {
   CheckCircle2,
   Clock3,
   Download,
+  Eye,
   ExternalLink,
   Heart,
   ListPlus,
+  Plus,
   RefreshCw,
   Search,
   Sparkles,
@@ -17,13 +19,16 @@ import {
 } from "lucide-react";
 
 import {
+  addWishListMusicBrainzCandidate,
   discoverWishListArtistAlbums,
   downloadDeemixAlbum,
   listWishList,
   listenToDeemixDownloadProgress,
   openExternalUrl,
   preflightDeemixAlbumDownload,
+  refreshWishListArtistAlbumSummary,
   removeWishListItem,
+  searchWishListMusicBrainz,
   searchDeemixAlbums,
 } from "../backend";
 import type {
@@ -32,8 +37,11 @@ import type {
   DeemixAlbumMatch,
   DeemixAlbumSearchResponse,
   WishListArtistAlbumDiscoveryResponse,
+  WishListArtistAlbumSummary,
   WishListEntity,
   WishListItem,
+  WishListMusicBrainzCandidate,
+  WishListMusicBrainzSearchResponse,
 } from "../types";
 
 type DownloadContext = {
@@ -63,6 +71,31 @@ function downloadKey(match: DeemixAlbumMatch, context: DownloadContext) {
   return `${context.musicbrainzReleaseGroupId ?? context.wishListItemId ?? "deezer"}:${match.id}`;
 }
 
+function missingAlbumLabel(count: number) {
+  if (count === 0) return "No albums missing";
+  return `${count} ${count === 1 ? "album" : "albums"} missing`;
+}
+
+function markSummaryAlbumAcquired(
+  summary: WishListArtistAlbumSummary,
+  releaseGroupId: string | null,
+) {
+  if (!releaseGroupId) return summary;
+  const missingAlbums = summary.missingAlbums.filter(
+    (album) => album.releaseGroupId !== releaseGroupId,
+  );
+  if (missingAlbums.length === summary.missingAlbums.length) return summary;
+  return {
+    ...summary,
+    ownedAlbumCount: Math.min(
+      summary.officialAlbumCount,
+      summary.ownedAlbumCount + 1,
+    ),
+    missingAlbumCount: missingAlbums.length,
+    missingAlbums,
+  };
+}
+
 function WishListGroup({
   entity,
   items,
@@ -71,6 +104,8 @@ function WishListGroup({
   onSearchAlbum,
   onDiscoverArtist,
   searchingId,
+  checkingArtistIds,
+  artistSummaryErrors,
 }: {
   entity: WishListEntity;
   items: WishListItem[];
@@ -79,6 +114,8 @@ function WishListGroup({
   onSearchAlbum: (item: WishListItem) => void;
   onDiscoverArtist: (item: WishListItem) => void;
   searchingId: number | null;
+  checkingArtistIds: ReadonlySet<number>;
+  artistSummaryErrors: Readonly<Record<number, string>>;
 }) {
   const isArtist = entity === "artist";
   const Icon = isArtist ? UsersRound : Album;
@@ -88,7 +125,10 @@ function WishListGroup({
     : "Missing MusicBrainz albums and Luna discoveries will appear here.";
 
   return (
-    <section className="wish-list-group" aria-labelledby={`wish-list-${entity}-heading`}>
+    <section
+      className={`wish-list-group ${entity}`}
+      aria-labelledby={`wish-list-${entity}-heading`}
+    >
       <header>
         <div>
           <span className={`wish-list-group-icon ${entity}`}>
@@ -96,7 +136,7 @@ function WishListGroup({
           </span>
           <div>
             <h2 id={`wish-list-${entity}-heading`}>{heading}</h2>
-            <p>{items.length} waiting</p>
+            <p>{items.length} {isArtist ? "tracking" : "waiting"}</p>
           </div>
         </div>
       </header>
@@ -121,6 +161,32 @@ function WishListGroup({
                   {item.year ? ` · ${item.year}` : ""}
                 </span>
                 <small>Added from {item.source}</small>
+                {isArtist && item.artistAlbumSummary ? (
+                  <span
+                    className={`wish-list-missing-summary ${item.artistAlbumSummary.missingAlbumCount === 0 ? "complete" : ""}`}
+                  >
+                    {missingAlbumLabel(item.artistAlbumSummary.missingAlbumCount)}
+                  </span>
+                ) : isArtist && checkingArtistIds.has(item.id) ? (
+                  <span className="wish-list-missing-summary loading">
+                    <RefreshCw size={11} className="spin" aria-hidden="true" />
+                    Checking albums…
+                  </span>
+                ) : isArtist && artistSummaryErrors[item.id] ? (
+                  <span
+                    className="wish-list-missing-summary error"
+                    title={artistSummaryErrors[item.id]}
+                  >
+                    Album check unavailable
+                  </span>
+                ) : isArtist && !item.musicbrainzId ? (
+                  <span
+                    className="wish-list-missing-summary error"
+                    title="Add a MusicBrainz artist ID before checking the official discography."
+                  >
+                    MusicBrainz ID needed
+                  </span>
+                ) : null}
                 {!isArtist && item.downloadedAt ? (
                   <span
                     className="wish-list-downloaded-badge"
@@ -132,6 +198,43 @@ function WishListGroup({
                 ) : null}
               </div>
               <div className="wish-list-item-actions">
+                {isArtist && item.artistAlbumSummary ? (
+                  <div className="wish-list-missing-popover">
+                    <button
+                      className="icon-button wish-list-missing-trigger"
+                      type="button"
+                      aria-label={`Show ${missingAlbumLabel(item.artistAlbumSummary.missingAlbumCount)} for ${item.title}`}
+                      aria-describedby={`wish-list-missing-${item.id}`}
+                      title="Show missing albums"
+                    >
+                      <Eye size={16} />
+                    </button>
+                    <div
+                      className="wish-list-missing-popup"
+                      id={`wish-list-missing-${item.id}`}
+                      role="tooltip"
+                    >
+                      <div>
+                        <strong>{missingAlbumLabel(item.artistAlbumSummary.missingAlbumCount)}</strong>
+                        <span>
+                          {item.artistAlbumSummary.ownedAlbumCount} of {item.artistAlbumSummary.officialAlbumCount} official albums acquired
+                        </span>
+                      </div>
+                      {item.artistAlbumSummary.missingAlbums.length ? (
+                        <ol>
+                          {item.artistAlbumSummary.missingAlbums.map((album) => (
+                            <li key={album.releaseGroupId}>
+                              <span>{album.title}</span>
+                              <small>{album.year ?? "Year unknown"}</small>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <p>Your collection contains every official album currently listed by MusicBrainz.</p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
                 <button
                   className="icon-button"
                   type="button"
@@ -207,6 +310,13 @@ export function WishListWorkspace() {
     useState<DeemixAlbumSearchResponse | null>(null);
   const [artistDiscovery, setArtistDiscovery] =
     useState<WishListArtistAlbumDiscoveryResponse | null>(null);
+  const [checkingArtistIds, setCheckingArtistIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [artistSummaryErrors, setArtistSummaryErrors] = useState<
+    Record<number, string>
+  >({});
+  const artistSummaryGeneration = useRef(0);
   const [isQueueingAll, setIsQueueingAll] = useState(false);
   const [queueNotice, setQueueNotice] = useState<string | null>(null);
   const [downloadQueue, setDownloadQueue] = useState<DownloadQueueJob[]>([]);
@@ -219,6 +329,15 @@ export function WishListWorkspace() {
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt | null>(null);
   const activeDownloadRequest = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAddPanel, setShowAddPanel] = useState(false);
+  const [addEntity, setAddEntity] = useState<WishListEntity>("artist");
+  const [addQuery, setAddQuery] = useState("");
+  const [musicbrainzSearch, setMusicbrainzSearch] =
+    useState<WishListMusicBrainzSearchResponse | null>(null);
+  const [isSearchingMusicbrainz, setIsSearchingMusicbrainz] = useState(false);
+  const [addingCandidateId, setAddingCandidateId] = useState<string | null>(null);
+  const [addNotice, setAddNotice] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const replaceQueue = useCallback(
     (update: (previous: DownloadQueueJob[]) => DownloadQueueJob[]) => {
@@ -229,19 +348,67 @@ export function WishListWorkspace() {
     [],
   );
 
+  const refreshMissingArtistSummaries = useCallback(
+    async (sourceItems: WishListItem[], generation: number) => {
+      const artists = sourceItems.filter(
+        (item) =>
+          item.entity === "artist" &&
+          item.musicbrainzId &&
+          !item.artistAlbumSummary,
+      );
+      setCheckingArtistIds(new Set(artists.map((item) => item.id)));
+      setArtistSummaryErrors({});
+      for (const artist of artists) {
+        try {
+          const summary = await refreshWishListArtistAlbumSummary(artist.id);
+          if (artistSummaryGeneration.current !== generation) return;
+          setItems((previous) =>
+            previous.map((item) =>
+              item.id === artist.id
+                ? { ...item, artistAlbumSummary: summary }
+                : item,
+            ),
+          );
+        } catch (summaryError) {
+          if (artistSummaryGeneration.current !== generation) return;
+          const message =
+            summaryError instanceof Error
+              ? summaryError.message
+              : String(summaryError);
+          setArtistSummaryErrors((previous) => ({
+            ...previous,
+            [artist.id]: message,
+          }));
+        } finally {
+          if (artistSummaryGeneration.current === generation) {
+            setCheckingArtistIds((previous) => {
+              const next = new Set(previous);
+              next.delete(artist.id);
+              return next;
+            });
+          }
+        }
+      }
+    },
+    [],
+  );
+
   const load = useCallback(async () => {
+    const summaryGeneration = artistSummaryGeneration.current + 1;
+    artistSummaryGeneration.current = summaryGeneration;
     setIsLoading(true);
     setError(null);
     try {
       const response = await listWishList();
       setItems(response.items);
       setAutoRemovedCount(response.autoRemovedCount);
+      void refreshMissingArtistSummaries(response.items, summaryGeneration);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [refreshMissingArtistSummaries]);
 
   useEffect(() => {
     void load();
@@ -288,16 +455,27 @@ export function WishListWorkspace() {
     downloadedAt: string,
   ) {
     setItems((previous) =>
-      previous.map((item) =>
-        item.id === context.wishListItemId && item.entity === "album"
-          ? {
-              ...item,
-              downloadedDeezerAlbumId: albumId,
-              downloadedPath: destinationPath,
-              downloadedAt,
-            }
-          : item,
-      ),
+      previous.map((item) => {
+        if (item.id !== context.wishListItemId) return item;
+        if (item.entity === "album") {
+          return {
+            ...item,
+            downloadedDeezerAlbumId: albumId,
+            downloadedPath: destinationPath,
+            downloadedAt,
+          };
+        }
+        if (item.entity === "artist" && item.artistAlbumSummary) {
+          return {
+            ...item,
+            artistAlbumSummary: markSummaryAlbumAcquired(
+              item.artistAlbumSummary,
+              context.musicbrainzReleaseGroupId,
+            ),
+          };
+        }
+        return item;
+      }),
     );
     setDeemixResults((previous) =>
       previous
@@ -337,6 +515,10 @@ export function WishListWorkspace() {
                     ),
                   }
                 : album,
+            ),
+            albumSummary: markSummaryAlbumAcquired(
+              previous.albumSummary,
+              context.musicbrainzReleaseGroupId,
             ),
           }
         : previous,
@@ -555,7 +737,15 @@ export function WishListWorkspace() {
     setQueueNotice(null);
     setError(null);
     try {
-      setArtistDiscovery(await discoverWishListArtistAlbums(item.id));
+      const response = await discoverWishListArtistAlbums(item.id);
+      setArtistDiscovery(response);
+      setItems((previous) =>
+        previous.map((entry) =>
+          entry.id === item.id
+            ? { ...entry, artistAlbumSummary: response.albumSummary }
+            : entry,
+        ),
+      );
     } catch (discoveryError) {
       setError(
         discoveryError instanceof Error
@@ -582,7 +772,7 @@ export function WishListWorkspace() {
           skippedUnmatched += 1;
           continue;
         }
-        if (album.downloadedAt) {
+        if (album.downloadedAt || album.inLibrary) {
           skippedDownloaded += 1;
           continue;
         }
@@ -600,13 +790,63 @@ export function WishListWorkspace() {
       }
       setQueueNotice(
         `${queued} ${queued === 1 ? "album" : "albums"} added to the queue` +
-          `${skippedDownloaded ? ` · ${skippedDownloaded} already downloaded` : ""}` +
+          `${skippedDownloaded ? ` · ${skippedDownloaded} already acquired` : ""}` +
           `${skippedUnmatched ? ` · ${skippedUnmatched} without a Deezer match` : ""}.`,
       );
     } catch (queueError) {
       setError(queueError instanceof Error ? queueError.message : String(queueError));
     } finally {
       setIsQueueingAll(false);
+    }
+  }
+
+  async function searchMusicbrainzForAddition() {
+    const query = addQuery.trim();
+    if (query.length < 2 || isSearchingMusicbrainz) return;
+    setIsSearchingMusicbrainz(true);
+    setMusicbrainzSearch(null);
+    setAddNotice(null);
+    setAddError(null);
+    try {
+      const response = await searchWishListMusicBrainz({
+        entity: addEntity,
+        query,
+      });
+      setMusicbrainzSearch(response);
+    } catch (searchError) {
+      setAddError(
+        searchError instanceof Error ? searchError.message : String(searchError),
+      );
+    } finally {
+      setIsSearchingMusicbrainz(false);
+    }
+  }
+
+  async function addMusicbrainzCandidate(
+    candidate: WishListMusicBrainzCandidate,
+  ) {
+    if (addingCandidateId) return;
+    setAddingCandidateId(candidate.musicbrainzId);
+    setAddNotice(null);
+    setAddError(null);
+    try {
+      const response = await addWishListMusicBrainzCandidate(candidate);
+      const addedItem = response.item;
+      if (addedItem) {
+        setItems((previous) => [
+          addedItem,
+          ...previous.filter((item) => item.id !== addedItem.id),
+        ]);
+      }
+      setAddNotice(response.message);
+    } catch (addCandidateError) {
+      setAddError(
+        addCandidateError instanceof Error
+          ? addCandidateError.message
+          : String(addCandidateError),
+      );
+    } finally {
+      setAddingCandidateId(null);
     }
   }
 
@@ -628,17 +868,190 @@ export function WishListWorkspace() {
         </div>
         <div className="topbar-actions">
           <button
+            className="primary-button wish-list-add-toggle"
+            type="button"
+            aria-expanded={showAddPanel}
+            aria-controls="wish-list-add-panel"
+            onClick={() => {
+              setShowAddPanel((visible) => !visible);
+              setAddError(null);
+            }}
+          >
+            <Plus size={16} aria-hidden="true" />
+            <span>Add artist or album</span>
+          </button>
+          <button
             className="icon-button"
             type="button"
             aria-label="Refresh Wish List"
             title="Refresh Wish List"
-            disabled={isLoading}
+            disabled={isLoading || checkingArtistIds.size > 0}
             onClick={() => void load()}
           >
-            <RefreshCw size={18} className={isLoading ? "spin" : ""} />
+            <RefreshCw
+              size={18}
+              className={isLoading || checkingArtistIds.size > 0 ? "spin" : ""}
+            />
           </button>
         </div>
       </header>
+
+      {showAddPanel ? (
+        <section className="wish-list-add-panel" id="wish-list-add-panel">
+          <header>
+            <div>
+              <span className="wish-list-add-icon">
+                <Search size={18} aria-hidden="true" />
+              </span>
+              <div>
+                <h2>Add to Wish List</h2>
+                <p>Search MusicBrainz first so the artist or album is verified.</p>
+              </div>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Close Add to Wish List"
+              title="Close"
+              onClick={() => setShowAddPanel(false)}
+            >
+              <X size={16} />
+            </button>
+          </header>
+          <form
+            className="wish-list-add-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void searchMusicbrainzForAddition();
+            }}
+          >
+            <div className="wish-list-add-kind" role="group" aria-label="Wish List item type">
+              {(["artist", "album"] as const).map((entity) => (
+                <button
+                  key={entity}
+                  className={addEntity === entity ? "active" : ""}
+                  type="button"
+                  aria-pressed={addEntity === entity}
+                  onClick={() => {
+                    setAddEntity(entity);
+                    setMusicbrainzSearch(null);
+                    setAddNotice(null);
+                    setAddError(null);
+                  }}
+                >
+                  {entity === "artist" ? (
+                    <UsersRound size={15} aria-hidden="true" />
+                  ) : (
+                    <Album size={15} aria-hidden="true" />
+                  )}
+                  {entity === "artist" ? "Artist" : "Album"}
+                </button>
+              ))}
+            </div>
+            <label>
+              <span>{addEntity === "artist" ? "Artist name" : "Album title"}</span>
+              <input
+                type="search"
+                value={addQuery}
+                maxLength={200}
+                autoComplete="off"
+                placeholder={
+                  addEntity === "artist"
+                    ? "For example, Engine Alley"
+                    : "For example, Release"
+                }
+                onChange={(event) => setAddQuery(event.target.value)}
+              />
+            </label>
+            <button
+              className="primary-button"
+              type="submit"
+              disabled={addQuery.trim().length < 2 || isSearchingMusicbrainz}
+            >
+              {isSearchingMusicbrainz ? (
+                <RefreshCw size={15} className="spin" aria-hidden="true" />
+              ) : (
+                <Search size={15} aria-hidden="true" />
+              )}
+              <span>{isSearchingMusicbrainz ? "Searching" : "Search MusicBrainz"}</span>
+            </button>
+          </form>
+          {addEntity === "artist" ? (
+            <p className="wish-list-add-help">
+              Before adding an artist, the app checks official album releases against your library and completed downloads. Artists with nothing missing are not added.
+            </p>
+          ) : null}
+          {addError ? <p className="error-message">{addError}</p> : null}
+          {addNotice ? (
+            <p className="wish-list-add-notice" role="status">
+              <CheckCircle2 size={16} aria-hidden="true" />
+              {addNotice}
+            </p>
+          ) : null}
+          {musicbrainzSearch ? (
+            musicbrainzSearch.candidates.length ? (
+              <div className="wish-list-musicbrainz-results" aria-live="polite">
+                {musicbrainzSearch.candidates.map((candidate) => (
+                  <article key={candidate.musicbrainzId}>
+                    <span className="wish-list-item-mark">
+                      {candidate.entity === "artist" ? (
+                        <UsersRound size={17} aria-hidden="true" />
+                      ) : (
+                        <Album size={17} aria-hidden="true" />
+                      )}
+                    </span>
+                    <div>
+                      <strong>{candidate.title}</strong>
+                      <span>
+                        {candidate.entity === "artist"
+                          ? [candidate.country, candidate.disambiguation]
+                              .filter(Boolean)
+                              .join(" · ") || "Artist"
+                          : `${candidate.artist}${candidate.year ? ` · ${candidate.year}` : ""}`}
+                      </span>
+                      <small>{candidate.score}% MusicBrainz match</small>
+                    </div>
+                    <div className="wish-list-musicbrainz-actions">
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => void openUrl(candidate.musicbrainzUrl)}
+                      >
+                        <ExternalLink size={14} aria-hidden="true" />
+                        MusicBrainz
+                      </button>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        disabled={addingCandidateId !== null}
+                        aria-label={`Add ${candidate.title} to Wish List`}
+                        onClick={() => void addMusicbrainzCandidate(candidate)}
+                      >
+                        {addingCandidateId === candidate.musicbrainzId ? (
+                          <RefreshCw size={15} className="spin" aria-hidden="true" />
+                        ) : (
+                          <Plus size={15} aria-hidden="true" />
+                        )}
+                        {addingCandidateId === candidate.musicbrainzId
+                          ? candidate.entity === "artist"
+                            ? "Checking albums"
+                            : "Adding"
+                          : `Add ${candidate.entity}`}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="wish-list-add-empty" role="status">
+                <Search size={18} aria-hidden="true" />
+                <strong>No {musicbrainzSearch.entity} found on MusicBrainz</strong>
+                <span>Check the spelling or try a broader name.</span>
+              </div>
+            )
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="wish-list-summary" aria-label="Wish List summary">
         <div>
@@ -677,6 +1090,8 @@ export function WishListWorkspace() {
           onSearchAlbum={(item) => void searchItemWithDeemix(item)}
           onDiscoverArtist={(item) => void discoverArtist(item)}
           searchingId={searchingId}
+          checkingArtistIds={checkingArtistIds}
+          artistSummaryErrors={artistSummaryErrors}
         />
         <WishListGroup
           entity="album"
@@ -686,6 +1101,8 @@ export function WishListWorkspace() {
           onSearchAlbum={(item) => void searchItemWithDeemix(item)}
           onDiscoverArtist={(item) => void discoverArtist(item)}
           searchingId={searchingId}
+          checkingArtistIds={checkingArtistIds}
+          artistSummaryErrors={artistSummaryErrors}
         />
       </div>
 
@@ -813,6 +1230,7 @@ export function WishListWorkspace() {
                 <h2>Albums found</h2>
                 <p>
                   {artistDiscovery.artist} · {artistDiscovery.officialAlbumCount} official MusicBrainz {artistDiscovery.officialAlbumCount === 1 ? "album" : "albums"} · {artistDiscovery.matchedAlbumCount} with Deezer matches
+                  {` · ${missingAlbumLabel(artistDiscovery.albumSummary.missingAlbumCount)}`}
                 </p>
               </div>
             </div>
@@ -902,6 +1320,15 @@ export function WishListWorkspace() {
                     )}
                   </div>
                   <div className="artist-album-actions">
+                    {album.inLibrary ? (
+                      <span
+                        className="wish-list-library-badge"
+                        title="This album is already in the imported library"
+                      >
+                        <CheckCircle2 size={13} aria-hidden="true" />
+                        In library
+                      </span>
+                    ) : null}
                     {album.downloadedAt ? (
                       <span
                         className="wish-list-downloaded-badge"
@@ -933,6 +1360,8 @@ export function WishListWorkspace() {
                               ? "Queued"
                               : album.downloadedAt
                                 ? "Download again"
+                                : album.inLibrary
+                                  ? "Download copy"
                                 : "Download"}
                         </span>
                       </button>

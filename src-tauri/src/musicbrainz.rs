@@ -43,7 +43,7 @@ const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.45.0 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.83.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 const MUSICBRAINZ_RATE_LIMIT_DELAY_MS: u64 = 1100;
@@ -3291,16 +3291,127 @@ fn filter_official_album_release_groups(
     albums
 }
 
+pub(crate) fn cached_official_album_release_groups_for_wishlist(
+    conn: &Connection,
+    artist_mbid: &str,
+) -> Result<Option<(Vec<WishListOfficialAlbum>, String)>> {
+    if !table_exists(conn, "musicbrainz_artist_release_groups")?
+        || !table_exists(conn, "musicbrainz_release_status_cache")?
+    {
+        return Ok(None);
+    }
+
+    let album_count: i64 = conn
+        .query_row(
+            "
+            SELECT COUNT(*)
+            FROM musicbrainz_artist_release_groups
+            WHERE artist_mbid = ?1
+              AND LOWER(COALESCE(type, '')) = 'album'
+            ",
+            params![artist_mbid],
+            |row| row.get(0),
+        )
+        .context("Could not count cached Wish List artist albums")?;
+    if album_count == 0 {
+        return Ok(None);
+    }
+
+    let covered_count: i64 = conn
+        .query_row(
+            "
+            SELECT COUNT(*)
+            FROM musicbrainz_artist_release_groups release_group
+            JOIN musicbrainz_release_status_cache release_status
+              ON release_status.artist_mbid = release_group.artist_mbid
+             AND release_status.release_mbid = release_group.release_mbid
+            WHERE release_group.artist_mbid = ?1
+              AND LOWER(COALESCE(release_group.type, '')) = 'album'
+            ",
+            params![artist_mbid],
+            |row| row.get(0),
+        )
+        .context("Could not verify cached Wish List artist album coverage")?;
+    if covered_count != album_count {
+        return Ok(None);
+    }
+
+    let updated_at = conn
+        .query_row(
+            "
+            SELECT MAX(fetched_at)
+            FROM musicbrainz_artist_release_groups
+            WHERE artist_mbid = ?1
+            ",
+            params![artist_mbid],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .context("Could not read the cached Wish List artist album timestamp")?
+        .unwrap_or_default();
+    let mut statement = conn
+        .prepare(
+            "
+            SELECT release_group.release_mbid, release_group.title, release_group.year,
+                   release_group.secondary_types
+            FROM musicbrainz_artist_release_groups release_group
+            JOIN musicbrainz_release_status_cache release_status
+              ON release_status.artist_mbid = release_group.artist_mbid
+             AND release_status.release_mbid = release_group.release_mbid
+            WHERE release_group.artist_mbid = ?1
+              AND LOWER(COALESCE(release_group.type, '')) = 'album'
+              AND release_status.has_official_release = 1
+            ORDER BY COALESCE(release_group.year, 9999), LOWER(release_group.title),
+                     release_group.release_mbid
+            ",
+        )
+        .context("Could not prepare the cached Wish List artist album lookup")?;
+    let albums = statement
+        .query_map(params![artist_mbid], |row| {
+            let secondary_types = row.get::<_, String>(3)?;
+            Ok(WishListOfficialAlbum {
+                release_mbid: row.get(0)?,
+                title: row.get(1)?,
+                year: row.get(2)?,
+                secondary_types: secondary_types
+                    .split(" + ")
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+                    .collect(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load cached Wish List artist albums")?;
+
+    Ok(Some((albums, updated_at)))
+}
+
 #[cfg(not(test))]
 pub(crate) fn official_album_release_groups_for_wishlist(
+    conn: &mut Connection,
     artist_mbid: &str,
-) -> Result<Vec<WishListOfficialAlbum>> {
+) -> Result<(Vec<WishListOfficialAlbum>, String)> {
     let artist_mbid = required_mbid(Some(artist_mbid))?;
     let rows = fetch_artist_release_groups(&artist_mbid)?;
     thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
     let official_ids = fetch_official_release_group_ids(&artist_mbid)?
         .context("MusicBrainz could not verify official album releases")?;
-    Ok(filter_official_album_release_groups(rows, &official_ids))
+    let fetched_at = Utc::now().to_rfc3339();
+    save_refreshed_artist_release_groups(conn, &artist_mbid, &rows, &fetched_at)?;
+    let statuses = rows
+        .iter()
+        .map(|row| {
+            (
+                row.release_mbid.clone(),
+                official_ids.contains(&row.release_mbid),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    save_official_release_statuses(conn, &artist_mbid, &statuses)?;
+    Ok((
+        filter_official_album_release_groups(rows, &official_ids),
+        fetched_at,
+    ))
 }
 
 fn empty_discography_response(
