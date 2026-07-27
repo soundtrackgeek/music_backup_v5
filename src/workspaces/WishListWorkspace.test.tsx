@@ -58,6 +58,8 @@ function match(id: string, title: string, year: number) {
 describe("WishListWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
     listenToDeemixDownloadProgress.mockResolvedValue(() => undefined);
     listWishList.mockResolvedValue({
       autoRemovedCount: 1,
@@ -309,13 +311,44 @@ describe("WishListWorkspace", () => {
     expect(screen.getByText("Release")).toBeInTheDocument();
     expect(screen.getByText(/Removed 1 item now found/)).toBeInTheDocument();
     expect(screen.getByText("Pet Shop Boys · 2002")).toBeInTheDocument();
+    const missingAlbumsTrigger = screen.getByLabelText(
+      "Show 2 albums missing for Pet Shop Boys",
+    );
+    expect(screen.getAllByText("2 albums missing")).toHaveLength(1);
+    fireEvent.mouseEnter(missingAlbumsTrigger);
+    expect(await screen.findByRole("tooltip")).toBeInTheDocument();
     expect(screen.getAllByText("2 albums missing")).toHaveLength(2);
-    expect(
-      screen.getByLabelText("Show 2 albums missing for Pet Shop Boys"),
-    ).toBeInTheDocument();
     expect(screen.getByText("2 of 4 official albums acquired")).toBeInTheDocument();
     expect(screen.getByText("Please")).toBeInTheDocument();
     expect(screen.getByText("Actually")).toBeInTheDocument();
+  });
+
+  it("portals and flips the missing-album popup above a trigger near the viewport bottom", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 800 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 300 });
+    render(<WishListWorkspace />);
+
+    await screen.findByText("Pet Shop Boys");
+    const trigger = screen.getByLabelText("Show 2 albums missing for Pet Shop Boys");
+    vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue({
+      x: 700,
+      y: 260,
+      top: 260,
+      right: 731,
+      bottom: 291,
+      left: 700,
+      width: 31,
+      height: 31,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.mouseEnter(trigger);
+    const popup = await screen.findByRole("tooltip");
+
+    expect(popup.parentElement).toBe(document.body);
+    expect(popup).toHaveAttribute("data-placement", "above");
+    expect(popup.style.bottom).toBe("47px");
+    expect(popup.style.maxHeight).toBe("245px");
   });
 
   it("loads an uncached artist album summary without removing the artist", async () => {
@@ -369,9 +402,10 @@ describe("WishListWorkspace", () => {
         selector: ".wish-list-item-copy > strong",
       }),
     ).toBeInTheDocument();
-    expect(await screen.findAllByText("2 albums missing")).toHaveLength(2);
+    expect(await screen.findAllByText("2 albums missing")).toHaveLength(1);
     expect(refreshWishListArtistAlbumSummary).toHaveBeenCalledWith(7);
-    expect(screen.getByText("2 of 4 official albums acquired")).toBeInTheDocument();
+    fireEvent.mouseEnter(screen.getByLabelText("Show 2 albums missing for Engine Alley"));
+    expect(await screen.findByText("2 of 4 official albums acquired")).toBeInTheDocument();
   });
 
   it("searches MusicBrainz and adds an artist only after missing albums are verified", async () => {
@@ -611,7 +645,7 @@ describe("WishListWorkspace", () => {
       }),
     );
     await waitFor(() =>
-      expect(screen.getAllByText("No albums missing")).toHaveLength(2),
+      expect(screen.getAllByText("No albums missing")).toHaveLength(1),
     );
   });
 

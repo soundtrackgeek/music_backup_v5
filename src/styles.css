@@ -11581,10 +11581,6 @@ button {
   background: #ffffff;
 }
 
-.wish-list-group.artist {
-  overflow: visible;
-}
-
 .wish-list-group > header {
   border-bottom: 1px solid #e1e8e5;
   padding: 14px 15px;
@@ -11742,37 +11738,34 @@ button {
 }
 
 .wish-list-missing-popup {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 7px);
-  right: 0;
+  position: fixed;
+  z-index: 1000;
   display: grid;
   gap: 9px;
-  width: min(310px, calc(100vw - 76px));
-  max-height: 340px;
   overflow: auto;
-  visibility: hidden;
   border: 1px solid #cbd8d4;
   border-radius: 10px;
-  opacity: 0;
   color: #233b34;
   background: #ffffff;
   padding: 12px;
   box-shadow: 0 16px 38px rgba(27, 51, 43, 0.18);
-  transform: translateY(-3px);
-  transition:
-    opacity 120ms ease,
-    transform 120ms ease,
-    visibility 120ms ease;
-  pointer-events: none;
+  animation: wish-list-popup-in 120ms ease-out;
+  overscroll-behavior: contain;
 }
 
-.wish-list-missing-popover:hover .wish-list-missing-popup,
-.wish-list-missing-popover:focus-within .wish-list-missing-popup {
-  visibility: visible;
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
+@keyframes wish-list-popup-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wish-list-missing-popup.above {
+  transform-origin: bottom right;
 }
 
 .wish-list-missing-popup > div {

@@ -18,7 +18,7 @@ const MAX_MUSICBRAINZ_SEARCH_QUERY_LENGTH: usize = 200;
 #[cfg(not(test))]
 const MUSICBRAINZ_SEARCH_LIMIT: usize = 8;
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.83.1 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.84.1 (local desktop app)";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

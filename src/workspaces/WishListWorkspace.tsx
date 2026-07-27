@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   Album,
@@ -94,6 +102,199 @@ function markSummaryAlbumAcquired(
     missingAlbumCount: missingAlbums.length,
     missingAlbums,
   };
+}
+
+type MissingAlbumsPopupPosition = {
+  placement: "above" | "below";
+  left: number;
+  top?: number;
+  bottom?: number;
+  width: number;
+  maxHeight: number;
+};
+
+const MISSING_POPUP_GAP = 7;
+const MISSING_POPUP_MARGIN = 8;
+const MISSING_POPUP_MAX_WIDTH = 310;
+const MISSING_POPUP_MAX_HEIGHT = 340;
+
+function MissingAlbumsPopover({ item }: { item: WishListItem }) {
+  const summary = item.artistAlbumSummary;
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<MissingAlbumsPopupPosition | null>(null);
+  const popupId = `wish-list-missing-${item.id}`;
+
+  const cancelClose = useCallback(() => {
+    if (closeTimerRef.current === null) return;
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+  }, []);
+
+  const openPopup = useCallback(() => {
+    cancelClose();
+    setIsOpen(true);
+  }, [cancelClose]);
+
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimerRef.current = window.setTimeout(() => {
+      setIsOpen(false);
+      closeTimerRef.current = null;
+    }, 80);
+  }, [cancelClose]);
+
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger || !summary) return;
+
+    const bounds = trigger.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const width = Math.min(
+      MISSING_POPUP_MAX_WIDTH,
+      Math.max(0, viewportWidth - MISSING_POPUP_MARGIN * 2),
+    );
+    const maxLeft = Math.max(
+      MISSING_POPUP_MARGIN,
+      viewportWidth - MISSING_POPUP_MARGIN - width,
+    );
+    const left = Math.min(
+      maxLeft,
+      Math.max(MISSING_POPUP_MARGIN, bounds.right - width),
+    );
+    const spaceAbove = Math.max(
+      0,
+      bounds.top - MISSING_POPUP_GAP - MISSING_POPUP_MARGIN,
+    );
+    const spaceBelow = Math.max(
+      0,
+      viewportHeight - bounds.bottom - MISSING_POPUP_GAP - MISSING_POPUP_MARGIN,
+    );
+    const estimatedHeight = Math.min(
+      MISSING_POPUP_MAX_HEIGHT,
+      61 + Math.max(1, summary.missingAlbums.length) * 28,
+    );
+    const placement =
+      spaceBelow < estimatedHeight && spaceAbove > spaceBelow ? "above" : "below";
+    const maxHeight = Math.min(
+      MISSING_POPUP_MAX_HEIGHT,
+      placement === "above" ? spaceAbove : spaceBelow,
+    );
+
+    setPosition({
+      placement,
+      left,
+      width,
+      maxHeight,
+      ...(placement === "above"
+        ? { bottom: viewportHeight - bounds.top + MISSING_POPUP_GAP }
+        : { top: bounds.bottom + MISSING_POPUP_GAP }),
+    });
+  }, [summary]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setPosition(null);
+      return;
+    }
+    updatePosition();
+  }, [isOpen, updatePosition]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (triggerRef.current?.contains(target) || popupRef.current?.contains(target)) return;
+      setIsOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setIsOpen(false);
+      triggerRef.current?.focus();
+    };
+
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isOpen, updatePosition]);
+
+  useEffect(() => () => cancelClose(), [cancelClose]);
+
+  if (!summary) return null;
+
+  const popup = isOpen && position ? (
+    <div
+      className={`wish-list-missing-popup ${position.placement}`}
+      id={popupId}
+      ref={popupRef}
+      role="tooltip"
+      data-placement={position.placement}
+      style={{
+        left: position.left,
+        top: position.top,
+        bottom: position.bottom,
+        width: position.width,
+        maxHeight: position.maxHeight,
+      }}
+      onMouseEnter={openPopup}
+      onMouseLeave={scheduleClose}
+    >
+      <div>
+        <strong>{missingAlbumLabel(summary.missingAlbumCount)}</strong>
+        <span>
+          {summary.ownedAlbumCount} of {summary.officialAlbumCount} official albums acquired
+        </span>
+      </div>
+      {summary.missingAlbums.length ? (
+        <ol>
+          {summary.missingAlbums.map((album) => (
+            <li key={album.releaseGroupId}>
+              <span>{album.title}</span>
+              <small>{album.year ?? "Year unknown"}</small>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p>Your collection contains every official album currently listed by MusicBrainz.</p>
+      )}
+    </div>
+  ) : null;
+
+  return (
+    <div
+      className="wish-list-missing-popover"
+      onMouseEnter={openPopup}
+      onMouseLeave={scheduleClose}
+    >
+      <button
+        className="icon-button wish-list-missing-trigger"
+        ref={triggerRef}
+        type="button"
+        aria-label={`Show ${missingAlbumLabel(summary.missingAlbumCount)} for ${item.title}`}
+        aria-describedby={isOpen ? popupId : undefined}
+        aria-expanded={isOpen}
+        title="Show missing albums"
+        onClick={openPopup}
+        onFocus={openPopup}
+        onBlur={scheduleClose}
+      >
+        <Eye size={16} aria-hidden="true" />
+      </button>
+      {popup ? createPortal(popup, document.body) : null}
+    </div>
+  );
 }
 
 function WishListGroup({
@@ -199,41 +400,7 @@ function WishListGroup({
               </div>
               <div className="wish-list-item-actions">
                 {isArtist && item.artistAlbumSummary ? (
-                  <div className="wish-list-missing-popover">
-                    <button
-                      className="icon-button wish-list-missing-trigger"
-                      type="button"
-                      aria-label={`Show ${missingAlbumLabel(item.artistAlbumSummary.missingAlbumCount)} for ${item.title}`}
-                      aria-describedby={`wish-list-missing-${item.id}`}
-                      title="Show missing albums"
-                    >
-                      <Eye size={16} />
-                    </button>
-                    <div
-                      className="wish-list-missing-popup"
-                      id={`wish-list-missing-${item.id}`}
-                      role="tooltip"
-                    >
-                      <div>
-                        <strong>{missingAlbumLabel(item.artistAlbumSummary.missingAlbumCount)}</strong>
-                        <span>
-                          {item.artistAlbumSummary.ownedAlbumCount} of {item.artistAlbumSummary.officialAlbumCount} official albums acquired
-                        </span>
-                      </div>
-                      {item.artistAlbumSummary.missingAlbums.length ? (
-                        <ol>
-                          {item.artistAlbumSummary.missingAlbums.map((album) => (
-                            <li key={album.releaseGroupId}>
-                              <span>{album.title}</span>
-                              <small>{album.year ?? "Year unknown"}</small>
-                            </li>
-                          ))}
-                        </ol>
-                      ) : (
-                        <p>Your collection contains every official album currently listed by MusicBrainz.</p>
-                      )}
-                    </div>
-                  </div>
+                  <MissingAlbumsPopover item={item} />
                 ) : null}
                 <button
                   className="icon-button"

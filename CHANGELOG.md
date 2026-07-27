@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.84.1] - 2026-07-27
+### Fixed
+- Fixed Wish List missing-album panels being clipped by artist cards or the bottom of the app window. The panel now renders in a viewport-level layer, flips above the eye control when needed, stays within the horizontal viewport, and scrolls internally for long album lists.
+
+### Changed
+- Bumped synchronized app metadata to `0.84.1`.
+
 ## [0.84.0] - 2026-07-26
 ### Added
 - Added inclusive year-range recipes to outside-library Discovery, including natural decade wording such as `1980s`, `80s`, `'80s`, and `’80s` plus bounded requests such as `from 1982 through 1987`.
