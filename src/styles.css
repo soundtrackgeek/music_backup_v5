@@ -1502,11 +1502,11 @@ button {
 }
 
 .chart-builder .segmented-control {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .chart-builder .search-row {
-  grid-template-columns: minmax(320px, 1fr) 300px;
+  grid-template-columns: minmax(320px, 1fr) 400px;
 }
 
 .album-search-row {
@@ -1527,7 +1527,7 @@ button {
 .chart-results .result-table-row {
   grid-template-columns:
     48px minmax(220px, 2fr) minmax(140px, 1.35fr) 64px minmax(104px, 1fr)
-    repeat(9, minmax(72px, 0.8fr));
+    repeat(10, minmax(72px, 0.8fr));
   min-width: 1180px;
 }
 
@@ -1696,6 +1696,266 @@ button {
 
 .cover-list span {
   font-size: 18px;
+}
+
+.album-timeline {
+  display: grid;
+  gap: 22px;
+  padding: 4px 2px 10px;
+}
+
+.album-timeline-heading,
+.album-timeline-year > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.album-timeline-heading h3,
+.album-timeline-year h4 {
+  margin: 5px 0 0;
+  color: #17221f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(24px, 3vw, 38px);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+
+.album-timeline-heading p {
+  max-width: 680px;
+  margin: 8px 0 0;
+  color: #63716c;
+  line-height: 1.55;
+}
+
+.album-timeline-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #9a5d13;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.album-timeline-caveat {
+  flex: 0 0 auto;
+  border: 1px solid #e3e9e6;
+  border-radius: 999px;
+  padding: 7px 11px;
+  color: #68756f;
+  background: #f7f9f8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.album-timeline-chart {
+  display: grid;
+  grid-auto-columns: minmax(48px, 1fr);
+  grid-auto-flow: column;
+  align-items: end;
+  gap: 5px;
+  min-height: 210px;
+  overflow-x: auto;
+  border-block: 1px solid #e6ebe8;
+  padding: 18px 5px 12px;
+  scrollbar-width: thin;
+}
+
+.album-timeline-point {
+  display: grid;
+  align-self: stretch;
+}
+
+.album-timeline-chart button {
+  display: grid;
+  grid-template-rows: 20px 132px 22px;
+  align-items: end;
+  min-width: 46px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 4px 4px;
+  color: #69756f;
+  background: transparent;
+  cursor: pointer;
+}
+
+.album-timeline-chart button:hover,
+.album-timeline-chart button:focus-visible,
+.album-timeline-chart button.active {
+  color: #0b625c;
+  background: #eef7f4;
+}
+
+.album-timeline-chart button:focus-visible {
+  outline: 2px solid #17857b;
+  outline-offset: 2px;
+}
+
+.album-timeline-count {
+  align-self: start;
+  justify-self: center;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.album-timeline-bar {
+  width: 100%;
+  height: max(5px, calc(132px * var(--timeline-density)));
+  border-radius: 5px 5px 2px 2px;
+  background: linear-gradient(180deg, #e3a33d 0%, #b86e1f 100%);
+  box-shadow: inset 0 0 0 1px rgb(112 63 13 / 12%);
+  transition: height 180ms ease, filter 180ms ease;
+}
+
+.album-timeline-chart button.active .album-timeline-bar {
+  background: linear-gradient(180deg, #25a398 0%, #0b625c 100%);
+}
+
+.album-timeline-chart button strong {
+  justify-self: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.album-timeline-year {
+  display: grid;
+  gap: 14px;
+}
+
+.album-timeline-year > header {
+  align-items: end;
+  border-bottom: 1px solid #e6ebe8;
+  padding-bottom: 10px;
+}
+
+.album-timeline-year > header span {
+  color: #8a9691;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.album-timeline-year > header strong {
+  color: #0b625c;
+  font-size: 12px;
+}
+
+.album-timeline-albums {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 9px;
+}
+
+.album-timeline-albums article {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  border: 1px solid #e2e9e6;
+  border-radius: 10px;
+  padding: 8px;
+  background: #fff;
+}
+
+.album-timeline-cover {
+  width: 62px;
+  height: 62px;
+  border-radius: 7px;
+}
+
+.album-timeline-albums article > div {
+  display: grid;
+  min-width: 0;
+}
+
+.album-timeline-albums article span,
+.album-timeline-albums article time {
+  color: #9a5d13;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.album-timeline-albums article strong,
+.album-timeline-albums article small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-timeline-albums article strong {
+  margin-top: 2px;
+  color: #1b2824;
+  font-size: 13px;
+}
+
+.album-timeline-albums article small {
+  margin-top: 1px;
+  color: #69756f;
+  font-size: 11px;
+}
+
+.album-timeline-albums article time {
+  margin-top: 5px;
+  color: #0b625c;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.album-timeline-empty {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  min-height: 240px;
+  place-content: center;
+  color: #72807a;
+  text-align: center;
+}
+
+.album-timeline-empty strong {
+  color: #283630;
+}
+
+.album-timeline-empty span {
+  max-width: 470px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .chart-builder .search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .album-timeline-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .chart-builder .segmented-control {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .album-timeline {
+    gap: 16px;
+  }
+
+  .album-timeline-albums {
+    grid-template-columns: 1fr;
+  }
+
+  .album-timeline-year > header {
+    align-items: flex-start;
+  }
 }
 
 .cover-preview-trigger {
@@ -4863,6 +5123,22 @@ button {
   min-width: 1020px;
 }
 
+.album-results.with-debut .result-table-head,
+.album-results.with-debut .result-table-row {
+  grid-template-columns:
+    minmax(220px, 2fr) minmax(140px, 1.35fr) minmax(96px, 0.9fr) 64px
+    minmax(104px, 1fr) minmax(104px, 0.9fr) 64px 84px 72px;
+  min-width: 1044px;
+}
+
+.album-results.with-billboard.with-debut .result-table-head,
+.album-results.with-billboard.with-debut .result-table-row {
+  grid-template-columns:
+    minmax(220px, 2fr) minmax(140px, 1.35fr) minmax(96px, 0.9fr) 64px
+    minmax(104px, 1fr) 82px minmax(104px, 0.9fr) 64px 84px 72px;
+  min-width: 1124px;
+}
+
 .track-results .result-table-head,
 .track-results .result-table-row {
   grid-template-columns:
@@ -4877,6 +5153,24 @@ button {
     minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(132px, 1.1fr)
     minmax(96px, 0.8fr) 64px 96px 72px 64px minmax(140px, 1.1fr);
   min-width: 1136px;
+}
+
+.track-results.with-debut .result-table-head,
+.track-results.with-debut .result-table-row {
+  grid-template-columns:
+    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(132px, 1.1fr)
+    minmax(96px, 0.8fr) 64px minmax(104px, 0.9fr) 72px 64px
+    minmax(140px, 1.1fr);
+  min-width: 1144px;
+}
+
+.track-results.with-billboard.with-debut .result-table-head,
+.track-results.with-billboard.with-debut .result-table-row {
+  grid-template-columns:
+    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(132px, 1.1fr)
+    minmax(96px, 0.8fr) 64px 96px minmax(104px, 0.9fr) 72px 64px
+    minmax(140px, 1.1fr);
+  min-width: 1240px;
 }
 
 .album-index-results .result-table-head,
@@ -5897,6 +6191,17 @@ button {
 .right-sidebar-hidden .detail-column {
   visibility: hidden;
   pointer-events: none;
+}
+
+.chart-grid-debut {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  color: #8d6317;
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detail-header {
@@ -8952,6 +9257,38 @@ button {
       rgba(242, 207, 132, 0.18)
     ),
     #13231f;
+}
+
+:root[data-theme="dark"] .album-timeline-heading h3,
+:root[data-theme="dark"] .album-timeline-year h4,
+:root[data-theme="dark"] .album-timeline-albums article strong,
+:root[data-theme="dark"] .album-timeline-empty strong {
+  color: #e5eeeb;
+}
+
+:root[data-theme="dark"] .album-timeline-heading p,
+:root[data-theme="dark"] .album-timeline-albums article small,
+:root[data-theme="dark"] .album-timeline-empty {
+  color: #9caca6;
+}
+
+:root[data-theme="dark"] .album-timeline-chart,
+:root[data-theme="dark"] .album-timeline-year > header {
+  border-color: #2c3935;
+}
+
+:root[data-theme="dark"] .album-timeline-chart button:hover,
+:root[data-theme="dark"] .album-timeline-chart button:focus-visible,
+:root[data-theme="dark"] .album-timeline-chart button.active {
+  color: #7ed3c9;
+  background: #172824;
+}
+
+:root[data-theme="dark"] .album-timeline-albums article,
+:root[data-theme="dark"] .album-timeline-caveat {
+  border-color: #2f3d38;
+  color: #a8b6b0;
+  background: #171f1c;
 }
 
 :root[data-theme="dark"] .album-cover-preview {

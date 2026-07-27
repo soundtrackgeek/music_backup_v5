@@ -241,6 +241,7 @@ import {
 } from "./app/config";
 import {
   compareBrowseRows,
+  formatBillboardDebutWeek,
   formatAverage,
   formatBillboardRank,
   formatBillboardSingleRank,
@@ -324,6 +325,7 @@ import { GenreTimeline } from "./components/GenreTimeline";
 import { ImportSafetyPanel } from "./components/ImportSafetyPanel";
 import { InsightActionDock } from "./components/InsightActionDock";
 import { AlbumCover } from "./components/AlbumCover";
+import { AlbumTimeline } from "./components/AlbumTimeline";
 import {
   ChartAdvancedControls,
   ChartLunaCommandArea,
@@ -1732,6 +1734,27 @@ function NumberField({
   );
 }
 
+function WeekField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <label className="criterion">
+      <span>{label}</span>
+      <input
+        type="week"
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value || null)}
+      />
+    </label>
+  );
+}
+
 function CompletenessRangeCriterion({
   minValue,
   maxValue,
@@ -2001,10 +2024,11 @@ function ResultTable({
 
   const visibleColumnSet = new Set(visibleColumns);
   const showBillboardColumn = visibleColumnSet.has("billboard");
+  const showDebutColumn = visibleColumnSet.has("billboardDebut");
 
   return response.view === "tracks" ? (
     <div
-      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}`}
+      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}`}
       role="table"
     >
       <div className="result-table-head" role="row">
@@ -2042,6 +2066,14 @@ function ResultTable({
           <SortableColumnHeader
             label="Album Billboard"
             field="billboardRank"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
+        {showDebutColumn ? (
+          <SortableColumnHeader
+            label="Debut week"
+            field="billboardDebut"
             sort={sort}
             onSort={onSort}
           />
@@ -2097,6 +2129,9 @@ function ResultTable({
             {showBillboardColumn ? (
               <span role="cell">{formatBillboardRank(row)}</span>
             ) : null}
+            {showDebutColumn ? (
+              <span role="cell">{formatBillboardDebutWeek(row)}</span>
+            ) : null}
             <span role="cell">{singleLabel}</span>
             <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
             <span role="cell" title={row.filePath ?? ""}>
@@ -2108,7 +2143,7 @@ function ResultTable({
     </div>
   ) : (
     <div
-      className={`result-table album-results${showBillboardColumn ? " with-billboard" : ""}`}
+      className={`result-table album-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}`}
       role="table"
     >
       <div className="result-table-head" role="row">
@@ -2150,6 +2185,14 @@ function ResultTable({
             onSort={onSort}
           />
         ) : null}
+        {showDebutColumn ? (
+          <SortableColumnHeader
+            label="Debut week"
+            field="billboardDebut"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
         <SortableColumnHeader
           label="Tracks"
           field="trackCount"
@@ -2185,6 +2228,9 @@ function ResultTable({
           <span role="cell">{row.canonicalGenre ?? ""}</span>
           {showBillboardColumn ? (
             <span role="cell">{formatBillboardRank(row)}</span>
+          ) : null}
+          {showDebutColumn ? (
+            <span role="cell">{formatBillboardDebutWeek(row)}</span>
           ) : null}
           <span role="cell">{row.totalTracks ?? ""}</span>
           <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
@@ -2508,6 +2554,10 @@ function AlbumDetailPanel({
         <div>
           <dt>Billboard</dt>
           <dd>{formatBillboardRank(album)}</dd>
+        </div>
+        <div>
+          <dt>Billboard debut</dt>
+          <dd>{formatBillboardDebutWeek(album)}</dd>
         </div>
         <div>
           <dt>Origin Country</dt>
@@ -4724,6 +4774,10 @@ function ChartResults({
     );
   }
 
+  if (config.viewMode === "timeline") {
+    return <AlbumTimeline rows={response.rows} />;
+  }
+
   if (config.viewMode === "compact") {
     return (
       <div className="chart-list" role="list">
@@ -4748,6 +4802,9 @@ function ChartResults({
                   <CountryDisplay value={row} mode={countryFlagDisplay} />
                 ) : null}
                 {row.year ? <span>{row.year}</span> : null}
+                {formatBillboardDebutWeek(row) ? (
+                  <span>{formatBillboardDebutWeek(row)}</span>
+                ) : null}
                 {row.canonicalGenre ? <span>{row.canonicalGenre}</span> : null}
               </p>
             </div>
@@ -4794,6 +4851,11 @@ function ChartResults({
                 {billboardLabel ? (
                   <span className="billboard-badge chart-grid-billboard">
                     {billboardLabel}
+                  </span>
+                ) : null}
+                {formatBillboardDebutWeek(row) ? (
+                  <span className="chart-grid-debut">
+                    {formatBillboardDebutWeek(row)}
                   </span>
                 ) : null}
                 <span className="chart-grid-score">
@@ -4860,6 +4922,12 @@ function ChartResults({
       label: "Billboard",
       sortField: "billboardRank",
       value: (row: BrowseRow) => formatBillboardRank(row),
+    },
+    {
+      key: "billboardDebut",
+      label: "Debut week",
+      sortField: "billboardDebut",
+      value: (row: BrowseRow) => formatBillboardDebutWeek(row),
     },
     {
       key: "rating",
@@ -7462,6 +7530,7 @@ export default function App() {
   const [includeCalculated, setIncludeCalculated] = useState(false);
   const [searchTableColumns, setSearchTableColumns] = useState<string[]>([
     "billboard",
+    "billboardDebut",
   ]);
   const [searchExportColumns, setSearchExportColumns] = useState<string[]>([]);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
@@ -9129,6 +9198,27 @@ export default function App() {
         updateFilters({ yearFrom: null, yearTo: null });
       },
     );
+    if (
+      currentFilters.billboardDebutWeekFrom ||
+      currentFilters.billboardDebutWeekTo
+    ) {
+      const from = currentFilters.billboardDebutWeekFrom;
+      const to = currentFilters.billboardDebutWeekTo;
+      nextChips.push({
+        key: "billboardDebutWeek",
+        label:
+          from && to
+            ? `Chart debut ${from}–${to}`
+            : from
+              ? `Chart debut from ${from}`
+              : `Chart debut through ${to}`,
+        remove: () =>
+          updateFilters({
+            billboardDebutWeekFrom: null,
+            billboardDebutWeekTo: null,
+          }),
+      });
+    }
     addRangeChip(
       nextChips,
       "billboard",
@@ -12160,7 +12250,7 @@ export default function App() {
                   onChange={(event) =>
                     setBillboardSourcePath(event.target.value)
                   }
-                  placeholder="CSV"
+                  placeholder="CSV_ALBUMS"
                   disabled={isImportingBillboard}
                 />
               </label>
@@ -12171,7 +12261,8 @@ export default function App() {
               {billboardImportSummary ? (
                 <p className="success-message">
                   Matched {formatNumber(billboardImportSummary.matchedAlbums)}{" "}
-                  albums from{" "}
+                  albums with {formatNumber(billboardImportSummary.datedAlbums)}{" "}
+                  debut weeks from{" "}
                   {formatNumber(billboardImportSummary.chartEntries)} chart rows
                   across {formatNumber(billboardImportSummary.filesScanned)}{" "}
                   files.
@@ -12500,6 +12591,20 @@ export default function App() {
                   label="Year to"
                   value={chartConfig.request.filters.yearTo}
                   onChange={(value) => updateChartFilters({ yearTo: value })}
+                />
+                <WeekField
+                  label="Chart debut from"
+                  value={chartConfig.request.filters.billboardDebutWeekFrom}
+                  onChange={(billboardDebutWeekFrom) =>
+                    updateChartFilters({ billboardDebutWeekFrom })
+                  }
+                />
+                <WeekField
+                  label="Chart debut to"
+                  value={chartConfig.request.filters.billboardDebutWeekTo}
+                  onChange={(billboardDebutWeekTo) =>
+                    updateChartFilters({ billboardDebutWeekTo })
+                  }
                 />
                 <GenreListCriterion
                   label="Exclude genres"
@@ -16876,6 +16981,18 @@ export default function App() {
                   label="Year to"
                   value={currentFilters.yearTo}
                   onChange={(value) => updateFilter("yearTo", value)}
+                />
+                <WeekField
+                  label="Chart debut from"
+                  value={currentFilters.billboardDebutWeekFrom}
+                  onChange={(value) =>
+                    updateFilter("billboardDebutWeekFrom", value)
+                  }
+                />
+                <WeekField
+                  label="Chart debut to"
+                  value={currentFilters.billboardDebutWeekTo}
+                  onChange={(value) => updateFilter("billboardDebutWeekTo", value)}
                 />
                 <GenreListCriterion
                   label="Exclude genres"

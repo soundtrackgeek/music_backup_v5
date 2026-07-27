@@ -20,6 +20,7 @@ export default defineConfig({
         "**/src-tauri/**",
         "**/AlbumCovers/**",
         "**/CSV/**",
+        "**/CSV_ALBUMS/**",
         "**/CSV_SINGLES/**",
         "**/MusicBrainz/**",
         "**/musicbee-library.tsv",

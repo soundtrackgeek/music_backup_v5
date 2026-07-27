@@ -185,14 +185,16 @@ Cover import:
 
 ### Billboard CSV Data
 
-Default album chart path: `CSV`
+Default album chart path: `CSV_ALBUMS`
 
 Album chart files:
 
-- Named by year, for example `CSV/1987.csv`.
-- Required columns: `EOY Rank`, `Artist`, `Title`.
+- Named by year, for example `CSV_ALBUMS/1987.csv`.
+- Required columns: `EOY Rank`, `Artist`, `Title`, `First Appearance`, and `First Appearance Week`.
+- `First Appearance` is a calendar month/year such as `Mar 1989`; `First Appearance Week` is week 1–53. January/December boundary rows are resolved to the adjacent canonical ISO week-year when necessary while retaining the source calendar month/year for display.
 - Matching normalizes case, punctuation, and diacritics.
-- Imported rows are persisted, linked to albums when possible, and collapsed to the best stored album rank.
+- Imported rows are persisted, linked to albums when possible, and collapsed to the best stored album rank plus the earliest Billboard chart debut.
+- Search and Charts expose chart-debut week from/to filters, columns, sorting, and exports. Charts adds an interactive year-density timeline; Luna Search, Chart, and Playlist Builder plans can compile chart-debut periods and named seasons to local week ranges.
 
 Default singles chart path: `CSV_SINGLES`
 
@@ -470,13 +472,13 @@ Expected next backend modularization:
 
 ### Phase 11: Billboard Albums and Singles
 
-- Billboard album CSV import from `CSV`.
+- Billboard album CSV import from `CSV_ALBUMS`, including first-appearance month and week data.
 - Billboard singles CSV import from `CSV_SINGLES`.
 - Persisted chart-entry tables.
-- Album and track Billboard badges.
+- Album and track Billboard badges plus album chart-debut labels.
 - Search, Albums, Charts, Discovery, Artists, Genres, details, and exports surface Billboard ranks.
-- Billboard album and single rank filters.
-- Billboard chart ranking metric and template.
+- Billboard album and single rank filters plus album chart-debut ISO-week ranges.
+- Billboard chart ranking metric and template plus the Albums through the years timeline.
 - Missing Billboard Albums and Missing Billboard Singles tools.
 
 ### Phase 11.5: Maintainability

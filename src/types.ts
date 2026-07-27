@@ -164,6 +164,7 @@ export type BillboardImportSummary = {
   filesScanned: number;
   chartEntries: number;
   matchedAlbums: number;
+  datedAlbums: number;
   durationMs: number;
 };
 
@@ -1125,6 +1126,8 @@ export type BrowseFilters = {
   billboardRankMax: number | null;
   billboardSingleRankMin: number | null;
   billboardSingleRankMax: number | null;
+  billboardDebutWeekFrom: string | null;
+  billboardDebutWeekTo: string | null;
   yearFrom: number | null;
   yearTo: number | null;
   releaseYearFrom: number | null;
@@ -1507,6 +1510,10 @@ export type BrowseRow = {
   albumScore: number | null;
   billboardRank: number | null;
   billboardYear: number | null;
+  billboardDebutYear: number | null;
+  billboardDebutMonth: number | null;
+  billboardDebutWeek: number | null;
+  billboardDebutWeekKey: string | null;
   billboardSingleRank: number | null;
   billboardSingleYear: number | null;
   trackSeconds: number | null;
@@ -1541,7 +1548,7 @@ export type SavedSearch = {
   updatedAt: string;
 };
 
-export type ChartViewMode = "table" | "compact" | "grid";
+export type ChartViewMode = "table" | "compact" | "grid" | "timeline";
 
 export type ChartConfig = {
   request: BrowseRequest;

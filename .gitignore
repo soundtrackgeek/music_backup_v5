@@ -15,5 +15,6 @@ src-tauri/gen/
 musicbee-library.tsv
 AlbumCovers/
 CSV/
+CSV_ALBUMS/
 CSV_SINGLES/
 MusicBrainz/

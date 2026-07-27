@@ -196,6 +196,7 @@ pub struct BillboardImportSummary {
     pub files_scanned: usize,
     pub chart_entries: usize,
     pub matched_albums: i64,
+    pub dated_albums: i64,
     pub duration_ms: u128,
 }
 
@@ -821,6 +822,10 @@ pub struct BrowseFilters {
     #[serde(default)]
     pub billboard_single_rank_max: Option<i32>,
     #[serde(default)]
+    pub billboard_debut_week_from: Option<String>,
+    #[serde(default)]
+    pub billboard_debut_week_to: Option<String>,
+    #[serde(default)]
     pub year_from: Option<i32>,
     #[serde(default)]
     pub year_to: Option<i32>,
@@ -1372,6 +1377,10 @@ pub struct BrowseRow {
     pub album_score: Option<f64>,
     pub billboard_rank: Option<i32>,
     pub billboard_year: Option<i32>,
+    pub billboard_debut_year: Option<i32>,
+    pub billboard_debut_month: Option<i32>,
+    pub billboard_debut_week: Option<i32>,
+    pub billboard_debut_week_key: Option<String>,
     pub billboard_single_rank: Option<i32>,
     pub billboard_single_year: Option<i32>,
     pub track_seconds: Option<i64>,
@@ -1870,7 +1879,7 @@ fn default_cover_source_path() -> String {
 }
 
 fn default_billboard_source_path() -> String {
-    "CSV".to_string()
+    "CSV_ALBUMS".to_string()
 }
 
 fn default_billboard_singles_source_path() -> String {

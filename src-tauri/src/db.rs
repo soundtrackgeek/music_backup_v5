@@ -25,7 +25,7 @@ use crate::models::{
     YearProgressRequest, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::{Datelike, Utc};
+use chrono::{Datelike, NaiveDate, Utc, Weekday};
 use rusqlite::{params, params_from_iter, types::Value, Connection, OpenFlags, OptionalExtension};
 use rust_xlsxwriter::{Format, Workbook};
 use serde_json::json;
@@ -68,7 +68,7 @@ const DB_FILE_NAME: &str = "music-library.sqlite3";
 const DEFAULT_BACKUP_RETENTION: u32 = 3;
 const DEFAULT_IMPORT_SOURCE_PATH: &str = "musicbee-library.tsv";
 const DEFAULT_COVER_SOURCE_PATH: &str = "AlbumCovers";
-const DEFAULT_BILLBOARD_SOURCE_PATH: &str = "CSV";
+const DEFAULT_BILLBOARD_SOURCE_PATH: &str = "CSV_ALBUMS";
 const DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES";
 const DEFAULT_DEEMIX_DOWNLOAD_PATH: &str = "";
 const DEFAULT_DEEMIX_DOWNLOAD_QUALITY: &str = "mp3_320";
@@ -117,6 +117,11 @@ struct BillboardChartEntry {
     album_key: String,
     rank: i32,
     year: i32,
+    first_appearance: String,
+    first_appearance_year: i32,
+    first_appearance_month: i32,
+    first_appearance_week: i32,
+    first_appearance_week_key: String,
 }
 
 #[derive(Debug, Clone)]
@@ -360,7 +365,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_two_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_three_schema_exists(conn)?
+    {
         return Ok(());
     }
 
@@ -473,7 +479,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             effective_album_rating INTEGER,
             album_score REAL,
             billboard_rank INTEGER,
-            billboard_year INTEGER
+            billboard_year INTEGER,
+            billboard_debut_year INTEGER,
+            billboard_debut_month INTEGER,
+            billboard_debut_week INTEGER,
+            billboard_debut_week_key TEXT
         );
 
         CREATE TABLE IF NOT EXISTS album_covers (
@@ -496,6 +506,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             album TEXT NOT NULL,
             artist_key TEXT NOT NULL,
             album_key TEXT NOT NULL,
+            first_appearance TEXT,
+            first_appearance_year INTEGER,
+            first_appearance_month INTEGER,
+            first_appearance_week INTEGER,
+            first_appearance_week_key TEXT,
             matched_album_id TEXT REFERENCES albums(id) ON DELETE SET NULL,
             imported_at TEXT NOT NULL
         );
@@ -726,7 +741,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             right_sidebar_default TEXT NOT NULL DEFAULT 'expanded',
             import_source_path TEXT NOT NULL DEFAULT 'musicbee-library.tsv',
             cover_source_path TEXT NOT NULL DEFAULT 'AlbumCovers',
-            billboard_source_path TEXT NOT NULL DEFAULT 'CSV',
+            billboard_source_path TEXT NOT NULL DEFAULT 'CSV_ALBUMS',
             billboard_singles_source_path TEXT NOT NULL DEFAULT 'CSV_SINGLES',
             deemix_download_path TEXT NOT NULL DEFAULT '',
             deemix_download_quality TEXT NOT NULL DEFAULT 'mp3_320',
@@ -1118,10 +1133,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_artist_info_tables(conn)?;
     ensure_musicbrainz_map_location_tables(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
+    migrations::migrate_billboard_album_source_default(conn)?;
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 32;
+        PRAGMA user_version = 33;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -1324,7 +1340,10 @@ fn ensure_app_settings_import_columns(conn: &Connection) -> Result<()> {
             "TEXT NOT NULL DEFAULT 'musicbee-library.tsv'",
         ),
         ("cover_source_path", "TEXT NOT NULL DEFAULT 'AlbumCovers'"),
-        ("billboard_source_path", "TEXT NOT NULL DEFAULT 'CSV'"),
+        (
+            "billboard_source_path",
+            "TEXT NOT NULL DEFAULT 'CSV_ALBUMS'",
+        ),
         (
             "billboard_singles_source_path",
             "TEXT NOT NULL DEFAULT 'CSV_SINGLES'",
@@ -1737,7 +1756,14 @@ pub fn ensure_musicbrainz_artist_info_tables(conn: &Connection) -> Result<()> {
 }
 
 fn ensure_album_billboard_columns(conn: &Connection) -> Result<()> {
-    for (name, definition) in [("billboard_rank", "INTEGER"), ("billboard_year", "INTEGER")] {
+    for (name, definition) in [
+        ("billboard_rank", "INTEGER"),
+        ("billboard_year", "INTEGER"),
+        ("billboard_debut_year", "INTEGER"),
+        ("billboard_debut_month", "INTEGER"),
+        ("billboard_debut_week", "INTEGER"),
+        ("billboard_debut_week_key", "TEXT"),
+    ] {
         if !schema_column_exists(conn, "albums", name)? {
             let sql = format!("ALTER TABLE albums ADD COLUMN {name} {definition}");
             conn.execute_batch(&sql)
@@ -1746,7 +1772,11 @@ fn ensure_album_billboard_columns(conn: &Connection) -> Result<()> {
     }
 
     conn.execute_batch(
-        "CREATE INDEX IF NOT EXISTS idx_albums_billboard_rank ON albums(billboard_rank);",
+        "
+        CREATE INDEX IF NOT EXISTS idx_albums_billboard_rank ON albums(billboard_rank);
+        CREATE INDEX IF NOT EXISTS idx_albums_billboard_debut_week
+            ON albums(billboard_debut_week_key);
+        ",
     )
     .context("Could not create Billboard rank index")?;
 
@@ -1765,6 +1795,11 @@ fn ensure_billboard_chart_entries_table(conn: &Connection) -> Result<()> {
             album TEXT NOT NULL,
             artist_key TEXT NOT NULL,
             album_key TEXT NOT NULL,
+            first_appearance TEXT,
+            first_appearance_year INTEGER,
+            first_appearance_month INTEGER,
+            first_appearance_week INTEGER,
+            first_appearance_week_key TEXT,
             matched_album_id TEXT REFERENCES albums(id) ON DELETE SET NULL,
             imported_at TEXT NOT NULL
         );
@@ -1776,6 +1811,20 @@ fn ensure_billboard_chart_entries_table(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create Billboard chart entry table")?;
+
+    for (name, definition) in [
+        ("first_appearance", "TEXT"),
+        ("first_appearance_year", "INTEGER"),
+        ("first_appearance_month", "INTEGER"),
+        ("first_appearance_week", "INTEGER"),
+        ("first_appearance_week_key", "TEXT"),
+    ] {
+        if !schema_column_exists(conn, "billboard_chart_entries", name)? {
+            let sql = format!("ALTER TABLE billboard_chart_entries ADD COLUMN {name} {definition}");
+            conn.execute_batch(&sql)
+                .with_context(|| format!("Could not add billboard_chart_entries.{name}"))?;
+        }
+    }
 
     Ok(())
 }
@@ -1967,7 +2016,15 @@ fn import_billboard_charts(
         .transaction()
         .context("Could not start Billboard chart import transaction")?;
     tx.execute(
-        "UPDATE albums SET billboard_rank = NULL, billboard_year = NULL",
+        "
+        UPDATE albums
+        SET billboard_rank = NULL,
+            billboard_year = NULL,
+            billboard_debut_year = NULL,
+            billboard_debut_month = NULL,
+            billboard_debut_week = NULL,
+            billboard_debut_week_key = NULL
+        ",
         [],
     )
     .context("Could not clear existing Billboard rankings")?;
@@ -2022,7 +2079,25 @@ fn import_billboard_charts(
             }
 
             if let Some(entry) = best_match {
-                album_matches.push((album_id, entry.rank, entry.year));
+                let earliest_debut = billboard_match_keys(&artist_key, &album_key)
+                    .iter()
+                    .filter_map(|key| entry_indexes_by_match_key.get(key))
+                    .flatten()
+                    .map(|index| &source_entries[*index])
+                    .min_by(|left, right| {
+                        left.first_appearance_week_key
+                            .cmp(&right.first_appearance_week_key)
+                    })
+                    .unwrap_or(entry);
+                album_matches.push((
+                    album_id,
+                    entry.rank,
+                    entry.year,
+                    earliest_debut.first_appearance_year,
+                    earliest_debut.first_appearance_month,
+                    earliest_debut.first_appearance_week,
+                    earliest_debut.first_appearance_week_key.clone(),
+                ));
             }
         }
     }
@@ -2032,13 +2107,27 @@ fn import_billboard_charts(
             "
             UPDATE albums
             SET billboard_rank = ?1,
-                billboard_year = ?2
-            WHERE id = ?3
+                billboard_year = ?2,
+                billboard_debut_year = ?3,
+                billboard_debut_month = ?4,
+                billboard_debut_week = ?5,
+                billboard_debut_week_key = ?6
+            WHERE id = ?7
             ",
         )?;
-        for (album_id, rank, year) in &album_matches {
+        for (album_id, rank, year, debut_year, debut_month, debut_week, debut_week_key) in
+            &album_matches
+        {
             update_album
-                .execute(params![rank, year, album_id])
+                .execute(params![
+                    rank,
+                    year,
+                    debut_year,
+                    debut_month,
+                    debut_week,
+                    debut_week_key,
+                    album_id
+                ])
                 .with_context(|| format!("Could not update Billboard ranking for {album_id}"))?;
         }
     }
@@ -2051,9 +2140,10 @@ fn import_billboard_charts(
             "
             INSERT INTO billboard_chart_entries (
                 source_file, year, rank, artist, album, artist_key, album_key,
-                matched_album_id, imported_at
+                first_appearance, first_appearance_year, first_appearance_month,
+                first_appearance_week, first_appearance_week_key, matched_album_id, imported_at
             ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14
             )
             ",
         )?;
@@ -2067,6 +2157,11 @@ fn import_billboard_charts(
                     &entry.album,
                     &entry.artist_key,
                     &entry.album_key,
+                    &entry.first_appearance,
+                    entry.first_appearance_year,
+                    entry.first_appearance_month,
+                    entry.first_appearance_week,
+                    &entry.first_appearance_week_key,
                     matched_entry_album_ids[index].as_deref(),
                     &imported_at,
                 ])
@@ -2087,6 +2182,7 @@ fn import_billboard_charts(
         files_scanned,
         chart_entries: source_entry_count,
         matched_albums: album_matches.len() as i64,
+        dated_albums: album_matches.len() as i64,
         duration_ms: started.elapsed().as_millis(),
     })
 }
@@ -2315,6 +2411,8 @@ fn read_billboard_chart_file(path: &Path, year: i32) -> Result<Vec<BillboardChar
     let rank_index = csv_header_index(&headers, "EOY Rank")?;
     let artist_index = csv_header_index(&headers, "Artist")?;
     let title_index = csv_header_index(&headers, "Title")?;
+    let first_appearance_index = csv_header_index(&headers, "First Appearance")?;
+    let first_appearance_week_index = csv_header_index(&headers, "First Appearance Week")?;
     let source_file = path
         .file_name()
         .and_then(|name| name.to_str())
@@ -2322,7 +2420,7 @@ fn read_billboard_chart_file(path: &Path, year: i32) -> Result<Vec<BillboardChar
         .to_string();
 
     let mut entries = Vec::new();
-    for result in reader.records() {
+    for (row_index, result) in reader.records().enumerate() {
         let record = result
             .with_context(|| format!("Could not read Billboard CSV row {}", path.display()))?;
         let rank = record
@@ -2340,6 +2438,43 @@ fn read_billboard_chart_file(path: &Path, year: i32) -> Result<Vec<BillboardChar
             .to_string();
         let artist_key = billboard_text_key(&artist);
         let album_key = billboard_text_key(&album);
+        let first_appearance = record
+            .get(first_appearance_index)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        let first_appearance_date = parse_billboard_first_appearance(&first_appearance)
+            .with_context(|| {
+                format!(
+                    "Invalid First Appearance in {} row {}",
+                    path.display(),
+                    row_index + 2
+                )
+            })?;
+        let first_appearance_year = first_appearance_date.year();
+        let first_appearance_month = first_appearance_date.month() as i32;
+        let first_appearance_week = record
+            .get(first_appearance_week_index)
+            .and_then(|value| value.trim().parse::<i32>().ok())
+            .filter(|week| (1..=53).contains(week))
+            .ok_or_else(|| {
+                anyhow!(
+                    "Invalid First Appearance Week in {} row {}",
+                    path.display(),
+                    row_index + 2
+                )
+            })?;
+        let first_appearance_iso_year =
+            billboard_first_appearance_iso_year(first_appearance_date, first_appearance_week)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "First Appearance and ISO week do not overlap in {} row {}",
+                        path.display(),
+                        row_index + 2
+                    )
+                })?;
+        let first_appearance_week_key =
+            format!("{first_appearance_iso_year:04}-W{first_appearance_week:02}");
         if let Some(rank) = rank {
             if !artist_key.is_empty() && !album_key.is_empty() {
                 entries.push(BillboardChartEntry {
@@ -2350,12 +2485,47 @@ fn read_billboard_chart_file(path: &Path, year: i32) -> Result<Vec<BillboardChar
                     album_key,
                     rank,
                     year,
+                    first_appearance,
+                    first_appearance_year,
+                    first_appearance_month,
+                    first_appearance_week,
+                    first_appearance_week_key,
                 });
             }
         }
     }
 
     Ok(entries)
+}
+
+fn parse_billboard_first_appearance(value: &str) -> Result<NaiveDate> {
+    for format in ["%b %Y", "%B %Y"] {
+        if let Ok(date) = NaiveDate::parse_from_str(&format!("01 {value}"), &format!("%d {format}"))
+        {
+            return Ok(date);
+        }
+    }
+    bail!("Expected a month and four-digit year, for example Mar 1989")
+}
+
+fn billboard_first_appearance_iso_year(month: NaiveDate, week: i32) -> Option<i32> {
+    let next_month = if month.month() == 12 {
+        NaiveDate::from_ymd_opt(month.year() + 1, 1, 1)?
+    } else {
+        NaiveDate::from_ymd_opt(month.year(), month.month() + 1, 1)?
+    };
+    let month_end = next_month.pred_opt()?;
+
+    [month.year() - 1, month.year(), month.year() + 1]
+        .into_iter()
+        .find(|iso_year| {
+            NaiveDate::from_isoywd_opt(*iso_year, week as u32, Weekday::Mon)
+                .map(|monday| {
+                    let sunday = monday + chrono::Duration::days(6);
+                    sunday >= month && monday <= month_end
+                })
+                .unwrap_or(false)
+        })
 }
 
 fn read_billboard_single_chart_file(
@@ -4430,7 +4600,7 @@ fn ensure_music_tool_data_for_request(
                 return Ok(());
             }
 
-            let Ok(source_path) = resolve_billboard_source_path("CSV") else {
+            let Ok(source_path) = resolve_billboard_source_path("CSV_ALBUMS") else {
                 return Ok(());
             };
 
@@ -4440,10 +4610,10 @@ fn ensure_music_tool_data_for_request(
                 &request.request_id,
                 "loading",
                 15,
-                "Preparing Billboard chart rows from CSV.",
+                "Preparing Billboard album chart rows from CSV_ALBUMS.",
             );
             import_billboard_charts(conn, &source_path)
-                .context("Could not prepare Missing Billboard Albums data from CSV")?;
+                .context("Could not prepare Missing Billboard Albums data from CSV_ALBUMS")?;
         }
         "missing-billboard-singles" => {
             if count_rows(conn, "billboard_single_chart_entries")? > 0 {
@@ -10754,6 +10924,10 @@ fn search_library(
             a.album_score,
             a.billboard_rank,
             a.billboard_year,
+            a.billboard_debut_year,
+            a.billboard_debut_month,
+            a.billboard_debut_week,
+            a.billboard_debut_week_key,
             t.billboard_single_rank,
             t.billboard_single_year,
             t.time_seconds,
@@ -10795,6 +10969,10 @@ fn search_library(
             a.album_score,
             a.billboard_rank,
             a.billboard_year,
+            a.billboard_debut_year,
+            a.billboard_debut_month,
+            a.billboard_debut_week,
+            a.billboard_debut_week_key,
             NULL,
             NULL,
             NULL,
@@ -10886,21 +11064,25 @@ fn browse_row_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BrowseRow> {
         album_score: row.get(19)?,
         billboard_rank: row.get(20)?,
         billboard_year: row.get(21)?,
-        billboard_single_rank: row.get(22)?,
-        billboard_single_year: row.get(23)?,
-        track_seconds: row.get(24)?,
-        normalized_rating: row.get(25)?,
-        disc_number: row.get(26)?,
-        track_number: row.get(27)?,
-        love: row.get(28)?,
-        file_path: row.get(29)?,
-        filename: row.get(30)?,
-        cover_path: row.get(31)?,
-        cover_mime_type: row.get(32)?,
-        origin_country_code: row.get(33)?,
-        origin_country_name: row.get(34)?,
-        origin_country_raw_area: row.get(35)?,
-        origin_country_review_state: row.get(36)?,
+        billboard_debut_year: row.get(22)?,
+        billboard_debut_month: row.get(23)?,
+        billboard_debut_week: row.get(24)?,
+        billboard_debut_week_key: row.get(25)?,
+        billboard_single_rank: row.get(26)?,
+        billboard_single_year: row.get(27)?,
+        track_seconds: row.get(28)?,
+        normalized_rating: row.get(29)?,
+        disc_number: row.get(30)?,
+        track_number: row.get(31)?,
+        love: row.get(32)?,
+        file_path: row.get(33)?,
+        filename: row.get(34)?,
+        cover_path: row.get(35)?,
+        cover_mime_type: row.get(36)?,
+        origin_country_code: row.get(37)?,
+        origin_country_name: row.get(38)?,
+        origin_country_raw_area: row.get(39)?,
+        origin_country_review_state: row.get(40)?,
     })
 }
 
@@ -11084,6 +11266,13 @@ fn build_where_clause(
         "a.billboard_rank",
         filters.billboard_rank_min,
         filters.billboard_rank_max,
+    );
+    add_iso_week_range(
+        &mut conditions,
+        &mut values,
+        "a.billboard_debut_week_key",
+        filters.billboard_debut_week_from.as_deref(),
+        filters.billboard_debut_week_to.as_deref(),
     );
     if is_tracks {
         add_i32_range(
@@ -11520,6 +11709,35 @@ fn add_i32_range(
     }
 }
 
+fn add_iso_week_range(
+    conditions: &mut Vec<String>,
+    values: &mut Vec<Value>,
+    field: &str,
+    minimum: Option<&str>,
+    maximum: Option<&str>,
+) {
+    if let Some(minimum) = minimum.and_then(normalize_iso_week_key) {
+        conditions.push(format!("{field} >= ?"));
+        values.push(Value::Text(minimum));
+    }
+    if let Some(maximum) = maximum.and_then(normalize_iso_week_key) {
+        conditions.push(format!("{field} <= ?"));
+        values.push(Value::Text(maximum));
+    }
+}
+
+fn normalize_iso_week_key(value: &str) -> Option<String> {
+    let normalized = value.trim().to_uppercase();
+    let (year, week) = normalized.split_once("-W")?;
+    if year.len() != 4 || week.is_empty() || week.len() > 2 {
+        return None;
+    }
+    let year = year.parse::<i32>().ok()?;
+    let week = week.parse::<u32>().ok()?;
+    NaiveDate::from_isoywd_opt(year, week, Weekday::Mon)?;
+    Some(format!("{year:04}-W{week:02}"))
+}
+
 fn add_i64_range(
     conditions: &mut Vec<String>,
     values: &mut Vec<Value>,
@@ -11678,6 +11896,7 @@ fn add_missing_field_conditions(conditions: &mut Vec<String>, is_tracks: bool, f
                 )",
             ),
             "billboard" => Some("a.billboard_rank IS NULL"),
+            "billboardDebut" => Some("a.billboard_debut_week_key IS NULL"),
             "billboardSingle" if is_tracks => Some("t.billboard_single_rank IS NULL"),
             "rating" => Some(if is_tracks {
                 "t.normalized_rating IS NULL"
@@ -11718,6 +11937,7 @@ fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "genre" => "LOWER(COALESCE(t.genre_normalized, ''))",
             "originCountry" => "LOWER(COALESCE(origin.country_name, origin.country_code, ''))",
             "billboardRank" => "a.billboard_rank",
+            "billboardDebut" => "a.billboard_debut_week_key",
             "billboardSingleRank" => "t.billboard_single_rank",
             "trackRating" => "t.normalized_rating",
             "time" => "t.time_seconds",
@@ -11735,6 +11955,7 @@ fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "genre" => "LOWER(COALESCE(a.genre_normalized, ''))",
             "originCountry" => "LOWER(COALESCE(origin.country_name, origin.country_code, ''))",
             "billboardRank" => "a.billboard_rank",
+            "billboardDebut" => "a.billboard_debut_week_key",
             "totalMinutes" => "a.total_seconds",
             "trackCount" => "a.total_tracks",
             "albumRating" => "a.effective_album_rating",
@@ -11789,7 +12010,7 @@ fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
     }
     let grid_cover_size = config.grid_cover_size.clamp(96, 224);
     let view_mode = match config.view_mode.as_str() {
-        "compact" | "grid" => config.view_mode.clone(),
+        "compact" | "grid" | "timeline" => config.view_mode.clone(),
         _ => "table".to_string(),
     };
 
@@ -11831,7 +12052,7 @@ fn normalize_chart_sort_field(field: Option<&str>, fallback_metric: &str) -> Str
     match field.unwrap_or(fallback_metric) {
         "album" | "artist" | "year" | "genre" | "originCountry" | "albumRating"
         | "ratingCompleteness" | "lovedTracks" | "ae" | "tmoe" | "totalMinutes" | "albumScore"
-        | "billboardRank" => field.unwrap_or(fallback_metric).to_string(),
+        | "billboardRank" | "billboardDebut" => field.unwrap_or(fallback_metric).to_string(),
         _ => fallback_metric.to_string(),
     }
 }
@@ -12143,6 +12364,7 @@ fn export_table(
             "Display Artist",
             "Year",
             "Album Billboard",
+            "Album Billboard Debut Week",
             "Single Billboard",
             "Rating",
             "Time",
@@ -12156,6 +12378,7 @@ fn export_table(
             "Album",
             "Year",
             "Billboard",
+            "Billboard Debut Week",
             "Release Year",
             "Genre",
             "Publisher",
@@ -12207,6 +12430,11 @@ fn export_table(
                     optional_text(&row.display_artist),
                     optional_i32(row.year),
                     format_billboard_rank(row.billboard_rank, row.billboard_year),
+                    format_billboard_debut_week(
+                        row.billboard_debut_year,
+                        row.billboard_debut_month,
+                        row.billboard_debut_week,
+                    ),
                     format_billboard_rank(row.billboard_single_rank, row.billboard_single_year),
                     row.normalized_rating
                         .map(|rating| format!("{:.0}", f64::from(rating) / 20.0))
@@ -12224,6 +12452,11 @@ fn export_table(
                     optional_text(&row.album),
                     optional_i32(row.year),
                     format_billboard_rank(row.billboard_rank, row.billboard_year),
+                    format_billboard_debut_week(
+                        row.billboard_debut_year,
+                        row.billboard_debut_month,
+                        row.billboard_debut_week,
+                    ),
                     optional_i32(row.release_year),
                     optional_text(&row.canonical_genre),
                     optional_text(&row.publisher),
@@ -12364,6 +12597,19 @@ fn format_billboard_rank(rank: Option<i32>, year: Option<i32>) -> String {
     match (rank, year) {
         (Some(rank), Some(year)) => format!("#{rank} {year}"),
         (Some(rank), None) => format!("#{rank}"),
+        _ => String::new(),
+    }
+}
+
+fn format_billboard_debut_week(year: Option<i32>, month: Option<i32>, week: Option<i32>) -> String {
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    match (year, month, week) {
+        (Some(year), Some(month), Some(week)) if (1..=12).contains(&month) => {
+            format!("{} {year:04} · Week {week}", MONTHS[(month - 1) as usize])
+        }
+        (Some(year), _, Some(week)) => format!("{year:04} · Week {week}"),
         _ => String::new(),
     }
 }
@@ -12999,12 +13245,12 @@ mod tests {
         fs::create_dir_all(&source_dir).expect("create billboard csv dir");
         fs::write(
             source_dir.join("1987.csv"),
-            "EOY Rank,Artist,Title\n1,WHITNEY HOUSTON,Whitney\n103,PET SHOP BOYS,Actually\n",
+            "EOY Rank,Artist,Title,First Appearance,First Appearance Week\n1,WHITNEY HOUSTON,Whitney,Jun 1987,23\n103,PET SHOP BOYS,Actually,Sep 1987,36\n",
         )
         .expect("write 1987 chart");
         fs::write(
             source_dir.join("1988.csv"),
-            "EOY Rank,Artist,Title\n7,WHITNEY HOUSTON,Whitney\n107,PET SHOP BOYS,Actually\n",
+            "EOY Rank,Artist,Title,First Appearance,First Appearance Week\n7,WHITNEY HOUSTON,Whitney,Jun 1987,23\n107,PET SHOP BOYS,Actually,Sep 1987,36\n",
         )
         .expect("write 1988 chart");
 
@@ -13015,8 +13261,24 @@ mod tests {
         assert_eq!(summary.files_scanned, 2);
         assert_eq!(summary.chart_entries, 4);
         assert_eq!(summary.matched_albums, 1);
+        assert_eq!(summary.dated_albums, 1);
         assert_eq!(response.rows[0].billboard_rank, Some(103));
         assert_eq!(response.rows[0].billboard_year, Some(1987));
+        assert_eq!(response.rows[0].billboard_debut_year, Some(1987));
+        assert_eq!(response.rows[0].billboard_debut_month, Some(9));
+        assert_eq!(response.rows[0].billboard_debut_week, Some(36));
+        assert_eq!(
+            response.rows[0].billboard_debut_week_key.as_deref(),
+            Some("1987-W36")
+        );
+
+        let mut debut_request = BrowseRequest::default();
+        debut_request.filters.billboard_debut_week_from = Some("1987-W36".to_string());
+        debut_request.filters.billboard_debut_week_to = Some("1987-W36".to_string());
+        let debut_response = search_library(&conn, debut_request, 50)
+            .expect("filter albums by Billboard debut week");
+        assert_eq!(debut_response.total, 1);
+        assert_eq!(debut_response.rows[0].album.as_deref(), Some("Actually"));
 
         let mut request = MusicToolIssueRequest::default();
         request.tool_id = "missing-billboard-albums".to_string();
@@ -13034,6 +13296,23 @@ mod tests {
         assert_eq!(missing_response.rows[0].value.as_deref(), Some("#1 / 1987"));
 
         fs::remove_dir_all(source_dir).expect("remove billboard csv dir");
+    }
+
+    #[test]
+    fn resolves_billboard_weeks_across_iso_year_boundaries() {
+        let january_1949 =
+            parse_billboard_first_appearance("Jan 1949").expect("parse January first appearance");
+        let december_1957 =
+            parse_billboard_first_appearance("Dec 1957").expect("parse December first appearance");
+
+        assert_eq!(
+            billboard_first_appearance_iso_year(january_1949, 53),
+            Some(1948)
+        );
+        assert_eq!(
+            billboard_first_appearance_iso_year(december_1957, 1),
+            Some(1958)
+        );
     }
 
     #[test]
@@ -13405,29 +13684,38 @@ mod tests {
         fs::create_dir_all(&source_dir).expect("create billboard csv dir");
         fs::write(
             source_dir.join("1989.csv"),
-            "EOY Rank,Artist,Title\n5,MOTLEY CRUE,Dr. Feelgood\n",
+            "EOY Rank,Artist,Title,First Appearance,First Appearance Week\n5,MOTLEY CRUE,Dr. Feelgood,Sep 1989,36\n",
         )
         .expect("write diacritic chart");
 
         let summary =
             import_billboard_charts(&mut conn, &source_dir).expect("import billboard charts");
-        let (rank, year): (Option<i32>, Option<i32>) = conn
+        let (rank, year, debut_year, debut_week): (
+            Option<i32>,
+            Option<i32>,
+            Option<i32>,
+            Option<i32>,
+        ) = conn
             .query_row(
                 "
-                SELECT billboard_rank, billboard_year
+                SELECT billboard_rank, billboard_year,
+                       billboard_debut_year, billboard_debut_week
                 FROM albums
                 WHERE id = 'mb:motley'
                 ",
                 [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
             )
             .expect("load motley billboard rank");
 
         assert_eq!(summary.files_scanned, 1);
         assert_eq!(summary.chart_entries, 1);
         assert_eq!(summary.matched_albums, 1);
+        assert_eq!(summary.dated_albums, 1);
         assert_eq!(rank, Some(5));
         assert_eq!(year, Some(1989));
+        assert_eq!(debut_year, Some(1989));
+        assert_eq!(debut_week, Some(36));
 
         fs::remove_dir_all(source_dir).expect("remove billboard csv dir");
     }
@@ -14322,6 +14610,8 @@ mod tests {
             .expect("phase thirty-one schema exists"));
         assert!(migrations::phase_thirty_two_schema_exists(&conn)
             .expect("phase thirty-two schema exists"));
+        assert!(migrations::phase_thirty_three_schema_exists(&conn)
+            .expect("phase thirty-three schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));

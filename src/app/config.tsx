@@ -2,6 +2,7 @@ import {
   Activity,
   Album,
   BarChart3,
+  CalendarDays,
   Clock3,
   Compass,
   Film,
@@ -152,6 +153,7 @@ export const rankingOptions = [
 
 export const chartColumnOptions = [
   { value: "billboard", label: "Billboard" },
+  { value: "billboardDebut", label: "Debut week" },
   { value: "originCountry", label: "Origin" },
   { value: "rating", label: "Rating" },
   { value: "complete", label: "Complete" },
@@ -164,6 +166,7 @@ export const chartColumnOptions = [
 
 export const searchTableColumnOptions = [
   { value: "billboard", label: "Billboard" },
+  { value: "billboardDebut", label: "Debut week" },
 ];
 
 export type SearchExportColumnOption = {
@@ -184,6 +187,7 @@ export const chartViewModes: { value: ChartViewMode; label: string; icon: Lucide
   { value: "table", label: "Table", icon: BarChart3 },
   { value: "compact", label: "List", icon: ListMusic },
   { value: "grid", label: "Grid", icon: Album },
+  { value: "timeline", label: "Timeline", icon: CalendarDays },
 ];
 
 export const chartGridCoverSize = {

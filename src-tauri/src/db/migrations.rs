@@ -1,7 +1,17 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 32;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 33;
+
+pub(super) fn phase_thirty_three_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_thirty_two_schema_exists(conn)?
+        && super::schema_column_exists(conn, "albums", "billboard_debut_year")?
+        && super::schema_column_exists(conn, "albums", "billboard_debut_month")?
+        && super::schema_column_exists(conn, "albums", "billboard_debut_week")?
+        && super::schema_column_exists(conn, "albums", "billboard_debut_week_key")?
+        && super::schema_column_exists(conn, "billboard_chart_entries", "first_appearance_week")?
+        && super::schema_column_exists(conn, "billboard_chart_entries", "first_appearance_month")?)
+}
 
 pub(super) fn phase_thirty_two_schema_exists(conn: &Connection) -> Result<bool> {
     Ok(phase_thirty_one_schema_exists(conn)?
@@ -78,5 +88,14 @@ pub(super) fn migrate_portable_overlay_sync_default(conn: &Connection) -> Result
         params![LEGACY_DEVELOPER_OVERLAY_SYNC_PATH],
     )
     .context("Could not clear the legacy developer-specific overlay sync path")?;
+    Ok(())
+}
+
+pub(super) fn migrate_billboard_album_source_default(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "UPDATE app_settings SET billboard_source_path = 'CSV_ALBUMS' WHERE LOWER(TRIM(billboard_source_path)) = 'csv'",
+        [],
+    )
+    .context("Could not migrate the Billboard album CSV source path")?;
     Ok(())
 }

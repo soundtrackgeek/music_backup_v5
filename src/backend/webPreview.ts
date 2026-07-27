@@ -660,7 +660,14 @@ type MusicBrainzArtistInfoFields = Pick<
   | "musicBrainzInfoReviewState"
   | "musicBrainzInfoFetchedAt"
 >;
-type BrowseRowWithoutOrigin = Omit<BrowseRow, keyof OriginCountryFields>;
+type BrowseRowWithoutOrigin = Omit<
+  BrowseRow,
+  | keyof OriginCountryFields
+  | "billboardDebutYear"
+  | "billboardDebutMonth"
+  | "billboardDebutWeek"
+  | "billboardDebutWeekKey"
+>;
 type ArtistSummaryWithoutMusicBrainz = Omit<
   ArtistSummary,
   keyof OriginCountryFields | keyof MusicBrainzArtistInfoFields
@@ -806,8 +813,17 @@ function mockArtistInfoForArtist(
 }
 
 function withMockOrigin(row: BrowseRowWithoutOrigin): BrowseRow {
+  const debutWeek =
+    row.billboardYear == null ? null : ((row.billboardYear * 7) % 52) + 1;
   return {
     ...row,
+    billboardDebutYear: row.billboardYear,
+    billboardDebutMonth: debutWeek == null ? null : Math.ceil(debutWeek / 4.4),
+    billboardDebutWeek: debutWeek,
+    billboardDebutWeekKey:
+      row.billboardYear == null || debutWeek == null
+        ? null
+        : `${row.billboardYear}-W${String(debutWeek).padStart(2, "0")}`,
     ...mockOriginForArtist(row.albumArtistDisplay),
   };
 }

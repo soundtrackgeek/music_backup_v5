@@ -7,6 +7,7 @@ import type { ChartConfig, TextFilter } from "../types";
 
 const defaultVisibleColumns = [
   "billboard",
+  "billboardDebut",
   "rating",
   "complete",
   "score",

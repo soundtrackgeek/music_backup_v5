@@ -23,6 +23,8 @@ describe("browse request creation and serialization", () => {
       offset: 0,
     });
     expect(second.filters.genres).toEqual([]);
+    expect(first.filters.billboardDebutWeekFrom).toBeNull();
+    expect(first.filters.billboardDebutWeekTo).toBeNull();
     expect(first.filters.artistDissolvedYearTo).toBeNull();
   });
 
@@ -33,6 +35,8 @@ describe("browse request creation and serialization", () => {
     request.filters.originCountryCodes = ["GB"];
     request.filters.artistBornYearFrom = 1940;
     request.filters.billboardSingleRankMax = 20;
+    request.filters.billboardDebutWeekFrom = "1989-W22";
+    request.filters.billboardDebutWeekTo = "1989-W35";
     request.sort = { field: "billboardSingleRank", direction: "asc" };
 
     const serialized = serializeBrowseRequest(request);
@@ -45,6 +49,8 @@ describe("browse request creation and serialization", () => {
         originCountryCodes: ["GB"],
         artistBornYearFrom: 1940,
         billboardSingleRankMax: 20,
+        billboardDebutWeekFrom: "1989-W22",
+        billboardDebutWeekTo: "1989-W35",
       },
     });
     expect(restored).toEqual(request);
@@ -73,6 +79,8 @@ describe("saved search and chart normalization", () => {
     expect(normalized.request.filters.genres).toEqual(["Pop"]);
     expect(normalized.request.filters.originCountryCodes).toEqual([]);
     expect(normalized.request.filters.artistType).toBe("");
+    expect(normalized.request.filters.billboardDebutWeekFrom).toBeNull();
+    expect(normalized.request.filters.billboardDebutWeekTo).toBeNull();
   });
 
   it("converts a legacy chart threshold and clamps its cover size", () => {

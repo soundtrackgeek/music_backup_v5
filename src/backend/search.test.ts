@@ -19,4 +19,14 @@ describe("web preview library search", () => {
     expect(response.rows[0]?.album).not.toBe("Actually");
     expect(response.rows.map((row) => row.album)).toContain("Actually");
   });
+
+  it("filters albums by their Billboard debut week", async () => {
+    const request = createRequest("albums");
+    request.filters.billboardDebutWeekFrom = "1987-W01";
+    request.filters.billboardDebutWeekTo = "1987-W53";
+
+    const response = await searchLibrary(request);
+
+    expect(response.rows.map((row) => row.album)).toEqual(["Actually"]);
+  });
 });

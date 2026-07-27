@@ -2607,6 +2607,7 @@ export async function importBillboardCharts(sourcePath: string) {
       filesScanned: 70,
       chartEntries: 12000,
       matchedAlbums,
+      datedAlbums: matchedAlbums,
       durationMs: 0,
     } satisfies BillboardImportSummary;
   }
@@ -2694,6 +2695,8 @@ export async function searchLibrary(request: BrowseRequest) {
     const billboardRankMax = request.filters.billboardRankMax;
     const billboardSingleRankMin = request.filters.billboardSingleRankMin;
     const billboardSingleRankMax = request.filters.billboardSingleRankMax;
+    const billboardDebutWeekFrom = request.filters.billboardDebutWeekFrom;
+    const billboardDebutWeekTo = request.filters.billboardDebutWeekTo;
     const lovedTracksMin = request.filters.lovedTracksMin;
     const lovedTracksMax = request.filters.lovedTracksMax;
     const ratingCompletenessMin = normalizePercentFilter(
@@ -2733,6 +2736,13 @@ export async function searchLibrary(request: BrowseRequest) {
         matchesArtistInfoFilters(artistInfo, request.filters) &&
         matchesNumberRange(row.year, yearFrom, yearTo) &&
         matchesNumberRange(row.releaseYear, releaseYearFrom, releaseYearTo) &&
+        matchesIsoWeekRange(
+          row.billboardDebutWeekKey,
+          row.billboardDebutYear,
+          row.billboardDebutWeek,
+          billboardDebutWeekFrom,
+          billboardDebutWeekTo,
+        ) &&
         matchesMinuteRange(
           isTracks ? row.trackSeconds : row.totalSeconds,
           totalMinutesMin,
@@ -3479,6 +3489,23 @@ function matchesNumberRange(
     (minimum == null || value >= minimum) &&
     (maximum == null || value <= maximum)
   );
+}
+
+function matchesIsoWeekRange(
+  weekKey: string | null | undefined,
+  year: number | null | undefined,
+  week: number | null | undefined,
+  minimum: string | null | undefined,
+  maximum: string | null | undefined,
+) {
+  if (!minimum && !maximum) return true;
+  const value =
+    weekKey ??
+    (year == null || week == null
+      ? null
+      : `${year.toString().padStart(4, "0")}-W${week.toString().padStart(2, "0")}`);
+  if (!value) return false;
+  return (!minimum || value >= minimum) && (!maximum || value <= maximum);
 }
 
 function normalizedArtistInfoValue(value: string | null | undefined) {

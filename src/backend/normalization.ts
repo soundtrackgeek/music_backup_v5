@@ -10,7 +10,7 @@ import type {
 export const settingsStorageKey = "musicLibrarySettings:v1";
 export const defaultImportSourcePath = "musicbee-library.tsv";
 export const defaultCoverSourcePath = "AlbumCovers";
-export const defaultBillboardSourcePath = "CSV";
+export const defaultBillboardSourcePath = "CSV_ALBUMS";
 export const defaultBillboardSinglesSourcePath = "CSV_SINGLES";
 export const defaultMusicBrainzCachePath =
   "MusicBrainz/musicbrainz_cache.db";
@@ -52,9 +52,8 @@ export function normalizeSettings(
       settings.coverSourcePath,
       defaultCoverSourcePath,
     ),
-    billboardSourcePath: normalizeImportPath(
+    billboardSourcePath: normalizeBillboardSourcePath(
       settings.billboardSourcePath,
-      defaultBillboardSourcePath,
     ),
     billboardSinglesSourcePath: normalizeImportPath(
       settings.billboardSinglesSourcePath,
@@ -161,6 +160,13 @@ function normalizeCountryFlagDisplay(value: unknown): CountryFlagDisplay {
 function normalizeImportPath(value: unknown, fallback: string) {
   const normalized = typeof value === "string" ? value.trim() : "";
   return normalized || fallback;
+}
+
+function normalizeBillboardSourcePath(value: unknown) {
+  const normalized = normalizeImportPath(value, defaultBillboardSourcePath);
+  return normalized.toLowerCase() === "csv"
+    ? defaultBillboardSourcePath
+    : normalized;
 }
 
 export function normalizeDeemixDownloadQuality(

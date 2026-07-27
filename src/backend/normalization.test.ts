@@ -10,6 +10,7 @@ describe("settings normalization", () => {
 
     expect(settings.backupRetention).toBe(3);
     expect(settings.importSourcePath).toBe("musicbee-library.tsv");
+    expect(settings.billboardSourcePath).toBe("CSV_ALBUMS");
     expect(settings.musicBrainzCachePath).toBe(
       "MusicBrainz/musicbrainz_cache.db",
     );
@@ -21,6 +22,12 @@ describe("settings normalization", () => {
     expect(settings.deemixDownloadOrganization).toBe(
       "flat_artist_album_year",
     );
+  });
+
+  it("migrates the legacy album chart folder default", () => {
+    const settings = normalizeSettings({ billboardSourcePath: "CSV" });
+
+    expect(settings.billboardSourcePath).toBe("CSV_ALBUMS");
   });
 
   it("trims paths, validates modes, and clamps numeric preferences", () => {

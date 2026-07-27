@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.86.0] - 2026-07-27
+### Added
+- Added Billboard album first-appearance month and week import from `CSV_ALBUMS`, including correct ISO-year handling at January and December boundaries.
+- Added Billboard chart-debut week ranges, columns, sorting, exports, album details, and an interactive **Albums through the years** Chart timeline.
+- Added Luna Search, Chart, and Playlist Builder support for chart-debut periods and named seasons such as `summer 1989`.
+
+### Changed
+- Replaced the legacy default album chart folder `CSV` with `CSV_ALBUMS`; existing exact-default settings migrate automatically.
+- Bumped the SQLite schema to version 33 and synchronized app metadata at `0.86.0`.
+
 ## [0.85.0] - 2026-07-27
 ### Added
 - Added lossless FLAC as a Deemix audio-quality option, including Vorbis metadata and embedded front-cover artwork.

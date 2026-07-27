@@ -134,6 +134,40 @@ export function formatOriginCountry(
   return name;
 }
 
+export function formatBillboardDebutWeek(
+  row: Pick<
+    BrowseRow,
+    "billboardDebutYear" | "billboardDebutMonth" | "billboardDebutWeek"
+  >,
+) {
+  if (row.billboardDebutYear == null || row.billboardDebutWeek == null) {
+    return "";
+  }
+  const month =
+    row.billboardDebutMonth == null
+      ? ""
+      : new Intl.DateTimeFormat(undefined, {
+          month: "short",
+          timeZone: "UTC",
+        }).format(new Date(Date.UTC(2000, row.billboardDebutMonth - 1, 1)));
+  return `${month ? `${month} ` : ""}${row.billboardDebutYear} · Week ${row.billboardDebutWeek}`;
+}
+
+export function billboardDebutWeekKey(
+  row: Pick<
+    BrowseRow,
+    "billboardDebutYear" | "billboardDebutWeek" | "billboardDebutWeekKey"
+  >,
+) {
+  if (row.billboardDebutWeekKey) {
+    return row.billboardDebutWeekKey;
+  }
+  if (row.billboardDebutYear == null || row.billboardDebutWeek == null) {
+    return "";
+  }
+  return `${row.billboardDebutYear.toString().padStart(4, "0")}-W${row.billboardDebutWeek.toString().padStart(2, "0")}`;
+}
+
 function stripOriginCountryArea(value: string | null | undefined) {
   const trimmed = value?.trim() ?? "";
   if (!trimmed.endsWith(")")) {
@@ -183,6 +217,8 @@ export function browseRowSortValue(row: BrowseRow, field: string) {
       return (row.originCountryName || row.originCountryCode || "").toLowerCase();
     case "billboardRank":
       return row.billboardRank;
+    case "billboardDebut":
+      return billboardDebutWeekKey(row);
     case "billboardSingleRank":
       return row.billboardSingleRank;
     case "trackRating":
