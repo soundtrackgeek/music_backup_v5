@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.85.0] - 2026-07-27
+### Added
+- Added lossless FLAC as a Deemix audio-quality option, including Vorbis metadata and embedded front-cover artwork.
+- Added a persisted quality-fallback preference. When enabled, each track uses the best available format in the order FLAC, MP3 320 kbps, then MP3 128 kbps; exact-quality mode remains available.
+
+### Changed
+- Bumped the SQLite schema to version 32 for the Deemix fallback preference and synchronized app metadata at `0.85.0`.
+
 ## [0.84.1] - 2026-07-27
 ### Fixed
 - Fixed Wish List missing-album panels being clipped by artist cards or the bottom of the app window. The panel now renders in a viewport-level layer, flips above the eye control when needed, stays within the horizontal viewport, and scrolls internally for long album lists.

@@ -234,6 +234,8 @@ pub struct AppSettings {
     pub deemix_download_path: String,
     #[serde(default = "default_deemix_download_quality")]
     pub deemix_download_quality: String,
+    #[serde(default = "default_deemix_download_fallback")]
+    pub deemix_download_fallback: bool,
     #[serde(default = "default_deemix_download_organization")]
     pub deemix_download_organization: String,
     #[serde(
@@ -1883,6 +1885,10 @@ fn default_deemix_download_quality() -> String {
     "mp3_320".to_string()
 }
 
+fn default_deemix_download_fallback() -> bool {
+    true
+}
+
 fn default_deemix_download_organization() -> String {
     "flat_artist_album_year".to_string()
 }
@@ -1926,6 +1932,7 @@ mod tests {
             billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
             deemix_download_path: r"D:\Music\Incoming".to_string(),
             deemix_download_quality: "mp3_320".to_string(),
+            deemix_download_fallback: true,
             deemix_download_organization: "flat_artist_album_year".to_string(),
             musicbrainz_cache_path: r"C:\Sync\musicbrainz_cache.db".to_string(),
             musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3".to_string(),
@@ -1976,6 +1983,7 @@ mod tests {
             serialized.get("deemixDownloadQuality"),
             Some(&json!("mp3_320"))
         );
+        assert_eq!(serialized.get("deemixDownloadFallback"), Some(&json!(true)));
         assert_eq!(
             serialized.get("deemixDownloadOrganization"),
             Some(&json!("flat_artist_album_year"))
@@ -1991,6 +1999,7 @@ mod tests {
             "billboardSinglesSourcePath": r"D:\Charts\Singles",
             "deemixDownloadPath": r"D:\Music\Incoming",
             "deemixDownloadQuality": "mp3_128",
+            "deemixDownloadFallback": false,
             "deemixDownloadOrganization": "artist_album_year_folders",
             "countryFlagDisplay": "flag",
             "musicBrainzCachePath": r"C:\Sync\musicbrainz_cache.db",
@@ -2005,6 +2014,7 @@ mod tests {
         assert_eq!(decoded.billboard_singles_source_path, r"D:\Charts\Singles");
         assert_eq!(decoded.deemix_download_path, r"D:\Music\Incoming");
         assert_eq!(decoded.deemix_download_quality, "mp3_128");
+        assert!(!decoded.deemix_download_fallback);
         assert_eq!(
             decoded.deemix_download_organization,
             "artist_album_year_folders"

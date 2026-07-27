@@ -100,23 +100,30 @@ describe("DeemixSettingsPanel", () => {
     await waitFor(() => expect(onDownloadPathChange).toHaveBeenCalledWith(""));
   });
 
-  it("saves exact quality and album-folder organization preferences", async () => {
+  it("saves FLAC, fallback, and album-folder organization preferences", async () => {
     const onQualityChange = vi.fn().mockResolvedValue(true);
+    const onFallbackChange = vi.fn().mockResolvedValue(true);
     const onOrganizationChange = vi.fn().mockResolvedValue(true);
     render(
       <DeemixSettingsPanel
         quality="mp3_320"
         organization="flat_artist_album_year"
         onQualityChange={onQualityChange}
+        onFallbackChange={onFallbackChange}
         onOrganizationChange={onOrganizationChange}
       />,
     );
     await screen.findByText("No Deezer ARL configured");
 
     fireEvent.change(screen.getByLabelText("Deemix audio quality"), {
-      target: { value: "mp3_128" },
+      target: { value: "flac" },
     });
-    await waitFor(() => expect(onQualityChange).toHaveBeenCalledWith("mp3_128"));
+    await waitFor(() => expect(onQualityChange).toHaveBeenCalledWith("flac"));
+
+    fireEvent.change(screen.getByLabelText("Deemix quality fallback"), {
+      target: { value: "exact" },
+    });
+    await waitFor(() => expect(onFallbackChange).toHaveBeenCalledWith(false));
 
     fireEvent.change(screen.getByLabelText("Deemix folder organization"), {
       target: { value: "artist_album_year_folders" },

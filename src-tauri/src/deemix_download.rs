@@ -7,6 +7,8 @@ use cookie_store::CookieStore;
 use id3::frame::{ExtendedText, InvolvedPeopleList, InvolvedPeopleListItem, Picture, PictureType};
 use id3::{Tag, TagLike, Version};
 use md5::{Digest, Md5};
+use metaflac::block::PictureType as FlacPictureType;
+use metaflac::Tag as FlacTag;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -24,7 +26,7 @@ use zeroize::Zeroizing;
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_MEDIA_URL: &str = "https://media.deezer.com/v1/get_url";
 const DEEMIX_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.84.1";
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.85.0";
 const DOWNLOAD_EVENT: &str = "deemix-download-progress";
 const STREAM_CHUNK_SIZE: usize = 2048;
 const MAX_ARTWORK_BYTES: u64 = 20 * 1024 * 1024;
@@ -105,16 +107,18 @@ struct KnownDownload {
     downloaded_at: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum DownloadQuality {
     Mp3_128,
     Mp3_320,
+    Flac,
 }
 
 impl DownloadQuality {
     fn from_setting(value: &str) -> Self {
         match value {
             "mp3_128" => Self::Mp3_128,
+            "flac" => Self::Flac,
             _ => Self::Mp3_320,
         }
     }
@@ -123,6 +127,7 @@ impl DownloadQuality {
         match self {
             Self::Mp3_128 => "mp3_128",
             Self::Mp3_320 => "mp3_320",
+            Self::Flac => "flac",
         }
     }
 
@@ -130,6 +135,7 @@ impl DownloadQuality {
         match self {
             Self::Mp3_128 => "MP3_128",
             Self::Mp3_320 => "MP3_320",
+            Self::Flac => "FLAC",
         }
     }
 
@@ -137,6 +143,7 @@ impl DownloadQuality {
         match self {
             Self::Mp3_128 => "FILESIZE_MP3_128",
             Self::Mp3_320 => "FILESIZE_MP3_320",
+            Self::Flac => "FILESIZE_FLAC",
         }
     }
 
@@ -144,6 +151,25 @@ impl DownloadQuality {
         match self {
             Self::Mp3_128 => "MP3 128 kbps",
             Self::Mp3_320 => "MP3 320 kbps",
+            Self::Flac => "FLAC",
+        }
+    }
+
+    fn file_extension(self) -> &'static str {
+        match self {
+            Self::Mp3_128 | Self::Mp3_320 => "mp3",
+            Self::Flac => "flac",
+        }
+    }
+
+    fn fallback_candidates(self, allow_fallback: bool) -> Vec<Self> {
+        if !allow_fallback {
+            return vec![self];
+        }
+        match self {
+            Self::Flac => vec![Self::Flac, Self::Mp3_320, Self::Mp3_128],
+            Self::Mp3_320 => vec![Self::Mp3_320, Self::Mp3_128],
+            Self::Mp3_128 => vec![Self::Mp3_128],
         }
     }
 }
@@ -153,6 +179,7 @@ struct AuthenticatedSession {
     api_token: Zeroizing<String>,
     license_token: Zeroizing<String>,
     can_stream_hq: bool,
+    can_stream_lossless: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -186,6 +213,7 @@ struct TrackMetadata {
     composers: Vec<String>,
     involved_people: Vec<(String, String)>,
     track_token: Zeroizing<String>,
+    download_quality: DownloadQuality,
 }
 
 #[derive(Debug, Clone)]
@@ -397,12 +425,9 @@ pub fn download_album_for_app(
     );
 
     let mut session = authenticate()?;
-    if quality == DownloadQuality::Mp3_320 && !session.can_stream_hq {
-        bail!(
-            "This Deezer account does not report high-quality streaming. Choose MP3 128 kbps or reconnect an account with HQ access."
-        );
-    }
-    let album = fetch_album(&mut session, &input.album_id, quality)?;
+    let quality_candidates =
+        account_quality_candidates(&session, quality, settings.deemix_download_fallback)?;
+    let album = fetch_album(&mut session, &input.album_id, &quality_candidates)?;
     let base_destination = destination_path(&root, &album, &settings.deemix_download_organization)?;
     let destination = if input.allow_duplicate {
         next_available_destination(&base_destination)?
@@ -423,7 +448,7 @@ pub fn download_album_for_app(
     }
     fs::create_dir(&stage_path).context("Could not create the Deemix staging folder")?;
 
-    let result = download_album_to_stage(app, &input, &session, quality, &album, &stage_path)
+    let result = download_album_to_stage(app, &input, &session, &album, &stage_path)
         .and_then(|cover_name| {
             if destination.exists() {
                 bail!(
@@ -477,9 +502,9 @@ pub fn download_album_for_app(
                 &input,
                 "complete",
                 &format!(
-                    "Downloaded and tagged {} tracks as {}.",
+                    "Downloaded and tagged {} tracks: {}.",
                     summary.track_count,
-                    quality.display_name()
+                    quality_breakdown(&album)
                 ),
                 None,
                 summary.track_count,
@@ -510,7 +535,6 @@ fn download_album_to_stage(
     app: &AppHandle,
     input: &DeemixAlbumDownloadRequest,
     session: &AuthenticatedSession,
-    quality: DownloadQuality,
     album: &AlbumMetadata,
     stage_path: &Path,
 ) -> Result<String> {
@@ -540,7 +564,7 @@ fn download_album_to_stage(
             completed,
             album.tracks.len(),
         );
-        let media_url = fetch_media_url(session, track, quality)?;
+        let media_url = fetch_media_url(session, track, track.download_quality)?;
         let file_name = unique_track_filename(track, album.disc_total, &mut used_names);
         let final_path = stage_path.join(&file_name);
         let part_path = stage_path.join(format!("{file_name}.part"));
@@ -556,7 +580,7 @@ fn download_album_to_stage(
             completed,
             album.tracks.len(),
         );
-        write_mp3_tags(&part_path, album, track, &artwork)
+        write_audio_tags(&part_path, album, track, &artwork)
             .with_context(|| format!("Could not tag {}", track.title))?;
         fs::rename(&part_path, &final_path)
             .with_context(|| format!("Could not finalize {}", file_name))?;
@@ -672,6 +696,53 @@ fn is_uuid(value: &str) -> bool {
         })
 }
 
+fn account_quality_candidates(
+    session: &AuthenticatedSession,
+    preferred: DownloadQuality,
+    allow_fallback: bool,
+) -> Result<Vec<DownloadQuality>> {
+    let candidates = preferred
+        .fallback_candidates(allow_fallback)
+        .into_iter()
+        .filter(|quality| match quality {
+            DownloadQuality::Flac => session.can_stream_lossless,
+            DownloadQuality::Mp3_320 => session.can_stream_hq,
+            DownloadQuality::Mp3_128 => true,
+        })
+        .collect::<Vec<_>>();
+    if !candidates.is_empty() {
+        return Ok(candidates);
+    }
+    match preferred {
+        DownloadQuality::Flac => bail!(
+            "This Deezer account does not report lossless streaming. Enable quality fallback or reconnect an account with lossless access."
+        ),
+        DownloadQuality::Mp3_320 => bail!(
+            "This Deezer account does not report high-quality streaming. Enable quality fallback or reconnect an account with HQ access."
+        ),
+        DownloadQuality::Mp3_128 => bail!("This Deezer account cannot stream MP3 128 kbps."),
+    }
+}
+
+fn quality_breakdown(album: &AlbumMetadata) -> String {
+    [
+        DownloadQuality::Flac,
+        DownloadQuality::Mp3_320,
+        DownloadQuality::Mp3_128,
+    ]
+    .into_iter()
+    .filter_map(|quality| {
+        let count = album
+            .tracks
+            .iter()
+            .filter(|track| track.download_quality == quality)
+            .count();
+        (count > 0).then(|| format!("{count} as {}", quality.display_name()))
+    })
+    .collect::<Vec<_>>()
+    .join(", ")
+}
+
 #[cfg(not(test))]
 fn validate_download_root(value: &str) -> Result<PathBuf> {
     let trimmed = value.trim();
@@ -713,11 +784,14 @@ fn authenticate() -> Result<AuthenticatedSession> {
     let options = user_data.pointer("/USER/OPTIONS").unwrap_or(&Value::Null);
     let can_stream_hq =
         flexible_bool(options.get("web_hq")) || flexible_bool(options.get("mobile_hq"));
+    let can_stream_lossless =
+        flexible_bool(options.get("web_lossless")) || flexible_bool(options.get("mobile_lossless"));
     Ok(AuthenticatedSession {
         agent,
         api_token: Zeroizing::new(api_token),
         license_token: Zeroizing::new(license_token),
         can_stream_hq,
+        can_stream_lossless,
     })
 }
 
@@ -826,13 +900,15 @@ fn refresh_authenticated_session_at(
     let options = user_data.pointer("/USER/OPTIONS").unwrap_or(&Value::Null);
     session.can_stream_hq =
         flexible_bool(options.get("web_hq")) || flexible_bool(options.get("mobile_hq"));
+    session.can_stream_lossless =
+        flexible_bool(options.get("web_lossless")) || flexible_bool(options.get("mobile_lossless"));
     Ok(())
 }
 
 fn fetch_album(
     session: &mut AuthenticatedSession,
     album_id: &str,
-    quality: DownloadQuality,
+    quality_candidates: &[DownloadQuality],
 ) -> Result<AlbumMetadata> {
     let url = format!("https://api.deezer.com/album/{album_id}");
     let response = session
@@ -862,7 +938,7 @@ fn fetch_album(
         &public_album,
         &gateway_album,
         &gateway_tracks,
-        quality,
+        quality_candidates,
     )
 }
 
@@ -871,8 +947,12 @@ fn parse_album_metadata(
     public_album: &Value,
     gateway_album: &Value,
     gateway_tracks: &Value,
-    quality: DownloadQuality,
+    quality_candidates: &[DownloadQuality],
 ) -> Result<AlbumMetadata> {
+    let preferred_quality = quality_candidates
+        .first()
+        .copied()
+        .context("No Deezer download quality is available for this account")?;
     let id = required_string(public_album.get("id"), "album ID")?;
     if id != requested_id {
         bail!("Deezer returned metadata for a different album.");
@@ -974,15 +1054,20 @@ fn parse_album_metadata(
             .unwrap_or(1)
             .max(1);
         let track_token = required_string(gateway_track.get("TRACK_TOKEN"), "track token")?;
-        let requested_filesize =
-            scalar_u64(gateway_track.get(quality.filesize_field())).unwrap_or(0);
-        if requested_filesize == 0 {
+        let download_quality = select_download_quality(gateway_track, quality_candidates);
+        let Some(download_quality) = download_quality else {
+            let accepted = quality_candidates
+                .iter()
+                .map(|quality| quality.display_name())
+                .collect::<Vec<_>>()
+                .join(", then ");
             bail!(
-                "{} is unavailable as {}. No lower-quality file was substituted.",
+                "{} is unavailable as {}. Accepted qualities were: {}.",
                 track_title,
-                quality.display_name()
+                preferred_quality.display_name(),
+                accepted
             );
-        }
+        };
         let (composers, involved_people) = contributor_tags(gateway_track.get("SNG_CONTRIBUTORS"));
         tracks.push(TrackMetadata {
             id: track_id,
@@ -1001,6 +1086,7 @@ fn parse_album_metadata(
             composers,
             involved_people,
             track_token: Zeroizing::new(track_token),
+            download_quality,
         });
     }
     tracks.sort_by_key(|track| (track.disc_number, track.track_number));
@@ -1029,6 +1115,16 @@ fn parse_album_metadata(
         disc_total,
         tracks,
     })
+}
+
+fn select_download_quality(
+    gateway_track: &Value,
+    quality_candidates: &[DownloadQuality],
+) -> Option<DownloadQuality> {
+    quality_candidates
+        .iter()
+        .copied()
+        .find(|quality| scalar_u64(gateway_track.get(quality.filesize_field())).unwrap_or(0) > 0)
 }
 
 fn fetch_media_url(
@@ -1191,6 +1287,20 @@ fn download_artwork(url: &str) -> Result<Artwork> {
     })
 }
 
+fn write_audio_tags(
+    path: &Path,
+    album: &AlbumMetadata,
+    track: &TrackMetadata,
+    artwork: &Artwork,
+) -> Result<()> {
+    match track.download_quality {
+        DownloadQuality::Mp3_128 | DownloadQuality::Mp3_320 => {
+            write_mp3_tags(path, album, track, artwork)
+        }
+        DownloadQuality::Flac => write_flac_tags(path, album, track, artwork),
+    }
+}
+
 fn write_mp3_tags(
     path: &Path,
     album: &AlbumMetadata,
@@ -1274,6 +1384,78 @@ fn write_mp3_tags(
     Ok(())
 }
 
+fn write_flac_tags(
+    path: &Path,
+    album: &AlbumMetadata,
+    track: &TrackMetadata,
+    artwork: &Artwork,
+) -> Result<()> {
+    let mut tag = FlacTag::read_from_path(path).context("Could not read FLAC metadata")?;
+    tag.set_vorbis("TITLE", vec![track.title.clone()]);
+    tag.set_vorbis("ARTIST", track.artists.clone());
+    tag.set_vorbis("ALBUM", vec![album.title.clone()]);
+    tag.set_vorbis("ALBUMARTIST", album.album_artists.clone());
+    tag.set_vorbis("TRACKNUMBER", vec![track.track_number.to_string()]);
+    tag.set_vorbis("TRACKTOTAL", vec![album.tracks.len().to_string()]);
+    tag.set_vorbis("DISCNUMBER", vec![track.disc_number.to_string()]);
+    tag.set_vorbis("DISCTOTAL", vec![album.disc_total.to_string()]);
+    if !album.genres.is_empty() {
+        tag.set_vorbis("GENRE", album.genres.clone());
+    }
+    if let Some(date) = &album.release_date {
+        tag.set_vorbis("DATE", vec![date.clone()]);
+    } else if let Some(year) = album.year {
+        tag.set_vorbis("DATE", vec![year.to_string()]);
+    }
+    if let Some(label) = &album.label {
+        tag.set_vorbis("LABEL", vec![label.clone()]);
+    }
+    if let Some(isrc) = &track.isrc {
+        tag.set_vorbis("ISRC", vec![isrc.clone()]);
+    }
+    if let Some(copyright) = track.copyright.as_ref().or(album.copyright.as_ref()) {
+        tag.set_vorbis("COPYRIGHT", vec![copyright.clone()]);
+    }
+    if !track.composers.is_empty() {
+        tag.set_vorbis("COMPOSER", track.composers.clone());
+    }
+    let mut people_by_role = HashMap::<String, Vec<String>>::new();
+    for (role, name) in &track.involved_people {
+        let key = role
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() {
+                    character.to_ascii_uppercase()
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>();
+        if !key.is_empty() {
+            people_by_role.entry(key).or_default().push(name.clone());
+        }
+    }
+    for (role, names) in people_by_role {
+        tag.set_vorbis(role, names);
+    }
+    if let Some(upc) = &album.upc {
+        tag.set_vorbis("BARCODE", vec![upc.clone()]);
+    }
+    tag.set_vorbis(
+        "ITUNESADVISORY",
+        vec![if track.explicit { "1" } else { "0" }.to_string()],
+    );
+    tag.set_vorbis("SOURCE", vec!["Deezer".to_string()]);
+    tag.set_vorbis("SOURCEID", vec![track.id.clone()]);
+    tag.add_picture(
+        artwork.mime_type.clone(),
+        FlacPictureType::CoverFront,
+        artwork.bytes.clone(),
+    );
+    tag.save().context("Could not write FLAC tags")?;
+    Ok(())
+}
+
 fn destination_path(root: &Path, album: &AlbumMetadata, organization: &str) -> Result<PathBuf> {
     destination_path_from_parts(root, &album.artist, &album.title, album.year, organization)
 }
@@ -1333,10 +1515,11 @@ fn unique_track_filename(
     } else {
         format!("{:02}", track.track_number)
     };
-    let mut file_name = format!("{prefix} {title}.mp3");
+    let extension = track.download_quality.file_extension();
+    let mut file_name = format!("{prefix} {title}.{extension}");
     let key = file_name.to_lowercase();
     if !used_names.insert(key) {
-        file_name = format!("{prefix} {title} [{}].mp3", track.id);
+        file_name = format!("{prefix} {title} [{}].{extension}", track.id);
         used_names.insert(file_name.to_lowercase());
     }
     file_name
@@ -1741,6 +1924,7 @@ mod tests {
             api_token: Zeroizing::new("stale-token".to_string()),
             license_token: Zeroizing::new("stale-license".to_string()),
             can_stream_hq: false,
+            can_stream_lossless: false,
         };
         let result = gateway_call_at(
             &mut session,
@@ -1777,7 +1961,7 @@ mod tests {
     #[ignore = "requires a configured Windows Credential Manager ARL and makes live Deezer metadata requests"]
     fn live_authenticated_album_metadata_session() {
         let mut session = authenticate().expect("authenticate the configured Deezer ARL");
-        let album = fetch_album(&mut session, "240766", DownloadQuality::Mp3_320)
+        let album = fetch_album(&mut session, "240766", &[DownloadQuality::Mp3_320])
             .expect("load authenticated album metadata");
         assert_eq!(album.id, "240766");
         assert!(!album.tracks.is_empty());
@@ -1964,7 +2148,7 @@ mod tests {
             &public,
             &gateway_album,
             &gateway_tracks,
-            DownloadQuality::Mp3_320,
+            &[DownloadQuality::Mp3_320],
         )
         .expect("album metadata");
         assert_eq!(album.year, Some(1992));
@@ -1972,10 +2156,51 @@ mod tests {
         assert_eq!(album.label.as_deref(), Some("Interscope"));
         assert_eq!(album.genres, vec!["Alternative", "Metal"]);
         assert_eq!(album.tracks[0].isrc.as_deref(), Some("USIR19200541"));
+        assert_eq!(album.tracks[0].download_quality, DownloadQuality::Mp3_320);
         assert_eq!(album.tracks[0].composers, vec!["Page Hamilton"]);
         assert_eq!(
             album.tracks[0].involved_people,
             vec![("producer".to_string(), "Steve Albini".to_string())]
+        );
+    }
+
+    #[test]
+    fn quality_fallback_uses_the_best_available_lower_format() {
+        assert_eq!(
+            DownloadQuality::Flac.fallback_candidates(true),
+            vec![
+                DownloadQuality::Flac,
+                DownloadQuality::Mp3_320,
+                DownloadQuality::Mp3_128
+            ]
+        );
+        assert_eq!(
+            DownloadQuality::Mp3_320.fallback_candidates(true),
+            vec![DownloadQuality::Mp3_320, DownloadQuality::Mp3_128]
+        );
+        assert_eq!(
+            DownloadQuality::Flac.fallback_candidates(false),
+            vec![DownloadQuality::Flac]
+        );
+
+        let gateway_track = json!({
+            "FILESIZE_FLAC": 0,
+            "FILESIZE_MP3_320": 0,
+            "FILESIZE_MP3_128": 12345
+        });
+        assert_eq!(
+            select_download_quality(
+                &gateway_track,
+                &DownloadQuality::Flac.fallback_candidates(true)
+            ),
+            Some(DownloadQuality::Mp3_128)
+        );
+        assert_eq!(
+            select_download_quality(
+                &gateway_track,
+                &DownloadQuality::Flac.fallback_candidates(false)
+            ),
+            None
         );
     }
 
@@ -2006,20 +2231,7 @@ mod tests {
     #[test]
     fn writes_complete_mp3_tags_and_embedded_cover() {
         let mut album = fixture_album();
-        let track = TrackMetadata {
-            id: "2445707".to_string(),
-            title: "In The Meantime".to_string(),
-            artists: vec!["Helmet".to_string()],
-            track_number: 1,
-            disc_number: 1,
-            duration_seconds: 188,
-            isrc: Some("USIR19200541".to_string()),
-            explicit: false,
-            copyright: Some("1992 Interscope".to_string()),
-            composers: vec!["Page Hamilton".to_string()],
-            involved_people: vec![("producer".to_string(), "Steve Albini".to_string())],
-            track_token: Zeroizing::new("token".to_string()),
-        };
+        let track = fixture_track(DownloadQuality::Mp3_320);
         album.tracks.push(track.clone());
         let artwork = Artwork {
             bytes: vec![0xFF, 0xD8, 0xFF, 0xD9],
@@ -2053,6 +2265,62 @@ mod tests {
         );
         assert_eq!(tag.pictures().count(), 1);
         fs::remove_file(&path).expect("remove tag test file");
+    }
+
+    #[test]
+    fn writes_complete_flac_tags_and_embedded_cover() {
+        let mut album = fixture_album();
+        let track = fixture_track(DownloadQuality::Flac);
+        album.tracks.push(track.clone());
+        let artwork = Artwork {
+            bytes: vec![0xFF, 0xD8, 0xFF, 0xD9],
+            mime_type: "image/jpeg".to_string(),
+            extension: "jpg",
+        };
+        let path = std::env::temp_dir().join(format!(
+            "music-library-deemix-tag-test-{}-{}.flac",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        let mut minimal_flac = b"fLaC".to_vec();
+        minimal_flac.extend_from_slice(&[0x80, 0x00, 0x00, 0x22]);
+        minimal_flac.extend_from_slice(&[0; 34]);
+        fs::write(&path, minimal_flac).expect("seed FLAC");
+        write_flac_tags(&path, &album, &track, &artwork).expect("write FLAC tags");
+
+        let tag = FlacTag::read_from_path(&path).expect("read FLAC tags");
+        assert_eq!(
+            tag.get_vorbis("TITLE")
+                .expect("title tag")
+                .collect::<Vec<_>>(),
+            vec!["In The Meantime"]
+        );
+        assert_eq!(
+            tag.get_vorbis("ALBUMARTIST")
+                .expect("album artist tag")
+                .collect::<Vec<_>>(),
+            vec!["Helmet"]
+        );
+        assert_eq!(tag.pictures().count(), 1);
+        fs::remove_file(&path).expect("remove FLAC tag test file");
+    }
+
+    fn fixture_track(download_quality: DownloadQuality) -> TrackMetadata {
+        TrackMetadata {
+            id: "2445707".to_string(),
+            title: "In The Meantime".to_string(),
+            artists: vec!["Helmet".to_string()],
+            track_number: 1,
+            disc_number: 1,
+            duration_seconds: 188,
+            isrc: Some("USIR19200541".to_string()),
+            explicit: false,
+            copyright: Some("1992 Interscope".to_string()),
+            composers: vec!["Page Hamilton".to_string()],
+            involved_people: vec![("producer".to_string(), "Steve Albini".to_string())],
+            track_token: Zeroizing::new("token".to_string()),
+            download_quality,
+        }
     }
 
     fn fixture_album() -> AlbumMetadata {

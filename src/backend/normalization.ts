@@ -64,6 +64,10 @@ export function normalizeSettings(
     deemixDownloadQuality: normalizeDeemixDownloadQuality(
       settings.deemixDownloadQuality,
     ),
+    deemixDownloadFallback:
+      settings.deemixDownloadFallback === undefined
+        ? true
+        : Boolean(settings.deemixDownloadFallback),
     deemixDownloadOrganization: normalizeDeemixDownloadOrganization(
       settings.deemixDownloadOrganization,
     ),
@@ -162,7 +166,7 @@ function normalizeImportPath(value: unknown, fallback: string) {
 export function normalizeDeemixDownloadQuality(
   value: unknown,
 ): DeemixDownloadQuality {
-  return value === "mp3_128" || value === "mp3_320"
+  return value === "mp3_128" || value === "mp3_320" || value === "flac"
     ? value
     : defaultDeemixDownloadQuality;
 }

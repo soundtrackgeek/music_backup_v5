@@ -41,9 +41,13 @@ type DeemixSettingsPanelProps = {
     path: string,
   ) => Promise<boolean | void> | boolean | void;
   quality?: DeemixDownloadQuality;
+  fallback?: boolean;
   organization?: DeemixDownloadOrganization;
   onQualityChange?: (
     quality: DeemixDownloadQuality,
+  ) => Promise<boolean | void> | boolean | void;
+  onFallbackChange?: (
+    fallback: boolean,
   ) => Promise<boolean | void> | boolean | void;
   onOrganizationChange?: (
     organization: DeemixDownloadOrganization,
@@ -54,8 +58,10 @@ export function DeemixSettingsPanel({
   downloadPath = "",
   onDownloadPathChange,
   quality = "mp3_320",
+  fallback = true,
   organization = "flat_artist_album_year",
   onQualityChange,
+  onFallbackChange,
   onOrganizationChange,
 }: DeemixSettingsPanelProps) {
   const desktopRuntime = isTauriRuntime();
@@ -213,6 +219,24 @@ export function DeemixSettingsPanel({
     }
   }
 
+  async function saveFallback(nextFallback: boolean) {
+    setBusyAction("preference");
+    setError(null);
+    setMessage(null);
+    try {
+      const saved = await onFallbackChange?.(nextFallback);
+      if (saved !== false) setMessage("Deemix quality fallback saved.");
+    } catch (preferenceError) {
+      setError(
+        preferenceError instanceof Error
+          ? preferenceError.message
+          : String(preferenceError),
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   const isBusy = busyAction !== null;
 
   return (
@@ -236,8 +260,21 @@ export function DeemixSettingsPanel({
               void saveQuality(event.target.value as DeemixDownloadQuality)
             }
           >
+            <option value="flac">FLAC · lossless</option>
             <option value="mp3_320">MP3 · 320 kbps</option>
             <option value="mp3_128">MP3 · 128 kbps</option>
+          </select>
+        </label>
+        <label className="criterion">
+          <span>Quality fallback</span>
+          <select
+            aria-label="Deemix quality fallback"
+            value={fallback ? "lower" : "exact"}
+            disabled={isBusy}
+            onChange={(event) => void saveFallback(event.target.value === "lower")}
+          >
+            <option value="lower">Accept lower qualities</option>
+            <option value="exact">Exact quality only</option>
           </select>
         </label>
         <label className="criterion">
@@ -348,8 +385,8 @@ export function DeemixSettingsPanel({
       <div className="ai-settings-notes deemix-settings-notes">
         <span>The ARL is validated before it is stored.</span>
         <span>It is never written to SQLite, browser storage, logs, or backups.</span>
-        <span>Downloads use the exact selected bitrate; unavailable tracks are not silently downgraded.</span>
-        <span>Album art is embedded in every MP3 and saved beside the tracks as cover.jpg or cover.png.</span>
+        <span>{fallback ? "Fallback uses FLAC → MP3 320 → MP3 128 and never substitutes a higher quality." : "Exact quality only is enabled; unavailable tracks fail instead of being substituted."}</span>
+        <span>Album art is embedded in every MP3 or FLAC and saved beside the tracks as cover.jpg or cover.png.</span>
         <span>Connection and searches go directly from the Rust backend to Deezer; the Deemix GUI is not used.</span>
       </div>
 

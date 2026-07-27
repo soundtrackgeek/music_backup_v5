@@ -72,6 +72,7 @@ const DEFAULT_BILLBOARD_SOURCE_PATH: &str = "CSV";
 const DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES";
 const DEFAULT_DEEMIX_DOWNLOAD_PATH: &str = "";
 const DEFAULT_DEEMIX_DOWNLOAD_QUALITY: &str = "mp3_320";
+const DEFAULT_DEEMIX_DOWNLOAD_FALLBACK: bool = true;
 const DEFAULT_DEEMIX_DOWNLOAD_ORGANIZATION: &str = "flat_artist_album_year";
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH: &str = "";
@@ -359,7 +360,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_one_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_two_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -729,6 +730,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             billboard_singles_source_path TEXT NOT NULL DEFAULT 'CSV_SINGLES',
             deemix_download_path TEXT NOT NULL DEFAULT '',
             deemix_download_quality TEXT NOT NULL DEFAULT 'mp3_320',
+            deemix_download_fallback INTEGER NOT NULL DEFAULT 1,
             deemix_download_organization TEXT NOT NULL DEFAULT 'flat_artist_album_year',
             musicbrainz_cache_path TEXT NOT NULL DEFAULT 'MusicBrainz/musicbrainz_cache.db',
             musicbrainz_overlay_sync_path TEXT NOT NULL DEFAULT '',
@@ -1119,7 +1121,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 31;
+        PRAGMA user_version = 32;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -1351,6 +1353,13 @@ fn ensure_app_settings_deemix_columns(conn: &Connection) -> Result<()> {
             "ALTER TABLE app_settings ADD COLUMN deemix_download_quality TEXT NOT NULL DEFAULT 'mp3_320';",
         )
         .context("Could not add app_settings.deemix_download_quality")?;
+    }
+
+    if !schema_column_exists(conn, "app_settings", "deemix_download_fallback")? {
+        conn.execute_batch(
+            "ALTER TABLE app_settings ADD COLUMN deemix_download_fallback INTEGER NOT NULL DEFAULT 1;",
+        )
+        .context("Could not add app_settings.deemix_download_fallback")?;
     }
 
     if !schema_column_exists(conn, "app_settings", "deemix_download_organization")? {
@@ -14311,6 +14320,8 @@ mod tests {
         assert!(migrations::phase_thirty_schema_exists(&conn).expect("phase thirty schema exists"));
         assert!(migrations::phase_thirty_one_schema_exists(&conn)
             .expect("phase thirty-one schema exists"));
+        assert!(migrations::phase_thirty_two_schema_exists(&conn)
+            .expect("phase thirty-two schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -14442,7 +14453,32 @@ mod tests {
         let user_version: i32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .expect("read schema version");
-        assert_eq!(user_version, 31);
+        assert_eq!(user_version, LATEST_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn schema_thirty_two_adds_deemix_quality_fallback() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            ALTER TABLE app_settings DROP COLUMN deemix_download_fallback;
+            PRAGMA user_version = 31;
+            ",
+        )
+        .expect("simulate schema thirty-one settings");
+
+        migrate(&conn).expect("migrate current schema");
+
+        let fallback: i64 = conn
+            .query_row(
+                "SELECT deemix_download_fallback FROM app_settings WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read default Deemix fallback");
+        assert_eq!(fallback, 1);
     }
 
     #[test]
@@ -15121,6 +15157,7 @@ mod tests {
                 billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
                 deemix_download_path: r"D:\Music\Incoming".to_string(),
                 deemix_download_quality: "mp3_128".to_string(),
+                deemix_download_fallback: false,
                 deemix_download_organization: "artist_album_year_folders".to_string(),
                 musicbrainz_cache_path: "MusicBrainz/custom-cache.db".to_string(),
                 musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
@@ -15146,6 +15183,7 @@ mod tests {
         assert_eq!(saved.billboard_singles_source_path, r"D:\Charts\Singles");
         assert_eq!(saved.deemix_download_path, r"D:\Music\Incoming");
         assert_eq!(saved.deemix_download_quality, "mp3_128");
+        assert!(!saved.deemix_download_fallback);
         assert_eq!(
             saved.deemix_download_organization,
             "artist_album_year_folders"
@@ -15182,6 +15220,7 @@ mod tests {
         assert_eq!(loaded.billboard_singles_source_path, r"D:\Charts\Singles");
         assert_eq!(loaded.deemix_download_path, r"D:\Music\Incoming");
         assert_eq!(loaded.deemix_download_quality, "mp3_128");
+        assert!(!loaded.deemix_download_fallback);
         assert_eq!(
             loaded.deemix_download_organization,
             "artist_album_year_folders"

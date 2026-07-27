@@ -17,6 +17,7 @@ describe("settings normalization", () => {
     expect(settings.musicBrainzOverlaySyncPath).toBe("");
     expect(settings.deemixDownloadPath).toBe("");
     expect(settings.deemixDownloadQuality).toBe("mp3_320");
+    expect(settings.deemixDownloadFallback).toBe(true);
     expect(settings.deemixDownloadOrganization).toBe(
       "flat_artist_album_year",
     );
@@ -33,6 +34,7 @@ describe("settings normalization", () => {
       coverSourcePath: "  C:\\_code\\music_backup_v5\\AlbumCovers\\  ",
       deemixDownloadPath: "  D:/Music/Incoming  ",
       deemixDownloadQuality: "mp3_128",
+      deemixDownloadFallback: false,
       deemixDownloadOrganization: "artist_album_year_folders",
       musicBrainzOverlaySyncPath: "  D:/Sync/overlay.sqlite3  ",
       musicBrainzOverlayAutoSyncMinutes: -25,
@@ -49,6 +51,7 @@ describe("settings normalization", () => {
       coverSourcePath: "C:\\_code\\music_backup_v5\\AlbumCovers\\",
       deemixDownloadPath: "D:/Music/Incoming",
       deemixDownloadQuality: "mp3_128",
+      deemixDownloadFallback: false,
       deemixDownloadOrganization: "artist_album_year_folders",
       musicBrainzOverlaySyncPath: "D:/Sync/overlay.sqlite3",
       musicBrainzOverlayAutoSyncMinutes: 0,

@@ -14996,12 +14996,16 @@ export default function App() {
                 <DeemixSettingsPanel
                   downloadPath={settings.deemixDownloadPath}
                   quality={settings.deemixDownloadQuality}
+                  fallback={settings.deemixDownloadFallback}
                   organization={settings.deemixDownloadOrganization}
                   onDownloadPathChange={(path) =>
                     saveAppSettings({ deemixDownloadPath: path })
                   }
                   onQualityChange={(quality) =>
                     saveAppSettings({ deemixDownloadQuality: quality })
+                  }
+                  onFallbackChange={(fallback) =>
+                    saveAppSettings({ deemixDownloadFallback: fallback })
                   }
                   onOrganizationChange={(organization) =>
                     saveAppSettings({ deemixDownloadOrganization: organization })

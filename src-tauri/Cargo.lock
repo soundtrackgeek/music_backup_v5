@@ -2390,6 +2390,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "metaflac"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdf25a3451319c52a4a56d956475fbbb763bfb8420e2187d802485cb0fd8d965"
+dependencies = [
+ "byteorder",
+ "hex",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2455,7 +2465,7 @@ dependencies = [
 
 [[package]]
 name = "music-library"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2470,6 +2480,7 @@ dependencies = [
  "id3",
  "keyring",
  "md-5",
+ "metaflac",
  "rusqlite",
  "rust_xlsxwriter",
  "serde",

@@ -181,7 +181,7 @@ export type RightSidebarMode = "expanded" | "hidden";
 
 export type CountryFlagDisplay = "flagAndName" | "name" | "flag";
 
-export type DeemixDownloadQuality = "mp3_128" | "mp3_320";
+export type DeemixDownloadQuality = "mp3_128" | "mp3_320" | "flac";
 
 export type DeemixDownloadOrganization =
   | "flat_artist_album_year"
@@ -199,6 +199,7 @@ export type AppSettings = {
   billboardSinglesSourcePath: string;
   deemixDownloadPath: string;
   deemixDownloadQuality: DeemixDownloadQuality;
+  deemixDownloadFallback: boolean;
   deemixDownloadOrganization: DeemixDownloadOrganization;
   musicBrainzCachePath: string;
   musicBrainzOverlaySyncPath: string;
