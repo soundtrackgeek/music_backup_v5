@@ -31,6 +31,10 @@ describe("album cover hover preview", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      value: null,
+    });
   });
 
   it("shows the loaded artwork in a 300px floating preview", async () => {
@@ -99,6 +103,37 @@ describe("album cover hover preview", () => {
     expect(
       document.body.querySelector(".album-cover-preview-art"),
     ).toHaveTextContent("B");
+  });
+
+  it("renders the hover preview inside the active fullscreen surface", async () => {
+    const fullscreenSurface = document.createElement("section");
+    document.body.append(fullscreenSurface);
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      value: fullscreenSurface,
+    });
+    backend.getAlbumCoverDataUrl.mockResolvedValue(
+      "data:image/png;base64,Y292ZXI=",
+    );
+    render(
+      <AlbumCoverPreviewProvider>
+        <AlbumCover
+          row={albumRow("album-fullscreen", "Fullscreen", "C:\\covers\\fullscreen.jpg")}
+          decorative={false}
+          previewOnHover
+        />
+      </AlbumCoverPreviewProvider>,
+    );
+
+    const cover = await screen.findByRole("img", {
+      name: "Fullscreen cover",
+    });
+    fireEvent.mouseEnter(cover.parentElement!);
+
+    expect(fullscreenSurface.querySelector(".album-cover-preview")).toHaveClass(
+      "is-visible",
+    );
+    fullscreenSurface.remove();
   });
 
   it("fades and removes the preview after leaving the thumbnail", () => {

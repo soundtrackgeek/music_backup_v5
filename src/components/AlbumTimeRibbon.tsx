@@ -9,6 +9,7 @@ import {
   CaretDown,
   CaretLeft,
   CaretRight,
+  Check,
   CornersIn,
   MagnifyingGlass,
   Play,
@@ -30,10 +31,19 @@ import type {
 } from "../types";
 import { AlbumCover } from "./AlbumCover";
 
-type SeasonId = "year" | "winter" | "spring" | "summer" | "autumn";
+type PeriodId =
+  | "spring"
+  | "summer"
+  | "fall"
+  | "winter"
+  | "christmas"
+  | "new-year"
+  | "year"
+  | "custom";
+type PresetPeriodId = Exclude<PeriodId, "custom">;
 
-type SeasonDefinition = {
-  id: SeasonId;
+type PeriodDefinition = {
+  id: PeriodId;
   label: string;
   months: number[];
   contextMonths: number[];
@@ -56,38 +66,49 @@ type AlbumTimeRibbonProps = {
   onSelectYear: (year: number) => void;
 };
 
-const seasons: SeasonDefinition[] = [
+const periodPresets: Array<{
+  id: PresetPeriodId;
+  label: string;
+  months: number[];
+}> = [
+  {
+    id: "spring",
+    label: "Spring",
+    months: [3, 4, 5],
+  },
   {
     id: "summer",
     label: "Summer",
     months: [6, 7, 8],
-    contextMonths: [5, 6, 7, 8, 9],
   },
   {
-    id: "autumn",
-    label: "Autumn",
+    id: "fall",
+    label: "Fall",
     months: [9, 10, 11],
-    contextMonths: [8, 9, 10, 11, 12],
   },
   {
     id: "winter",
     label: "Winter",
     months: [12, 1, 2],
-    contextMonths: [11, 12, 1, 2, 3],
   },
   {
-    id: "spring",
-    label: "Spring",
-    months: [3, 4, 5],
-    contextMonths: [2, 3, 4, 5, 6],
+    id: "christmas",
+    label: "Christmas",
+    months: [12],
+  },
+  {
+    id: "new-year",
+    label: "New Year",
+    months: [1],
   },
   {
     id: "year",
     label: "Full year",
     months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-    contextMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
   },
 ];
+
+const calendarMonths = Array.from({ length: 12 }, (_, index) => index + 1);
 
 function monthLabel(month: number, format: "long" | "short" = "long") {
   return new Intl.DateTimeFormat(undefined, {
@@ -96,17 +117,62 @@ function monthLabel(month: number, format: "long" | "short" = "long") {
   }).format(new Date(Date.UTC(2000, month - 1, 1)));
 }
 
-function seasonFor(id: SeasonId) {
-  return seasons.find((season) => season.id === id) ?? seasons[0];
+function offsetMonth(month: number, offset: number) {
+  return ((month - 1 + offset + 120) % 12) + 1;
 }
 
-export function albumsForSeason(
+export function monthsInRange(startMonth: number, endMonth: number) {
+  const months = [startMonth];
+  let currentMonth = startMonth;
+  while (currentMonth !== endMonth && months.length < 12) {
+    currentMonth = offsetMonth(currentMonth, 1);
+    months.push(currentMonth);
+  }
+  return months;
+}
+
+function contextMonthsFor(months: number[]) {
+  if (months.length >= 12) {
+    return calendarMonths;
+  }
+  return [
+    offsetMonth(months[0], -1),
+    ...months,
+    offsetMonth(months[months.length - 1], 1),
+  ].filter((month, index, values) => values.indexOf(month) === index);
+}
+
+function periodFor(
+  id: PeriodId,
+  customStartMonth: number,
+  customEndMonth: number,
+): PeriodDefinition {
+  if (id === "custom") {
+    const months = monthsInRange(customStartMonth, customEndMonth);
+    return {
+      id,
+      label:
+        customStartMonth === customEndMonth
+          ? monthLabel(customStartMonth)
+          : `${monthLabel(customStartMonth)} – ${monthLabel(customEndMonth)}`,
+      months,
+      contextMonths: contextMonthsFor(months),
+    };
+  }
+  const preset =
+    periodPresets.find((candidate) => candidate.id === id) ?? periodPresets[1];
+  return {
+    ...preset,
+    contextMonths: contextMonthsFor(preset.months),
+  };
+}
+
+export function albumsForPeriod(
   albums: AlbumDebutTimelineAlbum[],
-  seasonId: SeasonId,
+  months: number[],
 ) {
-  const definition = seasonFor(seasonId);
   return albums.filter((album) =>
-    definition.months.includes(album.billboardDebutMonth),
+    months.includes(album.billboardDebutMonth),
   );
 }
 
@@ -203,12 +269,15 @@ function decadeLabels(firstYear: number, lastYear: number, selectedYear: number)
   return [...labels].sort((left, right) => left - right);
 }
 
-function seasonRangeLabel(season: SeasonDefinition) {
-  if (season.id === "year") {
+function periodRangeLabel(period: PeriodDefinition) {
+  if (period.id === "year") {
     return "January – December";
   }
-  return `${monthLabel(season.months[0])} – ${monthLabel(
-    season.months[season.months.length - 1],
+  if (period.months.length === 1) {
+    return monthLabel(period.months[0]);
+  }
+  return `${monthLabel(period.months[0])} – ${monthLabel(
+    period.months[period.months.length - 1],
   )}`;
 }
 
@@ -238,7 +307,11 @@ export function AlbumTimeRibbon({
   onSelectYear,
 }: AlbumTimeRibbonProps) {
   const rootRef = useRef<HTMLElement | null>(null);
-  const [seasonId, setSeasonId] = useState<SeasonId>("summer");
+  const periodMenuRef = useRef<HTMLDivElement | null>(null);
+  const [periodId, setPeriodId] = useState<PeriodId>("summer");
+  const [customStartMonth, setCustomStartMonth] = useState(1);
+  const [customEndMonth, setCustomEndMonth] = useState(1);
+  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
@@ -255,17 +328,47 @@ export function AlbumTimeRibbon({
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
+  useEffect(() => {
+    if (!isPeriodMenuOpen) {
+      return;
+    }
+    function closeOnOutsidePointer(event: PointerEvent) {
+      if (
+        event.target instanceof Node &&
+        !periodMenuRef.current?.contains(event.target)
+      ) {
+        setIsPeriodMenuOpen(false);
+      }
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsPeriodMenuOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isPeriodMenuOpen]);
+
   const selectedYear = data?.selectedYear ?? null;
   const years = data?.years ?? [];
-  const selectedSeason = seasonFor(seasonId);
-  const seasonAlbums = useMemo(
+  const selectedPeriod = useMemo(
+    () => periodFor(periodId, customStartMonth, customEndMonth),
+    [customEndMonth, customStartMonth, periodId],
+  );
+  const periodAlbums = useMemo(
     () =>
-      albumsForSeason(data?.albums ?? [], seasonId).sort(albumChronology),
-    [data?.albums, seasonId],
+      albumsForPeriod(data?.albums ?? [], selectedPeriod.months).sort(
+        albumChronology,
+      ),
+    [data?.albums, selectedPeriod],
   );
   const selectedAlbum =
-    seasonAlbums.find((album) => album.id === selectedAlbumId) ??
-    seasonAlbums[0] ??
+    periodAlbums.find((album) => album.id === selectedAlbumId) ??
+    periodAlbums[0] ??
     null;
 
   if (!data && isLoading) {
@@ -315,9 +418,14 @@ export function AlbumTimeRibbon({
   const selectedMonth = selectedAlbum?.billboardDebutMonth ?? null;
   const selectedWeek = selectedAlbum?.billboardDebutWeek ?? null;
   const selectorLabel =
-    selectedSeason.id === "year"
+    selectedPeriod.id === "year"
       ? `Explore ${selectedYear}`
-      : `Relive ${selectedSeason.label} ${selectedYear}`;
+      : `Relive ${selectedPeriod.label} ${selectedYear}`;
+  const customPeriodLabel = periodFor(
+    "custom",
+    customStartMonth,
+    customEndMonth,
+  ).label;
   const timelineStyle = {
     "--album-time-active-x": `${activePosition}%`,
   } as CSSProperties;
@@ -342,19 +450,31 @@ export function AlbumTimeRibbon({
   }
 
   function createPlaylist() {
-    if (seasonAlbums.length === 0) {
+    if (periodAlbums.length === 0) {
       return;
     }
     const title = selectorLabel;
     onCreatePlaylist({
       title,
-      albumIds: seasonAlbums.map((album) => album.albumId),
+      albumIds: periodAlbums.map((album) => album.albumId),
       prompt: `Create a playlist that relives ${
-        selectedSeason.id === "year"
+        selectedPeriod.id === "year"
           ? `the album arrivals of ${selectedYear}`
-          : `${selectedSeason.label.toLowerCase()} ${selectedYear}`
+          : `${selectedPeriod.label.toLowerCase()} ${selectedYear}`
       }. Use only music from these albums and let the sequence move chronologically through their Billboard debut weeks.`,
     });
+  }
+
+  function choosePreset(nextPeriodId: PresetPeriodId) {
+    setPeriodId(nextPeriodId);
+    setSelectedAlbumId(null);
+    setIsPeriodMenuOpen(false);
+  }
+
+  function applyCustomPeriod() {
+    setPeriodId("custom");
+    setSelectedAlbumId(null);
+    setIsPeriodMenuOpen(false);
   }
 
   return (
@@ -380,26 +500,115 @@ export function AlbumTimeRibbon({
           </p>
         </div>
         <div className="album-time-ribbon-actions">
-          <label className="album-time-ribbon-season-select">
-            <CalendarBlank size={18} weight="light" aria-hidden="true" />
-            <span className="sr-only">Timeline season</span>
-            <select
-              value={seasonId}
-              onChange={(event) =>
-                setSeasonId(event.target.value as SeasonId)
-              }
-              aria-label="Timeline season"
+          <div className="album-time-ribbon-period-picker" ref={periodMenuRef}>
+            <button
+              type="button"
+              className="album-time-ribbon-season-select"
+              aria-label={`Period: ${selectedPeriod.label} ${selectedYear}`}
+              aria-haspopup="dialog"
+              aria-expanded={isPeriodMenuOpen}
+              onClick={() => setIsPeriodMenuOpen((current) => !current)}
             >
-              {seasons.map((season) => (
-                <option value={season.id} key={season.id}>
-                  {season.id === "year"
-                    ? `Explore ${selectedYear}`
-                    : `Relive ${season.label} ${selectedYear}`}
-                </option>
-              ))}
-            </select>
-            <CaretDown size={14} weight="bold" aria-hidden="true" />
-          </label>
+              <CalendarBlank size={18} weight="light" aria-hidden="true" />
+              <span className="album-time-ribbon-period-copy">
+                <small>Period</small>
+                <strong>
+                  {selectedPeriod.label} {selectedYear}
+                </strong>
+              </span>
+              <CaretDown
+                className={isPeriodMenuOpen ? "is-open" : ""}
+                size={14}
+                weight="bold"
+                aria-hidden="true"
+              />
+            </button>
+            {isPeriodMenuOpen ? (
+              <div
+                className="album-time-ribbon-period-menu"
+                role="dialog"
+                aria-label="Choose timeline period"
+              >
+                <header>
+                  <strong>Choose a period</strong>
+                  <span>Use a ready-made moment or build your own.</span>
+                </header>
+                <div
+                  className="album-time-ribbon-period-presets"
+                  role="group"
+                  aria-label="Period presets"
+                >
+                  {periodPresets.map((preset) => (
+                    <button
+                      type="button"
+                      className={periodId === preset.id ? "active" : ""}
+                      aria-pressed={periodId === preset.id}
+                      onClick={() => choosePreset(preset.id)}
+                      key={preset.id}
+                    >
+                      <span>
+                        <strong>{preset.label}</strong>
+                        <small>
+                          {periodRangeLabel(periodFor(preset.id, 1, 1))}
+                        </small>
+                      </span>
+                      {periodId === preset.id ? (
+                        <Check size={15} weight="bold" aria-hidden="true" />
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+                <div className="album-time-ribbon-custom-period">
+                  <div>
+                    <strong>Custom months</strong>
+                    <span>Single months and ranges can wrap across December.</span>
+                  </div>
+                  <div className="album-time-ribbon-custom-fields">
+                    <label>
+                      <span>From</span>
+                      <select
+                        value={customStartMonth}
+                        onChange={(event) =>
+                          setCustomStartMonth(Number(event.target.value))
+                        }
+                        aria-label="Custom period from month"
+                      >
+                        {calendarMonths.map((month) => (
+                          <option value={month} key={month}>
+                            {monthLabel(month)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <span aria-hidden="true">through</span>
+                    <label>
+                      <span>To</span>
+                      <select
+                        value={customEndMonth}
+                        onChange={(event) =>
+                          setCustomEndMonth(Number(event.target.value))
+                        }
+                        aria-label="Custom period to month"
+                      >
+                        {calendarMonths.map((month) => (
+                          <option value={month} key={month}>
+                            {monthLabel(month)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    className="album-time-ribbon-apply-period"
+                    onClick={applyCustomPeriod}
+                  >
+                    Show {customPeriodLabel}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
             className="album-time-ribbon-square-action"
@@ -524,11 +733,20 @@ export function AlbumTimeRibbon({
 
       <section className="album-time-ribbon-weeks" aria-label={`${selectorLabel} weeks`}>
         <div className="album-time-ribbon-week-pointer" aria-hidden="true" />
-        <div className="album-time-ribbon-months">
-          {selectedSeason.contextMonths.map((month) => (
+        <div
+          className={`album-time-ribbon-months${
+            selectedPeriod.contextMonths.length > 6 ? " is-wide" : ""
+          }`}
+          style={
+            {
+              "--album-time-month-count": selectedPeriod.contextMonths.length,
+            } as CSSProperties
+          }
+        >
+          {selectedPeriod.contextMonths.map((month) => (
             <div
               className={`album-time-ribbon-month${
-                selectedSeason.months.includes(month) ? " in-season" : ""
+                selectedPeriod.months.includes(month) ? " in-season" : ""
               }`}
               key={month}
             >
@@ -550,7 +768,7 @@ export function AlbumTimeRibbon({
                         : ""
                     }
                     onClick={() => {
-                      const album = seasonAlbums.find(
+                      const album = periodAlbums.find(
                         (candidate) =>
                           candidate.billboardDebutMonth === month &&
                           candidate.billboardDebutWeek === week,
@@ -559,7 +777,7 @@ export function AlbumTimeRibbon({
                         setSelectedAlbumId(album.id);
                       }
                     }}
-                    disabled={!seasonAlbums.some(
+                    disabled={!periodAlbums.some(
                       (album) =>
                         album.billboardDebutMonth === month &&
                         album.billboardDebutWeek === week,
@@ -581,7 +799,7 @@ export function AlbumTimeRibbon({
           <div>
             <strong>{selectorLabel.replace("Relive ", "")}</strong>
             <span>
-              {seasonRangeLabel(selectedSeason)} · {seasonAlbums.length} of{" "}
+              {periodRangeLabel(selectedPeriod)} · {periodAlbums.length} of{" "}
               {yearSummary.albumCount} album arrivals
             </span>
             {selectedAlbum ? (
@@ -605,7 +823,7 @@ export function AlbumTimeRibbon({
             <button
               type="button"
               className="album-time-ribbon-playlist"
-              disabled={seasonAlbums.length === 0}
+              disabled={periodAlbums.length === 0}
               onClick={createPlaylist}
             >
               <Play size={15} weight="fill" aria-hidden="true" />
@@ -615,9 +833,9 @@ export function AlbumTimeRibbon({
           </div>
         </header>
 
-        {seasonAlbums.length > 0 ? (
+        {periodAlbums.length > 0 ? (
           <div className="album-time-ribbon-covers" role="list">
-            {seasonAlbums.map((album, index) => (
+            {periodAlbums.map((album, index) => (
               <button
                 type="button"
                 role="listitem"
@@ -639,8 +857,8 @@ export function AlbumTimeRibbon({
         ) : (
           <div className="album-time-ribbon-season-empty">
             <CalendarBlank size={24} weight="light" aria-hidden="true" />
-            <strong>No {selectedSeason.label.toLowerCase()} arrivals in {selectedYear}</strong>
-            <span>Choose another season or move to the next chart year.</span>
+            <strong>No {selectedPeriod.label.toLowerCase()} arrivals in {selectedYear}</strong>
+            <span>Choose another period or move to the next chart year.</span>
           </div>
         )}
       </section>

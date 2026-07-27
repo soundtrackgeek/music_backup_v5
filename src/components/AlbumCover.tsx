@@ -34,6 +34,7 @@ type CoverPreviewRequest = {
   initial: string;
   label: string;
   left: number;
+  portalTarget: Element;
   size: number;
   top: number;
 };
@@ -179,7 +180,7 @@ export function AlbumCoverPreviewProvider({
                 )}
               </div>
             </div>,
-            document.body,
+            preview.portalTarget,
           )
         : null}
     </CoverPreviewContext.Provider>
@@ -252,6 +253,7 @@ export function AlbumCover({
         imageUrl: displayImageUrl,
         initial,
         label,
+        portalTarget: document.fullscreenElement ?? document.body,
         ...coverPreviewPosition(element),
       });
     },

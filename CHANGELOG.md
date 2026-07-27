@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.88.0] - 2026-07-27
+### Added
+- Added Spring, Summer, Fall, Winter, Christmas, New Year, and full-year Timeline presets plus custom single-month and wrapping month-range periods such as January or November through February.
+- Added responsive period-picker presentation and exact custom-period handoff to Playlist Builder.
+
+### Fixed
+- Fixed 300×300 album artwork hover previews disappearing in true fullscreen by mounting the preview inside the active fullscreen surface.
+
+### Changed
+- Expanded the browser preview data across every month and bumped synchronized app metadata to `0.88.0`.
+
 ## [0.87.0] - 2026-07-27
 ### Added
 - Added a standalone dark **Timeline** workspace inspired by the selected cinematic design, with a decade-spanning album ribbon, chart-year navigation, season views, week-level album selection, real cover art, fullscreen mode, and responsive mobile presentation.

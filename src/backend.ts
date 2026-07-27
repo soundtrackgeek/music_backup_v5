@@ -519,7 +519,7 @@ function mockAlbumDebutTimeline(
   const datedAlbums = previewYears.flatMap((year, yearIndex) => {
     const months =
       year === 1989
-        ? [5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9]
+        ? [1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 10, 11, 12]
         : Array.from(
             { length: yearIndex % 3 === 0 ? 2 : 1 },
             (_, albumIndex) => ((yearIndex * 3 + albumIndex * 4) % 12) + 1,

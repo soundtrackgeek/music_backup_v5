@@ -13967,6 +13967,8 @@ button {
 }
 
 .album-time-ribbon-header {
+  position: relative;
+  z-index: 20;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -14004,6 +14006,11 @@ button {
   padding-right: 48px;
 }
 
+.album-time-ribbon-period-picker {
+  position: relative;
+  min-width: 260px;
+}
+
 .album-time-ribbon-season-select,
 .album-time-ribbon-square-action,
 .album-time-ribbon-open-album,
@@ -14024,30 +14031,225 @@ button {
   grid-template-columns: auto minmax(180px, auto) auto;
   align-items: center;
   gap: 10px;
-  min-width: 260px;
+  width: 100%;
+  min-width: 0;
   border-color: #274145;
   border-radius: 8px;
   padding: 0 14px;
   color: #89c9c4;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
   background: #0e1b22;
-}
-
-.album-time-ribbon-season-select select {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  color: inherit;
-  background: transparent;
-  font-size: 13px;
-  font-weight: 600;
-  appearance: none;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
-.album-time-ribbon-season-select select:focus-visible {
-  outline: 2px solid #80bdb9;
-  outline-offset: 5px;
+.album-time-ribbon-season-select:hover,
+.album-time-ribbon-season-select:focus-visible,
+.album-time-ribbon-season-select[aria-expanded="true"] {
+  border-color: #467174;
+  outline: 0;
+  color: #a7ded9;
+  background: #112229;
+}
+
+.album-time-ribbon-period-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.album-time-ribbon-period-copy small {
+  color: #6f8f93;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.album-time-ribbon-period-copy strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-time-ribbon-season-select > svg:last-child {
+  transition: transform 180ms ease;
+}
+
+.album-time-ribbon-season-select > svg:last-child.is-open {
+  transform: rotate(180deg);
+}
+
+.album-time-ribbon-period-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(410px, calc(100vw - 32px));
+  border: 1px solid #33414d;
+  border-radius: 12px;
+  padding: 16px;
+  color: #dce2e7;
+  background:
+    radial-gradient(circle at 88% 0%, rgba(48, 103, 103, 0.16), transparent 42%),
+    #111821;
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+.album-time-ribbon-period-menu > header {
+  display: grid;
+  gap: 3px;
+  padding: 1px 2px 13px;
+}
+
+.album-time-ribbon-period-menu > header strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.album-time-ribbon-period-menu > header span,
+.album-time-ribbon-custom-period > div:first-child span {
+  color: #7f8995;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.album-time-ribbon-period-presets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.album-time-ribbon-period-presets button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  border: 1px solid #293541;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #b8c0c8;
+  background: #0d141d;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.album-time-ribbon-period-presets button:hover,
+.album-time-ribbon-period-presets button:focus-visible {
+  border-color: #49616a;
+  outline: 0;
+  color: #edf2f4;
+  background: #151e28;
+}
+
+.album-time-ribbon-period-presets button.active {
+  border-color: rgba(124, 195, 189, 0.5);
+  color: #9dd8d3;
+  background: rgba(25, 72, 73, 0.28);
+}
+
+.album-time-ribbon-period-presets button > span {
+  display: grid;
+  gap: 2px;
+}
+
+.album-time-ribbon-period-presets button strong {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.album-time-ribbon-period-presets button small {
+  color: #707b86;
+  font-size: 8px;
+}
+
+.album-time-ribbon-custom-period {
+  display: grid;
+  gap: 11px;
+  margin-top: 14px;
+  border-top: 1px solid #2b3540;
+  padding-top: 14px;
+}
+
+.album-time-ribbon-custom-period > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.album-time-ribbon-custom-period > div:first-child strong {
+  font-size: 11px;
+}
+
+.album-time-ribbon-custom-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 8px;
+}
+
+.album-time-ribbon-custom-fields > span {
+  padding-bottom: 9px;
+  color: #69737e;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.album-time-ribbon-custom-fields label {
+  display: grid;
+  gap: 5px;
+  color: #77818c;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.album-time-ribbon-custom-fields select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #34414d;
+  border-radius: 7px;
+  padding: 0 28px 0 10px;
+  color: #d5dce1;
+  background: #0b121a;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.album-time-ribbon-custom-fields select:focus-visible {
+  border-color: #6eaaa6;
+  outline: 2px solid rgba(128, 189, 185, 0.18);
+}
+
+.album-time-ribbon-apply-period {
+  min-height: 38px;
+  border: 1px solid rgba(237, 111, 99, 0.7);
+  border-radius: 8px;
+  color: #fff3f0;
+  background: linear-gradient(135deg, #cf5d55, #e87368);
+  box-shadow: 0 8px 24px rgba(201, 76, 67, 0.18);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.album-time-ribbon-apply-period:hover,
+.album-time-ribbon-apply-period:focus-visible {
+  outline: 0;
+  filter: brightness(1.09);
 }
 
 .album-time-ribbon-square-action {
@@ -14288,14 +14490,17 @@ button {
 
 .album-time-ribbon-months {
   display: grid;
-  grid-template-columns: repeat(5, minmax(98px, 1fr));
+  grid-template-columns: repeat(var(--album-time-month-count), minmax(0, 1fr));
   gap: 14px;
   min-width: 0;
   overflow: hidden;
 }
 
-.album-time-ribbon-months:has(.album-time-ribbon-month:nth-child(6)) {
-  grid-template-columns: repeat(12, minmax(92px, 1fr));
+.album-time-ribbon-months.is-wide {
+  grid-template-columns: repeat(var(--album-time-month-count), minmax(72px, 1fr));
+  overflow-x: auto;
+  scrollbar-color: #59413d transparent;
+  scrollbar-width: thin;
 }
 
 .album-time-ribbon-month {
@@ -14662,8 +14867,11 @@ button {
   }
 
   .album-time-ribbon-season-select {
-    min-width: 220px;
     grid-template-columns: auto minmax(140px, auto) auto;
+  }
+
+  .album-time-ribbon-period-picker {
+    min-width: 220px;
   }
 }
 
@@ -14713,10 +14921,18 @@ button {
     padding-right: 46px;
   }
 
-  .album-time-ribbon-season-select {
-    flex: 1 1 auto;
+  .album-time-ribbon-period-picker {
     min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .album-time-ribbon-season-select {
     grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .album-time-ribbon-period-menu {
+    right: auto;
+    left: 0;
   }
 
   .album-time-ribbon-actions .album-time-ribbon-square-action:nth-of-type(3) {
@@ -14760,10 +14976,14 @@ button {
     transform: none;
   }
 
-  .album-time-ribbon-months,
-  .album-time-ribbon-months:has(.album-time-ribbon-month:nth-child(6)) {
-    grid-template-columns: repeat(5, minmax(50px, 1fr));
+  .album-time-ribbon-months {
+    grid-template-columns: repeat(var(--album-time-month-count), minmax(50px, 1fr));
     justify-content: start;
+  }
+
+  .album-time-ribbon-months.is-wide {
+    grid-template-columns: repeat(var(--album-time-month-count), minmax(54px, 1fr));
+    overflow-x: auto;
   }
 
   .album-time-ribbon-month-long {
@@ -14847,6 +15067,15 @@ button {
 
   .album-time-ribbon-season-select {
     min-width: 0;
+  }
+
+  .album-time-ribbon-period-menu {
+    width: calc(100vw - 32px);
+    padding: 14px;
+  }
+
+  .album-time-ribbon-period-presets button {
+    min-height: 45px;
   }
 
   .album-time-ribbon-drawer-actions {
