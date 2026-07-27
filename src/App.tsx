@@ -71,6 +71,7 @@ import {
   fixMusicToolIssues,
   cacheSettings,
   getDiscovery,
+  getAlbumDebutTimeline,
   getGenreProgress,
   getMusicBrainzArtistDiscography,
   getMusicBrainzArtistInfoStatus,
@@ -130,6 +131,7 @@ import {
 } from "./backend";
 import type {
   AppSettings,
+  AlbumDebutTimelineResponse,
   AiMusicResearchContext,
   AiSnapshot,
   ArtistListRequest,
@@ -325,7 +327,10 @@ import { GenreTimeline } from "./components/GenreTimeline";
 import { ImportSafetyPanel } from "./components/ImportSafetyPanel";
 import { InsightActionDock } from "./components/InsightActionDock";
 import { AlbumCover } from "./components/AlbumCover";
-import { AlbumTimeline } from "./components/AlbumTimeline";
+import {
+  AlbumTimeRibbon,
+  type AlbumTimeRibbonPlaylist,
+} from "./components/AlbumTimeRibbon";
 import {
   ChartAdvancedControls,
   ChartLunaCommandArea,
@@ -4774,10 +4779,6 @@ function ChartResults({
     );
   }
 
-  if (config.viewMode === "timeline") {
-    return <AlbumTimeline rows={response.rows} />;
-  }
-
   if (config.viewMode === "compact") {
     return (
       <div className="chart-list" role="list">
@@ -7669,6 +7670,12 @@ export default function App() {
   const [isChartLoading, setIsChartLoading] = useState(false);
   const [chartExportResult, setChartExportResult] =
     useState<ExportResult | null>(null);
+  const [albumTimelineResponse, setAlbumTimelineResponse] =
+    useState<AlbumDebutTimelineResponse | null>(null);
+  const [albumTimelineYear, setAlbumTimelineYear] = useState<number | null>(null);
+  const [albumTimelineError, setAlbumTimelineError] = useState<string | null>(null);
+  const [isAlbumTimelineLoading, setIsAlbumTimelineLoading] = useState(false);
+  const [albumTimelineRefreshKey, setAlbumTimelineRefreshKey] = useState(0);
   const [statistics, setStatistics] = useState<StatisticsResponse | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [isStatsLoading, setIsStatsLoading] = useState(false);
@@ -8804,6 +8811,43 @@ export default function App() {
     toolIssueRequest.limit,
     toolIssueRequest.offset,
   ]);
+
+  useEffect(() => {
+    if (activeSection !== "Timeline") {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setIsAlbumTimelineLoading(true);
+      setAlbumTimelineError(null);
+      void getAlbumDebutTimeline(albumTimelineYear)
+        .then((nextResponse) => {
+          if (!cancelled) {
+            setAlbumTimelineResponse(nextResponse);
+          }
+        })
+        .catch((timelineError) => {
+          if (!cancelled) {
+            setAlbumTimelineError(
+              timelineError instanceof Error
+                ? timelineError.message
+                : String(timelineError),
+            );
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsAlbumTimelineLoading(false);
+          }
+        });
+    }, 80);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeSection, albumTimelineYear, albumTimelineRefreshKey]);
 
   useEffect(() => {
     if (activeSection !== "Charts") {
@@ -10073,6 +10117,28 @@ export default function App() {
       request: normalizeBrowseRequestForClient(cohort.request),
     });
     setActiveSection("Playlists");
+  }
+
+  function openTimelinePlaylist(selection: AlbumTimeRibbonPlaylist) {
+    const playlistRequest = createRequest("tracks");
+    playlistRequest.filters.albumIds = selection.albumIds;
+    playlistRequest.limit = 500;
+    setPlaylistLaunch({
+      id: Date.now(),
+      cohortTitle: selection.title,
+      prompt: selection.prompt,
+      request: normalizeBrowseRequestForClient(playlistRequest),
+    });
+    setActiveSection("Playlists");
+  }
+
+  function openTimelineAlbum(albumId: string) {
+    const nextAlbumRequest = createRequest("albums");
+    nextAlbumRequest.filters.albumIds = [albumId];
+    nextAlbumRequest.limit = 25;
+    setAlbumRequest(nextAlbumRequest);
+    setSelectedAlbumId(albumId);
+    setActiveSection("Albums");
   }
 
   async function removeSavedSearch(id: number) {
@@ -11695,6 +11761,7 @@ export default function App() {
     hasUsefulDetailContent ? "has-detail-content" : "no-detail-content",
     isDetailsDrawerLayout ? "details-drawer-layout" : "",
     isDetailsDrawerOpen ? "details-drawer-open" : "",
+    activeSection === "Timeline" ? "albums-years-active" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -11989,7 +12056,20 @@ export default function App() {
           </section>
         ) : null}
 
-        {activeSection === "Imports" ? (
+        {activeSection === "Timeline" ? (
+          <AlbumTimeRibbon
+            data={albumTimelineResponse}
+            error={albumTimelineError}
+            isLoading={isAlbumTimelineLoading}
+            onCreatePlaylist={openTimelinePlaylist}
+            onOpenAlbum={openTimelineAlbum}
+            onOpenSearch={() => setActiveSection("Search")}
+            onRetry={() =>
+              setAlbumTimelineRefreshKey((previous) => previous + 1)
+            }
+            onSelectYear={setAlbumTimelineYear}
+          />
+        ) : activeSection === "Imports" ? (
           <section className="workspace">
             <header className="topbar">
               <div>

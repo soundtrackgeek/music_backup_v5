@@ -2,13 +2,13 @@ import {
   Activity,
   Album,
   BarChart3,
-  CalendarDays,
   Clock3,
   Compass,
   Film,
   FolderInput,
   Gauge,
   Heart,
+  History,
   ListMusic,
   MapPinned,
   Search,
@@ -36,6 +36,7 @@ export const EXPORT_FORMATS = ["csv", "tsv", "xlsx", "json", "txt"];
 export const navigation: { label: string; icon: LucideIcon; enabled: boolean; shortcut: string }[] = [
   { label: "Search", icon: Search, enabled: true, shortcut: "1" },
   { label: "Charts", icon: BarChart3, enabled: true, shortcut: "2" },
+  { label: "Timeline", icon: History, enabled: true, shortcut: "y" },
   { label: "Discovery", icon: Compass, enabled: true, shortcut: "3" },
   { label: "Music Map", icon: MapPinned, enabled: true, shortcut: "m" },
   { label: "Wish List", icon: Heart, enabled: true, shortcut: "w" },
@@ -187,7 +188,6 @@ export const chartViewModes: { value: ChartViewMode; label: string; icon: Lucide
   { value: "table", label: "Table", icon: BarChart3 },
   { value: "compact", label: "List", icon: ListMusic },
   { value: "grid", label: "Grid", icon: Album },
-  { value: "timeline", label: "Timeline", icon: CalendarDays },
 ];
 
 export const chartGridCoverSize = {

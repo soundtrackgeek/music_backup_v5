@@ -1539,6 +1539,38 @@ export type BrowseResponse = {
   offset: number;
 };
 
+export type AlbumDebutTimelineAlbum = {
+  id: string;
+  albumId: string;
+  album: string | null;
+  albumArtistDisplay: string | null;
+  canonicalGenre: string | null;
+  year: number | null;
+  albumScore: number | null;
+  billboardRank: number | null;
+  billboardYear: number | null;
+  billboardDebutYear: number;
+  billboardDebutMonth: number;
+  billboardDebutWeek: number;
+  billboardDebutWeekKey: string;
+  coverPath: string | null;
+  coverMimeType: string | null;
+};
+
+export type AlbumDebutTimelineYear = {
+  year: number;
+  albumCount: number;
+  representativeAlbum: AlbumDebutTimelineAlbum | null;
+};
+
+export type AlbumDebutTimelineResponse = {
+  years: AlbumDebutTimelineYear[];
+  selectedYear: number | null;
+  albums: AlbumDebutTimelineAlbum[];
+  datedAlbumCount: number;
+  undatedAlbumCount: number;
+};
+
 export type SavedSearch = {
   id: number;
   name: string;
@@ -1548,7 +1580,7 @@ export type SavedSearch = {
   updatedAt: string;
 };
 
-export type ChartViewMode = "table" | "compact" | "grid" | "timeline";
+export type ChartViewMode = "table" | "compact" | "grid";
 
 export type ChartConfig = {
   request: BrowseRequest;

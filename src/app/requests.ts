@@ -386,6 +386,13 @@ export function chartCompletenessRange(config: ChartConfig) {
 
 export function normalizeChartConfigForClient(config: ChartConfig) {
   const { min, max } = chartCompletenessRange(config);
+  const rawViewMode = config.viewMode as string;
+  const viewMode =
+    rawViewMode === "compact" || rawViewMode === "grid"
+      ? rawViewMode
+      : rawViewMode === "timeline"
+        ? "grid"
+        : "table";
   const request = {
     ...normalizeBrowseRequestForClient(config.request),
     view: "albums" as const,
@@ -397,6 +404,7 @@ export function normalizeChartConfigForClient(config: ChartConfig) {
     ratingCompletenessMax: max,
     ratingCompletenessThreshold: null,
     gridCoverSize: normalizeChartGridCoverSize(config.gridCoverSize),
+    viewMode,
   } satisfies ChartConfig;
 }
 

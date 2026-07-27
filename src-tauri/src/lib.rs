@@ -16,19 +16,19 @@ mod wishlist;
 
 #[cfg(not(test))]
 use models::{
-    AppSettings, ArtistListRequest, ArtistListResponse, BillboardImportSummary,
-    BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
-    CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
-    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
-    GenreProgressRequest, GenreProgressStats, MusicBrainzArtistDiscographyRequest,
-    MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
-    MusicBrainzArtistInfoImportRequest, MusicBrainzArtistInfoImportSummary,
-    MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus, MusicBrainzArtistLinkRequest,
-    MusicBrainzArtistOriginCountryRequest, MusicBrainzArtistOriginCountryUpdate,
-    MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus,
-    MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
-    MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryStatus,
-    MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
+    AlbumDebutTimelineResponse, AppSettings, ArtistListRequest, ArtistListResponse,
+    BillboardImportSummary, BillboardSinglesImportSummary, BrowseRequest, BrowseResponse,
+    CoverImportRequest, CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary,
+    DiscoveryResponse, ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest,
+    GenreListResponse, GenreProgressRequest, GenreProgressStats,
+    MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
+    MusicBrainzArtistExportRequest, MusicBrainzArtistInfoImportRequest,
+    MusicBrainzArtistInfoImportSummary, MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus,
+    MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginCountryRequest,
+    MusicBrainzArtistOriginCountryUpdate, MusicBrainzArtistRefreshRequest,
+    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzOriginCountryImportRequest,
+    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
+    MusicBrainzOriginCountryStatus, MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
     MusicBrainzReleaseDecisionRequest, MusicMapLocationDetails, MusicMapRefreshSummary,
     MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
@@ -739,6 +739,20 @@ async fn get_statistics(app: AppHandle) -> Result<StatisticsResponse, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_album_debut_timeline(
+    app: AppHandle,
+    selected_year: Option<i32>,
+) -> Result<AlbumDebutTimelineResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::album_debut_timeline_for_app(&app, selected_year)
+    })
+    .await
+    .map_err(|error| format!("Album debut timeline task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_music_map(app: AppHandle) -> Result<MusicMapResponse, String> {
     tauri::async_runtime::spawn_blocking(move || music_map::music_map_for_app(&app))
         .await
@@ -1155,6 +1169,7 @@ pub fn run() {
             export_musicbrainz_artist_releases,
             save_settings,
             get_statistics,
+            get_album_debut_timeline,
             get_music_map,
             get_music_map_location_details,
             refresh_music_map_locations,

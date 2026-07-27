@@ -63,6 +63,7 @@ import {
   mockOriginProgress,
   mockOriginProgressHandlers,
   mockRows,
+  mockTimelineCoverUrls,
   mockAiSnapshots,
   mockSavedCharts,
   mockSavedSearches,
@@ -142,6 +143,8 @@ import type {
   ArtistListRequest,
   ArtistListResponse,
   ArtistSummary,
+  AlbumDebutTimelineAlbum,
+  AlbumDebutTimelineResponse,
   BillboardImportSummary,
   BillboardSinglesImportSummary,
   BrowseFilters,
@@ -488,6 +491,122 @@ export async function getStatistics() {
   }
 
   return invoke<StatisticsResponse>("get_statistics");
+}
+
+function mockAlbumDebutTimeline(
+  requestedYear: number | null,
+): AlbumDebutTimelineResponse {
+  const previewYears = [
+    1960, 1964, 1969, 1973, 1978, 1982, 1986, 1989, 1993, 1998, 2002,
+    2008, 2013, 2018, 2024,
+  ];
+  const previewTitles = [
+    "Afterimage",
+    "Night Geometry",
+    "Still Water",
+    "Pale Orbit",
+    "The Red Door",
+    "Contour Lines",
+  ];
+  const previewArtists = [
+    "Glass Harbour",
+    "Northern Static",
+    "Velvet Transit",
+    "Low Meridian",
+    "Sunday Cinema",
+    "Parallel Forms",
+  ];
+  const datedAlbums = previewYears.flatMap((year, yearIndex) => {
+    const months =
+      year === 1989
+        ? [5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9]
+        : Array.from(
+            { length: yearIndex % 3 === 0 ? 2 : 1 },
+            (_, albumIndex) => ((yearIndex * 3 + albumIndex * 4) % 12) + 1,
+          );
+    return months.map((month, albumIndex) => {
+      const sequence = yearIndex * 3 + albumIndex;
+      const week = Math.min(
+        53,
+        Math.max(1, Math.round((month - 1) * 4.35 + 2 + (sequence % 3))),
+      );
+      const id = `timeline-preview-${year}-${albumIndex}`;
+      return {
+        id,
+        albumId: id,
+        album: `${previewTitles[sequence % previewTitles.length]}${
+          year === 1989 ? ` ${albumIndex + 1}` : ""
+        }`,
+        albumArtistDisplay: previewArtists[sequence % previewArtists.length],
+        canonicalGenre: ["Art Pop", "Synthpop", "Post-Punk", "Ambient"][
+          sequence % 4
+        ],
+        year,
+        albumScore: 6.7 + (sequence % 23) / 10,
+        billboardRank: 7 + (sequence * 11) % 91,
+        billboardYear: year,
+        billboardDebutYear: year,
+        billboardDebutMonth: month,
+        billboardDebutWeek: week,
+        billboardDebutWeekKey: `${year}-W${String(week).padStart(2, "0")}`,
+        coverPath: mockTimelineCoverUrls[sequence % mockTimelineCoverUrls.length],
+        coverMimeType: "image/webp",
+      } satisfies AlbumDebutTimelineAlbum;
+    });
+  });
+  const grouped = new Map<
+    number,
+    { albumCount: number; representativeAlbum: AlbumDebutTimelineAlbum }
+  >();
+  for (const album of datedAlbums) {
+    const current = grouped.get(album.billboardDebutYear);
+    if (!current) {
+      grouped.set(album.billboardDebutYear, {
+        albumCount: 1,
+        representativeAlbum: album,
+      });
+      continue;
+    }
+    current.albumCount += 1;
+    const currentScore = current.representativeAlbum.albumScore ?? -Infinity;
+    if ((album.albumScore ?? -Infinity) > currentScore) {
+      current.representativeAlbum = album;
+    }
+  }
+  const years = [...grouped.entries()]
+    .map(([year, value]) => ({ year, ...value }))
+    .sort((left, right) => left.year - right.year);
+  const selectedYear =
+    requestedYear != null && grouped.has(requestedYear)
+      ? requestedYear
+      : (years.reduce<(typeof years)[number] | null>(
+          (best, year) =>
+            !best ||
+            year.albumCount > best.albumCount ||
+            (year.albumCount === best.albumCount && year.year > best.year)
+              ? year
+              : best,
+          null,
+        )?.year ?? null);
+  return {
+    years,
+    selectedYear,
+    albums: datedAlbums.filter(
+      (album) => album.billboardDebutYear === selectedYear,
+    ),
+    datedAlbumCount: datedAlbums.length,
+    undatedAlbumCount: 3,
+  };
+}
+
+export async function getAlbumDebutTimeline(selectedYear: number | null = null) {
+  if (!isTauriRuntime()) {
+    return mockAlbumDebutTimeline(selectedYear);
+  }
+
+  return invoke<AlbumDebutTimelineResponse>("get_album_debut_timeline", {
+    selectedYear,
+  });
 }
 
 export async function getMusicMap() {

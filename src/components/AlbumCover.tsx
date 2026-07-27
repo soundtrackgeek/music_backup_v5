@@ -17,6 +17,11 @@ import { createPortal } from "react-dom";
 import { getAlbumCoverDataUrl } from "../backend";
 import type { BrowseRow } from "../types";
 
+export type AlbumCoverSource = Pick<
+  BrowseRow,
+  "album" | "albumId" | "coverPath"
+>;
+
 const COVER_PREVIEW_SIZE = 300;
 const COVER_PREVIEW_GAP = 16;
 const COVER_PREVIEW_MARGIN = 16;
@@ -46,8 +51,12 @@ const CoverPreviewContext = createContext<CoverPreviewContextValue | null>(
   null,
 );
 
-function albumInitial(row: BrowseRow | null) {
+function albumInitial(row: AlbumCoverSource | null) {
   return row?.album?.trim().slice(0, 1).toUpperCase() || "A";
+}
+
+function isDirectCoverUrl(coverPath: string) {
+  return /^(?:blob:|data:|https?:\/\/|\/)/i.test(coverPath);
 }
 
 function coverPreviewPosition(element: HTMLElement) {
@@ -183,7 +192,7 @@ export function AlbumCover({
   decorative = true,
   previewOnHover = false,
 }: {
-  row: BrowseRow | null;
+  row: AlbumCoverSource | null;
   className?: string;
   decorative?: boolean;
   previewOnHover?: boolean;
@@ -201,6 +210,11 @@ export function AlbumCover({
     setImageFailed(false);
     setImageUrl(null);
     if (!albumId || !coverPath) {
+      return;
+    }
+
+    if (isDirectCoverUrl(coverPath)) {
+      setImageUrl(coverPath);
       return;
     }
 

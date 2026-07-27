@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.87.0] - 2026-07-27
+### Added
+- Added a standalone dark **Timeline** workspace inspired by the selected cinematic design, with a decade-spanning album ribbon, chart-year navigation, season views, week-level album selection, real cover art, fullscreen mode, and responsive mobile presentation.
+- Added exact season-album handoff to Playlist Builder plus direct album and library-search entry points from the timeline.
+
+### Changed
+- Moved **Albums through the years** out of Charts and promoted it to a first-class sidebar destination; legacy saved Chart timeline view modes now open in Grid view.
+- Added a dedicated aggregate timeline query so the experience loads year counts and representative covers without running a full ranked chart request.
+- Added self-hosted Cormorant Garamond and Manrope typography, Phosphor interface icons, and generated abstract cover fallbacks for the browser preview.
+- Bumped synchronized app metadata to `0.87.0`.
+
 ## [0.86.0] - 2026-07-27
 ### Added
 - Added Billboard album first-appearance month and week import from `CSV_ALBUMS`, including correct ISO-year handling at January and December boundaries.

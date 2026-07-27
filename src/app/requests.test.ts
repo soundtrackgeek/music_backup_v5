@@ -92,7 +92,7 @@ describe("saved search and chart normalization", () => {
       resultLimit: 25,
       visibleColumns: [],
       exportColumns: [],
-      viewMode: "grid",
+      viewMode: "timeline",
       gridCoverSize: 9999,
       ratingCompletenessThreshold: 75,
       ratingCompletenessMin: undefined,
@@ -112,6 +112,7 @@ describe("saved search and chart normalization", () => {
     expect(normalized.config.ratingCompletenessMax).toBe(100);
     expect(normalized.config.ratingCompletenessThreshold).toBeNull();
     expect(normalized.config.gridCoverSize).toBe(224);
+    expect(normalized.config.viewMode).toBe("grid");
     expect(normalized.config.request.view).toBe("albums");
   });
 });

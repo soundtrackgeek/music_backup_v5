@@ -1410,6 +1410,44 @@ pub struct BrowseResponse {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AlbumDebutTimelineAlbum {
+    pub id: String,
+    pub album_id: String,
+    pub album: Option<String>,
+    pub album_artist_display: Option<String>,
+    pub canonical_genre: Option<String>,
+    pub year: Option<i32>,
+    pub album_score: Option<f64>,
+    pub billboard_rank: Option<i32>,
+    pub billboard_year: Option<i32>,
+    pub billboard_debut_year: i32,
+    pub billboard_debut_month: i32,
+    pub billboard_debut_week: i32,
+    pub billboard_debut_week_key: String,
+    pub cover_path: Option<String>,
+    pub cover_mime_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumDebutTimelineYear {
+    pub year: i32,
+    pub album_count: i64,
+    pub representative_album: Option<AlbumDebutTimelineAlbum>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumDebutTimelineResponse {
+    pub years: Vec<AlbumDebutTimelineYear>,
+    pub selected_year: Option<i32>,
+    pub albums: Vec<AlbumDebutTimelineAlbum>,
+    pub dated_album_count: i64,
+    pub undated_album_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SavedSearch {
     pub id: i64,
     pub name: String,

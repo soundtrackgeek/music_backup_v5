@@ -8,21 +8,21 @@ use crate::ai::{
 #[cfg(test)]
 use crate::models::AppSettings;
 use crate::models::{
-    ArtistListRequest, ArtistListResponse, ArtistSummary, BillboardImportSummary,
-    BillboardSinglesImportSummary, BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow,
-    BrowseSort, CatalogConcentrationStats, ChartConfig, ConcentrationPoint, DecadeProgressStats,
-    DiscoveryAlbumPoint, DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell,
-    DiscoveryMission, DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats,
-    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
-    GenreProgressRequest, GenreProgressStats, GenreSummary, ImportRun, LibraryHealthScore,
-    LibraryOverviewStats, LibraryShapeStats, LibraryStatus, LovedDensityStat, LovedTrackStats,
-    MetadataCoverageMetric, MusicBrainzOriginCountryOption, MusicToolFieldDiff, MusicToolFixDiff,
-    MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest,
-    MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress, MusicToolSummary,
-    MusicToolUndoSummary, OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse,
-    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
-    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
-    YearProgressRequest, YearProgressStats,
+    AlbumDebutTimelineAlbum, AlbumDebutTimelineResponse, AlbumDebutTimelineYear, ArtistListRequest,
+    ArtistListResponse, ArtistSummary, BillboardImportSummary, BillboardSinglesImportSummary,
+    BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, CatalogConcentrationStats,
+    ChartConfig, ConcentrationPoint, DecadeProgressStats, DiscoveryAlbumPoint,
+    DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell, DiscoveryMission,
+    DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats, ExportMusicToolRequest,
+    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressRequest,
+    GenreProgressStats, GenreSummary, ImportRun, LibraryHealthScore, LibraryOverviewStats,
+    LibraryShapeStats, LibraryStatus, LovedDensityStat, LovedTrackStats, MetadataCoverageMetric,
+    MusicBrainzOriginCountryOption, MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry,
+    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
+    MusicToolIssueRow, MusicToolProgress, MusicToolSummary, MusicToolUndoSummary, OutlierStat,
+    PerformanceProbeOperation, PerformanceProbeResponse, RatingBucket, RatingEvent,
+    RatingHistoryPoint, RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart,
+    SavedSearch, StatisticsResponse, TextFilter, YearProgressRequest, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, NaiveDate, Utc, Weekday};
@@ -2798,6 +2798,139 @@ pub fn list_import_runs_for_app(app: &AppHandle, limit: u32) -> Result<Vec<Impor
 pub fn statistics_for_app(app: &AppHandle) -> Result<StatisticsResponse> {
     let (conn, _) = open(app)?;
     statistics(&conn)
+}
+
+#[cfg(not(test))]
+pub fn album_debut_timeline_for_app(
+    app: &AppHandle,
+    selected_year: Option<i32>,
+) -> Result<AlbumDebutTimelineResponse> {
+    let (conn, _) = open(app)?;
+    album_debut_timeline(&conn, selected_year)
+}
+
+fn album_debut_timeline(
+    conn: &Connection,
+    requested_year: Option<i32>,
+) -> Result<AlbumDebutTimelineResponse> {
+    let mut statement = conn.prepare(
+        "SELECT
+            a.id,
+            a.album,
+            a.album_artist_display,
+            a.canonical_genre,
+            a.year,
+            a.album_score,
+            a.billboard_rank,
+            a.billboard_year,
+            a.billboard_debut_year,
+            a.billboard_debut_month,
+            a.billboard_debut_week,
+            a.billboard_debut_week_key,
+            c.cache_path,
+            c.mime_type
+         FROM albums a
+         LEFT JOIN album_covers c ON c.album_id = a.id
+         WHERE a.billboard_debut_year IS NOT NULL
+           AND a.billboard_debut_month IS NOT NULL
+           AND a.billboard_debut_week IS NOT NULL
+           AND a.billboard_debut_week_key IS NOT NULL
+         ORDER BY
+            a.billboard_debut_year ASC,
+            a.billboard_debut_week_key ASC,
+            a.album COLLATE NOCASE ASC,
+            a.id ASC",
+    )?;
+    let album_rows = statement.query_map([], |row| {
+        let id: String = row.get(0)?;
+        Ok(AlbumDebutTimelineAlbum {
+            album_id: id.clone(),
+            id,
+            album: row.get(1)?,
+            album_artist_display: row.get(2)?,
+            canonical_genre: row.get(3)?,
+            year: row.get(4)?,
+            album_score: row.get(5)?,
+            billboard_rank: row.get(6)?,
+            billboard_year: row.get(7)?,
+            billboard_debut_year: row.get(8)?,
+            billboard_debut_month: row.get(9)?,
+            billboard_debut_week: row.get(10)?,
+            billboard_debut_week_key: row.get(11)?,
+            cover_path: row.get(12)?,
+            cover_mime_type: row.get(13)?,
+        })
+    })?;
+    let all_albums = album_rows.collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut grouped: HashMap<i32, AlbumDebutTimelineYear> = HashMap::new();
+    for album in &all_albums {
+        let year = grouped
+            .entry(album.billboard_debut_year)
+            .or_insert_with(|| AlbumDebutTimelineYear {
+                year: album.billboard_debut_year,
+                album_count: 0,
+                representative_album: None,
+            });
+        year.album_count += 1;
+        let should_replace = year
+            .representative_album
+            .as_ref()
+            .map(|current| {
+                let candidate_has_cover = album.cover_path.is_some();
+                let current_has_cover = current.cover_path.is_some();
+                (candidate_has_cover && !current_has_cover)
+                    || (candidate_has_cover == current_has_cover
+                        && album.album_score.unwrap_or(f64::NEG_INFINITY)
+                            > current.album_score.unwrap_or(f64::NEG_INFINITY))
+            })
+            .unwrap_or(true);
+        if should_replace {
+            year.representative_album = Some(album.clone());
+        }
+    }
+
+    let mut years = grouped.into_values().collect::<Vec<_>>();
+    years.sort_by_key(|year| year.year);
+    let selected_year = requested_year
+        .filter(|requested| years.iter().any(|year| year.year == *requested))
+        .or_else(|| {
+            years
+                .iter()
+                .max_by(|left, right| {
+                    left.album_count
+                        .cmp(&right.album_count)
+                        .then(left.year.cmp(&right.year))
+                })
+                .map(|year| year.year)
+        });
+    let albums = selected_year
+        .map(|selected| {
+            all_albums
+                .iter()
+                .filter(|album| album.billboard_debut_year == selected)
+                .cloned()
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let undated_album_count = conn.query_row(
+        "SELECT COUNT(*)
+         FROM albums
+         WHERE billboard_debut_year IS NULL
+            OR billboard_debut_month IS NULL
+            OR billboard_debut_week IS NULL
+            OR billboard_debut_week_key IS NULL",
+        [],
+        |row| row.get(0),
+    )?;
+
+    Ok(AlbumDebutTimelineResponse {
+        years,
+        selected_year,
+        albums,
+        dated_album_count: all_albums.len() as i64,
+        undated_album_count,
+    })
 }
 
 #[cfg(not(test))]
@@ -12010,7 +12143,8 @@ fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
     }
     let grid_cover_size = config.grid_cover_size.clamp(96, 224);
     let view_mode = match config.view_mode.as_str() {
-        "compact" | "grid" | "timeline" => config.view_mode.clone(),
+        "compact" | "grid" => config.view_mode.clone(),
+        "timeline" => "grid".to_string(),
         _ => "table".to_string(),
     };
 
@@ -13279,6 +13413,16 @@ mod tests {
             .expect("filter albums by Billboard debut week");
         assert_eq!(debut_response.total, 1);
         assert_eq!(debut_response.rows[0].album.as_deref(), Some("Actually"));
+
+        let timeline = album_debut_timeline(&conn, None).expect("build album debut timeline");
+        assert_eq!(timeline.selected_year, Some(1987));
+        assert_eq!(timeline.dated_album_count, 1);
+        assert_eq!(timeline.undated_album_count, 0);
+        assert_eq!(timeline.years.len(), 1);
+        assert_eq!(timeline.years[0].album_count, 1);
+        assert_eq!(timeline.albums.len(), 1);
+        assert_eq!(timeline.albums[0].album.as_deref(), Some("Actually"));
+        assert_eq!(timeline.albums[0].billboard_debut_week, 36);
 
         let mut request = MusicToolIssueRequest::default();
         request.tool_id = "missing-billboard-albums".to_string();

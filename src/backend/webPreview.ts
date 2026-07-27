@@ -57,6 +57,21 @@ import type {
   MusicBrainzOverlaySyncResult,
   PerformanceProbeResponse,
 } from "../types";
+import timelineCover1 from "../assets/album-timeline/timeline-cover-1.webp";
+import timelineCover2 from "../assets/album-timeline/timeline-cover-2.webp";
+import timelineCover3 from "../assets/album-timeline/timeline-cover-3.webp";
+import timelineCover4 from "../assets/album-timeline/timeline-cover-4.webp";
+import timelineCover5 from "../assets/album-timeline/timeline-cover-5.webp";
+import timelineCover6 from "../assets/album-timeline/timeline-cover-6.webp";
+
+const mockTimelineCoverUrls = [
+  timelineCover1,
+  timelineCover2,
+  timelineCover3,
+  timelineCover4,
+  timelineCover5,
+  timelineCover6,
+];
 import {
   defaultMusicBrainzCachePath,
   loadCachedSettings,
@@ -2699,6 +2714,7 @@ export {
   mockOriginProgress,
   mockOriginProgressHandlers,
   mockRows,
+  mockTimelineCoverUrls,
   mockAiSnapshots,
   mockSavedCharts,
   mockSavedSearches,
