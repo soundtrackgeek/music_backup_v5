@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.93.1] - 2026-07-28
+### Changed
+- Renamed the generic Search and Charts `Single` labels to **Billboard single** so the source is distinct from VG Lista and Ti i Skuddet.
+- Synchronized app metadata to `0.93.1`.
+
+### Fixed
+- Added the missing **Billboard single** Search table-column control and made the column fully optional in Tracks mode.
+
 ## [0.93.0] - 2026-07-28
 ### Added
 - Added Ti i Skuddet weekly singles imports from `CSV_TIISKUDDET_NO`, preserving all valid source rows in a dedicated SQLite table while enriching matched tracks with best rank and first chart week.

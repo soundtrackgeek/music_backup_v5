@@ -124,8 +124,8 @@ export const missingFieldOptions: MissingFieldOption[] = [
   { value: "filename", albumLabel: "Any filename", trackLabel: "Filename" },
   { value: "coverArt", albumLabel: "Cover art", trackLabel: "Album cover art" },
   { value: "billboard", albumLabel: "Billboard rank", trackLabel: "Album Billboard rank" },
-  { value: "billboardSingle", albumLabel: "Single Billboard rank", trackLabel: "Single Billboard rank" },
-  { value: "billboardSingleDebut", albumLabel: "Single chart debut", trackLabel: "Single chart debut" },
+  { value: "billboardSingle", albumLabel: "Billboard single rank", trackLabel: "Billboard single rank" },
+  { value: "billboardSingleDebut", albumLabel: "Billboard single debut", trackLabel: "Billboard single debut" },
   { value: "vgLista", albumLabel: "VG Lista rank", trackLabel: "VG Lista rank" },
   { value: "vgListaDebut", albumLabel: "VG Lista debut week", trackLabel: "VG Lista debut week" },
   { value: "tiISkuddet", albumLabel: "Ti i Skuddet rank", trackLabel: "Ti i Skuddet rank" },
@@ -156,8 +156,8 @@ export const rankingOptions = [
   { value: "ratingCompleteness", label: "Completeness" },
   { value: "totalMinutes", label: "Minutes" },
   { value: "trackRating", label: "Track rating" },
-  { value: "billboardSingleRank", label: "Single Billboard rank" },
-  { value: "billboardSingleDebut", label: "Single chart debut" },
+  { value: "billboardSingleRank", label: "Billboard single rank" },
+  { value: "billboardSingleDebut", label: "Billboard single debut" },
   { value: "vgListaRank", label: "VG Lista rank" },
   { value: "vgListaDebut", label: "VG Lista debut week" },
   { value: "tiISkuddetRank", label: "Ti i Skuddet rank" },
@@ -208,20 +208,31 @@ export const chartColumnOptions = [
   { value: "ae", label: "AE" },
   { value: "tmoe", label: "TMOE" },
   { value: "minutes", label: "Minutes" },
-  { value: "billboardSingle", label: "Single Billboard" },
-  { value: "billboardSingleDebut", label: "Single debut" },
+  { value: "billboardSingle", label: "Billboard single" },
+  { value: "billboardSingleDebut", label: "Billboard single debut" },
   { value: "trackRating", label: "Track rating" },
 ];
 
 export const searchTableColumnOptions = [
   { value: "billboard", label: "Billboard" },
   { value: "billboardDebut", label: "Debut week" },
+  { value: "billboardSingle", label: "Billboard single" },
+  { value: "billboardSingleDebut", label: "Billboard single debut" },
   { value: "vgLista", label: "VG Lista" },
   { value: "vgListaDebut", label: "VG Lista debut week" },
   { value: "tiISkuddet", label: "Ti i Skuddet" },
   { value: "tiISkuddetDebut", label: "Ti i Skuddet debut week" },
-  { value: "billboardSingleDebut", label: "Single debut" },
 ];
+
+export function searchTableColumnLabel(
+  option: (typeof searchTableColumnOptions)[number],
+  view: BrowseView,
+) {
+  if (view !== "tracks") return option.label;
+  if (option.value === "billboard") return "Album Billboard";
+  if (option.value === "billboardDebut") return "Album Billboard debut";
+  return option.label;
+}
 
 export type SearchExportColumnOption = {
   value: string;

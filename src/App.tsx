@@ -252,6 +252,7 @@ import {
   rightSidebarModeLabels,
   rightSidebarModeOptions,
   searchExportColumnOptions,
+  searchTableColumnLabel,
   searchTableColumnOptions,
 } from "./app/config";
 import {
@@ -2090,6 +2091,8 @@ function ResultTable({
   const visibleColumnSet = new Set(visibleColumns);
   const showBillboardColumn = visibleColumnSet.has("billboard");
   const showDebutColumn = visibleColumnSet.has("billboardDebut");
+  const showBillboardSingleColumn =
+    response.view === "tracks" && visibleColumnSet.has("billboardSingle");
   const showSingleDebutColumn = visibleColumnSet.has("billboardSingleDebut");
   const showVgListaColumn = visibleColumnSet.has("vgLista");
   const showVgListaDebutColumn = visibleColumnSet.has("vgListaDebut");
@@ -2119,7 +2122,7 @@ function ResultTable({
     "64px",
     ...(showBillboardColumn ? ["96px"] : []),
     ...(showDebutColumn ? ["minmax(104px, 0.9fr)"] : []),
-    "72px",
+    ...(showBillboardSingleColumn ? ["96px"] : []),
     ...(showSingleDebutColumn ? ["minmax(132px, 1fr)"] : []),
     ...(showVgListaColumn ? ["88px"] : []),
     ...(showVgListaDebutColumn ? ["minmax(132px, 1fr)"] : []),
@@ -2131,6 +2134,7 @@ function ResultTable({
   const optionalTableWidth =
     (showBillboardColumn ? 96 : 0) +
     (showDebutColumn ? 104 : 0) +
+    (showBillboardSingleColumn ? 96 : 0) +
     (showSingleDebutColumn ? 132 : 0) +
     (showVgListaColumn ? 88 : 0) +
     (showVgListaDebutColumn ? 132 : 0) +
@@ -2139,12 +2143,12 @@ function ResultTable({
 
   return response.view === "tracks" ? (
     <div
-      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}${showTiISkuddetColumn ? " with-ti-i-skuddet" : ""}${showTiISkuddetDebutColumn ? " with-ti-i-skuddet-debut" : ""}`}
+      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showBillboardSingleColumn ? " with-billboard-single" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}${showTiISkuddetColumn ? " with-ti-i-skuddet" : ""}${showTiISkuddetDebutColumn ? " with-ti-i-skuddet-debut" : ""}`}
       role="table"
       style={
         {
           "--result-table-columns": trackTableColumns,
-          "--result-table-min-width": `${1040 + optionalTableWidth}px`,
+          "--result-table-min-width": `${968 + optionalTableWidth}px`,
         } as CSSProperties
       }
     >
@@ -2189,21 +2193,23 @@ function ResultTable({
         ) : null}
         {showDebutColumn ? (
           <SortableColumnHeader
-            label="Debut week"
+            label="Album Billboard debut"
             field="billboardDebut"
             sort={sort}
             onSort={onSort}
           />
         ) : null}
-        <SortableColumnHeader
-          label="Single"
-          field="billboardSingleRank"
-          sort={sort}
-          onSort={onSort}
-        />
+        {showBillboardSingleColumn ? (
+          <SortableColumnHeader
+            label="Billboard single"
+            field="billboardSingleRank"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
         {showSingleDebutColumn ? (
           <SortableColumnHeader
-            label="Single debut"
+            label="Billboard single debut"
             field="billboardSingleDebut"
             sort={sort}
             onSort={onSort}
@@ -2289,7 +2295,9 @@ function ResultTable({
             {showDebutColumn ? (
               <span role="cell">{formatBillboardDebutWeek(row)}</span>
             ) : null}
-            <span role="cell">{singleLabel}</span>
+            {showBillboardSingleColumn ? (
+              <span role="cell">{singleLabel}</span>
+            ) : null}
             {showSingleDebutColumn ? (
               <span role="cell">{formatBillboardSingleDebut(row)}</span>
             ) : null}
@@ -5162,13 +5170,13 @@ function ChartResults({
     },
     {
       key: "billboardSingle",
-      label: "Single Billboard",
+      label: "Billboard single",
       sortField: "billboardSingleRank",
       value: (row: BrowseRow) => formatBillboardSingleRank(row),
     },
     {
       key: "billboardSingleDebut",
-      label: "Single debut",
+      label: "Billboard single debut",
       sortField: "billboardSingleDebut",
       value: (row: BrowseRow) => formatBillboardSingleDebut(row),
     },
@@ -7859,6 +7867,7 @@ export default function App() {
   const [searchTableColumns, setSearchTableColumns] = useState<string[]>([
     "billboard",
     "billboardDebut",
+    "billboardSingle",
     "billboardSingleDebut",
   ]);
   const [searchExportColumns, setSearchExportColumns] = useState<string[]>([]);
@@ -9653,10 +9662,10 @@ export default function App() {
         key: "billboardSingleDebutDate",
         label:
           from && to
-            ? `Single chart debut ${from}–${to}`
+            ? `Billboard single debut ${from}–${to}`
             : from
-              ? `Single chart debut from ${from}`
-              : `Single chart debut through ${to}`,
+              ? `Billboard single debut from ${from}`
+              : `Billboard single debut through ${to}`,
         remove: () =>
           updateFilters({
             billboardSingleDebutDateFrom: null,
@@ -9719,7 +9728,7 @@ export default function App() {
       addRangeChip(
         nextChips,
         "billboardSingle",
-        "Single Billboard",
+        "Billboard single",
         currentFilters.billboardSingleRankMin,
         currentFilters.billboardSingleRankMax,
         () =>
@@ -18637,6 +18646,7 @@ export default function App() {
                       (option) =>
                         request.view === "tracks" ||
                         ![
+                          "billboardSingle",
                           "billboardSingleDebut",
                           "tiISkuddet",
                           "tiISkuddetDebut",
@@ -18649,7 +18659,7 @@ export default function App() {
                         checked={searchTableColumns.includes(option.value)}
                         onChange={() => toggleSearchTableColumn(option.value)}
                       />
-                      <span>{option.label}</span>
+                      <span>{searchTableColumnLabel(option, request.view)}</span>
                     </label>
                     ))}
                 </div>
@@ -18687,11 +18697,11 @@ export default function App() {
                             },
                             {
                               value: "billboardSingleRank",
-                              label: "Single Billboard",
+                              label: "Billboard single",
                             },
                             {
                               value: "billboardSingleDebut",
-                              label: "Single chart debut",
+                              label: "Billboard single debut",
                             },
                             {
                               value: "vgListaRank",
