@@ -4,6 +4,8 @@ import "@fontsource/manrope/latin-500.css";
 import "@fontsource/manrope/latin-600.css";
 
 import {
+  ArrowCounterClockwise,
+  ArrowsDownUp,
   ArrowsOutSimple,
   CalendarBlank,
   CaretDown,
@@ -41,6 +43,14 @@ type PeriodId =
   | "year"
   | "custom";
 type PresetPeriodId = Exclude<PeriodId, "custom">;
+type AlbumOrderMode =
+  | "debut"
+  | "score"
+  | "billboard"
+  | "title"
+  | "artist"
+  | "custom";
+type AlbumOrderDirection = "ascending" | "descending";
 
 type PeriodDefinition = {
   id: PeriodId;
@@ -109,6 +119,20 @@ const periodPresets: Array<{
 ];
 
 const calendarMonths = Array.from({ length: 12 }, (_, index) => index + 1);
+const emptyAlbumOrder: string[] = [];
+
+const albumOrderOptions: Array<{
+  id: AlbumOrderMode;
+  label: string;
+  defaultDirection: AlbumOrderDirection;
+}> = [
+  { id: "debut", label: "First appearance", defaultDirection: "ascending" },
+  { id: "score", label: "Album score", defaultDirection: "descending" },
+  { id: "billboard", label: "Billboard rank", defaultDirection: "ascending" },
+  { id: "title", label: "Album title", defaultDirection: "ascending" },
+  { id: "artist", label: "Artist", defaultDirection: "ascending" },
+  { id: "custom", label: "Custom order", defaultDirection: "ascending" },
+];
 
 function monthLabel(month: number, format: "long" | "short" = "long") {
   return new Intl.DateTimeFormat(undefined, {
@@ -184,6 +208,147 @@ function albumChronology(
     left.billboardDebutWeekKey.localeCompare(right.billboardDebutWeekKey) ||
     (left.album ?? "").localeCompare(right.album ?? "")
   );
+}
+
+function compareOptionalNumber(
+  left: number | null,
+  right: number | null,
+  direction: AlbumOrderDirection,
+) {
+  if (left == null && right == null) {
+    return 0;
+  }
+  if (left == null) {
+    return 1;
+  }
+  if (right == null) {
+    return -1;
+  }
+  const comparison = left - right;
+  return direction === "ascending" ? comparison : -comparison;
+}
+
+export function orderTimelineAlbums(
+  albums: AlbumDebutTimelineAlbum[],
+  mode: AlbumOrderMode,
+  direction: AlbumOrderDirection,
+  customOrder: string[] = [],
+) {
+  if (mode === "custom") {
+    const customIndexes = new Map(
+      customOrder.map((albumId, index) => [albumId, index]),
+    );
+    return [...albums].sort((left, right) => {
+      const leftIndex = customIndexes.get(left.id);
+      const rightIndex = customIndexes.get(right.id);
+      if (leftIndex == null && rightIndex == null) {
+        return albumChronology(left, right);
+      }
+      if (leftIndex == null) {
+        return 1;
+      }
+      if (rightIndex == null) {
+        return -1;
+      }
+      return leftIndex - rightIndex;
+    });
+  }
+
+  return [...albums].sort((left, right) => {
+    let comparison = 0;
+    switch (mode) {
+      case "debut":
+        comparison = albumChronology(left, right);
+        break;
+      case "score":
+        comparison = compareOptionalNumber(
+          left.albumScore,
+          right.albumScore,
+          direction,
+        );
+        break;
+      case "billboard":
+        comparison = compareOptionalNumber(
+          left.billboardRank,
+          right.billboardRank,
+          direction,
+        );
+        break;
+      case "title":
+        comparison = (left.album ?? "").localeCompare(right.album ?? "");
+        break;
+      case "artist":
+        comparison = (left.albumArtistDisplay ?? "").localeCompare(
+          right.albumArtistDisplay ?? "",
+        );
+        break;
+    }
+    if (mode === "debut") {
+      return direction === "ascending" ? comparison : -comparison;
+    }
+    if (mode === "title" || mode === "artist") {
+      comparison = direction === "ascending" ? comparison : -comparison;
+    }
+    return comparison || albumChronology(left, right);
+  });
+}
+
+function albumOrderDirectionLabel(
+  mode: AlbumOrderMode,
+  direction: AlbumOrderDirection,
+) {
+  switch (mode) {
+    case "debut":
+      return direction === "ascending" ? "Oldest first" : "Newest first";
+    case "score":
+      return direction === "ascending" ? "Low score first" : "High score first";
+    case "billboard":
+      return direction === "ascending" ? "Best rank first" : "Lowest rank first";
+    case "title":
+    case "artist":
+      return direction === "ascending" ? "A–Z" : "Z–A";
+    case "custom":
+      return "Custom order";
+  }
+}
+
+function albumOrderDescription(
+  mode: AlbumOrderMode,
+  direction: AlbumOrderDirection,
+) {
+  const directionLabel = albumOrderDirectionLabel(mode, direction);
+  if (mode === "score") {
+    return `${directionLabel}; albums without a score stay last.`;
+  }
+  if (mode === "billboard") {
+    return `${directionLabel}; unranked albums stay last.`;
+  }
+  if (mode === "debut") {
+    return `${directionLabel} by Billboard first-appearance week.`;
+  }
+  if (mode === "custom") {
+    return "Select a cover, then move it earlier or later.";
+  }
+  return directionLabel;
+}
+
+function albumOrderMetricLabel(
+  album: AlbumDebutTimelineAlbum,
+  mode: AlbumOrderMode,
+) {
+  if (mode === "score") {
+    return album.albumScore == null
+      ? "No score"
+      : `Score ${album.albumScore.toLocaleString(undefined, {
+          maximumFractionDigits: 3,
+        })}`;
+  }
+  if (mode === "billboard") {
+    return album.billboardRank == null
+      ? "Unranked"
+      : `#${album.billboardRank.toLocaleString()}`;
+  }
+  return null;
 }
 
 function isoWeek(date: Date) {
@@ -312,6 +477,13 @@ export function AlbumTimeRibbon({
   const [customStartMonth, setCustomStartMonth] = useState(1);
   const [customEndMonth, setCustomEndMonth] = useState(1);
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
+  const [albumOrderMode, setAlbumOrderMode] =
+    useState<AlbumOrderMode>("debut");
+  const [albumOrderDirection, setAlbumOrderDirection] =
+    useState<AlbumOrderDirection>("ascending");
+  const [customAlbumOrders, setCustomAlbumOrders] = useState<
+    Record<string, string[]>
+  >({});
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
@@ -359,16 +531,36 @@ export function AlbumTimeRibbon({
     () => periodFor(periodId, customStartMonth, customEndMonth),
     [customEndMonth, customStartMonth, periodId],
   );
-  const periodAlbums = useMemo(
+  const albumOrderScope = `${selectedYear ?? "none"}:${selectedPeriod.months.join("-")}`;
+  const cohortAlbums = useMemo(
     () =>
-      albumsForPeriod(data?.albums ?? [], selectedPeriod.months).sort(
-        albumChronology,
+      orderTimelineAlbums(
+        albumsForPeriod(data?.albums ?? [], selectedPeriod.months),
+        "debut",
+        "ascending",
       ),
     [data?.albums, selectedPeriod],
   );
+  const customOrderForScope =
+    customAlbumOrders[albumOrderScope] ?? emptyAlbumOrder;
+  const orderedAlbums = useMemo(
+    () =>
+      orderTimelineAlbums(
+        cohortAlbums,
+        albumOrderMode,
+        albumOrderDirection,
+        customOrderForScope,
+      ),
+    [
+      albumOrderDirection,
+      albumOrderMode,
+      cohortAlbums,
+      customOrderForScope,
+    ],
+  );
   const selectedAlbum =
-    periodAlbums.find((album) => album.id === selectedAlbumId) ??
-    periodAlbums[0] ??
+    orderedAlbums.find((album) => album.id === selectedAlbumId) ??
+    orderedAlbums[0] ??
     null;
 
   if (!data && isLoading) {
@@ -426,6 +618,15 @@ export function AlbumTimeRibbon({
     customStartMonth,
     customEndMonth,
   ).label;
+  const selectedAlbumOrderIndex = selectedAlbum
+    ? orderedAlbums.findIndex((album) => album.id === selectedAlbum.id)
+    : -1;
+  const chronologicalAlbumIds = cohortAlbums.map((album) => album.id);
+  const customOrderIsModified =
+    albumOrderMode === "custom" &&
+    orderedAlbums.some(
+      (album, index) => album.id !== chronologicalAlbumIds[index],
+    );
   const timelineStyle = {
     "--album-time-active-x": `${activePosition}%`,
   } as CSSProperties;
@@ -450,19 +651,80 @@ export function AlbumTimeRibbon({
   }
 
   function createPlaylist() {
-    if (periodAlbums.length === 0) {
+    if (orderedAlbums.length === 0) {
       return;
     }
     const title = selectorLabel;
+    const orderLabel =
+      albumOrderOptions.find((option) => option.id === albumOrderMode)?.label ??
+      "First appearance";
+    const orderInstruction =
+      albumOrderMode === "debut"
+        ? `let the sequence move ${
+            albumOrderDirection === "ascending" ? "forward" : "backward"
+          } through Billboard debut weeks`
+        : albumOrderMode === "custom"
+          ? "follow the custom album order exactly"
+          : `follow the visible ${orderLabel.toLowerCase()} order`;
     onCreatePlaylist({
       title,
-      albumIds: periodAlbums.map((album) => album.albumId),
+      albumIds: orderedAlbums.map((album) => album.albumId),
       prompt: `Create a playlist that relives ${
         selectedPeriod.id === "year"
           ? `the album arrivals of ${selectedYear}`
           : `${selectedPeriod.label.toLowerCase()} ${selectedYear}`
-      }. Use only music from these albums and let the sequence move chronologically through their Billboard debut weeks.`,
+      }. Use only music from these albums and ${orderInstruction}.`,
     });
+  }
+
+  function chooseAlbumOrder(nextMode: AlbumOrderMode) {
+    const option =
+      albumOrderOptions.find((candidate) => candidate.id === nextMode) ??
+      albumOrderOptions[0];
+    if (nextMode === "custom") {
+      setCustomAlbumOrders((current) =>
+        Object.prototype.hasOwnProperty.call(current, albumOrderScope)
+          ? current
+          : {
+              ...current,
+              [albumOrderScope]: orderedAlbums.map((album) => album.id),
+            },
+      );
+    }
+    setAlbumOrderMode(nextMode);
+    setAlbumOrderDirection(option.defaultDirection);
+  }
+
+  function toggleAlbumOrderDirection() {
+    setAlbumOrderDirection((current) =>
+      current === "ascending" ? "descending" : "ascending",
+    );
+  }
+
+  function moveSelectedAlbum(offset: -1 | 1) {
+    if (!selectedAlbum || selectedAlbumOrderIndex < 0) {
+      return;
+    }
+    const destinationIndex = selectedAlbumOrderIndex + offset;
+    if (destinationIndex < 0 || destinationIndex >= orderedAlbums.length) {
+      return;
+    }
+    const nextOrder = orderedAlbums.map((album) => album.id);
+    [nextOrder[selectedAlbumOrderIndex], nextOrder[destinationIndex]] = [
+      nextOrder[destinationIndex],
+      nextOrder[selectedAlbumOrderIndex],
+    ];
+    setCustomAlbumOrders((current) => ({
+      ...current,
+      [albumOrderScope]: nextOrder,
+    }));
+  }
+
+  function resetCustomAlbumOrder() {
+    setCustomAlbumOrders((current) => ({
+      ...current,
+      [albumOrderScope]: chronologicalAlbumIds,
+    }));
   }
 
   function choosePreset(nextPeriodId: PresetPeriodId) {
@@ -768,7 +1030,7 @@ export function AlbumTimeRibbon({
                         : ""
                     }
                     onClick={() => {
-                      const album = periodAlbums.find(
+                      const album = cohortAlbums.find(
                         (candidate) =>
                           candidate.billboardDebutMonth === month &&
                           candidate.billboardDebutWeek === week,
@@ -777,7 +1039,7 @@ export function AlbumTimeRibbon({
                         setSelectedAlbumId(album.id);
                       }
                     }}
-                    disabled={!periodAlbums.some(
+                    disabled={!cohortAlbums.some(
                       (album) =>
                         album.billboardDebutMonth === month &&
                         album.billboardDebutWeek === week,
@@ -799,7 +1061,7 @@ export function AlbumTimeRibbon({
           <div>
             <strong>{selectorLabel.replace("Relive ", "")}</strong>
             <span>
-              {periodRangeLabel(selectedPeriod)} · {periodAlbums.length} of{" "}
+              {periodRangeLabel(selectedPeriod)} · {orderedAlbums.length} of{" "}
               {yearSummary.albumCount} album arrivals
             </span>
             {selectedAlbum ? (
@@ -823,7 +1085,7 @@ export function AlbumTimeRibbon({
             <button
               type="button"
               className="album-time-ribbon-playlist"
-              disabled={periodAlbums.length === 0}
+              disabled={orderedAlbums.length === 0}
               onClick={createPlaylist}
             >
               <Play size={15} weight="fill" aria-hidden="true" />
@@ -833,26 +1095,144 @@ export function AlbumTimeRibbon({
           </div>
         </header>
 
-        {periodAlbums.length > 0 ? (
-          <div className="album-time-ribbon-covers" role="list">
-            {periodAlbums.map((album, index) => (
-              <button
-                type="button"
-                role="listitem"
-                className={album.id === selectedAlbum?.id ? "active" : ""}
-                aria-label={`${album.album ?? "Untitled"} by ${
-                  album.albumArtistDisplay ?? "Unknown artist"
-                }, ${monthLabel(album.billboardDebutMonth, "short")} ${
-                  album.billboardDebutYear
-                }, week ${album.billboardDebutWeek}`}
-                aria-pressed={album.id === selectedAlbum?.id}
-                onClick={() => setSelectedAlbumId(album.id)}
-                style={{ "--album-time-cover-index": index } as CSSProperties}
-                key={album.id}
-              >
-                <AlbumCover row={album} decorative={false} previewOnHover />
-              </button>
-            ))}
+        {orderedAlbums.length > 0 ? (
+          <div
+            className="album-time-ribbon-order-bar"
+            aria-label="Album order controls"
+          >
+            <div className="album-time-ribbon-order-controls">
+              <label className="album-time-ribbon-order-select">
+                <ArrowsDownUp size={16} weight="bold" aria-hidden="true" />
+                <span>Order</span>
+                <select
+                  value={albumOrderMode}
+                  onChange={(event) =>
+                    chooseAlbumOrder(event.target.value as AlbumOrderMode)
+                  }
+                  aria-label="Album order"
+                >
+                  {albumOrderOptions.map((option) => (
+                    <option value={option.id} key={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {albumOrderMode === "custom" ? (
+                <div
+                  className="album-time-ribbon-custom-order-actions"
+                  role="group"
+                  aria-label="Custom album order"
+                >
+                  <button
+                    type="button"
+                    onClick={() => moveSelectedAlbum(-1)}
+                    disabled={selectedAlbumOrderIndex <= 0}
+                    aria-label="Move selected album earlier"
+                  >
+                    <CaretLeft size={13} weight="bold" aria-hidden="true" />
+                    Earlier
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveSelectedAlbum(1)}
+                    disabled={
+                      selectedAlbumOrderIndex < 0 ||
+                      selectedAlbumOrderIndex >= orderedAlbums.length - 1
+                    }
+                    aria-label="Move selected album later"
+                  >
+                    Later
+                    <CaretRight size={13} weight="bold" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetCustomAlbumOrder}
+                    disabled={!customOrderIsModified}
+                    aria-label="Reset custom album order"
+                  >
+                    <ArrowCounterClockwise
+                      size={13}
+                      weight="bold"
+                      aria-hidden="true"
+                    />
+                    Reset
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="album-time-ribbon-order-direction"
+                  onClick={toggleAlbumOrderDirection}
+                  aria-label={`Reverse album order; currently ${albumOrderDirectionLabel(
+                    albumOrderMode,
+                    albumOrderDirection,
+                  )}`}
+                >
+                  {albumOrderDirectionLabel(
+                    albumOrderMode,
+                    albumOrderDirection,
+                  )}
+                  <ArrowsDownUp size={13} weight="bold" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            <span className="album-time-ribbon-order-description">
+              {albumOrderDescription(albumOrderMode, albumOrderDirection)}
+            </span>
+          </div>
+        ) : null}
+
+        {orderedAlbums.length > 0 ? (
+          <div
+            className="album-time-ribbon-covers"
+            role="list"
+            aria-label="Albums in selected period"
+          >
+            {orderedAlbums.map((album, index) => {
+              const orderMetricLabel = albumOrderMetricLabel(
+                album,
+                albumOrderMode,
+              );
+              return (
+                <button
+                  type="button"
+                  role="listitem"
+                  className={album.id === selectedAlbum?.id ? "active" : ""}
+                  aria-label={`${album.album ?? "Untitled"} by ${
+                    album.albumArtistDisplay ?? "Unknown artist"
+                  }, ${monthLabel(album.billboardDebutMonth, "short")} ${
+                    album.billboardDebutYear
+                  }, week ${album.billboardDebutWeek}${
+                    albumOrderMode === "custom"
+                      ? `, custom position ${index + 1}`
+                      : ""
+                  }`}
+                  aria-pressed={album.id === selectedAlbum?.id}
+                  onClick={() => setSelectedAlbumId(album.id)}
+                  style={{ "--album-time-cover-index": index } as CSSProperties}
+                  key={album.id}
+                >
+                  {albumOrderMode === "custom" ? (
+                    <span
+                      className="album-time-ribbon-order-index"
+                      aria-hidden="true"
+                    >
+                      {index + 1}
+                    </span>
+                  ) : null}
+                  {orderMetricLabel ? (
+                    <span
+                      className="album-time-ribbon-order-value"
+                      aria-hidden="true"
+                    >
+                      {orderMetricLabel}
+                    </span>
+                  ) : null}
+                  <AlbumCover row={album} decorative={false} previewOnHover />
+                </button>
+              );
+            })}
           </div>
         ) : (
           <div className="album-time-ribbon-season-empty">

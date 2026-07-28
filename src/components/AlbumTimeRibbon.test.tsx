@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -10,24 +10,35 @@ import {
   AlbumTimeRibbon,
   albumsForPeriod,
   monthsInRange,
+  orderTimelineAlbums,
   representativeTimelineYears,
 } from "./AlbumTimeRibbon";
+
+type AlbumOverrides = {
+  album?: string;
+  albumArtistDisplay?: string;
+  albumScore?: number | null;
+  billboardRank?: number | null;
+};
 
 function album(
   id: string,
   year: number,
   month: number,
   week: number,
+  overrides: AlbumOverrides = {},
 ): AlbumDebutTimelineAlbum {
   return {
     id,
     albumId: id,
-    album: `Album ${id}`,
-    albumArtistDisplay: "Pet Shop Boys",
+    album: overrides.album ?? `Album ${id}`,
+    albumArtistDisplay: overrides.albumArtistDisplay ?? "Pet Shop Boys",
     canonicalGenre: "Synthpop",
     year,
-    albumScore: 8.4,
-    billboardRank: 17,
+    albumScore:
+      overrides.albumScore === undefined ? 8.4 : overrides.albumScore,
+    billboardRank:
+      overrides.billboardRank === undefined ? 17 : overrides.billboardRank,
     billboardYear: year,
     billboardDebutYear: year,
     billboardDebutMonth: month,
@@ -35,6 +46,34 @@ function album(
     billboardDebutWeekKey: `${year}-W${String(week).padStart(2, "0")}`,
     coverPath: null,
     coverMimeType: null,
+  };
+}
+
+function orderingResponse(): AlbumDebutTimelineResponse {
+  const gamma = album("gamma", 1989, 6, 23, {
+    album: "Gamma",
+    albumArtistDisplay: "Aster",
+    albumScore: 8,
+    billboardRank: 90,
+  });
+  const beta = album("beta", 1989, 6, 24, {
+    album: "Beta",
+    albumArtistDisplay: "Cinder",
+    albumScore: 6,
+    billboardRank: 2,
+  });
+  const alpha = album("alpha", 1989, 6, 25, {
+    album: "Alpha",
+    albumArtistDisplay: "Beacon",
+    albumScore: 10,
+    billboardRank: 45,
+  });
+  return {
+    years: [{ year: 1989, albumCount: 3, representativeAlbum: alpha }],
+    selectedYear: 1989,
+    albums: [alpha, gamma, beta],
+    datedAlbumCount: 3,
+    undatedAlbumCount: 0,
   };
 }
 
@@ -54,6 +93,14 @@ function response(): AlbumDebutTimelineResponse {
     datedAlbumCount: 6,
     undatedAlbumCount: 1,
   };
+}
+
+function visibleCoverTitles() {
+  return within(
+    screen.getByRole("list", { name: "Albums in selected period" }),
+  )
+    .getAllByRole("listitem")
+    .map((item) => item.getAttribute("aria-label")?.split(" by ")[0]);
 }
 
 describe("AlbumTimeRibbon", () => {
@@ -157,6 +204,89 @@ describe("AlbumTimeRibbon", () => {
     expect(onSelectYear).toHaveBeenCalledWith(1990);
   });
 
+  it("orders the cover strip by score and Billboard rank in either direction", async () => {
+    const user = userEvent.setup();
+    const onCreatePlaylist = vi.fn();
+    render(
+      <AlbumTimeRibbon
+        data={orderingResponse()}
+        error={null}
+        isLoading={false}
+        onCreatePlaylist={onCreatePlaylist}
+        onOpenAlbum={vi.fn()}
+        onOpenSearch={vi.fn()}
+        onRetry={vi.fn()}
+        onSelectYear={vi.fn()}
+      />,
+    );
+
+    expect(visibleCoverTitles()).toEqual(["Gamma", "Beta", "Alpha"]);
+    await user.selectOptions(screen.getByLabelText("Album order"), "score");
+    expect(visibleCoverTitles()).toEqual(["Alpha", "Gamma", "Beta"]);
+    expect(screen.getByText(/High score first; albums without a score stay last/)).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Reverse album order; currently High score first",
+      }),
+    );
+    expect(visibleCoverTitles()).toEqual(["Beta", "Gamma", "Alpha"]);
+
+    await user.selectOptions(screen.getByLabelText("Album order"), "billboard");
+    expect(visibleCoverTitles()).toEqual(["Beta", "Alpha", "Gamma"]);
+    await user.click(screen.getByRole("button", { name: "Create playlist" }));
+    expect(onCreatePlaylist).toHaveBeenLastCalledWith(
+      expect.objectContaining({ albumIds: ["beta", "alpha", "gamma"] }),
+    );
+  });
+
+  it("lets the selected album move through a resettable custom order", async () => {
+    const user = userEvent.setup();
+    const onCreatePlaylist = vi.fn();
+    render(
+      <AlbumTimeRibbon
+        data={orderingResponse()}
+        error={null}
+        isLoading={false}
+        onCreatePlaylist={onCreatePlaylist}
+        onOpenAlbum={vi.fn()}
+        onOpenSearch={vi.fn()}
+        onRetry={vi.fn()}
+        onSelectYear={vi.fn()}
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText("Album order"), "billboard");
+    await user.selectOptions(screen.getByLabelText("Album order"), "custom");
+    expect(visibleCoverTitles()).toEqual(["Beta", "Alpha", "Gamma"]);
+
+    await user.click(
+      screen.getByRole("listitem", {
+        name: /Alpha by Beacon.*custom position 2/,
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Move selected album earlier" }),
+    );
+    expect(visibleCoverTitles()).toEqual(["Alpha", "Beta", "Gamma"]);
+
+    await user.click(screen.getByRole("button", { name: "Create playlist" }));
+    expect(onCreatePlaylist).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        albumIds: ["alpha", "beta", "gamma"],
+        prompt: expect.stringContaining("follow the custom album order exactly"),
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Reset custom album order" }),
+    );
+    expect(visibleCoverTitles()).toEqual(["Gamma", "Beta", "Alpha"]);
+    expect(
+      screen.getByRole("button", { name: "Reset custom album order" }),
+    ).toBeDisabled();
+  });
+
   it("keeps period and representative sampling deterministic", () => {
     const years = Array.from({ length: 30 }, (_, index) => ({
       year: 1970 + index,
@@ -167,6 +297,37 @@ describe("AlbumTimeRibbon", () => {
     expect(albumsForPeriod(response().albums, [6, 7, 8]).map((item) => item.id)).toEqual([
       "summer",
     ]);
+    const sortableAlbums = orderingResponse().albums;
+    expect(
+      orderTimelineAlbums(sortableAlbums, "score", "descending").map(
+        (item) => item.id,
+      ),
+    ).toEqual(["alpha", "gamma", "beta"]);
+    expect(
+      orderTimelineAlbums(sortableAlbums, "billboard", "ascending").map(
+        (item) => item.id,
+      ),
+    ).toEqual(["beta", "alpha", "gamma"]);
+    const missingMetrics = album("missing", 1989, 6, 26, {
+      albumScore: null,
+      billboardRank: null,
+    });
+    const ascendingScoresWithMissing = orderTimelineAlbums(
+      [...sortableAlbums, missingMetrics],
+      "score",
+      "ascending",
+    );
+    expect(
+      ascendingScoresWithMissing[ascendingScoresWithMissing.length - 1]?.id,
+    ).toBe("missing");
+    const descendingRanksWithMissing = orderTimelineAlbums(
+      [...sortableAlbums, missingMetrics],
+      "billboard",
+      "descending",
+    );
+    expect(
+      descendingRanksWithMissing[descendingRanksWithMissing.length - 1]?.id,
+    ).toBe("missing");
     const representatives = representativeTimelineYears(years, 1989, 8);
     expect(representatives).toHaveLength(8);
     expect(representatives.some((year) => year.year === 1989)).toBe(true);

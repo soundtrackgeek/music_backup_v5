@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.89.0] - 2026-07-28
+### Added
+- Added Timeline album-strip ordering by Billboard first-appearance week, Album Score, Billboard rank, album title, artist, or a manual custom order.
+- Added contextual score and Billboard-rank badges, reversible sort directions, custom earlier/later controls, reset, and exact visible-order handoff to Playlist Builder.
+
+### Changed
+- Timeline still defaults to chronological first appearance; missing scores and unranked albums remain at the end in either direction.
+- Bumped synchronized app metadata to `0.89.0`.
+
 ## [0.88.0] - 2026-07-27
 ### Added
 - Added Spring, Summer, Fall, Winter, Christmas, New Year, and full-year Timeline presets plus custom single-month and wrapping month-range periods such as January or November through February.
