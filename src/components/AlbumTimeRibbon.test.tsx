@@ -165,6 +165,11 @@ describe("AlbumTimeRibbon", () => {
     expect(
       container.querySelectorAll(".album-time-ribbon-decade-nodes span.active"),
     ).toHaveLength(1);
+    const albumList = screen.getByRole("list", {
+      name: "Albums in selected period",
+    });
+    expect(within(albumList).getByText("Album summer")).toBeInTheDocument();
+    expect(within(albumList).getByText("Pet Shop Boys")).toBeInTheDocument();
   });
 
   it("offers every preset and hands the selected period to playlists", async () => {
@@ -294,6 +299,9 @@ describe("AlbumTimeRibbon", () => {
     const trackList = screen.getByRole("list", {
       name: "Tracks in selected period",
     });
+    expect(within(trackList).getByText("Summer Song")).toBeInTheDocument();
+    expect(within(trackList).getByText("The Satellites")).toBeInTheDocument();
+    expect(within(trackList).getByText("Night Signals")).toBeInTheDocument();
     await user.click(within(trackList).getByRole("listitem"));
     expect(container.querySelector(".album-time-ribbon-drawer small")).toHaveTextContent(
       /1989 · Week 24/,

@@ -1387,7 +1387,9 @@ export function AlbumTimeRibbon({
                 <button
                   type="button"
                   role="listitem"
-                  className={album.id === selectedAlbum?.id ? "active" : ""}
+                  className={`${album.id === selectedAlbum?.id ? "active" : ""}${
+                    mode === "tracks" ? " is-track" : ""
+                  }`}
                   aria-label={`${album.album ?? "Untitled"} by ${
                     album.albumArtistDisplay ?? "Unknown artist"
                   }, ${monthLabel(album.billboardDebutMonth, "short")} ${
@@ -1402,23 +1404,32 @@ export function AlbumTimeRibbon({
                   style={{ "--album-time-cover-index": index } as CSSProperties}
                   key={album.id}
                 >
-                  {albumOrderMode === "custom" ? (
-                    <span
-                      className="album-time-ribbon-order-index"
-                      aria-hidden="true"
-                    >
-                      {index + 1}
-                    </span>
-                  ) : null}
-                  {orderMetricLabel ? (
-                    <span
-                      className="album-time-ribbon-order-value"
-                      aria-hidden="true"
-                    >
-                      {orderMetricLabel}
-                    </span>
-                  ) : null}
-                  <AlbumCover row={album} decorative={false} previewOnHover />
+                  <span className="album-time-ribbon-cover-art">
+                    {albumOrderMode === "custom" ? (
+                      <span
+                        className="album-time-ribbon-order-index"
+                        aria-hidden="true"
+                      >
+                        {index + 1}
+                      </span>
+                    ) : null}
+                    {orderMetricLabel ? (
+                      <span
+                        className="album-time-ribbon-order-value"
+                        aria-hidden="true"
+                      >
+                        {orderMetricLabel}
+                      </span>
+                    ) : null}
+                    <AlbumCover row={album} decorative={false} previewOnHover />
+                  </span>
+                  <span className="album-time-ribbon-cover-info" aria-hidden="true">
+                    <strong>{album.album ?? "Untitled"}</strong>
+                    <span>{album.albumArtistDisplay ?? "Unknown artist"}</span>
+                    {mode === "tracks" && album.sourceAlbumTitle ? (
+                      <small>{album.sourceAlbumTitle}</small>
+                    ) : null}
+                  </span>
                 </button>
               );
             })}

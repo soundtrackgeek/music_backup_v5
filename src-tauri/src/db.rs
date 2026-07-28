@@ -131,6 +131,8 @@ struct BillboardSingleChartEntry {
     artist: String,
     featured: String,
     display_artist: String,
+    album: String,
+    album_key: String,
     title: String,
     primary_artist_key: String,
     artist_key: String,
@@ -156,6 +158,26 @@ struct BillboardSingleTrackMatch {
     debut_month: Option<i32>,
     debut_week: Option<i32>,
     debut_week_key: Option<String>,
+}
+
+#[derive(Debug)]
+struct BillboardSingleTrackCandidate {
+    track_id: i64,
+    album_key: String,
+    album_artist_key: String,
+    year: Option<i32>,
+    normalized_rating: Option<i32>,
+    has_cover: bool,
+    source_album_key: String,
+    source_artist_key: String,
+    rank: i32,
+    chart_year: i32,
+    debut_date: Option<String>,
+    debut_year: Option<i32>,
+    debut_month: Option<i32>,
+    debut_week: Option<i32>,
+    debut_week_key: Option<String>,
+    entry_indexes: Vec<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -385,7 +407,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_four_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_five_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -550,6 +572,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             title TEXT NOT NULL,
             artist_key TEXT NOT NULL,
             title_key TEXT NOT NULL,
+            album TEXT,
+            album_key TEXT,
             date_entered_raw TEXT,
             date_entered TEXT,
             date_entered_year INTEGER,
@@ -1168,7 +1192,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 34;
+        PRAGMA user_version = 35;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -1945,6 +1969,8 @@ fn ensure_billboard_single_chart_entries_table(conn: &Connection) -> Result<()> 
             title TEXT NOT NULL,
             artist_key TEXT NOT NULL,
             title_key TEXT NOT NULL,
+            album TEXT,
+            album_key TEXT,
             date_entered_raw TEXT,
             date_entered TEXT,
             date_entered_year INTEGER,
@@ -1965,6 +1991,8 @@ fn ensure_billboard_single_chart_entries_table(conn: &Connection) -> Result<()> 
     .context("Could not create Billboard singles chart entry table")?;
 
     for (name, definition) in [
+        ("album", "TEXT"),
+        ("album_key", "TEXT"),
         ("date_entered_raw", "TEXT"),
         ("date_entered", "TEXT"),
         ("date_entered_year", "INTEGER"),
@@ -2287,7 +2315,6 @@ fn import_billboard_singles(
     let mut files_scanned = 0_usize;
     let mut source_entry_count = 0_usize;
     let mut source_entries = Vec::new();
-    let mut best_entries: HashMap<String, BillboardSingleChartEntry> = HashMap::new();
     let mut entry_indexes_by_match_key: HashMap<String, Vec<usize>> = HashMap::new();
     for csv_file in csv_files {
         let year = billboard_year_from_path(&csv_file)?;
@@ -2298,19 +2325,9 @@ fn import_billboard_singles(
             let entry_index = source_entries.len();
             for key in billboard_single_entry_match_keys(&entry) {
                 entry_indexes_by_match_key
-                    .entry(key.clone())
+                    .entry(key)
                     .or_default()
                     .push(entry_index);
-                let should_replace = best_entries
-                    .get(&key)
-                    .map(|existing| {
-                        entry.rank < existing.rank
-                            || (entry.rank == existing.rank && entry.year < existing.year)
-                    })
-                    .unwrap_or(true);
-                if should_replace {
-                    best_entries.insert(key, entry.clone());
-                }
             }
             source_entries.push(entry);
         }
@@ -2339,8 +2356,17 @@ fn import_billboard_singles(
     {
         let mut stmt = tx.prepare(
             "
-            SELECT id, display_artist, title
-            FROM tracks
+            SELECT
+                t.id,
+                t.display_artist,
+                t.title,
+                t.album,
+                t.album_artist_display,
+                t.year,
+                t.normalized_rating,
+                c.album_id IS NOT NULL
+            FROM tracks t
+            LEFT JOIN album_covers c ON c.album_id = t.album_id
             ",
         )?;
         let track_rows = stmt
@@ -2349,68 +2375,124 @@ fn import_billboard_singles(
                     row.get::<_, i64>(0)?,
                     row.get::<_, Option<String>>(1)?,
                     row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<i32>>(5)?,
+                    row.get::<_, Option<i32>>(6)?,
+                    row.get::<_, bool>(7)?,
                 ))
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
-        for (track_id, display_artist, title) in track_rows {
+        let mut candidates_by_identity: HashMap<String, Vec<BillboardSingleTrackCandidate>> =
+            HashMap::new();
+        for (
+            track_id,
+            display_artist,
+            title,
+            album,
+            album_artist_display,
+            year,
+            normalized_rating,
+            has_cover,
+        ) in track_rows
+        {
             let artist_key = billboard_text_key(display_artist.as_deref().unwrap_or_default());
             let title_key = billboard_text_key(title.as_deref().unwrap_or_default());
             if artist_key.is_empty() || title_key.is_empty() {
                 continue;
             }
 
-            let mut best_match: Option<&BillboardSingleChartEntry> = None;
-            let mut earliest_debut: Option<&BillboardSingleChartEntry> = None;
+            let mut entry_indexes = Vec::new();
             for key in billboard_single_match_keys(&artist_key, &title_key) {
                 if let Some(indexes) = entry_indexes_by_match_key.get(&key) {
                     for &entry_index in indexes {
-                        let candidate = &source_entries[entry_index];
-                        if matched_entry_track_ids[entry_index].is_none() {
-                            matched_entry_track_ids[entry_index] = Some(track_id);
+                        if !entry_indexes.contains(&entry_index) {
+                            entry_indexes.push(entry_index);
                         }
-                        if candidate.date_entered.is_some()
-                            && earliest_debut
-                                .and_then(|entry| entry.date_entered.as_ref())
-                                .map(|current| {
-                                    candidate
-                                        .date_entered
-                                        .as_ref()
-                                        .is_some_and(|date| date < current)
-                                })
-                                .unwrap_or(true)
-                        {
-                            earliest_debut = Some(candidate);
-                        }
-                    }
-                }
-
-                if let Some(entry) = best_entries.get(&key) {
-                    if best_match
-                        .map(|existing| {
-                            entry.rank < existing.rank
-                                || (entry.rank == existing.rank && entry.year < existing.year)
-                        })
-                        .unwrap_or(true)
-                    {
-                        best_match = Some(entry);
                     }
                 }
             }
+            if entry_indexes.is_empty() {
+                continue;
+            }
 
-            if let Some(entry) = best_match {
-                track_matches.push(BillboardSingleTrackMatch {
+            let best_match = entry_indexes
+                .iter()
+                .map(|index| &source_entries[*index])
+                .min_by_key(|entry| (entry.rank, entry.year))
+                .expect("matched Billboard single entries are not empty");
+            let earliest_debut = entry_indexes
+                .iter()
+                .map(|index| &source_entries[*index])
+                .filter(|entry| entry.date_entered.is_some())
+                .min_by_key(|entry| entry.date_entered.as_deref());
+            let source_album_key = entry_indexes
+                .iter()
+                .map(|index| &source_entries[*index])
+                .filter(|entry| !entry.album_key.is_empty())
+                .min_by(|left, right| {
+                    (
+                        left.date_entered.is_none(),
+                        left.date_entered.as_deref().unwrap_or_default(),
+                        left.year,
+                    )
+                        .cmp(&(
+                            right.date_entered.is_none(),
+                            right.date_entered.as_deref().unwrap_or_default(),
+                            right.year,
+                        ))
+                })
+                .map(|entry| entry.album_key.clone())
+                .unwrap_or_default();
+            let identity_key =
+                billboard_match_key(&best_match.primary_artist_key, &best_match.title_key);
+            candidates_by_identity
+                .entry(identity_key)
+                .or_default()
+                .push(BillboardSingleTrackCandidate {
                     track_id,
-                    rank: entry.rank,
-                    year: entry.year,
-                    debut_date: earliest_debut.and_then(|item| item.date_entered.clone()),
-                    debut_year: earliest_debut.and_then(|item| item.date_entered_year),
-                    debut_month: earliest_debut.and_then(|item| item.date_entered_month),
-                    debut_week: earliest_debut.and_then(|item| item.date_entered_week),
+                    album_key: billboard_text_key(album.as_deref().unwrap_or_default()),
+                    album_artist_key: billboard_text_key(
+                        album_artist_display.as_deref().unwrap_or_default(),
+                    ),
+                    year,
+                    normalized_rating,
+                    has_cover,
+                    source_album_key,
+                    source_artist_key: best_match.primary_artist_key.clone(),
+                    rank: best_match.rank,
+                    chart_year: best_match.year,
+                    debut_date: earliest_debut.and_then(|entry| entry.date_entered.clone()),
+                    debut_year: earliest_debut.and_then(|entry| entry.date_entered_year),
+                    debut_month: earliest_debut.and_then(|entry| entry.date_entered_month),
+                    debut_week: earliest_debut.and_then(|entry| entry.date_entered_week),
                     debut_week_key: earliest_debut
-                        .and_then(|item| item.date_entered_week_key.clone()),
+                        .and_then(|entry| entry.date_entered_week_key.clone()),
+                    entry_indexes,
                 });
+        }
+
+        for candidates in candidates_by_identity.into_values() {
+            let Some(candidate) = candidates
+                .iter()
+                .max_by_key(|candidate| billboard_single_candidate_priority(candidate))
+            else {
+                continue;
+            };
+            for &entry_index in &candidate.entry_indexes {
+                matched_entry_track_ids[entry_index] = Some(candidate.track_id);
             }
+            track_matches.push(BillboardSingleTrackMatch {
+                track_id: candidate.track_id,
+                rank: candidate.rank,
+                year: candidate.chart_year,
+                debut_date: candidate.debut_date.clone(),
+                debut_year: candidate.debut_year,
+                debut_month: candidate.debut_month,
+                debut_week: candidate.debut_week,
+                debut_week_key: candidate.debut_week_key.clone(),
+            });
         }
     }
 
@@ -2457,12 +2539,12 @@ fn import_billboard_singles(
             "
             INSERT INTO billboard_single_chart_entries (
                 source_file, year, rank, artist, featured, display_artist, title,
-                artist_key, title_key, date_entered_raw, date_entered,
+                artist_key, title_key, album, album_key, date_entered_raw, date_entered,
                 date_entered_year, date_entered_month, date_entered_week,
                 date_entered_week_key, date_entered_quality, matched_track_id, imported_at
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
-                ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18
+                ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20
             )
             ",
         )?;
@@ -2478,6 +2560,8 @@ fn import_billboard_singles(
                     &entry.title,
                     &entry.artist_key,
                     &entry.title_key,
+                    &entry.album,
+                    nonempty_str(&entry.album_key),
                     nonempty_str(&entry.date_entered_raw),
                     &entry.date_entered,
                     entry.date_entered_year,
@@ -2709,6 +2793,12 @@ fn read_billboard_single_chart_file(
     let rank_index = csv_header_index(&headers, "Yearly Rank")?;
     let artist_index = csv_header_index(&headers, "Artist")?;
     let featured_index = csv_header_index(&headers, "Featured")?;
+    let album_index = headers
+        .iter()
+        .position(|header| header.trim().eq_ignore_ascii_case("Album"));
+    let label_number_index = headers
+        .iter()
+        .position(|header| header.trim().eq_ignore_ascii_case("Label/Number"));
     let title_index = csv_header_index(&headers, "Track")?;
     let date_entered_index = headers
         .iter()
@@ -2745,10 +2835,20 @@ fn read_billboard_single_chart_file(
             .unwrap_or_default()
             .trim()
             .to_string();
+        let album = album_index
+            .and_then(|index| record.get(index))
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        let label_number = label_number_index
+            .and_then(|index| record.get(index))
+            .unwrap_or_default()
+            .trim();
         let display_artist = billboard_single_display_artist(&artist, &featured);
         let primary_artist_key = billboard_text_key(&artist);
         let artist_key = billboard_text_key(&display_artist);
         let title_key = billboard_text_key(&title);
+        let album_key = billboard_single_source_album_key(&album, label_number);
         let date_entered_raw = date_entered_index
             .and_then(|index| record.get(index))
             .unwrap_or_default()
@@ -2778,6 +2878,8 @@ fn read_billboard_single_chart_file(
                     display_artist,
                     primary_artist_key,
                     artist_key,
+                    album,
+                    album_key,
                     title,
                     title_key,
                     rank,
@@ -2987,6 +3089,148 @@ fn billboard_single_display_artist(artist: &str, featured: &str) -> String {
     }
 }
 
+fn billboard_single_source_album_key(album: &str, label_number: &str) -> String {
+    let album = album.trim();
+    let raw_key = billboard_text_key(album);
+    if raw_key.is_empty()
+        || matches!(
+            raw_key.as_str(),
+            "s" | "single" | "none" | "unknown" | "unk" | "n a" | "na" | "tbd"
+        )
+    {
+        return String::new();
+    }
+
+    let cleaned = [" - ", " – ", " — "]
+        .into_iter()
+        .find_map(|separator| {
+            let separator_index = album.rfind(separator)?;
+            let title = album[..separator_index].trim();
+            let suffix = album[separator_index + separator.len()..].trim();
+            if title.is_empty()
+                || !suffix.chars().any(|character| character.is_ascii_digit())
+                || !billboard_single_catalog_label_matches(suffix, label_number)
+            {
+                return None;
+            }
+            Some(title)
+        })
+        .unwrap_or(album);
+
+    billboard_text_key(cleaned)
+}
+
+fn billboard_single_catalog_label_matches(album_suffix: &str, label_number: &str) -> bool {
+    let suffix_key = billboard_text_key(album_suffix);
+    let label_key = billboard_text_key(label_number);
+    if suffix_key.is_empty() || label_key.is_empty() {
+        return false;
+    }
+
+    let suffix_tokens = suffix_key
+        .split_whitespace()
+        .filter(|token| token.chars().all(char::is_alphabetic))
+        .collect::<Vec<_>>();
+    let label_tokens = label_key
+        .split_whitespace()
+        .filter(|token| token.chars().all(char::is_alphabetic))
+        .collect::<Vec<_>>();
+    suffix_tokens
+        .iter()
+        .any(|suffix| suffix.len() >= 2 && label_tokens.iter().any(|label| suffix == label))
+        || (suffix_tokens.len() >= 2
+            && label_tokens.len() >= 2
+            && suffix_tokens[..2] == label_tokens[..2])
+}
+
+fn billboard_single_album_match_score(library_album_key: &str, source_album_key: &str) -> i32 {
+    if library_album_key.is_empty() || source_album_key.is_empty() {
+        return 0;
+    }
+
+    let library_variants = billboard_key_variants(library_album_key);
+    let source_variants = billboard_key_variants(source_album_key);
+    if library_variants
+        .iter()
+        .any(|library| source_variants.iter().any(|source| library == source))
+    {
+        return 4;
+    }
+
+    if library_variants.iter().any(|library| {
+        source_variants.iter().any(|source| {
+            library
+                .strip_prefix(source)
+                .is_some_and(|suffix| suffix.starts_with(' '))
+                || source
+                    .strip_prefix(library)
+                    .is_some_and(|suffix| suffix.starts_with(' '))
+        })
+    }) {
+        return 3;
+    }
+
+    let library_tokens = library_album_key.split_whitespace().collect::<HashSet<_>>();
+    let source_tokens = source_album_key.split_whitespace().collect::<HashSet<_>>();
+    let shared = library_tokens.intersection(&source_tokens).count();
+    let required = library_tokens.len().min(source_tokens.len());
+    if required >= 2 && shared * 4 >= required * 3 {
+        2
+    } else {
+        0
+    }
+}
+
+fn billboard_single_album_artist_matches(album_artist_key: &str, source_artist_key: &str) -> bool {
+    if album_artist_key.is_empty() || source_artist_key.is_empty() {
+        return false;
+    }
+    let album_variants = billboard_single_artist_key_variants(album_artist_key);
+    let source_variants = billboard_single_artist_key_variants(source_artist_key);
+    album_variants
+        .iter()
+        .any(|album| source_variants.iter().any(|source| album == source))
+}
+
+fn billboard_single_is_compilation_artist(album_artist_key: &str) -> bool {
+    matches!(
+        album_artist_key,
+        "various" | "various artist" | "various artists" | "v a"
+    )
+}
+
+fn billboard_single_release_year_score(year: Option<i32>, debut_year: Option<i32>) -> i32 {
+    let (Some(year), Some(debut_year)) = (year, debut_year) else {
+        return 0;
+    };
+    let difference = year - debut_year;
+    match difference {
+        0 => 5,
+        -1 => 4,
+        -2 => 3,
+        1 => 2,
+        -5..=-3 | 2..=5 => 1,
+        _ => 0,
+    }
+}
+
+fn billboard_single_candidate_priority(
+    candidate: &BillboardSingleTrackCandidate,
+) -> (i32, bool, bool, i32, bool, i32, std::cmp::Reverse<i64>) {
+    (
+        billboard_single_album_match_score(&candidate.album_key, &candidate.source_album_key),
+        billboard_single_album_artist_matches(
+            &candidate.album_artist_key,
+            &candidate.source_artist_key,
+        ),
+        !billboard_single_is_compilation_artist(&candidate.album_artist_key),
+        billboard_single_release_year_score(candidate.year, candidate.debut_year),
+        candidate.has_cover,
+        candidate.normalized_rating.unwrap_or(i32::MIN),
+        std::cmp::Reverse(candidate.track_id),
+    )
+}
+
 fn billboard_key_variants(key: &str) -> Vec<String> {
     let mut variants = vec![key.to_string()];
     if let Some(stripped) = key.strip_prefix("the ") {
@@ -3186,8 +3430,51 @@ pub fn track_debut_timeline_for_app(
     app: &AppHandle,
     selected_year: Option<i32>,
 ) -> Result<TrackDebutTimelineResponse> {
-    let (conn, _) = open(app)?;
+    let (mut conn, _) = open(app)?;
+    refresh_billboard_single_album_metadata_if_needed(&mut conn)?;
     track_debut_timeline(&conn, selected_year)
+}
+
+#[cfg(not(test))]
+fn refresh_billboard_single_album_metadata_if_needed(conn: &mut Connection) -> Result<()> {
+    let (entry_count, album_metadata_count): (i64, i64) = conn.query_row(
+        "SELECT
+            COUNT(*),
+            COUNT(album)
+         FROM billboard_single_chart_entries",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    if entry_count == 0 || album_metadata_count > 0 {
+        return Ok(());
+    }
+
+    let settings = settings_for_connection(conn)?;
+    let Ok(source_path) = resolve_billboard_source_path(&settings.billboard_singles_source_path)
+    else {
+        return Ok(());
+    };
+    import_billboard_singles(conn, &source_path)
+        .context("Could not refresh Billboard singles album matching")?;
+    Ok(())
+}
+
+fn timeline_track_priority(
+    track: &TrackDebutTimelineTrack,
+) -> (bool, bool, i32, bool, bool, i32, std::cmp::Reverse<i64>) {
+    let album_artist_key =
+        billboard_text_key(track.album_artist_display.as_deref().unwrap_or_default());
+    let display_artist_key =
+        billboard_text_key(track.display_artist.as_deref().unwrap_or_default());
+    (
+        billboard_single_album_artist_matches(&album_artist_key, &display_artist_key),
+        !billboard_single_is_compilation_artist(&album_artist_key),
+        billboard_single_release_year_score(track.year, Some(track.billboard_single_debut_year)),
+        track.cover_path.is_some(),
+        track.love.as_deref() == Some("L"),
+        track.normalized_rating.unwrap_or(i32::MIN),
+        std::cmp::Reverse(track.track_id),
+    )
 }
 
 fn track_debut_timeline(
@@ -3252,7 +3539,36 @@ fn track_debut_timeline(
             cover_mime_type: row.get(19)?,
         })
     })?;
-    let all_tracks = track_rows.collect::<rusqlite::Result<Vec<_>>>()?;
+    let raw_tracks = track_rows.collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut canonical_tracks: HashMap<String, TrackDebutTimelineTrack> = HashMap::new();
+    for track in raw_tracks {
+        let artist_key = billboard_text_key(track.display_artist.as_deref().unwrap_or_default());
+        let title_key = billboard_text_key(track.title.as_deref().unwrap_or_default());
+        let identity_key = format!(
+            "{}\u{1f}{}\u{1f}{}",
+            remove_artist_connector_tokens(&artist_key),
+            strip_title_feature_suffix(&title_key).unwrap_or(title_key),
+            track.billboard_single_debut_date
+        );
+        let should_replace = canonical_tracks
+            .get(&identity_key)
+            .map(|current| timeline_track_priority(&track) > timeline_track_priority(current))
+            .unwrap_or(true);
+        if should_replace {
+            canonical_tracks.insert(identity_key, track);
+        }
+    }
+    let mut all_tracks = canonical_tracks.into_values().collect::<Vec<_>>();
+    all_tracks.sort_by(|left, right| {
+        left.billboard_single_debut_date
+            .cmp(&right.billboard_single_debut_date)
+            .then_with(|| {
+                billboard_text_key(left.title.as_deref().unwrap_or_default()).cmp(
+                    &billboard_text_key(right.title.as_deref().unwrap_or_default()),
+                )
+            })
+            .then(left.track_id.cmp(&right.track_id))
+    });
 
     let mut grouped: HashMap<i32, TrackDebutTimelineYear> = HashMap::new();
     for track in &all_tracks {
@@ -14349,9 +14665,9 @@ mod tests {
     }
 
     #[test]
-    fn imports_billboard_singles_using_display_artist_and_best_rank() {
+    fn imports_billboard_singles_once_using_the_official_album_then_a_compilation_fallback() {
         let mut conn = seeded_connection();
-        conn.execute(
+        conn.execute_batch(
             "
             INSERT INTO albums (
                 id, import_run_id, album_unique_id, album, album_artist_display,
@@ -14362,12 +14678,31 @@ mod tests {
                 'mb:va-rock', 1, 'va-rock', 'Rock Star', 'Various Artists',
                 'Soundtrack', 'soundtrack', 'Posthuman', 2001, 2001,
                 1, 1, 1.0, 248, 1, 248, 1.0, 100, 157.4
-            )
+            );
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+            ) VALUES (
+                'mb:slippery', 1, 'slippery', 'Slippery When Wet', 'Bon Jovi',
+                'Rock', 'rock', 'Mercury', 1986, 1986,
+                1, 1, 1.0, 248, 1, 248, 1.0, 100, 180.0
+            );
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+            ) VALUES (
+                'mb:va-pop', 1, 'va-pop', 'Now That''s Pop', 'Various Artists',
+                'Pop', 'pop', 'Arista', 1990, 1990,
+                1, 0, 0.0, 260, 0, 0, 0.0, NULL, NULL
+            );
             ",
-            [],
         )
-        .expect("insert compilation album");
-        conn.execute(
+        .expect("insert candidate albums");
+        conn.execute_batch(
             "
             INSERT INTO tracks (
                 import_run_id, album_id, album_unique_id, display_artist,
@@ -14379,11 +14714,34 @@ mod tests {
                 'Rock Star', 'Livin'' On A Prayer', 'Soundtrack',
                 'soundtrack', 'Posthuman', 'L', 100, 2001, 2001, 248,
                 'D:\\Music\\Various Artists\\Rock Star', '06 Bon Jovi.mp3', 'hash-bon-jovi'
-            )
+            );
+            INSERT INTO tracks (
+                import_run_id, album_id, album_unique_id, display_artist,
+                album_artist_display, album, title, canonical_genre, genre_normalized,
+                publisher, love, normalized_rating, year, release_year, time_seconds,
+                file_path, filename, row_hash
+            ) VALUES (
+                1, 'mb:slippery', 'slippery', 'Bon Jovi', 'Bon Jovi',
+                'Slippery When Wet', 'Livin'' On A Prayer', 'Rock',
+                'rock', 'Mercury', 'L', 80, 1986, 1986, 248,
+                'D:\\Music\\Bon Jovi\\Slippery When Wet', '03 Livin On A Prayer.mp3',
+                'hash-bon-jovi-official'
+            );
+            INSERT INTO tracks (
+                import_run_id, album_id, album_unique_id, display_artist,
+                album_artist_display, album, title, canonical_genre, genre_normalized,
+                publisher, love, normalized_rating, year, release_year, time_seconds,
+                file_path, filename, row_hash
+            ) VALUES (
+                1, 'mb:va-pop', 'va-pop', 'Whitney Houston', 'Various Artists',
+                'Now That''s Pop', 'So Emotional', 'Pop', 'pop', 'Arista',
+                NULL, NULL, 1990, 1990, 260,
+                'D:\\Music\\Various Artists\\Now That''s Pop', '05 So Emotional.mp3',
+                'hash-whitney-compilation'
+            );
             ",
-            [],
         )
-        .expect("insert compilation track");
+        .expect("insert candidate tracks");
         rebuild_search_indexes(&conn).expect("rebuild search indexes");
 
         let source_dir = std::env::temp_dir().join(format!(
@@ -14393,12 +14751,12 @@ mod tests {
         fs::create_dir_all(&source_dir).expect("create billboard singles csv dir");
         fs::write(
             source_dir.join("1987.csv"),
-            "Year,Yearly Rank,Artist,Featured,Track,Date Entered\n1987,2,Bon Jovi,,Livin' On A Prayer,1986-12-20\n1987,7,Whitney Houston,,So Emotional,11/14/1987\n",
+            "Year,Yearly Rank,Artist,Featured,Album,Track,Label/Number,Date Entered\n1987,2,Bon Jovi,,Slippery When Wet - Mercury 830 264-2,Livin' On A Prayer,Mercury 884953-7,1986-12-20\n1987,7,Whitney Houston,,single,So Emotional,Arista,11/14/1987\n",
         )
         .expect("write 1987 singles chart");
         fs::write(
             source_dir.join("1988.csv"),
-            "Year,Yearly Rank,Artist,Featured,Track,Date Entered\n1988,1,Bon Jovi,,Livin' On A Prayer,1988-01-09\n",
+            "Year,Yearly Rank,Artist,Featured,Album,Track,Label/Number,Date Entered\n1988,1,Bon Jovi,,Slippery When Wet,Livin' On A Prayer,Mercury,1988-01-09\n",
         )
         .expect("write 1988 singles chart");
 
@@ -14415,7 +14773,7 @@ mod tests {
                 SELECT billboard_single_rank, billboard_single_year,
                        billboard_single_debut_date, billboard_single_debut_week
                 FROM tracks
-                WHERE display_artist = 'Bon Jovi'
+                WHERE display_artist = 'Bon Jovi' AND album = 'Slippery When Wet'
                 ",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
@@ -14424,13 +14782,39 @@ mod tests {
 
         assert_eq!(summary.files_scanned, 2);
         assert_eq!(summary.chart_entries, 3);
-        assert_eq!(summary.matched_tracks, 1);
-        assert_eq!(summary.dated_tracks, 1);
+        assert_eq!(summary.matched_tracks, 2);
+        assert_eq!(summary.dated_tracks, 2);
         assert_eq!(summary.exact_dates, 3);
         assert_eq!(rank, Some(1));
         assert_eq!(year, Some(1988));
         assert_eq!(debut_date.as_deref(), Some("1986-12-20"));
         assert_eq!(debut_week, Some(51));
+        let compilation_rank: Option<i32> = conn
+            .query_row(
+                "SELECT billboard_single_rank FROM tracks WHERE album = 'Rock Star'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("load compilation duplicate rank");
+        assert_eq!(compilation_rank, None);
+        let fallback_rank: Option<i32> = conn
+            .query_row(
+                "SELECT billboard_single_rank FROM tracks WHERE title = 'So Emotional'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("load compilation fallback rank");
+        assert_eq!(fallback_rank, Some(7));
+        let source_album: (String, Option<String>) = conn
+            .query_row(
+                "SELECT album, album_key FROM billboard_single_chart_entries
+                 WHERE title = 'Livin'' On A Prayer' AND year = 1987",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("load source album metadata");
+        assert_eq!(source_album.0, "Slippery When Wet - Mercury 830 264-2");
+        assert_eq!(source_album.1.as_deref(), Some("slippery when wet"));
 
         let mut request = BrowseRequest::default();
         request.view = "tracks".to_string();
@@ -14445,7 +14829,7 @@ mod tests {
         assert_eq!(response.rows[0].display_artist.as_deref(), Some("Bon Jovi"));
         assert_eq!(
             response.rows[0].album_artist_display.as_deref(),
-            Some("Various Artists")
+            Some("Bon Jovi")
         );
         assert_eq!(response.rows[0].billboard_single_rank, Some(1));
         assert_eq!(response.rows[0].billboard_single_year, Some(1988));
@@ -14466,9 +14850,9 @@ mod tests {
             search_library(&conn, debut_request, 50).expect("search singles by chart debut date");
         assert_eq!(debut_response.total, 1);
 
-        let timeline = track_debut_timeline(&conn, None).expect("build track debut timeline");
+        let timeline = track_debut_timeline(&conn, Some(1986)).expect("build track debut timeline");
         assert_eq!(timeline.selected_year, Some(1986));
-        assert_eq!(timeline.dated_track_count, 1);
+        assert_eq!(timeline.dated_track_count, 2);
         assert_eq!(timeline.years[0].track_count, 1);
         assert_eq!(
             timeline.tracks[0].title.as_deref(),
@@ -14479,13 +14863,30 @@ mod tests {
         tool_request.tool_id = "missing-billboard-singles".to_string();
         let missing_response = list_music_tool_issues(&conn, tool_request, 50, None)
             .expect("list missing Billboard singles");
-        assert_eq!(missing_response.total, 1);
-        assert_eq!(
-            missing_response.rows[0].title.as_deref(),
-            Some("So Emotional")
-        );
+        assert_eq!(missing_response.total, 0);
 
         fs::remove_dir_all(source_dir).expect("remove billboard singles csv dir");
+    }
+
+    #[test]
+    fn cleans_only_catalog_style_billboard_single_album_suffixes() {
+        assert_eq!(
+            billboard_single_source_album_key(
+                "Faster Than The Speed Of Night - Columbia 38710",
+                "Columbia 38-03906"
+            ),
+            "faster than the speed of night"
+        );
+        assert_eq!(
+            billboard_single_source_album_key("Thriller - Epic 38112", "Epic 34-04363"),
+            "thriller"
+        );
+        assert_eq!(
+            billboard_single_source_album_key("Mercury - Acts 1 & 2", "KIDinaKORNER/Interscope"),
+            "mercury acts 1 and 2"
+        );
+        assert_eq!(billboard_single_source_album_key("21", "Columbia"), "21");
+        assert_eq!(billboard_single_source_album_key("single", "RCA"), "");
     }
 
     #[test]
@@ -15299,6 +15700,10 @@ mod tests {
             .expect("phase thirty-two schema exists"));
         assert!(migrations::phase_thirty_three_schema_exists(&conn)
             .expect("phase thirty-three schema exists"));
+        assert!(migrations::phase_thirty_four_schema_exists(&conn)
+            .expect("phase thirty-four schema exists"));
+        assert!(migrations::phase_thirty_five_schema_exists(&conn)
+            .expect("phase thirty-five schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -16165,6 +16570,14 @@ mod tests {
             "date_entered_quality"
         )
         .expect("Billboard single date quality column exists"));
+        assert!(
+            schema_column_exists(&conn, "billboard_single_chart_entries", "album")
+                .expect("Billboard single source album column exists")
+        );
+        assert!(
+            schema_column_exists(&conn, "billboard_single_chart_entries", "album_key")
+                .expect("Billboard single source album key column exists")
+        );
         assert!(
             schema_index_exists(&conn, "idx_billboard_single_chart_entries_date")
                 .expect("Billboard single date index exists")

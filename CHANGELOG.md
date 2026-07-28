@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.91.0] - 2026-07-28
+### Added
+- Added persistent Billboard single source-album provenance and normalized album keys from the `CSV_SINGLES` `Album` column.
+- Added always-visible title and artist information below every Album and Track Timeline cover, plus the selected library album on track cards so missing artwork stays identifiable.
+
+### Changed
+- Billboard singles now enrich one canonical library track per charted song, preferring the CSV's official artist album, then an artist-owned period-appropriate copy, while retaining a compilation fallback when no better copy exists.
+- Catalog notation such as ` - Columbia 38710` is removed only from the matching key when its label agrees with `Label/Number`; raw CSV album text remains preserved and legitimate hyphenated album titles remain intact.
+- Existing chart rows without source-album metadata refresh automatically from the configured `CSV_SINGLES` path when the Track Timeline first opens.
+- Bumped SQLite schema to version 35 and synchronized app metadata to `0.91.0`.
+
+### Fixed
+- Removed duplicate soundtrack, compilation, remake, and reissue copies of the same charted song from Track Timeline cohorts and playlist handoff.
+
 ## [0.90.1] - 2026-07-28
 ### Fixed
 - Fixed startup upgrades from databases created before Billboard singles chart-entry dates were added by deferring the new date index until after the legacy table receives its date columns.
