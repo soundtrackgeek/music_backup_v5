@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.90.1] - 2026-07-28
+### Fixed
+- Fixed startup upgrades from databases created before Billboard singles chart-entry dates were added by deferring the new date index until after the legacy table receives its date columns.
+
+### Changed
+- Bumped synchronized app metadata to `0.90.1`.
+
 ## [0.90.0] - 2026-07-28
 ### Added
 - Added Billboard singles `Date Entered` import from `CSV_SINGLES`, with exact calendar dates, ISO weeks, qualified historical-date handling, and independent earliest-debut selection when a track appears in multiple chart years.

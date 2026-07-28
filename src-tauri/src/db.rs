@@ -586,8 +586,6 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             ON billboard_single_chart_entries(matched_track_id);
         CREATE INDEX IF NOT EXISTS idx_billboard_single_chart_entries_year_rank
             ON billboard_single_chart_entries(year, rank);
-        CREATE INDEX IF NOT EXISTS idx_billboard_single_chart_entries_date
-            ON billboard_single_chart_entries(date_entered);
 
         CREATE VIRTUAL TABLE IF NOT EXISTS album_search_fts USING fts5(
             album_id UNINDEXED,
@@ -16128,6 +16126,53 @@ mod tests {
                 .expect("billboard single debut week column exists")
         );
         assert!(phase_twelve_schema_exists(&conn).expect("phase twelve schema exists"));
+    }
+
+    #[test]
+    fn migrates_existing_billboard_singles_table_before_date_index() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        conn.execute_batch(
+            "
+            CREATE TABLE billboard_single_chart_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_file TEXT NOT NULL,
+                year INTEGER NOT NULL,
+                rank INTEGER NOT NULL,
+                artist TEXT NOT NULL,
+                featured TEXT,
+                display_artist TEXT NOT NULL,
+                title TEXT NOT NULL,
+                artist_key TEXT NOT NULL,
+                title_key TEXT NOT NULL,
+                matched_track_id INTEGER,
+                imported_at TEXT NOT NULL
+            );
+            PRAGMA user_version = 33;
+            ",
+        )
+        .expect("create schema thirty-three Billboard singles table");
+
+        migrate(&conn).expect("migrate schema thirty-three singles table");
+
+        assert!(
+            schema_column_exists(&conn, "billboard_single_chart_entries", "date_entered")
+                .expect("Billboard single date entered column exists")
+        );
+        assert!(schema_column_exists(
+            &conn,
+            "billboard_single_chart_entries",
+            "date_entered_quality"
+        )
+        .expect("Billboard single date quality column exists"));
+        assert!(
+            schema_index_exists(&conn, "idx_billboard_single_chart_entries_date")
+                .expect("Billboard single date index exists")
+        );
+        let user_version = conn
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+            .expect("read migrated user version");
+        assert_eq!(user_version, LATEST_SCHEMA_VERSION);
     }
 
     #[test]
