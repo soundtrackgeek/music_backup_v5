@@ -129,6 +129,29 @@ function trackResponse(): TrackDebutTimelineResponse {
   };
 }
 
+function trackWeekResponse(): TrackDebutTimelineResponse {
+  const firstTrack = trackResponse().tracks[0];
+  const secondTrack: TrackDebutTimelineTrack = {
+    ...firstTrack,
+    id: "track:43",
+    trackId: 43,
+    albumId: "album-43",
+    title: "Late Summer Song",
+    album: "Signals After Dark",
+    billboardSingleRank: 12,
+    billboardSingleDebutDate: "1989-06-30",
+    billboardSingleDebutWeek: 26,
+    billboardSingleDebutWeekKey: "1989-W26",
+  };
+  return {
+    years: [{ year: 1989, trackCount: 2, representativeTrack: firstTrack }],
+    selectedYear: 1989,
+    tracks: [firstTrack, secondTrack],
+    datedTrackCount: 2,
+    undatedTrackCount: 0,
+  };
+}
+
 function visibleCoverTitles() {
   return within(
     screen.getByRole("list", { name: "Albums in selected period" }),
@@ -252,6 +275,40 @@ describe("AlbumTimeRibbon", () => {
     expect(monthsInRange(11, 2)).toEqual([11, 12, 1, 2]);
   });
 
+  it("starts with every album week visible and filters the cover strip by week", async () => {
+    const user = userEvent.setup();
+    render(
+      <AlbumTimeRibbon
+        data={orderingResponse()}
+        error={null}
+        isLoading={false}
+        onCreatePlaylist={vi.fn()}
+        onOpenAlbum={vi.fn()}
+        onOpenSearch={vi.fn()}
+        onRetry={vi.fn()}
+        onSelectYear={vi.fn()}
+      />,
+    );
+
+    const allWeeks = screen.getByRole("button", {
+      name: "All weeks in Summer 1989",
+    });
+    expect(allWeeks).toHaveAttribute("aria-pressed", "true");
+    expect(visibleCoverTitles()).toEqual(["Gamma", "Beta", "Alpha"]);
+
+    await user.click(screen.getByRole("button", { name: "June week 24" }));
+    expect(allWeeks).toHaveAttribute("aria-pressed", "false");
+    expect(visibleCoverTitles()).toEqual(["Beta"]);
+    expect(
+      screen.getByText(/June · Week 24 · 1 of 3 album arrivals/),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Period: Summer 1989" }));
+    await user.click(screen.getByRole("button", { name: /^Summer/ }));
+    expect(allWeeks).toHaveAttribute("aria-pressed", "true");
+    expect(visibleCoverTitles()).toEqual(["Gamma", "Beta", "Alpha"]);
+  });
+
   it("navigates to another available chart year", async () => {
     const user = userEvent.setup();
     const onSelectYear = vi.fn();
@@ -321,6 +378,53 @@ describe("AlbumTimeRibbon", () => {
 
     await user.click(screen.getByRole("button", { name: "Albums" }));
     expect(onModeChange).toHaveBeenCalledWith("albums");
+  });
+
+  it("filters tracks and playlist handoff to the selected chart week", async () => {
+    const user = userEvent.setup();
+    const onCreatePlaylist = vi.fn();
+    render(
+      <AlbumTimeRibbon
+        data={trackWeekResponse()}
+        mode="tracks"
+        error={null}
+        isLoading={false}
+        onCreatePlaylist={onCreatePlaylist}
+        onOpenAlbum={vi.fn()}
+        onOpenTrack={vi.fn()}
+        onOpenSearch={vi.fn()}
+        onRetry={vi.fn()}
+        onSelectYear={vi.fn()}
+      />,
+    );
+
+    const trackList = screen.getByRole("list", {
+      name: "Tracks in selected period",
+    });
+    expect(within(trackList).getAllByRole("listitem")).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: "June week 24" }));
+    expect(within(trackList).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(trackList).getByText("Summer Song")).toBeInTheDocument();
+    expect(
+      within(trackList).queryByText("Late Summer Song"),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Create playlist" }));
+    expect(onCreatePlaylist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trackIds: [42],
+        title: "Relive Summer 1989 · June week 24",
+        prompt: expect.stringContaining(
+          "narrowed to Billboard chart-entry week 24",
+        ),
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "All weeks in Summer 1989" }),
+    );
+    expect(within(trackList).getAllByRole("listitem")).toHaveLength(2);
   });
 
   it("orders the cover strip by score and Billboard rank in either direction", async () => {

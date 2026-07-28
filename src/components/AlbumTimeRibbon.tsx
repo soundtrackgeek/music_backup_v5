@@ -54,6 +54,12 @@ type AlbumOrderMode =
 type AlbumOrderDirection = "ascending" | "descending";
 export type TimelineMode = "albums" | "tracks";
 
+type TimelineWeekSelection = {
+  scope: string;
+  month: number;
+  week: number;
+};
+
 type TimelineRibbonItem = AlbumDebutTimelineAlbum & {
   trackId?: number | null;
   sourceAlbumTitle?: string | null;
@@ -592,6 +598,8 @@ export function AlbumTimeRibbon({
     Record<string, string[]>
   >({});
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
+  const [selectedWeekSelection, setSelectedWeekSelection] =
+    useState<TimelineWeekSelection | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const normalizedData = useMemo(
@@ -636,17 +644,26 @@ export function AlbumTimeRibbon({
     };
   }, [isPeriodMenuOpen]);
 
-  useEffect(() => {
-    setSelectedAlbumId(null);
-  }, [mode]);
-
   const selectedYear = normalizedData?.selectedYear ?? null;
   const years = normalizedData?.years ?? [];
   const selectedPeriod = useMemo(
     () => periodFor(periodId, customStartMonth, customEndMonth),
     [customEndMonth, customStartMonth, periodId],
   );
-  const albumOrderScope = `${mode}:${selectedYear ?? "none"}:${selectedPeriod.months.join("-")}`;
+  const periodScope = `${mode}:${selectedYear ?? "none"}:${
+    selectedPeriod.id
+  }:${selectedPeriod.months.join("-")}`;
+  const activeWeekSelection =
+    selectedWeekSelection?.scope === periodScope
+      ? selectedWeekSelection
+      : null;
+  const activeWeekMonth = activeWeekSelection?.month ?? null;
+  const activeWeek = activeWeekSelection?.week ?? null;
+  const albumOrderScope = `${periodScope}:${
+    activeWeekMonth == null || activeWeek == null
+      ? "all"
+      : `${activeWeekMonth}-${activeWeek}`
+  }`;
   const cohortAlbums = useMemo(
     () =>
       orderTimelineAlbums(
@@ -656,12 +673,23 @@ export function AlbumTimeRibbon({
       ),
     [normalizedData?.albums, selectedPeriod],
   );
+  const visibleAlbums = useMemo(
+    () =>
+      activeWeekMonth == null || activeWeek == null
+        ? cohortAlbums
+        : cohortAlbums.filter(
+            (album) =>
+              album.billboardDebutMonth === activeWeekMonth &&
+              album.billboardDebutWeek === activeWeek,
+          ),
+    [activeWeek, activeWeekMonth, cohortAlbums],
+  );
   const customOrderForScope =
     customAlbumOrders[albumOrderScope] ?? emptyAlbumOrder;
   const orderedAlbums = useMemo(
     () =>
       orderTimelineAlbums(
-        cohortAlbums,
+        visibleAlbums,
         albumOrderMode,
         albumOrderDirection,
         customOrderForScope,
@@ -669,7 +697,7 @@ export function AlbumTimeRibbon({
     [
       albumOrderDirection,
       albumOrderMode,
-      cohortAlbums,
+      visibleAlbums,
       customOrderForScope,
     ],
   );
@@ -725,8 +753,7 @@ export function AlbumTimeRibbon({
   const previousYear = years[selectedYearIndex - 1]?.year ?? null;
   const nextYear = years[selectedYearIndex + 1]?.year ?? null;
   const yearSummary = years[selectedYearIndex];
-  const selectedMonth = selectedAlbum?.billboardDebutMonth ?? null;
-  const selectedWeek = selectedAlbum?.billboardDebutWeek ?? null;
+  const selectedAlbumWeek = selectedAlbum?.billboardDebutWeek ?? null;
   const selectedDebutLabel =
     mode === "tracks" && selectedAlbum?.debutDate
       ? `${new Intl.DateTimeFormat(undefined, {
@@ -735,11 +762,11 @@ export function AlbumTimeRibbon({
           day: "numeric",
           timeZone: "UTC",
         }).format(new Date(`${selectedAlbum.debutDate}T00:00:00Z`))}${
-          selectedWeek == null ? "" : ` · Week ${selectedWeek}`
+          selectedAlbumWeek == null ? "" : ` · Week ${selectedAlbumWeek}`
         }`
-      : selectedWeek == null
+      : selectedAlbumWeek == null
         ? null
-        : `Week ${selectedWeek}`;
+        : `Week ${selectedAlbumWeek}`;
   const selectorLabel =
     selectedPeriod.id === "year"
       ? `Explore ${selectedYear}`
@@ -752,7 +779,7 @@ export function AlbumTimeRibbon({
   const selectedAlbumOrderIndex = selectedAlbum
     ? orderedAlbums.findIndex((album) => album.id === selectedAlbum.id)
     : -1;
-  const chronologicalAlbumIds = cohortAlbums.map((album) => album.id);
+  const chronologicalAlbumIds = visibleAlbums.map((album) => album.id);
   const customOrderIsModified =
     albumOrderMode === "custom" &&
     orderedAlbums.some(
@@ -785,7 +812,10 @@ export function AlbumTimeRibbon({
     if (orderedAlbums.length === 0) {
       return;
     }
-    const title = selectorLabel;
+    const title =
+      activeWeekMonth == null || activeWeek == null
+        ? selectorLabel
+        : `${selectorLabel} · ${monthLabel(activeWeekMonth)} week ${activeWeek}`;
     const orderLabel =
       albumOrderOptions.find((option) => option.id === albumOrderMode)?.label ??
       "First appearance";
@@ -812,8 +842,42 @@ export function AlbumTimeRibbon({
         selectedPeriod.id === "year"
           ? `the ${mode === "tracks" ? "track" : "album"} arrivals of ${selectedYear}`
           : `${selectedPeriod.label.toLowerCase()} ${selectedYear}`
+      }${
+        activeWeek == null
+          ? ""
+          : `, narrowed to Billboard ${
+              mode === "tracks" ? "chart-entry" : "first-appearance"
+            } week ${activeWeek}`
       }. Use only ${mode === "tracks" ? "these tracks" : "music from these albums"} and ${orderInstruction}.`,
     });
+  }
+
+  function chooseMode(nextMode: TimelineMode) {
+    setSelectedAlbumId(null);
+    setSelectedWeekSelection(null);
+    onModeChange(nextMode);
+  }
+
+  function chooseYear(year: number) {
+    setSelectedAlbumId(null);
+    setSelectedWeekSelection(null);
+    onSelectYear(year);
+  }
+
+  function chooseAllWeeks() {
+    setSelectedAlbumId(null);
+    setSelectedWeekSelection(null);
+  }
+
+  function chooseWeek(month: number, week: number) {
+    setSelectedAlbumId(null);
+    setSelectedWeekSelection((current) =>
+      current?.scope === periodScope &&
+      current.month === month &&
+      current.week === week
+        ? null
+        : { scope: periodScope, month, week },
+    );
   }
 
   function chooseAlbumOrder(nextMode: AlbumOrderMode) {
@@ -869,12 +933,14 @@ export function AlbumTimeRibbon({
   function choosePreset(nextPeriodId: PresetPeriodId) {
     setPeriodId(nextPeriodId);
     setSelectedAlbumId(null);
+    setSelectedWeekSelection(null);
     setIsPeriodMenuOpen(false);
   }
 
   function applyCustomPeriod() {
     setPeriodId("custom");
     setSelectedAlbumId(null);
+    setSelectedWeekSelection(null);
     setIsPeriodMenuOpen(false);
   }
 
@@ -903,7 +969,7 @@ export function AlbumTimeRibbon({
               type="button"
               className={mode === "albums" ? "active" : ""}
               aria-pressed={mode === "albums"}
-              onClick={() => onModeChange("albums")}
+              onClick={() => chooseMode("albums")}
             >
               Albums
             </button>
@@ -911,7 +977,7 @@ export function AlbumTimeRibbon({
               type="button"
               className={mode === "tracks" ? "active" : ""}
               aria-pressed={mode === "tracks"}
-              onClick={() => onModeChange("tracks")}
+              onClick={() => chooseMode("tracks")}
             >
               Tracks
             </button>
@@ -1037,7 +1103,7 @@ export function AlbumTimeRibbon({
             className="album-time-ribbon-square-action"
             disabled={previousYear == null}
             aria-label="Previous chart year"
-            onClick={() => previousYear != null && onSelectYear(previousYear)}
+            onClick={() => previousYear != null && chooseYear(previousYear)}
           >
             <CaretLeft size={19} weight="light" />
           </button>
@@ -1046,7 +1112,7 @@ export function AlbumTimeRibbon({
             className="album-time-ribbon-square-action"
             disabled={nextYear == null}
             aria-label="Next chart year"
-            onClick={() => nextYear != null && onSelectYear(nextYear)}
+            onClick={() => nextYear != null && chooseYear(nextYear)}
           >
             <CaretRight size={19} weight="light" />
           </button>
@@ -1124,7 +1190,7 @@ export function AlbumTimeRibbon({
                 year.albumCount === 1 ? "" : "s"
               }`}
               aria-pressed={year.year === selectedYear}
-              onClick={() => onSelectYear(year.year)}
+              onClick={() => chooseYear(year.year)}
               key={year.year}
             />
           ))}
@@ -1155,7 +1221,7 @@ export function AlbumTimeRibbon({
                     selectedYear,
                   )}%`,
                 }}
-                onClick={() => onSelectYear(year.year)}
+                onClick={() => chooseYear(year.year)}
                 aria-label={`${year.year}: ${album.album ?? "Untitled"}`}
                 aria-pressed={year.year === selectedYear}
                 title={`${album.album ?? "Untitled"} · ${year.year}`}
@@ -1204,26 +1270,20 @@ export function AlbumTimeRibbon({
                   <button
                     type="button"
                     className={
-                      selectedMonth === month && selectedWeek === week
+                      activeWeekMonth === month && activeWeek === week
                         ? "active"
                         : ""
                     }
-                    onClick={() => {
-                      const album = cohortAlbums.find(
-                        (candidate) =>
-                          candidate.billboardDebutMonth === month &&
-                          candidate.billboardDebutWeek === week,
-                      );
-                      if (album) {
-                        setSelectedAlbumId(album.id);
-                      }
-                    }}
+                    onClick={() => chooseWeek(month, week)}
                     disabled={!cohortAlbums.some(
                       (album) =>
                         album.billboardDebutMonth === month &&
                         album.billboardDebutWeek === week,
                     )}
                     aria-label={`${monthLabel(month)} week ${week}`}
+                    aria-pressed={
+                      activeWeekMonth === month && activeWeek === week
+                    }
                     key={week}
                   >
                     W{weekIndex + 1}
@@ -1233,6 +1293,23 @@ export function AlbumTimeRibbon({
             </div>
           ))}
         </div>
+        <div className="album-time-ribbon-week-filter">
+          <span>View</span>
+          <button
+            type="button"
+            className={activeWeek == null ? "active" : ""}
+            aria-pressed={activeWeek == null}
+            aria-label={`All weeks in ${selectedPeriod.label} ${selectedYear}`}
+            onClick={chooseAllWeeks}
+          >
+            All weeks
+          </button>
+          <small>
+            {activeWeekMonth == null || activeWeek == null
+              ? "Entire period"
+              : `${monthLabel(activeWeekMonth)} · Week ${activeWeek}`}
+          </small>
+        </div>
       </section>
 
       <section className="album-time-ribbon-drawer" aria-live="polite">
@@ -1240,7 +1317,10 @@ export function AlbumTimeRibbon({
           <div>
             <strong>{selectorLabel.replace("Relive ", "")}</strong>
             <span>
-              {periodRangeLabel(selectedPeriod)} · {orderedAlbums.length} of{" "}
+              {activeWeekMonth == null || activeWeek == null
+                ? periodRangeLabel(selectedPeriod)
+                : `${monthLabel(activeWeekMonth)} · Week ${activeWeek}`} ·{" "}
+              {orderedAlbums.length} of{" "}
               {yearSummary.albumCount} {mode === "tracks" ? "track" : "album"}
               {yearSummary.albumCount === 1 ? " arrival" : " arrivals"}
             </span>

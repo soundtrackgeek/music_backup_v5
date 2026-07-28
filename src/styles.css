@@ -14794,6 +14794,52 @@ button {
   background: #592c2b;
 }
 
+.album-time-ribbon-week-filter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 11px;
+  border-top: 1px solid rgba(91, 67, 63, 0.54);
+  padding-top: 9px;
+  color: #7f7778;
+  font-size: 9px;
+}
+
+.album-time-ribbon-week-filter > span {
+  color: #8c7b74;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.album-time-ribbon-week-filter button {
+  border: 1px solid #4a3837;
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: #c4a995;
+  background: rgba(42, 31, 32, 0.72);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.album-time-ribbon-week-filter button:hover,
+.album-time-ribbon-week-filter button:focus-visible,
+.album-time-ribbon-week-filter button.active {
+  outline: 0;
+  border-color: rgba(255, 138, 125, 0.72);
+  color: #ffe0d5;
+  background: #592c2b;
+  box-shadow: 0 0 14px rgba(237, 111, 99, 0.16);
+}
+
+.album-time-ribbon-week-filter small {
+  min-width: 74px;
+  color: #9a8e8e;
+  font-size: 9px;
+}
+
 .album-time-ribbon-drawer {
   position: relative;
   min-width: 0;
@@ -15429,7 +15475,7 @@ button {
   .album-time-ribbon-weeks {
     flex: 0 0 auto;
     width: calc(100% - 24px);
-    min-height: 104px;
+    min-height: 126px;
     padding: 16px 12px;
     overflow: hidden;
     left: auto;
@@ -15483,6 +15529,24 @@ button {
     outline-offset: 2px;
     background: #ff8a7d;
     transform: scale(1.35);
+  }
+
+  .album-time-ribbon-week-filter {
+    justify-content: flex-start;
+    gap: 6px;
+    margin-top: 12px;
+    padding-top: 10px;
+  }
+
+  .album-time-ribbon-week-filter button {
+    padding: 4px 8px;
+  }
+
+  .album-time-ribbon-week-filter small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .album-time-ribbon-drawer {

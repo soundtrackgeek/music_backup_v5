@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.91.1] - 2026-07-28
+### Added
+- Added an explicit **All weeks** Timeline state so a season or custom period opens as a complete snapshot instead of highlighting the first visible item's week.
+
+### Changed
+- Individual week buttons now filter the Album and Track Timeline artwork, counts, selected item, ordering scope, and exact playlist handoff to that week.
+- Choosing **All weeks**, another period, another chart year, or another Timeline mode restores the complete period cohort.
+- Synchronized app metadata to `0.91.1`.
+
+### Fixed
+- Fixed Timeline week buttons changing only the selected-item text while leaving the full season's artwork visible.
+
 ## [0.91.0] - 2026-07-28
 ### Added
 - Added persistent Billboard single source-album provenance and normalized album keys from the `CSV_SINGLES` `Album` column.
