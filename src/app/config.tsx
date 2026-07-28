@@ -126,6 +126,8 @@ export const missingFieldOptions: MissingFieldOption[] = [
   { value: "billboard", albumLabel: "Billboard rank", trackLabel: "Album Billboard rank" },
   { value: "billboardSingle", albumLabel: "Single Billboard rank", trackLabel: "Single Billboard rank" },
   { value: "billboardSingleDebut", albumLabel: "Single chart debut", trackLabel: "Single chart debut" },
+  { value: "vgLista", albumLabel: "VG Lista rank", trackLabel: "VG Lista rank" },
+  { value: "vgListaDebut", albumLabel: "VG Lista debut week", trackLabel: "VG Lista debut week" },
   { value: "rating", albumLabel: "Album rating", trackLabel: "Track rating" },
   { value: "time", albumLabel: "Total duration", trackLabel: "Track duration" },
 ];

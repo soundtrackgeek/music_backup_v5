@@ -13712,6 +13712,16 @@ fn add_missing_field_conditions(conditions: &mut Vec<String>, is_tracks: bool, f
             "billboardDebut" => Some("a.billboard_debut_week_key IS NULL"),
             "billboardSingle" if is_tracks => Some("t.billboard_single_rank IS NULL"),
             "billboardSingleDebut" if is_tracks => Some("t.billboard_single_debut_date IS NULL"),
+            "vgLista" => Some(if is_tracks {
+                "t.vg_lista_rank IS NULL"
+            } else {
+                "a.vg_lista_rank IS NULL"
+            }),
+            "vgListaDebut" => Some(if is_tracks {
+                "t.vg_lista_debut_week_key IS NULL"
+            } else {
+                "a.vg_lista_debut_week_key IS NULL"
+            }),
             "rating" => Some(if is_tracks {
                 "t.normalized_rating IS NULL"
             } else {
@@ -15218,6 +15228,7 @@ mod tests {
         let mut filter_request = BrowseRequest::default();
         filter_request.filters.vg_lista_rank_min = Some(1);
         filter_request.filters.vg_lista_rank_max = Some(1);
+        filter_request.filters.missing_fields = vec!["billboard".to_string()];
         filter_request.filters.vg_lista_debut_week_from = Some("1987-W36".to_string());
         filter_request.filters.vg_lista_debut_week_to = Some("1987-W36".to_string());
         filter_request.sort = BrowseSort {
@@ -15225,7 +15236,7 @@ mod tests {
             direction: "asc".to_string(),
         };
         let filtered = search_library(&conn, filter_request, 50)
-            .expect("filter albums by VG Lista rank and debut week");
+            .expect("filter VG Lista albums missing Billboard data");
         assert_eq!(filtered.total, 1);
         assert_eq!(filtered.rows[0].album.as_deref(), Some("Actually"));
 

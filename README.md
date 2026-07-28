@@ -111,6 +111,8 @@ Search and Charts include Ask Luna query controls powered by the exact `gpt-5.6-
 
 Ask Luna also recognizes direct questions. For example, `How many Billboard No. 1 albums have I rated with 100% completeness, and how many do I have left to rate?` applies only the Billboard-rank cohort filter, then automatically uses the same bounded local inspection as Ask about this view. The exact answer opens after that one submission; `left to rate` combines partially rated and unrated albums instead of filtering them away. Multi-part count and comparison questions do not need to be split into separate prompts.
 
+Chart-source wording stays source-specific. For example, `Give me all the nr. 3 albums in the VG Lista charts from 1980 to 1989` applies VG Lista rank 3 rather than Billboard rank 3, while `Find albums that were on VG Lista but not Billboard` combines a VG Lista presence filter with missing Billboard data. Luna also supports VG Lista rank/debut sorting and chart ranking without substituting the US chart fields.
+
 Bounded numeric requests are supported as typed ranges. For example, `Albums from artists who died between 1985 and 1989` activates the artist-death filter and applies `Died year: 1985–1989` before searching locally.
 
 Billboard debut-time requests compile to the same local ISO-week range used by Search, Charts, and Playlist Builder. For example, `Relive the summer of 1989` covers June through August 1989 using album chart-debut weeks; this is first Billboard appearance data, not an asserted retail release date.

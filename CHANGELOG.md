@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.92.2] - 2026-07-28
+### Changed
+- Extended Luna's structured query plan with VG Lista rank, debut-week, missing-data, sorting, and chart-ranking fields.
+- Synchronized app metadata to `0.92.2`.
+
+### Fixed
+- Fixed Luna interpreting an explicitly named VG Lista position as a Billboard rank.
+- Fixed Luna dropping the required VG Lista presence condition from requests for albums that charted in Norway but not on Billboard.
+
 ## [0.92.1] - 2026-07-28
 ### Changed
 - Moved the Billboard album, Billboard single, and VG Lista chart-debut ranges into Search's **Advanced filters** and Charts' **Advanced chart controls**, including their active-control counts.

@@ -3977,6 +3977,10 @@ function matchesMissingFields(
         return isTracks ? row.billboardSingleRank == null : true;
       case "billboardSingleDebut":
         return isTracks ? row.billboardSingleDebutDate == null : true;
+      case "vgLista":
+        return row.vgListaRank == null;
+      case "vgListaDebut":
+        return row.vgListaDebutWeekKey == null;
       case "rating":
         return isTracks
           ? row.normalizedRating == null
