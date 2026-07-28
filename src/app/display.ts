@@ -143,6 +143,35 @@ export function formatVgListaRank(
     : `#${row.vgListaRank} ${row.vgListaYear}`;
 }
 
+export function formatTiISkuddetRank(
+  row: Pick<BrowseRow, "tiISkuddetRank" | "tiISkuddetYear">,
+) {
+  if (row.tiISkuddetRank == null) return "";
+  return row.tiISkuddetYear == null
+    ? `#${row.tiISkuddetRank}`
+    : `#${row.tiISkuddetRank} ${row.tiISkuddetYear}`;
+}
+
+export function formatTiISkuddetDebut(
+  row: Pick<
+    BrowseRow,
+    "tiISkuddetDebutDate" | "tiISkuddetDebutWeek"
+  >,
+) {
+  if (!row.tiISkuddetDebutDate) return "";
+  const date = new Date(`${row.tiISkuddetDebutDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return row.tiISkuddetDebutDate;
+  const label = new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+  return row.tiISkuddetDebutWeek == null
+    ? label
+    : `${label} · W${row.tiISkuddetDebutWeek}`;
+}
+
 export function formatBillboardSingleDebut(
   row: Pick<
     BrowseRow,
@@ -242,6 +271,10 @@ export function formatChartMetric(row: BrowseRow, metric: string) {
       return formatVgListaRank(row);
     case "vgListaDebut":
       return formatVgListaDebutWeek(row);
+    case "tiISkuddetRank":
+      return formatTiISkuddetRank(row);
+    case "tiISkuddetDebut":
+      return formatTiISkuddetDebut(row);
     case "trackRating":
       return formatTrackRating(row.normalizedRating);
     case "lovedTracks":
@@ -285,6 +318,10 @@ export function browseRowSortValue(row: BrowseRow, field: string) {
       return row.vgListaRank;
     case "vgListaDebut":
       return row.vgListaDebutWeekKey ?? "";
+    case "tiISkuddetRank":
+      return row.tiISkuddetRank;
+    case "tiISkuddetDebut":
+      return row.tiISkuddetDebutWeekKey ?? "";
     case "trackRating":
       return row.normalizedRating;
     case "time":

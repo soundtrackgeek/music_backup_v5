@@ -693,6 +693,13 @@ type BrowseRowWithoutOrigin = Omit<
   | "vgListaDebutMonth"
   | "vgListaDebutWeek"
   | "vgListaDebutWeekKey"
+  | "tiISkuddetRank"
+  | "tiISkuddetYear"
+  | "tiISkuddetDebutDate"
+  | "tiISkuddetDebutYear"
+  | "tiISkuddetDebutMonth"
+  | "tiISkuddetDebutWeek"
+  | "tiISkuddetDebutWeekKey"
 >;
 type ArtistSummaryWithoutMusicBrainz = Omit<
   ArtistSummary,
@@ -907,6 +914,21 @@ function withMockOrigin(row: BrowseRowWithoutOrigin): BrowseRow {
         : row.billboardSingleYear == null || singleDebutWeek == null
           ? null
           : `${singleDebutWeek.isoYear}-W${String(singleDebutWeek.week).padStart(2, "0")}`,
+    tiISkuddetRank:
+      row.trackId == null ? null : row.billboardSingleRank,
+    tiISkuddetYear:
+      row.trackId == null ? null : row.billboardSingleYear,
+    tiISkuddetDebutDate: row.trackId == null ? null : singleDebutDate,
+    tiISkuddetDebutYear:
+      row.trackId == null ? null : row.billboardSingleYear,
+    tiISkuddetDebutMonth:
+      row.trackId == null || singleDebutDate == null ? null : 7,
+    tiISkuddetDebutWeek:
+      row.trackId == null ? null : (singleDebutWeek?.week ?? null),
+    tiISkuddetDebutWeekKey:
+      row.trackId == null || row.billboardSingleYear == null || singleDebutWeek == null
+        ? null
+        : `${singleDebutWeek.isoYear}-W${String(singleDebutWeek.week).padStart(2, "0")}`,
     ...mockOriginForArtist(row.albumArtistDisplay),
   };
 }

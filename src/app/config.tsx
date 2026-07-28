@@ -128,6 +128,8 @@ export const missingFieldOptions: MissingFieldOption[] = [
   { value: "billboardSingleDebut", albumLabel: "Single chart debut", trackLabel: "Single chart debut" },
   { value: "vgLista", albumLabel: "VG Lista rank", trackLabel: "VG Lista rank" },
   { value: "vgListaDebut", albumLabel: "VG Lista debut week", trackLabel: "VG Lista debut week" },
+  { value: "tiISkuddet", albumLabel: "Ti i Skuddet rank", trackLabel: "Ti i Skuddet rank" },
+  { value: "tiISkuddetDebut", albumLabel: "Ti i Skuddet debut week", trackLabel: "Ti i Skuddet debut week" },
   { value: "rating", albumLabel: "Album rating", trackLabel: "Track rating" },
   { value: "time", albumLabel: "Total duration", trackLabel: "Track duration" },
 ];
@@ -158,6 +160,8 @@ export const rankingOptions = [
   { value: "billboardSingleDebut", label: "Single chart debut" },
   { value: "vgListaRank", label: "VG Lista rank" },
   { value: "vgListaDebut", label: "VG Lista debut week" },
+  { value: "tiISkuddetRank", label: "Ti i Skuddet rank" },
+  { value: "tiISkuddetDebut", label: "Ti i Skuddet debut week" },
 ];
 
 export const albumRankingOptions = rankingOptions.filter((option) =>
@@ -184,6 +188,8 @@ export const trackRankingOptions = rankingOptions.filter((option) =>
     "albumRating",
     "vgListaRank",
     "vgListaDebut",
+    "tiISkuddetRank",
+    "tiISkuddetDebut",
   ].includes(option.value),
 );
 
@@ -192,6 +198,8 @@ export const chartColumnOptions = [
   { value: "billboardDebut", label: "Debut week" },
   { value: "vgLista", label: "VG Lista" },
   { value: "vgListaDebut", label: "VG Lista debut week" },
+  { value: "tiISkuddet", label: "Ti i Skuddet" },
+  { value: "tiISkuddetDebut", label: "Ti i Skuddet debut week" },
   { value: "originCountry", label: "Origin" },
   { value: "rating", label: "Rating" },
   { value: "complete", label: "Complete" },
@@ -210,6 +218,8 @@ export const searchTableColumnOptions = [
   { value: "billboardDebut", label: "Debut week" },
   { value: "vgLista", label: "VG Lista" },
   { value: "vgListaDebut", label: "VG Lista debut week" },
+  { value: "tiISkuddet", label: "Ti i Skuddet" },
+  { value: "tiISkuddetDebut", label: "Ti i Skuddet debut week" },
   { value: "billboardSingleDebut", label: "Single debut" },
 ];
 

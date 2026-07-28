@@ -29,6 +29,29 @@ function hasRange(min: number | null, max: number | null) {
   return min != null || max != null;
 }
 
+export function countChartSourceFilters(config: ChartConfig) {
+  const filters = config.request.filters;
+  return [
+    hasRange(filters.billboardRankMin, filters.billboardRankMax),
+    config.request.view === "tracks" &&
+      hasRange(filters.billboardSingleRankMin, filters.billboardSingleRankMax),
+    config.request.view === "tracks" &&
+      (filters.billboardSingleDebutDateFrom != null ||
+        filters.billboardSingleDebutDateTo != null),
+    config.request.view === "albums" &&
+      (filters.billboardDebutWeekFrom != null ||
+        filters.billboardDebutWeekTo != null),
+    hasRange(filters.vgListaRankMin, filters.vgListaRankMax),
+    filters.vgListaDebutWeekFrom != null ||
+      filters.vgListaDebutWeekTo != null,
+    config.request.view === "tracks" &&
+      hasRange(filters.tiISkuddetRankMin, filters.tiISkuddetRankMax),
+    config.request.view === "tracks" &&
+      (filters.tiISkuddetDebutWeekFrom != null ||
+        filters.tiISkuddetDebutWeekTo != null),
+  ].filter(Boolean).length;
+}
+
 function hasSameValues(current: string[], defaults: string[]) {
   return (
     current.length === defaults.length &&
@@ -51,6 +74,11 @@ export function countAdvancedChartControls(config: ChartConfig) {
         filters.billboardDebutWeekTo != null),
     filters.vgListaDebutWeekFrom != null ||
       filters.vgListaDebutWeekTo != null,
+    config.request.view === "tracks" &&
+      hasRange(filters.tiISkuddetRankMin, filters.tiISkuddetRankMax),
+    config.request.view === "tracks" &&
+      (filters.tiISkuddetDebutWeekFrom != null ||
+        filters.tiISkuddetDebutWeekTo != null),
     filters.originCountryCodes.length > 0,
     filters.excludedOriginCountryCodes.length > 0,
     filters.artistType.trim().length > 0,

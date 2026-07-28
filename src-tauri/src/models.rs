@@ -226,6 +226,18 @@ pub struct VgListaImportSummary {
     pub duration_ms: u128,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TiISkuddetImportSummary {
+    pub source_path: String,
+    pub files_scanned: usize,
+    pub chart_entries: usize,
+    pub matched_tracks: i64,
+    pub dated_tracks: i64,
+    pub skipped_rows: usize,
+    pub duration_ms: u128,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
@@ -251,6 +263,8 @@ pub struct AppSettings {
     pub vg_lista_album_source_path: String,
     #[serde(default = "default_vg_lista_singles_source_path")]
     pub vg_lista_singles_source_path: String,
+    #[serde(default = "default_ti_i_skuddet_source_path")]
+    pub ti_i_skuddet_source_path: String,
     #[serde(default = "default_deemix_download_path")]
     pub deemix_download_path: String,
     #[serde(default = "default_deemix_download_quality")]
@@ -860,6 +874,14 @@ pub struct BrowseFilters {
     #[serde(default)]
     pub vg_lista_debut_week_to: Option<String>,
     #[serde(default)]
+    pub ti_i_skuddet_rank_min: Option<i32>,
+    #[serde(default)]
+    pub ti_i_skuddet_rank_max: Option<i32>,
+    #[serde(default)]
+    pub ti_i_skuddet_debut_week_from: Option<String>,
+    #[serde(default)]
+    pub ti_i_skuddet_debut_week_to: Option<String>,
+    #[serde(default)]
     pub year_from: Option<i32>,
     #[serde(default)]
     pub year_to: Option<i32>,
@@ -1428,6 +1450,13 @@ pub struct BrowseRow {
     pub vg_lista_debut_month: Option<i32>,
     pub vg_lista_debut_week: Option<i32>,
     pub vg_lista_debut_week_key: Option<String>,
+    pub ti_i_skuddet_rank: Option<i32>,
+    pub ti_i_skuddet_year: Option<i32>,
+    pub ti_i_skuddet_debut_date: Option<String>,
+    pub ti_i_skuddet_debut_year: Option<i32>,
+    pub ti_i_skuddet_debut_month: Option<i32>,
+    pub ti_i_skuddet_debut_week: Option<i32>,
+    pub ti_i_skuddet_debut_week_key: Option<String>,
     pub track_seconds: Option<i64>,
     pub normalized_rating: Option<i32>,
     pub disc_number: Option<i32>,
@@ -2020,6 +2049,10 @@ fn default_vg_lista_singles_source_path() -> String {
     "CSV_SINGLES_NO".to_string()
 }
 
+fn default_ti_i_skuddet_source_path() -> String {
+    "CSV_TIISKUDDET_NO".to_string()
+}
+
 fn default_deemix_download_path() -> String {
     String::new()
 }
@@ -2075,6 +2108,7 @@ mod tests {
             billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
             vg_lista_album_source_path: r"D:\Charts\Norway\Albums".to_string(),
             vg_lista_singles_source_path: r"D:\Charts\Norway\Singles".to_string(),
+            ti_i_skuddet_source_path: r"D:\Charts\Norway\Ti i Skuddet".to_string(),
             deemix_download_path: r"D:\Music\Incoming".to_string(),
             deemix_download_quality: "mp3_320".to_string(),
             deemix_download_fallback: true,
@@ -2111,6 +2145,10 @@ mod tests {
         assert_eq!(
             serialized.get("coverSourcePath"),
             Some(&json!(r"D:\Covers"))
+        );
+        assert_eq!(
+            serialized.get("tiISkuddetSourcePath"),
+            Some(&json!(r"D:\Charts\Norway\Ti i Skuddet"))
         );
         assert_eq!(
             serialized.get("billboardSourcePath"),

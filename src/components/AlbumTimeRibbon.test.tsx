@@ -380,6 +380,51 @@ describe("AlbumTimeRibbon", () => {
     expect(onModeChange).toHaveBeenCalledWith("albums");
   });
 
+  it("offers Ti i Skuddet as a track-only timeline source", async () => {
+    const user = userEvent.setup();
+    const onChartSourceChange = vi.fn();
+    const { rerender } = render(
+      <AlbumTimeRibbon
+        data={trackResponse()}
+        mode="tracks"
+        chartSource="billboard"
+        error={null}
+        isLoading={false}
+        onChartSourceChange={onChartSourceChange}
+        onCreatePlaylist={vi.fn()}
+        onOpenAlbum={vi.fn()}
+        onOpenTrack={vi.fn()}
+        onOpenSearch={vi.fn()}
+        onRetry={vi.fn()}
+        onSelectYear={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "NO · Ti i Skuddet" }),
+    );
+    expect(onChartSourceChange).toHaveBeenCalledWith("tiISkuddet");
+
+    rerender(
+      <AlbumTimeRibbon
+        data={response()}
+        mode="albums"
+        chartSource="vgLista"
+        error={null}
+        isLoading={false}
+        onChartSourceChange={onChartSourceChange}
+        onCreatePlaylist={vi.fn()}
+        onOpenAlbum={vi.fn()}
+        onOpenSearch={vi.fn()}
+        onRetry={vi.fn()}
+        onSelectYear={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "NO · Ti i Skuddet" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("filters tracks and playlist handoff to the selected chart week", async () => {
     const user = userEvent.setup();
     const onCreatePlaylist = vi.fn();

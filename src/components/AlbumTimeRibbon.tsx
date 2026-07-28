@@ -31,6 +31,7 @@ import type {
   AlbumDebutTimelineResponse,
   TrackDebutTimelineResponse,
   TrackDebutTimelineTrack,
+  TimelineChartSource,
 } from "../types";
 import { AlbumCover } from "./AlbumCover";
 
@@ -53,7 +54,6 @@ type AlbumOrderMode =
   | "custom";
 type AlbumOrderDirection = "ascending" | "descending";
 export type TimelineMode = "albums" | "tracks";
-export type ChartCountry = "US" | "NO";
 
 type TimelineWeekSelection = {
   scope: string;
@@ -99,12 +99,12 @@ export type AlbumTimeRibbonPlaylist = {
 type AlbumTimeRibbonProps = {
   data: AlbumDebutTimelineResponse | TrackDebutTimelineResponse | null;
   mode?: TimelineMode;
-  chartCountry?: ChartCountry;
+  chartSource?: TimelineChartSource;
   error: string | null;
   isLoading: boolean;
   onCreatePlaylist: (selection: AlbumTimeRibbonPlaylist) => void;
   onModeChange?: (mode: TimelineMode) => void;
-  onChartCountryChange?: (country: ChartCountry) => void;
+  onChartSourceChange?: (source: TimelineChartSource) => void;
   onOpenAlbum: (albumId: string) => void;
   onOpenTrack?: (trackId: number) => void;
   onOpenSearch: () => void;
@@ -574,12 +574,14 @@ function LoadingTimeline({ mode }: { mode: TimelineMode }) {
   );
 }
 
-function ChartCountryToggle({
-  chartCountry,
+function ChartSourceToggle({
+  chartSource,
+  mode,
   onChange,
 }: {
-  chartCountry: ChartCountry;
-  onChange: (country: ChartCountry) => void;
+  chartSource: TimelineChartSource;
+  mode: TimelineMode;
+  onChange: (source: TimelineChartSource) => void;
 }) {
   return (
     <div
@@ -589,20 +591,30 @@ function ChartCountryToggle({
     >
       <button
         type="button"
-        className={chartCountry === "US" ? "active" : ""}
-        aria-pressed={chartCountry === "US"}
-        onClick={() => onChange("US")}
+        className={chartSource === "billboard" ? "active" : ""}
+        aria-pressed={chartSource === "billboard"}
+        onClick={() => onChange("billboard")}
       >
         US · Billboard
       </button>
       <button
         type="button"
-        className={chartCountry === "NO" ? "active" : ""}
-        aria-pressed={chartCountry === "NO"}
-        onClick={() => onChange("NO")}
+        className={chartSource === "vgLista" ? "active" : ""}
+        aria-pressed={chartSource === "vgLista"}
+        onClick={() => onChange("vgLista")}
       >
         NO · VG Lista
       </button>
+      {mode === "tracks" ? (
+        <button
+          type="button"
+          className={chartSource === "tiISkuddet" ? "active" : ""}
+          aria-pressed={chartSource === "tiISkuddet"}
+          onClick={() => onChange("tiISkuddet")}
+        >
+          NO · Ti i Skuddet
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -610,12 +622,12 @@ function ChartCountryToggle({
 export function AlbumTimeRibbon({
   data,
   mode = "albums",
-  chartCountry = "US",
+  chartSource = "billboard",
   error,
   isLoading,
   onCreatePlaylist,
   onModeChange = () => undefined,
-  onChartCountryChange = () => undefined,
+  onChartSourceChange = () => undefined,
   onOpenAlbum,
   onOpenTrack = () => undefined,
   onOpenSearch,
@@ -645,7 +657,11 @@ export function AlbumTimeRibbon({
     [data, mode],
   );
   const chartSourceLabel =
-    chartCountry === "NO" ? "VG Lista" : "Billboard";
+    chartSource === "tiISkuddet"
+      ? "Ti i Skuddet"
+      : chartSource === "vgLista"
+        ? "VG Lista"
+        : "Billboard";
 
   useEffect(() => {
     function handleFullscreenChange() {
@@ -769,21 +785,24 @@ export function AlbumTimeRibbon({
   if (!normalizedData || selectedYear == null || years.length === 0) {
     return (
       <section className="album-time-ribbon-state">
-        <ChartCountryToggle
-          chartCountry={chartCountry}
-          onChange={onChartCountryChange}
+        <ChartSourceToggle
+          chartSource={chartSource}
+          mode={mode}
+          onChange={onChartSourceChange}
         />
         <CalendarBlank size={30} weight="light" aria-hidden="true" />
         <strong>No {mode === "tracks" ? "track debut dates" : "album debut weeks"} yet</strong>
         <span>
           Import the{" "}
-          {chartCountry === "NO"
-            ? mode === "tracks"
-              ? "CSV_SINGLES_NO"
-              : "CSV_ALBUMS_NO"
-            : mode === "tracks"
-              ? "CSV_SINGLES"
-              : "CSV_ALBUMS"}{" "}
+          {chartSource === "tiISkuddet"
+            ? "CSV_TIISKUDDET_NO"
+            : chartSource === "vgLista"
+              ? mode === "tracks"
+                ? "CSV_SINGLES_NO"
+                : "CSV_ALBUMS_NO"
+              : mode === "tracks"
+                ? "CSV_SINGLES"
+                : "CSV_ALBUMS"}{" "}
           folder to place your collection on this timeline.
         </span>
       </section>
@@ -906,13 +925,16 @@ export function AlbumTimeRibbon({
   function chooseMode(nextMode: TimelineMode) {
     setSelectedAlbumId(null);
     setSelectedWeekSelection(null);
+    if (nextMode === "albums" && chartSource === "tiISkuddet") {
+      onChartSourceChange("vgLista");
+    }
     onModeChange(nextMode);
   }
 
-  function chooseChartCountry(nextCountry: ChartCountry) {
+  function chooseChartSource(nextSource: TimelineChartSource) {
     setSelectedAlbumId(null);
     setSelectedWeekSelection(null);
-    onChartCountryChange(nextCountry);
+    onChartSourceChange(nextSource);
   }
 
   function chooseYear(year: number) {
@@ -1039,9 +1061,10 @@ export function AlbumTimeRibbon({
               Tracks
             </button>
           </div>
-          <ChartCountryToggle
-            chartCountry={chartCountry}
-            onChange={chooseChartCountry}
+          <ChartSourceToggle
+            chartSource={chartSource}
+            mode={mode}
+            onChange={chooseChartSource}
           />
           <h1>{mode === "tracks" ? "Tracks" : "Albums"} through the years</h1>
           <p>

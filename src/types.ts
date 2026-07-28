@@ -190,6 +190,16 @@ export type VgListaImportSummary = {
   durationMs: number;
 };
 
+export type TiISkuddetImportSummary = {
+  sourcePath: string;
+  filesScanned: number;
+  chartEntries: number;
+  matchedTracks: number;
+  datedTracks: number;
+  skippedRows: number;
+  durationMs: number;
+};
+
 export type LeftSidebarMode = "expanded" | "iconOnly" | "hidden";
 
 export type RightSidebarMode = "expanded" | "hidden";
@@ -214,6 +224,7 @@ export type AppSettings = {
   billboardSinglesSourcePath: string;
   vgListaAlbumSourcePath: string;
   vgListaSinglesSourcePath: string;
+  tiISkuddetSourcePath: string;
   deemixDownloadPath: string;
   deemixDownloadQuality: DeemixDownloadQuality;
   deemixDownloadFallback: boolean;
@@ -1151,6 +1162,10 @@ export type BrowseFilters = {
   vgListaRankMax: number | null;
   vgListaDebutWeekFrom: string | null;
   vgListaDebutWeekTo: string | null;
+  tiISkuddetRankMin: number | null;
+  tiISkuddetRankMax: number | null;
+  tiISkuddetDebutWeekFrom: string | null;
+  tiISkuddetDebutWeekTo: string | null;
   yearFrom: number | null;
   yearTo: number | null;
   releaseYearFrom: number | null;
@@ -1550,6 +1565,13 @@ export type BrowseRow = {
   vgListaDebutMonth: number | null;
   vgListaDebutWeek: number | null;
   vgListaDebutWeekKey: string | null;
+  tiISkuddetRank: number | null;
+  tiISkuddetYear: number | null;
+  tiISkuddetDebutDate: string | null;
+  tiISkuddetDebutYear: number | null;
+  tiISkuddetDebutMonth: number | null;
+  tiISkuddetDebutWeek: number | null;
+  tiISkuddetDebutWeekKey: string | null;
   trackSeconds: number | null;
   normalizedRating: number | null;
   discNumber: number | null;
@@ -1641,6 +1663,11 @@ export type TrackDebutTimelineResponse = {
   datedTrackCount: number;
   undatedTrackCount: number;
 };
+
+export type TimelineChartSource =
+  | "billboard"
+  | "vgLista"
+  | "tiISkuddet";
 
 export type SavedSearch = {
   id: number;

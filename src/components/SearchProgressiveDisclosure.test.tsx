@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   ChartAdvancedControls,
+  ChartFilterSourceGroup,
+  ChartFiltersDisclosure,
   ChartLunaCommandArea,
   SearchAdvancedFilters,
   SearchLunaCommandArea,
@@ -97,5 +99,28 @@ describe("Search progressive disclosure", () => {
 
     expect(screen.getByText("2 active")).toBeVisible();
     expect(screen.getByLabelText("Billboard minimum")).not.toBeVisible();
+  });
+
+  it("groups growing chart-source filters behind a nested disclosure", () => {
+    render(
+      <ChartFiltersDisclosure activeFilterCount={2}>
+        <ChartFilterSourceGroup
+          title="NO · Ti i Skuddet"
+          description="Unofficial Norwegian singles chart history."
+        >
+          <label>
+            Ti i Skuddet best rank
+            <input />
+          </label>
+        </ChartFilterSourceGroup>
+      </ChartFiltersDisclosure>,
+    );
+
+    expect(screen.getByText("2 active")).toBeVisible();
+    expect(screen.getByLabelText("Ti i Skuddet best rank")).not.toBeVisible();
+
+    fireEvent.click(screen.getByText("Chart filters"));
+    expect(screen.getByLabelText("Ti i Skuddet best rank")).toBeVisible();
+    expect(screen.getByText("NO · Ti i Skuddet")).toBeVisible();
   });
 });

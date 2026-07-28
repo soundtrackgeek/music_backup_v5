@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { createChartConfig } from "./requests";
-import { countAdvancedChartControls } from "./chartProgressive";
+import {
+  countAdvancedChartControls,
+  countChartSourceFilters,
+} from "./chartProgressive";
 
 describe("progressive Charts control summary", () => {
   it("does not count common chart controls as advanced", () => {
@@ -69,5 +72,21 @@ describe("progressive Charts control summary", () => {
     config.request.filters.vgListaDebutWeekTo = "1987-W30";
 
     expect(countAdvancedChartControls(config)).toBe(baseline + 2);
+  });
+
+  it("counts Ti i Skuddet chart groups only for track charts", () => {
+    const config = createChartConfig();
+    config.request.view = "tracks";
+    const baseline = countAdvancedChartControls(config);
+    config.request.filters.tiISkuddetRankMin = 1;
+    config.request.filters.tiISkuddetRankMax = 10;
+    config.request.filters.tiISkuddetDebutWeekFrom = "1989-W20";
+    config.request.filters.tiISkuddetDebutWeekTo = "1989-W30";
+
+    expect(countChartSourceFilters(config)).toBe(2);
+    expect(countAdvancedChartControls(config)).toBe(baseline + 2);
+
+    config.request.view = "albums";
+    expect(countChartSourceFilters(config)).toBe(0);
   });
 });

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { createFilters } from "./requests";
-import { countAdvancedSearchFilters } from "./searchProgressive";
+import {
+  countAdvancedSearchFilters,
+  countSearchChartFilters,
+} from "./searchProgressive";
 
 describe("progressive Search filter summary", () => {
   it("does not count common album controls as advanced", () => {
@@ -56,5 +59,18 @@ describe("progressive Search filter summary", () => {
     filters.vgListaDebutWeekTo = "1987-W30";
 
     expect(countAdvancedSearchFilters(filters, "albums")).toBe(2);
+  });
+
+  it("counts Ti i Skuddet chart groups only for track searches", () => {
+    const filters = createFilters();
+    filters.tiISkuddetRankMin = 1;
+    filters.tiISkuddetRankMax = 10;
+    filters.tiISkuddetDebutWeekFrom = "1989-W20";
+    filters.tiISkuddetDebutWeekTo = "1989-W30";
+
+    expect(countSearchChartFilters(filters, "tracks")).toBe(2);
+    expect(countAdvancedSearchFilters(filters, "tracks")).toBe(2);
+    expect(countSearchChartFilters(filters, "albums")).toBe(0);
+    expect(countAdvancedSearchFilters(filters, "albums")).toBe(0);
   });
 });

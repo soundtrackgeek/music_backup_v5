@@ -14,6 +14,7 @@ import {
   defaultBillboardSourcePath,
   defaultVgListaAlbumSourcePath,
   defaultVgListaSinglesSourcePath,
+  defaultTiISkuddetSourcePath,
   defaultCoverSourcePath,
   defaultImportSourcePath,
   defaultMusicBrainzCachePath,
@@ -91,6 +92,7 @@ export {
   defaultBillboardSourcePath,
   defaultVgListaAlbumSourcePath,
   defaultVgListaSinglesSourcePath,
+  defaultTiISkuddetSourcePath,
   defaultCoverSourcePath,
   defaultImportSourcePath,
   defaultMusicBrainzCachePath,
@@ -151,9 +153,11 @@ import type {
   AlbumDebutTimelineResponse,
   TrackDebutTimelineResponse,
   TrackDebutTimelineTrack,
+  TimelineChartSource,
   BillboardImportSummary,
   BillboardSinglesImportSummary,
   VgListaImportSummary,
+  TiISkuddetImportSummary,
   BrowseFilters,
   BrowseRequest,
   BrowseResponse,
@@ -608,7 +612,7 @@ function mockAlbumDebutTimeline(
 
 export async function getAlbumDebutTimeline(
   selectedYear: number | null = null,
-  chartCountry: "US" | "NO" = "US",
+  chartSource: TimelineChartSource = "billboard",
 ) {
   if (!isTauriRuntime()) {
     return mockAlbumDebutTimeline(selectedYear);
@@ -616,22 +620,30 @@ export async function getAlbumDebutTimeline(
 
   return invoke<AlbumDebutTimelineResponse>("get_album_debut_timeline", {
     selectedYear,
-    chartCountry,
+    chartSource,
   });
 }
 
 function mockTrackDebutTimeline(
   requestedYear: number | null,
+  chartSource: TimelineChartSource = "billboard",
 ): TrackDebutTimelineResponse {
+  const useTiISkuddet = chartSource === "tiISkuddet";
   const tracks = mockRows
     .filter(
       (row) =>
         row.trackId != null &&
-        row.billboardSingleDebutDate != null &&
-        row.billboardSingleDebutYear != null &&
-        row.billboardSingleDebutMonth != null &&
-        row.billboardSingleDebutWeek != null &&
-        row.billboardSingleDebutWeekKey != null,
+        (useTiISkuddet
+          ? row.tiISkuddetDebutDate != null &&
+            row.tiISkuddetDebutYear != null &&
+            row.tiISkuddetDebutMonth != null &&
+            row.tiISkuddetDebutWeek != null &&
+            row.tiISkuddetDebutWeekKey != null
+          : row.billboardSingleDebutDate != null &&
+            row.billboardSingleDebutYear != null &&
+            row.billboardSingleDebutMonth != null &&
+            row.billboardSingleDebutWeek != null &&
+            row.billboardSingleDebutWeekKey != null),
     )
     .map(
       (row) =>
@@ -647,13 +659,27 @@ function mockTrackDebutTimeline(
           year: row.year,
           normalizedRating: row.normalizedRating,
           love: row.love,
-          billboardSingleRank: row.billboardSingleRank,
-          billboardSingleYear: row.billboardSingleYear,
-          billboardSingleDebutDate: row.billboardSingleDebutDate!,
-          billboardSingleDebutYear: row.billboardSingleDebutYear!,
-          billboardSingleDebutMonth: row.billboardSingleDebutMonth!,
-          billboardSingleDebutWeek: row.billboardSingleDebutWeek!,
-          billboardSingleDebutWeekKey: row.billboardSingleDebutWeekKey!,
+          billboardSingleRank: useTiISkuddet
+            ? row.tiISkuddetRank
+            : row.billboardSingleRank,
+          billboardSingleYear: useTiISkuddet
+            ? row.tiISkuddetYear
+            : row.billboardSingleYear,
+          billboardSingleDebutDate: useTiISkuddet
+            ? row.tiISkuddetDebutDate!
+            : row.billboardSingleDebutDate!,
+          billboardSingleDebutYear: useTiISkuddet
+            ? row.tiISkuddetDebutYear!
+            : row.billboardSingleDebutYear!,
+          billboardSingleDebutMonth: useTiISkuddet
+            ? row.tiISkuddetDebutMonth!
+            : row.billboardSingleDebutMonth!,
+          billboardSingleDebutWeek: useTiISkuddet
+            ? row.tiISkuddetDebutWeek!
+            : row.billboardSingleDebutWeek!,
+          billboardSingleDebutWeekKey: useTiISkuddet
+            ? row.tiISkuddetDebutWeekKey!
+            : row.billboardSingleDebutWeekKey!,
           coverPath: row.coverPath,
           coverMimeType: row.coverMimeType,
         }) satisfies TrackDebutTimelineTrack,
@@ -707,15 +733,15 @@ function mockTrackDebutTimeline(
 
 export async function getTrackDebutTimeline(
   selectedYear: number | null = null,
-  chartCountry: "US" | "NO" = "US",
+  chartSource: TimelineChartSource = "billboard",
 ) {
   if (!isTauriRuntime()) {
-    return mockTrackDebutTimeline(selectedYear);
+    return mockTrackDebutTimeline(selectedYear, chartSource);
   }
 
   return invoke<TrackDebutTimelineResponse>("get_track_debut_timeline", {
     selectedYear,
-    chartCountry,
+    chartSource,
   });
 }
 
@@ -2917,6 +2943,27 @@ export async function importVgListaSingles(sourcePath: string) {
   });
 }
 
+export async function importTiISkuddetSingles(sourcePath: string) {
+  if (!isTauriRuntime()) {
+    const matchedTracks = mockRows.filter(
+      (row) => row.trackId !== null && row.tiISkuddetRank != null,
+    ).length;
+    return {
+      sourcePath,
+      filesScanned: 33,
+      chartEntries: 17_974,
+      matchedTracks,
+      datedTracks: matchedTracks,
+      skippedRows: 1,
+      durationMs: 0,
+    } satisfies TiISkuddetImportSummary;
+  }
+
+  return invoke<TiISkuddetImportSummary>("import_ti_i_skuddet_singles", {
+    sourcePath,
+  });
+}
+
 export async function getAlbumCoverDataUrl(albumId: string) {
   if (!isTauriRuntime()) {
     return null;
@@ -2987,6 +3034,11 @@ export async function searchLibrary(request: BrowseRequest) {
     const vgListaRankMax = request.filters.vgListaRankMax;
     const vgListaDebutWeekFrom = request.filters.vgListaDebutWeekFrom;
     const vgListaDebutWeekTo = request.filters.vgListaDebutWeekTo;
+    const tiISkuddetRankMin = request.filters.tiISkuddetRankMin;
+    const tiISkuddetRankMax = request.filters.tiISkuddetRankMax;
+    const tiISkuddetDebutWeekFrom =
+      request.filters.tiISkuddetDebutWeekFrom;
+    const tiISkuddetDebutWeekTo = request.filters.tiISkuddetDebutWeekTo;
     const lovedTracksMin = request.filters.lovedTracksMin;
     const lovedTracksMax = request.filters.lovedTracksMax;
     const ratingCompletenessMin = normalizePercentFilter(
@@ -3081,6 +3133,20 @@ export async function searchLibrary(request: BrowseRequest) {
           vgListaDebutWeekFrom,
           vgListaDebutWeekTo,
         ) &&
+        (!isTracks ||
+          matchesNumberRange(
+            row.tiISkuddetRank,
+            tiISkuddetRankMin,
+            tiISkuddetRankMax,
+          )) &&
+        (!isTracks ||
+          matchesIsoWeekRange(
+            row.tiISkuddetDebutWeekKey,
+            row.tiISkuddetDebutYear,
+            row.tiISkuddetDebutWeek,
+            tiISkuddetDebutWeekFrom,
+            tiISkuddetDebutWeekTo,
+          )) &&
         (lovedTracksMin == null || lovedTracks >= lovedTracksMin) &&
         (lovedTracksMax == null || lovedTracks <= lovedTracksMax) &&
         (ratingCompletenessMin == null ||
@@ -3981,6 +4047,10 @@ function matchesMissingFields(
         return row.vgListaRank == null;
       case "vgListaDebut":
         return row.vgListaDebutWeekKey == null;
+      case "tiISkuddet":
+        return isTracks ? row.tiISkuddetRank == null : true;
+      case "tiISkuddetDebut":
+        return isTracks ? row.tiISkuddetDebutWeekKey == null : true;
       case "rating":
         return isTracks
           ? row.normalizedRating == null
@@ -4028,6 +4098,14 @@ function browseSortValue(row: BrowseRow, field: string) {
       return row.billboardSingleRank;
     case "billboardSingleDebut":
       return row.billboardSingleDebutDate;
+    case "vgListaRank":
+      return row.vgListaRank;
+    case "vgListaDebut":
+      return row.vgListaDebutWeekKey;
+    case "tiISkuddetRank":
+      return row.tiISkuddetRank;
+    case "tiISkuddetDebut":
+      return row.tiISkuddetDebutWeekKey;
     case "trackRating":
       return row.normalizedRating;
     case "time":

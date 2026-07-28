@@ -64,6 +64,7 @@ import {
   defaultBillboardSourcePath,
   defaultVgListaAlbumSourcePath,
   defaultVgListaSinglesSourcePath,
+  defaultTiISkuddetSourcePath,
   defaultCoverSourcePath,
   defaultImportSourcePath,
   defaultMusicBrainzCachePath,
@@ -89,6 +90,7 @@ import {
   importBillboardSingles,
   importVgListaAlbums,
   importVgListaSingles,
+  importTiISkuddetSingles,
   applyImportPreview,
   cancelImportPreview,
   getImportPreview,
@@ -146,6 +148,7 @@ import type {
   BillboardImportSummary,
   BillboardSinglesImportSummary,
   VgListaImportSummary,
+  TiISkuddetImportSummary,
   BrowseFilters,
   BrowseRequest,
   BrowseResponse,
@@ -218,6 +221,7 @@ import type {
   StatisticsResponse,
   TextFilter,
   TextFilterOperator,
+  TimelineChartSource,
   YearProgressStats,
 } from "./types";
 import { chartTemplates, type ChartTemplate } from "./app/chartTemplates";
@@ -259,6 +263,8 @@ import {
   formatBillboardSingleDebut,
   formatVgListaDebutWeek,
   formatVgListaRank,
+  formatTiISkuddetDebut,
+  formatTiISkuddetRank,
   formatBytes,
   formatChartMetric,
   formatClockTime,
@@ -316,8 +322,14 @@ import {
   useAdaptiveDetailsLayout,
   workspaceHasUsefulDetails,
 } from "./app/adaptiveDetails";
-import { countAdvancedChartControls } from "./app/chartProgressive";
-import { countAdvancedSearchFilters } from "./app/searchProgressive";
+import {
+  countAdvancedChartControls,
+  countChartSourceFilters,
+} from "./app/chartProgressive";
+import {
+  countAdvancedSearchFilters,
+  countSearchChartFilters,
+} from "./app/searchProgressive";
 import {
   formatMusicBrainzReviewState,
   MusicBrainzReviewState,
@@ -346,6 +358,8 @@ import {
 } from "./components/AlbumTimeRibbon";
 import {
   ChartAdvancedControls,
+  ChartFilterSourceGroup,
+  ChartFiltersDisclosure,
   ChartLunaCommandArea,
   SearchAdvancedFilters,
   SearchLunaCommandArea,
@@ -497,6 +511,10 @@ function createDefaultVgListaAlbumSourcePath() {
 
 function createDefaultVgListaSinglesSourcePath() {
   return loadCachedSettings().vgListaSinglesSourcePath;
+}
+
+function createDefaultTiISkuddetSourcePath() {
+  return loadCachedSettings().tiISkuddetSourcePath;
 }
 
 function createDefaultLeftSidebarMode(): LeftSidebarMode {
@@ -2075,6 +2093,10 @@ function ResultTable({
   const showSingleDebutColumn = visibleColumnSet.has("billboardSingleDebut");
   const showVgListaColumn = visibleColumnSet.has("vgLista");
   const showVgListaDebutColumn = visibleColumnSet.has("vgListaDebut");
+  const showTiISkuddetColumn =
+    response.view === "tracks" && visibleColumnSet.has("tiISkuddet");
+  const showTiISkuddetDebutColumn =
+    response.view === "tracks" && visibleColumnSet.has("tiISkuddetDebut");
   const albumTableColumns = [
     "minmax(220px, 2fr)",
     "minmax(140px, 1.35fr)",
@@ -2101,6 +2123,8 @@ function ResultTable({
     ...(showSingleDebutColumn ? ["minmax(132px, 1fr)"] : []),
     ...(showVgListaColumn ? ["88px"] : []),
     ...(showVgListaDebutColumn ? ["minmax(132px, 1fr)"] : []),
+    ...(showTiISkuddetColumn ? ["104px"] : []),
+    ...(showTiISkuddetDebutColumn ? ["minmax(144px, 1fr)"] : []),
     "64px",
     "minmax(140px, 1.1fr)",
   ].join(" ");
@@ -2109,11 +2133,13 @@ function ResultTable({
     (showDebutColumn ? 104 : 0) +
     (showSingleDebutColumn ? 132 : 0) +
     (showVgListaColumn ? 88 : 0) +
-    (showVgListaDebutColumn ? 132 : 0);
+    (showVgListaDebutColumn ? 132 : 0) +
+    (showTiISkuddetColumn ? 104 : 0) +
+    (showTiISkuddetDebutColumn ? 144 : 0);
 
   return response.view === "tracks" ? (
     <div
-      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}`}
+      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}${showTiISkuddetColumn ? " with-ti-i-skuddet" : ""}${showTiISkuddetDebutColumn ? " with-ti-i-skuddet-debut" : ""}`}
       role="table"
       style={
         {
@@ -2199,6 +2225,22 @@ function ResultTable({
             onSort={onSort}
           />
         ) : null}
+        {showTiISkuddetColumn ? (
+          <SortableColumnHeader
+            label="Ti i Skuddet"
+            field="tiISkuddetRank"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
+        {showTiISkuddetDebutColumn ? (
+          <SortableColumnHeader
+            label="Ti i Skuddet debut"
+            field="tiISkuddetDebut"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
         <SortableColumnHeader
           label="Rating"
           field="trackRating"
@@ -2256,6 +2298,12 @@ function ResultTable({
             ) : null}
             {showVgListaDebutColumn ? (
               <span role="cell">{formatVgListaDebutWeek(row)}</span>
+            ) : null}
+            {showTiISkuddetColumn ? (
+              <span role="cell">{formatTiISkuddetRank(row)}</span>
+            ) : null}
+            {showTiISkuddetDebutColumn ? (
+              <span role="cell">{formatTiISkuddetDebut(row)}</span>
             ) : null}
             <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
             <span role="cell" title={row.filePath ?? ""}>
@@ -5137,6 +5185,18 @@ function ChartResults({
       value: (row: BrowseRow) => formatVgListaDebutWeek(row),
     },
     {
+      key: "tiISkuddet",
+      label: "Ti i Skuddet",
+      sortField: "tiISkuddetRank",
+      value: (row: BrowseRow) => formatTiISkuddetRank(row),
+    },
+    {
+      key: "tiISkuddetDebut",
+      label: "Ti i Skuddet debut week",
+      sortField: "tiISkuddetDebut",
+      value: (row: BrowseRow) => formatTiISkuddetDebut(row),
+    },
+    {
       key: "rating",
       label: "Rating",
       sortField: "albumRating",
@@ -5208,7 +5268,14 @@ function ChartResults({
     }
     if (
       !isTracks &&
-      ["track", "billboardSingle", "billboardSingleDebut", "trackRating"].includes(
+      [
+        "track",
+        "billboardSingle",
+        "billboardSingleDebut",
+        "tiISkuddet",
+        "tiISkuddetDebut",
+        "trackRating",
+      ].includes(
         column.key,
       )
     ) {
@@ -7770,8 +7837,15 @@ export default function App() {
   );
   const [vgListaSinglesImportSummary, setVgListaSinglesImportSummary] =
     useState<VgListaImportSummary | null>(null);
+  const [tiISkuddetSourcePath, setTiISkuddetSourcePath] = useState(() =>
+    createDefaultTiISkuddetSourcePath(),
+  );
+  const [tiISkuddetImportSummary, setTiISkuddetImportSummary] =
+    useState<TiISkuddetImportSummary | null>(null);
   const [importSingleChartsUs, setImportSingleChartsUs] = useState(true);
   const [importSingleChartsNo, setImportSingleChartsNo] = useState(true);
+  const [importSingleChartsTiISkuddet, setImportSingleChartsTiISkuddet] =
+    useState(true);
   const [request, setRequest] = useState<BrowseRequest>(() =>
     createRequest("albums"),
   );
@@ -7929,8 +8003,8 @@ export default function App() {
   const [trackTimelineResponse, setTrackTimelineResponse] =
     useState<TrackDebutTimelineResponse | null>(null);
   const [timelineMode, setTimelineMode] = useState<TimelineMode>("albums");
-  const [timelineChartCountry, setTimelineChartCountry] =
-    useState<"US" | "NO">("US");
+  const [timelineChartSource, setTimelineChartSource] =
+    useState<TimelineChartSource>("billboard");
   const [albumTimelineYear, setAlbumTimelineYear] = useState<number | null>(null);
   const [trackTimelineYear, setTrackTimelineYear] = useState<number | null>(null);
   const [albumTimelineError, setAlbumTimelineError] = useState<string | null>(null);
@@ -8163,6 +8237,9 @@ export default function App() {
     setVgListaSinglesSourcePath(
       nextSettings.vgListaSinglesSourcePath ||
         defaultVgListaSinglesSourcePath,
+    );
+    setTiISkuddetSourcePath(
+      nextSettings.tiISkuddetSourcePath || defaultTiISkuddetSourcePath,
     );
     setMusicBrainzCachePathDraft(
       nextSettings.musicBrainzCachePath || defaultMusicBrainzCachePath,
@@ -9090,8 +9167,8 @@ export default function App() {
       setAlbumTimelineError(null);
       const timelineRequest =
         timelineMode === "tracks"
-          ? getTrackDebutTimeline(trackTimelineYear, timelineChartCountry)
-          : getAlbumDebutTimeline(albumTimelineYear, timelineChartCountry);
+          ? getTrackDebutTimeline(trackTimelineYear, timelineChartSource)
+          : getAlbumDebutTimeline(albumTimelineYear, timelineChartSource);
       void timelineRequest
         .then((nextResponse) => {
           if (!cancelled) {
@@ -9127,7 +9204,7 @@ export default function App() {
     albumTimelineYear,
     trackTimelineYear,
     timelineMode,
-    timelineChartCountry,
+    timelineChartSource,
     albumTimelineRefreshKey,
   ]);
 
@@ -9362,6 +9439,10 @@ export default function App() {
         vgListaSinglesSourcePath,
         defaultVgListaSinglesSourcePath,
       ),
+      tiISkuddetSourcePath: textSettingValue(
+        tiISkuddetSourcePath,
+        defaultTiISkuddetSourcePath,
+      ),
     }),
     [
       billboardSinglesSourcePath,
@@ -9370,6 +9451,7 @@ export default function App() {
       sourcePath,
       vgListaAlbumSourcePath,
       vgListaSinglesSourcePath,
+      tiISkuddetSourcePath,
     ],
   );
   const importPathsKey = useMemo(
@@ -9388,7 +9470,9 @@ export default function App() {
     normalizedImportPaths.vgListaAlbumSourcePath !==
       persistedSettings.vgListaAlbumSourcePath ||
     normalizedImportPaths.vgListaSinglesSourcePath !==
-      persistedSettings.vgListaSinglesSourcePath;
+      persistedSettings.vgListaSinglesSourcePath ||
+    normalizedImportPaths.tiISkuddetSourcePath !==
+      persistedSettings.tiISkuddetSourcePath;
 
   useEffect(() => {
     if (
@@ -9601,6 +9685,28 @@ export default function App() {
           }),
       });
     }
+    if (
+      request.view === "tracks" &&
+      (currentFilters.tiISkuddetDebutWeekFrom ||
+        currentFilters.tiISkuddetDebutWeekTo)
+    ) {
+      const from = currentFilters.tiISkuddetDebutWeekFrom;
+      const to = currentFilters.tiISkuddetDebutWeekTo;
+      nextChips.push({
+        key: "tiISkuddetDebutWeek",
+        label:
+          from && to
+            ? `Ti i Skuddet debut ${from}–${to}`
+            : from
+              ? `Ti i Skuddet debut from ${from}`
+              : `Ti i Skuddet debut through ${to}`,
+        remove: () =>
+          updateFilters({
+            tiISkuddetDebutWeekFrom: null,
+            tiISkuddetDebutWeekTo: null,
+          }),
+      });
+    }
     addRangeChip(
       nextChips,
       "billboard",
@@ -9631,6 +9737,20 @@ export default function App() {
       currentFilters.vgListaRankMax,
       () => updateFilters({ vgListaRankMin: null, vgListaRankMax: null }),
     );
+    if (request.view === "tracks") {
+      addRangeChip(
+        nextChips,
+        "tiISkuddet",
+        "Ti i Skuddet",
+        currentFilters.tiISkuddetRankMin,
+        currentFilters.tiISkuddetRankMax,
+        () =>
+          updateFilters({
+            tiISkuddetRankMin: null,
+            tiISkuddetRankMax: null,
+          }),
+      );
+    }
     addRangeChip(
       nextChips,
       "releaseYear",
@@ -9792,6 +9912,10 @@ export default function App() {
     settings.countryFlagDisplay,
   ]);
   const advancedSearchFilterCount = countAdvancedSearchFilters(
+    currentFilters,
+    request.view,
+  );
+  const searchChartFilterCount = countSearchChartFilters(
     currentFilters,
     request.view,
   );
@@ -10439,6 +10563,7 @@ export default function App() {
     setBillboardSinglesImportError(null);
     setBillboardSinglesImportSummary(null);
     setVgListaSinglesImportSummary(null);
+    setTiISkuddetImportSummary(null);
 
     try {
       const errors: string[] = [];
@@ -10464,6 +10589,18 @@ export default function App() {
         } catch (error) {
           errors.push(
             `Norway: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      if (importSingleChartsTiISkuddet) {
+        try {
+          setTiISkuddetImportSummary(
+            await importTiISkuddetSingles(tiISkuddetSourcePath),
+          );
+          completed = true;
+        } catch (error) {
+          errors.push(
+            `Ti i Skuddet: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
       }
@@ -11205,6 +11342,10 @@ export default function App() {
           baseSettings.vgListaSinglesSourcePath,
         defaultVgListaSinglesSourcePath,
       ),
+      tiISkuddetSourcePath: textSettingValue(
+        values.tiISkuddetSourcePath ?? baseSettings.tiISkuddetSourcePath,
+        defaultTiISkuddetSourcePath,
+      ),
       deemixDownloadPath: (
         values.deemixDownloadPath ?? baseSettings.deemixDownloadPath
       ).trim(),
@@ -11333,6 +11474,21 @@ export default function App() {
                 defaultVgListaSinglesSourcePath,
               ) === nextSettings.vgListaSinglesSourcePath
                 ? saved.vgListaSinglesSourcePath
+                : current,
+            );
+          }
+          if (
+            Object.prototype.hasOwnProperty.call(
+              values,
+              "tiISkuddetSourcePath",
+            )
+          ) {
+            setTiISkuddetSourcePath((current) =>
+              textSettingValue(
+                current,
+                defaultTiISkuddetSourcePath,
+              ) === nextSettings.tiISkuddetSourcePath
+                ? saved.tiISkuddetSourcePath
                 : current,
             );
           }
@@ -11959,6 +12115,7 @@ export default function App() {
   const currentChartCompletenessRange = chartCompletenessRange(chartConfig);
   const advancedChartControlCount =
     countAdvancedChartControls(chartConfig);
+  const chartSourceFilterCount = countChartSourceFilters(chartConfig);
   const discoveryMissionTotal =
     (discovery?.backlogMissions.length ?? 0) +
     (discovery?.smartMissions.length ?? 0);
@@ -12534,12 +12691,12 @@ export default function App() {
                 : albumTimelineResponse
             }
             mode={timelineMode}
-            chartCountry={timelineChartCountry}
+            chartSource={timelineChartSource}
             error={albumTimelineError}
             isLoading={isAlbumTimelineLoading}
             onCreatePlaylist={openTimelinePlaylist}
             onModeChange={setTimelineMode}
-            onChartCountryChange={setTimelineChartCountry}
+            onChartSourceChange={setTimelineChartSource}
             onOpenAlbum={openTimelineAlbum}
             onOpenTrack={openTimelineTrack}
             onOpenSearch={() => setActiveSection("Search")}
@@ -12917,10 +13074,10 @@ export default function App() {
             <section className="import-panel">
               <div className="panel-heading">
                 <div>
-                  <h2>Year-end singles charts</h2>
+                  <h2>Singles charts</h2>
                   <p>
-                    Import US Billboard year-end rows and Norwegian VG Lista
-                    weekly rows in one operation.
+                    Import US Billboard, VG Lista, and Ti i Skuddet rows in one
+                    operation.
                   </p>
                 </div>
                 <RunStatus
@@ -12928,7 +13085,8 @@ export default function App() {
                     isImportingBillboardSingles
                       ? "running"
                       : billboardSinglesImportSummary ||
-                          vgListaSinglesImportSummary
+                          vgListaSinglesImportSummary ||
+                          tiISkuddetImportSummary
                         ? "completed"
                         : "idle"
                   }
@@ -12961,6 +13119,17 @@ export default function App() {
                   />
                   <span>NO · VG Lista</span>
                 </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={importSingleChartsTiISkuddet}
+                    onChange={(event) =>
+                      setImportSingleChartsTiISkuddet(event.target.checked)
+                    }
+                    disabled={isImportingBillboardSingles}
+                  />
+                  <span>NO · Ti i Skuddet</span>
+                </label>
               </div>
 
               <label className="source-input">
@@ -12973,6 +13142,20 @@ export default function App() {
                   placeholder="CSV_SINGLES"
                   disabled={
                     isImportingBillboardSingles || !importSingleChartsUs
+                  }
+                />
+              </label>
+              <label className="source-input">
+                <span>Ti i Skuddet CSV folder</span>
+                <input
+                  value={tiISkuddetSourcePath}
+                  onChange={(event) =>
+                    setTiISkuddetSourcePath(event.target.value)
+                  }
+                  placeholder="CSV_TIISKUDDET_NO"
+                  disabled={
+                    isImportingBillboardSingles ||
+                    !importSingleChartsTiISkuddet
                   }
                 />
               </label>
@@ -13026,6 +13209,21 @@ export default function App() {
                   files.
                 </p>
               ) : null}
+              {tiISkuddetImportSummary ? (
+                <p className="success-message">
+                  Ti i Skuddet · Matched{" "}
+                  {formatNumber(tiISkuddetImportSummary.matchedTracks)} tracks
+                  with {formatNumber(tiISkuddetImportSummary.datedTracks)}{" "}
+                  debut weeks from{" "}
+                  {formatNumber(tiISkuddetImportSummary.chartEntries)} rows
+                  across {formatNumber(tiISkuddetImportSummary.filesScanned)}{" "}
+                  files
+                  {tiISkuddetImportSummary.skippedRows > 0
+                    ? `; skipped ${formatNumber(tiISkuddetImportSummary.skippedRows)} incomplete rows`
+                    : ""}
+                  .
+                </p>
+              ) : null}
 
               <div className="action-row">
                 <button
@@ -13034,11 +13232,15 @@ export default function App() {
                   onClick={startBillboardSinglesImport}
                   disabled={
                     isImportingBillboardSingles ||
-                    (!importSingleChartsUs && !importSingleChartsNo) ||
+                    (!importSingleChartsUs &&
+                      !importSingleChartsNo &&
+                      !importSingleChartsTiISkuddet) ||
                     (importSingleChartsUs &&
                       !billboardSinglesSourcePath.trim()) ||
                     (importSingleChartsNo &&
                       !vgListaSinglesSourcePath.trim()) ||
+                    (importSingleChartsTiISkuddet &&
+                      !tiISkuddetSourcePath.trim()) ||
                     !canImport ||
                     (status?.trackCount ?? 0) === 0
                   }
@@ -13364,60 +13566,175 @@ export default function App() {
                   </>
                 ) : null}
 
+                <ChartFiltersDisclosure
+                  activeFilterCount={chartSourceFilterCount}
+                >
+                  <ChartFilterSourceGroup
+                    title="US · Billboard"
+                    description={
+                      chartConfig.request.view === "tracks"
+                        ? "Year-end single peak and exact chart-entry date."
+                        : "Year-end album peak and first chart week."
+                    }
+                  >
+                    <NumberField
+                      label="Rank min"
+                      value={
+                        chartConfig.request.view === "tracks"
+                          ? chartConfig.request.filters.billboardSingleRankMin
+                          : chartConfig.request.filters.billboardRankMin
+                      }
+                      min={1}
+                      onChange={(value) =>
+                        chartConfig.request.view === "tracks"
+                          ? updateChartFilters({ billboardSingleRankMin: value })
+                          : updateChartFilters({ billboardRankMin: value })
+                      }
+                    />
+                    <NumberField
+                      label="Rank max"
+                      value={
+                        chartConfig.request.view === "tracks"
+                          ? chartConfig.request.filters.billboardSingleRankMax
+                          : chartConfig.request.filters.billboardRankMax
+                      }
+                      min={1}
+                      onChange={(value) =>
+                        chartConfig.request.view === "tracks"
+                          ? updateChartFilters({ billboardSingleRankMax: value })
+                          : updateChartFilters({ billboardRankMax: value })
+                      }
+                    />
+                    {chartConfig.request.view === "tracks" ? (
+                      <>
+                        <DateField
+                          label="Debut from"
+                          value={
+                            chartConfig.request.filters
+                              .billboardSingleDebutDateFrom
+                          }
+                          onChange={(billboardSingleDebutDateFrom) =>
+                            updateChartFilters({
+                              billboardSingleDebutDateFrom,
+                            })
+                          }
+                        />
+                        <DateField
+                          label="Debut to"
+                          value={
+                            chartConfig.request.filters
+                              .billboardSingleDebutDateTo
+                          }
+                          onChange={(billboardSingleDebutDateTo) =>
+                            updateChartFilters({ billboardSingleDebutDateTo })
+                          }
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <WeekField
+                          label="Debut from"
+                          value={
+                            chartConfig.request.filters.billboardDebutWeekFrom
+                          }
+                          onChange={(billboardDebutWeekFrom) =>
+                            updateChartFilters({ billboardDebutWeekFrom })
+                          }
+                        />
+                        <WeekField
+                          label="Debut to"
+                          value={
+                            chartConfig.request.filters.billboardDebutWeekTo
+                          }
+                          onChange={(billboardDebutWeekTo) =>
+                            updateChartFilters({ billboardDebutWeekTo })
+                          }
+                        />
+                      </>
+                    )}
+                  </ChartFilterSourceGroup>
+
+                  <ChartFilterSourceGroup
+                    title="NO · VG Lista"
+                    description="Official Norwegian weekly chart history."
+                  >
+                    <NumberField
+                      label="Rank min"
+                      value={chartConfig.request.filters.vgListaRankMin}
+                      min={1}
+                      onChange={(vgListaRankMin) =>
+                        updateChartFilters({ vgListaRankMin })
+                      }
+                    />
+                    <NumberField
+                      label="Rank max"
+                      value={chartConfig.request.filters.vgListaRankMax}
+                      min={1}
+                      onChange={(vgListaRankMax) =>
+                        updateChartFilters({ vgListaRankMax })
+                      }
+                    />
+                    <WeekField
+                      label="Debut from"
+                      value={chartConfig.request.filters.vgListaDebutWeekFrom}
+                      onChange={(vgListaDebutWeekFrom) =>
+                        updateChartFilters({ vgListaDebutWeekFrom })
+                      }
+                    />
+                    <WeekField
+                      label="Debut to"
+                      value={chartConfig.request.filters.vgListaDebutWeekTo}
+                      onChange={(vgListaDebutWeekTo) =>
+                        updateChartFilters({ vgListaDebutWeekTo })
+                      }
+                    />
+                  </ChartFilterSourceGroup>
+
+                  {chartConfig.request.view === "tracks" ? (
+                    <ChartFilterSourceGroup
+                      title="NO · Ti i Skuddet"
+                      description="Unofficial Norwegian singles chart history."
+                    >
+                      <NumberField
+                        label="Rank min"
+                        value={chartConfig.request.filters.tiISkuddetRankMin}
+                        min={1}
+                        onChange={(tiISkuddetRankMin) =>
+                          updateChartFilters({ tiISkuddetRankMin })
+                        }
+                      />
+                      <NumberField
+                        label="Rank max"
+                        value={chartConfig.request.filters.tiISkuddetRankMax}
+                        min={1}
+                        onChange={(tiISkuddetRankMax) =>
+                          updateChartFilters({ tiISkuddetRankMax })
+                        }
+                      />
+                      <WeekField
+                        label="Debut from"
+                        value={
+                          chartConfig.request.filters
+                            .tiISkuddetDebutWeekFrom
+                        }
+                        onChange={(tiISkuddetDebutWeekFrom) =>
+                          updateChartFilters({ tiISkuddetDebutWeekFrom })
+                        }
+                      />
+                      <WeekField
+                        label="Debut to"
+                        value={
+                          chartConfig.request.filters.tiISkuddetDebutWeekTo
+                        }
+                        onChange={(tiISkuddetDebutWeekTo) =>
+                          updateChartFilters({ tiISkuddetDebutWeekTo })
+                        }
+                      />
+                    </ChartFilterSourceGroup>
+                  ) : null}
+                </ChartFiltersDisclosure>
+
                 <div className="filter-grid chart-advanced-filter-grid">
-                {chartConfig.request.view === "tracks" ? (
-                  <>
-                    <DateField
-                      label="Single chart debut from"
-                      value={
-                        chartConfig.request.filters.billboardSingleDebutDateFrom
-                      }
-                      onChange={(billboardSingleDebutDateFrom) =>
-                        updateChartFilters({ billboardSingleDebutDateFrom })
-                      }
-                    />
-                    <DateField
-                      label="Single chart debut to"
-                      value={
-                        chartConfig.request.filters.billboardSingleDebutDateTo
-                      }
-                      onChange={(billboardSingleDebutDateTo) =>
-                        updateChartFilters({ billboardSingleDebutDateTo })
-                      }
-                    />
-                  </>
-                ) : (
-                  <>
-                    <WeekField
-                      label="Chart debut from"
-                      value={chartConfig.request.filters.billboardDebutWeekFrom}
-                      onChange={(billboardDebutWeekFrom) =>
-                        updateChartFilters({ billboardDebutWeekFrom })
-                      }
-                    />
-                    <WeekField
-                      label="Chart debut to"
-                      value={chartConfig.request.filters.billboardDebutWeekTo}
-                      onChange={(billboardDebutWeekTo) =>
-                        updateChartFilters({ billboardDebutWeekTo })
-                      }
-                    />
-                  </>
-                )}
-                <WeekField
-                  label="VG Lista debut from"
-                  value={chartConfig.request.filters.vgListaDebutWeekFrom}
-                  onChange={(vgListaDebutWeekFrom) =>
-                    updateChartFilters({ vgListaDebutWeekFrom })
-                  }
-                />
-                <WeekField
-                  label="VG Lista debut to"
-                  value={chartConfig.request.filters.vgListaDebutWeekTo}
-                  onChange={(vgListaDebutWeekTo) =>
-                    updateChartFilters({ vgListaDebutWeekTo })
-                  }
-                />
                 <NumberField
                   label="Limit"
                   value={chartConfig.resultLimit}
@@ -13425,58 +13742,6 @@ export default function App() {
                   max={500}
                   onChange={(value) =>
                     updateChartConfig({ resultLimit: value ?? 50 })
-                  }
-                />
-                <NumberField
-                  label={
-                    chartConfig.request.view === "tracks"
-                      ? "Single Billboard min"
-                      : "Billboard min"
-                  }
-                  value={
-                    chartConfig.request.view === "tracks"
-                      ? chartConfig.request.filters.billboardSingleRankMin
-                      : chartConfig.request.filters.billboardRankMin
-                  }
-                  min={1}
-                  onChange={(value) =>
-                    chartConfig.request.view === "tracks"
-                      ? updateChartFilters({ billboardSingleRankMin: value })
-                      : updateChartFilters({ billboardRankMin: value })
-                  }
-                />
-                <NumberField
-                  label={
-                    chartConfig.request.view === "tracks"
-                      ? "Single Billboard max"
-                      : "Billboard max"
-                  }
-                  value={
-                    chartConfig.request.view === "tracks"
-                      ? chartConfig.request.filters.billboardSingleRankMax
-                      : chartConfig.request.filters.billboardRankMax
-                  }
-                  min={1}
-                  onChange={(value) =>
-                    chartConfig.request.view === "tracks"
-                      ? updateChartFilters({ billboardSingleRankMax: value })
-                      : updateChartFilters({ billboardRankMax: value })
-                  }
-                />
-                <NumberField
-                  label="VG Lista min"
-                  value={chartConfig.request.filters.vgListaRankMin}
-                  min={1}
-                  onChange={(vgListaRankMin) =>
-                    updateChartFilters({ vgListaRankMin })
-                  }
-                />
-                <NumberField
-                  label="VG Lista max"
-                  value={chartConfig.request.filters.vgListaRankMax}
-                  min={1}
-                  onChange={(vgListaRankMax) =>
-                    updateChartFilters({ vgListaRankMax })
                   }
                 />
                 <CountryListCriterion
@@ -13708,11 +13973,15 @@ export default function App() {
                             "billboardSingleDebut",
                             "vgLista",
                             "vgListaDebut",
+                            "tiISkuddet",
+                            "tiISkuddetDebut",
                             "trackRating",
                           ].includes(option.value)
                         : ![
                             "billboardSingle",
                             "billboardSingleDebut",
+                            "tiISkuddet",
+                            "tiISkuddetDebut",
                             "trackRating",
                           ].includes(option.value),
                     )
@@ -17837,6 +18106,172 @@ export default function App() {
               <SearchAdvancedFilters
                 activeFilterCount={advancedSearchFilterCount}
               >
+                <ChartFiltersDisclosure
+                  activeFilterCount={searchChartFilterCount}
+                >
+                  <ChartFilterSourceGroup
+                    title="US · Billboard"
+                    description={
+                      request.view === "tracks"
+                        ? "Album and single year-end chart metadata."
+                        : "Year-end album peak and first chart week."
+                    }
+                  >
+                    <NumberField
+                      label={
+                        request.view === "tracks"
+                          ? "Album rank min"
+                          : "Rank min"
+                      }
+                      value={currentFilters.billboardRankMin}
+                      min={1}
+                      onChange={(value) =>
+                        updateFilter("billboardRankMin", value)
+                      }
+                    />
+                    <NumberField
+                      label={
+                        request.view === "tracks"
+                          ? "Album rank max"
+                          : "Rank max"
+                      }
+                      value={currentFilters.billboardRankMax}
+                      min={1}
+                      onChange={(value) =>
+                        updateFilter("billboardRankMax", value)
+                      }
+                    />
+                    {request.view === "tracks" ? (
+                      <>
+                        <NumberField
+                          label="Single rank min"
+                          value={currentFilters.billboardSingleRankMin}
+                          min={1}
+                          onChange={(value) =>
+                            updateFilter("billboardSingleRankMin", value)
+                          }
+                        />
+                        <NumberField
+                          label="Single rank max"
+                          value={currentFilters.billboardSingleRankMax}
+                          min={1}
+                          onChange={(value) =>
+                            updateFilter("billboardSingleRankMax", value)
+                          }
+                        />
+                        <DateField
+                          label="Single debut from"
+                          value={currentFilters.billboardSingleDebutDateFrom}
+                          onChange={(value) =>
+                            updateFilter(
+                              "billboardSingleDebutDateFrom",
+                              value,
+                            )
+                          }
+                        />
+                        <DateField
+                          label="Single debut to"
+                          value={currentFilters.billboardSingleDebutDateTo}
+                          onChange={(value) =>
+                            updateFilter("billboardSingleDebutDateTo", value)
+                          }
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <WeekField
+                          label="Debut from"
+                          value={currentFilters.billboardDebutWeekFrom}
+                          onChange={(value) =>
+                            updateFilter("billboardDebutWeekFrom", value)
+                          }
+                        />
+                        <WeekField
+                          label="Debut to"
+                          value={currentFilters.billboardDebutWeekTo}
+                          onChange={(value) =>
+                            updateFilter("billboardDebutWeekTo", value)
+                          }
+                        />
+                      </>
+                    )}
+                  </ChartFilterSourceGroup>
+
+                  <ChartFilterSourceGroup
+                    title="NO · VG Lista"
+                    description="Official Norwegian weekly chart history."
+                  >
+                    <NumberField
+                      label="Rank min"
+                      value={currentFilters.vgListaRankMin}
+                      min={1}
+                      onChange={(value) =>
+                        updateFilter("vgListaRankMin", value)
+                      }
+                    />
+                    <NumberField
+                      label="Rank max"
+                      value={currentFilters.vgListaRankMax}
+                      min={1}
+                      onChange={(value) =>
+                        updateFilter("vgListaRankMax", value)
+                      }
+                    />
+                    <WeekField
+                      label="Debut from"
+                      value={currentFilters.vgListaDebutWeekFrom}
+                      onChange={(value) =>
+                        updateFilter("vgListaDebutWeekFrom", value)
+                      }
+                    />
+                    <WeekField
+                      label="Debut to"
+                      value={currentFilters.vgListaDebutWeekTo}
+                      onChange={(value) =>
+                        updateFilter("vgListaDebutWeekTo", value)
+                      }
+                    />
+                  </ChartFilterSourceGroup>
+
+                  {request.view === "tracks" ? (
+                    <ChartFilterSourceGroup
+                      title="NO · Ti i Skuddet"
+                      description="Unofficial Norwegian singles chart history."
+                    >
+                      <NumberField
+                        label="Rank min"
+                        value={currentFilters.tiISkuddetRankMin}
+                        min={1}
+                        onChange={(value) =>
+                          updateFilter("tiISkuddetRankMin", value)
+                        }
+                      />
+                      <NumberField
+                        label="Rank max"
+                        value={currentFilters.tiISkuddetRankMax}
+                        min={1}
+                        onChange={(value) =>
+                          updateFilter("tiISkuddetRankMax", value)
+                        }
+                      />
+                      <WeekField
+                        label="Debut from"
+                        value={currentFilters.tiISkuddetDebutWeekFrom}
+                        onChange={(value) =>
+                          updateFilter("tiISkuddetDebutWeekFrom", value)
+                        }
+                      />
+                      <WeekField
+                        label="Debut to"
+                        value={currentFilters.tiISkuddetDebutWeekTo}
+                        onChange={(value) =>
+                          updateFilter("tiISkuddetDebutWeekTo", value)
+                        }
+                      />
+                    </ChartFilterSourceGroup>
+                  ) : null}
+                </ChartFiltersDisclosure>
+
                 <div className="filter-grid search-advanced-filter-grid">
                   {request.view === "tracks" ? (
                     <>
@@ -17869,55 +18304,6 @@ export default function App() {
                       />
                     </>
                   )}
-                {request.view === "tracks" ? (
-                  <>
-                    <DateField
-                      label="Single chart debut from"
-                      value={currentFilters.billboardSingleDebutDateFrom}
-                      onChange={(value) =>
-                        updateFilter("billboardSingleDebutDateFrom", value)
-                      }
-                    />
-                    <DateField
-                      label="Single chart debut to"
-                      value={currentFilters.billboardSingleDebutDateTo}
-                      onChange={(value) =>
-                        updateFilter("billboardSingleDebutDateTo", value)
-                      }
-                    />
-                  </>
-                ) : (
-                  <>
-                    <WeekField
-                      label="Chart debut from"
-                      value={currentFilters.billboardDebutWeekFrom}
-                      onChange={(value) =>
-                        updateFilter("billboardDebutWeekFrom", value)
-                      }
-                    />
-                    <WeekField
-                      label="Chart debut to"
-                      value={currentFilters.billboardDebutWeekTo}
-                      onChange={(value) =>
-                        updateFilter("billboardDebutWeekTo", value)
-                      }
-                    />
-                  </>
-                )}
-                <WeekField
-                  label="VG Lista debut from"
-                  value={currentFilters.vgListaDebutWeekFrom}
-                  onChange={(value) =>
-                    updateFilter("vgListaDebutWeekFrom", value)
-                  }
-                />
-                <WeekField
-                  label="VG Lista debut to"
-                  value={currentFilters.vgListaDebutWeekTo}
-                  onChange={(value) =>
-                    updateFilter("vgListaDebutWeekTo", value)
-                  }
-                />
                 <CountryListCriterion
                   label="Origin countries"
                   values={currentFilters.originCountryCodes}
@@ -17968,58 +18354,6 @@ export default function App() {
                   />
                 </label>
 
-                <NumberField
-                  label={
-                    request.view === "tracks"
-                      ? "Album Billboard min"
-                      : "Billboard min"
-                  }
-                  value={currentFilters.billboardRankMin}
-                  min={1}
-                  onChange={(value) => updateFilter("billboardRankMin", value)}
-                />
-                <NumberField
-                  label={
-                    request.view === "tracks"
-                      ? "Album Billboard max"
-                      : "Billboard max"
-                  }
-                  value={currentFilters.billboardRankMax}
-                  min={1}
-                  onChange={(value) => updateFilter("billboardRankMax", value)}
-                />
-                {request.view === "tracks" ? (
-                  <>
-                    <NumberField
-                      label="Single Billboard min"
-                      value={currentFilters.billboardSingleRankMin}
-                      min={1}
-                      onChange={(value) =>
-                        updateFilter("billboardSingleRankMin", value)
-                      }
-                    />
-                    <NumberField
-                      label="Single Billboard max"
-                      value={currentFilters.billboardSingleRankMax}
-                      min={1}
-                      onChange={(value) =>
-                        updateFilter("billboardSingleRankMax", value)
-                      }
-                    />
-                  </>
-                ) : null}
-                <NumberField
-                  label="VG Lista min"
-                  value={currentFilters.vgListaRankMin}
-                  min={1}
-                  onChange={(value) => updateFilter("vgListaRankMin", value)}
-                />
-                <NumberField
-                  label="VG Lista max"
-                  value={currentFilters.vgListaRankMax}
-                  min={1}
-                  onChange={(value) => updateFilter("vgListaRankMax", value)}
-                />
                 <NumberField
                   label="Release from"
                   value={currentFilters.releaseYearFrom}
@@ -18215,7 +18549,12 @@ export default function App() {
                     .filter(
                       (option) =>
                         request.view === "tracks" ||
-                        option.value !== "billboardSingle",
+                        ![
+                          "billboardSingle",
+                          "billboardSingleDebut",
+                          "tiISkuddet",
+                          "tiISkuddetDebut",
+                        ].includes(option.value),
                     )
                     .map((option) => {
                       const checked = currentFilters.missingFields.includes(
@@ -18297,7 +18636,11 @@ export default function App() {
                     .filter(
                       (option) =>
                         request.view === "tracks" ||
-                        option.value !== "billboardSingleDebut",
+                        ![
+                          "billboardSingleDebut",
+                          "tiISkuddet",
+                          "tiISkuddetDebut",
+                        ].includes(option.value),
                     )
                     .map((option) => (
                     <label key={option.value}>
@@ -18357,6 +18700,14 @@ export default function App() {
                             {
                               value: "vgListaDebut",
                               label: "VG Lista debut week",
+                            },
+                            {
+                              value: "tiISkuddetRank",
+                              label: "Ti i Skuddet",
+                            },
+                            {
+                              value: "tiISkuddetDebut",
+                              label: "Ti i Skuddet debut week",
                             },
                             { value: "trackRating", label: "Track rating" },
                             { value: "trackNumber", label: "Track number" },

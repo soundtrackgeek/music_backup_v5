@@ -14,6 +14,7 @@ export const defaultBillboardSourcePath = "CSV_ALBUMS";
 export const defaultBillboardSinglesSourcePath = "CSV_SINGLES";
 export const defaultVgListaAlbumSourcePath = "CSV_ALBUMS_NO";
 export const defaultVgListaSinglesSourcePath = "CSV_SINGLES_NO";
+export const defaultTiISkuddetSourcePath = "CSV_TIISKUDDET_NO";
 export const defaultMusicBrainzCachePath =
   "MusicBrainz/musicbrainz_cache.db";
 export const defaultMusicBrainzOverlaySyncPath = "";
@@ -72,6 +73,11 @@ export function normalizeSettings(
       settings.vgListaSinglesSourcePath,
       billboardSinglesSourcePath,
       defaultVgListaSinglesSourcePath,
+    ),
+    tiISkuddetSourcePath: normalizeSiblingImportPath(
+      settings.tiISkuddetSourcePath,
+      billboardSinglesSourcePath,
+      defaultTiISkuddetSourcePath,
     ),
     deemixDownloadPath: normalizeOptionalPath(settings.deemixDownloadPath),
     deemixDownloadQuality: normalizeDeemixDownloadQuality(

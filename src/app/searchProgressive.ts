@@ -8,6 +8,31 @@ function hasRange(min: number | null, max: number | null) {
   return min != null || max != null;
 }
 
+export function countSearchChartFilters(
+  filters: BrowseFilters,
+  view: BrowseView,
+) {
+  return [
+    hasRange(filters.billboardRankMin, filters.billboardRankMax),
+    view === "tracks" &&
+      hasRange(filters.billboardSingleRankMin, filters.billboardSingleRankMax),
+    view === "tracks" &&
+      (filters.billboardSingleDebutDateFrom != null ||
+        filters.billboardSingleDebutDateTo != null),
+    view === "albums" &&
+      (filters.billboardDebutWeekFrom != null ||
+        filters.billboardDebutWeekTo != null),
+    hasRange(filters.vgListaRankMin, filters.vgListaRankMax),
+    filters.vgListaDebutWeekFrom != null ||
+      filters.vgListaDebutWeekTo != null,
+    view === "tracks" &&
+      hasRange(filters.tiISkuddetRankMin, filters.tiISkuddetRankMax),
+    view === "tracks" &&
+      (filters.tiISkuddetDebutWeekFrom != null ||
+        filters.tiISkuddetDebutWeekTo != null),
+  ].filter(Boolean).length;
+}
+
 export function countAdvancedSearchFilters(
   filters: BrowseFilters,
   view: BrowseView,
@@ -36,6 +61,11 @@ export function countAdvancedSearchFilters(
         filters.billboardDebutWeekTo != null),
     filters.vgListaDebutWeekFrom != null ||
       filters.vgListaDebutWeekTo != null,
+    view === "tracks" &&
+      hasRange(filters.tiISkuddetRankMin, filters.tiISkuddetRankMax),
+    view === "tracks" &&
+      (filters.tiISkuddetDebutWeekFrom != null ||
+        filters.tiISkuddetDebutWeekTo != null),
     hasRange(filters.releaseYearFrom, filters.releaseYearTo),
     hasRange(filters.totalMinutesMin, filters.totalMinutesMax),
     hasRange(filters.trackCountMin, filters.trackCountMax),

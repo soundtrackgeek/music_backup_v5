@@ -1848,6 +1848,7 @@ mod tests {
             listener.local_addr().expect("address")
         );
         let server = thread::spawn(move || {
+            let mut observed_requests = Vec::new();
             for request_index in 0..3 {
                 let (mut stream, _) = listener.accept().expect("accept mock request");
                 let mut request = Vec::new();
@@ -1863,37 +1864,23 @@ mod tests {
                     }
                 }
                 let request = String::from_utf8_lossy(&request);
-                let request_line = request.lines().next().unwrap_or_default();
+                let request_line = request.lines().next().unwrap_or_default().to_string();
                 let cookie_header = request
                     .lines()
                     .find(|line| line.to_ascii_lowercase().starts_with("cookie:"))
-                    .unwrap_or_default();
-                assert!(cookie_header.contains("arl=test-arl"));
+                    .unwrap_or_default()
+                    .to_string();
 
                 let (body, set_cookie) = match request_index {
-                    0 => {
-                        assert!(request_line.contains("method=album.getData"));
-                        assert!(request_line.contains("api_token=stale-token"));
-                        (
-                            r#"{"error":{"VALID_TOKEN_REQUIRED":"Invalid CSRF token"}}"#,
-                            "Set-Cookie: sid=session-123; Path=/; HttpOnly\r\n",
-                        )
-                    }
-                    1 => {
-                        assert!(request_line.contains("method=deezer.getUserData"));
-                        assert!(request_line.contains("api_token=null"));
-                        assert!(cookie_header.contains("sid=session-123"));
-                        (
-                            r#"{"error":[],"results":{"checkForm":"fresh-token","USER":{"USER_ID":"123","OPTIONS":{"license_token":"fresh-license","web_hq":true}}}}"#,
-                            "",
-                        )
-                    }
-                    _ => {
-                        assert!(request_line.contains("method=album.getData"));
-                        assert!(request_line.contains("api_token=fresh-token"));
-                        assert!(cookie_header.contains("sid=session-123"));
-                        (r#"{"error":[],"results":{"ALB_ID":"42"}}"#, "")
-                    }
+                    0 => (
+                        r#"{"error":{"VALID_TOKEN_REQUIRED":"Invalid CSRF token"}}"#,
+                        "Set-Cookie: sid=session-123; Path=/; HttpOnly\r\n",
+                    ),
+                    1 => (
+                        r#"{"error":[],"results":{"checkForm":"fresh-token","USER":{"USER_ID":"123","OPTIONS":{"license_token":"fresh-license","web_hq":true}}}}"#,
+                        "",
+                    ),
+                    _ => (r#"{"error":[],"results":{"ALB_ID":"42"}}"#, ""),
                 };
                 let response = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n{}\r\n{}",
@@ -1904,7 +1891,9 @@ mod tests {
                 stream
                     .write_all(response.as_bytes())
                     .expect("write mock response");
+                observed_requests.push((request_line, cookie_header));
             }
+            observed_requests
         });
 
         let endpoint_url = Url::parse(&endpoint).expect("mock endpoint URL");
@@ -1937,7 +1926,19 @@ mod tests {
         assert_eq!(session.api_token.as_str(), "fresh-token");
         assert_eq!(session.license_token.as_str(), "fresh-license");
         assert!(session.can_stream_hq);
-        server.join().expect("mock server");
+        let observed_requests = server.join().expect("mock server");
+        assert_eq!(observed_requests.len(), 3);
+        assert!(observed_requests
+            .iter()
+            .all(|(_, cookie)| cookie.contains("arl=test-arl")));
+        assert!(observed_requests[0].0.contains("method=album.getData"));
+        assert!(observed_requests[0].0.contains("api_token=stale-token"));
+        assert!(observed_requests[1].0.contains("method=deezer.getUserData"));
+        assert!(observed_requests[1].0.contains("api_token=null"));
+        assert!(observed_requests[1].1.contains("sid=session-123"));
+        assert!(observed_requests[2].0.contains("method=album.getData"));
+        assert!(observed_requests[2].0.contains("api_token=fresh-token"));
+        assert!(observed_requests[2].1.contains("sid=session-123"));
     }
 
     #[test]

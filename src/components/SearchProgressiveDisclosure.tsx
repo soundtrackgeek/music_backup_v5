@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, SlidersHorizontal, Sparkles } from "lucide-react";
+import { BarChart3, ChevronDown, SlidersHorizontal, Sparkles } from "lucide-react";
 
 type LunaCommandMode = "build" | "results";
 export type LunaCommandLaunch = {
@@ -216,7 +216,7 @@ export function SearchAdvancedFilters({
   return (
     <AdvancedDisclosure
       title="Advanced filters"
-      description="Lifecycle, MusicBrainz, metadata, file, and scoring controls."
+      description="Charts, lifecycle, MusicBrainz, metadata, file, and scoring controls."
       activeCount={activeFilterCount}
     >
       {children}
@@ -235,10 +235,63 @@ export function ChartAdvancedControls({
     <AdvancedDisclosure
       className="chart-advanced-controls"
       title="Advanced chart controls"
-      description="Presets, lifecycle, scoring, columns, and export settings."
+      description="Presets, chart sources, lifecycle, scoring, columns, and export settings."
       activeCount={activeControlCount}
     >
       {children}
     </AdvancedDisclosure>
+  );
+}
+
+export function ChartFiltersDisclosure({
+  activeFilterCount,
+  children,
+}: {
+  activeFilterCount: number;
+  children: ReactNode;
+}) {
+  return (
+    <details className="chart-filter-disclosure">
+      <summary>
+        <span className="search-disclosure-heading">
+          <span className="search-disclosure-icon" aria-hidden="true">
+            <BarChart3 size={18} />
+          </span>
+          <span>
+            <strong>Chart filters</strong>
+            <small>Rank and first-appearance controls grouped by source.</small>
+          </span>
+        </span>
+        <span className="search-advanced-summary-meta">
+          <span>
+            {activeFilterCount > 0
+              ? `${activeFilterCount} active`
+              : "Optional"}
+          </span>
+          <ChevronDown size={17} aria-hidden="true" />
+        </span>
+      </summary>
+      <div className="chart-filter-disclosure-content">{children}</div>
+    </details>
+  );
+}
+
+export function ChartFilterSourceGroup({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="chart-filter-source-group" aria-label={title}>
+      <header>
+        <strong>{title}</strong>
+        <small>{description}</small>
+      </header>
+      <div className="filter-grid chart-filter-source-fields">{children}</div>
+    </section>
   );
 }

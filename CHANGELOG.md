@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.93.0] - 2026-07-28
+### Added
+- Added Ti i Skuddet weekly singles imports from `CSV_TIISKUDDET_NO`, preserving all valid source rows in a dedicated SQLite table while enriching matched tracks with best rank and first chart week.
+- Added track-only Ti i Skuddet rank and debut-week filters, sorting, columns, chart rankings, Timeline source selection, and Luna Search/Chart/Playlist query fields.
+
+### Changed
+- Grouped Billboard, VG Lista, and Ti i Skuddet controls into a nested **Chart filters** disclosure inside Search's **Advanced filters** and Charts' **Advanced chart controls** so more chart sources can be added without expanding the primary filter layout.
+- Expanded the combined singles import to select Billboard, VG Lista, and Ti i Skuddet independently, with all three selected by default.
+- Bumped SQLite schema to version 37 and synchronized app metadata to `0.93.0`.
+
+### Fixed
+- Stabilized the authenticated Deemix gateway mock so its request assertions cannot reset the local connection during parallel Rust test runs.
+
 ## [0.92.2] - 2026-07-28
 ### Changed
 - Extended Luna's structured query plan with VG Lista rank, debut-week, missing-data, sorting, and chart-ranking fields.

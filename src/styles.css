@@ -822,6 +822,67 @@ button {
   padding-top: 14px;
 }
 
+.chart-filter-disclosure {
+  margin-top: 14px;
+  border: 1px solid #d7e2de;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.chart-filter-disclosure > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 14px;
+}
+
+.chart-filter-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.chart-filter-disclosure[open] > summary {
+  border-bottom: 1px solid #dfe7e4;
+}
+
+.chart-filter-disclosure[open] .search-advanced-summary-meta svg {
+  transform: rotate(180deg);
+}
+
+.chart-filter-disclosure-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.chart-filter-source-group {
+  min-width: 0;
+  border: 1px solid #e0e8e5;
+  border-radius: 9px;
+  background: #f8faf9;
+  padding: 12px;
+}
+
+.chart-filter-source-group > header {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.chart-filter-source-group > header strong {
+  color: #26342f;
+  font-size: 13px;
+}
+
+.chart-filter-source-group > header small {
+  color: #74817d;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.chart-filter-source-fields {
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
+}
+
 .natural-query-panel {
   display: grid;
   gap: 14px;
@@ -8127,6 +8188,8 @@ button {
 :root[data-theme="dark"] .natural-query-panel,
 :root[data-theme="dark"] .search-luna-command-area,
 :root[data-theme="dark"] .search-advanced-filters,
+:root[data-theme="dark"] .chart-filter-disclosure,
+:root[data-theme="dark"] .chart-filter-source-group,
 :root[data-theme="dark"] .import-panel,
 :root[data-theme="dark"] .table-panel,
 :root[data-theme="dark"] .artist-detail-shell,
@@ -8158,6 +8221,14 @@ button {
 
 :root[data-theme="dark"] .search-disclosure-heading strong {
   color: #dce7e3;
+}
+
+:root[data-theme="dark"] .chart-filter-source-group > header strong {
+  color: #dce7e3;
+}
+
+:root[data-theme="dark"] .chart-filter-source-group > header small {
+  color: #98a7a2;
 }
 
 :root[data-theme="dark"] .insight-action-dock {

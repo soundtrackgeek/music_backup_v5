@@ -33,8 +33,8 @@ use models::{
     MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
     PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch,
-    StatisticsResponse, TrackDebutTimelineResponse, VgListaImportSummary, YearProgressRequest,
-    YearProgressStats,
+    StatisticsResponse, TiISkuddetImportSummary, TrackDebutTimelineResponse, VgListaImportSummary,
+    YearProgressRequest, YearProgressStats,
 };
 #[cfg(not(test))]
 use models::{ImportPreview, ImportRun, ImportSummary, LibraryStatus};
@@ -743,10 +743,10 @@ async fn get_statistics(app: AppHandle) -> Result<StatisticsResponse, String> {
 async fn get_album_debut_timeline(
     app: AppHandle,
     selected_year: Option<i32>,
-    chart_country: String,
+    chart_source: String,
 ) -> Result<AlbumDebutTimelineResponse, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        db::album_debut_timeline_for_app(&app, selected_year, chart_country)
+        db::album_debut_timeline_for_app(&app, selected_year, chart_source)
     })
     .await
     .map_err(|error| format!("Album debut timeline task failed: {error}"))?
@@ -758,10 +758,10 @@ async fn get_album_debut_timeline(
 async fn get_track_debut_timeline(
     app: AppHandle,
     selected_year: Option<i32>,
-    chart_country: String,
+    chart_source: String,
 ) -> Result<TrackDebutTimelineResponse, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        db::track_debut_timeline_for_app(&app, selected_year, chart_country)
+        db::track_debut_timeline_for_app(&app, selected_year, chart_source)
     })
     .await
     .map_err(|error| format!("Track debut timeline task failed: {error}"))?
@@ -964,6 +964,20 @@ async fn import_vg_lista_singles(
     })
     .await
     .map_err(|error| format!("VG Lista singles import task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn import_ti_i_skuddet_singles(
+    app: AppHandle,
+    source_path: String,
+) -> Result<TiISkuddetImportSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::import_ti_i_skuddet_singles_for_app(&app, source_path)
+    })
+    .await
+    .map_err(|error| format!("Ti i Skuddet import task failed: {error}"))?
     .map_err(|error| error.to_string())
 }
 
@@ -1232,6 +1246,7 @@ pub fn run() {
             import_billboard_singles,
             import_vg_lista_albums,
             import_vg_lista_singles,
+            import_ti_i_skuddet_singles,
             get_album_cover_data_url,
             search_library,
             list_artists,
