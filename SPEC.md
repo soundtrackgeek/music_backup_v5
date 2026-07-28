@@ -60,7 +60,7 @@ Core principles:
 | Artists | Implemented | Album-artist index, artist summary stats, album lists, cover board, MusicBrainz pure-official-album discography status, and exports. |
 | Genres | Implemented | Canonical-genre index, genre summary stats, album lists, and exports. |
 | Tools | Implemented | Query-backed validation issue lists, severity, progress, pagination, sorting, counts, exports, and guided whitespace repair with exact diffs, history, and undo. |
-| Timeline | Implemented | Standalone dark album-debut ribbon with year/preset/custom-month/week navigation, chronological/score/Billboard/title/artist/manual cover ordering, fullscreen hover previews, ordered playlist handoff, album entry, responsive layout, and fullscreen. |
+| Timeline | Implemented | Standalone dark album-debut ribbon with a luminous selected-year stage, decade nodes, long cover connectors, year/preset/custom-month/week navigation, chronological/score/Billboard/title/artist/manual cover ordering, fullscreen hover previews, ordered playlist handoff, album entry, responsive layout, and fullscreen. |
 | Imports | Implemented | MusicBee TSV import, cover art import, Billboard album CSV import, Billboard singles CSV import, progress, and import history. |
 | Settings | Implemented | Secure Windows OpenAI key storage, theme, backup retention, backup restore, Performance Proof diagnostics, MusicBrainz cache status, country flag display, and default left/right sidebar visibility. |
 
@@ -195,7 +195,7 @@ Album chart files:
 - `First Appearance` is a calendar month/year such as `Mar 1989`; `First Appearance Week` is week 1–53. January/December boundary rows are resolved to the adjacent canonical ISO week-year when necessary while retaining the source calendar month/year for display.
 - Matching normalizes case, punctuation, and diacritics.
 - Imported rows are persisted, linked to albums when possible, and collapsed to the best stored album rank plus the earliest Billboard chart debut.
-- Search and Charts expose chart-debut week from/to filters, columns, sorting, and exports. The standalone Timeline workspace adds a decade-spanning album ribbon; Spring, Summer, Fall, Winter, Christmas, New Year, and full-year presets; custom single-month or wrapping month-range views; chronological, Album Score, Billboard rank, title, artist, and manual cover ordering; exact ordered-album playlist handoff; and fullscreen hover artwork. Luna Search, Chart, and Playlist Builder plans can compile chart-debut periods and named seasons to local week ranges.
+- Search and Charts expose chart-debut week from/to filters, columns, sorting, and exports. The standalone Timeline workspace adds a decade-spanning album ribbon with luminous decade nodes, long cover connectors, and a motion-aware selected-year light stage; Spring, Summer, Fall, Winter, Christmas, New Year, and full-year presets; custom single-month or wrapping month-range views; chronological, Album Score, Billboard rank, title, artist, and manual cover ordering; exact ordered-album playlist handoff; and fullscreen hover artwork. Luna Search, Chart, and Playlist Builder plans can compile chart-debut periods and named seasons to local week ranges.
 
 Default singles chart path: `CSV_SINGLES`
 

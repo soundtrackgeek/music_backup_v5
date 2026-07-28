@@ -13889,6 +13889,9 @@ button {
   --album-time-ink: #edf0f3;
   --album-time-accent: #ed6f63;
   --album-time-gold: #d79a57;
+  --album-time-upper-rail-y: 76px;
+  --album-time-axis-y: 57%;
+  --album-time-marker-stem: 48px;
   position: relative;
   display: grid;
   grid-template-rows: auto 329px auto minmax(218px, auto) auto;
@@ -14313,33 +14316,126 @@ button {
   transform: translate(-50%, -5px);
 }
 
+.album-time-ribbon-decade-rail {
+  position: absolute;
+  z-index: 2;
+  top: var(--album-time-upper-rail-y);
+  right: 48px;
+  left: 48px;
+  height: 1px;
+  background: rgba(137, 105, 75, 0.58);
+  box-shadow: 0 0 18px rgba(215, 154, 87, 0.07);
+}
+
+.album-time-ribbon-decade-nodes {
+  position: absolute;
+  z-index: 6;
+  top: calc(var(--album-time-upper-rail-y) - 9px);
+  right: 48px;
+  left: 48px;
+  height: 18px;
+  pointer-events: none;
+}
+
+.album-time-ribbon-decade-nodes span {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #ffd0a3;
+  border-radius: 50%;
+  background: #e7a167;
+  box-shadow:
+    0 0 0 3px rgba(215, 154, 87, 0.1),
+    0 0 13px rgba(236, 164, 98, 0.68);
+  transform: translate(-50%, -50%);
+}
+
+.album-time-ribbon-decade-nodes span.active {
+  width: 17px;
+  height: 17px;
+  border-width: 4px;
+  background: #ff8173;
+  box-shadow:
+    0 0 0 6px rgba(237, 111, 99, 0.18),
+    0 0 22px rgba(255, 128, 105, 0.9);
+  animation: album-time-node-breathe 4.8s ease-in-out infinite;
+}
+
 .album-time-ribbon-focus {
   position: absolute;
   z-index: 0;
-  top: 76px;
+  top: var(--album-time-upper-rail-y);
   bottom: 0;
   left: var(--album-time-active-x);
-  width: clamp(260px, 23vw, 360px);
-  border-right: 1px solid rgba(237, 111, 99, 0.25);
-  border-left: 1px solid rgba(237, 111, 99, 0.25);
-  background: rgba(237, 111, 99, 0.055);
+  width: clamp(390px, 34vw, 590px);
+  background:
+    radial-gradient(
+      ellipse at 50% 22%,
+      rgba(255, 132, 105, 0.24) 0%,
+      rgba(237, 111, 99, 0.13) 34%,
+      rgba(119, 58, 61, 0.07) 58%,
+      transparent 78%
+    ),
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(237, 111, 99, 0.035) 20%,
+      rgba(237, 111, 99, 0.12) 50%,
+      rgba(237, 111, 99, 0.035) 80%,
+      transparent 100%
+    );
+  transform: translateX(-50%);
+  transform-origin: 50% 0;
+  animation: album-time-focus-breathe 5.8s ease-in-out infinite;
+}
+
+.album-time-ribbon-focus::before {
+  position: absolute;
+  inset: 0 27%;
+  border-right: 1px solid rgba(237, 111, 99, 0.2);
+  border-left: 1px solid rgba(237, 111, 99, 0.2);
+  background: linear-gradient(
+    180deg,
+    rgba(237, 111, 99, 0.1),
+    rgba(237, 111, 99, 0.035) 62%,
+    rgba(237, 111, 99, 0.1)
+  );
+  content: "";
+}
+
+.album-time-ribbon-focus::after {
+  position: absolute;
+  top: -14px;
+  bottom: -18px;
+  left: 50%;
+  width: 90px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 130, 102, 0.16),
+    transparent
+  );
+  filter: blur(13px);
+  content: "";
   transform: translateX(-50%);
 }
 
 .album-time-ribbon-baseline {
   position: absolute;
   z-index: 2;
-  top: 57%;
+  top: var(--album-time-axis-y);
   right: 48px;
   left: 48px;
   height: 1px;
-  background: #766451;
+  background: rgba(133, 106, 78, 0.78);
+  box-shadow: 0 0 13px rgba(215, 154, 87, 0.06);
 }
 
 .album-time-ribbon-year-ticks {
   position: absolute;
   z-index: 6;
-  top: calc(57% - 10px);
+  top: calc(var(--album-time-axis-y) - 10px);
   right: 48px;
   left: 48px;
   height: 21px;
@@ -14348,11 +14444,12 @@ button {
 .album-time-ribbon-year-ticks button {
   position: absolute;
   top: 7px;
-  width: 6px;
+  width: 3px;
   height: 8px;
   padding: 0;
-  border-radius: 2px;
-  background: #a48663;
+  border-radius: 3px;
+  background: #ad8d69;
+  box-shadow: 0 0 6px rgba(213, 150, 90, 0.16);
   transform: translateX(-50%);
   cursor: pointer;
 }
@@ -14380,7 +14477,7 @@ button {
 .album-time-ribbon-markers {
   position: absolute;
   z-index: 5;
-  inset: 56px 48px 0;
+  inset: 0 48px;
   pointer-events: none;
 }
 
@@ -14397,21 +14494,21 @@ button {
 }
 
 .album-time-ribbon-marker.above {
-  bottom: 50%;
-  margin-bottom: 26px;
+  bottom: calc(100% - var(--album-time-axis-y));
+  margin-bottom: var(--album-time-marker-stem);
 }
 
 .album-time-ribbon-marker.below {
-  top: 50%;
-  margin-top: 26px;
+  top: var(--album-time-axis-y);
+  margin-top: var(--album-time-marker-stem);
 }
 
 .album-time-ribbon-marker::after {
   position: absolute;
   left: 50%;
   width: 1px;
-  height: 27px;
-  background: #6e6254;
+  height: calc(var(--album-time-marker-stem) + 1px);
+  background: linear-gradient(#8f765c, #5f554b);
   content: "";
 }
 
@@ -14441,12 +14538,34 @@ button {
 .album-time-ribbon-active-line {
   position: absolute;
   z-index: 3;
-  top: 55px;
+  top: var(--album-time-upper-rail-y);
   bottom: 0;
   left: var(--album-time-active-x);
   width: 1px;
-  background: var(--album-time-accent);
+  background: linear-gradient(
+    180deg,
+    #ff9a78 0%,
+    #ed6f63 52%,
+    #ffb078 100%
+  );
+  box-shadow:
+    0 0 7px rgba(255, 133, 104, 0.8),
+    0 0 22px rgba(237, 111, 99, 0.48);
   transform: translateX(-50%);
+}
+
+.album-time-ribbon-active-line::before {
+  position: absolute;
+  inset: -4px -12px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 133, 104, 0.22),
+    transparent
+  );
+  filter: blur(7px);
+  content: "";
+  animation: album-time-beam-breathe 3.8s ease-in-out infinite;
 }
 
 .album-time-ribbon-active-line span {
@@ -14457,7 +14576,44 @@ button {
   height: 12px;
   border: 2px solid #ffae8a;
   background: var(--album-time-accent);
+  box-shadow: 0 0 17px rgba(255, 140, 104, 0.7);
   transform: translate(-50%, 50%) rotate(45deg);
+}
+
+@keyframes album-time-focus-breathe {
+  0%,
+  100% {
+    opacity: 0.82;
+    transform: translateX(-50%) scaleX(0.985);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) scaleX(1.025);
+  }
+}
+
+@keyframes album-time-node-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 6px rgba(237, 111, 99, 0.16),
+      0 0 18px rgba(255, 128, 105, 0.76);
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px rgba(237, 111, 99, 0.22),
+      0 0 28px rgba(255, 151, 117, 1);
+  }
+}
+
+@keyframes album-time-beam-breathe {
+  0%,
+  100% {
+    opacity: 0.56;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .album-time-ribbon-weeks {
@@ -14982,6 +15138,9 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .album-time-ribbon-focus,
+  .album-time-ribbon-decade-nodes span.active,
+  .album-time-ribbon-active-line::before,
   .album-time-ribbon-covers > button,
   .album-time-ribbon-loading-bar,
   .album-time-ribbon-skeleton-title,
@@ -15010,6 +15169,8 @@ button {
   }
 
   .album-time-ribbon-labels,
+  .album-time-ribbon-decade-rail,
+  .album-time-ribbon-decade-nodes,
   .album-time-ribbon-year-ticks,
   .album-time-ribbon-markers,
   .album-time-ribbon-baseline {
@@ -15100,11 +15261,14 @@ button {
   }
 
   .album-time-ribbon-labels span:not(.active),
+  .album-time-ribbon-decade-nodes span:not(.active),
   .album-time-ribbon-marker:not(.active) {
     display: none;
   }
 
   .album-time-ribbon-labels,
+  .album-time-ribbon-decade-rail,
+  .album-time-ribbon-decade-nodes,
   .album-time-ribbon-year-ticks,
   .album-time-ribbon-markers,
   .album-time-ribbon-baseline {

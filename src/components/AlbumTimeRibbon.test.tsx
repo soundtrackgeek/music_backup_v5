@@ -104,6 +104,35 @@ function visibleCoverTitles() {
 }
 
 describe("AlbumTimeRibbon", () => {
+  it("renders the selected-year light stage and a node for every year label", () => {
+    const { container } = render(
+      <AlbumTimeRibbon
+        data={response()}
+        error={null}
+        isLoading={false}
+        onCreatePlaylist={vi.fn()}
+        onOpenAlbum={vi.fn()}
+        onOpenSearch={vi.fn()}
+        onRetry={vi.fn()}
+        onSelectYear={vi.fn()}
+      />,
+    );
+
+    const labels = container.querySelectorAll(".album-time-ribbon-labels span");
+    const nodes = container.querySelectorAll(
+      ".album-time-ribbon-decade-nodes span",
+    );
+
+    expect(container.querySelector(".album-time-ribbon-decade-rail")).toBeInTheDocument();
+    expect(container.querySelector(".album-time-ribbon-focus")).toBeInTheDocument();
+    expect(container.querySelector(".album-time-ribbon-active-line")).toBeInTheDocument();
+    expect(container.querySelector(".album-time-ribbon-marker.active")).not.toBeInTheDocument();
+    expect(nodes).toHaveLength(labels.length);
+    expect(
+      container.querySelectorAll(".album-time-ribbon-decade-nodes span.active"),
+    ).toHaveLength(1);
+  });
+
   it("offers every preset and hands the selected period to playlists", async () => {
     const user = userEvent.setup();
     const onCreatePlaylist = vi.fn();

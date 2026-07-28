@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.89.1] - 2026-07-28
+### Changed
+- Restored the Timeline proposal's cinematic selected-year treatment with a warm breathing light stage, luminous decade rail and nodes, a glowing year beam, and longer cover connectors aligned to the central axis.
+- Kept the selected-year beam visually clear by omitting its redundant representative cover marker while preserving year selection through the interactive axis.
+- Bumped synchronized app metadata to `0.89.1`.
+
 ## [0.89.0] - 2026-07-28
 ### Added
 - Added Timeline album-strip ordering by Billboard first-appearance week, Album Score, Billboard rank, album title, artist, or a manual custom order.

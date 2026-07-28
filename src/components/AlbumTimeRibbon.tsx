@@ -925,6 +925,24 @@ export function AlbumTimeRibbon({
           ))}
         </div>
 
+        <div className="album-time-ribbon-decade-rail" aria-hidden="true" />
+        <div className="album-time-ribbon-decade-nodes" aria-hidden="true">
+          {labels.map((year) => (
+            <span
+              className={year === selectedYear ? "active" : ""}
+              style={{
+                left: `${yearPosition(
+                  year,
+                  firstYear,
+                  lastYear,
+                  selectedYear,
+                )}%`,
+              }}
+              key={`decade-node-${year}`}
+            />
+          ))}
+        </div>
+
         <div className="album-time-ribbon-focus" aria-hidden="true" />
         <div className="album-time-ribbon-baseline" aria-hidden="true" />
         <div className="album-time-ribbon-year-ticks" role="list" aria-label="Chart years">
@@ -958,7 +976,7 @@ export function AlbumTimeRibbon({
         >
           {markerYears.map((year, index) => {
             const album = year.representativeAlbum;
-            if (!album) {
+            if (!album || year.year === selectedYear) {
               return null;
             }
             const side = index % 2 === 0 ? "above" : "below";
