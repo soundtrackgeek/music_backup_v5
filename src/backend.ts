@@ -12,6 +12,8 @@ export { isTauriRuntime } from "./backend/tauriClient";
 import {
   defaultBillboardSinglesSourcePath,
   defaultBillboardSourcePath,
+  defaultVgListaAlbumSourcePath,
+  defaultVgListaSinglesSourcePath,
   defaultCoverSourcePath,
   defaultImportSourcePath,
   defaultMusicBrainzCachePath,
@@ -87,6 +89,8 @@ import {
 export {
   defaultBillboardSinglesSourcePath,
   defaultBillboardSourcePath,
+  defaultVgListaAlbumSourcePath,
+  defaultVgListaSinglesSourcePath,
   defaultCoverSourcePath,
   defaultImportSourcePath,
   defaultMusicBrainzCachePath,
@@ -149,6 +153,7 @@ import type {
   TrackDebutTimelineTrack,
   BillboardImportSummary,
   BillboardSinglesImportSummary,
+  VgListaImportSummary,
   BrowseFilters,
   BrowseRequest,
   BrowseResponse,
@@ -601,13 +606,17 @@ function mockAlbumDebutTimeline(
   };
 }
 
-export async function getAlbumDebutTimeline(selectedYear: number | null = null) {
+export async function getAlbumDebutTimeline(
+  selectedYear: number | null = null,
+  chartCountry: "US" | "NO" = "US",
+) {
   if (!isTauriRuntime()) {
     return mockAlbumDebutTimeline(selectedYear);
   }
 
   return invoke<AlbumDebutTimelineResponse>("get_album_debut_timeline", {
     selectedYear,
+    chartCountry,
   });
 }
 
@@ -696,13 +705,17 @@ function mockTrackDebutTimeline(
   };
 }
 
-export async function getTrackDebutTimeline(selectedYear: number | null = null) {
+export async function getTrackDebutTimeline(
+  selectedYear: number | null = null,
+  chartCountry: "US" | "NO" = "US",
+) {
   if (!isTauriRuntime()) {
     return mockTrackDebutTimeline(selectedYear);
   }
 
   return invoke<TrackDebutTimelineResponse>("get_track_debut_timeline", {
     selectedYear,
+    chartCountry,
   });
 }
 
@@ -2857,6 +2870,46 @@ export async function importBillboardSingles(sourcePath: string) {
   });
 }
 
+export async function importVgListaAlbums(sourcePath: string) {
+  if (!isTauriRuntime()) {
+    const matchedItems = mockRows.filter(
+      (row) => row.trackId === null && row.vgListaRank != null,
+    ).length;
+    return {
+      sourcePath,
+      filesScanned: 59,
+      chartEntries: 52_000,
+      matchedItems,
+      datedItems: matchedItems,
+      durationMs: 0,
+    } satisfies VgListaImportSummary;
+  }
+
+  return invoke<VgListaImportSummary>("import_vg_lista_albums", {
+    sourcePath,
+  });
+}
+
+export async function importVgListaSingles(sourcePath: string) {
+  if (!isTauriRuntime()) {
+    const matchedItems = mockRows.filter(
+      (row) => row.trackId !== null && row.vgListaRank != null,
+    ).length;
+    return {
+      sourcePath,
+      filesScanned: 69,
+      chartEntries: 76_000,
+      matchedItems,
+      datedItems: matchedItems,
+      durationMs: 0,
+    } satisfies VgListaImportSummary;
+  }
+
+  return invoke<VgListaImportSummary>("import_vg_lista_singles", {
+    sourcePath,
+  });
+}
+
 export async function getAlbumCoverDataUrl(albumId: string) {
   if (!isTauriRuntime()) {
     return null;
@@ -2923,6 +2976,10 @@ export async function searchLibrary(request: BrowseRequest) {
       request.filters.billboardSingleDebutDateTo;
     const billboardDebutWeekFrom = request.filters.billboardDebutWeekFrom;
     const billboardDebutWeekTo = request.filters.billboardDebutWeekTo;
+    const vgListaRankMin = request.filters.vgListaRankMin;
+    const vgListaRankMax = request.filters.vgListaRankMax;
+    const vgListaDebutWeekFrom = request.filters.vgListaDebutWeekFrom;
+    const vgListaDebutWeekTo = request.filters.vgListaDebutWeekTo;
     const lovedTracksMin = request.filters.lovedTracksMin;
     const lovedTracksMax = request.filters.lovedTracksMax;
     const ratingCompletenessMin = normalizePercentFilter(
@@ -3005,6 +3062,18 @@ export async function searchLibrary(request: BrowseRequest) {
             billboardSingleDebutDateFrom,
             billboardSingleDebutDateTo,
           )) &&
+        matchesNumberRange(
+          row.vgListaRank,
+          vgListaRankMin,
+          vgListaRankMax,
+        ) &&
+        matchesIsoWeekRange(
+          row.vgListaDebutWeekKey,
+          row.vgListaDebutYear,
+          row.vgListaDebutWeek,
+          vgListaDebutWeekFrom,
+          vgListaDebutWeekTo,
+        ) &&
         (lovedTracksMin == null || lovedTracks >= lovedTracksMin) &&
         (lovedTracksMax == null || lovedTracks <= lovedTracksMax) &&
         (ratingCompletenessMin == null ||

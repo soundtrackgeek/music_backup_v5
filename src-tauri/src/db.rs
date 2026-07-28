@@ -23,7 +23,8 @@ use crate::models::{
     PerformanceProbeOperation, PerformanceProbeResponse, RatingBucket, RatingEvent,
     RatingHistoryPoint, RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart,
     SavedSearch, StatisticsResponse, TextFilter, TrackDebutTimelineResponse,
-    TrackDebutTimelineTrack, TrackDebutTimelineYear, YearProgressRequest, YearProgressStats,
+    TrackDebutTimelineTrack, TrackDebutTimelineYear, VgListaImportSummary, YearProgressRequest,
+    YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, NaiveDate, Utc, Weekday};
@@ -71,6 +72,8 @@ const DEFAULT_IMPORT_SOURCE_PATH: &str = "musicbee-library.tsv";
 const DEFAULT_COVER_SOURCE_PATH: &str = "AlbumCovers";
 const DEFAULT_BILLBOARD_SOURCE_PATH: &str = "CSV_ALBUMS";
 const DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES";
+const DEFAULT_VG_LISTA_ALBUM_SOURCE_PATH: &str = "CSV_ALBUMS_NO";
+const DEFAULT_VG_LISTA_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES_NO";
 const DEFAULT_DEEMIX_DOWNLOAD_PATH: &str = "";
 const DEFAULT_DEEMIX_DOWNLOAD_QUALITY: &str = "mp3_320";
 const DEFAULT_DEEMIX_DOWNLOAD_FALLBACK: bool = true;
@@ -177,6 +180,39 @@ struct BillboardSingleTrackCandidate {
     debut_month: Option<i32>,
     debut_week: Option<i32>,
     debut_week_key: Option<String>,
+    entry_indexes: Vec<usize>,
+}
+
+#[derive(Debug, Clone)]
+struct VgListaChartEntry {
+    source_file: String,
+    year: i32,
+    week: i32,
+    rank: i32,
+    artist: String,
+    title: String,
+    artist_key: String,
+    title_key: String,
+    week_date: String,
+    month: i32,
+    week_key: String,
+}
+
+#[derive(Debug)]
+struct VgListaTrackCandidate {
+    track_id: i64,
+    album_artist_key: String,
+    year: Option<i32>,
+    normalized_rating: Option<i32>,
+    has_cover: bool,
+    source_artist_key: String,
+    rank: i32,
+    chart_year: i32,
+    debut_date: String,
+    debut_year: i32,
+    debut_month: i32,
+    debut_week: i32,
+    debut_week_key: String,
     entry_indexes: Vec<usize>,
 }
 
@@ -407,7 +443,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_five_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_six_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -499,6 +535,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             billboard_single_debut_month INTEGER,
             billboard_single_debut_week INTEGER,
             billboard_single_debut_week_key TEXT,
+            vg_lista_rank INTEGER,
+            vg_lista_year INTEGER,
+            vg_lista_debut_date TEXT,
+            vg_lista_debut_year INTEGER,
+            vg_lista_debut_month INTEGER,
+            vg_lista_debut_week INTEGER,
+            vg_lista_debut_week_key TEXT,
             row_hash TEXT NOT NULL
         );
 
@@ -529,7 +572,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             billboard_debut_year INTEGER,
             billboard_debut_month INTEGER,
             billboard_debut_week INTEGER,
-            billboard_debut_week_key TEXT
+            billboard_debut_week_key TEXT,
+            vg_lista_rank INTEGER,
+            vg_lista_year INTEGER,
+            vg_lista_debut_year INTEGER,
+            vg_lista_debut_month INTEGER,
+            vg_lista_debut_week INTEGER,
+            vg_lista_debut_week_key TEXT
         );
 
         CREATE TABLE IF NOT EXISTS album_covers (
@@ -585,6 +634,38 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             imported_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS vg_lista_album_chart_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            week INTEGER NOT NULL,
+            rank INTEGER NOT NULL,
+            artist TEXT NOT NULL,
+            title TEXT NOT NULL,
+            artist_key TEXT NOT NULL,
+            title_key TEXT NOT NULL,
+            week_date TEXT NOT NULL,
+            week_key TEXT NOT NULL,
+            matched_album_id TEXT REFERENCES albums(id) ON DELETE SET NULL,
+            imported_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS vg_lista_single_chart_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            week INTEGER NOT NULL,
+            rank INTEGER NOT NULL,
+            artist TEXT NOT NULL,
+            title TEXT NOT NULL,
+            artist_key TEXT NOT NULL,
+            title_key TEXT NOT NULL,
+            week_date TEXT NOT NULL,
+            week_key TEXT NOT NULL,
+            matched_track_id INTEGER REFERENCES tracks(id) ON DELETE SET NULL,
+            imported_at TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_tracks_album_id ON tracks(album_id);
         CREATE INDEX IF NOT EXISTS idx_tracks_year ON tracks(year);
         CREATE INDEX IF NOT EXISTS idx_tracks_rating ON tracks(normalized_rating);
@@ -610,6 +691,14 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             ON billboard_single_chart_entries(matched_track_id);
         CREATE INDEX IF NOT EXISTS idx_billboard_single_chart_entries_year_rank
             ON billboard_single_chart_entries(year, rank);
+        CREATE INDEX IF NOT EXISTS idx_vg_lista_album_chart_entries_match
+            ON vg_lista_album_chart_entries(matched_album_id);
+        CREATE INDEX IF NOT EXISTS idx_vg_lista_album_chart_entries_week_rank
+            ON vg_lista_album_chart_entries(year, week, rank);
+        CREATE INDEX IF NOT EXISTS idx_vg_lista_single_chart_entries_match
+            ON vg_lista_single_chart_entries(matched_track_id);
+        CREATE INDEX IF NOT EXISTS idx_vg_lista_single_chart_entries_week_rank
+            ON vg_lista_single_chart_entries(year, week, rank);
 
         CREATE VIRTUAL TABLE IF NOT EXISTS album_search_fts USING fts5(
             album_id UNINDEXED,
@@ -798,6 +887,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             cover_source_path TEXT NOT NULL DEFAULT 'AlbumCovers',
             billboard_source_path TEXT NOT NULL DEFAULT 'CSV_ALBUMS',
             billboard_singles_source_path TEXT NOT NULL DEFAULT 'CSV_SINGLES',
+            vg_lista_album_source_path TEXT NOT NULL DEFAULT 'CSV_ALBUMS_NO',
+            vg_lista_singles_source_path TEXT NOT NULL DEFAULT 'CSV_SINGLES_NO',
             deemix_download_path TEXT NOT NULL DEFAULT '',
             deemix_download_quality TEXT NOT NULL DEFAULT 'mp3_320',
             deemix_download_fallback INTEGER NOT NULL DEFAULT 1,
@@ -1175,6 +1266,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_billboard_chart_entries_table(conn)?;
     ensure_track_billboard_single_columns(conn)?;
     ensure_billboard_single_chart_entries_table(conn)?;
+    ensure_vg_lista_schema(conn)?;
     ensure_app_settings_musicbrainz_columns(conn)?;
     ensure_app_settings_musicbrainz_sync_columns(conn)?;
     ensure_app_settings_update_columns(conn)?;
@@ -1192,7 +1284,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 35;
+        PRAGMA user_version = 36;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -1402,6 +1494,14 @@ fn ensure_app_settings_import_columns(conn: &Connection) -> Result<()> {
         (
             "billboard_singles_source_path",
             "TEXT NOT NULL DEFAULT 'CSV_SINGLES'",
+        ),
+        (
+            "vg_lista_album_source_path",
+            "TEXT NOT NULL DEFAULT 'CSV_ALBUMS_NO'",
+        ),
+        (
+            "vg_lista_singles_source_path",
+            "TEXT NOT NULL DEFAULT 'CSV_SINGLES_NO'",
         ),
     ] {
         if !schema_column_exists(conn, "app_settings", name)? {
@@ -2019,6 +2119,93 @@ fn ensure_billboard_single_chart_entries_table(conn: &Connection) -> Result<()> 
     Ok(())
 }
 
+fn ensure_vg_lista_schema(conn: &Connection) -> Result<()> {
+    for (name, definition) in [
+        ("vg_lista_rank", "INTEGER"),
+        ("vg_lista_year", "INTEGER"),
+        ("vg_lista_debut_year", "INTEGER"),
+        ("vg_lista_debut_month", "INTEGER"),
+        ("vg_lista_debut_week", "INTEGER"),
+        ("vg_lista_debut_week_key", "TEXT"),
+    ] {
+        if !schema_column_exists(conn, "albums", name)? {
+            let sql = format!("ALTER TABLE albums ADD COLUMN {name} {definition}");
+            conn.execute_batch(&sql)
+                .with_context(|| format!("Could not add albums.{name}"))?;
+        }
+    }
+
+    for (name, definition) in [
+        ("vg_lista_rank", "INTEGER"),
+        ("vg_lista_year", "INTEGER"),
+        ("vg_lista_debut_date", "TEXT"),
+        ("vg_lista_debut_year", "INTEGER"),
+        ("vg_lista_debut_month", "INTEGER"),
+        ("vg_lista_debut_week", "INTEGER"),
+        ("vg_lista_debut_week_key", "TEXT"),
+    ] {
+        if !schema_column_exists(conn, "tracks", name)? {
+            let sql = format!("ALTER TABLE tracks ADD COLUMN {name} {definition}");
+            conn.execute_batch(&sql)
+                .with_context(|| format!("Could not add tracks.{name}"))?;
+        }
+    }
+
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS vg_lista_album_chart_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            week INTEGER NOT NULL,
+            rank INTEGER NOT NULL,
+            artist TEXT NOT NULL,
+            title TEXT NOT NULL,
+            artist_key TEXT NOT NULL,
+            title_key TEXT NOT NULL,
+            week_date TEXT NOT NULL,
+            week_key TEXT NOT NULL,
+            matched_album_id TEXT REFERENCES albums(id) ON DELETE SET NULL,
+            imported_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS vg_lista_single_chart_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            week INTEGER NOT NULL,
+            rank INTEGER NOT NULL,
+            artist TEXT NOT NULL,
+            title TEXT NOT NULL,
+            artist_key TEXT NOT NULL,
+            title_key TEXT NOT NULL,
+            week_date TEXT NOT NULL,
+            week_key TEXT NOT NULL,
+            matched_track_id INTEGER REFERENCES tracks(id) ON DELETE SET NULL,
+            imported_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_albums_vg_lista_rank ON albums(vg_lista_rank);
+        CREATE INDEX IF NOT EXISTS idx_albums_vg_lista_debut_week
+            ON albums(vg_lista_debut_week_key);
+        CREATE INDEX IF NOT EXISTS idx_tracks_vg_lista_rank ON tracks(vg_lista_rank);
+        CREATE INDEX IF NOT EXISTS idx_tracks_vg_lista_debut_week
+            ON tracks(vg_lista_debut_week_key);
+        CREATE INDEX IF NOT EXISTS idx_vg_lista_album_chart_entries_match
+            ON vg_lista_album_chart_entries(matched_album_id);
+        CREATE INDEX IF NOT EXISTS idx_vg_lista_album_chart_entries_week_rank
+            ON vg_lista_album_chart_entries(year, week, rank);
+        CREATE INDEX IF NOT EXISTS idx_vg_lista_single_chart_entries_match
+            ON vg_lista_single_chart_entries(matched_track_id);
+        CREATE INDEX IF NOT EXISTS idx_vg_lista_single_chart_entries_week_rank
+            ON vg_lista_single_chart_entries(year, week, rank);
+        ",
+    )
+    .context("Could not create VG Lista chart schema")?;
+
+    Ok(())
+}
+
 fn schema_column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
     let sql = format!("PRAGMA table_info({table})");
     let mut stmt = conn
@@ -2617,6 +2804,597 @@ fn import_billboard_singles(
         invalid_dates,
         duration_ms: started.elapsed().as_millis(),
     })
+}
+
+#[cfg(not(test))]
+pub fn import_vg_lista_albums_for_app(
+    app: &AppHandle,
+    source_path: String,
+) -> Result<VgListaImportSummary> {
+    let (mut conn, _) = open(app)?;
+    let source_path = resolve_vg_lista_source_path(&source_path)?;
+    import_vg_lista_albums(&mut conn, &source_path)
+}
+
+fn import_vg_lista_albums(
+    conn: &mut Connection,
+    source_path: &Path,
+) -> Result<VgListaImportSummary> {
+    let started = Instant::now();
+    let csv_files = vg_lista_csv_files(source_path)?;
+    if csv_files.is_empty() {
+        bail!(
+            "No VG Lista album CSV files found in {}",
+            source_path.display()
+        );
+    }
+
+    let mut source_entries = Vec::new();
+    let mut entry_indexes_by_match_key: HashMap<String, Vec<usize>> = HashMap::new();
+    for csv_file in &csv_files {
+        for entry in read_vg_lista_chart_file(csv_file)? {
+            let entry_index = source_entries.len();
+            for key in billboard_match_keys(&entry.artist_key, &entry.title_key) {
+                entry_indexes_by_match_key
+                    .entry(key)
+                    .or_default()
+                    .push(entry_index);
+            }
+            source_entries.push(entry);
+        }
+    }
+
+    let tx = conn
+        .transaction()
+        .context("Could not start VG Lista album import transaction")?;
+    tx.execute(
+        "
+        UPDATE albums
+        SET vg_lista_rank = NULL,
+            vg_lista_year = NULL,
+            vg_lista_debut_year = NULL,
+            vg_lista_debut_month = NULL,
+            vg_lista_debut_week = NULL,
+            vg_lista_debut_week_key = NULL
+        ",
+        [],
+    )
+    .context("Could not clear existing VG Lista album rankings")?;
+
+    let mut matched_entry_album_ids = vec![None::<String>; source_entries.len()];
+    let mut album_matches = Vec::new();
+    {
+        let mut stmt = tx.prepare("SELECT id, album_artist_display, album FROM albums")?;
+        let album_rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+
+        for (album_id, artist, album) in album_rows {
+            let artist_key = billboard_text_key(artist.as_deref().unwrap_or_default());
+            let title_key = billboard_text_key(album.as_deref().unwrap_or_default());
+            if artist_key.is_empty() || title_key.is_empty() {
+                continue;
+            }
+
+            let mut entry_indexes = Vec::new();
+            for key in billboard_match_keys(&artist_key, &title_key) {
+                if let Some(indexes) = entry_indexes_by_match_key.get(&key) {
+                    for &entry_index in indexes {
+                        if !entry_indexes.contains(&entry_index) {
+                            entry_indexes.push(entry_index);
+                        }
+                    }
+                }
+            }
+            if entry_indexes.is_empty() {
+                continue;
+            }
+
+            for &entry_index in &entry_indexes {
+                matched_entry_album_ids[entry_index] = Some(album_id.clone());
+            }
+            let best = entry_indexes
+                .iter()
+                .map(|index| &source_entries[*index])
+                .min_by_key(|entry| (entry.rank, entry.year, entry.week))
+                .expect("matched VG Lista album entries are not empty");
+            let debut = entry_indexes
+                .iter()
+                .map(|index| &source_entries[*index])
+                .min_by_key(|entry| (entry.year, entry.week))
+                .expect("matched VG Lista album entries are not empty");
+            album_matches.push((
+                album_id,
+                best.rank,
+                best.year,
+                debut.year,
+                debut.month,
+                debut.week,
+                debut.week_key.clone(),
+            ));
+        }
+    }
+
+    {
+        let mut update_album = tx.prepare(
+            "
+            UPDATE albums
+            SET vg_lista_rank = ?1,
+                vg_lista_year = ?2,
+                vg_lista_debut_year = ?3,
+                vg_lista_debut_month = ?4,
+                vg_lista_debut_week = ?5,
+                vg_lista_debut_week_key = ?6
+            WHERE id = ?7
+            ",
+        )?;
+        for (album_id, rank, year, debut_year, debut_month, debut_week, debut_week_key) in
+            &album_matches
+        {
+            update_album.execute(params![
+                rank,
+                year,
+                debut_year,
+                debut_month,
+                debut_week,
+                debut_week_key,
+                album_id
+            ])?;
+        }
+    }
+
+    tx.execute("DELETE FROM vg_lista_album_chart_entries", [])
+        .context("Could not clear existing VG Lista album entries")?;
+    {
+        let imported_at = Utc::now().to_rfc3339();
+        let mut insert_entry = tx.prepare(
+            "
+            INSERT INTO vg_lista_album_chart_entries (
+                source_file, year, week, rank, artist, title, artist_key, title_key,
+                week_date, week_key, matched_album_id, imported_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+            ",
+        )?;
+        for (index, entry) in source_entries.iter().enumerate() {
+            insert_entry.execute(params![
+                &entry.source_file,
+                entry.year,
+                entry.week,
+                entry.rank,
+                &entry.artist,
+                &entry.title,
+                &entry.artist_key,
+                &entry.title_key,
+                &entry.week_date,
+                &entry.week_key,
+                matched_entry_album_ids[index].as_deref(),
+                &imported_at,
+            ])?;
+        }
+    }
+
+    tx.commit()
+        .context("Could not commit VG Lista album import")?;
+    Ok(VgListaImportSummary {
+        source_path: source_path.display().to_string(),
+        files_scanned: csv_files.len(),
+        chart_entries: source_entries.len(),
+        matched_items: album_matches.len() as i64,
+        dated_items: album_matches.len() as i64,
+        duration_ms: started.elapsed().as_millis(),
+    })
+}
+
+#[cfg(not(test))]
+pub fn import_vg_lista_singles_for_app(
+    app: &AppHandle,
+    source_path: String,
+) -> Result<VgListaImportSummary> {
+    let (mut conn, _) = open(app)?;
+    let source_path = resolve_vg_lista_source_path(&source_path)?;
+    import_vg_lista_singles(&mut conn, &source_path)
+}
+
+fn import_vg_lista_singles(
+    conn: &mut Connection,
+    source_path: &Path,
+) -> Result<VgListaImportSummary> {
+    let started = Instant::now();
+    let csv_files = vg_lista_csv_files(source_path)?;
+    if csv_files.is_empty() {
+        bail!(
+            "No VG Lista singles CSV files found in {}",
+            source_path.display()
+        );
+    }
+
+    let mut source_entries = Vec::new();
+    let mut entry_indexes_by_match_key: HashMap<String, Vec<usize>> = HashMap::new();
+    for csv_file in &csv_files {
+        for entry in read_vg_lista_chart_file(csv_file)? {
+            let entry_index = source_entries.len();
+            for key in billboard_single_match_keys(&entry.artist_key, &entry.title_key) {
+                entry_indexes_by_match_key
+                    .entry(key)
+                    .or_default()
+                    .push(entry_index);
+            }
+            source_entries.push(entry);
+        }
+    }
+
+    let tx = conn
+        .transaction()
+        .context("Could not start VG Lista singles import transaction")?;
+    tx.execute(
+        "
+        UPDATE tracks
+        SET vg_lista_rank = NULL,
+            vg_lista_year = NULL,
+            vg_lista_debut_date = NULL,
+            vg_lista_debut_year = NULL,
+            vg_lista_debut_month = NULL,
+            vg_lista_debut_week = NULL,
+            vg_lista_debut_week_key = NULL
+        ",
+        [],
+    )
+    .context("Could not clear existing VG Lista singles rankings")?;
+
+    let mut matched_entry_track_ids = vec![None::<i64>; source_entries.len()];
+    let mut track_matches = Vec::new();
+    {
+        let mut stmt = tx.prepare(
+            "
+            SELECT t.id, t.display_artist, t.title, t.album_artist_display,
+                   t.year, t.normalized_rating, c.album_id IS NOT NULL
+            FROM tracks t
+            LEFT JOIN album_covers c ON c.album_id = t.album_id
+            ",
+        )?;
+        let track_rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<i32>>(4)?,
+                    row.get::<_, Option<i32>>(5)?,
+                    row.get::<_, bool>(6)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+
+        let mut candidates_by_identity: HashMap<String, Vec<VgListaTrackCandidate>> =
+            HashMap::new();
+        for (
+            track_id,
+            display_artist,
+            title,
+            album_artist_display,
+            year,
+            normalized_rating,
+            has_cover,
+        ) in track_rows
+        {
+            let artist_key = billboard_text_key(display_artist.as_deref().unwrap_or_default());
+            let title_key = billboard_text_key(title.as_deref().unwrap_or_default());
+            if artist_key.is_empty() || title_key.is_empty() {
+                continue;
+            }
+
+            let mut entry_indexes = Vec::new();
+            for key in billboard_single_match_keys(&artist_key, &title_key) {
+                if let Some(indexes) = entry_indexes_by_match_key.get(&key) {
+                    for &entry_index in indexes {
+                        if !entry_indexes.contains(&entry_index) {
+                            entry_indexes.push(entry_index);
+                        }
+                    }
+                }
+            }
+            if entry_indexes.is_empty() {
+                continue;
+            }
+
+            let best = entry_indexes
+                .iter()
+                .map(|index| &source_entries[*index])
+                .min_by_key(|entry| (entry.rank, entry.year, entry.week))
+                .expect("matched VG Lista single entries are not empty");
+            let debut = entry_indexes
+                .iter()
+                .map(|index| &source_entries[*index])
+                .min_by_key(|entry| (entry.year, entry.week))
+                .expect("matched VG Lista single entries are not empty");
+            let identity_key = billboard_match_key(&best.artist_key, &best.title_key);
+            candidates_by_identity
+                .entry(identity_key)
+                .or_default()
+                .push(VgListaTrackCandidate {
+                    track_id,
+                    album_artist_key: billboard_text_key(
+                        album_artist_display.as_deref().unwrap_or_default(),
+                    ),
+                    year,
+                    normalized_rating,
+                    has_cover,
+                    source_artist_key: best.artist_key.clone(),
+                    rank: best.rank,
+                    chart_year: best.year,
+                    debut_date: debut.week_date.clone(),
+                    debut_year: debut.year,
+                    debut_month: debut.month,
+                    debut_week: debut.week,
+                    debut_week_key: debut.week_key.clone(),
+                    entry_indexes,
+                });
+        }
+
+        for candidates in candidates_by_identity.into_values() {
+            let Some(candidate) = candidates
+                .iter()
+                .max_by_key(|candidate| vg_lista_track_candidate_priority(candidate))
+            else {
+                continue;
+            };
+            for &entry_index in &candidate.entry_indexes {
+                matched_entry_track_ids[entry_index] = Some(candidate.track_id);
+            }
+            track_matches.push((
+                candidate.track_id,
+                candidate.rank,
+                candidate.chart_year,
+                candidate.debut_date.clone(),
+                candidate.debut_year,
+                candidate.debut_month,
+                candidate.debut_week,
+                candidate.debut_week_key.clone(),
+            ));
+        }
+    }
+
+    {
+        let mut update_track = tx.prepare(
+            "
+            UPDATE tracks
+            SET vg_lista_rank = ?1,
+                vg_lista_year = ?2,
+                vg_lista_debut_date = ?3,
+                vg_lista_debut_year = ?4,
+                vg_lista_debut_month = ?5,
+                vg_lista_debut_week = ?6,
+                vg_lista_debut_week_key = ?7
+            WHERE id = ?8
+            ",
+        )?;
+        for (
+            track_id,
+            rank,
+            year,
+            debut_date,
+            debut_year,
+            debut_month,
+            debut_week,
+            debut_week_key,
+        ) in &track_matches
+        {
+            update_track.execute(params![
+                rank,
+                year,
+                debut_date,
+                debut_year,
+                debut_month,
+                debut_week,
+                debut_week_key,
+                track_id,
+            ])?;
+        }
+    }
+
+    tx.execute("DELETE FROM vg_lista_single_chart_entries", [])
+        .context("Could not clear existing VG Lista single entries")?;
+    {
+        let imported_at = Utc::now().to_rfc3339();
+        let mut insert_entry = tx.prepare(
+            "
+            INSERT INTO vg_lista_single_chart_entries (
+                source_file, year, week, rank, artist, title, artist_key, title_key,
+                week_date, week_key, matched_track_id, imported_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+            ",
+        )?;
+        for (index, entry) in source_entries.iter().enumerate() {
+            insert_entry.execute(params![
+                &entry.source_file,
+                entry.year,
+                entry.week,
+                entry.rank,
+                &entry.artist,
+                &entry.title,
+                &entry.artist_key,
+                &entry.title_key,
+                &entry.week_date,
+                &entry.week_key,
+                matched_entry_track_ids[index],
+                &imported_at,
+            ])?;
+        }
+    }
+
+    tx.commit()
+        .context("Could not commit VG Lista singles import")?;
+    Ok(VgListaImportSummary {
+        source_path: source_path.display().to_string(),
+        files_scanned: csv_files.len(),
+        chart_entries: source_entries.len(),
+        matched_items: track_matches.len() as i64,
+        dated_items: track_matches.len() as i64,
+        duration_ms: started.elapsed().as_millis(),
+    })
+}
+
+fn vg_lista_track_candidate_priority(
+    candidate: &VgListaTrackCandidate,
+) -> (bool, bool, i32, bool, i32, std::cmp::Reverse<i64>) {
+    (
+        billboard_single_album_artist_matches(
+            &candidate.album_artist_key,
+            &candidate.source_artist_key,
+        ),
+        !billboard_single_is_compilation_artist(&candidate.album_artist_key),
+        billboard_single_release_year_score(candidate.year, Some(candidate.debut_year)),
+        candidate.has_cover,
+        candidate.normalized_rating.unwrap_or(i32::MIN),
+        std::cmp::Reverse(candidate.track_id),
+    )
+}
+
+fn vg_lista_csv_files(source_path: &Path) -> Result<Vec<PathBuf>> {
+    if source_path.is_file() {
+        return Ok(vec![source_path.to_path_buf()]);
+    }
+
+    let mut files = fs::read_dir(source_path)
+        .with_context(|| {
+            format!(
+                "Could not read VG Lista CSV folder {}",
+                source_path.display()
+            )
+        })?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .and_then(|extension| extension.to_str())
+                .map(|extension| extension.eq_ignore_ascii_case("csv"))
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+    files.sort();
+    Ok(files)
+}
+
+fn read_vg_lista_chart_file(path: &Path) -> Result<Vec<VgListaChartEntry>> {
+    let mut reader = csv::ReaderBuilder::new()
+        .flexible(true)
+        .from_path(path)
+        .with_context(|| format!("Could not open VG Lista CSV {}", path.display()))?;
+    let headers = reader
+        .headers()
+        .with_context(|| format!("Could not read VG Lista CSV header {}", path.display()))?
+        .clone();
+    let year_index = chart_csv_header_index(&headers, "Year", "VG Lista")?;
+    let week_index = chart_csv_header_index(&headers, "Week", "VG Lista")?;
+    let rank_index = chart_csv_header_index(&headers, "Rank", "VG Lista")?;
+    let artist_index = chart_csv_header_index(&headers, "Artist", "VG Lista")?;
+    let title_index = chart_csv_header_index(&headers, "Title", "VG Lista")?;
+    let source_file = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let mut entries = Vec::new();
+    for (row_index, result) in reader.records().enumerate() {
+        let record = result
+            .with_context(|| format!("Could not read VG Lista CSV row {}", path.display()))?;
+        let year = record
+            .get(year_index)
+            .and_then(|value| value.trim().parse::<i32>().ok())
+            .ok_or_else(|| anyhow!("Invalid Year in {} row {}", path.display(), row_index + 2))?;
+        let week = record
+            .get(week_index)
+            .and_then(|value| value.trim().parse::<i32>().ok())
+            .filter(|week| (1..=53).contains(week))
+            .ok_or_else(|| anyhow!("Invalid Week in {} row {}", path.display(), row_index + 2))?;
+        let week_date =
+            NaiveDate::from_isoywd_opt(year, week as u32, Weekday::Mon).ok_or_else(|| {
+                anyhow!(
+                    "Invalid ISO Year/Week in {} row {}",
+                    path.display(),
+                    row_index + 2
+                )
+            })?;
+        let rank = record
+            .get(rank_index)
+            .and_then(|value| value.trim().parse::<i32>().ok())
+            .filter(|rank| *rank > 0)
+            .ok_or_else(|| anyhow!("Invalid Rank in {} row {}", path.display(), row_index + 2))?;
+        let artist = record
+            .get(artist_index)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        let title = record
+            .get(title_index)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        let artist_key = billboard_text_key(&artist);
+        let title_key = billboard_text_key(&title);
+        if artist_key.is_empty() || title_key.is_empty() {
+            continue;
+        }
+        entries.push(VgListaChartEntry {
+            source_file: source_file.clone(),
+            year,
+            week,
+            rank,
+            artist,
+            title,
+            artist_key,
+            title_key,
+            week_date: week_date.format("%Y-%m-%d").to_string(),
+            month: week_date.month() as i32,
+            week_key: format!("{year:04}-W{week:02}"),
+        });
+    }
+
+    Ok(entries)
+}
+
+fn chart_csv_header_index(
+    headers: &csv::StringRecord,
+    name: &str,
+    source_label: &str,
+) -> Result<usize> {
+    headers
+        .iter()
+        .position(|header| header.trim().eq_ignore_ascii_case(name))
+        .ok_or_else(|| anyhow!("Missing required {source_label} CSV column: {name}"))
+}
+
+fn resolve_vg_lista_source_path(source_path: &str) -> Result<PathBuf> {
+    let trimmed = source_path.trim();
+    if trimmed.is_empty() {
+        bail!("Choose a VG Lista CSV folder before starting import");
+    }
+
+    let provided = PathBuf::from(trimmed);
+    let candidates = if provided.is_absolute() {
+        vec![provided]
+    } else {
+        let cwd = std::env::current_dir().context("Could not read current working directory")?;
+        let mut candidates = vec![cwd.join(&provided)];
+        if let Some(parent) = cwd.parent() {
+            candidates.push(parent.join(&provided));
+        }
+        candidates
+    };
+
+    candidates
+        .into_iter()
+        .find(|candidate| candidate.exists())
+        .map(|candidate| candidate.canonicalize().unwrap_or(candidate))
+        .ok_or_else(|| anyhow!("Could not find VG Lista CSV source path: {source_path}"))
 }
 
 fn billboard_csv_files(source_path: &Path) -> Result<Vec<PathBuf>> {
@@ -3296,16 +4074,52 @@ pub fn statistics_for_app(app: &AppHandle) -> Result<StatisticsResponse> {
 pub fn album_debut_timeline_for_app(
     app: &AppHandle,
     selected_year: Option<i32>,
+    chart_country: String,
 ) -> Result<AlbumDebutTimelineResponse> {
     let (conn, _) = open(app)?;
-    album_debut_timeline(&conn, selected_year)
+    album_debut_timeline_for_source(&conn, selected_year, &chart_country)
 }
 
+#[cfg(test)]
 fn album_debut_timeline(
     conn: &Connection,
     requested_year: Option<i32>,
 ) -> Result<AlbumDebutTimelineResponse> {
-    let mut statement = conn.prepare(
+    album_debut_timeline_for_source(conn, requested_year, "US")
+}
+
+fn album_debut_timeline_for_source(
+    conn: &Connection,
+    requested_year: Option<i32>,
+    chart_country: &str,
+) -> Result<AlbumDebutTimelineResponse> {
+    let (
+        rank_field,
+        year_field,
+        debut_year_field,
+        debut_month_field,
+        debut_week_field,
+        debut_week_key_field,
+    ) = if chart_country.eq_ignore_ascii_case("NO") {
+        (
+            "a.vg_lista_rank",
+            "a.vg_lista_year",
+            "a.vg_lista_debut_year",
+            "a.vg_lista_debut_month",
+            "a.vg_lista_debut_week",
+            "a.vg_lista_debut_week_key",
+        )
+    } else {
+        (
+            "a.billboard_rank",
+            "a.billboard_year",
+            "a.billboard_debut_year",
+            "a.billboard_debut_month",
+            "a.billboard_debut_week",
+            "a.billboard_debut_week_key",
+        )
+    };
+    let sql = format!(
         "SELECT
             a.id,
             a.album,
@@ -3313,26 +4127,27 @@ fn album_debut_timeline(
             a.canonical_genre,
             a.year,
             a.album_score,
-            a.billboard_rank,
-            a.billboard_year,
-            a.billboard_debut_year,
-            a.billboard_debut_month,
-            a.billboard_debut_week,
-            a.billboard_debut_week_key,
+            {rank_field},
+            {year_field},
+            {debut_year_field},
+            {debut_month_field},
+            {debut_week_field},
+            {debut_week_key_field},
             c.cache_path,
             c.mime_type
          FROM albums a
          LEFT JOIN album_covers c ON c.album_id = a.id
-         WHERE a.billboard_debut_year IS NOT NULL
-           AND a.billboard_debut_month IS NOT NULL
-           AND a.billboard_debut_week IS NOT NULL
-           AND a.billboard_debut_week_key IS NOT NULL
+         WHERE {debut_year_field} IS NOT NULL
+           AND {debut_month_field} IS NOT NULL
+           AND {debut_week_field} IS NOT NULL
+           AND {debut_week_key_field} IS NOT NULL
          ORDER BY
-            a.billboard_debut_year ASC,
-            a.billboard_debut_week_key ASC,
+            {debut_year_field} ASC,
+            {debut_week_key_field} ASC,
             a.album COLLATE NOCASE ASC,
-            a.id ASC",
-    )?;
+            a.id ASC"
+    );
+    let mut statement = conn.prepare(&sql)?;
     let album_rows = statement.query_map([], |row| {
         let id: String = row.get(0)?;
         Ok(AlbumDebutTimelineAlbum {
@@ -3405,16 +4220,15 @@ fn album_debut_timeline(
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    let undated_album_count = conn.query_row(
+    let undated_sql = format!(
         "SELECT COUNT(*)
-         FROM albums
-         WHERE billboard_debut_year IS NULL
-            OR billboard_debut_month IS NULL
-            OR billboard_debut_week IS NULL
-            OR billboard_debut_week_key IS NULL",
-        [],
-        |row| row.get(0),
-    )?;
+         FROM albums a
+         WHERE {debut_year_field} IS NULL
+            OR {debut_month_field} IS NULL
+            OR {debut_week_field} IS NULL
+            OR {debut_week_key_field} IS NULL"
+    );
+    let undated_album_count = conn.query_row(&undated_sql, [], |row| row.get(0))?;
 
     Ok(AlbumDebutTimelineResponse {
         years,
@@ -3429,10 +4243,13 @@ fn album_debut_timeline(
 pub fn track_debut_timeline_for_app(
     app: &AppHandle,
     selected_year: Option<i32>,
+    chart_country: String,
 ) -> Result<TrackDebutTimelineResponse> {
     let (mut conn, _) = open(app)?;
-    refresh_billboard_single_album_metadata_if_needed(&mut conn)?;
-    track_debut_timeline(&conn, selected_year)
+    if !chart_country.eq_ignore_ascii_case("NO") {
+        refresh_billboard_single_album_metadata_if_needed(&mut conn)?;
+    }
+    track_debut_timeline_for_source(&conn, selected_year, &chart_country)
 }
 
 #[cfg(not(test))]
@@ -3477,11 +4294,49 @@ fn timeline_track_priority(
     )
 }
 
+#[cfg(test)]
 fn track_debut_timeline(
     conn: &Connection,
     requested_year: Option<i32>,
 ) -> Result<TrackDebutTimelineResponse> {
-    let mut statement = conn.prepare(
+    track_debut_timeline_for_source(conn, requested_year, "US")
+}
+
+fn track_debut_timeline_for_source(
+    conn: &Connection,
+    requested_year: Option<i32>,
+    chart_country: &str,
+) -> Result<TrackDebutTimelineResponse> {
+    let (
+        rank_field,
+        year_field,
+        debut_date_field,
+        debut_year_field,
+        debut_month_field,
+        debut_week_field,
+        debut_week_key_field,
+    ) = if chart_country.eq_ignore_ascii_case("NO") {
+        (
+            "t.vg_lista_rank",
+            "t.vg_lista_year",
+            "t.vg_lista_debut_date",
+            "t.vg_lista_debut_year",
+            "t.vg_lista_debut_month",
+            "t.vg_lista_debut_week",
+            "t.vg_lista_debut_week_key",
+        )
+    } else {
+        (
+            "t.billboard_single_rank",
+            "t.billboard_single_year",
+            "t.billboard_single_debut_date",
+            "t.billboard_single_debut_year",
+            "t.billboard_single_debut_month",
+            "t.billboard_single_debut_week",
+            "t.billboard_single_debut_week_key",
+        )
+    };
+    let sql = format!(
         "SELECT
             CAST(t.id AS TEXT),
             t.id,
@@ -3494,27 +4349,28 @@ fn track_debut_timeline(
             t.year,
             t.normalized_rating,
             t.love,
-            t.billboard_single_rank,
-            t.billboard_single_year,
-            t.billboard_single_debut_date,
-            t.billboard_single_debut_year,
-            t.billboard_single_debut_month,
-            t.billboard_single_debut_week,
-            t.billboard_single_debut_week_key,
+            {rank_field},
+            {year_field},
+            {debut_date_field},
+            {debut_year_field},
+            {debut_month_field},
+            {debut_week_field},
+            {debut_week_key_field},
             c.cache_path,
             c.mime_type
          FROM tracks t
          LEFT JOIN album_covers c ON c.album_id = t.album_id
-         WHERE t.billboard_single_debut_date IS NOT NULL
-           AND t.billboard_single_debut_year IS NOT NULL
-           AND t.billboard_single_debut_month IS NOT NULL
-           AND t.billboard_single_debut_week IS NOT NULL
-           AND t.billboard_single_debut_week_key IS NOT NULL
+         WHERE {debut_date_field} IS NOT NULL
+           AND {debut_year_field} IS NOT NULL
+           AND {debut_month_field} IS NOT NULL
+           AND {debut_week_field} IS NOT NULL
+           AND {debut_week_key_field} IS NOT NULL
          ORDER BY
-            t.billboard_single_debut_date ASC,
+            {debut_date_field} ASC,
             t.title COLLATE NOCASE ASC,
-            t.id ASC",
-    )?;
+            t.id ASC"
+    );
+    let mut statement = conn.prepare(&sql)?;
     let track_rows = statement.query_map([], |row| {
         Ok(TrackDebutTimelineTrack {
             id: row.get(0)?,
@@ -3631,17 +4487,16 @@ fn track_debut_timeline(
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    let undated_track_count = conn.query_row(
+    let undated_sql = format!(
         "SELECT COUNT(*)
-         FROM tracks
-         WHERE billboard_single_debut_date IS NULL
-            OR billboard_single_debut_year IS NULL
-            OR billboard_single_debut_month IS NULL
-            OR billboard_single_debut_week IS NULL
-            OR billboard_single_debut_week_key IS NULL",
-        [],
-        |row| row.get(0),
-    )?;
+         FROM tracks t
+         WHERE {debut_date_field} IS NULL
+            OR {debut_year_field} IS NULL
+            OR {debut_month_field} IS NULL
+            OR {debut_week_field} IS NULL
+            OR {debut_week_key_field} IS NULL"
+    );
+    let undated_track_count = conn.query_row(&undated_sql, [], |row| row.get(0))?;
 
     Ok(TrackDebutTimelineResponse {
         years,
@@ -11787,6 +12642,12 @@ fn search_library(
             t.billboard_single_debut_month,
             t.billboard_single_debut_week,
             t.billboard_single_debut_week_key,
+            t.vg_lista_rank,
+            t.vg_lista_year,
+            t.vg_lista_debut_year,
+            t.vg_lista_debut_month,
+            t.vg_lista_debut_week,
+            t.vg_lista_debut_week_key,
             t.time_seconds,
             t.normalized_rating,
             t.disc_number,
@@ -11837,6 +12698,12 @@ fn search_library(
             NULL,
             NULL,
             NULL,
+            a.vg_lista_rank,
+            a.vg_lista_year,
+            a.vg_lista_debut_year,
+            a.vg_lista_debut_month,
+            a.vg_lista_debut_week,
+            a.vg_lista_debut_week_key,
             NULL,
             NULL,
             NULL,
@@ -11937,19 +12804,25 @@ fn browse_row_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BrowseRow> {
         billboard_single_debut_month: row.get(30)?,
         billboard_single_debut_week: row.get(31)?,
         billboard_single_debut_week_key: row.get(32)?,
-        track_seconds: row.get(33)?,
-        normalized_rating: row.get(34)?,
-        disc_number: row.get(35)?,
-        track_number: row.get(36)?,
-        love: row.get(37)?,
-        file_path: row.get(38)?,
-        filename: row.get(39)?,
-        cover_path: row.get(40)?,
-        cover_mime_type: row.get(41)?,
-        origin_country_code: row.get(42)?,
-        origin_country_name: row.get(43)?,
-        origin_country_raw_area: row.get(44)?,
-        origin_country_review_state: row.get(45)?,
+        vg_lista_rank: row.get(33)?,
+        vg_lista_year: row.get(34)?,
+        vg_lista_debut_year: row.get(35)?,
+        vg_lista_debut_month: row.get(36)?,
+        vg_lista_debut_week: row.get(37)?,
+        vg_lista_debut_week_key: row.get(38)?,
+        track_seconds: row.get(39)?,
+        normalized_rating: row.get(40)?,
+        disc_number: row.get(41)?,
+        track_number: row.get(42)?,
+        love: row.get(43)?,
+        file_path: row.get(44)?,
+        filename: row.get(45)?,
+        cover_path: row.get(46)?,
+        cover_mime_type: row.get(47)?,
+        origin_country_code: row.get(48)?,
+        origin_country_name: row.get(49)?,
+        origin_country_raw_area: row.get(50)?,
+        origin_country_review_state: row.get(51)?,
     })
 }
 
@@ -12096,6 +12969,28 @@ fn build_where_clause(
             "a.id",
         );
     }
+    add_i32_range(
+        &mut conditions,
+        &mut values,
+        if is_tracks {
+            "t.vg_lista_rank"
+        } else {
+            "a.vg_lista_rank"
+        },
+        filters.vg_lista_rank_min,
+        filters.vg_lista_rank_max,
+    );
+    add_iso_week_range(
+        &mut conditions,
+        &mut values,
+        if is_tracks {
+            "t.vg_lista_debut_week_key"
+        } else {
+            "a.vg_lista_debut_week_key"
+        },
+        filters.vg_lista_debut_week_from.as_deref(),
+        filters.vg_lista_debut_week_to.as_deref(),
+    );
 
     if let Some(query) = fts_query(&filters.has_track_text) {
         let album_ref = if is_tracks { "t.album_id" } else { "a.id" };
@@ -12859,6 +13754,8 @@ fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "billboardDebut" => "a.billboard_debut_week_key",
             "billboardSingleRank" => "t.billboard_single_rank",
             "billboardSingleDebut" => "t.billboard_single_debut_date",
+            "vgListaRank" => "t.vg_lista_rank",
+            "vgListaDebut" => "t.vg_lista_debut_week_key",
             "trackRating" => "t.normalized_rating",
             "time" => "t.time_seconds",
             "albumRating" => "a.effective_album_rating",
@@ -12876,6 +13773,8 @@ fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "originCountry" => "LOWER(COALESCE(origin.country_name, origin.country_code, ''))",
             "billboardRank" => "a.billboard_rank",
             "billboardDebut" => "a.billboard_debut_week_key",
+            "vgListaRank" => "a.vg_lista_rank",
+            "vgListaDebut" => "a.vg_lista_debut_week_key",
             "totalMinutes" => "a.total_seconds",
             "trackCount" => "a.total_tracks",
             "albumRating" => "a.effective_album_rating",
@@ -12963,17 +13862,43 @@ fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
 
 fn normalize_ranking_metric(metric: &str) -> String {
     match metric {
-        "albumRating" | "ratingCompleteness" | "lovedTracks" | "ae" | "tmoe" | "totalMinutes"
-        | "billboardRank" => metric.to_string(),
+        "albumRating"
+        | "ratingCompleteness"
+        | "lovedTracks"
+        | "ae"
+        | "tmoe"
+        | "totalMinutes"
+        | "billboardRank"
+        | "trackRating"
+        | "billboardSingleRank"
+        | "billboardSingleDebut"
+        | "vgListaRank"
+        | "vgListaDebut" => metric.to_string(),
         _ => "albumScore".to_string(),
     }
 }
 
 fn normalize_chart_sort_field(field: Option<&str>, fallback_metric: &str) -> String {
     match field.unwrap_or(fallback_metric) {
-        "album" | "artist" | "year" | "genre" | "originCountry" | "albumRating"
-        | "ratingCompleteness" | "lovedTracks" | "ae" | "tmoe" | "totalMinutes" | "albumScore"
-        | "billboardRank" | "billboardDebut" => field.unwrap_or(fallback_metric).to_string(),
+        "album"
+        | "artist"
+        | "year"
+        | "genre"
+        | "originCountry"
+        | "albumRating"
+        | "ratingCompleteness"
+        | "lovedTracks"
+        | "ae"
+        | "tmoe"
+        | "totalMinutes"
+        | "albumScore"
+        | "billboardRank"
+        | "billboardDebut"
+        | "trackRating"
+        | "billboardSingleRank"
+        | "billboardSingleDebut"
+        | "vgListaRank"
+        | "vgListaDebut" => field.unwrap_or(fallback_metric).to_string(),
         _ => fallback_metric.to_string(),
     }
 }
@@ -14243,6 +15168,80 @@ mod tests {
     }
 
     #[test]
+    fn imports_vg_lista_albums_with_weekly_entries_filters_and_norway_timeline() {
+        let mut conn = seeded_connection();
+        let source_dir = std::env::temp_dir().join(format!(
+            "music-library-vg-lista-albums-test-{}",
+            Utc::now().timestamp_millis()
+        ));
+        fs::create_dir_all(&source_dir).expect("create VG Lista album csv dir");
+        fs::write(
+            source_dir.join("albums-1987.csv"),
+            "Year,Week,Rank,Last Week,Movement,Artist,Title,Weeks on Chart,Source URL\n\
+             1987,36,5,,,Pet Shop Boys,Actually,1,https://example.test/1987-36\n\
+             1987,37,1,5,4,Pet Shop Boys,Actually,2,https://example.test/1987-37\n\
+             1987,37,2,,,Whitney Houston,Whitney,1,https://example.test/1987-37\n",
+        )
+        .expect("write VG Lista album chart");
+
+        let summary =
+            import_vg_lista_albums(&mut conn, &source_dir).expect("import VG Lista albums");
+        assert_eq!(summary.files_scanned, 1);
+        assert_eq!(summary.chart_entries, 3);
+        assert_eq!(summary.matched_items, 1);
+        assert_eq!(summary.dated_items, 1);
+
+        let weekly_rows: (i64, i64) = conn
+            .query_row(
+                "
+                SELECT COUNT(*), COUNT(matched_album_id)
+                FROM vg_lista_album_chart_entries
+                ",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("count VG Lista album entries");
+        assert_eq!(weekly_rows, (3, 2));
+
+        let response =
+            search_library(&conn, BrowseRequest::default(), 50).expect("search VG Lista albums");
+        assert_eq!(response.rows[0].vg_lista_rank, Some(1));
+        assert_eq!(response.rows[0].vg_lista_year, Some(1987));
+        assert_eq!(response.rows[0].vg_lista_debut_year, Some(1987));
+        assert_eq!(response.rows[0].vg_lista_debut_month, Some(8));
+        assert_eq!(response.rows[0].vg_lista_debut_week, Some(36));
+        assert_eq!(
+            response.rows[0].vg_lista_debut_week_key.as_deref(),
+            Some("1987-W36")
+        );
+
+        let mut filter_request = BrowseRequest::default();
+        filter_request.filters.vg_lista_rank_min = Some(1);
+        filter_request.filters.vg_lista_rank_max = Some(1);
+        filter_request.filters.vg_lista_debut_week_from = Some("1987-W36".to_string());
+        filter_request.filters.vg_lista_debut_week_to = Some("1987-W36".to_string());
+        filter_request.sort = BrowseSort {
+            field: "vgListaDebut".to_string(),
+            direction: "asc".to_string(),
+        };
+        let filtered = search_library(&conn, filter_request, 50)
+            .expect("filter albums by VG Lista rank and debut week");
+        assert_eq!(filtered.total, 1);
+        assert_eq!(filtered.rows[0].album.as_deref(), Some("Actually"));
+
+        let timeline = album_debut_timeline_for_source(&conn, Some(1987), "NO")
+            .expect("build Norway album debut timeline");
+        assert_eq!(timeline.selected_year, Some(1987));
+        assert_eq!(timeline.dated_album_count, 1);
+        assert_eq!(timeline.undated_album_count, 0);
+        assert_eq!(timeline.albums.len(), 1);
+        assert_eq!(timeline.albums[0].billboard_rank, Some(1));
+        assert_eq!(timeline.albums[0].billboard_debut_week_key, "1987-W36");
+
+        fs::remove_dir_all(source_dir).expect("remove VG Lista album csv dir");
+    }
+
+    #[test]
     fn resolves_billboard_weeks_across_iso_year_boundaries() {
         let january_1949 =
             parse_billboard_first_appearance("Jan 1949").expect("parse January first appearance");
@@ -14866,6 +15865,80 @@ mod tests {
         assert_eq!(missing_response.total, 0);
 
         fs::remove_dir_all(source_dir).expect("remove billboard singles csv dir");
+    }
+
+    #[test]
+    fn imports_vg_lista_singles_with_weekly_entries_filters_and_norway_timeline() {
+        let mut conn = seeded_connection();
+        let source_dir = std::env::temp_dir().join(format!(
+            "music-library-vg-lista-singles-test-{}",
+            Utc::now().timestamp_millis()
+        ));
+        fs::create_dir_all(&source_dir).expect("create VG Lista singles csv dir");
+        fs::write(
+            source_dir.join("singles-1987.csv"),
+            "Year,Week,Rank,Last Week,Movement,Artist,Title,Weeks on Chart,Source URL\n\
+             1987,42,3,,,Pet Shop Boys,What Have I Done to Deserve This?,1,https://example.test/1987-42\n\
+             1987,43,2,3,1,Pet Shop Boys,What Have I Done to Deserve This?,2,https://example.test/1987-43\n\
+             1987,43,1,,,A-ha,The Living Daylights,1,https://example.test/1987-43\n",
+        )
+        .expect("write VG Lista singles chart");
+
+        let summary =
+            import_vg_lista_singles(&mut conn, &source_dir).expect("import VG Lista singles");
+        assert_eq!(summary.files_scanned, 1);
+        assert_eq!(summary.chart_entries, 3);
+        assert_eq!(summary.matched_items, 1);
+        assert_eq!(summary.dated_items, 1);
+
+        let weekly_rows: (i64, i64) = conn
+            .query_row(
+                "
+                SELECT COUNT(*), COUNT(matched_track_id)
+                FROM vg_lista_single_chart_entries
+                ",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("count VG Lista single entries");
+        assert_eq!(weekly_rows, (3, 2));
+
+        let mut request = BrowseRequest::default();
+        request.view = "tracks".to_string();
+        request.filters.vg_lista_rank_min = Some(2);
+        request.filters.vg_lista_rank_max = Some(2);
+        request.filters.vg_lista_debut_week_from = Some("1987-W42".to_string());
+        request.filters.vg_lista_debut_week_to = Some("1987-W42".to_string());
+        request.sort = BrowseSort {
+            field: "vgListaRank".to_string(),
+            direction: "asc".to_string(),
+        };
+        let response =
+            search_library(&conn, request, 50).expect("filter singles by VG Lista metadata");
+        assert_eq!(response.total, 1);
+        assert_eq!(response.rows[0].vg_lista_rank, Some(2));
+        assert_eq!(response.rows[0].vg_lista_year, Some(1987));
+        assert_eq!(response.rows[0].vg_lista_debut_year, Some(1987));
+        assert_eq!(response.rows[0].vg_lista_debut_month, Some(10));
+        assert_eq!(response.rows[0].vg_lista_debut_week, Some(42));
+        assert_eq!(
+            response.rows[0].vg_lista_debut_week_key.as_deref(),
+            Some("1987-W42")
+        );
+
+        let timeline = track_debut_timeline_for_source(&conn, Some(1987), "NO")
+            .expect("build Norway track debut timeline");
+        assert_eq!(timeline.selected_year, Some(1987));
+        assert_eq!(timeline.dated_track_count, 1);
+        assert_eq!(timeline.undated_track_count, 0);
+        assert_eq!(timeline.tracks.len(), 1);
+        assert_eq!(timeline.tracks[0].billboard_single_rank, Some(2));
+        assert_eq!(
+            timeline.tracks[0].billboard_single_debut_week_key,
+            "1987-W42"
+        );
+
+        fs::remove_dir_all(source_dir).expect("remove VG Lista singles csv dir");
     }
 
     #[test]
@@ -15704,6 +16777,8 @@ mod tests {
             .expect("phase thirty-four schema exists"));
         assert!(migrations::phase_thirty_five_schema_exists(&conn)
             .expect("phase thirty-five schema exists"));
+        assert!(migrations::phase_thirty_six_schema_exists(&conn)
+            .expect("phase thirty-six schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -15861,6 +16936,61 @@ mod tests {
             )
             .expect("read default Deemix fallback");
         assert_eq!(fallback, 1);
+    }
+
+    #[test]
+    fn schema_thirty_six_adds_vg_lista_sources_and_weekly_chart_tables() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            DROP TABLE vg_lista_album_chart_entries;
+            DROP TABLE vg_lista_single_chart_entries;
+            DROP INDEX idx_albums_vg_lista_rank;
+            DROP INDEX idx_albums_vg_lista_debut_week;
+            DROP INDEX idx_tracks_vg_lista_rank;
+            DROP INDEX idx_tracks_vg_lista_debut_week;
+            ALTER TABLE albums DROP COLUMN vg_lista_rank;
+            ALTER TABLE albums DROP COLUMN vg_lista_year;
+            ALTER TABLE albums DROP COLUMN vg_lista_debut_year;
+            ALTER TABLE albums DROP COLUMN vg_lista_debut_month;
+            ALTER TABLE albums DROP COLUMN vg_lista_debut_week;
+            ALTER TABLE albums DROP COLUMN vg_lista_debut_week_key;
+            ALTER TABLE tracks DROP COLUMN vg_lista_rank;
+            ALTER TABLE tracks DROP COLUMN vg_lista_year;
+            ALTER TABLE tracks DROP COLUMN vg_lista_debut_date;
+            ALTER TABLE tracks DROP COLUMN vg_lista_debut_year;
+            ALTER TABLE tracks DROP COLUMN vg_lista_debut_month;
+            ALTER TABLE tracks DROP COLUMN vg_lista_debut_week;
+            ALTER TABLE tracks DROP COLUMN vg_lista_debut_week_key;
+            ALTER TABLE app_settings DROP COLUMN vg_lista_album_source_path;
+            ALTER TABLE app_settings DROP COLUMN vg_lista_singles_source_path;
+            PRAGMA user_version = 35;
+            ",
+        )
+        .expect("simulate schema thirty-five");
+
+        migrate(&conn).expect("migrate VG Lista schema");
+
+        assert!(migrations::phase_thirty_six_schema_exists(&conn).expect("VG Lista schema exists"));
+        let paths: (String, String) = conn
+            .query_row(
+                "
+                SELECT vg_lista_album_source_path, vg_lista_singles_source_path
+                FROM app_settings
+                WHERE id = 1
+                ",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read VG Lista default paths");
+        assert_eq!(paths.0, "CSV_ALBUMS_NO");
+        assert_eq!(paths.1, "CSV_SINGLES_NO");
+        let user_version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("read schema version");
+        assert_eq!(user_version, LATEST_SCHEMA_VERSION);
     }
 
     #[test]
@@ -16606,6 +17736,8 @@ mod tests {
                 cover_source_path: "C:\\_code\\music_backup_v5\\AlbumCovers\\".to_string(),
                 billboard_source_path: r"D:\Charts\Albums".to_string(),
                 billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
+                vg_lista_album_source_path: r"D:\Charts\Norway\Albums".to_string(),
+                vg_lista_singles_source_path: r"D:\Charts\Norway\Singles".to_string(),
                 deemix_download_path: r"D:\Music\Incoming".to_string(),
                 deemix_download_quality: "mp3_128".to_string(),
                 deemix_download_fallback: false,
@@ -16632,6 +17764,11 @@ mod tests {
         );
         assert_eq!(saved.billboard_source_path, r"D:\Charts\Albums");
         assert_eq!(saved.billboard_singles_source_path, r"D:\Charts\Singles");
+        assert_eq!(saved.vg_lista_album_source_path, r"D:\Charts\Norway\Albums");
+        assert_eq!(
+            saved.vg_lista_singles_source_path,
+            r"D:\Charts\Norway\Singles"
+        );
         assert_eq!(saved.deemix_download_path, r"D:\Music\Incoming");
         assert_eq!(saved.deemix_download_quality, "mp3_128");
         assert!(!saved.deemix_download_fallback);

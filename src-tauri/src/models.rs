@@ -215,6 +215,17 @@ pub struct BillboardSinglesImportSummary {
     pub duration_ms: u128,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VgListaImportSummary {
+    pub source_path: String,
+    pub files_scanned: usize,
+    pub chart_entries: usize,
+    pub matched_items: i64,
+    pub dated_items: i64,
+    pub duration_ms: u128,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
@@ -236,6 +247,10 @@ pub struct AppSettings {
     pub billboard_source_path: String,
     #[serde(default = "default_billboard_singles_source_path")]
     pub billboard_singles_source_path: String,
+    #[serde(default = "default_vg_lista_album_source_path")]
+    pub vg_lista_album_source_path: String,
+    #[serde(default = "default_vg_lista_singles_source_path")]
+    pub vg_lista_singles_source_path: String,
     #[serde(default = "default_deemix_download_path")]
     pub deemix_download_path: String,
     #[serde(default = "default_deemix_download_quality")]
@@ -837,6 +852,14 @@ pub struct BrowseFilters {
     #[serde(default)]
     pub billboard_debut_week_to: Option<String>,
     #[serde(default)]
+    pub vg_lista_rank_min: Option<i32>,
+    #[serde(default)]
+    pub vg_lista_rank_max: Option<i32>,
+    #[serde(default)]
+    pub vg_lista_debut_week_from: Option<String>,
+    #[serde(default)]
+    pub vg_lista_debut_week_to: Option<String>,
+    #[serde(default)]
     pub year_from: Option<i32>,
     #[serde(default)]
     pub year_to: Option<i32>,
@@ -1399,6 +1422,12 @@ pub struct BrowseRow {
     pub billboard_single_debut_month: Option<i32>,
     pub billboard_single_debut_week: Option<i32>,
     pub billboard_single_debut_week_key: Option<String>,
+    pub vg_lista_rank: Option<i32>,
+    pub vg_lista_year: Option<i32>,
+    pub vg_lista_debut_year: Option<i32>,
+    pub vg_lista_debut_month: Option<i32>,
+    pub vg_lista_debut_week: Option<i32>,
+    pub vg_lista_debut_week_key: Option<String>,
     pub track_seconds: Option<i64>,
     pub normalized_rating: Option<i32>,
     pub disc_number: Option<i32>,
@@ -1983,6 +2012,14 @@ fn default_billboard_singles_source_path() -> String {
     "CSV_SINGLES".to_string()
 }
 
+fn default_vg_lista_album_source_path() -> String {
+    "CSV_ALBUMS_NO".to_string()
+}
+
+fn default_vg_lista_singles_source_path() -> String {
+    "CSV_SINGLES_NO".to_string()
+}
+
 fn default_deemix_download_path() -> String {
     String::new()
 }
@@ -2036,6 +2073,8 @@ mod tests {
             cover_source_path: r"D:\Covers".to_string(),
             billboard_source_path: r"D:\Charts\Albums".to_string(),
             billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
+            vg_lista_album_source_path: r"D:\Charts\Norway\Albums".to_string(),
+            vg_lista_singles_source_path: r"D:\Charts\Norway\Singles".to_string(),
             deemix_download_path: r"D:\Music\Incoming".to_string(),
             deemix_download_quality: "mp3_320".to_string(),
             deemix_download_fallback: true,

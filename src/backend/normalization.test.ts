@@ -11,6 +11,9 @@ describe("settings normalization", () => {
     expect(settings.backupRetention).toBe(3);
     expect(settings.importSourcePath).toBe("musicbee-library.tsv");
     expect(settings.billboardSourcePath).toBe("CSV_ALBUMS");
+    expect(settings.billboardSinglesSourcePath).toBe("CSV_SINGLES");
+    expect(settings.vgListaAlbumSourcePath).toBe("CSV_ALBUMS_NO");
+    expect(settings.vgListaSinglesSourcePath).toBe("CSV_SINGLES_NO");
     expect(settings.musicBrainzCachePath).toBe(
       "MusicBrainz/musicbrainz_cache.db",
     );
@@ -39,6 +42,8 @@ describe("settings normalization", () => {
       rightSidebarDefault: "hidden",
       importSourcePath: "  D:/Music/library.tsv  ",
       coverSourcePath: "  C:\\_code\\music_backup_v5\\AlbumCovers\\  ",
+      vgListaAlbumSourcePath: "  D:/Charts/Norway/Albums  ",
+      vgListaSinglesSourcePath: "  D:/Charts/Norway/Singles  ",
       deemixDownloadPath: "  D:/Music/Incoming  ",
       deemixDownloadQuality: "mp3_128",
       deemixDownloadFallback: false,
@@ -56,6 +61,8 @@ describe("settings normalization", () => {
       rightSidebarDefault: "hidden",
       importSourcePath: "D:/Music/library.tsv",
       coverSourcePath: "C:\\_code\\music_backup_v5\\AlbumCovers\\",
+      vgListaAlbumSourcePath: "D:/Charts/Norway/Albums",
+      vgListaSinglesSourcePath: "D:/Charts/Norway/Singles",
       deemixDownloadPath: "D:/Music/Incoming",
       deemixDownloadQuality: "mp3_128",
       deemixDownloadFallback: false,

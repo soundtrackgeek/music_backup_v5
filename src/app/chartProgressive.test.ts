@@ -4,7 +4,7 @@ import { createChartConfig } from "./requests";
 import { countAdvancedChartControls } from "./chartProgressive";
 
 describe("progressive Charts control summary", () => {
-  it("does not count the six common chart controls as advanced", () => {
+  it("does not count common chart controls as advanced", () => {
     const config = createChartConfig();
     const baseline = countAdvancedChartControls(config);
 
@@ -13,6 +13,8 @@ describe("progressive Charts control summary", () => {
     config.request.filters.genres = ["Synthpop"];
     config.request.filters.yearFrom = 1980;
     config.request.filters.yearTo = 1989;
+    config.request.filters.vgListaDebutWeekFrom = "1987-W20";
+    config.request.filters.vgListaDebutWeekTo = "1987-W30";
     config.request.filters.excludedGenres = ["Comedy"];
 
     expect(countAdvancedChartControls(config)).toBe(baseline);
@@ -49,5 +51,14 @@ describe("progressive Charts control summary", () => {
     config.gridCoverSize = 200;
 
     expect(countAdvancedChartControls(config)).toBe(baseline + 3);
+  });
+
+  it("counts a VG Lista rank range as one advanced group", () => {
+    const config = createChartConfig();
+    const baseline = countAdvancedChartControls(config);
+    config.request.filters.vgListaRankMin = 1;
+    config.request.filters.vgListaRankMax = 20;
+
+    expect(countAdvancedChartControls(config)).toBe(baseline + 1);
   });
 });

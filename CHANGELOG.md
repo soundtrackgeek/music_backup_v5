@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.92.0] - 2026-07-28
+### Added
+- Added Norwegian VG Lista weekly album and single imports from `CSV_ALBUMS_NO` and `CSV_SINGLES_NO`, preserving every weekly chart row in country-specific tables while enriching matched library albums and one canonical track copy with peak rank and first chart week.
+- Added VG Lista rank and debut-week filters, sorting metrics, and optional table columns to Search and Charts for both album and track views.
+- Added a US Billboard / NO VG Lista source selector to Album and Track Timeline views.
+
+### Changed
+- Consolidated chart imports into **Year-end album charts** and **Year-end singles charts**, with independent US and Norway checkboxes selected by default and both countries handled in one import action.
+- Added persistent Norwegian album and single source paths, defaulting to the repo-local VG Lista folders.
+- Bumped SQLite schema to version 36 and synchronized app metadata to `0.92.0`.
+
 ## [0.91.1] - 2026-07-28
 ### Added
 - Added an explicit **All weeks** Timeline state so a season or custom period opens as a complete snapshot instead of highlighting the first visible item's week.

@@ -62,6 +62,8 @@ import {
   clearCoverImageCache,
   defaultBillboardSinglesSourcePath,
   defaultBillboardSourcePath,
+  defaultVgListaAlbumSourcePath,
+  defaultVgListaSinglesSourcePath,
   defaultCoverSourcePath,
   defaultImportSourcePath,
   defaultMusicBrainzCachePath,
@@ -85,6 +87,8 @@ import {
   importAlbumCovers,
   importBillboardCharts,
   importBillboardSingles,
+  importVgListaAlbums,
+  importVgListaSingles,
   applyImportPreview,
   cancelImportPreview,
   getImportPreview,
@@ -141,6 +145,7 @@ import type {
   ArtistSummary,
   BillboardImportSummary,
   BillboardSinglesImportSummary,
+  VgListaImportSummary,
   BrowseFilters,
   BrowseRequest,
   BrowseResponse,
@@ -252,6 +257,8 @@ import {
   formatBillboardRank,
   formatBillboardSingleRank,
   formatBillboardSingleDebut,
+  formatVgListaDebutWeek,
+  formatVgListaRank,
   formatBytes,
   formatChartMetric,
   formatClockTime,
@@ -482,6 +489,14 @@ function createDefaultBillboardSourcePath() {
 
 function createDefaultBillboardSinglesSourcePath() {
   return loadCachedSettings().billboardSinglesSourcePath;
+}
+
+function createDefaultVgListaAlbumSourcePath() {
+  return loadCachedSettings().vgListaAlbumSourcePath;
+}
+
+function createDefaultVgListaSinglesSourcePath() {
+  return loadCachedSettings().vgListaSinglesSourcePath;
 }
 
 function createDefaultLeftSidebarMode(): LeftSidebarMode {
@@ -2058,11 +2073,54 @@ function ResultTable({
   const showBillboardColumn = visibleColumnSet.has("billboard");
   const showDebutColumn = visibleColumnSet.has("billboardDebut");
   const showSingleDebutColumn = visibleColumnSet.has("billboardSingleDebut");
+  const showVgListaColumn = visibleColumnSet.has("vgLista");
+  const showVgListaDebutColumn = visibleColumnSet.has("vgListaDebut");
+  const albumTableColumns = [
+    "minmax(220px, 2fr)",
+    "minmax(140px, 1.35fr)",
+    "minmax(96px, 0.9fr)",
+    "64px",
+    "minmax(104px, 1fr)",
+    ...(showBillboardColumn ? ["82px"] : []),
+    ...(showDebutColumn ? ["minmax(104px, 0.9fr)"] : []),
+    ...(showVgListaColumn ? ["88px"] : []),
+    ...(showVgListaDebutColumn ? ["minmax(132px, 1fr)"] : []),
+    "64px",
+    "84px",
+    "72px",
+  ].join(" ");
+  const trackTableColumns = [
+    "minmax(190px, 2fr)",
+    "minmax(210px, 1.5fr)",
+    "minmax(132px, 1.1fr)",
+    "minmax(96px, 0.8fr)",
+    "64px",
+    ...(showBillboardColumn ? ["96px"] : []),
+    ...(showDebutColumn ? ["minmax(104px, 0.9fr)"] : []),
+    "72px",
+    ...(showSingleDebutColumn ? ["minmax(132px, 1fr)"] : []),
+    ...(showVgListaColumn ? ["88px"] : []),
+    ...(showVgListaDebutColumn ? ["minmax(132px, 1fr)"] : []),
+    "64px",
+    "minmax(140px, 1.1fr)",
+  ].join(" ");
+  const optionalTableWidth =
+    (showBillboardColumn ? 96 : 0) +
+    (showDebutColumn ? 104 : 0) +
+    (showSingleDebutColumn ? 132 : 0) +
+    (showVgListaColumn ? 88 : 0) +
+    (showVgListaDebutColumn ? 132 : 0);
 
   return response.view === "tracks" ? (
     <div
-      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}`}
+      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}`}
       role="table"
+      style={
+        {
+          "--result-table-columns": trackTableColumns,
+          "--result-table-min-width": `${1040 + optionalTableWidth}px`,
+        } as CSSProperties
+      }
     >
       <div className="result-table-head" role="row">
         <SortableColumnHeader
@@ -2125,6 +2183,22 @@ function ResultTable({
             onSort={onSort}
           />
         ) : null}
+        {showVgListaColumn ? (
+          <SortableColumnHeader
+            label="VG Lista"
+            field="vgListaRank"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
+        {showVgListaDebutColumn ? (
+          <SortableColumnHeader
+            label="VG Lista debut week"
+            field="vgListaDebut"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
         <SortableColumnHeader
           label="Rating"
           field="trackRating"
@@ -2177,6 +2251,12 @@ function ResultTable({
             {showSingleDebutColumn ? (
               <span role="cell">{formatBillboardSingleDebut(row)}</span>
             ) : null}
+            {showVgListaColumn ? (
+              <span role="cell">{formatVgListaRank(row)}</span>
+            ) : null}
+            {showVgListaDebutColumn ? (
+              <span role="cell">{formatVgListaDebutWeek(row)}</span>
+            ) : null}
             <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
             <span role="cell" title={row.filePath ?? ""}>
               {row.filename ?? ""}
@@ -2187,8 +2267,14 @@ function ResultTable({
     </div>
   ) : (
     <div
-      className={`result-table album-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}`}
+      className={`result-table album-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}`}
       role="table"
+      style={
+        {
+          "--result-table-columns": albumTableColumns,
+          "--result-table-min-width": `${940 + optionalTableWidth - (showSingleDebutColumn ? 132 : 0)}px`,
+        } as CSSProperties
+      }
     >
       <div className="result-table-head" role="row">
         <SortableColumnHeader
@@ -2237,6 +2323,22 @@ function ResultTable({
             onSort={onSort}
           />
         ) : null}
+        {showVgListaColumn ? (
+          <SortableColumnHeader
+            label="VG Lista"
+            field="vgListaRank"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
+        {showVgListaDebutColumn ? (
+          <SortableColumnHeader
+            label="VG Lista debut week"
+            field="vgListaDebut"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
         <SortableColumnHeader
           label="Tracks"
           field="trackCount"
@@ -2275,6 +2377,12 @@ function ResultTable({
           ) : null}
           {showDebutColumn ? (
             <span role="cell">{formatBillboardDebutWeek(row)}</span>
+          ) : null}
+          {showVgListaColumn ? (
+            <span role="cell">{formatVgListaRank(row)}</span>
+          ) : null}
+          {showVgListaDebutColumn ? (
+            <span role="cell">{formatVgListaDebutWeek(row)}</span>
           ) : null}
           <span role="cell">{row.totalTracks ?? ""}</span>
           <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
@@ -5017,6 +5125,18 @@ function ChartResults({
       value: (row: BrowseRow) => formatBillboardSingleDebut(row),
     },
     {
+      key: "vgLista",
+      label: "VG Lista",
+      sortField: "vgListaRank",
+      value: (row: BrowseRow) => formatVgListaRank(row),
+    },
+    {
+      key: "vgListaDebut",
+      label: "VG Lista debut week",
+      sortField: "vgListaDebut",
+      value: (row: BrowseRow) => formatVgListaDebutWeek(row),
+    },
+    {
       key: "rating",
       label: "Rating",
       sortField: "albumRating",
@@ -7629,6 +7749,13 @@ export default function App() {
   >(null);
   const [billboardImportSummary, setBillboardImportSummary] =
     useState<BillboardImportSummary | null>(null);
+  const [vgListaAlbumSourcePath, setVgListaAlbumSourcePath] = useState(() =>
+    createDefaultVgListaAlbumSourcePath(),
+  );
+  const [vgListaAlbumImportSummary, setVgListaAlbumImportSummary] =
+    useState<VgListaImportSummary | null>(null);
+  const [importAlbumChartsUs, setImportAlbumChartsUs] = useState(true);
+  const [importAlbumChartsNo, setImportAlbumChartsNo] = useState(true);
   const [billboardSinglesSourcePath, setBillboardSinglesSourcePath] = useState(
     () => createDefaultBillboardSinglesSourcePath(),
   );
@@ -7638,6 +7765,13 @@ export default function App() {
     useState<string | null>(null);
   const [billboardSinglesImportSummary, setBillboardSinglesImportSummary] =
     useState<BillboardSinglesImportSummary | null>(null);
+  const [vgListaSinglesSourcePath, setVgListaSinglesSourcePath] = useState(() =>
+    createDefaultVgListaSinglesSourcePath(),
+  );
+  const [vgListaSinglesImportSummary, setVgListaSinglesImportSummary] =
+    useState<VgListaImportSummary | null>(null);
+  const [importSingleChartsUs, setImportSingleChartsUs] = useState(true);
+  const [importSingleChartsNo, setImportSingleChartsNo] = useState(true);
   const [request, setRequest] = useState<BrowseRequest>(() =>
     createRequest("albums"),
   );
@@ -7795,6 +7929,8 @@ export default function App() {
   const [trackTimelineResponse, setTrackTimelineResponse] =
     useState<TrackDebutTimelineResponse | null>(null);
   const [timelineMode, setTimelineMode] = useState<TimelineMode>("albums");
+  const [timelineChartCountry, setTimelineChartCountry] =
+    useState<"US" | "NO">("US");
   const [albumTimelineYear, setAlbumTimelineYear] = useState<number | null>(null);
   const [trackTimelineYear, setTrackTimelineYear] = useState<number | null>(null);
   const [albumTimelineError, setAlbumTimelineError] = useState<string | null>(null);
@@ -8020,6 +8156,13 @@ export default function App() {
     setBillboardSinglesSourcePath(
       nextSettings.billboardSinglesSourcePath ||
         defaultBillboardSinglesSourcePath,
+    );
+    setVgListaAlbumSourcePath(
+      nextSettings.vgListaAlbumSourcePath || defaultVgListaAlbumSourcePath,
+    );
+    setVgListaSinglesSourcePath(
+      nextSettings.vgListaSinglesSourcePath ||
+        defaultVgListaSinglesSourcePath,
     );
     setMusicBrainzCachePathDraft(
       nextSettings.musicBrainzCachePath || defaultMusicBrainzCachePath,
@@ -8947,8 +9090,8 @@ export default function App() {
       setAlbumTimelineError(null);
       const timelineRequest =
         timelineMode === "tracks"
-          ? getTrackDebutTimeline(trackTimelineYear)
-          : getAlbumDebutTimeline(albumTimelineYear);
+          ? getTrackDebutTimeline(trackTimelineYear, timelineChartCountry)
+          : getAlbumDebutTimeline(albumTimelineYear, timelineChartCountry);
       void timelineRequest
         .then((nextResponse) => {
           if (!cancelled) {
@@ -8984,6 +9127,7 @@ export default function App() {
     albumTimelineYear,
     trackTimelineYear,
     timelineMode,
+    timelineChartCountry,
     albumTimelineRefreshKey,
   ]);
 
@@ -9210,12 +9354,22 @@ export default function App() {
         billboardSinglesSourcePath,
         defaultBillboardSinglesSourcePath,
       ),
+      vgListaAlbumSourcePath: textSettingValue(
+        vgListaAlbumSourcePath,
+        defaultVgListaAlbumSourcePath,
+      ),
+      vgListaSinglesSourcePath: textSettingValue(
+        vgListaSinglesSourcePath,
+        defaultVgListaSinglesSourcePath,
+      ),
     }),
     [
       billboardSinglesSourcePath,
       billboardSourcePath,
       coverSourcePath,
       sourcePath,
+      vgListaAlbumSourcePath,
+      vgListaSinglesSourcePath,
     ],
   );
   const importPathsKey = useMemo(
@@ -9230,7 +9384,11 @@ export default function App() {
     normalizedImportPaths.billboardSourcePath !==
       persistedSettings.billboardSourcePath ||
     normalizedImportPaths.billboardSinglesSourcePath !==
-      persistedSettings.billboardSinglesSourcePath;
+      persistedSettings.billboardSinglesSourcePath ||
+    normalizedImportPaths.vgListaAlbumSourcePath !==
+      persistedSettings.vgListaAlbumSourcePath ||
+    normalizedImportPaths.vgListaSinglesSourcePath !==
+      persistedSettings.vgListaSinglesSourcePath;
 
   useEffect(() => {
     if (
@@ -9422,6 +9580,27 @@ export default function App() {
           }),
       });
     }
+    if (
+      currentFilters.vgListaDebutWeekFrom ||
+      currentFilters.vgListaDebutWeekTo
+    ) {
+      const from = currentFilters.vgListaDebutWeekFrom;
+      const to = currentFilters.vgListaDebutWeekTo;
+      nextChips.push({
+        key: "vgListaDebutWeek",
+        label:
+          from && to
+            ? `VG Lista debut ${from}–${to}`
+            : from
+              ? `VG Lista debut from ${from}`
+              : `VG Lista debut through ${to}`,
+        remove: () =>
+          updateFilters({
+            vgListaDebutWeekFrom: null,
+            vgListaDebutWeekTo: null,
+          }),
+      });
+    }
     addRangeChip(
       nextChips,
       "billboard",
@@ -9441,9 +9620,17 @@ export default function App() {
           updateFilters({
             billboardSingleRankMin: null,
             billboardSingleRankMax: null,
-          }),
+        }),
       );
     }
+    addRangeChip(
+      nextChips,
+      "vgLista",
+      "VG Lista",
+      currentFilters.vgListaRankMin,
+      currentFilters.vgListaRankMax,
+      () => updateFilters({ vgListaRankMin: null, vgListaRankMax: null }),
+    );
     addRangeChip(
       nextChips,
       "releaseYear",
@@ -10195,21 +10382,49 @@ export default function App() {
     setIsImportingBillboard(true);
     setBillboardImportError(null);
     setBillboardImportSummary(null);
+    setVgListaAlbumImportSummary(null);
 
     try {
-      const summary = await importBillboardCharts(billboardSourcePath);
-      setBillboardImportSummary(summary);
-      await loadData();
-      setRequest((current) => ({ ...current }));
-      setAlbumTimelineRefreshKey((previous) => previous + 1);
-      setAlbumRequest((current) => ({ ...current }));
-      setChartConfig((current) => ({ ...current }));
-      setArtistRequest((current) => ({ ...current }));
-      setGenreRequest((current) => ({ ...current }));
-      setDiscoveryAlbumRequest((current) => ({ ...current }));
-      setArtistAlbumsResponse(null);
-      setGenreAlbumsResponse(null);
-      setDiscoveryAlbumResponse(null);
+      const errors: string[] = [];
+      let completed = false;
+      if (importAlbumChartsUs) {
+        try {
+          setBillboardImportSummary(
+            await importBillboardCharts(billboardSourcePath),
+          );
+          completed = true;
+        } catch (error) {
+          errors.push(
+            `US: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      if (importAlbumChartsNo) {
+        try {
+          setVgListaAlbumImportSummary(
+            await importVgListaAlbums(vgListaAlbumSourcePath),
+          );
+          completed = true;
+        } catch (error) {
+          errors.push(
+            `Norway: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      if (completed) {
+        await loadData();
+        setRequest((current) => ({ ...current }));
+        setAlbumTimelineRefreshKey((previous) => previous + 1);
+        setAlbumRequest((current) => ({ ...current }));
+        setChartConfig((current) => ({ ...current }));
+        setArtistRequest((current) => ({ ...current }));
+        setGenreRequest((current) => ({ ...current }));
+        setDiscoveryAlbumRequest((current) => ({ ...current }));
+        setArtistAlbumsResponse(null);
+        setGenreAlbumsResponse(null);
+        setDiscoveryAlbumResponse(null);
+      }
+      setBillboardImportError(errors.length > 0 ? errors.join(" · ") : null);
     } catch (error) {
       setBillboardImportError(
         error instanceof Error ? error.message : String(error),
@@ -10223,17 +10438,47 @@ export default function App() {
     setIsImportingBillboardSingles(true);
     setBillboardSinglesImportError(null);
     setBillboardSinglesImportSummary(null);
+    setVgListaSinglesImportSummary(null);
 
     try {
-      const summary = await importBillboardSingles(billboardSinglesSourcePath);
-      setBillboardSinglesImportSummary(summary);
-      await loadData();
-      setRequest((current) => ({ ...current }));
-      setAlbumTimelineRefreshKey((previous) => previous + 1);
-      setAlbumTracksResponse(null);
-      setArtistAlbumTracksResponse(null);
-      setGenreAlbumsResponse(null);
-      setDiscoveryAlbumResponse(null);
+      const errors: string[] = [];
+      let completed = false;
+      if (importSingleChartsUs) {
+        try {
+          setBillboardSinglesImportSummary(
+            await importBillboardSingles(billboardSinglesSourcePath),
+          );
+          completed = true;
+        } catch (error) {
+          errors.push(
+            `US: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      if (importSingleChartsNo) {
+        try {
+          setVgListaSinglesImportSummary(
+            await importVgListaSingles(vgListaSinglesSourcePath),
+          );
+          completed = true;
+        } catch (error) {
+          errors.push(
+            `Norway: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      if (completed) {
+        await loadData();
+        setRequest((current) => ({ ...current }));
+        setAlbumTimelineRefreshKey((previous) => previous + 1);
+        setAlbumTracksResponse(null);
+        setArtistAlbumTracksResponse(null);
+        setGenreAlbumsResponse(null);
+        setDiscoveryAlbumResponse(null);
+      }
+      setBillboardSinglesImportError(
+        errors.length > 0 ? errors.join(" · ") : null,
+      );
     } catch (error) {
       setBillboardSinglesImportError(
         error instanceof Error ? error.message : String(error),
@@ -10950,6 +11195,16 @@ export default function App() {
           baseSettings.billboardSinglesSourcePath,
         defaultBillboardSinglesSourcePath,
       ),
+      vgListaAlbumSourcePath: textSettingValue(
+        values.vgListaAlbumSourcePath ??
+          baseSettings.vgListaAlbumSourcePath,
+        defaultVgListaAlbumSourcePath,
+      ),
+      vgListaSinglesSourcePath: textSettingValue(
+        values.vgListaSinglesSourcePath ??
+          baseSettings.vgListaSinglesSourcePath,
+        defaultVgListaSinglesSourcePath,
+      ),
       deemixDownloadPath: (
         values.deemixDownloadPath ?? baseSettings.deemixDownloadPath
       ).trim(),
@@ -11048,6 +11303,36 @@ export default function App() {
                 defaultBillboardSinglesSourcePath,
               ) === nextSettings.billboardSinglesSourcePath
                 ? saved.billboardSinglesSourcePath
+                : current,
+            );
+          }
+          if (
+            Object.prototype.hasOwnProperty.call(
+              values,
+              "vgListaAlbumSourcePath",
+            )
+          ) {
+            setVgListaAlbumSourcePath((current) =>
+              textSettingValue(
+                current,
+                defaultVgListaAlbumSourcePath,
+              ) === nextSettings.vgListaAlbumSourcePath
+                ? saved.vgListaAlbumSourcePath
+                : current,
+            );
+          }
+          if (
+            Object.prototype.hasOwnProperty.call(
+              values,
+              "vgListaSinglesSourcePath",
+            )
+          ) {
+            setVgListaSinglesSourcePath((current) =>
+              textSettingValue(
+                current,
+                defaultVgListaSinglesSourcePath,
+              ) === nextSettings.vgListaSinglesSourcePath
+                ? saved.vgListaSinglesSourcePath
                 : current,
             );
           }
@@ -12249,10 +12534,12 @@ export default function App() {
                 : albumTimelineResponse
             }
             mode={timelineMode}
+            chartCountry={timelineChartCountry}
             error={albumTimelineError}
             isLoading={isAlbumTimelineLoading}
             onCreatePlaylist={openTimelinePlaylist}
             onModeChange={setTimelineMode}
+            onChartCountryChange={setTimelineChartCountry}
             onOpenAlbum={openTimelineAlbum}
             onOpenTrack={openTimelineTrack}
             onOpenSearch={() => setActiveSection("Search")}
@@ -12502,32 +12789,71 @@ export default function App() {
             <section className="import-panel">
               <div className="panel-heading">
                 <div>
-                  <h2>Billboard year-end charts</h2>
+                  <h2>Year-end album charts</h2>
                   <p>
-                    Import album ranks from yearly CSV files and annotate
-                    matching library albums.
+                    Import US Billboard year-end rows and Norwegian VG Lista
+                    weekly rows in one operation.
                   </p>
                 </div>
                 <RunStatus
                   status={
                     isImportingBillboard
                       ? "running"
-                      : billboardImportSummary
+                      : billboardImportSummary || vgListaAlbumImportSummary
                         ? "completed"
                         : "idle"
                   }
                 />
               </div>
 
+              <div
+                className="toggle-row cover-options"
+                aria-label="Album chart countries"
+              >
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={importAlbumChartsUs}
+                    onChange={(event) =>
+                      setImportAlbumChartsUs(event.target.checked)
+                    }
+                    disabled={isImportingBillboard}
+                  />
+                  <span>US · Billboard</span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={importAlbumChartsNo}
+                    onChange={(event) =>
+                      setImportAlbumChartsNo(event.target.checked)
+                    }
+                    disabled={isImportingBillboard}
+                  />
+                  <span>NO · VG Lista</span>
+                </label>
+              </div>
+
               <label className="source-input">
-                <span>Chart CSV folder</span>
+                <span>US album CSV folder</span>
                 <input
                   value={billboardSourcePath}
                   onChange={(event) =>
                     setBillboardSourcePath(event.target.value)
                   }
                   placeholder="CSV_ALBUMS"
-                  disabled={isImportingBillboard}
+                  disabled={isImportingBillboard || !importAlbumChartsUs}
+                />
+              </label>
+              <label className="source-input">
+                <span>Norwegian album CSV folder</span>
+                <input
+                  value={vgListaAlbumSourcePath}
+                  onChange={(event) =>
+                    setVgListaAlbumSourcePath(event.target.value)
+                  }
+                  placeholder="CSV_ALBUMS_NO"
+                  disabled={isImportingBillboard || !importAlbumChartsNo}
                 />
               </label>
 
@@ -12536,12 +12862,23 @@ export default function App() {
               ) : null}
               {billboardImportSummary ? (
                 <p className="success-message">
-                  Matched {formatNumber(billboardImportSummary.matchedAlbums)}{" "}
+                  US · Matched {formatNumber(billboardImportSummary.matchedAlbums)}{" "}
                   albums with {formatNumber(billboardImportSummary.datedAlbums)}{" "}
                   debut weeks from{" "}
                   {formatNumber(billboardImportSummary.chartEntries)} chart rows
                   across {formatNumber(billboardImportSummary.filesScanned)}{" "}
                   files.
+                </p>
+              ) : null}
+              {vgListaAlbumImportSummary ? (
+                <p className="success-message">
+                  Norway · Matched{" "}
+                  {formatNumber(vgListaAlbumImportSummary.matchedItems)} albums
+                  with {formatNumber(vgListaAlbumImportSummary.datedItems)}{" "}
+                  debut weeks from{" "}
+                  {formatNumber(vgListaAlbumImportSummary.chartEntries)} weekly
+                  rows across{" "}
+                  {formatNumber(vgListaAlbumImportSummary.filesScanned)} files.
                 </p>
               ) : null}
 
@@ -12552,24 +12889,27 @@ export default function App() {
                   onClick={startBillboardImport}
                   disabled={
                     isImportingBillboard ||
-                    !billboardSourcePath.trim() ||
+                    (!importAlbumChartsUs && !importAlbumChartsNo) ||
+                    (importAlbumChartsUs && !billboardSourcePath.trim()) ||
+                    (importAlbumChartsNo && !vgListaAlbumSourcePath.trim()) ||
                     !canImport ||
                     (status?.albumCount ?? 0) === 0
                   }
                   title={
                     canImport
-                      ? "Import Billboard charts"
-                      : "Open the Tauri desktop app to import Billboard charts"
+                      ? "Import selected album charts"
+                      : "Open the Tauri desktop app to import album charts"
                   }
                 >
                   <BarChart3 size={17} />
                   <span>
-                    {isImportingBillboard ? "Importing" : "Import Billboard"}
+                    {isImportingBillboard
+                      ? "Importing"
+                      : "Import album charts"}
                   </span>
                 </button>
                 <span className="db-path">
-                  Best rank wins when an album appears in more than one year-end
-                  chart.
+                  Each source keeps its own best rank and earliest chart week.
                 </span>
               </div>
             </section>
@@ -12577,32 +12917,76 @@ export default function App() {
             <section className="import-panel">
               <div className="panel-heading">
                 <div>
-                  <h2>Billboard year-end singles</h2>
+                  <h2>Year-end singles charts</h2>
                   <p>
-                    Import single ranks from yearly CSV files and annotate
-                    matching library tracks.
+                    Import US Billboard year-end rows and Norwegian VG Lista
+                    weekly rows in one operation.
                   </p>
                 </div>
                 <RunStatus
                   status={
                     isImportingBillboardSingles
                       ? "running"
-                      : billboardSinglesImportSummary
+                      : billboardSinglesImportSummary ||
+                          vgListaSinglesImportSummary
                         ? "completed"
                         : "idle"
                   }
                 />
               </div>
 
+              <div
+                className="toggle-row cover-options"
+                aria-label="Singles chart countries"
+              >
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={importSingleChartsUs}
+                    onChange={(event) =>
+                      setImportSingleChartsUs(event.target.checked)
+                    }
+                    disabled={isImportingBillboardSingles}
+                  />
+                  <span>US · Billboard</span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={importSingleChartsNo}
+                    onChange={(event) =>
+                      setImportSingleChartsNo(event.target.checked)
+                    }
+                    disabled={isImportingBillboardSingles}
+                  />
+                  <span>NO · VG Lista</span>
+                </label>
+              </div>
+
               <label className="source-input">
-                <span>Singles CSV folder</span>
+                <span>US singles CSV folder</span>
                 <input
                   value={billboardSinglesSourcePath}
                   onChange={(event) =>
                     setBillboardSinglesSourcePath(event.target.value)
                   }
                   placeholder="CSV_SINGLES"
-                  disabled={isImportingBillboardSingles}
+                  disabled={
+                    isImportingBillboardSingles || !importSingleChartsUs
+                  }
+                />
+              </label>
+              <label className="source-input">
+                <span>Norwegian singles CSV folder</span>
+                <input
+                  value={vgListaSinglesSourcePath}
+                  onChange={(event) =>
+                    setVgListaSinglesSourcePath(event.target.value)
+                  }
+                  placeholder="CSV_SINGLES_NO"
+                  disabled={
+                    isImportingBillboardSingles || !importSingleChartsNo
+                  }
                 />
               </label>
 
@@ -12611,7 +12995,7 @@ export default function App() {
               ) : null}
               {billboardSinglesImportSummary ? (
                 <p className="success-message">
-                  Matched{" "}
+                  US · Matched{" "}
                   {formatNumber(billboardSinglesImportSummary.matchedTracks)}{" "}
                   tracks from{" "}
                   {formatNumber(billboardSinglesImportSummary.chartEntries)}{" "}
@@ -12629,6 +13013,19 @@ export default function App() {
                   .
                 </p>
               ) : null}
+              {vgListaSinglesImportSummary ? (
+                <p className="success-message">
+                  Norway · Matched{" "}
+                  {formatNumber(vgListaSinglesImportSummary.matchedItems)}{" "}
+                  tracks with{" "}
+                  {formatNumber(vgListaSinglesImportSummary.datedItems)} debut
+                  weeks from{" "}
+                  {formatNumber(vgListaSinglesImportSummary.chartEntries)}{" "}
+                  weekly rows across{" "}
+                  {formatNumber(vgListaSinglesImportSummary.filesScanned)}{" "}
+                  files.
+                </p>
+              ) : null}
 
               <div className="action-row">
                 <button
@@ -12637,14 +13034,18 @@ export default function App() {
                   onClick={startBillboardSinglesImport}
                   disabled={
                     isImportingBillboardSingles ||
-                    !billboardSinglesSourcePath.trim() ||
+                    (!importSingleChartsUs && !importSingleChartsNo) ||
+                    (importSingleChartsUs &&
+                      !billboardSinglesSourcePath.trim()) ||
+                    (importSingleChartsNo &&
+                      !vgListaSinglesSourcePath.trim()) ||
                     !canImport ||
                     (status?.trackCount ?? 0) === 0
                   }
                   title={
                     canImport
-                      ? "Import Billboard singles"
-                      : "Open the Tauri desktop app to import Billboard singles"
+                      ? "Import selected singles charts"
+                      : "Open the Tauri desktop app to import singles charts"
                   }
                 >
                   <ListMusic size={17} />
@@ -12655,9 +13056,7 @@ export default function App() {
                   </span>
                 </button>
                 <span className="db-path">
-                  Matches use Display Artist and Track. Best rank and earliest
-                  plausible Date Entered are kept independently across repeated
-                  years.
+                  Each source keeps its own best rank and earliest chart entry.
                 </span>
               </div>
             </section>
@@ -12705,8 +13104,8 @@ export default function App() {
               <div>
                 <h1>Charts</h1>
                 <p>
-                  Rank albums or tracks from scores, ratings, Billboard
-                  performance, and chart-entry dates.
+                  Rank albums or tracks from scores, ratings, Billboard and VG
+                  Lista performance, and chart-entry dates.
                 </p>
               </div>
               <div className="topbar-actions">
@@ -12956,6 +13355,20 @@ export default function App() {
                     />
                   </>
                 )}
+                <WeekField
+                  label="VG Lista debut from"
+                  value={chartConfig.request.filters.vgListaDebutWeekFrom}
+                  onChange={(vgListaDebutWeekFrom) =>
+                    updateChartFilters({ vgListaDebutWeekFrom })
+                  }
+                />
+                <WeekField
+                  label="VG Lista debut to"
+                  value={chartConfig.request.filters.vgListaDebutWeekTo}
+                  onChange={(vgListaDebutWeekTo) =>
+                    updateChartFilters({ vgListaDebutWeekTo })
+                  }
+                />
                 <GenreListCriterion
                   label="Exclude genres"
                   values={chartConfig.request.filters.excludedGenres}
@@ -13048,6 +13461,22 @@ export default function App() {
                     chartConfig.request.view === "tracks"
                       ? updateChartFilters({ billboardSingleRankMax: value })
                       : updateChartFilters({ billboardRankMax: value })
+                  }
+                />
+                <NumberField
+                  label="VG Lista min"
+                  value={chartConfig.request.filters.vgListaRankMin}
+                  min={1}
+                  onChange={(vgListaRankMin) =>
+                    updateChartFilters({ vgListaRankMin })
+                  }
+                />
+                <NumberField
+                  label="VG Lista max"
+                  value={chartConfig.request.filters.vgListaRankMax}
+                  min={1}
+                  onChange={(vgListaRankMax) =>
+                    updateChartFilters({ vgListaRankMax })
                   }
                 />
                 <CountryListCriterion
@@ -13277,6 +13706,8 @@ export default function App() {
                             "originCountry",
                             "billboardSingle",
                             "billboardSingleDebut",
+                            "vgLista",
+                            "vgListaDebut",
                             "trackRating",
                           ].includes(option.value)
                         : ![
@@ -17374,6 +17805,20 @@ export default function App() {
                     />
                   </>
                 )}
+                <WeekField
+                  label="VG Lista debut from"
+                  value={currentFilters.vgListaDebutWeekFrom}
+                  onChange={(value) =>
+                    updateFilter("vgListaDebutWeekFrom", value)
+                  }
+                />
+                <WeekField
+                  label="VG Lista debut to"
+                  value={currentFilters.vgListaDebutWeekTo}
+                  onChange={(value) =>
+                    updateFilter("vgListaDebutWeekTo", value)
+                  }
+                />
                 <GenreListCriterion
                   label="Genres"
                   values={currentFilters.genres}
@@ -17563,6 +18008,18 @@ export default function App() {
                     />
                   </>
                 ) : null}
+                <NumberField
+                  label="VG Lista min"
+                  value={currentFilters.vgListaRankMin}
+                  min={1}
+                  onChange={(value) => updateFilter("vgListaRankMin", value)}
+                />
+                <NumberField
+                  label="VG Lista max"
+                  value={currentFilters.vgListaRankMax}
+                  min={1}
+                  onChange={(value) => updateFilter("vgListaRankMax", value)}
+                />
                 <NumberField
                   label="Release from"
                   value={currentFilters.releaseYearFrom}
@@ -17893,6 +18350,14 @@ export default function App() {
                               value: "billboardSingleDebut",
                               label: "Single chart debut",
                             },
+                            {
+                              value: "vgListaRank",
+                              label: "VG Lista",
+                            },
+                            {
+                              value: "vgListaDebut",
+                              label: "VG Lista debut week",
+                            },
                             { value: "trackRating", label: "Track rating" },
                             { value: "trackNumber", label: "Track number" },
                           ]
@@ -17903,6 +18368,11 @@ export default function App() {
                             { value: "year", label: "Year" },
                             { value: "originCountry", label: "Origin country" },
                             { value: "billboardRank", label: "Billboard" },
+                            { value: "vgListaRank", label: "VG Lista" },
+                            {
+                              value: "vgListaDebut",
+                              label: "VG Lista debut week",
+                            },
                             { value: "genre", label: "Genre" },
                             { value: "totalMinutes", label: "Minutes" },
                             { value: "trackCount", label: "Tracks" },

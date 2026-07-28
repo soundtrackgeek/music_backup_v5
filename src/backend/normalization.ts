@@ -12,6 +12,8 @@ export const defaultImportSourcePath = "musicbee-library.tsv";
 export const defaultCoverSourcePath = "AlbumCovers";
 export const defaultBillboardSourcePath = "CSV_ALBUMS";
 export const defaultBillboardSinglesSourcePath = "CSV_SINGLES";
+export const defaultVgListaAlbumSourcePath = "CSV_ALBUMS_NO";
+export const defaultVgListaSinglesSourcePath = "CSV_SINGLES_NO";
 export const defaultMusicBrainzCachePath =
   "MusicBrainz/musicbrainz_cache.db";
 export const defaultMusicBrainzOverlaySyncPath = "";
@@ -58,6 +60,14 @@ export function normalizeSettings(
     billboardSinglesSourcePath: normalizeImportPath(
       settings.billboardSinglesSourcePath,
       defaultBillboardSinglesSourcePath,
+    ),
+    vgListaAlbumSourcePath: normalizeImportPath(
+      settings.vgListaAlbumSourcePath,
+      defaultVgListaAlbumSourcePath,
+    ),
+    vgListaSinglesSourcePath: normalizeImportPath(
+      settings.vgListaSinglesSourcePath,
+      defaultVgListaSinglesSourcePath,
     ),
     deemixDownloadPath: normalizeOptionalPath(settings.deemixDownloadPath),
     deemixDownloadQuality: normalizeDeemixDownloadQuality(

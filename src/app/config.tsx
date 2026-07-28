@@ -154,6 +154,8 @@ export const rankingOptions = [
   { value: "trackRating", label: "Track rating" },
   { value: "billboardSingleRank", label: "Single Billboard rank" },
   { value: "billboardSingleDebut", label: "Single chart debut" },
+  { value: "vgListaRank", label: "VG Lista rank" },
+  { value: "vgListaDebut", label: "VG Lista debut week" },
 ];
 
 export const albumRankingOptions = rankingOptions.filter((option) =>
@@ -166,6 +168,8 @@ export const albumRankingOptions = rankingOptions.filter((option) =>
     "tmoe",
     "ratingCompleteness",
     "totalMinutes",
+    "vgListaRank",
+    "vgListaDebut",
   ].includes(option.value),
 );
 
@@ -176,12 +180,16 @@ export const trackRankingOptions = rankingOptions.filter((option) =>
     "billboardSingleDebut",
     "albumScore",
     "albumRating",
+    "vgListaRank",
+    "vgListaDebut",
   ].includes(option.value),
 );
 
 export const chartColumnOptions = [
   { value: "billboard", label: "Billboard" },
   { value: "billboardDebut", label: "Debut week" },
+  { value: "vgLista", label: "VG Lista" },
+  { value: "vgListaDebut", label: "VG Lista debut week" },
   { value: "originCountry", label: "Origin" },
   { value: "rating", label: "Rating" },
   { value: "complete", label: "Complete" },
@@ -198,6 +206,8 @@ export const chartColumnOptions = [
 export const searchTableColumnOptions = [
   { value: "billboard", label: "Billboard" },
   { value: "billboardDebut", label: "Debut week" },
+  { value: "vgLista", label: "VG Lista" },
+  { value: "vgListaDebut", label: "VG Lista debut week" },
   { value: "billboardSingleDebut", label: "Single debut" },
 ];
 

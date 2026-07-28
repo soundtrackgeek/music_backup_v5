@@ -181,6 +181,15 @@ export type BillboardSinglesImportSummary = {
   durationMs: number;
 };
 
+export type VgListaImportSummary = {
+  sourcePath: string;
+  filesScanned: number;
+  chartEntries: number;
+  matchedItems: number;
+  datedItems: number;
+  durationMs: number;
+};
+
 export type LeftSidebarMode = "expanded" | "iconOnly" | "hidden";
 
 export type RightSidebarMode = "expanded" | "hidden";
@@ -203,6 +212,8 @@ export type AppSettings = {
   coverSourcePath: string;
   billboardSourcePath: string;
   billboardSinglesSourcePath: string;
+  vgListaAlbumSourcePath: string;
+  vgListaSinglesSourcePath: string;
   deemixDownloadPath: string;
   deemixDownloadQuality: DeemixDownloadQuality;
   deemixDownloadFallback: boolean;
@@ -1136,6 +1147,10 @@ export type BrowseFilters = {
   billboardSingleDebutDateTo: string | null;
   billboardDebutWeekFrom: string | null;
   billboardDebutWeekTo: string | null;
+  vgListaRankMin: number | null;
+  vgListaRankMax: number | null;
+  vgListaDebutWeekFrom: string | null;
+  vgListaDebutWeekTo: string | null;
   yearFrom: number | null;
   yearTo: number | null;
   releaseYearFrom: number | null;
@@ -1529,6 +1544,12 @@ export type BrowseRow = {
   billboardSingleDebutMonth: number | null;
   billboardSingleDebutWeek: number | null;
   billboardSingleDebutWeekKey: string | null;
+  vgListaRank: number | null;
+  vgListaYear: number | null;
+  vgListaDebutYear: number | null;
+  vgListaDebutMonth: number | null;
+  vgListaDebutWeek: number | null;
+  vgListaDebutWeekKey: string | null;
   trackSeconds: number | null;
   normalizedRating: number | null;
   discNumber: number | null;

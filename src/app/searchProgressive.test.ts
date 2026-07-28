@@ -4,13 +4,15 @@ import { createFilters } from "./requests";
 import { countAdvancedSearchFilters } from "./searchProgressive";
 
 describe("progressive Search filter summary", () => {
-  it("does not count the six common album controls as advanced", () => {
+  it("does not count common album controls as advanced", () => {
     const filters = createFilters();
     filters.albumTitle.value = "Actually";
     filters.albumArtist.value = "Pet Shop Boys";
     filters.genres = ["Synthpop"];
     filters.yearFrom = 1987;
     filters.yearTo = 1987;
+    filters.vgListaDebutWeekFrom = "1987-W20";
+    filters.vgListaDebutWeekTo = "1987-W30";
     filters.excludedGenres = ["Comedy"];
 
     expect(countAdvancedSearchFilters(filters, "albums")).toBe(0);
@@ -38,5 +40,13 @@ describe("progressive Search filter summary", () => {
 
     filters.albumRatingMin = 80;
     expect(countAdvancedSearchFilters(filters, "tracks")).toBe(2);
+  });
+
+  it("counts a VG Lista rank range as one advanced group", () => {
+    const filters = createFilters();
+    filters.vgListaRankMin = 1;
+    filters.vgListaRankMax = 20;
+
+    expect(countAdvancedSearchFilters(filters, "albums")).toBe(1);
   });
 });

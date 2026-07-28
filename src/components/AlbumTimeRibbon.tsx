@@ -53,6 +53,7 @@ type AlbumOrderMode =
   | "custom";
 type AlbumOrderDirection = "ascending" | "descending";
 export type TimelineMode = "albums" | "tracks";
+export type ChartCountry = "US" | "NO";
 
 type TimelineWeekSelection = {
   scope: string;
@@ -98,10 +99,12 @@ export type AlbumTimeRibbonPlaylist = {
 type AlbumTimeRibbonProps = {
   data: AlbumDebutTimelineResponse | TrackDebutTimelineResponse | null;
   mode?: TimelineMode;
+  chartCountry?: ChartCountry;
   error: string | null;
   isLoading: boolean;
   onCreatePlaylist: (selection: AlbumTimeRibbonPlaylist) => void;
   onModeChange?: (mode: TimelineMode) => void;
+  onChartCountryChange?: (country: ChartCountry) => void;
   onOpenAlbum: (albumId: string) => void;
   onOpenTrack?: (trackId: number) => void;
   onOpenSearch: () => void;
@@ -161,7 +164,7 @@ const albumOrderOptions: Array<{
 }> = [
   { id: "debut", label: "First appearance", defaultDirection: "ascending" },
   { id: "score", label: "Album score", defaultDirection: "descending" },
-  { id: "billboard", label: "Billboard rank", defaultDirection: "ascending" },
+  { id: "billboard", label: "Chart rank", defaultDirection: "ascending" },
   { id: "title", label: "Album title", defaultDirection: "ascending" },
   { id: "artist", label: "Artist", defaultDirection: "ascending" },
   { id: "custom", label: "Custom order", defaultDirection: "ascending" },
@@ -360,7 +363,7 @@ function albumOrderDescription(
     return `${directionLabel}; unranked ${timelineMode === "tracks" ? "tracks" : "albums"} stay last.`;
   }
   if (mode === "debut") {
-    return `${directionLabel} by Billboard first-appearance week.`;
+    return `${directionLabel} by chart first-appearance week.`;
   }
   if (mode === "custom") {
     return "Select a cover, then move it earlier or later.";
@@ -571,13 +574,48 @@ function LoadingTimeline({ mode }: { mode: TimelineMode }) {
   );
 }
 
+function ChartCountryToggle({
+  chartCountry,
+  onChange,
+}: {
+  chartCountry: ChartCountry;
+  onChange: (country: ChartCountry) => void;
+}) {
+  return (
+    <div
+      className="album-time-ribbon-mode album-time-ribbon-country"
+      role="group"
+      aria-label="Timeline chart source"
+    >
+      <button
+        type="button"
+        className={chartCountry === "US" ? "active" : ""}
+        aria-pressed={chartCountry === "US"}
+        onClick={() => onChange("US")}
+      >
+        US · Billboard
+      </button>
+      <button
+        type="button"
+        className={chartCountry === "NO" ? "active" : ""}
+        aria-pressed={chartCountry === "NO"}
+        onClick={() => onChange("NO")}
+      >
+        NO · VG Lista
+      </button>
+    </div>
+  );
+}
+
 export function AlbumTimeRibbon({
   data,
   mode = "albums",
+  chartCountry = "US",
   error,
   isLoading,
   onCreatePlaylist,
   onModeChange = () => undefined,
+  onChartCountryChange = () => undefined,
   onOpenAlbum,
   onOpenTrack = () => undefined,
   onOpenSearch,
@@ -606,6 +644,8 @@ export function AlbumTimeRibbon({
     () => normalizeTimelineData(data, mode),
     [data, mode],
   );
+  const chartSourceLabel =
+    chartCountry === "NO" ? "VG Lista" : "Billboard";
 
   useEffect(() => {
     function handleFullscreenChange() {
@@ -729,11 +769,22 @@ export function AlbumTimeRibbon({
   if (!normalizedData || selectedYear == null || years.length === 0) {
     return (
       <section className="album-time-ribbon-state">
+        <ChartCountryToggle
+          chartCountry={chartCountry}
+          onChange={onChartCountryChange}
+        />
         <CalendarBlank size={30} weight="light" aria-hidden="true" />
         <strong>No {mode === "tracks" ? "track debut dates" : "album debut weeks"} yet</strong>
         <span>
-          Import the {mode === "tracks" ? "CSV_SINGLES" : "CSV_ALBUMS"} folder
-          to place your collection on this timeline.
+          Import the{" "}
+          {chartCountry === "NO"
+            ? mode === "tracks"
+              ? "CSV_SINGLES_NO"
+              : "CSV_ALBUMS_NO"
+            : mode === "tracks"
+              ? "CSV_SINGLES"
+              : "CSV_ALBUMS"}{" "}
+          folder to place your collection on this timeline.
         </span>
       </section>
     );
@@ -823,7 +874,7 @@ export function AlbumTimeRibbon({
       albumOrderMode === "debut"
         ? `let the sequence move ${
             albumOrderDirection === "ascending" ? "forward" : "backward"
-          } through Billboard debut weeks`
+          } through ${chartSourceLabel} debut weeks`
         : albumOrderMode === "custom"
           ? `follow the custom ${mode === "tracks" ? "track" : "album"} order exactly`
           : `follow the visible ${orderLabel.toLowerCase()} order`;
@@ -845,7 +896,7 @@ export function AlbumTimeRibbon({
       }${
         activeWeek == null
           ? ""
-          : `, narrowed to Billboard ${
+          : `, narrowed to ${chartSourceLabel} ${
               mode === "tracks" ? "chart-entry" : "first-appearance"
             } week ${activeWeek}`
       }. Use only ${mode === "tracks" ? "these tracks" : "music from these albums"} and ${orderInstruction}.`,
@@ -856,6 +907,12 @@ export function AlbumTimeRibbon({
     setSelectedAlbumId(null);
     setSelectedWeekSelection(null);
     onModeChange(nextMode);
+  }
+
+  function chooseChartCountry(nextCountry: ChartCountry) {
+    setSelectedAlbumId(null);
+    setSelectedWeekSelection(null);
+    onChartCountryChange(nextCountry);
   }
 
   function chooseYear(year: number) {
@@ -982,6 +1039,10 @@ export function AlbumTimeRibbon({
               Tracks
             </button>
           </div>
+          <ChartCountryToggle
+            chartCountry={chartCountry}
+            onChange={chooseChartCountry}
+          />
           <h1>{mode === "tracks" ? "Tracks" : "Albums"} through the years</h1>
           <p>
             Explore {normalizedData.datedAlbumCount.toLocaleString()} {mode === "tracks" ? "track" : "album"}
@@ -1525,7 +1586,7 @@ export function AlbumTimeRibbon({
 
       <footer className="album-time-ribbon-footnote">
         <span>
-          Billboard chart debut is used as the historical date marker.
+          {chartSourceLabel} chart debut is used as the historical date marker.
         </span>
         {normalizedData.undatedAlbumCount > 0 ? (
           <span>

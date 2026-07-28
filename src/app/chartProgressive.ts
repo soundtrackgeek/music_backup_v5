@@ -43,6 +43,7 @@ export function countAdvancedChartControls(config: ChartConfig) {
     config.resultLimit !== defaultResultLimit,
     hasRange(filters.billboardRankMin, filters.billboardRankMax),
     hasRange(filters.billboardSingleRankMin, filters.billboardSingleRankMax),
+    hasRange(filters.vgListaRankMin, filters.vgListaRankMax),
     filters.billboardSingleDebutDateFrom != null ||
       filters.billboardSingleDebutDateTo != null,
     filters.originCountryCodes.length > 0,

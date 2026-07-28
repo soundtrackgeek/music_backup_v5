@@ -27,6 +27,7 @@ export function countAdvancedSearchFilters(
         filters.billboardSingleRankMin,
         filters.billboardSingleRankMax,
       ),
+    hasRange(filters.vgListaRankMin, filters.vgListaRankMax),
     view === "tracks" &&
       (filters.billboardSingleDebutDateFrom != null ||
         filters.billboardSingleDebutDateTo != null),

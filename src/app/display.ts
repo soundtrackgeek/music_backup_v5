@@ -134,6 +134,15 @@ export function formatOriginCountry(
   return name;
 }
 
+export function formatVgListaRank(
+  row: Pick<BrowseRow, "vgListaRank" | "vgListaYear">,
+) {
+  if (row.vgListaRank == null) return "";
+  return row.vgListaYear == null
+    ? `#${row.vgListaRank}`
+    : `#${row.vgListaRank} ${row.vgListaYear}`;
+}
+
 export function formatBillboardSingleDebut(
   row: Pick<
     BrowseRow,
@@ -173,6 +182,25 @@ export function formatBillboardDebutWeek(
   return `${month ? `${month} ` : ""}${row.billboardDebutYear} · Week ${row.billboardDebutWeek}`;
 }
 
+export function formatVgListaDebutWeek(
+  row: Pick<
+    BrowseRow,
+    "vgListaDebutYear" | "vgListaDebutMonth" | "vgListaDebutWeek"
+  >,
+) {
+  if (row.vgListaDebutYear == null || row.vgListaDebutWeek == null) {
+    return "";
+  }
+  const month =
+    row.vgListaDebutMonth == null
+      ? ""
+      : new Intl.DateTimeFormat(undefined, {
+          month: "short",
+          timeZone: "UTC",
+        }).format(new Date(Date.UTC(2000, row.vgListaDebutMonth - 1, 1)));
+  return `${month ? `${month} ` : ""}${row.vgListaDebutYear} · Week ${row.vgListaDebutWeek}`;
+}
+
 export function billboardDebutWeekKey(
   row: Pick<
     BrowseRow,
@@ -210,6 +238,10 @@ export function formatChartMetric(row: BrowseRow, metric: string) {
       return formatBillboardSingleRank(row);
     case "billboardSingleDebut":
       return formatBillboardSingleDebut(row);
+    case "vgListaRank":
+      return formatVgListaRank(row);
+    case "vgListaDebut":
+      return formatVgListaDebutWeek(row);
     case "trackRating":
       return formatTrackRating(row.normalizedRating);
     case "lovedTracks":
@@ -249,6 +281,10 @@ export function browseRowSortValue(row: BrowseRow, field: string) {
       return row.billboardSingleRank;
     case "billboardSingleDebut":
       return row.billboardSingleDebutDate ?? "";
+    case "vgListaRank":
+      return row.vgListaRank;
+    case "vgListaDebut":
+      return row.vgListaDebutWeekKey ?? "";
     case "trackRating":
       return row.normalizedRating;
     case "time":
