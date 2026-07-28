@@ -682,6 +682,11 @@ type BrowseRowWithoutOrigin = Omit<
   | "billboardDebutMonth"
   | "billboardDebutWeek"
   | "billboardDebutWeekKey"
+  | "billboardSingleDebutDate"
+  | "billboardSingleDebutYear"
+  | "billboardSingleDebutMonth"
+  | "billboardSingleDebutWeek"
+  | "billboardSingleDebutWeekKey"
 >;
 type ArtistSummaryWithoutMusicBrainz = Omit<
   ArtistSummary,
@@ -827,9 +832,34 @@ function mockArtistInfoForArtist(
   }
 }
 
+function isoWeekForMockDate(date: Date) {
+  const thursday = new Date(date.getTime());
+  const day = thursday.getUTCDay() || 7;
+  thursday.setUTCDate(thursday.getUTCDate() + 4 - day);
+  const isoYear = thursday.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const week = Math.ceil(
+    ((thursday.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7,
+  );
+  return { isoYear, week };
+}
+
 function withMockOrigin(row: BrowseRowWithoutOrigin): BrowseRow {
   const debutWeek =
     row.billboardYear == null ? null : ((row.billboardYear * 7) % 52) + 1;
+  const singleDebutDay = ((row.trackId ?? 1) * 7) % 24 + 1;
+  const singleDebutDateValue =
+    row.billboardSingleYear == null
+      ? null
+      : new Date(Date.UTC(row.billboardSingleYear, 6, singleDebutDay));
+  const singleDebutWeek =
+    singleDebutDateValue == null
+      ? null
+      : isoWeekForMockDate(singleDebutDateValue);
+  const singleDebutDate =
+    row.billboardSingleYear == null || singleDebutDateValue == null
+      ? null
+      : `${row.billboardSingleYear}-07-${String(singleDebutDay).padStart(2, "0")}`;
   return {
     ...row,
     billboardDebutYear: row.billboardYear,
@@ -839,6 +869,14 @@ function withMockOrigin(row: BrowseRowWithoutOrigin): BrowseRow {
       row.billboardYear == null || debutWeek == null
         ? null
         : `${row.billboardYear}-W${String(debutWeek).padStart(2, "0")}`,
+    billboardSingleDebutDate: singleDebutDate,
+    billboardSingleDebutYear: row.billboardSingleYear,
+    billboardSingleDebutMonth: singleDebutDate == null ? null : 7,
+    billboardSingleDebutWeek: singleDebutWeek?.week ?? null,
+    billboardSingleDebutWeekKey:
+      row.billboardSingleYear == null || singleDebutWeek == null
+        ? null
+        : `${singleDebutWeek.isoYear}-W${String(singleDebutWeek.week).padStart(2, "0")}`,
     ...mockOriginForArtist(row.albumArtistDisplay),
   };
 }

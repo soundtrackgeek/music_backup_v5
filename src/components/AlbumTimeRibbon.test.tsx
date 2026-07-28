@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   AlbumDebutTimelineAlbum,
   AlbumDebutTimelineResponse,
+  TrackDebutTimelineResponse,
+  TrackDebutTimelineTrack,
 } from "../types";
 import {
   AlbumTimeRibbon,
@@ -92,6 +94,38 @@ function response(): AlbumDebutTimelineResponse {
     albums: [januaryAlbum, summerAlbum, fallAlbum, christmasAlbum],
     datedAlbumCount: 6,
     undatedAlbumCount: 1,
+  };
+}
+
+function trackResponse(): TrackDebutTimelineResponse {
+  const track: TrackDebutTimelineTrack = {
+    id: "track:42",
+    trackId: 42,
+    albumId: "album-42",
+    title: "Summer Song",
+    displayArtist: "The Satellites",
+    album: "Night Signals",
+    albumArtistDisplay: "The Satellites",
+    canonicalGenre: "Synthpop",
+    year: 1989,
+    normalizedRating: 180,
+    love: "L",
+    billboardSingleRank: 4,
+    billboardSingleYear: 1989,
+    billboardSingleDebutDate: "1989-06-17",
+    billboardSingleDebutYear: 1989,
+    billboardSingleDebutMonth: 6,
+    billboardSingleDebutWeek: 24,
+    billboardSingleDebutWeekKey: "1989-W24",
+    coverPath: null,
+    coverMimeType: null,
+  };
+  return {
+    years: [{ year: 1989, trackCount: 1, representativeTrack: track }],
+    selectedYear: 1989,
+    tracks: [track],
+    datedTrackCount: 1,
+    undatedTrackCount: 2,
   };
 }
 
@@ -231,6 +265,54 @@ describe("AlbumTimeRibbon", () => {
 
     await user.click(screen.getByRole("button", { name: "Next chart year" }));
     expect(onSelectYear).toHaveBeenCalledWith(1990);
+  });
+
+  it("switches to a track timeline and keeps exact tracks in playlist actions", async () => {
+    const user = userEvent.setup();
+    const onCreatePlaylist = vi.fn();
+    const onModeChange = vi.fn();
+    const onOpenTrack = vi.fn();
+    const { container } = render(
+      <AlbumTimeRibbon
+        data={trackResponse()}
+        mode="tracks"
+        error={null}
+        isLoading={false}
+        onCreatePlaylist={onCreatePlaylist}
+        onModeChange={onModeChange}
+        onOpenAlbum={vi.fn()}
+        onOpenTrack={onOpenTrack}
+        onOpenSearch={vi.fn()}
+        onRetry={vi.fn()}
+        onSelectYear={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Tracks through the years" }),
+    ).toBeInTheDocument();
+    const trackList = screen.getByRole("list", {
+      name: "Tracks in selected period",
+    });
+    await user.click(within(trackList).getByRole("listitem"));
+    expect(container.querySelector(".album-time-ribbon-drawer small")).toHaveTextContent(
+      /1989 · Week 24/,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open track" }));
+    expect(onOpenTrack).toHaveBeenCalledWith(42);
+
+    await user.click(screen.getByRole("button", { name: "Create playlist" }));
+    expect(onCreatePlaylist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        albumIds: [],
+        trackIds: [42],
+        mode: "tracks",
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Albums" }));
+    expect(onModeChange).toHaveBeenCalledWith("albums");
   });
 
   it("orders the cover strip by score and Billboard rank in either direction", async () => {

@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.90.0] - 2026-07-28
+### Added
+- Added Billboard singles `Date Entered` import from `CSV_SINGLES`, with exact calendar dates, ISO weeks, qualified historical-date handling, and independent earliest-debut selection when a track appears in multiple chart years.
+- Added a Tracks mode to the standalone Timeline with the same seasonal and custom periods, fullscreen stage, exact track playlist handoff, track rating/Billboard/custom ordering, and direct track navigation as the album experience.
+- Added exact single chart-debut date ranges, sorting, missing-date filters, and columns to Search and Charts, plus true track charts ranked by track rating, Billboard singles rank, or chart debut.
+- Added Luna support for track chart-entry date ranges, named seasons, track chart ranking, and playlist recipes without confusing chart entry with release year.
+
+### Changed
+- Track exports now include the normalized Billboard single debut date and ISO week, and the singles import summary reports dated tracks plus exact, qualified, missing, and malformed source dates.
+- Bumped SQLite schema to version 34 and synchronized app metadata to `0.90.0`.
+
+### Fixed
+- Correctly infers the century for qualified two-digit historical dates such as `12/31/21+` while rejecting implausible date typos.
+
 ## [0.89.1] - 2026-07-28
 ### Changed
 - Restored the Timeline proposal's cinematic selected-year treatment with a warm breathing light stage, luminous decade rail and nodes, a glowing year beam, and longer cover connectors aligned to the central axis.

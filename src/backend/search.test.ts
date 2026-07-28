@@ -29,4 +29,24 @@ describe("web preview library search", () => {
 
     expect(response.rows.map((row) => row.album)).toEqual(["Actually"]);
   });
+
+  it("filters tracks by their exact Billboard chart-entry dates", async () => {
+    const request = createRequest("tracks");
+    request.filters.billboardSingleDebutDateFrom = "1987-01-01";
+    request.filters.billboardSingleDebutDateTo = "1987-12-31";
+    request.sort = { field: "billboardSingleDebut", direction: "asc" };
+
+    const response = await searchLibrary(request);
+
+    expect(response.rows.length).toBeGreaterThan(0);
+    expect(response.rows.every((row) => row.trackId !== null)).toBe(true);
+    expect(
+      response.rows.every(
+        (row) =>
+          row.billboardSingleDebutDate !== null &&
+          row.billboardSingleDebutDate >= "1987-01-01" &&
+          row.billboardSingleDebutDate <= "1987-12-31",
+      ),
+    ).toBe(true);
+  });
 });

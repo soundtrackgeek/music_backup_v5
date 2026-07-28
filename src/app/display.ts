@@ -134,6 +134,26 @@ export function formatOriginCountry(
   return name;
 }
 
+export function formatBillboardSingleDebut(
+  row: Pick<
+    BrowseRow,
+    "billboardSingleDebutDate" | "billboardSingleDebutWeek"
+  >,
+) {
+  if (!row.billboardSingleDebutDate) return "";
+  const date = new Date(`${row.billboardSingleDebutDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return row.billboardSingleDebutDate;
+  const label = new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+  return row.billboardSingleDebutWeek == null
+    ? label
+    : `${label} · W${row.billboardSingleDebutWeek}`;
+}
+
 export function formatBillboardDebutWeek(
   row: Pick<
     BrowseRow,
@@ -186,6 +206,12 @@ export function formatChartMetric(row: BrowseRow, metric: string) {
       return formatBillboardRank(row);
     case "albumRating":
       return row.effectiveAlbumRating?.toString() ?? "";
+    case "billboardSingleRank":
+      return formatBillboardSingleRank(row);
+    case "billboardSingleDebut":
+      return formatBillboardSingleDebut(row);
+    case "trackRating":
+      return formatTrackRating(row.normalizedRating);
     case "lovedTracks":
       return row.lovedTracks?.toString() ?? "0";
     case "ae":
@@ -221,6 +247,8 @@ export function browseRowSortValue(row: BrowseRow, field: string) {
       return billboardDebutWeekKey(row);
     case "billboardSingleRank":
       return row.billboardSingleRank;
+    case "billboardSingleDebut":
+      return row.billboardSingleDebutDate ?? "";
     case "trackRating":
       return row.normalizedRating;
     case "time":

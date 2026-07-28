@@ -173,6 +173,11 @@ export type BillboardSinglesImportSummary = {
   filesScanned: number;
   chartEntries: number;
   matchedTracks: number;
+  datedTracks: number;
+  exactDates: number;
+  qualifiedDates: number;
+  missingDates: number;
+  invalidDates: number;
   durationMs: number;
 };
 
@@ -1110,6 +1115,7 @@ export type TextFilter = {
 
 export type BrowseFilters = {
   albumIds: string[];
+  trackIds: number[];
   artistKeys: string[];
   albumTitle: TextFilter;
   trackTitle: TextFilter;
@@ -1126,6 +1132,8 @@ export type BrowseFilters = {
   billboardRankMax: number | null;
   billboardSingleRankMin: number | null;
   billboardSingleRankMax: number | null;
+  billboardSingleDebutDateFrom: string | null;
+  billboardSingleDebutDateTo: string | null;
   billboardDebutWeekFrom: string | null;
   billboardDebutWeekTo: string | null;
   yearFrom: number | null;
@@ -1516,6 +1524,11 @@ export type BrowseRow = {
   billboardDebutWeekKey: string | null;
   billboardSingleRank: number | null;
   billboardSingleYear: number | null;
+  billboardSingleDebutDate: string | null;
+  billboardSingleDebutYear: number | null;
+  billboardSingleDebutMonth: number | null;
+  billboardSingleDebutWeek: number | null;
+  billboardSingleDebutWeekKey: string | null;
   trackSeconds: number | null;
   normalizedRating: number | null;
   discNumber: number | null;
@@ -1569,6 +1582,43 @@ export type AlbumDebutTimelineResponse = {
   albums: AlbumDebutTimelineAlbum[];
   datedAlbumCount: number;
   undatedAlbumCount: number;
+};
+
+export type TrackDebutTimelineTrack = {
+  id: string;
+  trackId: number;
+  albumId: string;
+  title: string | null;
+  displayArtist: string | null;
+  album: string | null;
+  albumArtistDisplay: string | null;
+  canonicalGenre: string | null;
+  year: number | null;
+  normalizedRating: number | null;
+  love: string | null;
+  billboardSingleRank: number | null;
+  billboardSingleYear: number | null;
+  billboardSingleDebutDate: string;
+  billboardSingleDebutYear: number;
+  billboardSingleDebutMonth: number;
+  billboardSingleDebutWeek: number;
+  billboardSingleDebutWeekKey: string;
+  coverPath: string | null;
+  coverMimeType: string | null;
+};
+
+export type TrackDebutTimelineYear = {
+  year: number;
+  trackCount: number;
+  representativeTrack: TrackDebutTimelineTrack | null;
+};
+
+export type TrackDebutTimelineResponse = {
+  years: TrackDebutTimelineYear[];
+  selectedYear: number | null;
+  tracks: TrackDebutTimelineTrack[];
+  datedTrackCount: number;
+  undatedTrackCount: number;
 };
 
 export type SavedSearch = {

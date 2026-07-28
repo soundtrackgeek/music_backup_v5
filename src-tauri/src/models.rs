@@ -207,6 +207,11 @@ pub struct BillboardSinglesImportSummary {
     pub files_scanned: usize,
     pub chart_entries: usize,
     pub matched_tracks: i64,
+    pub dated_tracks: i64,
+    pub exact_dates: usize,
+    pub qualified_dates: usize,
+    pub missing_dates: usize,
+    pub invalid_dates: usize,
     pub duration_ms: u128,
 }
 
@@ -790,6 +795,8 @@ pub struct BrowseFilters {
     #[serde(default)]
     pub album_ids: Vec<String>,
     #[serde(default)]
+    pub track_ids: Vec<i64>,
+    #[serde(default)]
     pub artist_keys: Vec<String>,
     #[serde(default)]
     pub album_title: TextFilter,
@@ -821,6 +828,10 @@ pub struct BrowseFilters {
     pub billboard_single_rank_min: Option<i32>,
     #[serde(default)]
     pub billboard_single_rank_max: Option<i32>,
+    #[serde(default)]
+    pub billboard_single_debut_date_from: Option<String>,
+    #[serde(default)]
+    pub billboard_single_debut_date_to: Option<String>,
     #[serde(default)]
     pub billboard_debut_week_from: Option<String>,
     #[serde(default)]
@@ -1383,6 +1394,11 @@ pub struct BrowseRow {
     pub billboard_debut_week_key: Option<String>,
     pub billboard_single_rank: Option<i32>,
     pub billboard_single_year: Option<i32>,
+    pub billboard_single_debut_date: Option<String>,
+    pub billboard_single_debut_year: Option<i32>,
+    pub billboard_single_debut_month: Option<i32>,
+    pub billboard_single_debut_week: Option<i32>,
+    pub billboard_single_debut_week_key: Option<String>,
     pub track_seconds: Option<i64>,
     pub normalized_rating: Option<i32>,
     pub disc_number: Option<i32>,
@@ -1444,6 +1460,49 @@ pub struct AlbumDebutTimelineResponse {
     pub albums: Vec<AlbumDebutTimelineAlbum>,
     pub dated_album_count: i64,
     pub undated_album_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackDebutTimelineTrack {
+    pub id: String,
+    pub track_id: i64,
+    pub album_id: String,
+    pub title: Option<String>,
+    pub display_artist: Option<String>,
+    pub album: Option<String>,
+    pub album_artist_display: Option<String>,
+    pub canonical_genre: Option<String>,
+    pub year: Option<i32>,
+    pub normalized_rating: Option<i32>,
+    pub love: Option<String>,
+    pub billboard_single_rank: Option<i32>,
+    pub billboard_single_year: Option<i32>,
+    pub billboard_single_debut_date: String,
+    pub billboard_single_debut_year: i32,
+    pub billboard_single_debut_month: i32,
+    pub billboard_single_debut_week: i32,
+    pub billboard_single_debut_week_key: String,
+    pub cover_path: Option<String>,
+    pub cover_mime_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackDebutTimelineYear {
+    pub year: i32,
+    pub track_count: i64,
+    pub representative_track: Option<TrackDebutTimelineTrack>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackDebutTimelineResponse {
+    pub years: Vec<TrackDebutTimelineYear>,
+    pub selected_year: Option<i32>,
+    pub tracks: Vec<TrackDebutTimelineTrack>,
+    pub dated_track_count: i64,
+    pub undated_track_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]

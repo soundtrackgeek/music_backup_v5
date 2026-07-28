@@ -5,13 +5,18 @@ import {
 } from "./requests";
 import type { ChartConfig, TextFilter } from "../types";
 
-const defaultVisibleColumns = [
+const defaultAlbumVisibleColumns = [
   "billboard",
   "billboardDebut",
   "rating",
   "complete",
   "score",
   "loved",
+];
+const defaultTrackVisibleColumns = [
+  "billboardSingle",
+  "billboardSingleDebut",
+  "trackRating",
 ];
 const defaultExportColumns = ["calculated"];
 const defaultResultLimit = 50;
@@ -37,12 +42,17 @@ export function countAdvancedChartControls(config: ChartConfig) {
   const advancedGroups = [
     config.resultLimit !== defaultResultLimit,
     hasRange(filters.billboardRankMin, filters.billboardRankMax),
+    hasRange(filters.billboardSingleRankMin, filters.billboardSingleRankMax),
+    filters.billboardSingleDebutDateFrom != null ||
+      filters.billboardSingleDebutDateTo != null,
     filters.originCountryCodes.length > 0,
     filters.excludedOriginCountryCodes.length > 0,
     filters.artistType.trim().length > 0,
     filters.artistGender.trim().length > 0,
     hasText(filters.albumArtist),
     hasText(filters.albumTitle),
+    hasText(filters.displayArtist),
+    hasText(filters.trackTitle),
     hasText(filters.publisher),
     hasRange(filters.artistBornYearFrom, filters.artistBornYearTo),
     filters.artistDied ||
@@ -55,11 +65,17 @@ export function countAdvancedChartControls(config: ChartConfig) {
       ),
     hasRange(filters.totalMinutesMin, filters.totalMinutesMax),
     hasRange(filters.albumRatingMin, filters.albumRatingMax),
+    hasRange(filters.trackRatingMin, filters.trackRatingMax),
     hasRange(filters.lovedTracksMin, filters.lovedTracksMax),
     completeness.min > completenessRange.min ||
       completeness.max < completenessRange.max,
     filters.missingOriginCountry,
-    !hasSameValues(config.visibleColumns, defaultVisibleColumns),
+    !hasSameValues(
+      config.visibleColumns,
+      config.request.view === "tracks"
+        ? defaultTrackVisibleColumns
+        : defaultAlbumVisibleColumns,
+    ),
     !hasSameValues(config.exportColumns, defaultExportColumns),
     config.viewMode === "grid" &&
       normalizeChartGridCoverSize(config.gridCoverSize) !==

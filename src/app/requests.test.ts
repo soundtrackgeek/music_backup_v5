@@ -35,6 +35,8 @@ describe("browse request creation and serialization", () => {
     request.filters.originCountryCodes = ["GB"];
     request.filters.artistBornYearFrom = 1940;
     request.filters.billboardSingleRankMax = 20;
+    request.filters.billboardSingleDebutDateFrom = "1989-06-01";
+    request.filters.billboardSingleDebutDateTo = "1989-08-31";
     request.filters.billboardDebutWeekFrom = "1989-W22";
     request.filters.billboardDebutWeekTo = "1989-W35";
     request.sort = { field: "billboardSingleRank", direction: "asc" };
@@ -49,6 +51,8 @@ describe("browse request creation and serialization", () => {
         originCountryCodes: ["GB"],
         artistBornYearFrom: 1940,
         billboardSingleRankMax: 20,
+        billboardSingleDebutDateFrom: "1989-06-01",
+        billboardSingleDebutDateTo: "1989-08-31",
         billboardDebutWeekFrom: "1989-W22",
         billboardDebutWeekTo: "1989-W35",
       },

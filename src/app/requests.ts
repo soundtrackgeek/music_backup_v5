@@ -27,6 +27,7 @@ export function createTextFilter(): TextFilter {
 export function createFilters(): BrowseFilters {
   return {
     albumIds: [],
+    trackIds: [],
     artistKeys: [],
     albumTitle: createTextFilter(),
     trackTitle: createTextFilter(),
@@ -43,6 +44,8 @@ export function createFilters(): BrowseFilters {
     billboardRankMax: null,
     billboardSingleRankMin: null,
     billboardSingleRankMax: null,
+    billboardSingleDebutDateFrom: null,
+    billboardSingleDebutDateTo: null,
     billboardDebutWeekFrom: null,
     billboardDebutWeekTo: null,
     yearFrom: null,
@@ -276,27 +279,25 @@ export function renewMusicToolIssueRequest(
   };
 }
 
-export function createChartConfig(): ChartConfig {
-  const request = createRequest("albums");
-  request.sort = { field: "albumScore", direction: "desc" };
+export function createChartConfig(view: BrowseView = "albums"): ChartConfig {
+  const request = createRequest(view);
+  const rankingMetric = view === "tracks" ? "trackRating" : "albumScore";
+  request.sort = { field: rankingMetric, direction: "desc" };
   request.limit = 50;
   request.filters.ratingCompletenessMin = 100;
 
   return {
     request,
-    rankingMetric: "albumScore",
-    sortField: "albumScore",
+    rankingMetric,
+    sortField: rankingMetric,
     ratingCompletenessMin: 100,
     ratingCompletenessMax: 100,
     sortDirection: "desc",
     resultLimit: 50,
     visibleColumns: [
-      "billboard",
-      "billboardDebut",
-      "rating",
-      "complete",
-      "score",
-      "loved",
+      ...(view === "tracks"
+        ? ["billboardSingle", "billboardSingleDebut", "trackRating"]
+        : ["billboard", "billboardDebut", "rating", "complete", "score", "loved"]),
     ],
     exportColumns: ["calculated"],
     viewMode: "table",
@@ -315,7 +316,7 @@ export function chartRequestFromConfig(config: ChartConfig): BrowseRequest {
   const { min, max } = chartCompletenessRange(config);
   return {
     ...config.request,
-    view: "albums",
+    view: config.request.view,
     offset: 0,
     limit: config.resultLimit,
     sort: {
@@ -393,10 +394,7 @@ export function normalizeChartConfigForClient(config: ChartConfig) {
       : rawViewMode === "timeline"
         ? "grid"
         : "table";
-  const request = {
-    ...normalizeBrowseRequestForClient(config.request),
-    view: "albums" as const,
-  };
+  const request = normalizeBrowseRequestForClient(config.request);
   return {
     ...config,
     request,

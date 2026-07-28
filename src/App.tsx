@@ -72,6 +72,7 @@ import {
   cacheSettings,
   getDiscovery,
   getAlbumDebutTimeline,
+  getTrackDebutTimeline,
   getGenreProgress,
   getMusicBrainzArtistDiscography,
   getMusicBrainzArtistInfoStatus,
@@ -132,6 +133,7 @@ import {
 import type {
   AppSettings,
   AlbumDebutTimelineResponse,
+  TrackDebutTimelineResponse,
   AiMusicResearchContext,
   AiSnapshot,
   ArtistListRequest,
@@ -236,6 +238,8 @@ import {
   navigation,
   operatorLabels,
   rankingOptions,
+  albumRankingOptions,
+  trackRankingOptions,
   rightSidebarModeLabels,
   rightSidebarModeOptions,
   searchExportColumnOptions,
@@ -247,6 +251,7 @@ import {
   formatAverage,
   formatBillboardRank,
   formatBillboardSingleRank,
+  formatBillboardSingleDebut,
   formatBytes,
   formatChartMetric,
   formatClockTime,
@@ -330,6 +335,7 @@ import { AlbumCover } from "./components/AlbumCover";
 import {
   AlbumTimeRibbon,
   type AlbumTimeRibbonPlaylist,
+  type TimelineMode,
 } from "./components/AlbumTimeRibbon";
 import {
   ChartAdvancedControls,
@@ -1760,6 +1766,27 @@ function WeekField({
   );
 }
 
+function DateField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <label className="criterion">
+      <span>{label}</span>
+      <input
+        type="date"
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value || null)}
+      />
+    </label>
+  );
+}
+
 function CompletenessRangeCriterion({
   minValue,
   maxValue,
@@ -2030,10 +2057,11 @@ function ResultTable({
   const visibleColumnSet = new Set(visibleColumns);
   const showBillboardColumn = visibleColumnSet.has("billboard");
   const showDebutColumn = visibleColumnSet.has("billboardDebut");
+  const showSingleDebutColumn = visibleColumnSet.has("billboardSingleDebut");
 
   return response.view === "tracks" ? (
     <div
-      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}`}
+      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}`}
       role="table"
     >
       <div className="result-table-head" role="row">
@@ -2089,6 +2117,14 @@ function ResultTable({
           sort={sort}
           onSort={onSort}
         />
+        {showSingleDebutColumn ? (
+          <SortableColumnHeader
+            label="Single debut"
+            field="billboardSingleDebut"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
         <SortableColumnHeader
           label="Rating"
           field="trackRating"
@@ -2138,6 +2174,9 @@ function ResultTable({
               <span role="cell">{formatBillboardDebutWeek(row)}</span>
             ) : null}
             <span role="cell">{singleLabel}</span>
+            {showSingleDebutColumn ? (
+              <span role="cell">{formatBillboardSingleDebut(row)}</span>
+            ) : null}
             <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
             <span role="cell" title={row.filePath ?? ""}>
               {row.filename ?? ""}
@@ -4774,10 +4813,12 @@ function ChartResults({
     return (
       <div className="empty-state large">
         <FileSearch size={20} />
-        <span>No ranked albums.</span>
+        <span>No ranked {response.view === "tracks" ? "tracks" : "albums"}.</span>
       </div>
     );
   }
+
+  const isTracks = response.view === "tracks";
 
   if (config.viewMode === "compact") {
     return (
@@ -4788,23 +4829,35 @@ function ChartResults({
             <AlbumCover row={row} className="cover-list" previewOnHover />
             <div>
               <h3>
-                <span>{row.album ?? "Untitled"}</span>
-                {formatBillboardRank(row) ? (
+                <span>{isTracks ? row.title ?? "Untitled" : row.album ?? "Untitled"}</span>
+                {(isTracks
+                  ? formatBillboardSingleRank(row)
+                  : formatBillboardRank(row)) ? (
                   <span className="billboard-badge">
-                    {formatBillboardRank(row)}
+                    {isTracks
+                      ? formatBillboardSingleRank(row)
+                      : formatBillboardRank(row)}
                   </span>
                 ) : null}
               </h3>
               <p className="chart-list-meta">
-                {row.albumArtistDisplay ? (
-                  <span>{row.albumArtistDisplay}</span>
+                {(isTracks ? row.displayArtist : row.albumArtistDisplay) ? (
+                  <span>
+                    {isTracks ? row.displayArtist : row.albumArtistDisplay}
+                  </span>
                 ) : null}
                 {formatOriginCountry(row) ? (
                   <CountryDisplay value={row} mode={countryFlagDisplay} />
                 ) : null}
                 {row.year ? <span>{row.year}</span> : null}
-                {formatBillboardDebutWeek(row) ? (
-                  <span>{formatBillboardDebutWeek(row)}</span>
+                {(isTracks
+                  ? formatBillboardSingleDebut(row)
+                  : formatBillboardDebutWeek(row)) ? (
+                  <span>
+                    {isTracks
+                      ? formatBillboardSingleDebut(row)
+                      : formatBillboardDebutWeek(row)}
+                  </span>
                 ) : null}
                 {row.canonicalGenre ? <span>{row.canonicalGenre}</span> : null}
               </p>
@@ -4828,8 +4881,12 @@ function ChartResults({
     return (
       <div className="chart-grid" role="list" style={gridStyle}>
         {response.rows.map((row, index) => {
-          const albumTitle = row.album ?? "Untitled";
-          const billboardLabel = formatBillboardRank(row);
+          const albumTitle = isTracks
+            ? row.title ?? "Untitled"
+            : row.album ?? "Untitled";
+          const billboardLabel = isTracks
+            ? formatBillboardSingleRank(row)
+            : formatBillboardRank(row);
 
           return (
             <article className="chart-grid-item" role="listitem" key={row.id}>
@@ -4845,18 +4902,22 @@ function ChartResults({
                 </h3>
                 <p
                   className="chart-grid-artist"
-                  title={row.albumArtistDisplay ?? ""}
+                  title={(isTracks ? row.displayArtist : row.albumArtistDisplay) ?? ""}
                 >
-                  {row.albumArtistDisplay ?? ""}
+                  {(isTracks ? row.displayArtist : row.albumArtistDisplay) ?? ""}
                 </p>
                 {billboardLabel ? (
                   <span className="billboard-badge chart-grid-billboard">
                     {billboardLabel}
                   </span>
                 ) : null}
-                {formatBillboardDebutWeek(row) ? (
+                {(isTracks
+                  ? formatBillboardSingleDebut(row)
+                  : formatBillboardDebutWeek(row)) ? (
                   <span className="chart-grid-debut">
-                    {formatBillboardDebutWeek(row)}
+                    {isTracks
+                      ? formatBillboardSingleDebut(row)
+                      : formatBillboardDebutWeek(row)}
                   </span>
                 ) : null}
                 <span className="chart-grid-score">
@@ -4884,6 +4945,18 @@ function ChartResults({
       value: (_row: BrowseRow, rank: number) => `${rank}`,
     },
     {
+      key: "track",
+      label: "Track",
+      sortField: "title",
+      className: "album-title-cell",
+      value: (row: BrowseRow) => (
+        <span>
+          <strong>{row.title ?? "Untitled"}</strong>
+          <small>{row.album ?? ""}</small>
+        </span>
+      ),
+    },
+    {
       key: "album",
       label: "Album",
       sortField: "album",
@@ -4895,8 +4968,9 @@ function ChartResults({
     {
       key: "artist",
       label: "Artist",
-      sortField: "artist",
-      value: (row: BrowseRow) => row.albumArtistDisplay ?? "",
+      sortField: isTracks ? "displayArtist" : "artist",
+      value: (row: BrowseRow) =>
+        (isTracks ? row.displayArtist : row.albumArtistDisplay) ?? "",
     },
     {
       key: "year",
@@ -4931,10 +5005,28 @@ function ChartResults({
       value: (row: BrowseRow) => formatBillboardDebutWeek(row),
     },
     {
+      key: "billboardSingle",
+      label: "Single Billboard",
+      sortField: "billboardSingleRank",
+      value: (row: BrowseRow) => formatBillboardSingleRank(row),
+    },
+    {
+      key: "billboardSingleDebut",
+      label: "Single debut",
+      sortField: "billboardSingleDebut",
+      value: (row: BrowseRow) => formatBillboardSingleDebut(row),
+    },
+    {
       key: "rating",
       label: "Rating",
       sortField: "albumRating",
       value: (row: BrowseRow) => row.effectiveAlbumRating?.toString() ?? "",
+    },
+    {
+      key: "trackRating",
+      label: "Track rating",
+      sortField: "trackRating",
+      value: (row: BrowseRow) => formatTrackRating(row.normalizedRating),
     },
     {
       key: "complete",
@@ -4972,11 +5064,38 @@ function ChartResults({
       sortField: "totalMinutes",
       value: (row: BrowseRow) => formatMinutes(row.totalSeconds),
     },
-  ].filter(
-    (column) =>
-      ["rank", "album", "artist", "year", "genre"].includes(column.key) ||
-      visibleColumns.has(column.key),
-  );
+  ].filter((column) => {
+    const requiredColumns = isTracks
+      ? ["rank", "track", "artist", "year"]
+      : ["rank", "album", "artist", "year", "genre"];
+    if (requiredColumns.includes(column.key)) return true;
+    if (
+      isTracks &&
+      [
+        "album",
+        "billboard",
+        "billboardDebut",
+        "rating",
+        "complete",
+        "score",
+        "loved",
+        "ae",
+        "tmoe",
+        "minutes",
+      ].includes(column.key)
+    ) {
+      return false;
+    }
+    if (
+      !isTracks &&
+      ["track", "billboardSingle", "billboardSingleDebut", "trackRating"].includes(
+        column.key,
+      )
+    ) {
+      return false;
+    }
+    return visibleColumns.has(column.key);
+  });
   const activeSort: BrowseSort = displaySort ?? {
     field: config.rankingMetric,
     direction: config.sortDirection,
@@ -7532,6 +7651,7 @@ export default function App() {
   const [searchTableColumns, setSearchTableColumns] = useState<string[]>([
     "billboard",
     "billboardDebut",
+    "billboardSingleDebut",
   ]);
   const [searchExportColumns, setSearchExportColumns] = useState<string[]>([]);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
@@ -7672,7 +7792,11 @@ export default function App() {
     useState<ExportResult | null>(null);
   const [albumTimelineResponse, setAlbumTimelineResponse] =
     useState<AlbumDebutTimelineResponse | null>(null);
+  const [trackTimelineResponse, setTrackTimelineResponse] =
+    useState<TrackDebutTimelineResponse | null>(null);
+  const [timelineMode, setTimelineMode] = useState<TimelineMode>("albums");
   const [albumTimelineYear, setAlbumTimelineYear] = useState<number | null>(null);
+  const [trackTimelineYear, setTrackTimelineYear] = useState<number | null>(null);
   const [albumTimelineError, setAlbumTimelineError] = useState<string | null>(null);
   const [isAlbumTimelineLoading, setIsAlbumTimelineLoading] = useState(false);
   const [albumTimelineRefreshKey, setAlbumTimelineRefreshKey] = useState(0);
@@ -8821,10 +8945,18 @@ export default function App() {
     const timer = window.setTimeout(() => {
       setIsAlbumTimelineLoading(true);
       setAlbumTimelineError(null);
-      void getAlbumDebutTimeline(albumTimelineYear)
+      const timelineRequest =
+        timelineMode === "tracks"
+          ? getTrackDebutTimeline(trackTimelineYear)
+          : getAlbumDebutTimeline(albumTimelineYear);
+      void timelineRequest
         .then((nextResponse) => {
           if (!cancelled) {
-            setAlbumTimelineResponse(nextResponse);
+            if (timelineMode === "tracks") {
+              setTrackTimelineResponse(nextResponse as TrackDebutTimelineResponse);
+            } else {
+              setAlbumTimelineResponse(nextResponse as AlbumDebutTimelineResponse);
+            }
           }
         })
         .catch((timelineError) => {
@@ -8847,7 +8979,13 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeSection, albumTimelineYear, albumTimelineRefreshKey]);
+  }, [
+    activeSection,
+    albumTimelineYear,
+    trackTimelineYear,
+    timelineMode,
+    albumTimelineRefreshKey,
+  ]);
 
   useEffect(() => {
     if (activeSection !== "Charts") {
@@ -9260,6 +9398,27 @@ export default function App() {
           updateFilters({
             billboardDebutWeekFrom: null,
             billboardDebutWeekTo: null,
+          }),
+      });
+    }
+    if (
+      currentFilters.billboardSingleDebutDateFrom ||
+      currentFilters.billboardSingleDebutDateTo
+    ) {
+      const from = currentFilters.billboardSingleDebutDateFrom;
+      const to = currentFilters.billboardSingleDebutDateTo;
+      nextChips.push({
+        key: "billboardSingleDebutDate",
+        label:
+          from && to
+            ? `Single chart debut ${from}–${to}`
+            : from
+              ? `Single chart debut from ${from}`
+              : `Single chart debut through ${to}`,
+        remove: () =>
+          updateFilters({
+            billboardSingleDebutDateFrom: null,
+            billboardSingleDebutDateTo: null,
           }),
       });
     }
@@ -10014,6 +10173,7 @@ export default function App() {
       clearCoverImageCache();
       await loadData();
       setRequest((current) => ({ ...current }));
+      setAlbumTimelineRefreshKey((previous) => previous + 1);
       setAlbumRequest((current) => ({ ...current }));
       setChartConfig((current) => ({ ...current }));
       setArtistAlbumsResponse(null);
@@ -10041,6 +10201,7 @@ export default function App() {
       setBillboardImportSummary(summary);
       await loadData();
       setRequest((current) => ({ ...current }));
+      setAlbumTimelineRefreshKey((previous) => previous + 1);
       setAlbumRequest((current) => ({ ...current }));
       setChartConfig((current) => ({ ...current }));
       setArtistRequest((current) => ({ ...current }));
@@ -10068,6 +10229,7 @@ export default function App() {
       setBillboardSinglesImportSummary(summary);
       await loadData();
       setRequest((current) => ({ ...current }));
+      setAlbumTimelineRefreshKey((previous) => previous + 1);
       setAlbumTracksResponse(null);
       setArtistAlbumTracksResponse(null);
       setGenreAlbumsResponse(null);
@@ -10121,7 +10283,11 @@ export default function App() {
 
   function openTimelinePlaylist(selection: AlbumTimeRibbonPlaylist) {
     const playlistRequest = createRequest("tracks");
-    playlistRequest.filters.albumIds = selection.albumIds;
+    if (selection.mode === "tracks") {
+      playlistRequest.filters.trackIds = selection.trackIds;
+    } else {
+      playlistRequest.filters.albumIds = selection.albumIds;
+    }
     playlistRequest.limit = 500;
     setPlaylistLaunch({
       id: Date.now(),
@@ -10139,6 +10305,14 @@ export default function App() {
     setAlbumRequest(nextAlbumRequest);
     setSelectedAlbumId(albumId);
     setActiveSection("Albums");
+  }
+
+  function openTimelineTrack(trackId: number) {
+    const nextRequest = createRequest("tracks");
+    nextRequest.filters.trackIds = [trackId];
+    nextRequest.limit = 50;
+    setRequest(nextRequest);
+    setActiveSection("Search");
   }
 
   async function removeSavedSearch(id: number) {
@@ -10907,6 +11081,17 @@ export default function App() {
 
   async function saveImportPathSettings() {
     await saveAppSettings(normalizedImportPaths);
+  }
+
+  function setChartBrowseView(view: BrowseView) {
+    setChartConfig((previous) => ({
+      ...createChartConfig(view),
+      viewMode: previous.viewMode,
+      gridCoverSize: previous.gridCoverSize,
+      resultLimit: previous.resultLimit,
+    }));
+    setChartTableSort(null);
+    setChartExportResult(null);
   }
 
   async function restoreBackup(backup: DatabaseBackup) {
@@ -12058,16 +12243,27 @@ export default function App() {
 
         {activeSection === "Timeline" ? (
           <AlbumTimeRibbon
-            data={albumTimelineResponse}
+            data={
+              timelineMode === "tracks"
+                ? trackTimelineResponse
+                : albumTimelineResponse
+            }
+            mode={timelineMode}
             error={albumTimelineError}
             isLoading={isAlbumTimelineLoading}
             onCreatePlaylist={openTimelinePlaylist}
+            onModeChange={setTimelineMode}
             onOpenAlbum={openTimelineAlbum}
+            onOpenTrack={openTimelineTrack}
             onOpenSearch={() => setActiveSection("Search")}
             onRetry={() =>
               setAlbumTimelineRefreshKey((previous) => previous + 1)
             }
-            onSelectYear={setAlbumTimelineYear}
+            onSelectYear={
+              timelineMode === "tracks"
+                ? setTrackTimelineYear
+                : setAlbumTimelineYear
+            }
           />
         ) : activeSection === "Imports" ? (
           <section className="workspace">
@@ -12421,7 +12617,16 @@ export default function App() {
                   {formatNumber(billboardSinglesImportSummary.chartEntries)}{" "}
                   singles rows across{" "}
                   {formatNumber(billboardSinglesImportSummary.filesScanned)}{" "}
-                  files.
+                  files. Found chart-entry dates for{" "}
+                  {formatNumber(billboardSinglesImportSummary.datedTracks)}{" "}
+                  matched tracks
+                  {billboardSinglesImportSummary.qualifiedDates > 0
+                    ? `, including ${formatNumber(billboardSinglesImportSummary.qualifiedDates)} historically qualified dates`
+                    : ""}
+                  {billboardSinglesImportSummary.invalidDates > 0
+                    ? `; skipped ${formatNumber(billboardSinglesImportSummary.invalidDates)} malformed dates`
+                    : ""}
+                  .
                 </p>
               ) : null}
 
@@ -12450,8 +12655,9 @@ export default function App() {
                   </span>
                 </button>
                 <span className="db-path">
-                  Matches use Display Artist and Track; best rank wins across
-                  repeated years.
+                  Matches use Display Artist and Track. Best rank and earliest
+                  plausible Date Entered are kept independently across repeated
+                  years.
                 </span>
               </div>
             </section>
@@ -12499,8 +12705,8 @@ export default function App() {
               <div>
                 <h1>Charts</h1>
                 <p>
-                  Rank album lists from saved filters, Album Score, loved
-                  tracks, AE, and TMOE.
+                  Rank albums or tracks from scores, ratings, Billboard
+                  performance, and chart-entry dates.
                 </p>
               </div>
               <div className="topbar-actions">
@@ -12528,8 +12734,12 @@ export default function App() {
 
             <section className="metric-grid" aria-label="Chart summary">
               <Metric
-                label="Albums"
-                value={formatNumber(status?.albumCount)}
+                label={chartConfig.request.view === "tracks" ? "Tracks" : "Albums"}
+                value={formatNumber(
+                  chartConfig.request.view === "tracks"
+                    ? status?.trackCount
+                    : status?.albumCount,
+                )}
                 tone="teal"
                 icon={Album}
               />
@@ -12556,7 +12766,7 @@ export default function App() {
               chartCommand={
                 <NaturalLanguageQueryPanel
                   target="chart"
-                  currentView="albums"
+                  currentView={chartConfig.request.view}
                   showSnapshotHistory={false}
                   snapshotToOpen={
                     chartLunaLaunch?.mode === "build"
@@ -12603,11 +12813,42 @@ export default function App() {
                         },
                       })
                     }
-                    placeholder="Search within chart albums, artists, genres, publishers"
+                    placeholder={`Search within chart ${
+                      chartConfig.request.view === "tracks" ? "tracks" : "albums"
+                    }, artists, genres, publishers`}
                   />
                 </div>
 
-                <div className="segmented-control" aria-label="Chart view mode">
+                <div
+                  className="segmented-control chart-content-control"
+                  aria-label="Chart content"
+                >
+                  <button
+                    className={
+                      chartConfig.request.view === "albums" ? "active" : ""
+                    }
+                    type="button"
+                    onClick={() => setChartBrowseView("albums")}
+                  >
+                    <Album size={16} />
+                    <span>Albums</span>
+                  </button>
+                  <button
+                    className={
+                      chartConfig.request.view === "tracks" ? "active" : ""
+                    }
+                    type="button"
+                    onClick={() => setChartBrowseView("tracks")}
+                  >
+                    <ListMusic size={16} />
+                    <span>Tracks</span>
+                  </button>
+                </div>
+
+                <div
+                  className="segmented-control chart-display-control"
+                  aria-label="Chart view mode"
+                >
                   {chartViewModes.map((mode) => {
                     const Icon = mode.icon;
                     return (
@@ -12639,7 +12880,11 @@ export default function App() {
                   onChange={(rankingMetric) =>
                     updateChartConfig({ rankingMetric })
                   }
-                  options={rankingOptions}
+                  options={
+                    chartConfig.request.view === "tracks"
+                      ? trackRankingOptions
+                      : albumRankingOptions
+                  }
                 />
                 <SelectField
                   label="Direction"
@@ -12672,20 +12917,45 @@ export default function App() {
                   value={chartConfig.request.filters.yearTo}
                   onChange={(value) => updateChartFilters({ yearTo: value })}
                 />
-                <WeekField
-                  label="Chart debut from"
-                  value={chartConfig.request.filters.billboardDebutWeekFrom}
-                  onChange={(billboardDebutWeekFrom) =>
-                    updateChartFilters({ billboardDebutWeekFrom })
-                  }
-                />
-                <WeekField
-                  label="Chart debut to"
-                  value={chartConfig.request.filters.billboardDebutWeekTo}
-                  onChange={(billboardDebutWeekTo) =>
-                    updateChartFilters({ billboardDebutWeekTo })
-                  }
-                />
+                {chartConfig.request.view === "tracks" ? (
+                  <>
+                    <DateField
+                      label="Single chart debut from"
+                      value={
+                        chartConfig.request.filters.billboardSingleDebutDateFrom
+                      }
+                      onChange={(billboardSingleDebutDateFrom) =>
+                        updateChartFilters({ billboardSingleDebutDateFrom })
+                      }
+                    />
+                    <DateField
+                      label="Single chart debut to"
+                      value={
+                        chartConfig.request.filters.billboardSingleDebutDateTo
+                      }
+                      onChange={(billboardSingleDebutDateTo) =>
+                        updateChartFilters({ billboardSingleDebutDateTo })
+                      }
+                    />
+                  </>
+                ) : (
+                  <>
+                    <WeekField
+                      label="Chart debut from"
+                      value={chartConfig.request.filters.billboardDebutWeekFrom}
+                      onChange={(billboardDebutWeekFrom) =>
+                        updateChartFilters({ billboardDebutWeekFrom })
+                      }
+                    />
+                    <WeekField
+                      label="Chart debut to"
+                      value={chartConfig.request.filters.billboardDebutWeekTo}
+                      onChange={(billboardDebutWeekTo) =>
+                        updateChartFilters({ billboardDebutWeekTo })
+                      }
+                    />
+                  </>
+                )}
                 <GenreListCriterion
                   label="Exclude genres"
                   values={chartConfig.request.filters.excludedGenres}
@@ -12700,35 +12970,39 @@ export default function App() {
               <ChartAdvancedControls
                 activeControlCount={advancedChartControlCount}
               >
-                <div className="chart-advanced-section-heading">
-                  <div>
-                    <strong>Built-in charts</strong>
-                    <small>
-                      Start from a focused ranking, then refine any control.
-                    </small>
-                  </div>
-                </div>
-                <section
-                  className="chart-template-panel"
-                  aria-label="Built-in charts"
-                >
-                  {chartTemplates.map((template) => {
-                    const Icon = template.icon;
-                    return (
-                      <button
-                        type="button"
-                        key={template.id}
-                        onClick={() => applyChartTemplate(template)}
-                      >
-                        <Icon size={17} />
-                        <span>
-                          <strong>{template.label}</strong>
-                          <small>{template.description}</small>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </section>
+                {chartConfig.request.view === "albums" ? (
+                  <>
+                    <div className="chart-advanced-section-heading">
+                      <div>
+                        <strong>Built-in charts</strong>
+                        <small>
+                          Start from a focused ranking, then refine any control.
+                        </small>
+                      </div>
+                    </div>
+                    <section
+                      className="chart-template-panel"
+                      aria-label="Built-in charts"
+                    >
+                      {chartTemplates.map((template) => {
+                        const Icon = template.icon;
+                        return (
+                          <button
+                            type="button"
+                            key={template.id}
+                            onClick={() => applyChartTemplate(template)}
+                          >
+                            <Icon size={17} />
+                            <span>
+                              <strong>{template.label}</strong>
+                              <small>{template.description}</small>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </section>
+                  </>
+                ) : null}
 
                 <div className="filter-grid chart-advanced-filter-grid">
                 <NumberField
@@ -12741,19 +13015,39 @@ export default function App() {
                   }
                 />
                 <NumberField
-                  label="Billboard min"
-                  value={chartConfig.request.filters.billboardRankMin}
+                  label={
+                    chartConfig.request.view === "tracks"
+                      ? "Single Billboard min"
+                      : "Billboard min"
+                  }
+                  value={
+                    chartConfig.request.view === "tracks"
+                      ? chartConfig.request.filters.billboardSingleRankMin
+                      : chartConfig.request.filters.billboardRankMin
+                  }
                   min={1}
                   onChange={(value) =>
-                    updateChartFilters({ billboardRankMin: value })
+                    chartConfig.request.view === "tracks"
+                      ? updateChartFilters({ billboardSingleRankMin: value })
+                      : updateChartFilters({ billboardRankMin: value })
                   }
                 />
                 <NumberField
-                  label="Billboard max"
-                  value={chartConfig.request.filters.billboardRankMax}
+                  label={
+                    chartConfig.request.view === "tracks"
+                      ? "Single Billboard max"
+                      : "Billboard max"
+                  }
+                  value={
+                    chartConfig.request.view === "tracks"
+                      ? chartConfig.request.filters.billboardSingleRankMax
+                      : chartConfig.request.filters.billboardRankMax
+                  }
                   min={1}
                   onChange={(value) =>
-                    updateChartFilters({ billboardRankMax: value })
+                    chartConfig.request.view === "tracks"
+                      ? updateChartFilters({ billboardSingleRankMax: value })
+                      : updateChartFilters({ billboardRankMax: value })
                   }
                 />
                 <CountryListCriterion
@@ -12791,17 +13085,37 @@ export default function App() {
                   options={artistGenderOptions}
                 />
                 <TextCriterion
-                  label="Album artist"
-                  filter={chartConfig.request.filters.albumArtist}
+                  label={
+                    chartConfig.request.view === "tracks"
+                      ? "Display artist"
+                      : "Album artist"
+                  }
+                  filter={
+                    chartConfig.request.view === "tracks"
+                      ? chartConfig.request.filters.displayArtist
+                      : chartConfig.request.filters.albumArtist
+                  }
                   onChange={(filter) =>
-                    updateChartFilters({ albumArtist: filter })
+                    chartConfig.request.view === "tracks"
+                      ? updateChartFilters({ displayArtist: filter })
+                      : updateChartFilters({ albumArtist: filter })
                   }
                 />
                 <TextCriterion
-                  label="Album title"
-                  filter={chartConfig.request.filters.albumTitle}
+                  label={
+                    chartConfig.request.view === "tracks"
+                      ? "Track title"
+                      : "Album title"
+                  }
+                  filter={
+                    chartConfig.request.view === "tracks"
+                      ? chartConfig.request.filters.trackTitle
+                      : chartConfig.request.filters.albumTitle
+                  }
                   onChange={(filter) =>
-                    updateChartFilters({ albumTitle: filter })
+                    chartConfig.request.view === "tracks"
+                      ? updateChartFilters({ trackTitle: filter })
+                      : updateChartFilters({ albumTitle: filter })
                   }
                 />
                 <TextCriterion
@@ -12956,7 +13270,22 @@ export default function App() {
                   className="missing-flags"
                   aria-label="Visible chart columns"
                 >
-                  {chartColumnOptions.map((option) => (
+                  {chartColumnOptions
+                    .filter((option) =>
+                      chartConfig.request.view === "tracks"
+                        ? [
+                            "originCountry",
+                            "billboardSingle",
+                            "billboardSingleDebut",
+                            "trackRating",
+                          ].includes(option.value)
+                        : ![
+                            "billboardSingle",
+                            "billboardSingleDebut",
+                            "trackRating",
+                          ].includes(option.value),
+                    )
+                    .map((option) => (
                     <label key={option.value}>
                       <input
                         type="checkbox"
@@ -12969,7 +13298,7 @@ export default function App() {
                       />
                       <span>{option.label}</span>
                     </label>
-                  ))}
+                    ))}
                 </div>
                 <label className="toggle-row">
                   <input
@@ -13044,11 +13373,12 @@ export default function App() {
                   </p>
                 </div>
                 <span className="run-status">
-                  {formatCompletenessRange(
-                    currentChartCompletenessRange.min,
-                    currentChartCompletenessRange.max,
-                  )}{" "}
-                  complete
+                  {chartConfig.request.view === "tracks"
+                    ? "Track chart"
+                    : `${formatCompletenessRange(
+                        currentChartCompletenessRange.min,
+                        currentChartCompletenessRange.max,
+                      )} complete`}
                 </span>
               </div>
 
@@ -17062,18 +17392,41 @@ export default function App() {
                   value={currentFilters.yearTo}
                   onChange={(value) => updateFilter("yearTo", value)}
                 />
-                <WeekField
-                  label="Chart debut from"
-                  value={currentFilters.billboardDebutWeekFrom}
-                  onChange={(value) =>
-                    updateFilter("billboardDebutWeekFrom", value)
-                  }
-                />
-                <WeekField
-                  label="Chart debut to"
-                  value={currentFilters.billboardDebutWeekTo}
-                  onChange={(value) => updateFilter("billboardDebutWeekTo", value)}
-                />
+                {request.view === "tracks" ? (
+                  <>
+                    <DateField
+                      label="Single chart debut from"
+                      value={currentFilters.billboardSingleDebutDateFrom}
+                      onChange={(value) =>
+                        updateFilter("billboardSingleDebutDateFrom", value)
+                      }
+                    />
+                    <DateField
+                      label="Single chart debut to"
+                      value={currentFilters.billboardSingleDebutDateTo}
+                      onChange={(value) =>
+                        updateFilter("billboardSingleDebutDateTo", value)
+                      }
+                    />
+                  </>
+                ) : (
+                  <>
+                    <WeekField
+                      label="Chart debut from"
+                      value={currentFilters.billboardDebutWeekFrom}
+                      onChange={(value) =>
+                        updateFilter("billboardDebutWeekFrom", value)
+                      }
+                    />
+                    <WeekField
+                      label="Chart debut to"
+                      value={currentFilters.billboardDebutWeekTo}
+                      onChange={(value) =>
+                        updateFilter("billboardDebutWeekTo", value)
+                      }
+                    />
+                  </>
+                )}
                 <GenreListCriterion
                   label="Exclude genres"
                   values={currentFilters.excludedGenres}
@@ -17350,6 +17703,30 @@ export default function App() {
                     )
                   }
                 />
+                {chartConfig.request.view === "tracks" ? (
+                  <>
+                    <NumberField
+                      label="Track rating min"
+                      value={chartConfig.request.filters.trackRatingMin}
+                      min={0}
+                      max={5}
+                      step={0.5}
+                      onChange={(value) =>
+                        updateChartFilters({ trackRatingMin: value })
+                      }
+                    />
+                    <NumberField
+                      label="Track rating max"
+                      value={chartConfig.request.filters.trackRatingMax}
+                      min={0}
+                      max={5}
+                      step={0.5}
+                      onChange={(value) =>
+                        updateChartFilters({ trackRatingMax: value })
+                      }
+                    />
+                  </>
+                ) : null}
                 <NumberField
                   label="Loved min"
                   value={currentFilters.lovedTracksMin}
@@ -17459,7 +17836,13 @@ export default function App() {
                   aria-label="Visible Search columns"
                 >
                   <span className="missing-flags-title">Table columns</span>
-                  {searchTableColumnOptions.map((option) => (
+                  {searchTableColumnOptions
+                    .filter(
+                      (option) =>
+                        request.view === "tracks" ||
+                        option.value !== "billboardSingleDebut",
+                    )
+                    .map((option) => (
                     <label key={option.value}>
                       <input
                         type="checkbox"
@@ -17468,7 +17851,7 @@ export default function App() {
                       />
                       <span>{option.label}</span>
                     </label>
-                  ))}
+                    ))}
                 </div>
 
                 <div className="sort-controls">
@@ -17505,6 +17888,10 @@ export default function App() {
                             {
                               value: "billboardSingleRank",
                               label: "Single Billboard",
+                            },
+                            {
+                              value: "billboardSingleDebut",
+                              label: "Single chart debut",
                             },
                             { value: "trackRating", label: "Track rating" },
                             { value: "trackNumber", label: "Track number" },

@@ -145,6 +145,8 @@ import type {
   ArtistSummary,
   AlbumDebutTimelineAlbum,
   AlbumDebutTimelineResponse,
+  TrackDebutTimelineResponse,
+  TrackDebutTimelineTrack,
   BillboardImportSummary,
   BillboardSinglesImportSummary,
   BrowseFilters,
@@ -605,6 +607,101 @@ export async function getAlbumDebutTimeline(selectedYear: number | null = null) 
   }
 
   return invoke<AlbumDebutTimelineResponse>("get_album_debut_timeline", {
+    selectedYear,
+  });
+}
+
+function mockTrackDebutTimeline(
+  requestedYear: number | null,
+): TrackDebutTimelineResponse {
+  const tracks = mockRows
+    .filter(
+      (row) =>
+        row.trackId != null &&
+        row.billboardSingleDebutDate != null &&
+        row.billboardSingleDebutYear != null &&
+        row.billboardSingleDebutMonth != null &&
+        row.billboardSingleDebutWeek != null &&
+        row.billboardSingleDebutWeekKey != null,
+    )
+    .map(
+      (row) =>
+        ({
+          id: String(row.trackId),
+          trackId: row.trackId!,
+          albumId: row.albumId,
+          title: row.title,
+          displayArtist: row.displayArtist,
+          album: row.album,
+          albumArtistDisplay: row.albumArtistDisplay,
+          canonicalGenre: row.canonicalGenre,
+          year: row.year,
+          normalizedRating: row.normalizedRating,
+          love: row.love,
+          billboardSingleRank: row.billboardSingleRank,
+          billboardSingleYear: row.billboardSingleYear,
+          billboardSingleDebutDate: row.billboardSingleDebutDate!,
+          billboardSingleDebutYear: row.billboardSingleDebutYear!,
+          billboardSingleDebutMonth: row.billboardSingleDebutMonth!,
+          billboardSingleDebutWeek: row.billboardSingleDebutWeek!,
+          billboardSingleDebutWeekKey: row.billboardSingleDebutWeekKey!,
+          coverPath: row.coverPath,
+          coverMimeType: row.coverMimeType,
+        }) satisfies TrackDebutTimelineTrack,
+    );
+  const grouped = new Map<
+    number,
+    { trackCount: number; representativeTrack: TrackDebutTimelineTrack }
+  >();
+  for (const track of tracks) {
+    const current = grouped.get(track.billboardSingleDebutYear);
+    if (!current) {
+      grouped.set(track.billboardSingleDebutYear, {
+        trackCount: 1,
+        representativeTrack: track,
+      });
+      continue;
+    }
+    current.trackCount += 1;
+    if (
+      (track.normalizedRating ?? -Infinity) >
+      (current.representativeTrack.normalizedRating ?? -Infinity)
+    ) {
+      current.representativeTrack = track;
+    }
+  }
+  const years = [...grouped.entries()]
+    .map(([year, value]) => ({ year, ...value }))
+    .sort((left, right) => left.year - right.year);
+  const selectedYear =
+    requestedYear != null && grouped.has(requestedYear)
+      ? requestedYear
+      : (years.reduce<(typeof years)[number] | null>(
+          (best, year) =>
+            !best ||
+            year.trackCount > best.trackCount ||
+            (year.trackCount === best.trackCount && year.year > best.year)
+              ? year
+              : best,
+          null,
+        )?.year ?? null);
+  return {
+    years,
+    selectedYear,
+    tracks: tracks.filter(
+      (track) => track.billboardSingleDebutYear === selectedYear,
+    ),
+    datedTrackCount: tracks.length,
+    undatedTrackCount: mockRows.filter((row) => row.trackId != null).length - tracks.length,
+  };
+}
+
+export async function getTrackDebutTimeline(selectedYear: number | null = null) {
+  if (!isTauriRuntime()) {
+    return mockTrackDebutTimeline(selectedYear);
+  }
+
+  return invoke<TrackDebutTimelineResponse>("get_track_debut_timeline", {
     selectedYear,
   });
 }
@@ -2746,6 +2843,11 @@ export async function importBillboardSingles(sourcePath: string) {
       filesScanned: 135,
       chartEntries: 18000,
       matchedTracks,
+      datedTracks: matchedTracks,
+      exactDates: 18_000,
+      qualifiedDates: 0,
+      missingDates: 0,
+      invalidDates: 0,
       durationMs: 0,
     } satisfies BillboardSinglesImportSummary;
   }
@@ -2781,6 +2883,7 @@ export async function searchLibrary(request: BrowseRequest) {
   if (!isTauriRuntime()) {
     const isTracks = request.view === "tracks";
     const albumIds = new Set(request.filters.albumIds);
+    const trackIds = new Set(request.filters.trackIds);
     const artistKeys = new Set(request.filters.artistKeys);
     const genreKeys = new Set(expandGenreFilterKeys(request.filters.genres));
     const excludedGenreKeys = new Set(
@@ -2814,6 +2917,10 @@ export async function searchLibrary(request: BrowseRequest) {
     const billboardRankMax = request.filters.billboardRankMax;
     const billboardSingleRankMin = request.filters.billboardSingleRankMin;
     const billboardSingleRankMax = request.filters.billboardSingleRankMax;
+    const billboardSingleDebutDateFrom =
+      request.filters.billboardSingleDebutDateFrom;
+    const billboardSingleDebutDateTo =
+      request.filters.billboardSingleDebutDateTo;
     const billboardDebutWeekFrom = request.filters.billboardDebutWeekFrom;
     const billboardDebutWeekTo = request.filters.billboardDebutWeekTo;
     const lovedTracksMin = request.filters.lovedTracksMin;
@@ -2841,6 +2948,7 @@ export async function searchLibrary(request: BrowseRequest) {
       return (
         matchesView &&
         (albumIds.size === 0 || albumIds.has(row.albumId)) &&
+        (!isTracks || trackIds.size === 0 || (row.trackId != null && trackIds.has(row.trackId))) &&
         (artistKeys.size === 0 || artistKeys.has(artistKey)) &&
         (genreKeys.size === 0 || genreKeys.has(genreKey)) &&
         !excludedGenreKeys.has(genreKey) &&
@@ -2890,6 +2998,12 @@ export async function searchLibrary(request: BrowseRequest) {
             row.billboardSingleRank,
             billboardSingleRankMin,
             billboardSingleRankMax,
+          )) &&
+        (!isTracks ||
+          matchesIsoDateRange(
+            row.billboardSingleDebutDate,
+            billboardSingleDebutDateFrom,
+            billboardSingleDebutDateTo,
           )) &&
         (lovedTracksMin == null || lovedTracks >= lovedTracksMin) &&
         (lovedTracksMax == null || lovedTracks <= lovedTracksMax) &&
@@ -3217,6 +3331,20 @@ export async function fixMusicToolIssues(input: MusicToolFixRequest) {
   }
 
   return invoke<MusicToolFixSummary>("fix_music_tool_issues", { input });
+}
+
+function matchesIsoDateRange(
+  value: string | null | undefined,
+  minimum: string | null | undefined,
+  maximum: string | null | undefined,
+) {
+  if (minimum == null && maximum == null) {
+    return true;
+  }
+  if (!value) {
+    return false;
+  }
+  return (minimum == null || value >= minimum) && (maximum == null || value <= maximum);
 }
 
 export async function listMusicToolFixHistory(toolId?: string) {
@@ -3771,6 +3899,8 @@ function matchesMissingFields(
         return row.billboardRank == null;
       case "billboardSingle":
         return isTracks ? row.billboardSingleRank == null : true;
+      case "billboardSingleDebut":
+        return isTracks ? row.billboardSingleDebutDate == null : true;
       case "rating":
         return isTracks
           ? row.normalizedRating == null
@@ -3816,6 +3946,8 @@ function browseSortValue(row: BrowseRow, field: string) {
       return row.billboardRank;
     case "billboardSingleRank":
       return row.billboardSingleRank;
+    case "billboardSingleDebut":
+      return row.billboardSingleDebutDate;
     case "trackRating":
       return row.normalizedRating;
     case "time":

@@ -125,6 +125,7 @@ export const missingFieldOptions: MissingFieldOption[] = [
   { value: "coverArt", albumLabel: "Cover art", trackLabel: "Album cover art" },
   { value: "billboard", albumLabel: "Billboard rank", trackLabel: "Album Billboard rank" },
   { value: "billboardSingle", albumLabel: "Single Billboard rank", trackLabel: "Single Billboard rank" },
+  { value: "billboardSingleDebut", albumLabel: "Single chart debut", trackLabel: "Single chart debut" },
   { value: "rating", albumLabel: "Album rating", trackLabel: "Track rating" },
   { value: "time", albumLabel: "Total duration", trackLabel: "Track duration" },
 ];
@@ -150,7 +151,33 @@ export const rankingOptions = [
   { value: "tmoe", label: "TMOE" },
   { value: "ratingCompleteness", label: "Completeness" },
   { value: "totalMinutes", label: "Minutes" },
+  { value: "trackRating", label: "Track rating" },
+  { value: "billboardSingleRank", label: "Single Billboard rank" },
+  { value: "billboardSingleDebut", label: "Single chart debut" },
 ];
+
+export const albumRankingOptions = rankingOptions.filter((option) =>
+  [
+    "albumScore",
+    "billboardRank",
+    "albumRating",
+    "lovedTracks",
+    "ae",
+    "tmoe",
+    "ratingCompleteness",
+    "totalMinutes",
+  ].includes(option.value),
+);
+
+export const trackRankingOptions = rankingOptions.filter((option) =>
+  [
+    "trackRating",
+    "billboardSingleRank",
+    "billboardSingleDebut",
+    "albumScore",
+    "albumRating",
+  ].includes(option.value),
+);
 
 export const chartColumnOptions = [
   { value: "billboard", label: "Billboard" },
@@ -163,11 +190,15 @@ export const chartColumnOptions = [
   { value: "ae", label: "AE" },
   { value: "tmoe", label: "TMOE" },
   { value: "minutes", label: "Minutes" },
+  { value: "billboardSingle", label: "Single Billboard" },
+  { value: "billboardSingleDebut", label: "Single debut" },
+  { value: "trackRating", label: "Track rating" },
 ];
 
 export const searchTableColumnOptions = [
   { value: "billboard", label: "Billboard" },
   { value: "billboardDebut", label: "Debut week" },
+  { value: "billboardSingleDebut", label: "Single debut" },
 ];
 
 export type SearchExportColumnOption = {

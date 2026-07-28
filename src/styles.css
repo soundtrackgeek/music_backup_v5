@@ -1501,12 +1501,16 @@ button {
   line-height: 14px;
 }
 
-.chart-builder .segmented-control {
+.chart-builder .chart-display-control {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.chart-builder .chart-content-control {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .chart-builder .search-row {
-  grid-template-columns: minmax(320px, 1fr) 400px;
+  grid-template-columns: minmax(280px, 1fr) 184px 400px;
 }
 
 .album-search-row {
@@ -4924,6 +4928,42 @@ button {
     minmax(96px, 0.8fr) 64px 96px minmax(104px, 0.9fr) 72px 64px
     minmax(140px, 1.1fr);
   min-width: 1240px;
+}
+
+.track-results.with-single-debut .result-table-head,
+.track-results.with-single-debut .result-table-row {
+  grid-template-columns:
+    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(132px, 1.1fr)
+    minmax(96px, 0.8fr) 64px 72px minmax(132px, 1fr) 64px
+    minmax(140px, 1.1fr);
+  min-width: 1172px;
+}
+
+.track-results.with-billboard.with-single-debut .result-table-head,
+.track-results.with-billboard.with-single-debut .result-table-row {
+  grid-template-columns:
+    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(132px, 1.1fr)
+    minmax(96px, 0.8fr) 64px 96px 72px minmax(132px, 1fr) 64px
+    minmax(140px, 1.1fr);
+  min-width: 1268px;
+}
+
+.track-results.with-debut.with-single-debut .result-table-head,
+.track-results.with-debut.with-single-debut .result-table-row {
+  grid-template-columns:
+    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(132px, 1.1fr)
+    minmax(96px, 0.8fr) 64px minmax(104px, 0.9fr) 72px
+    minmax(132px, 1fr) 64px minmax(140px, 1.1fr);
+  min-width: 1276px;
+}
+
+.track-results.with-billboard.with-debut.with-single-debut .result-table-head,
+.track-results.with-billboard.with-debut.with-single-debut .result-table-row {
+  grid-template-columns:
+    minmax(190px, 2fr) minmax(210px, 1.5fr) minmax(132px, 1.1fr)
+    minmax(96px, 0.8fr) 64px 96px minmax(104px, 0.9fr) 72px
+    minmax(132px, 1fr) 64px minmax(140px, 1.1fr);
+  min-width: 1372px;
 }
 
 .album-index-results .result-table-head,
@@ -13978,6 +14018,47 @@ button {
   gap: 28px;
   min-width: 0;
   padding: 0 6px 24px;
+}
+
+.album-time-ribbon-heading {
+  min-width: 0;
+}
+
+.album-time-ribbon-mode {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  margin-bottom: 15px;
+  border: 1px solid #29313a;
+  border-radius: 8px;
+  padding: 3px;
+  background: rgba(11, 16, 23, 0.88);
+}
+
+.album-time-ribbon-mode button {
+  min-width: 76px;
+  height: 28px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 13px;
+  color: #7e8993;
+  background: transparent;
+  font: 600 10px/1 "Manrope", sans-serif;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.album-time-ribbon-mode button:hover,
+.album-time-ribbon-mode button:focus-visible {
+  color: #d7dde2;
+  outline: 0;
+}
+
+.album-time-ribbon-mode button.active {
+  color: #f5b47d;
+  background: linear-gradient(180deg, rgba(247, 109, 95, 0.18), rgba(247, 109, 95, 0.08));
+  box-shadow: inset 0 0 0 1px rgba(247, 109, 95, 0.28);
 }
 
 .album-time-ribbon-header h1 {

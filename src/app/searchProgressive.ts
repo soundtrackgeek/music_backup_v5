@@ -27,6 +27,9 @@ export function countAdvancedSearchFilters(
         filters.billboardSingleRankMin,
         filters.billboardSingleRankMax,
       ),
+    view === "tracks" &&
+      (filters.billboardSingleDebutDateFrom != null ||
+        filters.billboardSingleDebutDateTo != null),
     hasRange(filters.releaseYearFrom, filters.releaseYearTo),
     hasRange(filters.totalMinutesMin, filters.totalMinutesMax),
     hasRange(filters.trackCountMin, filters.trackCountMax),

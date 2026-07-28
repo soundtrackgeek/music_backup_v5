@@ -29,7 +29,8 @@ import {
 import type {
   AlbumDebutTimelineAlbum,
   AlbumDebutTimelineResponse,
-  AlbumDebutTimelineYear,
+  TrackDebutTimelineResponse,
+  TrackDebutTimelineTrack,
 } from "../types";
 import { AlbumCover } from "./AlbumCover";
 
@@ -51,6 +52,27 @@ type AlbumOrderMode =
   | "artist"
   | "custom";
 type AlbumOrderDirection = "ascending" | "descending";
+export type TimelineMode = "albums" | "tracks";
+
+type TimelineRibbonItem = AlbumDebutTimelineAlbum & {
+  trackId?: number | null;
+  sourceAlbumTitle?: string | null;
+  debutDate?: string | null;
+};
+
+type TimelineRibbonYear = {
+  year: number;
+  albumCount: number;
+  representativeAlbum: TimelineRibbonItem | null;
+};
+
+type TimelineRibbonData = {
+  years: TimelineRibbonYear[];
+  selectedYear: number | null;
+  albums: TimelineRibbonItem[];
+  datedAlbumCount: number;
+  undatedAlbumCount: number;
+};
 
 type PeriodDefinition = {
   id: PeriodId;
@@ -63,14 +85,19 @@ export type AlbumTimeRibbonPlaylist = {
   title: string;
   prompt: string;
   albumIds: string[];
+  trackIds: number[];
+  mode: TimelineMode;
 };
 
 type AlbumTimeRibbonProps = {
-  data: AlbumDebutTimelineResponse | null;
+  data: AlbumDebutTimelineResponse | TrackDebutTimelineResponse | null;
+  mode?: TimelineMode;
   error: string | null;
   isLoading: boolean;
   onCreatePlaylist: (selection: AlbumTimeRibbonPlaylist) => void;
+  onModeChange?: (mode: TimelineMode) => void;
   onOpenAlbum: (albumId: string) => void;
+  onOpenTrack?: (trackId: number) => void;
   onOpenSearch: () => void;
   onRetry: () => void;
   onSelectYear: (year: number) => void;
@@ -192,7 +219,7 @@ function periodFor(
 }
 
 export function albumsForPeriod(
-  albums: AlbumDebutTimelineAlbum[],
+  albums: TimelineRibbonItem[],
   months: number[],
 ) {
   return albums.filter((album) =>
@@ -201,8 +228,8 @@ export function albumsForPeriod(
 }
 
 function albumChronology(
-  left: AlbumDebutTimelineAlbum,
-  right: AlbumDebutTimelineAlbum,
+  left: TimelineRibbonItem,
+  right: TimelineRibbonItem,
 ) {
   return (
     left.billboardDebutWeekKey.localeCompare(right.billboardDebutWeekKey) ||
@@ -229,7 +256,7 @@ function compareOptionalNumber(
 }
 
 export function orderTimelineAlbums(
-  albums: AlbumDebutTimelineAlbum[],
+  albums: TimelineRibbonItem[],
   mode: AlbumOrderMode,
   direction: AlbumOrderDirection,
   customOrder: string[] = [],
@@ -315,13 +342,16 @@ function albumOrderDirectionLabel(
 function albumOrderDescription(
   mode: AlbumOrderMode,
   direction: AlbumOrderDirection,
+  timelineMode: TimelineMode = "albums",
 ) {
   const directionLabel = albumOrderDirectionLabel(mode, direction);
   if (mode === "score") {
-    return `${directionLabel}; albums without a score stay last.`;
+    return `${directionLabel}; ${
+      timelineMode === "tracks" ? "tracks without a rating" : "albums without a score"
+    } stay last.`;
   }
   if (mode === "billboard") {
-    return `${directionLabel}; unranked albums stay last.`;
+    return `${directionLabel}; unranked ${timelineMode === "tracks" ? "tracks" : "albums"} stay last.`;
   }
   if (mode === "debut") {
     return `${directionLabel} by Billboard first-appearance week.`;
@@ -333,13 +363,14 @@ function albumOrderDescription(
 }
 
 function albumOrderMetricLabel(
-  album: AlbumDebutTimelineAlbum,
+  album: TimelineRibbonItem,
   mode: AlbumOrderMode,
+  timelineMode: TimelineMode = "albums",
 ) {
   if (mode === "score") {
     return album.albumScore == null
       ? "No score"
-      : `Score ${album.albumScore.toLocaleString(undefined, {
+      : `${timelineMode === "tracks" ? "Rating" : "Score"} ${album.albumScore.toLocaleString(undefined, {
           maximumFractionDigits: 3,
         })}`;
   }
@@ -395,7 +426,7 @@ function yearPosition(
 }
 
 export function representativeTimelineYears(
-  years: AlbumDebutTimelineYear[],
+  years: TimelineRibbonYear[],
   selectedYear: number,
   maximum = 12,
 ) {
@@ -446,7 +477,77 @@ function periodRangeLabel(period: PeriodDefinition) {
   )}`;
 }
 
-function LoadingTimeline() {
+function trackToTimelineItem(track: TrackDebutTimelineTrack): TimelineRibbonItem {
+  return {
+    id: `track:${track.id}`,
+    albumId: track.albumId,
+    album: track.title,
+    albumArtistDisplay: track.displayArtist ?? track.albumArtistDisplay,
+    canonicalGenre: track.canonicalGenre,
+    year: track.year,
+    albumScore:
+      track.normalizedRating == null ? null : track.normalizedRating / 20,
+    billboardRank: track.billboardSingleRank,
+    billboardYear: track.billboardSingleYear,
+    billboardDebutYear: track.billboardSingleDebutYear,
+    billboardDebutMonth: track.billboardSingleDebutMonth,
+    billboardDebutWeek: track.billboardSingleDebutWeek,
+    billboardDebutWeekKey: track.billboardSingleDebutWeekKey,
+    coverPath: track.coverPath,
+    coverMimeType: track.coverMimeType,
+    trackId: track.trackId,
+    sourceAlbumTitle: track.album,
+    debutDate: track.billboardSingleDebutDate,
+  };
+}
+
+function normalizeTimelineData(
+  data: AlbumDebutTimelineResponse | TrackDebutTimelineResponse | null,
+  mode: TimelineMode,
+): TimelineRibbonData | null {
+  if (!data) return null;
+  if (mode === "albums") {
+    const albumData = data as AlbumDebutTimelineResponse;
+    return {
+      ...albumData,
+      albums: albumData.albums.map((album) => ({
+        ...album,
+        trackId: null,
+        sourceAlbumTitle: album.album,
+        debutDate: null,
+      })),
+      years: albumData.years.map((year) => ({
+        year: year.year,
+        albumCount: year.albumCount,
+        representativeAlbum: year.representativeAlbum
+          ? {
+              ...year.representativeAlbum,
+              trackId: null,
+              sourceAlbumTitle: year.representativeAlbum.album,
+              debutDate: null,
+            }
+          : null,
+      })),
+    };
+  }
+
+  const trackData = data as TrackDebutTimelineResponse;
+  return {
+    selectedYear: trackData.selectedYear,
+    albums: trackData.tracks.map(trackToTimelineItem),
+    years: trackData.years.map((year) => ({
+      year: year.year,
+      albumCount: year.trackCount,
+      representativeAlbum: year.representativeTrack
+        ? trackToTimelineItem(year.representativeTrack)
+        : null,
+    })),
+    datedAlbumCount: trackData.datedTrackCount,
+    undatedAlbumCount: trackData.undatedTrackCount,
+  };
+}
+
+function LoadingTimeline({ mode }: { mode: TimelineMode }) {
   return (
     <section className="album-time-ribbon-state" aria-live="polite">
       <div className="album-time-ribbon-skeleton-title" />
@@ -456,17 +557,23 @@ function LoadingTimeline() {
           <span key={index} />
         ))}
       </div>
-      <strong>Mapping chart arrivals across your library</strong>
+      <strong>
+        Mapping {mode === "tracks" ? "track" : "album"} chart arrivals across
+        your library
+      </strong>
     </section>
   );
 }
 
 export function AlbumTimeRibbon({
   data,
+  mode = "albums",
   error,
   isLoading,
   onCreatePlaylist,
+  onModeChange = () => undefined,
   onOpenAlbum,
+  onOpenTrack = () => undefined,
   onOpenSearch,
   onRetry,
   onSelectYear,
@@ -487,6 +594,10 @@ export function AlbumTimeRibbon({
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
+  const normalizedData = useMemo(
+    () => normalizeTimelineData(data, mode),
+    [data, mode],
+  );
 
   useEffect(() => {
     function handleFullscreenChange() {
@@ -525,21 +636,25 @@ export function AlbumTimeRibbon({
     };
   }, [isPeriodMenuOpen]);
 
-  const selectedYear = data?.selectedYear ?? null;
-  const years = data?.years ?? [];
+  useEffect(() => {
+    setSelectedAlbumId(null);
+  }, [mode]);
+
+  const selectedYear = normalizedData?.selectedYear ?? null;
+  const years = normalizedData?.years ?? [];
   const selectedPeriod = useMemo(
     () => periodFor(periodId, customStartMonth, customEndMonth),
     [customEndMonth, customStartMonth, periodId],
   );
-  const albumOrderScope = `${selectedYear ?? "none"}:${selectedPeriod.months.join("-")}`;
+  const albumOrderScope = `${mode}:${selectedYear ?? "none"}:${selectedPeriod.months.join("-")}`;
   const cohortAlbums = useMemo(
     () =>
       orderTimelineAlbums(
-        albumsForPeriod(data?.albums ?? [], selectedPeriod.months),
+        albumsForPeriod(normalizedData?.albums ?? [], selectedPeriod.months),
         "debut",
         "ascending",
       ),
-    [data?.albums, selectedPeriod],
+    [normalizedData?.albums, selectedPeriod],
   );
   const customOrderForScope =
     customAlbumOrders[albumOrderScope] ?? emptyAlbumOrder;
@@ -563,15 +678,18 @@ export function AlbumTimeRibbon({
     orderedAlbums[0] ??
     null;
 
-  if (!data && isLoading) {
-    return <LoadingTimeline />;
+  if (!normalizedData && isLoading) {
+    return <LoadingTimeline mode={mode} />;
   }
 
-  if (error && !data) {
+  if (error && !normalizedData) {
     return (
       <section className="album-time-ribbon-state error" role="alert">
         <WarningCircle size={30} weight="light" aria-hidden="true" />
-        <strong>The album timeline could not be loaded</strong>
+        <strong>
+          The {mode === "tracks" ? "track" : "album"} timeline could not be
+          loaded
+        </strong>
         <span>{error}</span>
         <button type="button" onClick={onRetry}>
           Try again
@@ -580,14 +698,14 @@ export function AlbumTimeRibbon({
     );
   }
 
-  if (!data || selectedYear == null || years.length === 0) {
+  if (!normalizedData || selectedYear == null || years.length === 0) {
     return (
       <section className="album-time-ribbon-state">
         <CalendarBlank size={30} weight="light" aria-hidden="true" />
-        <strong>No album debut weeks yet</strong>
+        <strong>No {mode === "tracks" ? "track debut dates" : "album debut weeks"} yet</strong>
         <span>
-          Import the CSV_ALBUMS folder to place your collection on this
-          timeline.
+          Import the {mode === "tracks" ? "CSV_SINGLES" : "CSV_ALBUMS"} folder
+          to place your collection on this timeline.
         </span>
       </section>
     );
@@ -609,6 +727,19 @@ export function AlbumTimeRibbon({
   const yearSummary = years[selectedYearIndex];
   const selectedMonth = selectedAlbum?.billboardDebutMonth ?? null;
   const selectedWeek = selectedAlbum?.billboardDebutWeek ?? null;
+  const selectedDebutLabel =
+    mode === "tracks" && selectedAlbum?.debutDate
+      ? `${new Intl.DateTimeFormat(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          timeZone: "UTC",
+        }).format(new Date(`${selectedAlbum.debutDate}T00:00:00Z`))}${
+          selectedWeek == null ? "" : ` · Week ${selectedWeek}`
+        }`
+      : selectedWeek == null
+        ? null
+        : `Week ${selectedWeek}`;
   const selectorLabel =
     selectedPeriod.id === "year"
       ? `Explore ${selectedYear}`
@@ -664,16 +795,24 @@ export function AlbumTimeRibbon({
             albumOrderDirection === "ascending" ? "forward" : "backward"
           } through Billboard debut weeks`
         : albumOrderMode === "custom"
-          ? "follow the custom album order exactly"
+          ? `follow the custom ${mode === "tracks" ? "track" : "album"} order exactly`
           : `follow the visible ${orderLabel.toLowerCase()} order`;
     onCreatePlaylist({
       title,
-      albumIds: orderedAlbums.map((album) => album.albumId),
+      albumIds:
+        mode === "albums" ? orderedAlbums.map((album) => album.albumId) : [],
+      trackIds:
+        mode === "tracks"
+          ? orderedAlbums.flatMap((album) =>
+              album.trackId == null ? [] : [album.trackId],
+            )
+          : [],
+      mode,
       prompt: `Create a playlist that relives ${
         selectedPeriod.id === "year"
-          ? `the album arrivals of ${selectedYear}`
+          ? `the ${mode === "tracks" ? "track" : "album"} arrivals of ${selectedYear}`
           : `${selectedPeriod.label.toLowerCase()} ${selectedYear}`
-      }. Use only music from these albums and ${orderInstruction}.`,
+      }. Use only ${mode === "tracks" ? "these tracks" : "music from these albums"} and ${orderInstruction}.`,
     });
   }
 
@@ -754,11 +893,33 @@ export function AlbumTimeRibbon({
         </button>
       </div>
       <header className="album-time-ribbon-header">
-        <div>
-          <h1>Albums through the years</h1>
+        <div className="album-time-ribbon-heading">
+          <div
+            className="album-time-ribbon-mode"
+            role="group"
+            aria-label="Timeline content"
+          >
+            <button
+              type="button"
+              className={mode === "albums" ? "active" : ""}
+              aria-pressed={mode === "albums"}
+              onClick={() => onModeChange("albums")}
+            >
+              Albums
+            </button>
+            <button
+              type="button"
+              className={mode === "tracks" ? "active" : ""}
+              aria-pressed={mode === "tracks"}
+              onClick={() => onModeChange("tracks")}
+            >
+              Tracks
+            </button>
+          </div>
+          <h1>{mode === "tracks" ? "Tracks" : "Albums"} through the years</h1>
           <p>
-            Explore {data.datedAlbumCount.toLocaleString()} album arrivals week
-            by week across decades.
+            Explore {normalizedData.datedAlbumCount.toLocaleString()} {mode === "tracks" ? "track" : "album"}
+            {normalizedData.datedAlbumCount === 1 ? " arrival" : " arrivals"} week by week across decades.
           </p>
         </div>
         <div className="album-time-ribbon-actions">
@@ -959,7 +1120,7 @@ export function AlbumTimeRibbon({
                   selectedYear,
                 )}%`,
               }}
-              aria-label={`${year.year}, ${year.albumCount} album${
+              aria-label={`${year.year}, ${year.albumCount} ${mode === "tracks" ? "track" : "album"}${
                 year.albumCount === 1 ? "" : "s"
               }`}
               aria-pressed={year.year === selectedYear}
@@ -972,7 +1133,7 @@ export function AlbumTimeRibbon({
         <div
           className="album-time-ribbon-markers"
           role="group"
-          aria-label="Representative album years"
+          aria-label={`Representative ${mode === "tracks" ? "track" : "album"} years`}
         >
           {markerYears.map((year, index) => {
             const album = year.representativeAlbum;
@@ -1080,13 +1241,14 @@ export function AlbumTimeRibbon({
             <strong>{selectorLabel.replace("Relive ", "")}</strong>
             <span>
               {periodRangeLabel(selectedPeriod)} · {orderedAlbums.length} of{" "}
-              {yearSummary.albumCount} album arrivals
+              {yearSummary.albumCount} {mode === "tracks" ? "track" : "album"}
+              {yearSummary.albumCount === 1 ? " arrival" : " arrivals"}
             </span>
             {selectedAlbum ? (
               <small>
                 {selectedAlbum.album ?? "Untitled"} —{" "}
-                {selectedAlbum.albumArtistDisplay ?? "Unknown artist"} · Week{" "}
-                {selectedAlbum.billboardDebutWeek}
+                {selectedAlbum.albumArtistDisplay ?? "Unknown artist"}
+                {selectedDebutLabel ? ` · ${selectedDebutLabel}` : ""}
               </small>
             ) : null}
           </div>
@@ -1095,9 +1257,13 @@ export function AlbumTimeRibbon({
               <button
                 type="button"
                 className="album-time-ribbon-open-album"
-                onClick={() => onOpenAlbum(selectedAlbum.albumId)}
+                onClick={() =>
+                  mode === "tracks" && selectedAlbum.trackId != null
+                    ? onOpenTrack(selectedAlbum.trackId)
+                    : onOpenAlbum(selectedAlbum.albumId)
+                }
               >
-                Open album
+                {mode === "tracks" ? "Open track" : "Open album"}
               </button>
             ) : null}
             <button
@@ -1116,7 +1282,7 @@ export function AlbumTimeRibbon({
         {orderedAlbums.length > 0 ? (
           <div
             className="album-time-ribbon-order-bar"
-            aria-label="Album order controls"
+            aria-label={`${mode === "tracks" ? "Track" : "Album"} order controls`}
           >
             <div className="album-time-ribbon-order-controls">
               <label className="album-time-ribbon-order-select">
@@ -1127,11 +1293,15 @@ export function AlbumTimeRibbon({
                   onChange={(event) =>
                     chooseAlbumOrder(event.target.value as AlbumOrderMode)
                   }
-                  aria-label="Album order"
+                  aria-label={`${mode === "tracks" ? "Track" : "Album"} order`}
                 >
                   {albumOrderOptions.map((option) => (
                     <option value={option.id} key={option.id}>
-                      {option.label}
+                      {mode === "tracks" && option.id === "score"
+                        ? "Track rating"
+                        : mode === "tracks" && option.id === "title"
+                          ? "Track title"
+                          : option.label}
                     </option>
                   ))}
                 </select>
@@ -1140,7 +1310,7 @@ export function AlbumTimeRibbon({
                 <div
                   className="album-time-ribbon-custom-order-actions"
                   role="group"
-                  aria-label="Custom album order"
+                  aria-label={`Custom ${mode === "tracks" ? "track" : "album"} order`}
                 >
                   <button
                     type="button"
@@ -1182,7 +1352,7 @@ export function AlbumTimeRibbon({
                   type="button"
                   className="album-time-ribbon-order-direction"
                   onClick={toggleAlbumOrderDirection}
-                  aria-label={`Reverse album order; currently ${albumOrderDirectionLabel(
+                    aria-label={`Reverse ${mode === "tracks" ? "track" : "album"} order; currently ${albumOrderDirectionLabel(
                     albumOrderMode,
                     albumOrderDirection,
                   )}`}
@@ -1196,7 +1366,7 @@ export function AlbumTimeRibbon({
               )}
             </div>
             <span className="album-time-ribbon-order-description">
-              {albumOrderDescription(albumOrderMode, albumOrderDirection)}
+              {albumOrderDescription(albumOrderMode, albumOrderDirection, mode)}
             </span>
           </div>
         ) : null}
@@ -1205,12 +1375,13 @@ export function AlbumTimeRibbon({
           <div
             className="album-time-ribbon-covers"
             role="list"
-            aria-label="Albums in selected period"
+            aria-label={`${mode === "tracks" ? "Tracks" : "Albums"} in selected period`}
           >
             {orderedAlbums.map((album, index) => {
               const orderMetricLabel = albumOrderMetricLabel(
                 album,
                 albumOrderMode,
+                mode,
               );
               return (
                 <button
@@ -1265,8 +1436,16 @@ export function AlbumTimeRibbon({
         <span>
           Billboard chart debut is used as the historical date marker.
         </span>
-        {data.undatedAlbumCount > 0 ? (
-          <span>{data.undatedAlbumCount.toLocaleString()} albums have no debut week.</span>
+        {normalizedData.undatedAlbumCount > 0 ? (
+          <span>
+            {normalizedData.undatedAlbumCount.toLocaleString()} {mode === "tracks"
+              ? normalizedData.undatedAlbumCount === 1
+                ? "track has no chart-entry date"
+                : "tracks have no chart-entry date"
+              : normalizedData.undatedAlbumCount === 1
+                ? "album has no debut week"
+                : "albums have no debut week"}.
+          </span>
         ) : null}
       </footer>
       {isLoading ? (

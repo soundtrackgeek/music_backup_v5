@@ -33,7 +33,7 @@ use models::{
     MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
     PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch,
-    StatisticsResponse, YearProgressRequest, YearProgressStats,
+    StatisticsResponse, TrackDebutTimelineResponse, YearProgressRequest, YearProgressStats,
 };
 #[cfg(not(test))]
 use models::{ImportPreview, ImportRun, ImportSummary, LibraryStatus};
@@ -753,6 +753,20 @@ async fn get_album_debut_timeline(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_track_debut_timeline(
+    app: AppHandle,
+    selected_year: Option<i32>,
+) -> Result<TrackDebutTimelineResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::track_debut_timeline_for_app(&app, selected_year)
+    })
+    .await
+    .map_err(|error| format!("Track debut timeline task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_music_map(app: AppHandle) -> Result<MusicMapResponse, String> {
     tauri::async_runtime::spawn_blocking(move || music_map::music_map_for_app(&app))
         .await
@@ -1170,6 +1184,7 @@ pub fn run() {
             save_settings,
             get_statistics,
             get_album_debut_timeline,
+            get_track_debut_timeline,
             get_music_map,
             get_music_map_location_details,
             refresh_music_map_locations,
