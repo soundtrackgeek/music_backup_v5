@@ -64,6 +64,8 @@ import {
   defaultBillboardSourcePath,
   defaultVgListaAlbumSourcePath,
   defaultVgListaSinglesSourcePath,
+  defaultOfficialUkAlbumSourcePath,
+  defaultOfficialUkSinglesSourcePath,
   defaultTiISkuddetSourcePath,
   defaultNorsktoppenSourcePath,
   defaultCoverSourcePath,
@@ -91,6 +93,8 @@ import {
   importBillboardSingles,
   importVgListaAlbums,
   importVgListaSingles,
+  importOfficialUkAlbums,
+  importOfficialUkSingles,
   importTiISkuddetSingles,
   importNorsktoppenSingles,
   applyImportPreview,
@@ -150,6 +154,7 @@ import type {
   BillboardImportSummary,
   BillboardSinglesImportSummary,
   VgListaImportSummary,
+  OfficialUkImportSummary,
   TiISkuddetImportSummary,
   NorsktoppenImportSummary,
   BrowseFilters,
@@ -267,6 +272,8 @@ import {
   formatBillboardSingleDebut,
   formatVgListaDebutWeek,
   formatVgListaRank,
+  formatOfficialUkDebutWeek,
+  formatOfficialUkRank,
   formatTiISkuddetDebut,
   formatTiISkuddetRank,
   formatNorsktoppenDebut,
@@ -517,6 +524,14 @@ function createDefaultVgListaAlbumSourcePath() {
 
 function createDefaultVgListaSinglesSourcePath() {
   return loadCachedSettings().vgListaSinglesSourcePath;
+}
+
+function createDefaultOfficialUkAlbumSourcePath() {
+  return loadCachedSettings().officialUkAlbumSourcePath;
+}
+
+function createDefaultOfficialUkSinglesSourcePath() {
+  return loadCachedSettings().officialUkSinglesSourcePath;
 }
 
 function createDefaultTiISkuddetSourcePath() {
@@ -2105,6 +2120,8 @@ function ResultTable({
   const showSingleDebutColumn = visibleColumnSet.has("billboardSingleDebut");
   const showVgListaColumn = visibleColumnSet.has("vgLista");
   const showVgListaDebutColumn = visibleColumnSet.has("vgListaDebut");
+  const showOfficialUkColumn = visibleColumnSet.has("officialUk");
+  const showOfficialUkDebutColumn = visibleColumnSet.has("officialUkDebut");
   const showTiISkuddetColumn =
     response.view === "tracks" && visibleColumnSet.has("tiISkuddet");
   const showTiISkuddetDebutColumn =
@@ -2123,6 +2140,8 @@ function ResultTable({
     ...(showDebutColumn ? ["minmax(104px, 0.9fr)"] : []),
     ...(showVgListaColumn ? ["88px"] : []),
     ...(showVgListaDebutColumn ? ["minmax(132px, 1fr)"] : []),
+    ...(showOfficialUkColumn ? ["88px"] : []),
+    ...(showOfficialUkDebutColumn ? ["minmax(132px, 1fr)"] : []),
     "64px",
     "84px",
     "72px",
@@ -2139,6 +2158,8 @@ function ResultTable({
     ...(showSingleDebutColumn ? ["minmax(132px, 1fr)"] : []),
     ...(showVgListaColumn ? ["88px"] : []),
     ...(showVgListaDebutColumn ? ["minmax(132px, 1fr)"] : []),
+    ...(showOfficialUkColumn ? ["88px"] : []),
+    ...(showOfficialUkDebutColumn ? ["minmax(132px, 1fr)"] : []),
     ...(showTiISkuddetColumn ? ["104px"] : []),
     ...(showTiISkuddetDebutColumn ? ["minmax(144px, 1fr)"] : []),
     ...(showNorsktoppenColumn ? ["104px"] : []),
@@ -2153,6 +2174,8 @@ function ResultTable({
     (showSingleDebutColumn ? 132 : 0) +
     (showVgListaColumn ? 88 : 0) +
     (showVgListaDebutColumn ? 132 : 0) +
+    (showOfficialUkColumn ? 88 : 0) +
+    (showOfficialUkDebutColumn ? 132 : 0) +
     (showTiISkuddetColumn ? 104 : 0) +
     (showTiISkuddetDebutColumn ? 144 : 0) +
     (showNorsktoppenColumn ? 104 : 0) +
@@ -2244,6 +2267,22 @@ function ResultTable({
           <SortableColumnHeader
             label="VG Lista debut week"
             field="vgListaDebut"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
+        {showOfficialUkColumn ? (
+          <SortableColumnHeader
+            label="Official UK"
+            field="officialUkRank"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
+        {showOfficialUkDebutColumn ? (
+          <SortableColumnHeader
+            label="Official UK debut week"
+            field="officialUkDebut"
             sort={sort}
             onSort={onSort}
           />
@@ -2340,6 +2379,12 @@ function ResultTable({
             {showVgListaDebutColumn ? (
               <span role="cell">{formatVgListaDebutWeek(row)}</span>
             ) : null}
+            {showOfficialUkColumn ? (
+              <span role="cell">{formatOfficialUkRank(row)}</span>
+            ) : null}
+            {showOfficialUkDebutColumn ? (
+              <span role="cell">{formatOfficialUkDebutWeek(row)}</span>
+            ) : null}
             {showTiISkuddetColumn ? (
               <span role="cell">{formatTiISkuddetRank(row)}</span>
             ) : null}
@@ -2434,6 +2479,22 @@ function ResultTable({
             onSort={onSort}
           />
         ) : null}
+        {showOfficialUkColumn ? (
+          <SortableColumnHeader
+            label="Official UK"
+            field="officialUkRank"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
+        {showOfficialUkDebutColumn ? (
+          <SortableColumnHeader
+            label="Official UK debut week"
+            field="officialUkDebut"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
         <SortableColumnHeader
           label="Tracks"
           field="trackCount"
@@ -2478,6 +2539,12 @@ function ResultTable({
           ) : null}
           {showVgListaDebutColumn ? (
             <span role="cell">{formatVgListaDebutWeek(row)}</span>
+          ) : null}
+          {showOfficialUkColumn ? (
+            <span role="cell">{formatOfficialUkRank(row)}</span>
+          ) : null}
+          {showOfficialUkDebutColumn ? (
+            <span role="cell">{formatOfficialUkDebutWeek(row)}</span>
           ) : null}
           <span role="cell">{row.totalTracks ?? ""}</span>
           <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
@@ -5232,6 +5299,18 @@ function ChartResults({
       value: (row: BrowseRow) => formatVgListaDebutWeek(row),
     },
     {
+      key: "officialUk",
+      label: "Official UK",
+      sortField: "officialUkRank",
+      value: (row: BrowseRow) => formatOfficialUkRank(row),
+    },
+    {
+      key: "officialUkDebut",
+      label: "Official UK debut week",
+      sortField: "officialUkDebut",
+      value: (row: BrowseRow) => formatOfficialUkDebutWeek(row),
+    },
+    {
       key: "tiISkuddet",
       label: "Ti i Skuddet",
       sortField: "tiISkuddetRank",
@@ -7882,8 +7961,14 @@ export default function App() {
   );
   const [vgListaAlbumImportSummary, setVgListaAlbumImportSummary] =
     useState<VgListaImportSummary | null>(null);
+  const [officialUkAlbumSourcePath, setOfficialUkAlbumSourcePath] = useState(
+    () => createDefaultOfficialUkAlbumSourcePath(),
+  );
+  const [officialUkAlbumImportSummary, setOfficialUkAlbumImportSummary] =
+    useState<OfficialUkImportSummary | null>(null);
   const [importAlbumChartsUs, setImportAlbumChartsUs] = useState(true);
   const [importAlbumChartsNo, setImportAlbumChartsNo] = useState(true);
+  const [importAlbumChartsUk, setImportAlbumChartsUk] = useState(true);
   const [billboardSinglesSourcePath, setBillboardSinglesSourcePath] = useState(
     () => createDefaultBillboardSinglesSourcePath(),
   );
@@ -7898,6 +7983,10 @@ export default function App() {
   );
   const [vgListaSinglesImportSummary, setVgListaSinglesImportSummary] =
     useState<VgListaImportSummary | null>(null);
+  const [officialUkSinglesSourcePath, setOfficialUkSinglesSourcePath] =
+    useState(() => createDefaultOfficialUkSinglesSourcePath());
+  const [officialUkSinglesImportSummary, setOfficialUkSinglesImportSummary] =
+    useState<OfficialUkImportSummary | null>(null);
   const [tiISkuddetSourcePath, setTiISkuddetSourcePath] = useState(() =>
     createDefaultTiISkuddetSourcePath(),
   );
@@ -7910,6 +7999,7 @@ export default function App() {
     useState<NorsktoppenImportSummary | null>(null);
   const [importSingleChartsUs, setImportSingleChartsUs] = useState(true);
   const [importSingleChartsNo, setImportSingleChartsNo] = useState(true);
+  const [importSingleChartsUk, setImportSingleChartsUk] = useState(true);
   const [importSingleChartsTiISkuddet, setImportSingleChartsTiISkuddet] =
     useState(true);
   const [importSingleChartsNorsktoppen, setImportSingleChartsNorsktoppen] =
@@ -8306,6 +8396,14 @@ export default function App() {
     setVgListaSinglesSourcePath(
       nextSettings.vgListaSinglesSourcePath ||
         defaultVgListaSinglesSourcePath,
+    );
+    setOfficialUkAlbumSourcePath(
+      nextSettings.officialUkAlbumSourcePath ||
+        defaultOfficialUkAlbumSourcePath,
+    );
+    setOfficialUkSinglesSourcePath(
+      nextSettings.officialUkSinglesSourcePath ||
+        defaultOfficialUkSinglesSourcePath,
     );
     setTiISkuddetSourcePath(
       nextSettings.tiISkuddetSourcePath || defaultTiISkuddetSourcePath,
@@ -9511,6 +9609,14 @@ export default function App() {
         vgListaSinglesSourcePath,
         defaultVgListaSinglesSourcePath,
       ),
+      officialUkAlbumSourcePath: textSettingValue(
+        officialUkAlbumSourcePath,
+        defaultOfficialUkAlbumSourcePath,
+      ),
+      officialUkSinglesSourcePath: textSettingValue(
+        officialUkSinglesSourcePath,
+        defaultOfficialUkSinglesSourcePath,
+      ),
       tiISkuddetSourcePath: textSettingValue(
         tiISkuddetSourcePath,
         defaultTiISkuddetSourcePath,
@@ -9527,6 +9633,8 @@ export default function App() {
       sourcePath,
       vgListaAlbumSourcePath,
       vgListaSinglesSourcePath,
+      officialUkAlbumSourcePath,
+      officialUkSinglesSourcePath,
       tiISkuddetSourcePath,
       norsktoppenSourcePath,
     ],
@@ -9548,6 +9656,10 @@ export default function App() {
       persistedSettings.vgListaAlbumSourcePath ||
     normalizedImportPaths.vgListaSinglesSourcePath !==
       persistedSettings.vgListaSinglesSourcePath ||
+    normalizedImportPaths.officialUkAlbumSourcePath !==
+      persistedSettings.officialUkAlbumSourcePath ||
+    normalizedImportPaths.officialUkSinglesSourcePath !==
+      persistedSettings.officialUkSinglesSourcePath ||
     normalizedImportPaths.tiISkuddetSourcePath !==
       persistedSettings.tiISkuddetSourcePath ||
     normalizedImportPaths.norsktoppenSourcePath !==
@@ -9765,6 +9877,27 @@ export default function App() {
       });
     }
     if (
+      currentFilters.officialUkDebutWeekFrom ||
+      currentFilters.officialUkDebutWeekTo
+    ) {
+      const from = currentFilters.officialUkDebutWeekFrom;
+      const to = currentFilters.officialUkDebutWeekTo;
+      nextChips.push({
+        key: "officialUkDebutWeek",
+        label:
+          from && to
+            ? `Official UK debut ${from}–${to}`
+            : from
+              ? `Official UK debut from ${from}`
+              : `Official UK debut through ${to}`,
+        remove: () =>
+          updateFilters({
+            officialUkDebutWeekFrom: null,
+            officialUkDebutWeekTo: null,
+          }),
+      });
+    }
+    if (
       request.view === "tracks" &&
       (currentFilters.tiISkuddetDebutWeekFrom ||
         currentFilters.tiISkuddetDebutWeekTo)
@@ -9849,6 +9982,14 @@ export default function App() {
       currentFilters.vgListaRankMin,
       currentFilters.vgListaRankMax,
       () => updateFilters({ vgListaRankMin: null, vgListaRankMax: null }),
+    );
+    addRangeChip(
+      nextChips,
+      "officialUk",
+      "Official UK",
+      currentFilters.officialUkRankMin,
+      currentFilters.officialUkRankMax,
+      () => updateFilters({ officialUkRankMin: null, officialUkRankMax: null }),
     );
     if (request.view === "tracks") {
       addRangeChip(
@@ -10620,6 +10761,7 @@ export default function App() {
     setBillboardImportError(null);
     setBillboardImportSummary(null);
     setVgListaAlbumImportSummary(null);
+    setOfficialUkAlbumImportSummary(null);
 
     try {
       const errors: string[] = [];
@@ -10645,6 +10787,18 @@ export default function App() {
         } catch (error) {
           errors.push(
             `Norway: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      if (importAlbumChartsUk) {
+        try {
+          setOfficialUkAlbumImportSummary(
+            await importOfficialUkAlbums(officialUkAlbumSourcePath),
+          );
+          completed = true;
+        } catch (error) {
+          errors.push(
+            `UK: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
       }
@@ -10676,6 +10830,7 @@ export default function App() {
     setBillboardSinglesImportError(null);
     setBillboardSinglesImportSummary(null);
     setVgListaSinglesImportSummary(null);
+    setOfficialUkSinglesImportSummary(null);
     setTiISkuddetImportSummary(null);
     setNorsktoppenImportSummary(null);
 
@@ -10703,6 +10858,18 @@ export default function App() {
         } catch (error) {
           errors.push(
             `Norway: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      if (importSingleChartsUk) {
+        try {
+          setOfficialUkSinglesImportSummary(
+            await importOfficialUkSingles(officialUkSinglesSourcePath),
+          );
+          completed = true;
+        } catch (error) {
+          errors.push(
+            `UK: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
       }
@@ -11468,6 +11635,16 @@ export default function App() {
           baseSettings.vgListaSinglesSourcePath,
         defaultVgListaSinglesSourcePath,
       ),
+      officialUkAlbumSourcePath: textSettingValue(
+        values.officialUkAlbumSourcePath ??
+          baseSettings.officialUkAlbumSourcePath,
+        defaultOfficialUkAlbumSourcePath,
+      ),
+      officialUkSinglesSourcePath: textSettingValue(
+        values.officialUkSinglesSourcePath ??
+          baseSettings.officialUkSinglesSourcePath,
+        defaultOfficialUkSinglesSourcePath,
+      ),
       tiISkuddetSourcePath: textSettingValue(
         values.tiISkuddetSourcePath ?? baseSettings.tiISkuddetSourcePath,
         defaultTiISkuddetSourcePath,
@@ -11604,6 +11781,36 @@ export default function App() {
                 defaultVgListaSinglesSourcePath,
               ) === nextSettings.vgListaSinglesSourcePath
                 ? saved.vgListaSinglesSourcePath
+                : current,
+            );
+          }
+          if (
+            Object.prototype.hasOwnProperty.call(
+              values,
+              "officialUkAlbumSourcePath",
+            )
+          ) {
+            setOfficialUkAlbumSourcePath((current) =>
+              textSettingValue(
+                current,
+                defaultOfficialUkAlbumSourcePath,
+              ) === nextSettings.officialUkAlbumSourcePath
+                ? saved.officialUkAlbumSourcePath
+                : current,
+            );
+          }
+          if (
+            Object.prototype.hasOwnProperty.call(
+              values,
+              "officialUkSinglesSourcePath",
+            )
+          ) {
+            setOfficialUkSinglesSourcePath((current) =>
+              textSettingValue(
+                current,
+                defaultOfficialUkSinglesSourcePath,
+              ) === nextSettings.officialUkSinglesSourcePath
+                ? saved.officialUkSinglesSourcePath
                 : current,
             );
           }
@@ -13091,17 +13298,19 @@ export default function App() {
             <section className="import-panel">
               <div className="panel-heading">
                 <div>
-                  <h2>Year-end album charts</h2>
+                  <h2>Album charts</h2>
                   <p>
-                    Import US Billboard year-end rows and Norwegian VG Lista
-                    weekly rows in one operation.
+                    Import US Billboard, Norwegian VG Lista, and Official UK
+                    album rows in one operation.
                   </p>
                 </div>
                 <RunStatus
                   status={
                     isImportingBillboard
                       ? "running"
-                      : billboardImportSummary || vgListaAlbumImportSummary
+                      : billboardImportSummary ||
+                          vgListaAlbumImportSummary ||
+                          officialUkAlbumImportSummary
                         ? "completed"
                         : "idle"
                   }
@@ -13134,6 +13343,17 @@ export default function App() {
                   />
                   <span>NO · VG Lista</span>
                 </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={importAlbumChartsUk}
+                    onChange={(event) =>
+                      setImportAlbumChartsUk(event.target.checked)
+                    }
+                    disabled={isImportingBillboard}
+                  />
+                  <span>UK · Official Charts</span>
+                </label>
               </div>
 
               <label className="source-input">
@@ -13156,6 +13376,17 @@ export default function App() {
                   }
                   placeholder="CSV_ALBUMS_NO"
                   disabled={isImportingBillboard || !importAlbumChartsNo}
+                />
+              </label>
+              <label className="source-input">
+                <span>Official UK album CSV folder</span>
+                <input
+                  value={officialUkAlbumSourcePath}
+                  onChange={(event) =>
+                    setOfficialUkAlbumSourcePath(event.target.value)
+                  }
+                  placeholder="CSV_ALBUMS_UK"
+                  disabled={isImportingBillboard || !importAlbumChartsUk}
                 />
               </label>
 
@@ -13183,6 +13414,19 @@ export default function App() {
                   {formatNumber(vgListaAlbumImportSummary.filesScanned)} files.
                 </p>
               ) : null}
+              {officialUkAlbumImportSummary ? (
+                <p className="success-message">
+                  UK · Matched{" "}
+                  {formatNumber(officialUkAlbumImportSummary.matchedItems)}{" "}
+                  albums with{" "}
+                  {formatNumber(officialUkAlbumImportSummary.datedItems)} debut
+                  weeks from{" "}
+                  {formatNumber(officialUkAlbumImportSummary.chartEntries)}{" "}
+                  weekly rows across{" "}
+                  {formatNumber(officialUkAlbumImportSummary.filesScanned)}{" "}
+                  files.
+                </p>
+              ) : null}
 
               <div className="action-row">
                 <button
@@ -13191,9 +13435,12 @@ export default function App() {
                   onClick={startBillboardImport}
                   disabled={
                     isImportingBillboard ||
-                    (!importAlbumChartsUs && !importAlbumChartsNo) ||
+                    (!importAlbumChartsUs &&
+                      !importAlbumChartsNo &&
+                      !importAlbumChartsUk) ||
                     (importAlbumChartsUs && !billboardSourcePath.trim()) ||
                     (importAlbumChartsNo && !vgListaAlbumSourcePath.trim()) ||
+                    (importAlbumChartsUk && !officialUkAlbumSourcePath.trim()) ||
                     !canImport ||
                     (status?.albumCount ?? 0) === 0
                   }
@@ -13221,8 +13468,8 @@ export default function App() {
                 <div>
                   <h2>Singles charts</h2>
                   <p>
-                    Import US Billboard, VG Lista, Ti i Skuddet, and
-                    Norsktoppen rows in one operation.
+                    Import US Billboard, Official UK, VG Lista, Ti i Skuddet,
+                    and Norsktoppen rows in one operation.
                   </p>
                 </div>
                 <RunStatus
@@ -13231,6 +13478,7 @@ export default function App() {
                       ? "running"
                       : billboardSinglesImportSummary ||
                           vgListaSinglesImportSummary ||
+                          officialUkSinglesImportSummary ||
                           tiISkuddetImportSummary ||
                           norsktoppenImportSummary
                         ? "completed"
@@ -13264,6 +13512,17 @@ export default function App() {
                     disabled={isImportingBillboardSingles}
                   />
                   <span>NO · VG Lista</span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={importSingleChartsUk}
+                    onChange={(event) =>
+                      setImportSingleChartsUk(event.target.checked)
+                    }
+                    disabled={isImportingBillboardSingles}
+                  />
+                  <span>UK · Official Charts</span>
                 </label>
                 <label className="toggle-row">
                   <input
@@ -13330,6 +13589,19 @@ export default function App() {
                 />
               </label>
               <label className="source-input">
+                <span>Official UK singles CSV folder</span>
+                <input
+                  value={officialUkSinglesSourcePath}
+                  onChange={(event) =>
+                    setOfficialUkSinglesSourcePath(event.target.value)
+                  }
+                  placeholder="CSV_SINGLES_UK"
+                  disabled={
+                    isImportingBillboardSingles || !importSingleChartsUk
+                  }
+                />
+              </label>
+              <label className="source-input">
                 <span>Norsktoppen CSV folder</span>
                 <input
                   value={norsktoppenSourcePath}
@@ -13380,6 +13652,19 @@ export default function App() {
                   files.
                 </p>
               ) : null}
+              {officialUkSinglesImportSummary ? (
+                <p className="success-message">
+                  UK · Matched{" "}
+                  {formatNumber(officialUkSinglesImportSummary.matchedItems)}{" "}
+                  tracks with{" "}
+                  {formatNumber(officialUkSinglesImportSummary.datedItems)}{" "}
+                  debut weeks from{" "}
+                  {formatNumber(officialUkSinglesImportSummary.chartEntries)}{" "}
+                  weekly rows across{" "}
+                  {formatNumber(officialUkSinglesImportSummary.filesScanned)}{" "}
+                  files.
+                </p>
+              ) : null}
               {tiISkuddetImportSummary ? (
                 <p className="success-message">
                   Ti i Skuddet · Matched{" "}
@@ -13420,12 +13705,15 @@ export default function App() {
                     isImportingBillboardSingles ||
                     (!importSingleChartsUs &&
                       !importSingleChartsNo &&
+                      !importSingleChartsUk &&
                       !importSingleChartsTiISkuddet &&
                       !importSingleChartsNorsktoppen) ||
                     (importSingleChartsUs &&
                       !billboardSinglesSourcePath.trim()) ||
                     (importSingleChartsNo &&
                       !vgListaSinglesSourcePath.trim()) ||
+                    (importSingleChartsUk &&
+                      !officialUkSinglesSourcePath.trim()) ||
                     (importSingleChartsTiISkuddet &&
                       !tiISkuddetSourcePath.trim()) ||
                     (importSingleChartsNorsktoppen &&
@@ -13844,6 +14132,44 @@ export default function App() {
                   </ChartFilterSourceGroup>
 
                   <ChartFilterSourceGroup
+                    title="UK · Official Charts"
+                    description="Official UK weekly chart history."
+                  >
+                    <NumberField
+                      label="Rank min"
+                      value={chartConfig.request.filters.officialUkRankMin}
+                      min={1}
+                      onChange={(officialUkRankMin) =>
+                        updateChartFilters({ officialUkRankMin })
+                      }
+                    />
+                    <NumberField
+                      label="Rank max"
+                      value={chartConfig.request.filters.officialUkRankMax}
+                      min={1}
+                      onChange={(officialUkRankMax) =>
+                        updateChartFilters({ officialUkRankMax })
+                      }
+                    />
+                    <WeekField
+                      label="Debut from"
+                      value={
+                        chartConfig.request.filters.officialUkDebutWeekFrom
+                      }
+                      onChange={(officialUkDebutWeekFrom) =>
+                        updateChartFilters({ officialUkDebutWeekFrom })
+                      }
+                    />
+                    <WeekField
+                      label="Debut to"
+                      value={chartConfig.request.filters.officialUkDebutWeekTo}
+                      onChange={(officialUkDebutWeekTo) =>
+                        updateChartFilters({ officialUkDebutWeekTo })
+                      }
+                    />
+                  </ChartFilterSourceGroup>
+
+                  <ChartFilterSourceGroup
                     title="NO · VG Lista"
                     description="Official Norwegian weekly chart history."
                   >
@@ -14204,6 +14530,8 @@ export default function App() {
                             "billboardSingleDebut",
                             "vgLista",
                             "vgListaDebut",
+                            "officialUk",
+                            "officialUkDebut",
                             "tiISkuddet",
                             "tiISkuddetDebut",
                             "norsktoppen",
@@ -18468,6 +18796,42 @@ export default function App() {
                     />
                   </ChartFilterSourceGroup>
 
+                  <ChartFilterSourceGroup
+                    title="UK · Official Charts"
+                    description="Official UK weekly chart history."
+                  >
+                    <NumberField
+                      label="Rank min"
+                      value={currentFilters.officialUkRankMin}
+                      min={1}
+                      onChange={(value) =>
+                        updateFilter("officialUkRankMin", value)
+                      }
+                    />
+                    <NumberField
+                      label="Rank max"
+                      value={currentFilters.officialUkRankMax}
+                      min={1}
+                      onChange={(value) =>
+                        updateFilter("officialUkRankMax", value)
+                      }
+                    />
+                    <WeekField
+                      label="Debut from"
+                      value={currentFilters.officialUkDebutWeekFrom}
+                      onChange={(value) =>
+                        updateFilter("officialUkDebutWeekFrom", value)
+                      }
+                    />
+                    <WeekField
+                      label="Debut to"
+                      value={currentFilters.officialUkDebutWeekTo}
+                      onChange={(value) =>
+                        updateFilter("officialUkDebutWeekTo", value)
+                      }
+                    />
+                  </ChartFilterSourceGroup>
+
                   {request.view === "tracks" ? (
                     <ChartFilterSourceGroup
                       title="NO · Ti i Skuddet"
@@ -18979,6 +19343,14 @@ export default function App() {
                               label: "VG Lista debut week",
                             },
                             {
+                              value: "officialUkRank",
+                              label: "Official UK",
+                            },
+                            {
+                              value: "officialUkDebut",
+                              label: "Official UK debut week",
+                            },
+                            {
                               value: "tiISkuddetRank",
                               label: "Ti i Skuddet",
                             },
@@ -19008,6 +19380,14 @@ export default function App() {
                             {
                               value: "vgListaDebut",
                               label: "VG Lista debut week",
+                            },
+                            {
+                              value: "officialUkRank",
+                              label: "Official UK",
+                            },
+                            {
+                              value: "officialUkDebut",
+                              label: "Official UK debut week",
                             },
                             { value: "genre", label: "Genre" },
                             { value: "totalMinutes", label: "Minutes" },

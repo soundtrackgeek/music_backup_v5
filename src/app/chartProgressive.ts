@@ -44,6 +44,9 @@ export function countChartSourceFilters(config: ChartConfig) {
     hasRange(filters.vgListaRankMin, filters.vgListaRankMax),
     filters.vgListaDebutWeekFrom != null ||
       filters.vgListaDebutWeekTo != null,
+    hasRange(filters.officialUkRankMin, filters.officialUkRankMax),
+    filters.officialUkDebutWeekFrom != null ||
+      filters.officialUkDebutWeekTo != null,
     config.request.view === "tracks" &&
       hasRange(filters.tiISkuddetRankMin, filters.tiISkuddetRankMax),
     config.request.view === "tracks" &&
@@ -72,6 +75,7 @@ export function countAdvancedChartControls(config: ChartConfig) {
     hasRange(filters.billboardRankMin, filters.billboardRankMax),
     hasRange(filters.billboardSingleRankMin, filters.billboardSingleRankMax),
     hasRange(filters.vgListaRankMin, filters.vgListaRankMax),
+    hasRange(filters.officialUkRankMin, filters.officialUkRankMax),
     filters.billboardSingleDebutDateFrom != null ||
       filters.billboardSingleDebutDateTo != null,
     config.request.view === "albums" &&
@@ -79,6 +83,8 @@ export function countAdvancedChartControls(config: ChartConfig) {
         filters.billboardDebutWeekTo != null),
     filters.vgListaDebutWeekFrom != null ||
       filters.vgListaDebutWeekTo != null,
+    filters.officialUkDebutWeekFrom != null ||
+      filters.officialUkDebutWeekTo != null,
     config.request.view === "tracks" &&
       hasRange(filters.tiISkuddetRankMin, filters.tiISkuddetRankMax),
     config.request.view === "tracks" &&

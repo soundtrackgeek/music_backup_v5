@@ -20,9 +20,9 @@ use crate::models::{
     MusicBrainzOriginCountryOption, MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry,
     MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
     MusicToolIssueRow, MusicToolProgress, MusicToolSummary, MusicToolUndoSummary,
-    NorsktoppenImportSummary, OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse,
-    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
-    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
+    NorsktoppenImportSummary, OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation,
+    PerformanceProbeResponse, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
+    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
     TiISkuddetImportSummary, TrackDebutTimelineResponse, TrackDebutTimelineTrack,
     TrackDebutTimelineYear, VgListaImportSummary, YearProgressRequest, YearProgressStats,
 };
@@ -76,6 +76,8 @@ const DEFAULT_VG_LISTA_ALBUM_SOURCE_PATH: &str = "CSV_ALBUMS_NO";
 const DEFAULT_VG_LISTA_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES_NO";
 const DEFAULT_TI_I_SKUDDET_SOURCE_PATH: &str = "CSV_TIISKUDDET_NO";
 const DEFAULT_NORSKTOPPEN_SOURCE_PATH: &str = "CSV_NORSKTOPPEN_NO";
+const DEFAULT_OFFICIAL_UK_ALBUM_SOURCE_PATH: &str = "CSV_ALBUMS_UK";
+const DEFAULT_OFFICIAL_UK_SINGLES_SOURCE_PATH: &str = "CSV_SINGLES_UK";
 const DEFAULT_DEEMIX_DOWNLOAD_PATH: &str = "";
 const DEFAULT_DEEMIX_DOWNLOAD_QUALITY: &str = "mp3_320";
 const DEFAULT_DEEMIX_DOWNLOAD_FALLBACK: bool = true;
@@ -197,6 +199,28 @@ struct VgListaChartEntry {
     title_key: String,
     week_date: String,
     month: i32,
+    week_key: String,
+}
+
+#[derive(Debug, Clone)]
+struct OfficialUkChartEntry {
+    source_file: String,
+    year: i32,
+    week: i32,
+    chart_date: String,
+    chart_end_date: String,
+    month: i32,
+    rank: i32,
+    last_week: String,
+    movement: String,
+    peak: String,
+    artist: String,
+    title: String,
+    artist_key: String,
+    title_key: String,
+    weeks_on_chart: String,
+    source_url: String,
+    item_url: String,
     week_key: String,
 }
 
@@ -485,8 +509,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_eight_schema_exists(conn)?
-    {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_nine_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -585,6 +608,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             vg_lista_debut_month INTEGER,
             vg_lista_debut_week INTEGER,
             vg_lista_debut_week_key TEXT,
+            official_uk_rank INTEGER,
+            official_uk_year INTEGER,
+            official_uk_debut_date TEXT,
+            official_uk_debut_year INTEGER,
+            official_uk_debut_month INTEGER,
+            official_uk_debut_week INTEGER,
+            official_uk_debut_week_key TEXT,
             ti_i_skuddet_rank INTEGER,
             ti_i_skuddet_year INTEGER,
             ti_i_skuddet_debut_date TEXT,
@@ -635,7 +665,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             vg_lista_debut_year INTEGER,
             vg_lista_debut_month INTEGER,
             vg_lista_debut_week INTEGER,
-            vg_lista_debut_week_key TEXT
+            vg_lista_debut_week_key TEXT,
+            official_uk_rank INTEGER,
+            official_uk_year INTEGER,
+            official_uk_debut_year INTEGER,
+            official_uk_debut_month INTEGER,
+            official_uk_debut_week INTEGER,
+            official_uk_debut_week_key TEXT
         );
 
         CREATE TABLE IF NOT EXISTS album_covers (
@@ -723,6 +759,52 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             imported_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS official_uk_album_chart_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            week INTEGER NOT NULL,
+            chart_date TEXT NOT NULL,
+            chart_end_date TEXT,
+            rank INTEGER NOT NULL,
+            last_week TEXT,
+            movement TEXT,
+            peak TEXT,
+            artist TEXT NOT NULL,
+            title TEXT NOT NULL,
+            artist_key TEXT NOT NULL,
+            title_key TEXT NOT NULL,
+            weeks_on_chart TEXT,
+            source_url TEXT,
+            item_url TEXT,
+            week_key TEXT NOT NULL,
+            matched_album_id TEXT REFERENCES albums(id) ON DELETE SET NULL,
+            imported_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS official_uk_single_chart_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            week INTEGER NOT NULL,
+            chart_date TEXT NOT NULL,
+            chart_end_date TEXT,
+            rank INTEGER NOT NULL,
+            last_week TEXT,
+            movement TEXT,
+            peak TEXT,
+            artist TEXT NOT NULL,
+            title TEXT NOT NULL,
+            artist_key TEXT NOT NULL,
+            title_key TEXT NOT NULL,
+            weeks_on_chart TEXT,
+            source_url TEXT,
+            item_url TEXT,
+            week_key TEXT NOT NULL,
+            matched_track_id INTEGER REFERENCES tracks(id) ON DELETE SET NULL,
+            imported_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS ti_i_skuddet_chart_entries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source_file TEXT NOT NULL,
@@ -796,6 +878,14 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             ON vg_lista_single_chart_entries(matched_track_id);
         CREATE INDEX IF NOT EXISTS idx_vg_lista_single_chart_entries_week_rank
             ON vg_lista_single_chart_entries(year, week, rank);
+        CREATE INDEX IF NOT EXISTS idx_official_uk_album_chart_entries_match
+            ON official_uk_album_chart_entries(matched_album_id);
+        CREATE INDEX IF NOT EXISTS idx_official_uk_album_chart_entries_week_rank
+            ON official_uk_album_chart_entries(year, week, rank);
+        CREATE INDEX IF NOT EXISTS idx_official_uk_single_chart_entries_match
+            ON official_uk_single_chart_entries(matched_track_id);
+        CREATE INDEX IF NOT EXISTS idx_official_uk_single_chart_entries_week_rank
+            ON official_uk_single_chart_entries(year, week, rank);
         CREATE INDEX IF NOT EXISTS idx_ti_i_skuddet_chart_entries_match
             ON ti_i_skuddet_chart_entries(matched_track_id);
         CREATE INDEX IF NOT EXISTS idx_ti_i_skuddet_chart_entries_week_rank
@@ -994,6 +1084,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             billboard_singles_source_path TEXT NOT NULL DEFAULT 'CSV_SINGLES',
             vg_lista_album_source_path TEXT NOT NULL DEFAULT 'CSV_ALBUMS_NO',
             vg_lista_singles_source_path TEXT NOT NULL DEFAULT 'CSV_SINGLES_NO',
+            official_uk_album_source_path TEXT NOT NULL DEFAULT 'CSV_ALBUMS_UK',
+            official_uk_singles_source_path TEXT NOT NULL DEFAULT 'CSV_SINGLES_UK',
             ti_i_skuddet_source_path TEXT NOT NULL DEFAULT 'CSV_TIISKUDDET_NO',
             norsktoppen_source_path TEXT NOT NULL DEFAULT 'CSV_NORSKTOPPEN_NO',
             deemix_download_path TEXT NOT NULL DEFAULT '',
@@ -1374,6 +1466,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_track_billboard_single_columns(conn)?;
     ensure_billboard_single_chart_entries_table(conn)?;
     ensure_vg_lista_schema(conn)?;
+    ensure_official_uk_schema(conn)?;
     ensure_ti_i_skuddet_schema(conn)?;
     ensure_norsktoppen_schema(conn)?;
     ensure_app_settings_musicbrainz_columns(conn)?;
@@ -1393,7 +1486,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 38;
+        PRAGMA user_version = 39;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -1611,6 +1704,14 @@ fn ensure_app_settings_import_columns(conn: &Connection) -> Result<()> {
         (
             "vg_lista_singles_source_path",
             "TEXT NOT NULL DEFAULT 'CSV_SINGLES_NO'",
+        ),
+        (
+            "official_uk_album_source_path",
+            "TEXT NOT NULL DEFAULT 'CSV_ALBUMS_UK'",
+        ),
+        (
+            "official_uk_singles_source_path",
+            "TEXT NOT NULL DEFAULT 'CSV_SINGLES_UK'",
         ),
         (
             "ti_i_skuddet_source_path",
@@ -2319,6 +2420,109 @@ fn ensure_vg_lista_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create VG Lista chart schema")?;
+
+    Ok(())
+}
+
+fn ensure_official_uk_schema(conn: &Connection) -> Result<()> {
+    for (name, definition) in [
+        ("official_uk_rank", "INTEGER"),
+        ("official_uk_year", "INTEGER"),
+        ("official_uk_debut_year", "INTEGER"),
+        ("official_uk_debut_month", "INTEGER"),
+        ("official_uk_debut_week", "INTEGER"),
+        ("official_uk_debut_week_key", "TEXT"),
+    ] {
+        if !schema_column_exists(conn, "albums", name)? {
+            let sql = format!("ALTER TABLE albums ADD COLUMN {name} {definition}");
+            conn.execute_batch(&sql)
+                .with_context(|| format!("Could not add albums.{name}"))?;
+        }
+    }
+
+    for (name, definition) in [
+        ("official_uk_rank", "INTEGER"),
+        ("official_uk_year", "INTEGER"),
+        ("official_uk_debut_date", "TEXT"),
+        ("official_uk_debut_year", "INTEGER"),
+        ("official_uk_debut_month", "INTEGER"),
+        ("official_uk_debut_week", "INTEGER"),
+        ("official_uk_debut_week_key", "TEXT"),
+    ] {
+        if !schema_column_exists(conn, "tracks", name)? {
+            let sql = format!("ALTER TABLE tracks ADD COLUMN {name} {definition}");
+            conn.execute_batch(&sql)
+                .with_context(|| format!("Could not add tracks.{name}"))?;
+        }
+    }
+
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS official_uk_album_chart_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            week INTEGER NOT NULL,
+            chart_date TEXT NOT NULL,
+            chart_end_date TEXT,
+            rank INTEGER NOT NULL,
+            last_week TEXT,
+            movement TEXT,
+            peak TEXT,
+            artist TEXT NOT NULL,
+            title TEXT NOT NULL,
+            artist_key TEXT NOT NULL,
+            title_key TEXT NOT NULL,
+            weeks_on_chart TEXT,
+            source_url TEXT,
+            item_url TEXT,
+            week_key TEXT NOT NULL,
+            matched_album_id TEXT REFERENCES albums(id) ON DELETE SET NULL,
+            imported_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS official_uk_single_chart_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            week INTEGER NOT NULL,
+            chart_date TEXT NOT NULL,
+            chart_end_date TEXT,
+            rank INTEGER NOT NULL,
+            last_week TEXT,
+            movement TEXT,
+            peak TEXT,
+            artist TEXT NOT NULL,
+            title TEXT NOT NULL,
+            artist_key TEXT NOT NULL,
+            title_key TEXT NOT NULL,
+            weeks_on_chart TEXT,
+            source_url TEXT,
+            item_url TEXT,
+            week_key TEXT NOT NULL,
+            matched_track_id INTEGER REFERENCES tracks(id) ON DELETE SET NULL,
+            imported_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_albums_official_uk_rank
+            ON albums(official_uk_rank);
+        CREATE INDEX IF NOT EXISTS idx_albums_official_uk_debut_week
+            ON albums(official_uk_debut_week_key);
+        CREATE INDEX IF NOT EXISTS idx_tracks_official_uk_rank
+            ON tracks(official_uk_rank);
+        CREATE INDEX IF NOT EXISTS idx_tracks_official_uk_debut_week
+            ON tracks(official_uk_debut_week_key);
+        CREATE INDEX IF NOT EXISTS idx_official_uk_album_chart_entries_match
+            ON official_uk_album_chart_entries(matched_album_id);
+        CREATE INDEX IF NOT EXISTS idx_official_uk_album_chart_entries_week_rank
+            ON official_uk_album_chart_entries(year, week, rank);
+        CREATE INDEX IF NOT EXISTS idx_official_uk_single_chart_entries_match
+            ON official_uk_single_chart_entries(matched_track_id);
+        CREATE INDEX IF NOT EXISTS idx_official_uk_single_chart_entries_week_rank
+            ON official_uk_single_chart_entries(year, week, rank);
+        ",
+    )
+    .context("Could not create Official UK chart schema")?;
 
     Ok(())
 }
@@ -3467,6 +3671,457 @@ fn import_vg_lista_singles(
 }
 
 #[cfg(not(test))]
+pub fn import_official_uk_albums_for_app(
+    app: &AppHandle,
+    source_path: String,
+) -> Result<OfficialUkImportSummary> {
+    let (mut conn, _) = open(app)?;
+    let source_path = resolve_official_uk_source_path(&source_path)?;
+    import_official_uk_albums(&mut conn, &source_path)
+}
+
+fn import_official_uk_albums(
+    conn: &mut Connection,
+    source_path: &Path,
+) -> Result<OfficialUkImportSummary> {
+    let started = Instant::now();
+    let csv_files = chart_csv_files(source_path, "Official UK")?;
+    if csv_files.is_empty() {
+        bail!(
+            "No Official UK album CSV files found in {}",
+            source_path.display()
+        );
+    }
+
+    let mut source_entries = Vec::new();
+    let mut entry_indexes_by_match_key: HashMap<String, Vec<usize>> = HashMap::new();
+    for csv_file in &csv_files {
+        for entry in read_official_uk_chart_file(csv_file)? {
+            let entry_index = source_entries.len();
+            for key in billboard_match_keys(&entry.artist_key, &entry.title_key) {
+                entry_indexes_by_match_key
+                    .entry(key)
+                    .or_default()
+                    .push(entry_index);
+            }
+            source_entries.push(entry);
+        }
+    }
+
+    let tx = conn
+        .transaction()
+        .context("Could not start Official UK album import transaction")?;
+    tx.execute(
+        "
+        UPDATE albums
+        SET official_uk_rank = NULL,
+            official_uk_year = NULL,
+            official_uk_debut_year = NULL,
+            official_uk_debut_month = NULL,
+            official_uk_debut_week = NULL,
+            official_uk_debut_week_key = NULL
+        ",
+        [],
+    )
+    .context("Could not clear existing Official UK album rankings")?;
+
+    let mut matched_entry_album_ids = vec![None::<String>; source_entries.len()];
+    let mut album_matches = Vec::new();
+    {
+        let mut stmt = tx.prepare("SELECT id, album_artist_display, album FROM albums")?;
+        let album_rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+
+        for (album_id, artist, album) in album_rows {
+            let artist_key = billboard_text_key(artist.as_deref().unwrap_or_default());
+            let title_key = billboard_text_key(album.as_deref().unwrap_or_default());
+            if artist_key.is_empty() || title_key.is_empty() {
+                continue;
+            }
+
+            let mut entry_indexes = Vec::new();
+            for key in billboard_match_keys(&artist_key, &title_key) {
+                if let Some(indexes) = entry_indexes_by_match_key.get(&key) {
+                    for &entry_index in indexes {
+                        if !entry_indexes.contains(&entry_index) {
+                            entry_indexes.push(entry_index);
+                        }
+                    }
+                }
+            }
+            if entry_indexes.is_empty() {
+                continue;
+            }
+
+            for &entry_index in &entry_indexes {
+                matched_entry_album_ids[entry_index] = Some(album_id.clone());
+            }
+            let best = entry_indexes
+                .iter()
+                .map(|index| &source_entries[*index])
+                .min_by_key(|entry| (entry.rank, entry.year, entry.week))
+                .expect("matched Official UK album entries are not empty");
+            let debut = entry_indexes
+                .iter()
+                .map(|index| &source_entries[*index])
+                .min_by_key(|entry| (&entry.chart_date, entry.rank))
+                .expect("matched Official UK album entries are not empty");
+            album_matches.push((
+                album_id,
+                best.rank,
+                best.year,
+                debut.year,
+                debut.month,
+                debut.week,
+                debut.week_key.clone(),
+            ));
+        }
+    }
+
+    {
+        let mut update_album = tx.prepare(
+            "
+            UPDATE albums
+            SET official_uk_rank = ?1,
+                official_uk_year = ?2,
+                official_uk_debut_year = ?3,
+                official_uk_debut_month = ?4,
+                official_uk_debut_week = ?5,
+                official_uk_debut_week_key = ?6
+            WHERE id = ?7
+            ",
+        )?;
+        for (album_id, rank, year, debut_year, debut_month, debut_week, debut_week_key) in
+            &album_matches
+        {
+            update_album.execute(params![
+                rank,
+                year,
+                debut_year,
+                debut_month,
+                debut_week,
+                debut_week_key,
+                album_id
+            ])?;
+        }
+    }
+
+    tx.execute("DELETE FROM official_uk_album_chart_entries", [])
+        .context("Could not clear existing Official UK album entries")?;
+    {
+        let imported_at = Utc::now().to_rfc3339();
+        let mut insert_entry = tx.prepare(
+            "
+            INSERT INTO official_uk_album_chart_entries (
+                source_file, year, week, chart_date, chart_end_date, rank,
+                last_week, movement, peak, artist, title, artist_key, title_key,
+                weeks_on_chart, source_url, item_url, week_key, matched_album_id, imported_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+            ",
+        )?;
+        for (index, entry) in source_entries.iter().enumerate() {
+            insert_entry.execute(params![
+                &entry.source_file,
+                entry.year,
+                entry.week,
+                &entry.chart_date,
+                &entry.chart_end_date,
+                entry.rank,
+                &entry.last_week,
+                &entry.movement,
+                &entry.peak,
+                &entry.artist,
+                &entry.title,
+                &entry.artist_key,
+                &entry.title_key,
+                &entry.weeks_on_chart,
+                &entry.source_url,
+                &entry.item_url,
+                &entry.week_key,
+                matched_entry_album_ids[index].as_deref(),
+                &imported_at,
+            ])?;
+        }
+    }
+
+    tx.commit()
+        .context("Could not commit Official UK album import")?;
+    Ok(OfficialUkImportSummary {
+        source_path: source_path.display().to_string(),
+        files_scanned: csv_files.len(),
+        chart_entries: source_entries.len(),
+        matched_items: album_matches.len() as i64,
+        dated_items: album_matches.len() as i64,
+        duration_ms: started.elapsed().as_millis(),
+    })
+}
+
+#[cfg(not(test))]
+pub fn import_official_uk_singles_for_app(
+    app: &AppHandle,
+    source_path: String,
+) -> Result<OfficialUkImportSummary> {
+    let (mut conn, _) = open(app)?;
+    let source_path = resolve_official_uk_source_path(&source_path)?;
+    import_official_uk_singles(&mut conn, &source_path)
+}
+
+fn import_official_uk_singles(
+    conn: &mut Connection,
+    source_path: &Path,
+) -> Result<OfficialUkImportSummary> {
+    let started = Instant::now();
+    let csv_files = chart_csv_files(source_path, "Official UK")?;
+    if csv_files.is_empty() {
+        bail!(
+            "No Official UK singles CSV files found in {}",
+            source_path.display()
+        );
+    }
+
+    let mut source_entries = Vec::new();
+    let mut entry_indexes_by_match_key: HashMap<String, Vec<usize>> = HashMap::new();
+    for csv_file in &csv_files {
+        for entry in read_official_uk_chart_file(csv_file)? {
+            let entry_index = source_entries.len();
+            for key in billboard_single_match_keys(&entry.artist_key, &entry.title_key) {
+                entry_indexes_by_match_key
+                    .entry(key)
+                    .or_default()
+                    .push(entry_index);
+            }
+            source_entries.push(entry);
+        }
+    }
+
+    let tx = conn
+        .transaction()
+        .context("Could not start Official UK singles import transaction")?;
+    tx.execute(
+        "
+        UPDATE tracks
+        SET official_uk_rank = NULL,
+            official_uk_year = NULL,
+            official_uk_debut_date = NULL,
+            official_uk_debut_year = NULL,
+            official_uk_debut_month = NULL,
+            official_uk_debut_week = NULL,
+            official_uk_debut_week_key = NULL
+        ",
+        [],
+    )
+    .context("Could not clear existing Official UK singles rankings")?;
+
+    let mut matched_entry_track_ids = vec![None::<i64>; source_entries.len()];
+    let mut track_matches = Vec::new();
+    {
+        let mut stmt = tx.prepare(
+            "
+            SELECT t.id, t.display_artist, t.title, t.album_artist_display,
+                   t.year, t.normalized_rating, c.album_id IS NOT NULL
+            FROM tracks t
+            LEFT JOIN album_covers c ON c.album_id = t.album_id
+            ",
+        )?;
+        let track_rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<i32>>(4)?,
+                    row.get::<_, Option<i32>>(5)?,
+                    row.get::<_, bool>(6)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+
+        let mut candidates_by_identity: HashMap<String, Vec<WeeklyChartTrackCandidate>> =
+            HashMap::new();
+        for (
+            track_id,
+            display_artist,
+            title,
+            album_artist_display,
+            year,
+            normalized_rating,
+            has_cover,
+        ) in track_rows
+        {
+            let artist_key = billboard_text_key(display_artist.as_deref().unwrap_or_default());
+            let title_key = billboard_text_key(title.as_deref().unwrap_or_default());
+            if artist_key.is_empty() || title_key.is_empty() {
+                continue;
+            }
+
+            let mut entry_indexes = Vec::new();
+            for key in billboard_single_match_keys(&artist_key, &title_key) {
+                if let Some(indexes) = entry_indexes_by_match_key.get(&key) {
+                    for &entry_index in indexes {
+                        if !entry_indexes.contains(&entry_index) {
+                            entry_indexes.push(entry_index);
+                        }
+                    }
+                }
+            }
+            if entry_indexes.is_empty() {
+                continue;
+            }
+
+            let best = entry_indexes
+                .iter()
+                .map(|index| &source_entries[*index])
+                .min_by_key(|entry| (entry.rank, entry.year, entry.week))
+                .expect("matched Official UK single entries are not empty");
+            let debut = entry_indexes
+                .iter()
+                .map(|index| &source_entries[*index])
+                .min_by_key(|entry| (&entry.chart_date, entry.rank))
+                .expect("matched Official UK single entries are not empty");
+            let identity_key = billboard_match_key(&best.artist_key, &best.title_key);
+            candidates_by_identity
+                .entry(identity_key)
+                .or_default()
+                .push(WeeklyChartTrackCandidate {
+                    track_id,
+                    album_artist_key: billboard_text_key(
+                        album_artist_display.as_deref().unwrap_or_default(),
+                    ),
+                    year,
+                    normalized_rating,
+                    has_cover,
+                    source_artist_key: best.artist_key.clone(),
+                    rank: best.rank,
+                    chart_year: best.year,
+                    debut_date: debut.chart_date.clone(),
+                    debut_year: debut.year,
+                    debut_month: debut.month,
+                    debut_week: debut.week,
+                    debut_week_key: debut.week_key.clone(),
+                    entry_indexes,
+                });
+        }
+
+        for candidates in candidates_by_identity.into_values() {
+            let Some(candidate) = candidates
+                .iter()
+                .max_by_key(|candidate| weekly_chart_track_candidate_priority(candidate))
+            else {
+                continue;
+            };
+            for &entry_index in &candidate.entry_indexes {
+                matched_entry_track_ids[entry_index] = Some(candidate.track_id);
+            }
+            track_matches.push((
+                candidate.track_id,
+                candidate.rank,
+                candidate.chart_year,
+                candidate.debut_date.clone(),
+                candidate.debut_year,
+                candidate.debut_month,
+                candidate.debut_week,
+                candidate.debut_week_key.clone(),
+            ));
+        }
+    }
+
+    {
+        let mut update_track = tx.prepare(
+            "
+            UPDATE tracks
+            SET official_uk_rank = ?1,
+                official_uk_year = ?2,
+                official_uk_debut_date = ?3,
+                official_uk_debut_year = ?4,
+                official_uk_debut_month = ?5,
+                official_uk_debut_week = ?6,
+                official_uk_debut_week_key = ?7
+            WHERE id = ?8
+            ",
+        )?;
+        for (
+            track_id,
+            rank,
+            year,
+            debut_date,
+            debut_year,
+            debut_month,
+            debut_week,
+            debut_week_key,
+        ) in &track_matches
+        {
+            update_track.execute(params![
+                rank,
+                year,
+                debut_date,
+                debut_year,
+                debut_month,
+                debut_week,
+                debut_week_key,
+                track_id,
+            ])?;
+        }
+    }
+
+    tx.execute("DELETE FROM official_uk_single_chart_entries", [])
+        .context("Could not clear existing Official UK single entries")?;
+    {
+        let imported_at = Utc::now().to_rfc3339();
+        let mut insert_entry = tx.prepare(
+            "
+            INSERT INTO official_uk_single_chart_entries (
+                source_file, year, week, chart_date, chart_end_date, rank,
+                last_week, movement, peak, artist, title, artist_key, title_key,
+                weeks_on_chart, source_url, item_url, week_key, matched_track_id, imported_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+            ",
+        )?;
+        for (index, entry) in source_entries.iter().enumerate() {
+            insert_entry.execute(params![
+                &entry.source_file,
+                entry.year,
+                entry.week,
+                &entry.chart_date,
+                &entry.chart_end_date,
+                entry.rank,
+                &entry.last_week,
+                &entry.movement,
+                &entry.peak,
+                &entry.artist,
+                &entry.title,
+                &entry.artist_key,
+                &entry.title_key,
+                &entry.weeks_on_chart,
+                &entry.source_url,
+                &entry.item_url,
+                &entry.week_key,
+                matched_entry_track_ids[index],
+                &imported_at,
+            ])?;
+        }
+    }
+
+    tx.commit()
+        .context("Could not commit Official UK singles import")?;
+    Ok(OfficialUkImportSummary {
+        source_path: source_path.display().to_string(),
+        files_scanned: csv_files.len(),
+        chart_entries: source_entries.len(),
+        matched_items: track_matches.len() as i64,
+        dated_items: track_matches.len() as i64,
+        duration_ms: started.elapsed().as_millis(),
+    })
+}
+
+#[cfg(not(test))]
 pub fn import_ti_i_skuddet_singles_for_app(
     app: &AppHandle,
     source_path: String,
@@ -4109,6 +4764,114 @@ fn read_vg_lista_chart_file(path: &Path) -> Result<Vec<VgListaChartEntry>> {
     Ok(entries)
 }
 
+fn read_official_uk_chart_file(path: &Path) -> Result<Vec<OfficialUkChartEntry>> {
+    let mut reader = csv::ReaderBuilder::new()
+        .flexible(true)
+        .from_path(path)
+        .with_context(|| format!("Could not open Official UK CSV {}", path.display()))?;
+    let headers = reader
+        .headers()
+        .with_context(|| format!("Could not read Official UK CSV header {}", path.display()))?
+        .clone();
+    let year_index = chart_csv_header_index(&headers, "Year", "Official UK")?;
+    let week_index = chart_csv_header_index(&headers, "ISO Week", "Official UK")?;
+    let chart_date_index = chart_csv_header_index(&headers, "Chart Date", "Official UK")?;
+    let rank_index = chart_csv_header_index(&headers, "Rank", "Official UK")?;
+    let artist_index = chart_csv_header_index(&headers, "Artist", "Official UK")?;
+    let title_index = chart_csv_header_index(&headers, "Title", "Official UK")?;
+    let chart_end_date_index = optional_chart_csv_header_index(&headers, "Chart End Date");
+    let last_week_index = optional_chart_csv_header_index(&headers, "Last Week");
+    let movement_index = optional_chart_csv_header_index(&headers, "Movement");
+    let peak_index = optional_chart_csv_header_index(&headers, "Peak");
+    let weeks_on_chart_index = optional_chart_csv_header_index(&headers, "Weeks on Chart");
+    let source_url_index = optional_chart_csv_header_index(&headers, "Source URL");
+    let item_url_index = optional_chart_csv_header_index(&headers, "Item URL");
+    let source_file = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let field = |record: &csv::StringRecord, index: Option<usize>| {
+        index
+            .and_then(|value| record.get(value))
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let mut entries = Vec::new();
+    for (row_index, result) in reader.records().enumerate() {
+        let record = result
+            .with_context(|| format!("Could not read Official UK CSV row {}", path.display()))?;
+        let year = record
+            .get(year_index)
+            .and_then(|value| value.trim().parse::<i32>().ok())
+            .ok_or_else(|| anyhow!("Invalid Year in {} row {}", path.display(), row_index + 2))?;
+        let week = record
+            .get(week_index)
+            .and_then(|value| value.trim().parse::<i32>().ok())
+            .filter(|week| (1..=53).contains(week))
+            .ok_or_else(|| {
+                anyhow!(
+                    "Invalid ISO Week in {} row {}",
+                    path.display(),
+                    row_index + 2
+                )
+            })?;
+        let chart_date_raw = record.get(chart_date_index).unwrap_or_default().trim();
+        let chart_date = NaiveDate::parse_from_str(chart_date_raw, "%Y-%m-%d").map_err(|_| {
+            anyhow!(
+                "Invalid Chart Date in {} row {}",
+                path.display(),
+                row_index + 2
+            )
+        })?;
+        let rank = record
+            .get(rank_index)
+            .and_then(|value| value.trim().parse::<i32>().ok())
+            .filter(|rank| *rank > 0)
+            .ok_or_else(|| anyhow!("Invalid Rank in {} row {}", path.display(), row_index + 2))?;
+        let artist = record
+            .get(artist_index)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        let title = record
+            .get(title_index)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        let artist_key = billboard_text_key(&artist);
+        let title_key = billboard_text_key(&title);
+        if artist_key.is_empty() || title_key.is_empty() {
+            continue;
+        }
+
+        entries.push(OfficialUkChartEntry {
+            source_file: source_file.clone(),
+            year,
+            week,
+            chart_date: chart_date.format("%Y-%m-%d").to_string(),
+            chart_end_date: field(&record, chart_end_date_index),
+            month: chart_date.month() as i32,
+            rank,
+            last_week: field(&record, last_week_index),
+            movement: field(&record, movement_index),
+            peak: field(&record, peak_index),
+            artist,
+            title,
+            artist_key,
+            title_key,
+            weeks_on_chart: field(&record, weeks_on_chart_index),
+            source_url: field(&record, source_url_index),
+            item_url: field(&record, item_url_index),
+            week_key: format!("{year:04}-W{week:02}"),
+        });
+    }
+
+    Ok(entries)
+}
+
 fn read_ti_i_skuddet_chart_file(path: &Path) -> Result<(Vec<TiISkuddetChartEntry>, usize)> {
     let mut reader = csv::ReaderBuilder::new()
         .flexible(true)
@@ -4362,6 +5125,10 @@ fn chart_csv_header_index(
 
 fn resolve_vg_lista_source_path(source_path: &str) -> Result<PathBuf> {
     resolve_chart_source_path(source_path, "VG Lista")
+}
+
+fn resolve_official_uk_source_path(source_path: &str) -> Result<PathBuf> {
+    resolve_chart_source_path(source_path, "Official UK")
 }
 
 fn resolve_ti_i_skuddet_source_path(source_path: &str) -> Result<PathBuf> {
@@ -5104,7 +5871,16 @@ fn album_debut_timeline_for_source(
         debut_month_field,
         debut_week_field,
         debut_week_key_field,
-    ) = if timeline_source_is_vg_lista(chart_source) {
+    ) = if timeline_source_is_official_uk(chart_source) {
+        (
+            "a.official_uk_rank",
+            "a.official_uk_year",
+            "a.official_uk_debut_year",
+            "a.official_uk_debut_month",
+            "a.official_uk_debut_week",
+            "a.official_uk_debut_week_key",
+        )
+    } else if timeline_source_is_vg_lista(chart_source) {
         (
             "a.vg_lista_rank",
             "a.vg_lista_year",
@@ -5319,7 +6095,17 @@ fn track_debut_timeline_for_source(
         debut_month_field,
         debut_week_field,
         debut_week_key_field,
-    ) = if timeline_source_is_norsktoppen(chart_source) {
+    ) = if timeline_source_is_official_uk(chart_source) {
+        (
+            "t.official_uk_rank",
+            "t.official_uk_year",
+            "t.official_uk_debut_date",
+            "t.official_uk_debut_year",
+            "t.official_uk_debut_month",
+            "t.official_uk_debut_week",
+            "t.official_uk_debut_week_key",
+        )
+    } else if timeline_source_is_norsktoppen(chart_source) {
         (
             "t.norsktoppen_rank",
             "t.norsktoppen_year",
@@ -5537,6 +6323,12 @@ fn timeline_source_is_billboard(value: &str) -> bool {
 
 fn timeline_source_is_vg_lista(value: &str) -> bool {
     value.eq_ignore_ascii_case("vgLista") || value.eq_ignore_ascii_case("NO")
+}
+
+fn timeline_source_is_official_uk(value: &str) -> bool {
+    value.eq_ignore_ascii_case("officialUk")
+        || value.eq_ignore_ascii_case("official_uk")
+        || value.eq_ignore_ascii_case("UK")
 }
 
 fn timeline_source_is_ti_i_skuddet(value: &str) -> bool {
@@ -13690,6 +14482,12 @@ fn search_library(
             t.vg_lista_debut_month,
             t.vg_lista_debut_week,
             t.vg_lista_debut_week_key,
+            t.official_uk_rank,
+            t.official_uk_year,
+            t.official_uk_debut_year,
+            t.official_uk_debut_month,
+            t.official_uk_debut_week,
+            t.official_uk_debut_week_key,
             t.ti_i_skuddet_rank,
             t.ti_i_skuddet_year,
             t.ti_i_skuddet_debut_date,
@@ -13760,6 +14558,12 @@ fn search_library(
             a.vg_lista_debut_month,
             a.vg_lista_debut_week,
             a.vg_lista_debut_week_key,
+            a.official_uk_rank,
+            a.official_uk_year,
+            a.official_uk_debut_year,
+            a.official_uk_debut_month,
+            a.official_uk_debut_week,
+            a.official_uk_debut_week_key,
             NULL,
             NULL,
             NULL,
@@ -13880,33 +14684,39 @@ fn browse_row_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BrowseRow> {
         vg_lista_debut_month: row.get(36)?,
         vg_lista_debut_week: row.get(37)?,
         vg_lista_debut_week_key: row.get(38)?,
-        ti_i_skuddet_rank: row.get(39)?,
-        ti_i_skuddet_year: row.get(40)?,
-        ti_i_skuddet_debut_date: row.get(41)?,
-        ti_i_skuddet_debut_year: row.get(42)?,
-        ti_i_skuddet_debut_month: row.get(43)?,
-        ti_i_skuddet_debut_week: row.get(44)?,
-        ti_i_skuddet_debut_week_key: row.get(45)?,
-        norsktoppen_rank: row.get(46)?,
-        norsktoppen_year: row.get(47)?,
-        norsktoppen_debut_date: row.get(48)?,
-        norsktoppen_debut_year: row.get(49)?,
-        norsktoppen_debut_month: row.get(50)?,
-        norsktoppen_debut_week: row.get(51)?,
-        norsktoppen_debut_week_key: row.get(52)?,
-        track_seconds: row.get(53)?,
-        normalized_rating: row.get(54)?,
-        disc_number: row.get(55)?,
-        track_number: row.get(56)?,
-        love: row.get(57)?,
-        file_path: row.get(58)?,
-        filename: row.get(59)?,
-        cover_path: row.get(60)?,
-        cover_mime_type: row.get(61)?,
-        origin_country_code: row.get(62)?,
-        origin_country_name: row.get(63)?,
-        origin_country_raw_area: row.get(64)?,
-        origin_country_review_state: row.get(65)?,
+        official_uk_rank: row.get(39)?,
+        official_uk_year: row.get(40)?,
+        official_uk_debut_year: row.get(41)?,
+        official_uk_debut_month: row.get(42)?,
+        official_uk_debut_week: row.get(43)?,
+        official_uk_debut_week_key: row.get(44)?,
+        ti_i_skuddet_rank: row.get(45)?,
+        ti_i_skuddet_year: row.get(46)?,
+        ti_i_skuddet_debut_date: row.get(47)?,
+        ti_i_skuddet_debut_year: row.get(48)?,
+        ti_i_skuddet_debut_month: row.get(49)?,
+        ti_i_skuddet_debut_week: row.get(50)?,
+        ti_i_skuddet_debut_week_key: row.get(51)?,
+        norsktoppen_rank: row.get(52)?,
+        norsktoppen_year: row.get(53)?,
+        norsktoppen_debut_date: row.get(54)?,
+        norsktoppen_debut_year: row.get(55)?,
+        norsktoppen_debut_month: row.get(56)?,
+        norsktoppen_debut_week: row.get(57)?,
+        norsktoppen_debut_week_key: row.get(58)?,
+        track_seconds: row.get(59)?,
+        normalized_rating: row.get(60)?,
+        disc_number: row.get(61)?,
+        track_number: row.get(62)?,
+        love: row.get(63)?,
+        file_path: row.get(64)?,
+        filename: row.get(65)?,
+        cover_path: row.get(66)?,
+        cover_mime_type: row.get(67)?,
+        origin_country_code: row.get(68)?,
+        origin_country_name: row.get(69)?,
+        origin_country_raw_area: row.get(70)?,
+        origin_country_review_state: row.get(71)?,
     })
 }
 
@@ -14074,6 +14884,28 @@ fn build_where_clause(
         },
         filters.vg_lista_debut_week_from.as_deref(),
         filters.vg_lista_debut_week_to.as_deref(),
+    );
+    add_i32_range(
+        &mut conditions,
+        &mut values,
+        if is_tracks {
+            "t.official_uk_rank"
+        } else {
+            "a.official_uk_rank"
+        },
+        filters.official_uk_rank_min,
+        filters.official_uk_rank_max,
+    );
+    add_iso_week_range(
+        &mut conditions,
+        &mut values,
+        if is_tracks {
+            "t.official_uk_debut_week_key"
+        } else {
+            "a.official_uk_debut_week_key"
+        },
+        filters.official_uk_debut_week_from.as_deref(),
+        filters.official_uk_debut_week_to.as_deref(),
     );
     if is_tracks {
         add_i32_range(
@@ -14836,6 +15668,16 @@ fn add_missing_field_conditions(conditions: &mut Vec<String>, is_tracks: bool, f
             } else {
                 "a.vg_lista_debut_week_key IS NULL"
             }),
+            "officialUk" => Some(if is_tracks {
+                "t.official_uk_rank IS NULL"
+            } else {
+                "a.official_uk_rank IS NULL"
+            }),
+            "officialUkDebut" => Some(if is_tracks {
+                "t.official_uk_debut_week_key IS NULL"
+            } else {
+                "a.official_uk_debut_week_key IS NULL"
+            }),
             "tiISkuddet" if is_tracks => Some("t.ti_i_skuddet_rank IS NULL"),
             "tiISkuddetDebut" if is_tracks => Some("t.ti_i_skuddet_debut_week_key IS NULL"),
             "norsktoppen" if is_tracks => Some("t.norsktoppen_rank IS NULL"),
@@ -14884,6 +15726,8 @@ fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "billboardSingleDebut" => "t.billboard_single_debut_date",
             "vgListaRank" => "t.vg_lista_rank",
             "vgListaDebut" => "t.vg_lista_debut_week_key",
+            "officialUkRank" => "t.official_uk_rank",
+            "officialUkDebut" => "t.official_uk_debut_week_key",
             "tiISkuddetRank" => "t.ti_i_skuddet_rank",
             "tiISkuddetDebut" => "t.ti_i_skuddet_debut_week_key",
             "norsktoppenRank" => "t.norsktoppen_rank",
@@ -14907,6 +15751,8 @@ fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "billboardDebut" => "a.billboard_debut_week_key",
             "vgListaRank" => "a.vg_lista_rank",
             "vgListaDebut" => "a.vg_lista_debut_week_key",
+            "officialUkRank" => "a.official_uk_rank",
+            "officialUkDebut" => "a.official_uk_debut_week_key",
             "totalMinutes" => "a.total_seconds",
             "trackCount" => "a.total_tracks",
             "albumRating" => "a.effective_album_rating",
@@ -16379,6 +17225,85 @@ mod tests {
     }
 
     #[test]
+    fn imports_official_uk_albums_with_source_details_filters_and_timeline() {
+        let mut conn = seeded_connection();
+        let source_dir = std::env::temp_dir().join(format!(
+            "music-library-official-uk-albums-test-{}",
+            Utc::now().timestamp_millis()
+        ));
+        fs::create_dir_all(&source_dir).expect("create Official UK album csv dir");
+        fs::write(
+            source_dir.join("1987.csv"),
+            "Year,ISO Week,Chart Date,Chart End Date,Rank,Last Week,Movement,Peak,Artist,Title,Weeks on Chart,Source URL,Item URL\n\
+             1987,36,1987-09-04,1987-09-10,5,,,5,Pet Shop Boys,Actually,1,https://example.test/albums/1987-36,https://example.test/actually\n\
+             1987,37,1987-09-11,1987-09-17,1,5,Up,1,Pet Shop Boys,Actually,2,https://example.test/albums/1987-37,https://example.test/actually\n\
+             1987,37,1987-09-11,1987-09-17,2,,,2,Whitney Houston,Whitney,1,https://example.test/albums/1987-37,https://example.test/whitney\n",
+        )
+        .expect("write Official UK album chart");
+
+        let summary =
+            import_official_uk_albums(&mut conn, &source_dir).expect("import Official UK albums");
+        assert_eq!(summary.files_scanned, 1);
+        assert_eq!(summary.chart_entries, 3);
+        assert_eq!(summary.matched_items, 1);
+
+        let source_row: (i64, i64, String, String, String, String) = conn
+            .query_row(
+                "
+                SELECT COUNT(*), COUNT(matched_album_id), chart_end_date,
+                       movement, peak, item_url
+                FROM official_uk_album_chart_entries
+                WHERE rank = 1
+                ",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .expect("read Official UK source details");
+        assert_eq!(source_row.0, 1);
+        assert_eq!(source_row.1, 1);
+        assert_eq!(source_row.2, "1987-09-17");
+        assert_eq!(source_row.3, "Up");
+        assert_eq!(source_row.4, "1");
+        assert_eq!(source_row.5, "https://example.test/actually");
+
+        let mut request = BrowseRequest::default();
+        request.filters.official_uk_rank_min = Some(1);
+        request.filters.official_uk_rank_max = Some(1);
+        request.filters.official_uk_debut_week_from = Some("1987-W36".to_string());
+        request.filters.official_uk_debut_week_to = Some("1987-W36".to_string());
+        request.sort = BrowseSort {
+            field: "officialUkDebut".to_string(),
+            direction: "asc".to_string(),
+        };
+        let response =
+            search_library(&conn, request, 50).expect("filter Official UK album metadata");
+        assert_eq!(response.total, 1);
+        assert_eq!(response.rows[0].official_uk_rank, Some(1));
+        assert_eq!(response.rows[0].official_uk_debut_month, Some(9));
+        assert_eq!(
+            response.rows[0].official_uk_debut_week_key.as_deref(),
+            Some("1987-W36")
+        );
+
+        let timeline = album_debut_timeline_for_source(&conn, Some(1987), "UK")
+            .expect("build Official UK album debut timeline");
+        assert_eq!(timeline.dated_album_count, 1);
+        assert_eq!(timeline.albums[0].billboard_rank, Some(1));
+        assert_eq!(timeline.albums[0].billboard_debut_week_key, "1987-W36");
+
+        fs::remove_dir_all(source_dir).expect("remove Official UK album csv dir");
+    }
+
+    #[test]
     fn resolves_billboard_weeks_across_iso_year_boundaries() {
         let january_1949 =
             parse_billboard_first_appearance("Jan 1949").expect("parse January first appearance");
@@ -17076,6 +18001,57 @@ mod tests {
         );
 
         fs::remove_dir_all(source_dir).expect("remove VG Lista singles csv dir");
+    }
+
+    #[test]
+    fn imports_official_uk_singles_once_with_exact_chart_dates() {
+        let mut conn = seeded_connection();
+        let source_dir = std::env::temp_dir().join(format!(
+            "music-library-official-uk-singles-test-{}",
+            Utc::now().timestamp_millis()
+        ));
+        fs::create_dir_all(&source_dir).expect("create Official UK singles csv dir");
+        fs::write(
+            source_dir.join("1987.csv"),
+            "Year,ISO Week,Chart Date,Chart End Date,Rank,Last Week,Movement,Peak,Artist,Title,Weeks on Chart,Source URL,Item URL\n\
+             1987,42,1987-10-16,1987-10-22,3,,,3,Pet Shop Boys,What Have I Done to Deserve This?,1,https://example.test/singles/1987-42,https://example.test/what-have-i-done\n\
+             1987,43,1987-10-23,1987-10-29,2,3,Up,2,Pet Shop Boys,What Have I Done to Deserve This?,2,https://example.test/singles/1987-43,https://example.test/what-have-i-done\n\
+             1987,43,1987-10-23,1987-10-29,1,,,1,A-ha,The Living Daylights,1,https://example.test/singles/1987-43,https://example.test/living-daylights\n",
+        )
+        .expect("write Official UK singles chart");
+
+        let summary =
+            import_official_uk_singles(&mut conn, &source_dir).expect("import Official UK singles");
+        assert_eq!(summary.chart_entries, 3);
+        assert_eq!(summary.matched_items, 1);
+
+        let mut request = BrowseRequest::default();
+        request.view = "tracks".to_string();
+        request.filters.official_uk_rank_min = Some(2);
+        request.filters.official_uk_rank_max = Some(2);
+        request.filters.official_uk_debut_week_from = Some("1987-W42".to_string());
+        request.filters.official_uk_debut_week_to = Some("1987-W42".to_string());
+        request.sort = BrowseSort {
+            field: "officialUkRank".to_string(),
+            direction: "asc".to_string(),
+        };
+        let response =
+            search_library(&conn, request, 50).expect("filter Official UK single metadata");
+        assert_eq!(response.total, 1);
+        assert_eq!(response.rows[0].official_uk_rank, Some(2));
+        assert_eq!(response.rows[0].official_uk_debut_month, Some(10));
+        assert_eq!(
+            response.rows[0].official_uk_debut_week_key.as_deref(),
+            Some("1987-W42")
+        );
+
+        let timeline = track_debut_timeline_for_source(&conn, Some(1987), "officialUk")
+            .expect("build Official UK track debut timeline");
+        assert_eq!(timeline.dated_track_count, 1);
+        assert_eq!(timeline.tracks[0].billboard_single_rank, Some(2));
+        assert_eq!(timeline.tracks[0].billboard_single_debut_date, "1987-10-16");
+
+        fs::remove_dir_all(source_dir).expect("remove Official UK singles csv dir");
     }
 
     #[test]
@@ -18414,6 +19390,63 @@ mod tests {
     }
 
     #[test]
+    fn schema_thirty_nine_adds_official_uk_sources_and_weekly_chart_tables() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            DROP TABLE official_uk_album_chart_entries;
+            DROP TABLE official_uk_single_chart_entries;
+            DROP INDEX idx_albums_official_uk_rank;
+            DROP INDEX idx_albums_official_uk_debut_week;
+            DROP INDEX idx_tracks_official_uk_rank;
+            DROP INDEX idx_tracks_official_uk_debut_week;
+            ALTER TABLE albums DROP COLUMN official_uk_rank;
+            ALTER TABLE albums DROP COLUMN official_uk_year;
+            ALTER TABLE albums DROP COLUMN official_uk_debut_year;
+            ALTER TABLE albums DROP COLUMN official_uk_debut_month;
+            ALTER TABLE albums DROP COLUMN official_uk_debut_week;
+            ALTER TABLE albums DROP COLUMN official_uk_debut_week_key;
+            ALTER TABLE tracks DROP COLUMN official_uk_rank;
+            ALTER TABLE tracks DROP COLUMN official_uk_year;
+            ALTER TABLE tracks DROP COLUMN official_uk_debut_date;
+            ALTER TABLE tracks DROP COLUMN official_uk_debut_year;
+            ALTER TABLE tracks DROP COLUMN official_uk_debut_month;
+            ALTER TABLE tracks DROP COLUMN official_uk_debut_week;
+            ALTER TABLE tracks DROP COLUMN official_uk_debut_week_key;
+            ALTER TABLE app_settings DROP COLUMN official_uk_album_source_path;
+            ALTER TABLE app_settings DROP COLUMN official_uk_singles_source_path;
+            PRAGMA user_version = 38;
+            ",
+        )
+        .expect("simulate schema thirty-eight");
+
+        migrate(&conn).expect("migrate Official UK schema");
+
+        assert!(
+            migrations::phase_thirty_nine_schema_exists(&conn).expect("Official UK schema exists")
+        );
+        let paths: (String, String) = conn
+            .query_row(
+                "
+                SELECT official_uk_album_source_path, official_uk_singles_source_path
+                FROM app_settings
+                WHERE id = 1
+                ",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read Official UK default paths");
+        assert_eq!(paths.0, "CSV_ALBUMS_UK");
+        assert_eq!(paths.1, "CSV_SINGLES_UK");
+        let user_version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("read schema version");
+        assert_eq!(user_version, LATEST_SCHEMA_VERSION);
+    }
+
+    #[test]
     fn saves_lists_and_deletes_typed_luna_snapshots() {
         let conn = seeded_connection();
         conn.execute(
@@ -19158,6 +20191,8 @@ mod tests {
                 billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
                 vg_lista_album_source_path: r"D:\Charts\Norway\Albums".to_string(),
                 vg_lista_singles_source_path: r"D:\Charts\Norway\Singles".to_string(),
+                official_uk_album_source_path: r"D:\Charts\UK\Albums".to_string(),
+                official_uk_singles_source_path: r"D:\Charts\UK\Singles".to_string(),
                 ti_i_skuddet_source_path: r"D:\Charts\Norway\Ti i Skuddet".to_string(),
                 norsktoppen_source_path: r"D:\Charts\Norway\Norsktoppen".to_string(),
                 deemix_download_path: r"D:\Music\Incoming".to_string(),
@@ -19190,6 +20225,11 @@ mod tests {
         assert_eq!(
             saved.vg_lista_singles_source_path,
             r"D:\Charts\Norway\Singles"
+        );
+        assert_eq!(saved.official_uk_album_source_path, r"D:\Charts\UK\Albums");
+        assert_eq!(
+            saved.official_uk_singles_source_path,
+            r"D:\Charts\UK\Singles"
         );
         assert_eq!(
             saved.ti_i_skuddet_source_path,

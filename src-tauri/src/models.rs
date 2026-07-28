@@ -228,6 +228,17 @@ pub struct VgListaImportSummary {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct OfficialUkImportSummary {
+    pub source_path: String,
+    pub files_scanned: usize,
+    pub chart_entries: usize,
+    pub matched_items: i64,
+    pub dated_items: i64,
+    pub duration_ms: u128,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TiISkuddetImportSummary {
     pub source_path: String,
     pub files_scanned: usize,
@@ -275,6 +286,10 @@ pub struct AppSettings {
     pub vg_lista_album_source_path: String,
     #[serde(default = "default_vg_lista_singles_source_path")]
     pub vg_lista_singles_source_path: String,
+    #[serde(default = "default_official_uk_album_source_path")]
+    pub official_uk_album_source_path: String,
+    #[serde(default = "default_official_uk_singles_source_path")]
+    pub official_uk_singles_source_path: String,
     #[serde(default = "default_ti_i_skuddet_source_path")]
     pub ti_i_skuddet_source_path: String,
     #[serde(default = "default_norsktoppen_source_path")]
@@ -888,6 +903,14 @@ pub struct BrowseFilters {
     #[serde(default)]
     pub vg_lista_debut_week_to: Option<String>,
     #[serde(default)]
+    pub official_uk_rank_min: Option<i32>,
+    #[serde(default)]
+    pub official_uk_rank_max: Option<i32>,
+    #[serde(default)]
+    pub official_uk_debut_week_from: Option<String>,
+    #[serde(default)]
+    pub official_uk_debut_week_to: Option<String>,
+    #[serde(default)]
     pub ti_i_skuddet_rank_min: Option<i32>,
     #[serde(default)]
     pub ti_i_skuddet_rank_max: Option<i32>,
@@ -1472,6 +1495,12 @@ pub struct BrowseRow {
     pub vg_lista_debut_month: Option<i32>,
     pub vg_lista_debut_week: Option<i32>,
     pub vg_lista_debut_week_key: Option<String>,
+    pub official_uk_rank: Option<i32>,
+    pub official_uk_year: Option<i32>,
+    pub official_uk_debut_year: Option<i32>,
+    pub official_uk_debut_month: Option<i32>,
+    pub official_uk_debut_week: Option<i32>,
+    pub official_uk_debut_week_key: Option<String>,
     pub ti_i_skuddet_rank: Option<i32>,
     pub ti_i_skuddet_year: Option<i32>,
     pub ti_i_skuddet_debut_date: Option<String>,
@@ -2078,6 +2107,14 @@ fn default_vg_lista_singles_source_path() -> String {
     "CSV_SINGLES_NO".to_string()
 }
 
+fn default_official_uk_album_source_path() -> String {
+    "CSV_ALBUMS_UK".to_string()
+}
+
+fn default_official_uk_singles_source_path() -> String {
+    "CSV_SINGLES_UK".to_string()
+}
+
 fn default_ti_i_skuddet_source_path() -> String {
     "CSV_TIISKUDDET_NO".to_string()
 }
@@ -2141,6 +2178,8 @@ mod tests {
             billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
             vg_lista_album_source_path: r"D:\Charts\Norway\Albums".to_string(),
             vg_lista_singles_source_path: r"D:\Charts\Norway\Singles".to_string(),
+            official_uk_album_source_path: r"D:\Charts\UK\Albums".to_string(),
+            official_uk_singles_source_path: r"D:\Charts\UK\Singles".to_string(),
             ti_i_skuddet_source_path: r"D:\Charts\Norway\Ti i Skuddet".to_string(),
             norsktoppen_source_path: r"D:\Charts\Norway\Norsktoppen".to_string(),
             deemix_download_path: r"D:\Music\Incoming".to_string(),

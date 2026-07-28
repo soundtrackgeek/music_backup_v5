@@ -32,8 +32,8 @@ use models::{
     MusicBrainzReleaseDecisionRequest, MusicMapLocationDetails, MusicMapRefreshSummary,
     MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
-    NorsktoppenImportSummary, PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest,
-    SavedChart, SavedSearch, StatisticsResponse, TiISkuddetImportSummary,
+    NorsktoppenImportSummary, OfficialUkImportSummary, PerformanceProbeResponse, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TiISkuddetImportSummary,
     TrackDebutTimelineResponse, VgListaImportSummary, YearProgressRequest, YearProgressStats,
 };
 #[cfg(not(test))]
@@ -969,6 +969,34 @@ async fn import_vg_lista_singles(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn import_official_uk_albums(
+    app: AppHandle,
+    source_path: String,
+) -> Result<OfficialUkImportSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::import_official_uk_albums_for_app(&app, source_path)
+    })
+    .await
+    .map_err(|error| format!("Official UK album import task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn import_official_uk_singles(
+    app: AppHandle,
+    source_path: String,
+) -> Result<OfficialUkImportSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::import_official_uk_singles_for_app(&app, source_path)
+    })
+    .await
+    .map_err(|error| format!("Official UK singles import task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn import_ti_i_skuddet_singles(
     app: AppHandle,
     source_path: String,
@@ -1260,6 +1288,8 @@ pub fn run() {
             import_billboard_singles,
             import_vg_lista_albums,
             import_vg_lista_singles,
+            import_official_uk_albums,
+            import_official_uk_singles,
             import_ti_i_skuddet_singles,
             import_norsktoppen_singles,
             get_album_cover_data_url,

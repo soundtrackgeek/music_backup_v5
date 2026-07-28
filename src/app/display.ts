@@ -143,6 +143,15 @@ export function formatVgListaRank(
     : `#${row.vgListaRank} ${row.vgListaYear}`;
 }
 
+export function formatOfficialUkRank(
+  row: Pick<BrowseRow, "officialUkRank" | "officialUkYear">,
+) {
+  if (row.officialUkRank == null) return "";
+  return row.officialUkYear == null
+    ? `#${row.officialUkRank}`
+    : `#${row.officialUkRank} ${row.officialUkYear}`;
+}
+
 export function formatTiISkuddetRank(
   row: Pick<BrowseRow, "tiISkuddetRank" | "tiISkuddetYear">,
 ) {
@@ -256,6 +265,25 @@ export function formatVgListaDebutWeek(
   return `${month ? `${month} ` : ""}${row.vgListaDebutYear} · Week ${row.vgListaDebutWeek}`;
 }
 
+export function formatOfficialUkDebutWeek(
+  row: Pick<
+    BrowseRow,
+    "officialUkDebutYear" | "officialUkDebutMonth" | "officialUkDebutWeek"
+  >,
+) {
+  if (row.officialUkDebutYear == null || row.officialUkDebutWeek == null) {
+    return "";
+  }
+  const month =
+    row.officialUkDebutMonth == null
+      ? ""
+      : new Intl.DateTimeFormat(undefined, {
+          month: "short",
+          timeZone: "UTC",
+        }).format(new Date(Date.UTC(2000, row.officialUkDebutMonth - 1, 1)));
+  return `${month ? `${month} ` : ""}${row.officialUkDebutYear} · Week ${row.officialUkDebutWeek}`;
+}
+
 export function billboardDebutWeekKey(
   row: Pick<
     BrowseRow,
@@ -297,6 +325,10 @@ export function formatChartMetric(row: BrowseRow, metric: string) {
       return formatVgListaRank(row);
     case "vgListaDebut":
       return formatVgListaDebutWeek(row);
+    case "officialUkRank":
+      return formatOfficialUkRank(row);
+    case "officialUkDebut":
+      return formatOfficialUkDebutWeek(row);
     case "tiISkuddetRank":
       return formatTiISkuddetRank(row);
     case "tiISkuddetDebut":
@@ -348,6 +380,10 @@ export function browseRowSortValue(row: BrowseRow, field: string) {
       return row.vgListaRank;
     case "vgListaDebut":
       return row.vgListaDebutWeekKey ?? "";
+    case "officialUkRank":
+      return row.officialUkRank;
+    case "officialUkDebut":
+      return row.officialUkDebutWeekKey ?? "";
     case "tiISkuddetRank":
       return row.tiISkuddetRank;
     case "tiISkuddetDebut":

@@ -61,6 +61,19 @@ describe("progressive Search filter summary", () => {
     expect(countAdvancedSearchFilters(filters, "albums")).toBe(2);
   });
 
+  it("counts Official UK rank and debut groups for album and track searches", () => {
+    const filters = createFilters();
+    filters.officialUkRankMin = 1;
+    filters.officialUkRankMax = 40;
+    filters.officialUkDebutWeekFrom = "1995-W01";
+    filters.officialUkDebutWeekTo = "1995-W52";
+
+    expect(countSearchChartFilters(filters, "albums")).toBe(2);
+    expect(countAdvancedSearchFilters(filters, "albums")).toBe(2);
+    expect(countSearchChartFilters(filters, "tracks")).toBe(2);
+    expect(countAdvancedSearchFilters(filters, "tracks")).toBe(2);
+  });
+
   it("counts Ti i Skuddet chart groups only for track searches", () => {
     const filters = createFilters();
     filters.tiISkuddetRankMin = 1;

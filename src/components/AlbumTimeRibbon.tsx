@@ -605,6 +605,14 @@ function ChartSourceToggle({
       >
         NO · VG Lista
       </button>
+      <button
+        type="button"
+        className={chartSource === "officialUk" ? "active" : ""}
+        aria-pressed={chartSource === "officialUk"}
+        onClick={() => onChange("officialUk")}
+      >
+        UK · Official Charts
+      </button>
       {mode === "tracks" ? (
         <button
           type="button"
@@ -673,6 +681,8 @@ export function AlbumTimeRibbon({
       ? "Ti i Skuddet"
       : chartSource === "vgLista"
         ? "VG Lista"
+        : chartSource === "officialUk"
+          ? "Official UK"
         : "Billboard";
 
   useEffect(() => {
@@ -814,6 +824,10 @@ export function AlbumTimeRibbon({
               ? mode === "tracks"
                 ? "CSV_SINGLES_NO"
                 : "CSV_ALBUMS_NO"
+              : chartSource === "officialUk"
+                ? mode === "tracks"
+                  ? "CSV_SINGLES_UK"
+                  : "CSV_ALBUMS_UK"
               : mode === "tracks"
                 ? "CSV_SINGLES"
                 : "CSV_ALBUMS"}{" "}

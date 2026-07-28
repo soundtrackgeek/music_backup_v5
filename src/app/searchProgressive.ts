@@ -25,6 +25,9 @@ export function countSearchChartFilters(
     hasRange(filters.vgListaRankMin, filters.vgListaRankMax),
     filters.vgListaDebutWeekFrom != null ||
       filters.vgListaDebutWeekTo != null,
+    hasRange(filters.officialUkRankMin, filters.officialUkRankMax),
+    filters.officialUkDebutWeekFrom != null ||
+      filters.officialUkDebutWeekTo != null,
     view === "tracks" &&
       hasRange(filters.tiISkuddetRankMin, filters.tiISkuddetRankMax),
     view === "tracks" &&
@@ -58,6 +61,7 @@ export function countAdvancedSearchFilters(
         filters.billboardSingleRankMax,
       ),
     hasRange(filters.vgListaRankMin, filters.vgListaRankMax),
+    hasRange(filters.officialUkRankMin, filters.officialUkRankMax),
     view === "tracks" &&
       (filters.billboardSingleDebutDateFrom != null ||
         filters.billboardSingleDebutDateTo != null),
@@ -66,6 +70,8 @@ export function countAdvancedSearchFilters(
         filters.billboardDebutWeekTo != null),
     filters.vgListaDebutWeekFrom != null ||
       filters.vgListaDebutWeekTo != null,
+    filters.officialUkDebutWeekFrom != null ||
+      filters.officialUkDebutWeekTo != null,
     view === "tracks" &&
       hasRange(filters.tiISkuddetRankMin, filters.tiISkuddetRankMax),
     view === "tracks" &&

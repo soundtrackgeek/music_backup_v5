@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.95.0] - 2026-07-28
+### Added
+- Added Official UK weekly album imports from 71 annual CSV files in `CSV_ALBUMS_UK`, preserving 278,293 chart rows from 1956 through 2026 with exact dates, rank movement, peak and weeks-on-chart details, source links, and item links.
+- Added Official UK weekly singles imports from 75 annual CSV files in `CSV_SINGLES_UK`, preserving 298,194 chart rows from 1952 through 2026 and selecting one canonical matching library track per charted recording.
+- Added Official UK peak-rank and debut-week filters, missing-data checks, sorting, optional columns, ranking metrics, album and track Timeline sources, and Luna Search, Charts, and Playlist Builder support.
+
+### Changed
+- Expanded the combined album and singles imports with independently selectable Official UK sources enabled by default; one source failure does not stop the other selected chart imports.
+- Added automatic sibling-path expansion for the UK chart folders, ignored all large local chart datasets in Vite development watching, and synchronized app metadata to `0.95.0`.
+- Advanced SQLite to schema version 39 with saved UK source paths, dedicated weekly album and singles tables, matched-library summary fields, and rank/debut indexes.
+
 ## [0.94.0] - 2026-07-28
 ### Added
 - Added track-only Norsktoppen imports from 36 annual CSV files in `CSV_NORSKTOPPEN_NO`, retaining 22,888 valid weekly rows in a dedicated SQLite table with raw ranged ranks, points, notes, chart details, source links, and exact chart dates.

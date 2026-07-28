@@ -6,6 +6,7 @@ use super::{
     DEFAULT_DEEMIX_DOWNLOAD_ORGANIZATION, DEFAULT_DEEMIX_DOWNLOAD_PATH,
     DEFAULT_DEEMIX_DOWNLOAD_QUALITY, DEFAULT_IMPORT_SOURCE_PATH, DEFAULT_MUSICBRAINZ_CACHE_PATH,
     DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH, DEFAULT_NORSKTOPPEN_SOURCE_PATH,
+    DEFAULT_OFFICIAL_UK_ALBUM_SOURCE_PATH, DEFAULT_OFFICIAL_UK_SINGLES_SOURCE_PATH,
     DEFAULT_TI_I_SKUDDET_SOURCE_PATH, DEFAULT_VG_LISTA_ALBUM_SOURCE_PATH,
     DEFAULT_VG_LISTA_SINGLES_SOURCE_PATH, MAX_BACKUP_RETENTION,
     MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES, MAX_UPDATE_AUTO_CHECK_MINUTES, MIN_BACKUP_RETENTION,
@@ -37,7 +38,8 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
                    left_sidebar_default, right_sidebar_default,
                    import_source_path, cover_source_path, billboard_source_path,
                    billboard_singles_source_path, vg_lista_album_source_path,
-                   vg_lista_singles_source_path, ti_i_skuddet_source_path,
+                   vg_lista_singles_source_path, official_uk_album_source_path,
+                   official_uk_singles_source_path, ti_i_skuddet_source_path,
                    norsktoppen_source_path,
                    deemix_download_path,
                    deemix_download_quality, deemix_download_fallback,
@@ -69,6 +71,9 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
                 billboard_singles_source_path: DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH.to_string(),
                 vg_lista_album_source_path: DEFAULT_VG_LISTA_ALBUM_SOURCE_PATH.to_string(),
                 vg_lista_singles_source_path: DEFAULT_VG_LISTA_SINGLES_SOURCE_PATH.to_string(),
+                official_uk_album_source_path: DEFAULT_OFFICIAL_UK_ALBUM_SOURCE_PATH.to_string(),
+                official_uk_singles_source_path: DEFAULT_OFFICIAL_UK_SINGLES_SOURCE_PATH
+                    .to_string(),
                 ti_i_skuddet_source_path: DEFAULT_TI_I_SKUDDET_SOURCE_PATH.to_string(),
                 norsktoppen_source_path: DEFAULT_NORSKTOPPEN_SOURCE_PATH.to_string(),
                 deemix_download_path: DEFAULT_DEEMIX_DOWNLOAD_PATH.to_string(),
@@ -97,7 +102,8 @@ pub(super) fn save_settings_for_connection(
             id, backup_retention, dark_mode, country_flag_display, left_sidebar_default, right_sidebar_default,
             import_source_path, cover_source_path, billboard_source_path,
             billboard_singles_source_path, vg_lista_album_source_path,
-            vg_lista_singles_source_path, ti_i_skuddet_source_path,
+            vg_lista_singles_source_path, official_uk_album_source_path,
+            official_uk_singles_source_path, ti_i_skuddet_source_path,
             norsktoppen_source_path,
             deemix_download_path,
             deemix_download_quality, deemix_download_fallback,
@@ -105,7 +111,7 @@ pub(super) fn save_settings_for_connection(
             musicbrainz_overlay_sync_path,
             musicbrainz_overlay_auto_sync_minutes, update_auto_check_minutes, updated_at
         )
-        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
+        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
         ON CONFLICT(id) DO UPDATE SET
             backup_retention = excluded.backup_retention,
             dark_mode = excluded.dark_mode,
@@ -118,6 +124,8 @@ pub(super) fn save_settings_for_connection(
             billboard_singles_source_path = excluded.billboard_singles_source_path,
             vg_lista_album_source_path = excluded.vg_lista_album_source_path,
             vg_lista_singles_source_path = excluded.vg_lista_singles_source_path,
+            official_uk_album_source_path = excluded.official_uk_album_source_path,
+            official_uk_singles_source_path = excluded.official_uk_singles_source_path,
             ti_i_skuddet_source_path = excluded.ti_i_skuddet_source_path,
             norsktoppen_source_path = excluded.norsktoppen_source_path,
             deemix_download_path = excluded.deemix_download_path,
@@ -142,6 +150,8 @@ pub(super) fn save_settings_for_connection(
             settings.billboard_singles_source_path,
             settings.vg_lista_album_source_path,
             settings.vg_lista_singles_source_path,
+            settings.official_uk_album_source_path,
+            settings.official_uk_singles_source_path,
             settings.ti_i_skuddet_source_path,
             settings.norsktoppen_source_path,
             settings.deemix_download_path,
@@ -175,17 +185,19 @@ fn settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppSettings> {
         billboard_singles_source_path: row.get(8)?,
         vg_lista_album_source_path: row.get(9)?,
         vg_lista_singles_source_path: row.get(10)?,
-        ti_i_skuddet_source_path: row.get(11)?,
-        norsktoppen_source_path: row.get(12)?,
-        deemix_download_path: row.get(13)?,
-        deemix_download_quality: row.get(14)?,
-        deemix_download_fallback: row.get::<_, i64>(15)? != 0,
-        deemix_download_organization: row.get(16)?,
-        musicbrainz_cache_path: row.get(17)?,
-        musicbrainz_overlay_sync_path: row.get(18)?,
-        musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(19)?.max(0) as u32,
-        update_auto_check_minutes: row.get::<_, i64>(20)?.max(0) as u32,
-        updated_at: row.get(21)?,
+        official_uk_album_source_path: row.get(11)?,
+        official_uk_singles_source_path: row.get(12)?,
+        ti_i_skuddet_source_path: row.get(13)?,
+        norsktoppen_source_path: row.get(14)?,
+        deemix_download_path: row.get(15)?,
+        deemix_download_quality: row.get(16)?,
+        deemix_download_fallback: row.get::<_, i64>(17)? != 0,
+        deemix_download_organization: row.get(18)?,
+        musicbrainz_cache_path: row.get(19)?,
+        musicbrainz_overlay_sync_path: row.get(20)?,
+        musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(21)?.max(0) as u32,
+        update_auto_check_minutes: row.get::<_, i64>(22)?.max(0) as u32,
+        updated_at: row.get(23)?,
     })
 }
 
@@ -216,6 +228,14 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
     settings.vg_lista_singles_source_path = normalize_import_path(
         &settings.vg_lista_singles_source_path,
         DEFAULT_VG_LISTA_SINGLES_SOURCE_PATH,
+    );
+    settings.official_uk_album_source_path = normalize_import_path(
+        &settings.official_uk_album_source_path,
+        DEFAULT_OFFICIAL_UK_ALBUM_SOURCE_PATH,
+    );
+    settings.official_uk_singles_source_path = normalize_import_path(
+        &settings.official_uk_singles_source_path,
+        DEFAULT_OFFICIAL_UK_SINGLES_SOURCE_PATH,
     );
     settings.ti_i_skuddet_source_path = normalize_import_path(
         &settings.ti_i_skuddet_source_path,

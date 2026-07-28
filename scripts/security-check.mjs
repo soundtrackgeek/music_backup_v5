@@ -56,6 +56,8 @@ for (const entry of [
   "AlbumCovers/",
   "CSV/",
   "CSV_SINGLES/",
+  "CSV_ALBUMS_UK/",
+  "CSV_SINGLES_UK/",
   "MusicBrainz/",
   "*.sqlite3",
   "*.sqlite3-*",

@@ -14,6 +14,8 @@ import {
   defaultBillboardSourcePath,
   defaultVgListaAlbumSourcePath,
   defaultVgListaSinglesSourcePath,
+  defaultOfficialUkAlbumSourcePath,
+  defaultOfficialUkSinglesSourcePath,
   defaultTiISkuddetSourcePath,
   defaultNorsktoppenSourcePath,
   defaultCoverSourcePath,
@@ -93,6 +95,8 @@ export {
   defaultBillboardSourcePath,
   defaultVgListaAlbumSourcePath,
   defaultVgListaSinglesSourcePath,
+  defaultOfficialUkAlbumSourcePath,
+  defaultOfficialUkSinglesSourcePath,
   defaultTiISkuddetSourcePath,
   defaultNorsktoppenSourcePath,
   defaultCoverSourcePath,
@@ -159,6 +163,7 @@ import type {
   BillboardImportSummary,
   BillboardSinglesImportSummary,
   VgListaImportSummary,
+  OfficialUkImportSummary,
   TiISkuddetImportSummary,
   NorsktoppenImportSummary,
   BrowseFilters,
@@ -627,12 +632,23 @@ export async function getAlbumDebutTimeline(
   });
 }
 
+function mockIsoWeekStartDate(year: number, week: number) {
+  const januaryFourth = new Date(Date.UTC(year, 0, 4));
+  const januaryFourthIsoDay = januaryFourth.getUTCDay() || 7;
+  januaryFourth.setUTCDate(
+    januaryFourth.getUTCDate() - januaryFourthIsoDay + 1 + (week - 1) * 7,
+  );
+  return januaryFourth.toISOString().slice(0, 10);
+}
+
 function mockTrackDebutTimeline(
   requestedYear: number | null,
   chartSource: TimelineChartSource = "billboard",
 ): TrackDebutTimelineResponse {
   const useTiISkuddet = chartSource === "tiISkuddet";
   const useNorsktoppen = chartSource === "norsktoppen";
+  const useOfficialUk = chartSource === "officialUk";
+  const useVgLista = chartSource === "vgLista";
   const tracks = mockRows
     .filter(
       (row) =>
@@ -649,6 +665,16 @@ function mockTrackDebutTimeline(
             row.tiISkuddetDebutMonth != null &&
             row.tiISkuddetDebutWeek != null &&
             row.tiISkuddetDebutWeekKey != null
+          : useOfficialUk
+          ? row.officialUkDebutYear != null &&
+            row.officialUkDebutMonth != null &&
+            row.officialUkDebutWeek != null &&
+            row.officialUkDebutWeekKey != null
+          : useVgLista
+          ? row.vgListaDebutYear != null &&
+            row.vgListaDebutMonth != null &&
+            row.vgListaDebutWeek != null &&
+            row.vgListaDebutWeekKey != null
           : row.billboardSingleDebutDate != null &&
             row.billboardSingleDebutYear != null &&
             row.billboardSingleDebutMonth != null &&
@@ -673,36 +699,70 @@ function mockTrackDebutTimeline(
             ? row.norsktoppenRank
             : useTiISkuddet
               ? row.tiISkuddetRank
+              : useOfficialUk
+                ? row.officialUkRank
+                : useVgLista
+                  ? row.vgListaRank
               : row.billboardSingleRank,
           billboardSingleYear: useNorsktoppen
             ? row.norsktoppenYear
             : useTiISkuddet
               ? row.tiISkuddetYear
+              : useOfficialUk
+                ? row.officialUkYear
+                : useVgLista
+                  ? row.vgListaYear
               : row.billboardSingleYear,
           billboardSingleDebutDate: useNorsktoppen
             ? row.norsktoppenDebutDate!
             : useTiISkuddet
               ? row.tiISkuddetDebutDate!
+              : useOfficialUk
+                ? mockIsoWeekStartDate(
+                    row.officialUkDebutYear!,
+                    row.officialUkDebutWeek!,
+                  )
+                : useVgLista
+                  ? mockIsoWeekStartDate(
+                      row.vgListaDebutYear!,
+                      row.vgListaDebutWeek!,
+                    )
               : row.billboardSingleDebutDate!,
           billboardSingleDebutYear: useNorsktoppen
             ? row.norsktoppenDebutYear!
             : useTiISkuddet
               ? row.tiISkuddetDebutYear!
+              : useOfficialUk
+                ? row.officialUkDebutYear!
+                : useVgLista
+                  ? row.vgListaDebutYear!
               : row.billboardSingleDebutYear!,
           billboardSingleDebutMonth: useNorsktoppen
             ? row.norsktoppenDebutMonth!
             : useTiISkuddet
               ? row.tiISkuddetDebutMonth!
+              : useOfficialUk
+                ? row.officialUkDebutMonth!
+                : useVgLista
+                  ? row.vgListaDebutMonth!
               : row.billboardSingleDebutMonth!,
           billboardSingleDebutWeek: useNorsktoppen
             ? row.norsktoppenDebutWeek!
             : useTiISkuddet
               ? row.tiISkuddetDebutWeek!
+              : useOfficialUk
+                ? row.officialUkDebutWeek!
+                : useVgLista
+                  ? row.vgListaDebutWeek!
               : row.billboardSingleDebutWeek!,
           billboardSingleDebutWeekKey: useNorsktoppen
             ? row.norsktoppenDebutWeekKey!
             : useTiISkuddet
               ? row.tiISkuddetDebutWeekKey!
+              : useOfficialUk
+                ? row.officialUkDebutWeekKey!
+                : useVgLista
+                  ? row.vgListaDebutWeekKey!
               : row.billboardSingleDebutWeekKey!,
           coverPath: row.coverPath,
           coverMimeType: row.coverMimeType,
@@ -2967,6 +3027,46 @@ export async function importVgListaSingles(sourcePath: string) {
   });
 }
 
+export async function importOfficialUkAlbums(sourcePath: string) {
+  if (!isTauriRuntime()) {
+    const matchedItems = mockRows.filter(
+      (row) => row.trackId === null && row.officialUkRank != null,
+    ).length;
+    return {
+      sourcePath,
+      filesScanned: 71,
+      chartEntries: 278_293,
+      matchedItems,
+      datedItems: matchedItems,
+      durationMs: 0,
+    } satisfies OfficialUkImportSummary;
+  }
+
+  return invoke<OfficialUkImportSummary>("import_official_uk_albums", {
+    sourcePath,
+  });
+}
+
+export async function importOfficialUkSingles(sourcePath: string) {
+  if (!isTauriRuntime()) {
+    const matchedItems = mockRows.filter(
+      (row) => row.trackId !== null && row.officialUkRank != null,
+    ).length;
+    return {
+      sourcePath,
+      filesScanned: 75,
+      chartEntries: 298_194,
+      matchedItems,
+      datedItems: matchedItems,
+      durationMs: 0,
+    } satisfies OfficialUkImportSummary;
+  }
+
+  return invoke<OfficialUkImportSummary>("import_official_uk_singles", {
+    sourcePath,
+  });
+}
+
 export async function importTiISkuddetSingles(sourcePath: string) {
   if (!isTauriRuntime()) {
     const matchedTracks = mockRows.filter(
@@ -3079,6 +3179,10 @@ export async function searchLibrary(request: BrowseRequest) {
     const vgListaRankMax = request.filters.vgListaRankMax;
     const vgListaDebutWeekFrom = request.filters.vgListaDebutWeekFrom;
     const vgListaDebutWeekTo = request.filters.vgListaDebutWeekTo;
+    const officialUkRankMin = request.filters.officialUkRankMin;
+    const officialUkRankMax = request.filters.officialUkRankMax;
+    const officialUkDebutWeekFrom = request.filters.officialUkDebutWeekFrom;
+    const officialUkDebutWeekTo = request.filters.officialUkDebutWeekTo;
     const tiISkuddetRankMin = request.filters.tiISkuddetRankMin;
     const tiISkuddetRankMax = request.filters.tiISkuddetRankMax;
     const tiISkuddetDebutWeekFrom =
@@ -3181,6 +3285,18 @@ export async function searchLibrary(request: BrowseRequest) {
           row.vgListaDebutWeek,
           vgListaDebutWeekFrom,
           vgListaDebutWeekTo,
+        ) &&
+        matchesNumberRange(
+          row.officialUkRank,
+          officialUkRankMin,
+          officialUkRankMax,
+        ) &&
+        matchesIsoWeekRange(
+          row.officialUkDebutWeekKey,
+          row.officialUkDebutYear,
+          row.officialUkDebutWeek,
+          officialUkDebutWeekFrom,
+          officialUkDebutWeekTo,
         ) &&
         (!isTracks ||
           matchesNumberRange(
@@ -4110,6 +4226,10 @@ function matchesMissingFields(
         return row.vgListaRank == null;
       case "vgListaDebut":
         return row.vgListaDebutWeekKey == null;
+      case "officialUk":
+        return row.officialUkRank == null;
+      case "officialUkDebut":
+        return row.officialUkDebutWeekKey == null;
       case "tiISkuddet":
         return isTracks ? row.tiISkuddetRank == null : true;
       case "tiISkuddetDebut":
@@ -4169,6 +4289,10 @@ function browseSortValue(row: BrowseRow, field: string) {
       return row.vgListaRank;
     case "vgListaDebut":
       return row.vgListaDebutWeekKey;
+    case "officialUkRank":
+      return row.officialUkRank;
+    case "officialUkDebut":
+      return row.officialUkDebutWeekKey;
     case "tiISkuddetRank":
       return row.tiISkuddetRank;
     case "tiISkuddetDebut":

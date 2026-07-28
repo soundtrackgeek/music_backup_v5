@@ -74,6 +74,21 @@ describe("progressive Charts control summary", () => {
     expect(countAdvancedChartControls(config)).toBe(baseline + 2);
   });
 
+  it("counts Official UK rank and debut groups for album and track charts", () => {
+    const config = createChartConfig();
+    const baseline = countAdvancedChartControls(config);
+    config.request.filters.officialUkRankMin = 1;
+    config.request.filters.officialUkRankMax = 40;
+    config.request.filters.officialUkDebutWeekFrom = "1995-W01";
+    config.request.filters.officialUkDebutWeekTo = "1995-W52";
+
+    expect(countChartSourceFilters(config)).toBe(2);
+    expect(countAdvancedChartControls(config)).toBe(baseline + 2);
+
+    config.request.view = "tracks";
+    expect(countChartSourceFilters(config)).toBe(2);
+  });
+
   it("counts Ti i Skuddet chart groups only for track charts", () => {
     const config = createChartConfig();
     config.request.view = "tracks";

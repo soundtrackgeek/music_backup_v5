@@ -190,6 +190,15 @@ export type VgListaImportSummary = {
   durationMs: number;
 };
 
+export type OfficialUkImportSummary = {
+  sourcePath: string;
+  filesScanned: number;
+  chartEntries: number;
+  matchedItems: number;
+  datedItems: number;
+  durationMs: number;
+};
+
 export type TiISkuddetImportSummary = {
   sourcePath: string;
   filesScanned: number;
@@ -234,6 +243,8 @@ export type AppSettings = {
   billboardSinglesSourcePath: string;
   vgListaAlbumSourcePath: string;
   vgListaSinglesSourcePath: string;
+  officialUkAlbumSourcePath: string;
+  officialUkSinglesSourcePath: string;
   tiISkuddetSourcePath: string;
   norsktoppenSourcePath: string;
   deemixDownloadPath: string;
@@ -1173,6 +1184,10 @@ export type BrowseFilters = {
   vgListaRankMax: number | null;
   vgListaDebutWeekFrom: string | null;
   vgListaDebutWeekTo: string | null;
+  officialUkRankMin: number | null;
+  officialUkRankMax: number | null;
+  officialUkDebutWeekFrom: string | null;
+  officialUkDebutWeekTo: string | null;
   tiISkuddetRankMin: number | null;
   tiISkuddetRankMax: number | null;
   tiISkuddetDebutWeekFrom: string | null;
@@ -1580,6 +1595,12 @@ export type BrowseRow = {
   vgListaDebutMonth: number | null;
   vgListaDebutWeek: number | null;
   vgListaDebutWeekKey: string | null;
+  officialUkRank: number | null;
+  officialUkYear: number | null;
+  officialUkDebutYear: number | null;
+  officialUkDebutMonth: number | null;
+  officialUkDebutWeek: number | null;
+  officialUkDebutWeekKey: string | null;
   tiISkuddetRank: number | null;
   tiISkuddetYear: number | null;
   tiISkuddetDebutDate: string | null;
@@ -1689,6 +1710,7 @@ export type TrackDebutTimelineResponse = {
 export type TimelineChartSource =
   | "billboard"
   | "vgLista"
+  | "officialUk"
   | "tiISkuddet"
   | "norsktoppen";
 

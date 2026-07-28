@@ -693,6 +693,12 @@ type BrowseRowWithoutOrigin = Omit<
   | "vgListaDebutMonth"
   | "vgListaDebutWeek"
   | "vgListaDebutWeekKey"
+  | "officialUkRank"
+  | "officialUkYear"
+  | "officialUkDebutYear"
+  | "officialUkDebutMonth"
+  | "officialUkDebutWeek"
+  | "officialUkDebutWeekKey"
   | "tiISkuddetRank"
   | "tiISkuddetYear"
   | "tiISkuddetDebutDate"
@@ -914,6 +920,30 @@ function withMockOrigin(row: BrowseRowWithoutOrigin): BrowseRow {
     vgListaDebutWeek:
       row.trackId == null ? debutWeek : (singleDebutWeek?.week ?? null),
     vgListaDebutWeekKey:
+      row.trackId == null
+        ? row.billboardYear == null || debutWeek == null
+          ? null
+          : `${row.billboardYear}-W${String(debutWeek).padStart(2, "0")}`
+        : row.billboardSingleYear == null || singleDebutWeek == null
+          ? null
+          : `${singleDebutWeek.isoYear}-W${String(singleDebutWeek.week).padStart(2, "0")}`,
+    officialUkRank:
+      row.trackId == null ? row.billboardRank : row.billboardSingleRank,
+    officialUkYear:
+      row.trackId == null ? row.billboardYear : row.billboardSingleYear,
+    officialUkDebutYear:
+      row.trackId == null ? row.billboardYear : row.billboardSingleYear,
+    officialUkDebutMonth:
+      row.trackId == null
+        ? debutWeek == null
+          ? null
+          : Math.ceil(debutWeek / 4.4)
+        : row.billboardSingleYear == null
+          ? null
+          : 7,
+    officialUkDebutWeek:
+      row.trackId == null ? debutWeek : (singleDebutWeek?.week ?? null),
+    officialUkDebutWeekKey:
       row.trackId == null
         ? row.billboardYear == null || debutWeek == null
           ? null
