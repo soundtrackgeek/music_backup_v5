@@ -280,18 +280,34 @@ export function ChartFilterSourceGroup({
   title,
   description,
   children,
+  unavailableMessage,
+  unavailableAction,
 }: {
   title: string;
   description: string;
   children: ReactNode;
+  unavailableMessage?: string;
+  unavailableAction?: ReactNode;
 }) {
+  const isUnavailable = unavailableMessage != null;
+
   return (
-    <section className="chart-filter-source-group" aria-label={title}>
+    <section
+      className={`chart-filter-source-group${isUnavailable ? " is-unavailable" : ""}`}
+      aria-label={title}
+    >
       <header>
         <strong>{title}</strong>
         <small>{description}</small>
       </header>
-      <div className="filter-grid chart-filter-source-fields">{children}</div>
+      {isUnavailable ? (
+        <div className="chart-filter-source-unavailable">
+          <span>{unavailableMessage}</span>
+          {unavailableAction}
+        </div>
+      ) : (
+        <div className="filter-grid chart-filter-source-fields">{children}</div>
+      )}
     </section>
   );
 }

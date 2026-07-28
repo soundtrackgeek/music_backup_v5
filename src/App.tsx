@@ -14205,11 +14205,27 @@ export default function App() {
                     />
                   </ChartFilterSourceGroup>
 
-                  {chartConfig.request.view === "tracks" ? (
-                    <ChartFilterSourceGroup
-                      title="NO · Ti i Skuddet"
-                      description="Unofficial Norwegian singles chart history."
-                    >
+                  <ChartFilterSourceGroup
+                    title="NO · Ti i Skuddet"
+                    description="Unofficial Norwegian singles chart history."
+                    unavailableMessage={
+                      chartConfig.request.view === "tracks"
+                        ? undefined
+                        : "Tracks-only source. Switch to Tracks to use rank and debut filters."
+                    }
+                    unavailableAction={
+                      chartConfig.request.view === "tracks" ? undefined : (
+                        <button
+                          className="secondary-button chart-filter-source-action"
+                          type="button"
+                          onClick={() => setChartBrowseView("tracks")}
+                        >
+                          <ListMusic size={15} />
+                          <span>Switch to Tracks</span>
+                        </button>
+                      )
+                    }
+                  >
                       <NumberField
                         label="Rank min"
                         value={chartConfig.request.filters.tiISkuddetRankMin}
@@ -14245,13 +14261,28 @@ export default function App() {
                           updateChartFilters({ tiISkuddetDebutWeekTo })
                         }
                       />
-                    </ChartFilterSourceGroup>
-                  ) : null}
-                  {chartConfig.request.view === "tracks" ? (
-                    <ChartFilterSourceGroup
-                      title="NO · Norsktoppen"
-                      description="Norwegian-language singles chart history."
-                    >
+                  </ChartFilterSourceGroup>
+                  <ChartFilterSourceGroup
+                    title="NO · Norsktoppen"
+                    description="Norwegian-language singles chart history."
+                    unavailableMessage={
+                      chartConfig.request.view === "tracks"
+                        ? undefined
+                        : "Tracks-only source. Switch to Tracks to use rank and debut filters."
+                    }
+                    unavailableAction={
+                      chartConfig.request.view === "tracks" ? undefined : (
+                        <button
+                          className="secondary-button chart-filter-source-action"
+                          type="button"
+                          onClick={() => setChartBrowseView("tracks")}
+                        >
+                          <ListMusic size={15} />
+                          <span>Switch to Tracks</span>
+                        </button>
+                      )
+                    }
+                  >
                       <NumberField
                         label="Rank min"
                         value={chartConfig.request.filters.norsktoppenRankMin}
@@ -14287,8 +14318,7 @@ export default function App() {
                           updateChartFilters({ norsktoppenDebutWeekTo })
                         }
                       />
-                    </ChartFilterSourceGroup>
-                  ) : null}
+                  </ChartFilterSourceGroup>
                 </ChartFiltersDisclosure>
 
                 <div className="filter-grid chart-advanced-filter-grid">
@@ -18832,11 +18862,27 @@ export default function App() {
                     />
                   </ChartFilterSourceGroup>
 
-                  {request.view === "tracks" ? (
-                    <ChartFilterSourceGroup
-                      title="NO · Ti i Skuddet"
-                      description="Unofficial Norwegian singles chart history."
-                    >
+                  <ChartFilterSourceGroup
+                    title="NO · Ti i Skuddet"
+                    description="Unofficial Norwegian singles chart history."
+                    unavailableMessage={
+                      request.view === "tracks"
+                        ? undefined
+                        : "Tracks-only source. Switch to Tracks to use rank and debut filters."
+                    }
+                    unavailableAction={
+                      request.view === "tracks" ? undefined : (
+                        <button
+                          className="secondary-button chart-filter-source-action"
+                          type="button"
+                          onClick={() => setView("tracks")}
+                        >
+                          <ListMusic size={15} />
+                          <span>Switch to Tracks</span>
+                        </button>
+                      )
+                    }
+                  >
                       <NumberField
                         label="Rank min"
                         value={currentFilters.tiISkuddetRankMin}
@@ -18867,13 +18913,28 @@ export default function App() {
                           updateFilter("tiISkuddetDebutWeekTo", value)
                         }
                       />
-                    </ChartFilterSourceGroup>
-                  ) : null}
-                  {request.view === "tracks" ? (
-                    <ChartFilterSourceGroup
-                      title="NO · Norsktoppen"
-                      description="Norwegian-language singles chart history."
-                    >
+                  </ChartFilterSourceGroup>
+                  <ChartFilterSourceGroup
+                    title="NO · Norsktoppen"
+                    description="Norwegian-language singles chart history."
+                    unavailableMessage={
+                      request.view === "tracks"
+                        ? undefined
+                        : "Tracks-only source. Switch to Tracks to use rank and debut filters."
+                    }
+                    unavailableAction={
+                      request.view === "tracks" ? undefined : (
+                        <button
+                          className="secondary-button chart-filter-source-action"
+                          type="button"
+                          onClick={() => setView("tracks")}
+                        >
+                          <ListMusic size={15} />
+                          <span>Switch to Tracks</span>
+                        </button>
+                      )
+                    }
+                  >
                       <NumberField
                         label="Rank min"
                         value={currentFilters.norsktoppenRankMin}
@@ -18904,8 +18965,7 @@ export default function App() {
                           updateFilter("norsktoppenDebutWeekTo", value)
                         }
                       />
-                    </ChartFilterSourceGroup>
-                  ) : null}
+                  </ChartFilterSourceGroup>
                 </ChartFiltersDisclosure>
 
                 <div className="filter-grid search-advanced-filter-grid">

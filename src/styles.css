@@ -849,7 +849,7 @@ button {
 
 .chart-filter-disclosure-content {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 12px;
   padding: 14px;
 }
@@ -860,6 +860,10 @@ button {
   border-radius: 9px;
   background: #f8faf9;
   padding: 12px;
+}
+
+.chart-filter-source-group.is-unavailable {
+  border-style: dashed;
 }
 
 .chart-filter-source-group > header {
@@ -881,6 +885,20 @@ button {
 
 .chart-filter-source-fields {
   grid-template-columns: repeat(2, minmax(110px, 1fr));
+}
+
+.chart-filter-source-unavailable {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 94px;
+  color: #65736e;
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.chart-filter-source-unavailable .chart-filter-source-action {
+  justify-self: start;
 }
 
 .natural-query-panel {
@@ -8229,6 +8247,10 @@ button {
 
 :root[data-theme="dark"] .chart-filter-source-group > header small {
   color: #98a7a2;
+}
+
+:root[data-theme="dark"] .chart-filter-source-unavailable {
+  color: #aebbb7;
 }
 
 :root[data-theme="dark"] .insight-action-dock {

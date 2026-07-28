@@ -134,4 +134,40 @@ describe("Search progressive disclosure", () => {
     expect(screen.getByLabelText("Norsktoppen best rank")).toBeVisible();
     expect(screen.getByText("NO · Norsktoppen")).toBeVisible();
   });
+
+  it("keeps a track-only chart source discoverable in album mode", () => {
+    render(
+      <ChartFiltersDisclosure activeFilterCount={0}>
+        <ChartFilterSourceGroup
+          title="NO · Ti i Skuddet"
+          description="Unofficial Norwegian singles chart history."
+          unavailableMessage="Tracks-only source. Switch to Tracks to use rank and debut filters."
+          unavailableAction={<button type="button">Switch to Tracks</button>}
+        >
+          <label>
+            Ti i Skuddet best rank
+            <input />
+          </label>
+        </ChartFilterSourceGroup>
+      </ChartFiltersDisclosure>,
+    );
+
+    fireEvent.click(screen.getByText("Chart filters"));
+
+    expect(screen.getByText("NO · Ti i Skuddet")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Tracks-only source. Switch to Tracks to use rank and debut filters.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Switch to Tracks" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByLabelText("Ti i Skuddet best rank"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "NO · Ti i Skuddet" }),
+    ).toHaveClass("is-unavailable");
+  });
 });

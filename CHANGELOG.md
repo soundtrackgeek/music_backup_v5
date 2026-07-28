@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.95.1] - 2026-07-28
+### Changed
+- Synchronized app metadata to `0.95.1`.
+
+### Fixed
+- Kept the track-only Ti i Skuddet and Norsktoppen source cards visible in Album Search and Charts, with a clear one-click switch to Tracks, so the singles filters no longer appear to have disappeared.
+- Increased the chart-source card minimum width so rank and debut controls remain contained when the expanded source list wraps across rows.
+
 ## [0.95.0] - 2026-07-28
 ### Added
 - Added Official UK weekly album imports from 71 annual CSV files in `CSV_ALBUMS_UK`, preserving 278,293 chart rows from 1956 through 2026 with exact dates, rank movement, peak and weeks-on-chart details, source links, and item links.
