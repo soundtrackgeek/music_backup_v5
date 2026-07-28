@@ -13,8 +13,6 @@ describe("progressive Charts control summary", () => {
     config.request.filters.genres = ["Synthpop"];
     config.request.filters.yearFrom = 1980;
     config.request.filters.yearTo = 1989;
-    config.request.filters.vgListaDebutWeekFrom = "1987-W20";
-    config.request.filters.vgListaDebutWeekTo = "1987-W30";
     config.request.filters.excludedGenres = ["Comedy"];
 
     expect(countAdvancedChartControls(config)).toBe(baseline);
@@ -60,5 +58,16 @@ describe("progressive Charts control summary", () => {
     config.request.filters.vgListaRankMax = 20;
 
     expect(countAdvancedChartControls(config)).toBe(baseline + 1);
+  });
+
+  it("counts Billboard and VG Lista debut ranges as advanced groups", () => {
+    const config = createChartConfig();
+    const baseline = countAdvancedChartControls(config);
+    config.request.filters.billboardDebutWeekFrom = "1987-W20";
+    config.request.filters.billboardDebutWeekTo = "1987-W30";
+    config.request.filters.vgListaDebutWeekFrom = "1987-W20";
+    config.request.filters.vgListaDebutWeekTo = "1987-W30";
+
+    expect(countAdvancedChartControls(config)).toBe(baseline + 2);
   });
 });

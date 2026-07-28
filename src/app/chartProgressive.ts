@@ -46,6 +46,11 @@ export function countAdvancedChartControls(config: ChartConfig) {
     hasRange(filters.vgListaRankMin, filters.vgListaRankMax),
     filters.billboardSingleDebutDateFrom != null ||
       filters.billboardSingleDebutDateTo != null,
+    config.request.view === "albums" &&
+      (filters.billboardDebutWeekFrom != null ||
+        filters.billboardDebutWeekTo != null),
+    filters.vgListaDebutWeekFrom != null ||
+      filters.vgListaDebutWeekTo != null,
     filters.originCountryCodes.length > 0,
     filters.excludedOriginCountryCodes.length > 0,
     filters.artistType.trim().length > 0,

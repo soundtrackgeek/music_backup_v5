@@ -11,8 +11,6 @@ describe("progressive Search filter summary", () => {
     filters.genres = ["Synthpop"];
     filters.yearFrom = 1987;
     filters.yearTo = 1987;
-    filters.vgListaDebutWeekFrom = "1987-W20";
-    filters.vgListaDebutWeekTo = "1987-W30";
     filters.excludedGenres = ["Comedy"];
 
     expect(countAdvancedSearchFilters(filters, "albums")).toBe(0);
@@ -48,5 +46,15 @@ describe("progressive Search filter summary", () => {
     filters.vgListaRankMax = 20;
 
     expect(countAdvancedSearchFilters(filters, "albums")).toBe(1);
+  });
+
+  it("counts Billboard and VG Lista debut ranges as advanced groups", () => {
+    const filters = createFilters();
+    filters.billboardDebutWeekFrom = "1987-W20";
+    filters.billboardDebutWeekTo = "1987-W30";
+    filters.vgListaDebutWeekFrom = "1987-W20";
+    filters.vgListaDebutWeekTo = "1987-W30";
+
+    expect(countAdvancedSearchFilters(filters, "albums")).toBe(2);
   });
 });

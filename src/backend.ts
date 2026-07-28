@@ -894,7 +894,9 @@ export async function getSettings() {
     return mockSettings;
   }
 
-  const settings = await invoke<AppSettings>("get_settings");
+  const settings = normalizeSettings(
+    await invoke<AppSettings>("get_settings"),
+  );
   cacheSettings(settings);
   return settings;
 }
@@ -2609,16 +2611,21 @@ function recomputeMockMusicBrainzDiscographyCounts(
 }
 
 export async function saveSettings(settings: AppSettings) {
+  const normalizedSettings = normalizeSettings(settings);
   if (!isTauriRuntime()) {
     setMockSettings({
-      ...normalizeSettings(settings),
+      ...normalizedSettings,
       updatedAt: new Date().toISOString(),
     });
     cacheSettings(mockSettings);
     return mockSettings;
   }
 
-  const saved = await invoke<AppSettings>("save_settings", { settings });
+  const saved = normalizeSettings(
+    await invoke<AppSettings>("save_settings", {
+      settings: normalizedSettings,
+    }),
+  );
   cacheSettings(saved);
   return saved;
 }

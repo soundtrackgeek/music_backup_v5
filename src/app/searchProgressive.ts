@@ -31,6 +31,11 @@ export function countAdvancedSearchFilters(
     view === "tracks" &&
       (filters.billboardSingleDebutDateFrom != null ||
         filters.billboardSingleDebutDateTo != null),
+    view === "albums" &&
+      (filters.billboardDebutWeekFrom != null ||
+        filters.billboardDebutWeekTo != null),
+    filters.vgListaDebutWeekFrom != null ||
+      filters.vgListaDebutWeekTo != null,
     hasRange(filters.releaseYearFrom, filters.releaseYearTo),
     hasRange(filters.totalMinutesMin, filters.totalMinutesMax),
     hasRange(filters.trackCountMin, filters.trackCountMax),

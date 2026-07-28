@@ -32,6 +32,13 @@ export function normalizeSettings(
   const updateAutoCheckMinutes = Math.round(
     Number(settings.updateAutoCheckMinutes ?? 0),
   );
+  const billboardSourcePath = normalizeBillboardSourcePath(
+    settings.billboardSourcePath,
+  );
+  const billboardSinglesSourcePath = normalizeImportPath(
+    settings.billboardSinglesSourcePath,
+    defaultBillboardSinglesSourcePath,
+  );
 
   return {
     backupRetention: Math.min(
@@ -54,19 +61,16 @@ export function normalizeSettings(
       settings.coverSourcePath,
       defaultCoverSourcePath,
     ),
-    billboardSourcePath: normalizeBillboardSourcePath(
-      settings.billboardSourcePath,
-    ),
-    billboardSinglesSourcePath: normalizeImportPath(
-      settings.billboardSinglesSourcePath,
-      defaultBillboardSinglesSourcePath,
-    ),
-    vgListaAlbumSourcePath: normalizeImportPath(
+    billboardSourcePath,
+    billboardSinglesSourcePath,
+    vgListaAlbumSourcePath: normalizeSiblingImportPath(
       settings.vgListaAlbumSourcePath,
+      billboardSourcePath,
       defaultVgListaAlbumSourcePath,
     ),
-    vgListaSinglesSourcePath: normalizeImportPath(
+    vgListaSinglesSourcePath: normalizeSiblingImportPath(
       settings.vgListaSinglesSourcePath,
+      billboardSinglesSourcePath,
       defaultVgListaSinglesSourcePath,
     ),
     deemixDownloadPath: normalizeOptionalPath(settings.deemixDownloadPath),
@@ -177,6 +181,26 @@ function normalizeBillboardSourcePath(value: unknown) {
   return normalized.toLowerCase() === "csv"
     ? defaultBillboardSourcePath
     : normalized;
+}
+
+export function normalizeSiblingImportPath(
+  value: unknown,
+  sourcePath: string,
+  siblingFolder: string,
+) {
+  const normalized = normalizeImportPath(value, siblingFolder);
+  if (normalized.toLowerCase() !== siblingFolder.toLowerCase()) {
+    return normalized;
+  }
+
+  const source = sourcePath.trim().replace(/[\\/]+$/, "");
+  const separatorIndex = Math.max(
+    source.lastIndexOf("\\"),
+    source.lastIndexOf("/"),
+  );
+  return separatorIndex >= 0
+    ? `${source.slice(0, separatorIndex + 1)}${siblingFolder}`
+    : siblingFolder;
 }
 
 export function normalizeDeemixDownloadQuality(

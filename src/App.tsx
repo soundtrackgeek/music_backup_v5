@@ -13316,6 +13316,55 @@ export default function App() {
                   value={chartConfig.request.filters.yearTo}
                   onChange={(value) => updateChartFilters({ yearTo: value })}
                 />
+                <GenreListCriterion
+                  label="Exclude genres"
+                  values={chartConfig.request.filters.excludedGenres}
+                  onChange={(excludedGenres) =>
+                    updateChartFilters({ excludedGenres })
+                  }
+                  genreOptions={genreSuggestionOptions}
+                  onRequestOptions={requestGenreSuggestionRefresh}
+                />
+              </div>
+
+              <ChartAdvancedControls
+                activeControlCount={advancedChartControlCount}
+              >
+                {chartConfig.request.view === "albums" ? (
+                  <>
+                    <div className="chart-advanced-section-heading">
+                      <div>
+                        <strong>Built-in charts</strong>
+                        <small>
+                          Start from a focused ranking, then refine any control.
+                        </small>
+                      </div>
+                    </div>
+                    <section
+                      className="chart-template-panel"
+                      aria-label="Built-in charts"
+                    >
+                      {chartTemplates.map((template) => {
+                        const Icon = template.icon;
+                        return (
+                          <button
+                            type="button"
+                            key={template.id}
+                            onClick={() => applyChartTemplate(template)}
+                          >
+                            <Icon size={17} />
+                            <span>
+                              <strong>{template.label}</strong>
+                              <small>{template.description}</small>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </section>
+                  </>
+                ) : null}
+
+                <div className="filter-grid chart-advanced-filter-grid">
                 {chartConfig.request.view === "tracks" ? (
                   <>
                     <DateField
@@ -13369,55 +13418,6 @@ export default function App() {
                     updateChartFilters({ vgListaDebutWeekTo })
                   }
                 />
-                <GenreListCriterion
-                  label="Exclude genres"
-                  values={chartConfig.request.filters.excludedGenres}
-                  onChange={(excludedGenres) =>
-                    updateChartFilters({ excludedGenres })
-                  }
-                  genreOptions={genreSuggestionOptions}
-                  onRequestOptions={requestGenreSuggestionRefresh}
-                />
-              </div>
-
-              <ChartAdvancedControls
-                activeControlCount={advancedChartControlCount}
-              >
-                {chartConfig.request.view === "albums" ? (
-                  <>
-                    <div className="chart-advanced-section-heading">
-                      <div>
-                        <strong>Built-in charts</strong>
-                        <small>
-                          Start from a focused ranking, then refine any control.
-                        </small>
-                      </div>
-                    </div>
-                    <section
-                      className="chart-template-panel"
-                      aria-label="Built-in charts"
-                    >
-                      {chartTemplates.map((template) => {
-                        const Icon = template.icon;
-                        return (
-                          <button
-                            type="button"
-                            key={template.id}
-                            onClick={() => applyChartTemplate(template)}
-                          >
-                            <Icon size={17} />
-                            <span>
-                              <strong>{template.label}</strong>
-                              <small>{template.description}</small>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </section>
-                  </>
-                ) : null}
-
-                <div className="filter-grid chart-advanced-filter-grid">
                 <NumberField
                   label="Limit"
                   value={chartConfig.resultLimit}
@@ -17805,20 +17805,6 @@ export default function App() {
                     />
                   </>
                 )}
-                <WeekField
-                  label="VG Lista debut from"
-                  value={currentFilters.vgListaDebutWeekFrom}
-                  onChange={(value) =>
-                    updateFilter("vgListaDebutWeekFrom", value)
-                  }
-                />
-                <WeekField
-                  label="VG Lista debut to"
-                  value={currentFilters.vgListaDebutWeekTo}
-                  onChange={(value) =>
-                    updateFilter("vgListaDebutWeekTo", value)
-                  }
-                />
                 <GenreListCriterion
                   label="Genres"
                   values={currentFilters.genres}
@@ -17837,41 +17823,6 @@ export default function App() {
                   value={currentFilters.yearTo}
                   onChange={(value) => updateFilter("yearTo", value)}
                 />
-                {request.view === "tracks" ? (
-                  <>
-                    <DateField
-                      label="Single chart debut from"
-                      value={currentFilters.billboardSingleDebutDateFrom}
-                      onChange={(value) =>
-                        updateFilter("billboardSingleDebutDateFrom", value)
-                      }
-                    />
-                    <DateField
-                      label="Single chart debut to"
-                      value={currentFilters.billboardSingleDebutDateTo}
-                      onChange={(value) =>
-                        updateFilter("billboardSingleDebutDateTo", value)
-                      }
-                    />
-                  </>
-                ) : (
-                  <>
-                    <WeekField
-                      label="Chart debut from"
-                      value={currentFilters.billboardDebutWeekFrom}
-                      onChange={(value) =>
-                        updateFilter("billboardDebutWeekFrom", value)
-                      }
-                    />
-                    <WeekField
-                      label="Chart debut to"
-                      value={currentFilters.billboardDebutWeekTo}
-                      onChange={(value) =>
-                        updateFilter("billboardDebutWeekTo", value)
-                      }
-                    />
-                  </>
-                )}
                 <GenreListCriterion
                   label="Exclude genres"
                   values={currentFilters.excludedGenres}
@@ -17918,6 +17869,55 @@ export default function App() {
                       />
                     </>
                   )}
+                {request.view === "tracks" ? (
+                  <>
+                    <DateField
+                      label="Single chart debut from"
+                      value={currentFilters.billboardSingleDebutDateFrom}
+                      onChange={(value) =>
+                        updateFilter("billboardSingleDebutDateFrom", value)
+                      }
+                    />
+                    <DateField
+                      label="Single chart debut to"
+                      value={currentFilters.billboardSingleDebutDateTo}
+                      onChange={(value) =>
+                        updateFilter("billboardSingleDebutDateTo", value)
+                      }
+                    />
+                  </>
+                ) : (
+                  <>
+                    <WeekField
+                      label="Chart debut from"
+                      value={currentFilters.billboardDebutWeekFrom}
+                      onChange={(value) =>
+                        updateFilter("billboardDebutWeekFrom", value)
+                      }
+                    />
+                    <WeekField
+                      label="Chart debut to"
+                      value={currentFilters.billboardDebutWeekTo}
+                      onChange={(value) =>
+                        updateFilter("billboardDebutWeekTo", value)
+                      }
+                    />
+                  </>
+                )}
+                <WeekField
+                  label="VG Lista debut from"
+                  value={currentFilters.vgListaDebutWeekFrom}
+                  onChange={(value) =>
+                    updateFilter("vgListaDebutWeekFrom", value)
+                  }
+                />
+                <WeekField
+                  label="VG Lista debut to"
+                  value={currentFilters.vgListaDebutWeekTo}
+                  onChange={(value) =>
+                    updateFilter("vgListaDebutWeekTo", value)
+                  }
+                />
                 <CountryListCriterion
                   label="Origin countries"
                   values={currentFilters.originCountryCodes}

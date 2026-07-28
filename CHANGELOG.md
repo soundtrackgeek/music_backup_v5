@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.92.1] - 2026-07-28
+### Changed
+- Moved the Billboard album, Billboard single, and VG Lista chart-debut ranges into Search's **Advanced filters** and Charts' **Advanced chart controls**, including their active-control counts.
+- Synchronized app metadata to `0.92.1`.
+
+### Fixed
+- Expanded bare Norwegian chart-folder defaults into full sibling paths whenever the corresponding US chart folder is configured with a full path.
+
 ## [0.92.0] - 2026-07-28
 ### Added
 - Added Norwegian VG Lista weekly album and single imports from `CSV_ALBUMS_NO` and `CSV_SINGLES_NO`, preserving every weekly chart row in country-specific tables while enriching matched library albums and one canonical track copy with peak rank and first chart week.

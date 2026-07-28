@@ -33,6 +33,23 @@ describe("settings normalization", () => {
     expect(settings.billboardSourcePath).toBe("CSV_ALBUMS");
   });
 
+  it("resolves bare Norwegian defaults beside full US chart folders", () => {
+    const settings = normalizeSettings({
+      billboardSourcePath: "C:\\_code\\music_backup_v5\\CSV_ALBUMS",
+      billboardSinglesSourcePath:
+        "C:\\_code\\music_backup_v5\\CSV_SINGLES",
+      vgListaAlbumSourcePath: "CSV_ALBUMS_NO",
+      vgListaSinglesSourcePath: "CSV_SINGLES_NO",
+    });
+
+    expect(settings.vgListaAlbumSourcePath).toBe(
+      "C:\\_code\\music_backup_v5\\CSV_ALBUMS_NO",
+    );
+    expect(settings.vgListaSinglesSourcePath).toBe(
+      "C:\\_code\\music_backup_v5\\CSV_SINGLES_NO",
+    );
+  });
+
   it("trims paths, validates modes, and clamps numeric preferences", () => {
     const settings = normalizeSettings({
       backupRetention: 999,
