@@ -49,6 +49,11 @@ export function countChartSourceFilters(config: ChartConfig) {
     config.request.view === "tracks" &&
       (filters.tiISkuddetDebutWeekFrom != null ||
         filters.tiISkuddetDebutWeekTo != null),
+    config.request.view === "tracks" &&
+      hasRange(filters.norsktoppenRankMin, filters.norsktoppenRankMax),
+    config.request.view === "tracks" &&
+      (filters.norsktoppenDebutWeekFrom != null ||
+        filters.norsktoppenDebutWeekTo != null),
   ].filter(Boolean).length;
 }
 
@@ -79,6 +84,11 @@ export function countAdvancedChartControls(config: ChartConfig) {
     config.request.view === "tracks" &&
       (filters.tiISkuddetDebutWeekFrom != null ||
         filters.tiISkuddetDebutWeekTo != null),
+    config.request.view === "tracks" &&
+      hasRange(filters.norsktoppenRankMin, filters.norsktoppenRankMax),
+    config.request.view === "tracks" &&
+      (filters.norsktoppenDebutWeekFrom != null ||
+        filters.norsktoppenDebutWeekTo != null),
     filters.originCountryCodes.length > 0,
     filters.excludedOriginCountryCodes.length > 0,
     filters.artistType.trim().length > 0,

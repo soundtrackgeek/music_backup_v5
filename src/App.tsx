@@ -65,6 +65,7 @@ import {
   defaultVgListaAlbumSourcePath,
   defaultVgListaSinglesSourcePath,
   defaultTiISkuddetSourcePath,
+  defaultNorsktoppenSourcePath,
   defaultCoverSourcePath,
   defaultImportSourcePath,
   defaultMusicBrainzCachePath,
@@ -91,6 +92,7 @@ import {
   importVgListaAlbums,
   importVgListaSingles,
   importTiISkuddetSingles,
+  importNorsktoppenSingles,
   applyImportPreview,
   cancelImportPreview,
   getImportPreview,
@@ -149,6 +151,7 @@ import type {
   BillboardSinglesImportSummary,
   VgListaImportSummary,
   TiISkuddetImportSummary,
+  NorsktoppenImportSummary,
   BrowseFilters,
   BrowseRequest,
   BrowseResponse,
@@ -266,6 +269,8 @@ import {
   formatVgListaRank,
   formatTiISkuddetDebut,
   formatTiISkuddetRank,
+  formatNorsktoppenDebut,
+  formatNorsktoppenRank,
   formatBytes,
   formatChartMetric,
   formatClockTime,
@@ -516,6 +521,10 @@ function createDefaultVgListaSinglesSourcePath() {
 
 function createDefaultTiISkuddetSourcePath() {
   return loadCachedSettings().tiISkuddetSourcePath;
+}
+
+function createDefaultNorsktoppenSourcePath() {
+  return loadCachedSettings().norsktoppenSourcePath;
 }
 
 function createDefaultLeftSidebarMode(): LeftSidebarMode {
@@ -2100,6 +2109,10 @@ function ResultTable({
     response.view === "tracks" && visibleColumnSet.has("tiISkuddet");
   const showTiISkuddetDebutColumn =
     response.view === "tracks" && visibleColumnSet.has("tiISkuddetDebut");
+  const showNorsktoppenColumn =
+    response.view === "tracks" && visibleColumnSet.has("norsktoppen");
+  const showNorsktoppenDebutColumn =
+    response.view === "tracks" && visibleColumnSet.has("norsktoppenDebut");
   const albumTableColumns = [
     "minmax(220px, 2fr)",
     "minmax(140px, 1.35fr)",
@@ -2128,6 +2141,8 @@ function ResultTable({
     ...(showVgListaDebutColumn ? ["minmax(132px, 1fr)"] : []),
     ...(showTiISkuddetColumn ? ["104px"] : []),
     ...(showTiISkuddetDebutColumn ? ["minmax(144px, 1fr)"] : []),
+    ...(showNorsktoppenColumn ? ["104px"] : []),
+    ...(showNorsktoppenDebutColumn ? ["minmax(144px, 1fr)"] : []),
     "64px",
     "minmax(140px, 1.1fr)",
   ].join(" ");
@@ -2139,11 +2154,13 @@ function ResultTable({
     (showVgListaColumn ? 88 : 0) +
     (showVgListaDebutColumn ? 132 : 0) +
     (showTiISkuddetColumn ? 104 : 0) +
-    (showTiISkuddetDebutColumn ? 144 : 0);
+    (showTiISkuddetDebutColumn ? 144 : 0) +
+    (showNorsktoppenColumn ? 104 : 0) +
+    (showNorsktoppenDebutColumn ? 144 : 0);
 
   return response.view === "tracks" ? (
     <div
-      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showBillboardSingleColumn ? " with-billboard-single" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}${showTiISkuddetColumn ? " with-ti-i-skuddet" : ""}${showTiISkuddetDebutColumn ? " with-ti-i-skuddet-debut" : ""}`}
+      className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showBillboardSingleColumn ? " with-billboard-single" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}${showTiISkuddetColumn ? " with-ti-i-skuddet" : ""}${showTiISkuddetDebutColumn ? " with-ti-i-skuddet-debut" : ""}${showNorsktoppenColumn ? " with-norsktoppen" : ""}${showNorsktoppenDebutColumn ? " with-norsktoppen-debut" : ""}`}
       role="table"
       style={
         {
@@ -2247,6 +2264,22 @@ function ResultTable({
             onSort={onSort}
           />
         ) : null}
+        {showNorsktoppenColumn ? (
+          <SortableColumnHeader
+            label="Norsktoppen"
+            field="norsktoppenRank"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
+        {showNorsktoppenDebutColumn ? (
+          <SortableColumnHeader
+            label="Norsktoppen debut"
+            field="norsktoppenDebut"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
         <SortableColumnHeader
           label="Rating"
           field="trackRating"
@@ -2312,6 +2345,12 @@ function ResultTable({
             ) : null}
             {showTiISkuddetDebutColumn ? (
               <span role="cell">{formatTiISkuddetDebut(row)}</span>
+            ) : null}
+            {showNorsktoppenColumn ? (
+              <span role="cell">{formatNorsktoppenRank(row)}</span>
+            ) : null}
+            {showNorsktoppenDebutColumn ? (
+              <span role="cell">{formatNorsktoppenDebut(row)}</span>
             ) : null}
             <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
             <span role="cell" title={row.filePath ?? ""}>
@@ -5205,6 +5244,18 @@ function ChartResults({
       value: (row: BrowseRow) => formatTiISkuddetDebut(row),
     },
     {
+      key: "norsktoppen",
+      label: "Norsktoppen",
+      sortField: "norsktoppenRank",
+      value: (row: BrowseRow) => formatNorsktoppenRank(row),
+    },
+    {
+      key: "norsktoppenDebut",
+      label: "Norsktoppen debut week",
+      sortField: "norsktoppenDebut",
+      value: (row: BrowseRow) => formatNorsktoppenDebut(row),
+    },
+    {
       key: "rating",
       label: "Rating",
       sortField: "albumRating",
@@ -5282,6 +5333,8 @@ function ChartResults({
         "billboardSingleDebut",
         "tiISkuddet",
         "tiISkuddetDebut",
+        "norsktoppen",
+        "norsktoppenDebut",
         "trackRating",
       ].includes(
         column.key,
@@ -7850,9 +7903,16 @@ export default function App() {
   );
   const [tiISkuddetImportSummary, setTiISkuddetImportSummary] =
     useState<TiISkuddetImportSummary | null>(null);
+  const [norsktoppenSourcePath, setNorsktoppenSourcePath] = useState(() =>
+    createDefaultNorsktoppenSourcePath(),
+  );
+  const [norsktoppenImportSummary, setNorsktoppenImportSummary] =
+    useState<NorsktoppenImportSummary | null>(null);
   const [importSingleChartsUs, setImportSingleChartsUs] = useState(true);
   const [importSingleChartsNo, setImportSingleChartsNo] = useState(true);
   const [importSingleChartsTiISkuddet, setImportSingleChartsTiISkuddet] =
+    useState(true);
+  const [importSingleChartsNorsktoppen, setImportSingleChartsNorsktoppen] =
     useState(true);
   const [request, setRequest] = useState<BrowseRequest>(() =>
     createRequest("albums"),
@@ -8249,6 +8309,9 @@ export default function App() {
     );
     setTiISkuddetSourcePath(
       nextSettings.tiISkuddetSourcePath || defaultTiISkuddetSourcePath,
+    );
+    setNorsktoppenSourcePath(
+      nextSettings.norsktoppenSourcePath || defaultNorsktoppenSourcePath,
     );
     setMusicBrainzCachePathDraft(
       nextSettings.musicBrainzCachePath || defaultMusicBrainzCachePath,
@@ -9452,6 +9515,10 @@ export default function App() {
         tiISkuddetSourcePath,
         defaultTiISkuddetSourcePath,
       ),
+      norsktoppenSourcePath: textSettingValue(
+        norsktoppenSourcePath,
+        defaultNorsktoppenSourcePath,
+      ),
     }),
     [
       billboardSinglesSourcePath,
@@ -9461,6 +9528,7 @@ export default function App() {
       vgListaAlbumSourcePath,
       vgListaSinglesSourcePath,
       tiISkuddetSourcePath,
+      norsktoppenSourcePath,
     ],
   );
   const importPathsKey = useMemo(
@@ -9481,7 +9549,9 @@ export default function App() {
     normalizedImportPaths.vgListaSinglesSourcePath !==
       persistedSettings.vgListaSinglesSourcePath ||
     normalizedImportPaths.tiISkuddetSourcePath !==
-      persistedSettings.tiISkuddetSourcePath;
+      persistedSettings.tiISkuddetSourcePath ||
+    normalizedImportPaths.norsktoppenSourcePath !==
+      persistedSettings.norsktoppenSourcePath;
 
   useEffect(() => {
     if (
@@ -9716,6 +9786,28 @@ export default function App() {
           }),
       });
     }
+    if (
+      request.view === "tracks" &&
+      (currentFilters.norsktoppenDebutWeekFrom ||
+        currentFilters.norsktoppenDebutWeekTo)
+    ) {
+      const from = currentFilters.norsktoppenDebutWeekFrom;
+      const to = currentFilters.norsktoppenDebutWeekTo;
+      nextChips.push({
+        key: "norsktoppenDebutWeek",
+        label:
+          from && to
+            ? `Norsktoppen debut ${from}–${to}`
+            : from
+              ? `Norsktoppen debut from ${from}`
+              : `Norsktoppen debut through ${to}`,
+        remove: () =>
+          updateFilters({
+            norsktoppenDebutWeekFrom: null,
+            norsktoppenDebutWeekTo: null,
+          }),
+      });
+    }
     addRangeChip(
       nextChips,
       "billboard",
@@ -9736,6 +9828,18 @@ export default function App() {
             billboardSingleRankMin: null,
             billboardSingleRankMax: null,
         }),
+      );
+      addRangeChip(
+        nextChips,
+        "norsktoppen",
+        "Norsktoppen",
+        currentFilters.norsktoppenRankMin,
+        currentFilters.norsktoppenRankMax,
+        () =>
+          updateFilters({
+            norsktoppenRankMin: null,
+            norsktoppenRankMax: null,
+          }),
       );
     }
     addRangeChip(
@@ -10573,6 +10677,7 @@ export default function App() {
     setBillboardSinglesImportSummary(null);
     setVgListaSinglesImportSummary(null);
     setTiISkuddetImportSummary(null);
+    setNorsktoppenImportSummary(null);
 
     try {
       const errors: string[] = [];
@@ -10610,6 +10715,18 @@ export default function App() {
         } catch (error) {
           errors.push(
             `Ti i Skuddet: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      if (importSingleChartsNorsktoppen) {
+        try {
+          setNorsktoppenImportSummary(
+            await importNorsktoppenSingles(norsktoppenSourcePath),
+          );
+          completed = true;
+        } catch (error) {
+          errors.push(
+            `Norsktoppen: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
       }
@@ -11355,6 +11472,10 @@ export default function App() {
         values.tiISkuddetSourcePath ?? baseSettings.tiISkuddetSourcePath,
         defaultTiISkuddetSourcePath,
       ),
+      norsktoppenSourcePath: textSettingValue(
+        values.norsktoppenSourcePath ?? baseSettings.norsktoppenSourcePath,
+        defaultNorsktoppenSourcePath,
+      ),
       deemixDownloadPath: (
         values.deemixDownloadPath ?? baseSettings.deemixDownloadPath
       ).trim(),
@@ -11498,6 +11619,21 @@ export default function App() {
                 defaultTiISkuddetSourcePath,
               ) === nextSettings.tiISkuddetSourcePath
                 ? saved.tiISkuddetSourcePath
+                : current,
+            );
+          }
+          if (
+            Object.prototype.hasOwnProperty.call(
+              values,
+              "norsktoppenSourcePath",
+            )
+          ) {
+            setNorsktoppenSourcePath((current) =>
+              textSettingValue(
+                current,
+                defaultNorsktoppenSourcePath,
+              ) === nextSettings.norsktoppenSourcePath
+                ? saved.norsktoppenSourcePath
                 : current,
             );
           }
@@ -13085,8 +13221,8 @@ export default function App() {
                 <div>
                   <h2>Singles charts</h2>
                   <p>
-                    Import US Billboard, VG Lista, and Ti i Skuddet rows in one
-                    operation.
+                    Import US Billboard, VG Lista, Ti i Skuddet, and
+                    Norsktoppen rows in one operation.
                   </p>
                 </div>
                 <RunStatus
@@ -13095,7 +13231,8 @@ export default function App() {
                       ? "running"
                       : billboardSinglesImportSummary ||
                           vgListaSinglesImportSummary ||
-                          tiISkuddetImportSummary
+                          tiISkuddetImportSummary ||
+                          norsktoppenImportSummary
                         ? "completed"
                         : "idle"
                   }
@@ -13139,6 +13276,17 @@ export default function App() {
                   />
                   <span>NO · Ti i Skuddet</span>
                 </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={importSingleChartsNorsktoppen}
+                    onChange={(event) =>
+                      setImportSingleChartsNorsktoppen(event.target.checked)
+                    }
+                    disabled={isImportingBillboardSingles}
+                  />
+                  <span>NO · Norsktoppen</span>
+                </label>
               </div>
 
               <label className="source-input">
@@ -13178,6 +13326,20 @@ export default function App() {
                   placeholder="CSV_SINGLES_NO"
                   disabled={
                     isImportingBillboardSingles || !importSingleChartsNo
+                  }
+                />
+              </label>
+              <label className="source-input">
+                <span>Norsktoppen CSV folder</span>
+                <input
+                  value={norsktoppenSourcePath}
+                  onChange={(event) =>
+                    setNorsktoppenSourcePath(event.target.value)
+                  }
+                  placeholder="CSV_NORSKTOPPEN_NO"
+                  disabled={
+                    isImportingBillboardSingles ||
+                    !importSingleChartsNorsktoppen
                   }
                 />
               </label>
@@ -13233,6 +13395,21 @@ export default function App() {
                   .
                 </p>
               ) : null}
+              {norsktoppenImportSummary ? (
+                <p className="success-message">
+                  Norsktoppen · Matched{" "}
+                  {formatNumber(norsktoppenImportSummary.matchedTracks)} tracks
+                  with {formatNumber(norsktoppenImportSummary.datedTracks)}{" "}
+                  debut weeks from{" "}
+                  {formatNumber(norsktoppenImportSummary.chartEntries)} rows
+                  across {formatNumber(norsktoppenImportSummary.filesScanned)}{" "}
+                  files
+                  {norsktoppenImportSummary.skippedRows > 0
+                    ? `; skipped ${formatNumber(norsktoppenImportSummary.skippedRows)} incomplete rows`
+                    : ""}
+                  .
+                </p>
+              ) : null}
 
               <div className="action-row">
                 <button
@@ -13243,13 +13420,16 @@ export default function App() {
                     isImportingBillboardSingles ||
                     (!importSingleChartsUs &&
                       !importSingleChartsNo &&
-                      !importSingleChartsTiISkuddet) ||
+                      !importSingleChartsTiISkuddet &&
+                      !importSingleChartsNorsktoppen) ||
                     (importSingleChartsUs &&
                       !billboardSinglesSourcePath.trim()) ||
                     (importSingleChartsNo &&
                       !vgListaSinglesSourcePath.trim()) ||
                     (importSingleChartsTiISkuddet &&
                       !tiISkuddetSourcePath.trim()) ||
+                    (importSingleChartsNorsktoppen &&
+                      !norsktoppenSourcePath.trim()) ||
                     !canImport ||
                     (status?.trackCount ?? 0) === 0
                   }
@@ -13741,6 +13921,48 @@ export default function App() {
                       />
                     </ChartFilterSourceGroup>
                   ) : null}
+                  {chartConfig.request.view === "tracks" ? (
+                    <ChartFilterSourceGroup
+                      title="NO · Norsktoppen"
+                      description="Norwegian-language singles chart history."
+                    >
+                      <NumberField
+                        label="Rank min"
+                        value={chartConfig.request.filters.norsktoppenRankMin}
+                        min={1}
+                        onChange={(norsktoppenRankMin) =>
+                          updateChartFilters({ norsktoppenRankMin })
+                        }
+                      />
+                      <NumberField
+                        label="Rank max"
+                        value={chartConfig.request.filters.norsktoppenRankMax}
+                        min={1}
+                        onChange={(norsktoppenRankMax) =>
+                          updateChartFilters({ norsktoppenRankMax })
+                        }
+                      />
+                      <WeekField
+                        label="Debut from"
+                        value={
+                          chartConfig.request.filters
+                            .norsktoppenDebutWeekFrom
+                        }
+                        onChange={(norsktoppenDebutWeekFrom) =>
+                          updateChartFilters({ norsktoppenDebutWeekFrom })
+                        }
+                      />
+                      <WeekField
+                        label="Debut to"
+                        value={
+                          chartConfig.request.filters.norsktoppenDebutWeekTo
+                        }
+                        onChange={(norsktoppenDebutWeekTo) =>
+                          updateChartFilters({ norsktoppenDebutWeekTo })
+                        }
+                      />
+                    </ChartFilterSourceGroup>
+                  ) : null}
                 </ChartFiltersDisclosure>
 
                 <div className="filter-grid chart-advanced-filter-grid">
@@ -13984,6 +14206,8 @@ export default function App() {
                             "vgListaDebut",
                             "tiISkuddet",
                             "tiISkuddetDebut",
+                            "norsktoppen",
+                            "norsktoppenDebut",
                             "trackRating",
                           ].includes(option.value)
                         : ![
@@ -13991,6 +14215,8 @@ export default function App() {
                             "billboardSingleDebut",
                             "tiISkuddet",
                             "tiISkuddetDebut",
+                            "norsktoppen",
+                            "norsktoppenDebut",
                             "trackRating",
                           ].includes(option.value),
                     )
@@ -18279,6 +18505,43 @@ export default function App() {
                       />
                     </ChartFilterSourceGroup>
                   ) : null}
+                  {request.view === "tracks" ? (
+                    <ChartFilterSourceGroup
+                      title="NO · Norsktoppen"
+                      description="Norwegian-language singles chart history."
+                    >
+                      <NumberField
+                        label="Rank min"
+                        value={currentFilters.norsktoppenRankMin}
+                        min={1}
+                        onChange={(value) =>
+                          updateFilter("norsktoppenRankMin", value)
+                        }
+                      />
+                      <NumberField
+                        label="Rank max"
+                        value={currentFilters.norsktoppenRankMax}
+                        min={1}
+                        onChange={(value) =>
+                          updateFilter("norsktoppenRankMax", value)
+                        }
+                      />
+                      <WeekField
+                        label="Debut from"
+                        value={currentFilters.norsktoppenDebutWeekFrom}
+                        onChange={(value) =>
+                          updateFilter("norsktoppenDebutWeekFrom", value)
+                        }
+                      />
+                      <WeekField
+                        label="Debut to"
+                        value={currentFilters.norsktoppenDebutWeekTo}
+                        onChange={(value) =>
+                          updateFilter("norsktoppenDebutWeekTo", value)
+                        }
+                      />
+                    </ChartFilterSourceGroup>
+                  ) : null}
                 </ChartFiltersDisclosure>
 
                 <div className="filter-grid search-advanced-filter-grid">
@@ -18563,6 +18826,8 @@ export default function App() {
                           "billboardSingleDebut",
                           "tiISkuddet",
                           "tiISkuddetDebut",
+                          "norsktoppen",
+                          "norsktoppenDebut",
                         ].includes(option.value),
                     )
                     .map((option) => {
@@ -18650,6 +18915,8 @@ export default function App() {
                           "billboardSingleDebut",
                           "tiISkuddet",
                           "tiISkuddetDebut",
+                          "norsktoppen",
+                          "norsktoppenDebut",
                         ].includes(option.value),
                     )
                     .map((option) => (
@@ -18718,6 +18985,14 @@ export default function App() {
                             {
                               value: "tiISkuddetDebut",
                               label: "Ti i Skuddet debut week",
+                            },
+                            {
+                              value: "norsktoppenRank",
+                              label: "Norsktoppen",
+                            },
+                            {
+                              value: "norsktoppenDebut",
+                              label: "Norsktoppen debut week",
                             },
                             { value: "trackRating", label: "Track rating" },
                             { value: "trackNumber", label: "Track number" },

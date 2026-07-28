@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.94.0] - 2026-07-28
+### Added
+- Added track-only Norsktoppen imports from 36 annual CSV files in `CSV_NORSKTOPPEN_NO`, retaining 22,888 valid weekly rows in a dedicated SQLite table with raw ranged ranks, points, notes, chart details, source links, and exact chart dates.
+- Added Norsktoppen best-rank and debut-week filters, missing-data checks, sorting, optional columns, chart ranking metrics, and a dedicated Track Timeline source.
+- Added Norsktoppen support to Luna Search, Charts, and Playlist Builder for source-specific presence, rank, debut week, missing data, sorting, and ranking requests.
+
+### Changed
+- Expanded the combined singles import to select Billboard, VG Lista, Ti i Skuddet, and Norsktoppen independently, with all four sources selected by default.
+- Added Norsktoppen to the nested track-only chart-filter groups in Search and Charts and synchronized app metadata to `0.94.0`.
+- Advanced the SQLite schema to version 38 for the Norsktoppen source path, weekly entry table, track summary fields, and indexes.
+
+### Fixed
+- Preserved Norsktoppen's declared chart year/week for historical year-boundary rows such as `1988-W53` while retaining the exact source chart date, instead of failing the complete import on the source inconsistency.
+- Norsktoppen album Timeline and Luna requests are rejected as singles-only rather than being mapped to another chart source.
+
 ## [0.93.1] - 2026-07-28
 ### Changed
 - Renamed the generic Search and Charts `Single` labels to **Billboard single** so the source is distinct from VG Lista and Ti i Skuddet.

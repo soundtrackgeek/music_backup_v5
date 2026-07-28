@@ -15,6 +15,7 @@ import {
   defaultVgListaAlbumSourcePath,
   defaultVgListaSinglesSourcePath,
   defaultTiISkuddetSourcePath,
+  defaultNorsktoppenSourcePath,
   defaultCoverSourcePath,
   defaultImportSourcePath,
   defaultMusicBrainzCachePath,
@@ -93,6 +94,7 @@ export {
   defaultVgListaAlbumSourcePath,
   defaultVgListaSinglesSourcePath,
   defaultTiISkuddetSourcePath,
+  defaultNorsktoppenSourcePath,
   defaultCoverSourcePath,
   defaultImportSourcePath,
   defaultMusicBrainzCachePath,
@@ -158,6 +160,7 @@ import type {
   BillboardSinglesImportSummary,
   VgListaImportSummary,
   TiISkuddetImportSummary,
+  NorsktoppenImportSummary,
   BrowseFilters,
   BrowseRequest,
   BrowseResponse,
@@ -629,11 +632,18 @@ function mockTrackDebutTimeline(
   chartSource: TimelineChartSource = "billboard",
 ): TrackDebutTimelineResponse {
   const useTiISkuddet = chartSource === "tiISkuddet";
+  const useNorsktoppen = chartSource === "norsktoppen";
   const tracks = mockRows
     .filter(
       (row) =>
         row.trackId != null &&
-        (useTiISkuddet
+        (useNorsktoppen
+          ? row.norsktoppenDebutDate != null &&
+            row.norsktoppenDebutYear != null &&
+            row.norsktoppenDebutMonth != null &&
+            row.norsktoppenDebutWeek != null &&
+            row.norsktoppenDebutWeekKey != null
+          : useTiISkuddet
           ? row.tiISkuddetDebutDate != null &&
             row.tiISkuddetDebutYear != null &&
             row.tiISkuddetDebutMonth != null &&
@@ -659,27 +669,41 @@ function mockTrackDebutTimeline(
           year: row.year,
           normalizedRating: row.normalizedRating,
           love: row.love,
-          billboardSingleRank: useTiISkuddet
-            ? row.tiISkuddetRank
-            : row.billboardSingleRank,
-          billboardSingleYear: useTiISkuddet
-            ? row.tiISkuddetYear
-            : row.billboardSingleYear,
-          billboardSingleDebutDate: useTiISkuddet
-            ? row.tiISkuddetDebutDate!
-            : row.billboardSingleDebutDate!,
-          billboardSingleDebutYear: useTiISkuddet
-            ? row.tiISkuddetDebutYear!
-            : row.billboardSingleDebutYear!,
-          billboardSingleDebutMonth: useTiISkuddet
-            ? row.tiISkuddetDebutMonth!
-            : row.billboardSingleDebutMonth!,
-          billboardSingleDebutWeek: useTiISkuddet
-            ? row.tiISkuddetDebutWeek!
-            : row.billboardSingleDebutWeek!,
-          billboardSingleDebutWeekKey: useTiISkuddet
-            ? row.tiISkuddetDebutWeekKey!
-            : row.billboardSingleDebutWeekKey!,
+          billboardSingleRank: useNorsktoppen
+            ? row.norsktoppenRank
+            : useTiISkuddet
+              ? row.tiISkuddetRank
+              : row.billboardSingleRank,
+          billboardSingleYear: useNorsktoppen
+            ? row.norsktoppenYear
+            : useTiISkuddet
+              ? row.tiISkuddetYear
+              : row.billboardSingleYear,
+          billboardSingleDebutDate: useNorsktoppen
+            ? row.norsktoppenDebutDate!
+            : useTiISkuddet
+              ? row.tiISkuddetDebutDate!
+              : row.billboardSingleDebutDate!,
+          billboardSingleDebutYear: useNorsktoppen
+            ? row.norsktoppenDebutYear!
+            : useTiISkuddet
+              ? row.tiISkuddetDebutYear!
+              : row.billboardSingleDebutYear!,
+          billboardSingleDebutMonth: useNorsktoppen
+            ? row.norsktoppenDebutMonth!
+            : useTiISkuddet
+              ? row.tiISkuddetDebutMonth!
+              : row.billboardSingleDebutMonth!,
+          billboardSingleDebutWeek: useNorsktoppen
+            ? row.norsktoppenDebutWeek!
+            : useTiISkuddet
+              ? row.tiISkuddetDebutWeek!
+              : row.billboardSingleDebutWeek!,
+          billboardSingleDebutWeekKey: useNorsktoppen
+            ? row.norsktoppenDebutWeekKey!
+            : useTiISkuddet
+              ? row.tiISkuddetDebutWeekKey!
+              : row.billboardSingleDebutWeekKey!,
           coverPath: row.coverPath,
           coverMimeType: row.coverMimeType,
         }) satisfies TrackDebutTimelineTrack,
@@ -2964,6 +2988,27 @@ export async function importTiISkuddetSingles(sourcePath: string) {
   });
 }
 
+export async function importNorsktoppenSingles(sourcePath: string) {
+  if (!isTauriRuntime()) {
+    const matchedTracks = mockRows.filter(
+      (row) => row.trackId !== null && row.norsktoppenRank != null,
+    ).length;
+    return {
+      sourcePath,
+      filesScanned: 36,
+      chartEntries: 22_888,
+      matchedTracks,
+      datedTracks: matchedTracks,
+      skippedRows: 24,
+      durationMs: 0,
+    } satisfies NorsktoppenImportSummary;
+  }
+
+  return invoke<NorsktoppenImportSummary>("import_norsktoppen_singles", {
+    sourcePath,
+  });
+}
+
 export async function getAlbumCoverDataUrl(albumId: string) {
   if (!isTauriRuntime()) {
     return null;
@@ -3039,6 +3084,10 @@ export async function searchLibrary(request: BrowseRequest) {
     const tiISkuddetDebutWeekFrom =
       request.filters.tiISkuddetDebutWeekFrom;
     const tiISkuddetDebutWeekTo = request.filters.tiISkuddetDebutWeekTo;
+    const norsktoppenRankMin = request.filters.norsktoppenRankMin;
+    const norsktoppenRankMax = request.filters.norsktoppenRankMax;
+    const norsktoppenDebutWeekFrom = request.filters.norsktoppenDebutWeekFrom;
+    const norsktoppenDebutWeekTo = request.filters.norsktoppenDebutWeekTo;
     const lovedTracksMin = request.filters.lovedTracksMin;
     const lovedTracksMax = request.filters.lovedTracksMax;
     const ratingCompletenessMin = normalizePercentFilter(
@@ -3146,6 +3195,20 @@ export async function searchLibrary(request: BrowseRequest) {
             row.tiISkuddetDebutWeek,
             tiISkuddetDebutWeekFrom,
             tiISkuddetDebutWeekTo,
+          )) &&
+        (!isTracks ||
+          matchesNumberRange(
+            row.norsktoppenRank,
+            norsktoppenRankMin,
+            norsktoppenRankMax,
+          )) &&
+        (!isTracks ||
+          matchesIsoWeekRange(
+            row.norsktoppenDebutWeekKey,
+            row.norsktoppenDebutYear,
+            row.norsktoppenDebutWeek,
+            norsktoppenDebutWeekFrom,
+            norsktoppenDebutWeekTo,
           )) &&
         (lovedTracksMin == null || lovedTracks >= lovedTracksMin) &&
         (lovedTracksMax == null || lovedTracks <= lovedTracksMax) &&
@@ -4051,6 +4114,10 @@ function matchesMissingFields(
         return isTracks ? row.tiISkuddetRank == null : true;
       case "tiISkuddetDebut":
         return isTracks ? row.tiISkuddetDebutWeekKey == null : true;
+      case "norsktoppen":
+        return isTracks ? row.norsktoppenRank == null : true;
+      case "norsktoppenDebut":
+        return isTracks ? row.norsktoppenDebutWeekKey == null : true;
       case "rating":
         return isTracks
           ? row.normalizedRating == null
@@ -4106,6 +4173,10 @@ function browseSortValue(row: BrowseRow, field: string) {
       return row.tiISkuddetRank;
     case "tiISkuddetDebut":
       return row.tiISkuddetDebutWeekKey;
+    case "norsktoppenRank":
+      return row.norsktoppenRank;
+    case "norsktoppenDebut":
+      return row.norsktoppenDebutWeekKey;
     case "trackRating":
       return row.normalizedRating;
     case "time":

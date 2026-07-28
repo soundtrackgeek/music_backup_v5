@@ -380,7 +380,7 @@ describe("AlbumTimeRibbon", () => {
     expect(onModeChange).toHaveBeenCalledWith("albums");
   });
 
-  it("offers Ti i Skuddet as a track-only timeline source", async () => {
+  it("offers Ti i Skuddet and Norsktoppen as track-only timeline sources", async () => {
     const user = userEvent.setup();
     const onChartSourceChange = vi.fn();
     const { rerender } = render(
@@ -404,6 +404,10 @@ describe("AlbumTimeRibbon", () => {
       screen.getByRole("button", { name: "NO · Ti i Skuddet" }),
     );
     expect(onChartSourceChange).toHaveBeenCalledWith("tiISkuddet");
+    await user.click(
+      screen.getByRole("button", { name: "NO · Norsktoppen" }),
+    );
+    expect(onChartSourceChange).toHaveBeenCalledWith("norsktoppen");
 
     rerender(
       <AlbumTimeRibbon
@@ -422,6 +426,9 @@ describe("AlbumTimeRibbon", () => {
     );
     expect(
       screen.queryByRole("button", { name: "NO · Ti i Skuddet" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "NO · Norsktoppen" }),
     ).not.toBeInTheDocument();
   });
 

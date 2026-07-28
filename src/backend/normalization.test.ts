@@ -15,6 +15,7 @@ describe("settings normalization", () => {
     expect(settings.vgListaAlbumSourcePath).toBe("CSV_ALBUMS_NO");
     expect(settings.vgListaSinglesSourcePath).toBe("CSV_SINGLES_NO");
     expect(settings.tiISkuddetSourcePath).toBe("CSV_TIISKUDDET_NO");
+    expect(settings.norsktoppenSourcePath).toBe("CSV_NORSKTOPPEN_NO");
     expect(settings.musicBrainzCachePath).toBe(
       "MusicBrainz/musicbrainz_cache.db",
     );
@@ -42,6 +43,7 @@ describe("settings normalization", () => {
       vgListaAlbumSourcePath: "CSV_ALBUMS_NO",
       vgListaSinglesSourcePath: "CSV_SINGLES_NO",
       tiISkuddetSourcePath: "CSV_TIISKUDDET_NO",
+      norsktoppenSourcePath: "CSV_NORSKTOPPEN_NO",
     });
 
     expect(settings.vgListaAlbumSourcePath).toBe(
@@ -52,6 +54,9 @@ describe("settings normalization", () => {
     );
     expect(settings.tiISkuddetSourcePath).toBe(
       "C:\\_code\\music_backup_v5\\CSV_TIISKUDDET_NO",
+    );
+    expect(settings.norsktoppenSourcePath).toBe(
+      "C:\\_code\\music_backup_v5\\CSV_NORSKTOPPEN_NO",
     );
   });
 
@@ -67,6 +72,7 @@ describe("settings normalization", () => {
       vgListaAlbumSourcePath: "  D:/Charts/Norway/Albums  ",
       vgListaSinglesSourcePath: "  D:/Charts/Norway/Singles  ",
       tiISkuddetSourcePath: "  D:/Charts/Norway/Ti i Skuddet  ",
+      norsktoppenSourcePath: "  D:/Charts/Norway/Norsktoppen  ",
       deemixDownloadPath: "  D:/Music/Incoming  ",
       deemixDownloadQuality: "mp3_128",
       deemixDownloadFallback: false,
@@ -87,6 +93,7 @@ describe("settings normalization", () => {
       vgListaAlbumSourcePath: "D:/Charts/Norway/Albums",
       vgListaSinglesSourcePath: "D:/Charts/Norway/Singles",
       tiISkuddetSourcePath: "D:/Charts/Norway/Ti i Skuddet",
+      norsktoppenSourcePath: "D:/Charts/Norway/Norsktoppen",
       deemixDownloadPath: "D:/Music/Incoming",
       deemixDownloadQuality: "mp3_128",
       deemixDownloadFallback: false,

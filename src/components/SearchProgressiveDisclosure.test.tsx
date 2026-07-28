@@ -113,6 +113,15 @@ describe("Search progressive disclosure", () => {
             <input />
           </label>
         </ChartFilterSourceGroup>
+        <ChartFilterSourceGroup
+          title="NO · Norsktoppen"
+          description="Norwegian-language singles chart history."
+        >
+          <label>
+            Norsktoppen best rank
+            <input />
+          </label>
+        </ChartFilterSourceGroup>
       </ChartFiltersDisclosure>,
     );
 
@@ -122,5 +131,7 @@ describe("Search progressive disclosure", () => {
     fireEvent.click(screen.getByText("Chart filters"));
     expect(screen.getByLabelText("Ti i Skuddet best rank")).toBeVisible();
     expect(screen.getByText("NO · Ti i Skuddet")).toBeVisible();
+    expect(screen.getByLabelText("Norsktoppen best rank")).toBeVisible();
+    expect(screen.getByText("NO · Norsktoppen")).toBeVisible();
   });
 });

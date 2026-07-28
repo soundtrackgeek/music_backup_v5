@@ -73,4 +73,17 @@ describe("progressive Search filter summary", () => {
     expect(countSearchChartFilters(filters, "albums")).toBe(0);
     expect(countAdvancedSearchFilters(filters, "albums")).toBe(0);
   });
+
+  it("counts Norsktoppen chart groups only for track searches", () => {
+    const filters = createFilters();
+    filters.norsktoppenRankMin = 1;
+    filters.norsktoppenRankMax = 10;
+    filters.norsktoppenDebutWeekFrom = "1989-W20";
+    filters.norsktoppenDebutWeekTo = "1989-W30";
+
+    expect(countSearchChartFilters(filters, "tracks")).toBe(2);
+    expect(countAdvancedSearchFilters(filters, "tracks")).toBe(2);
+    expect(countSearchChartFilters(filters, "albums")).toBe(0);
+    expect(countAdvancedSearchFilters(filters, "albums")).toBe(0);
+  });
 });

@@ -700,6 +700,13 @@ type BrowseRowWithoutOrigin = Omit<
   | "tiISkuddetDebutMonth"
   | "tiISkuddetDebutWeek"
   | "tiISkuddetDebutWeekKey"
+  | "norsktoppenRank"
+  | "norsktoppenYear"
+  | "norsktoppenDebutDate"
+  | "norsktoppenDebutYear"
+  | "norsktoppenDebutMonth"
+  | "norsktoppenDebutWeek"
+  | "norsktoppenDebutWeekKey"
 >;
 type ArtistSummaryWithoutMusicBrainz = Omit<
   ArtistSummary,
@@ -926,6 +933,21 @@ function withMockOrigin(row: BrowseRowWithoutOrigin): BrowseRow {
     tiISkuddetDebutWeek:
       row.trackId == null ? null : (singleDebutWeek?.week ?? null),
     tiISkuddetDebutWeekKey:
+      row.trackId == null || row.billboardSingleYear == null || singleDebutWeek == null
+        ? null
+        : `${singleDebutWeek.isoYear}-W${String(singleDebutWeek.week).padStart(2, "0")}`,
+    norsktoppenRank:
+      row.trackId == null ? null : row.billboardSingleRank,
+    norsktoppenYear:
+      row.trackId == null ? null : row.billboardSingleYear,
+    norsktoppenDebutDate: row.trackId == null ? null : singleDebutDate,
+    norsktoppenDebutYear:
+      row.trackId == null ? null : row.billboardSingleYear,
+    norsktoppenDebutMonth:
+      row.trackId == null || singleDebutDate == null ? null : 7,
+    norsktoppenDebutWeek:
+      row.trackId == null ? null : (singleDebutWeek?.week ?? null),
+    norsktoppenDebutWeekKey:
       row.trackId == null || row.billboardSingleYear == null || singleDebutWeek == null
         ? null
         : `${singleDebutWeek.isoYear}-W${String(singleDebutWeek.week).padStart(2, "0")}`,

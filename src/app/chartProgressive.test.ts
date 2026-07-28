@@ -89,4 +89,20 @@ describe("progressive Charts control summary", () => {
     config.request.view = "albums";
     expect(countChartSourceFilters(config)).toBe(0);
   });
+
+  it("counts Norsktoppen chart groups only for track charts", () => {
+    const config = createChartConfig();
+    config.request.view = "tracks";
+    const baseline = countAdvancedChartControls(config);
+    config.request.filters.norsktoppenRankMin = 1;
+    config.request.filters.norsktoppenRankMax = 10;
+    config.request.filters.norsktoppenDebutWeekFrom = "1989-W20";
+    config.request.filters.norsktoppenDebutWeekTo = "1989-W30";
+
+    expect(countChartSourceFilters(config)).toBe(2);
+    expect(countAdvancedChartControls(config)).toBe(baseline + 2);
+
+    config.request.view = "albums";
+    expect(countChartSourceFilters(config)).toBe(0);
+  });
 });

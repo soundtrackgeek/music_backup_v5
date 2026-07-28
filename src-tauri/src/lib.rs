@@ -32,9 +32,9 @@ use models::{
     MusicBrainzReleaseDecisionRequest, MusicMapLocationDetails, MusicMapRefreshSummary,
     MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
-    PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch,
-    StatisticsResponse, TiISkuddetImportSummary, TrackDebutTimelineResponse, VgListaImportSummary,
-    YearProgressRequest, YearProgressStats,
+    NorsktoppenImportSummary, PerformanceProbeResponse, SaveChartRequest, SaveSearchRequest,
+    SavedChart, SavedSearch, StatisticsResponse, TiISkuddetImportSummary,
+    TrackDebutTimelineResponse, VgListaImportSummary, YearProgressRequest, YearProgressStats,
 };
 #[cfg(not(test))]
 use models::{ImportPreview, ImportRun, ImportSummary, LibraryStatus};
@@ -983,6 +983,20 @@ async fn import_ti_i_skuddet_singles(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn import_norsktoppen_singles(
+    app: AppHandle,
+    source_path: String,
+) -> Result<NorsktoppenImportSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::import_norsktoppen_singles_for_app(&app, source_path)
+    })
+    .await
+    .map_err(|error| format!("Norsktoppen import task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn search_library(app: AppHandle, request: BrowseRequest) -> Result<BrowseResponse, String> {
     tauri::async_runtime::spawn_blocking(move || db::search_library_for_app(&app, request))
         .await
@@ -1247,6 +1261,7 @@ pub fn run() {
             import_vg_lista_albums,
             import_vg_lista_singles,
             import_ti_i_skuddet_singles,
+            import_norsktoppen_singles,
             get_album_cover_data_url,
             search_library,
             list_artists,

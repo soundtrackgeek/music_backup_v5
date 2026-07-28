@@ -172,6 +172,32 @@ export function formatTiISkuddetDebut(
     : `${label} · W${row.tiISkuddetDebutWeek}`;
 }
 
+export function formatNorsktoppenRank(
+  row: Pick<BrowseRow, "norsktoppenRank" | "norsktoppenYear">,
+) {
+  if (row.norsktoppenRank == null) return "";
+  return row.norsktoppenYear == null
+    ? `#${row.norsktoppenRank}`
+    : `#${row.norsktoppenRank} ${row.norsktoppenYear}`;
+}
+
+export function formatNorsktoppenDebut(
+  row: Pick<BrowseRow, "norsktoppenDebutDate" | "norsktoppenDebutWeek">,
+) {
+  if (!row.norsktoppenDebutDate) return "";
+  const date = new Date(`${row.norsktoppenDebutDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return row.norsktoppenDebutDate;
+  const label = new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+  return row.norsktoppenDebutWeek == null
+    ? label
+    : `${label} · W${row.norsktoppenDebutWeek}`;
+}
+
 export function formatBillboardSingleDebut(
   row: Pick<
     BrowseRow,
@@ -275,6 +301,10 @@ export function formatChartMetric(row: BrowseRow, metric: string) {
       return formatTiISkuddetRank(row);
     case "tiISkuddetDebut":
       return formatTiISkuddetDebut(row);
+    case "norsktoppenRank":
+      return formatNorsktoppenRank(row);
+    case "norsktoppenDebut":
+      return formatNorsktoppenDebut(row);
     case "trackRating":
       return formatTrackRating(row.normalizedRating);
     case "lovedTracks":
@@ -322,6 +352,10 @@ export function browseRowSortValue(row: BrowseRow, field: string) {
       return row.tiISkuddetRank;
     case "tiISkuddetDebut":
       return row.tiISkuddetDebutWeekKey ?? "";
+    case "norsktoppenRank":
+      return row.norsktoppenRank;
+    case "norsktoppenDebut":
+      return row.norsktoppenDebutWeekKey ?? "";
     case "trackRating":
       return row.normalizedRating;
     case "time":

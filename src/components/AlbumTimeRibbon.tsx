@@ -615,6 +615,16 @@ function ChartSourceToggle({
           NO · Ti i Skuddet
         </button>
       ) : null}
+      {mode === "tracks" ? (
+        <button
+          type="button"
+          className={chartSource === "norsktoppen" ? "active" : ""}
+          aria-pressed={chartSource === "norsktoppen"}
+          onClick={() => onChange("norsktoppen")}
+        >
+          NO · Norsktoppen
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -657,7 +667,9 @@ export function AlbumTimeRibbon({
     [data, mode],
   );
   const chartSourceLabel =
-    chartSource === "tiISkuddet"
+    chartSource === "norsktoppen"
+      ? "Norsktoppen"
+      : chartSource === "tiISkuddet"
       ? "Ti i Skuddet"
       : chartSource === "vgLista"
         ? "VG Lista"
@@ -794,7 +806,9 @@ export function AlbumTimeRibbon({
         <strong>No {mode === "tracks" ? "track debut dates" : "album debut weeks"} yet</strong>
         <span>
           Import the{" "}
-          {chartSource === "tiISkuddet"
+          {chartSource === "norsktoppen"
+            ? "CSV_NORSKTOPPEN_NO"
+            : chartSource === "tiISkuddet"
             ? "CSV_TIISKUDDET_NO"
             : chartSource === "vgLista"
               ? mode === "tracks"
@@ -925,7 +939,10 @@ export function AlbumTimeRibbon({
   function chooseMode(nextMode: TimelineMode) {
     setSelectedAlbumId(null);
     setSelectedWeekSelection(null);
-    if (nextMode === "albums" && chartSource === "tiISkuddet") {
+    if (
+      nextMode === "albums" &&
+      (chartSource === "tiISkuddet" || chartSource === "norsktoppen")
+    ) {
       onChartSourceChange("vgLista");
     }
     onModeChange(nextMode);

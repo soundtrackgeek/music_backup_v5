@@ -30,6 +30,11 @@ export function countSearchChartFilters(
     view === "tracks" &&
       (filters.tiISkuddetDebutWeekFrom != null ||
         filters.tiISkuddetDebutWeekTo != null),
+    view === "tracks" &&
+      hasRange(filters.norsktoppenRankMin, filters.norsktoppenRankMax),
+    view === "tracks" &&
+      (filters.norsktoppenDebutWeekFrom != null ||
+        filters.norsktoppenDebutWeekTo != null),
   ].filter(Boolean).length;
 }
 
@@ -66,6 +71,11 @@ export function countAdvancedSearchFilters(
     view === "tracks" &&
       (filters.tiISkuddetDebutWeekFrom != null ||
         filters.tiISkuddetDebutWeekTo != null),
+    view === "tracks" &&
+      hasRange(filters.norsktoppenRankMin, filters.norsktoppenRankMax),
+    view === "tracks" &&
+      (filters.norsktoppenDebutWeekFrom != null ||
+        filters.norsktoppenDebutWeekTo != null),
     hasRange(filters.releaseYearFrom, filters.releaseYearTo),
     hasRange(filters.totalMinutesMin, filters.totalMinutesMax),
     hasRange(filters.trackCountMin, filters.trackCountMax),

@@ -200,6 +200,16 @@ export type TiISkuddetImportSummary = {
   durationMs: number;
 };
 
+export type NorsktoppenImportSummary = {
+  sourcePath: string;
+  filesScanned: number;
+  chartEntries: number;
+  matchedTracks: number;
+  datedTracks: number;
+  skippedRows: number;
+  durationMs: number;
+};
+
 export type LeftSidebarMode = "expanded" | "iconOnly" | "hidden";
 
 export type RightSidebarMode = "expanded" | "hidden";
@@ -225,6 +235,7 @@ export type AppSettings = {
   vgListaAlbumSourcePath: string;
   vgListaSinglesSourcePath: string;
   tiISkuddetSourcePath: string;
+  norsktoppenSourcePath: string;
   deemixDownloadPath: string;
   deemixDownloadQuality: DeemixDownloadQuality;
   deemixDownloadFallback: boolean;
@@ -1166,6 +1177,10 @@ export type BrowseFilters = {
   tiISkuddetRankMax: number | null;
   tiISkuddetDebutWeekFrom: string | null;
   tiISkuddetDebutWeekTo: string | null;
+  norsktoppenRankMin: number | null;
+  norsktoppenRankMax: number | null;
+  norsktoppenDebutWeekFrom: string | null;
+  norsktoppenDebutWeekTo: string | null;
   yearFrom: number | null;
   yearTo: number | null;
   releaseYearFrom: number | null;
@@ -1572,6 +1587,13 @@ export type BrowseRow = {
   tiISkuddetDebutMonth: number | null;
   tiISkuddetDebutWeek: number | null;
   tiISkuddetDebutWeekKey: string | null;
+  norsktoppenRank: number | null;
+  norsktoppenYear: number | null;
+  norsktoppenDebutDate: string | null;
+  norsktoppenDebutYear: number | null;
+  norsktoppenDebutMonth: number | null;
+  norsktoppenDebutWeek: number | null;
+  norsktoppenDebutWeekKey: string | null;
   trackSeconds: number | null;
   normalizedRating: number | null;
   discNumber: number | null;
@@ -1667,7 +1689,8 @@ export type TrackDebutTimelineResponse = {
 export type TimelineChartSource =
   | "billboard"
   | "vgLista"
-  | "tiISkuddet";
+  | "tiISkuddet"
+  | "norsktoppen";
 
 export type SavedSearch = {
   id: number;

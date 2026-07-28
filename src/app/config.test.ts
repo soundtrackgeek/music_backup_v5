@@ -15,6 +15,18 @@ describe("Search table column options", () => {
     );
   });
 
+  it("offers independent Norsktoppen rank and debut columns", () => {
+    expect(searchTableColumnOptions).toEqual(
+      expect.arrayContaining([
+        { value: "norsktoppen", label: "Norsktoppen" },
+        {
+          value: "norsktoppenDebut",
+          label: "Norsktoppen debut week",
+        },
+      ]),
+    );
+  });
+
   it("distinguishes album-level Billboard columns in Tracks view", () => {
     const albumRank = searchTableColumnOptions.find(
       (option) => option.value === "billboard",
