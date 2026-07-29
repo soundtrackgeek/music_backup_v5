@@ -142,6 +142,10 @@ import type {
   DeemixAlbumSearchRequest,
   DeemixAlbumSearchResponse,
   DeemixConnectionTest,
+  LibraryCompletionCandidate,
+  LibraryCompletionDecision,
+  LibraryCompletionResponse,
+  SetLibraryCompletionDecisionRequest,
   DeemixCredentialStatus,
   WishListItem,
   WishListArtistAlbumSummary,
@@ -286,6 +290,183 @@ let mockWishListItems: WishListItem[] = [
     },
   },
 ];
+const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
+  {
+    id: "massive attack\u001fmezzanine",
+    artist: "Massive Attack",
+    title: "Mezzanine",
+    chartYear: 1998,
+    confidence: "best",
+    status: "candidate",
+    wishListItemId: null,
+    musicbrainzId: null,
+    musicbrainzUrl: null,
+    coverUrl: mockTimelineCoverUrls[5],
+    evidence: [
+      {
+        source: "officialUk",
+        label: "Official UK Albums",
+        bestRank: 31,
+        firstYear: 1998,
+        lastYear: 1998,
+        appearances: 12,
+      },
+      {
+        source: "vgLista",
+        label: "VG Lista",
+        bestRank: 31,
+        firstYear: 1998,
+        lastYear: 1998,
+        appearances: 8,
+      },
+    ],
+  },
+  {
+    id: "rem\u001fautomatic for the people",
+    artist: "R.E.M.",
+    title: "Automatic for the People",
+    chartYear: 1992,
+    confidence: "best",
+    status: "candidate",
+    wishListItemId: null,
+    musicbrainzId: null,
+    musicbrainzUrl: null,
+    coverUrl: mockTimelineCoverUrls[0],
+    evidence: [
+      {
+        source: "billboard",
+        label: "Billboard 200",
+        bestRank: 38,
+        firstYear: 1992,
+        lastYear: 1992,
+        appearances: 1,
+      },
+    ],
+  },
+  {
+    id: "the chemical brothers\u001fdig your own hole",
+    artist: "The Chemical Brothers",
+    title: "Dig Your Own Hole",
+    chartYear: 1997,
+    confidence: "best",
+    status: "candidate",
+    wishListItemId: null,
+    musicbrainzId: null,
+    musicbrainzUrl: null,
+    coverUrl: mockTimelineCoverUrls[2],
+    evidence: [
+      {
+        source: "officialUk",
+        label: "Official UK Albums",
+        bestRank: 21,
+        firstYear: 1997,
+        lastYear: 1997,
+        appearances: 9,
+      },
+    ],
+  },
+  {
+    id: "portishead\u001fportishead",
+    artist: "Portishead",
+    title: "Portishead",
+    chartYear: 1997,
+    confidence: "good",
+    status: "candidate",
+    wishListItemId: null,
+    musicbrainzId: null,
+    musicbrainzUrl: null,
+    coverUrl: mockTimelineCoverUrls[1],
+    evidence: [
+      {
+        source: "vgLista",
+        label: "VG Lista",
+        bestRank: 46,
+        firstYear: 1997,
+        lastYear: 1997,
+        appearances: 6,
+      },
+    ],
+  },
+  {
+    id: "air\u001fmoon safari",
+    artist: "Air",
+    title: "Moon Safari",
+    chartYear: 1998,
+    confidence: "good",
+    status: "candidate",
+    wishListItemId: null,
+    musicbrainzId: null,
+    musicbrainzUrl: null,
+    coverUrl: mockTimelineCoverUrls[3],
+    evidence: [
+      {
+        source: "officialUk",
+        label: "Official UK Albums",
+        bestRank: 15,
+        firstYear: 1998,
+        lastYear: 1998,
+        appearances: 3,
+      },
+    ],
+  },
+  {
+    id: "radiohead\u001fthe bends",
+    artist: "Radiohead",
+    title: "The Bends",
+    chartYear: 1995,
+    confidence: "needsReview",
+    status: "needsReview",
+    wishListItemId: null,
+    musicbrainzId: null,
+    musicbrainzUrl: null,
+    coverUrl: mockTimelineCoverUrls[4],
+    evidence: [
+      {
+        source: "billboard",
+        label: "Billboard 200",
+        bestRank: 88,
+        firstYear: 1995,
+        lastYear: 1996,
+        appearances: 2,
+      },
+    ],
+  },
+];
+const mockLibraryCompletionAtlasRows: Array<[
+  LibraryCompletionResponse["atlas"][number]["source"],
+  string,
+  number[],
+  number[],
+]> = [
+  ["billboard", "Billboard 200", [1960, 1970, 1980, 1990, 2000, 2010, 2020], [12, 28, 41, 72, 81, 89, 94]],
+  ["officialUk", "Official UK Albums", [1960, 1970, 1980, 1990, 2000, 2010, 2020], [18, 34, 38, 64, 76, 86, 93]],
+  ["vgLista", "VG Lista", [1960, 1970, 1980, 1990, 2000, 2010, 2020], [8, 21, 27, 53, 68, 80, 91]],
+];
+const mockLibraryCompletionAtlas = mockLibraryCompletionAtlasRows.flatMap(
+  ([source, label, decades, ownedPercents]) =>
+  (decades as number[]).map((decade, index) => {
+    const total = decade === 1980 && source === "officialUk" ? 418 : 240 + index * 24;
+    const owned = Math.round(total * (ownedPercents as number[])[index] / 100);
+    const needsReview = Math.max(4, Math.round(total * 0.15));
+    const wanted = Math.max(2, Math.round(total * 0.04));
+    const excluded = Math.max(1, Math.round(total * 0.03));
+    return {
+      source,
+      label,
+      decade,
+      owned,
+      candidates: Math.max(0, total - owned - needsReview - wanted - excluded),
+      wanted,
+      needsReview,
+      excluded,
+      total,
+    };
+  }),
+) satisfies LibraryCompletionResponse["atlas"];
+const mockLibraryCompletionDecisions = new Map<
+  string,
+  LibraryCompletionDecision
+>();
 const mockDeemixDownloads = new Map<
   string,
   { destinationPath: string; downloadedAt: string }
@@ -1589,12 +1770,93 @@ export async function listWishList() {
   return invoke<WishListResponse>("list_wish_list");
 }
 
+export async function getLibraryCompletion() {
+  if (!isTauriRuntime()) {
+    const candidates = mockLibraryCompletionCandidates.map((candidate) => {
+      const decision = mockLibraryCompletionDecisions.get(candidate.id);
+      if (!decision) return candidate;
+      return {
+        ...candidate,
+        status: decision.status,
+        wishListItemId: decision.wishListItemId,
+        musicbrainzId: decision.musicbrainzId,
+        musicbrainzUrl: decision.musicbrainzUrl,
+      };
+    });
+    return {
+      generatedAt: new Date().toISOString(),
+      totalChartAlbums: 2_164,
+      totalCandidates: 1_248,
+      returnedCandidates: candidates.length,
+      truncated: true,
+      candidates,
+      atlas: mockLibraryCompletionAtlas,
+    } satisfies LibraryCompletionResponse;
+  }
+  return invoke<LibraryCompletionResponse>("get_library_completion");
+}
+
+export async function setLibraryCompletionDecision(
+  input: SetLibraryCompletionDecisionRequest,
+) {
+  if (!isTauriRuntime()) {
+    if (input.status === "candidate") {
+      mockLibraryCompletionDecisions.delete(input.candidateId);
+      return {
+        candidateId: input.candidateId,
+        status: input.status,
+        wishListItemId: null,
+        musicbrainzId: input.musicbrainzId ?? null,
+        musicbrainzUrl: input.musicbrainzUrl ?? null,
+        updatedAt: new Date().toISOString(),
+      } satisfies LibraryCompletionDecision;
+    }
+
+    let wishListItemId = input.wishListItemId ?? null;
+    if (input.status === "wanted" && wishListItemId == null) {
+      const item = await addWishListItem({
+        entity: "album",
+        title: input.title,
+        artist: input.artist,
+        year: input.chartYear,
+        musicbrainzId: input.musicbrainzId ?? null,
+        musicbrainzUrl: input.musicbrainzUrl ?? null,
+        source: `Library Completion · ${input.source}`,
+      });
+      wishListItemId = item.id;
+    }
+
+    const decision = {
+      candidateId: input.candidateId,
+      status: input.status,
+      wishListItemId,
+      musicbrainzId: input.musicbrainzId ?? null,
+      musicbrainzUrl: input.musicbrainzUrl ?? null,
+      updatedAt: new Date().toISOString(),
+    } satisfies LibraryCompletionDecision;
+    mockLibraryCompletionDecisions.set(input.candidateId, decision);
+    return decision;
+  }
+  return invoke<LibraryCompletionDecision>(
+    "set_library_completion_decision",
+    { input },
+  );
+}
+
 export async function searchWishListMusicBrainz(
   input: WishListMusicBrainzSearchRequest,
 ) {
   if (!isTauriRuntime()) {
     const title = input.query.trim();
     const isArtist = input.entity === "artist";
+    const albumQueryMatch = isArtist
+      ? null
+      : title.match(/^(.+?)\s+by\s+(.+?)(?:\s+\((\d{4})\))?$/i);
+    const previewAlbumTitle = albumQueryMatch?.[1]?.trim() || title;
+    const previewAlbumArtist = albumQueryMatch?.[2]?.trim() || "Pet Shop Boys";
+    const previewAlbumYear = albumQueryMatch?.[3]
+      ? Number(albumQueryMatch[3])
+      : 2002;
     return {
       entity: input.entity,
       query: title,
@@ -1602,9 +1864,9 @@ export async function searchWishListMusicBrainz(
         ? [
             {
               entity: input.entity,
-              title,
-              artist: isArtist ? "" : "Pet Shop Boys",
-              year: isArtist ? null : 2002,
+              title: isArtist ? title : previewAlbumTitle,
+              artist: isArtist ? "" : previewAlbumArtist,
+              year: isArtist ? null : previewAlbumYear,
               musicbrainzId: isArtist
                 ? "11111111-1111-4111-8111-111111111111"
                 : "22222222-2222-4222-8222-222222222222",

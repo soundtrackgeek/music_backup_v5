@@ -509,7 +509,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_thirty_nine_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -995,6 +995,21 @@ pub fn migrate(conn: &Connection) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_wish_list_items_entity_created
             ON wish_list_items(entity, created_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS library_completion_decisions (
+            candidate_key TEXT PRIMARY KEY,
+            status TEXT NOT NULL CHECK(status IN ('wanted', 'notForMe', 'needsReview')),
+            artist TEXT NOT NULL,
+            title TEXT NOT NULL,
+            chart_year INTEGER NOT NULL,
+            wish_list_item_id INTEGER REFERENCES wish_list_items(id) ON DELETE SET NULL,
+            musicbrainz_id TEXT,
+            musicbrainz_url TEXT,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_completion_decisions_status
+            ON library_completion_decisions(status, updated_at DESC);
 
         CREATE TABLE IF NOT EXISTS deemix_downloads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1486,7 +1501,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 39;
+        PRAGMA user_version = 40;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -19092,6 +19107,7 @@ mod tests {
             .expect("phase thirty-six schema exists"));
         assert!(migrations::phase_thirty_seven_schema_exists(&conn)
             .expect("phase thirty-seven schema exists"));
+        assert!(migrations::phase_forty_schema_exists(&conn).expect("phase forty schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -19440,6 +19456,30 @@ mod tests {
             .expect("read Official UK default paths");
         assert_eq!(paths.0, "CSV_ALBUMS_UK");
         assert_eq!(paths.1, "CSV_SINGLES_UK");
+        let user_version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("read schema version");
+        assert_eq!(user_version, LATEST_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn schema_forty_adds_library_completion_decisions() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            DROP TABLE library_completion_decisions;
+            PRAGMA user_version = 39;
+            ",
+        )
+        .expect("simulate schema thirty-nine");
+
+        migrate(&conn).expect("migrate Library Completion schema");
+
+        assert!(
+            migrations::phase_forty_schema_exists(&conn).expect("Library Completion schema exists")
+        );
         let user_version: i32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .expect("read schema version");

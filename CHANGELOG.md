@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.96.0] - 2026-07-29
+### Added
+- Added the **Library Completion** command centre, which scans local Billboard 200, Official UK Albums, and VG Lista album entries against the imported library and merges repeated chart evidence into a prioritized missing-album queue.
+- Added a practical candidate Workbench with local-absence evidence, on-demand MusicBrainz verification, persistent **Wanted**, **Needs review**, and **Not for me** decisions, Wish List handoff, and Deemix availability searches for wanted albums.
+- Added the **Coverage Atlas** as a first-class view of owned and missing chart albums by source and decade; any cell can start a focused Workbench campaign.
+
+### Changed
+- Advanced SQLite to schema version 40 for persistent Library Completion decisions and synchronized app metadata to `0.96.0`.
+- Reserved Discogs verification as an explicit next-phase provider instead of making automatic network requests during local chart scans.
+
 ## [0.95.1] - 2026-07-28
 ### Changed
 - Synchronized app metadata to `0.95.1`.

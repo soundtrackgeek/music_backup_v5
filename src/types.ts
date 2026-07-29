@@ -1041,6 +1041,84 @@ export type WishListArtistAlbumDiscoveryResponse = {
   searchedAt: string;
 };
 
+export type LibraryCompletionStatus =
+  | "candidate"
+  | "wanted"
+  | "notForMe"
+  | "needsReview";
+
+export type LibraryCompletionConfidence =
+  | "best"
+  | "good"
+  | "needsReview"
+  | "low";
+
+export type LibraryCompletionEvidence = {
+  source: "billboard" | "officialUk" | "vgLista";
+  label: string;
+  bestRank: number;
+  firstYear: number;
+  lastYear: number;
+  appearances: number;
+};
+
+export type LibraryCompletionCandidate = {
+  id: string;
+  artist: string;
+  title: string;
+  chartYear: number;
+  confidence: LibraryCompletionConfidence;
+  status: LibraryCompletionStatus;
+  wishListItemId: number | null;
+  musicbrainzId: string | null;
+  musicbrainzUrl: string | null;
+  coverUrl: string | null;
+  evidence: LibraryCompletionEvidence[];
+};
+
+export type LibraryCompletionAtlasCell = {
+  source: LibraryCompletionEvidence["source"];
+  label: string;
+  decade: number;
+  owned: number;
+  candidates: number;
+  wanted: number;
+  needsReview: number;
+  excluded: number;
+  total: number;
+};
+
+export type LibraryCompletionResponse = {
+  generatedAt: string;
+  totalChartAlbums: number;
+  totalCandidates: number;
+  returnedCandidates: number;
+  truncated: boolean;
+  candidates: LibraryCompletionCandidate[];
+  atlas: LibraryCompletionAtlasCell[];
+};
+
+export type SetLibraryCompletionDecisionRequest = {
+  candidateId: string;
+  artist: string;
+  title: string;
+  chartYear: number;
+  source: string;
+  status: LibraryCompletionStatus;
+  wishListItemId: number | null;
+  musicbrainzId: string | null;
+  musicbrainzUrl: string | null;
+};
+
+export type LibraryCompletionDecision = {
+  candidateId: string;
+  status: LibraryCompletionStatus;
+  wishListItemId: number | null;
+  musicbrainzId: string | null;
+  musicbrainzUrl: string | null;
+  updatedAt: string;
+};
+
 export type DeemixCredentialSource = "windowsCredentialManager" | "none";
 
 export type DeemixCredentialStatus = {

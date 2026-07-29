@@ -8,6 +8,7 @@ mod deemix;
 mod deemix_download;
 mod external_discovery;
 mod importer;
+mod library_completion;
 mod models;
 mod music_map;
 mod musicbrainz;
@@ -416,6 +417,31 @@ async fn list_wish_list(app: AppHandle) -> Result<wishlist::WishListResponse, St
         .await
         .map_err(|error| format!("Wish list task failed: {error}"))?
         .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_library_completion(
+    app: AppHandle,
+) -> Result<library_completion::LibraryCompletionResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || library_completion::get_for_app(&app))
+        .await
+        .map_err(|error| format!("Library Completion task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn set_library_completion_decision(
+    app: AppHandle,
+    input: library_completion::SetLibraryCompletionDecisionRequest,
+) -> Result<library_completion::LibraryCompletionDecision, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        library_completion::set_decision_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Library Completion decision task failed: {error}"))?
+    .map_err(|error| error.to_string())
 }
 
 #[cfg(not(test))]
@@ -1245,6 +1271,8 @@ pub fn run() {
             save_external_discovery,
             delete_saved_external_discovery,
             list_wish_list,
+            get_library_completion,
+            set_library_completion_decision,
             discover_wish_list_artist_albums,
             refresh_wish_list_artist_album_summary,
             search_wish_list_musicbrainz,

@@ -949,6 +949,13 @@ fn add(conn: &Connection, mut input: AddWishListItemRequest) -> Result<WishListI
     load_item(conn, conn.last_insert_rowid())
 }
 
+pub(crate) fn add_for_connection(
+    conn: &Connection,
+    input: AddWishListItemRequest,
+) -> Result<WishListItem> {
+    add(conn, input)
+}
+
 fn remove(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM wish_list_items WHERE id = ?1", params![id])?;
     Ok(())

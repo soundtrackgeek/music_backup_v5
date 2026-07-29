@@ -33,6 +33,7 @@ export function workspaceHasUsefulDetails(
     case "Search":
       return true;
     case "Playlists":
+    case "Completion":
     case "Wish List":
     case "Settings":
     default:

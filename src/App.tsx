@@ -391,6 +391,7 @@ import {
 } from "./workspaces/SettingsWorkspace";
 import { PlaylistBuilderWorkspace } from "./workspaces/PlaylistBuilderWorkspace";
 import { WishListWorkspace } from "./workspaces/WishListWorkspace";
+import { LibraryCompletionWorkspace } from "./workspaces/LibraryCompletionWorkspace";
 import { MusicToolRepairPanel } from "./workspaces/MusicToolRepairPanel";
 import { MusicMapWorkspace } from "./workspaces/MusicMapWorkspace";
 import {
@@ -14934,6 +14935,8 @@ export default function App() {
           </section>
         ) : activeSection === "Music Map" ? (
           <MusicMapWorkspace onOpenArtist={openArtistFromMusicMap} />
+        ) : activeSection === "Completion" ? (
+          <LibraryCompletionWorkspace onOpenWishList={() => setActiveSection("Wish List")} />
         ) : activeSection === "Wish List" ? (
           <WishListWorkspace />
         ) : activeSection === "Artists" ? (
