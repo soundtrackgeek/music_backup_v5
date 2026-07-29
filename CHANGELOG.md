@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.104.2] - 2026-07-29
+### Changed
+- Synchronized app metadata and provider user agents to `0.104.2`.
+
+### Fixed
+- Fixed intermittent Deemix track failures by renewing expiring Deezer track tokens and following Deezer's bounded alternate track-source chain when the first media token is rejected.
+- Preserved the configured download-quality policy across alternate sources, so exact MP3 320/FLAC requests remain exact and lower-quality substitution still requires **Quality fallback**.
+
 ## [0.104.1] - 2026-07-29
 ### Added
 - Added a direct MusicBrainz artist-page link to every candidate in Artist Discovery's manual identity review, while preserving **Check identity** as a separate verification action.

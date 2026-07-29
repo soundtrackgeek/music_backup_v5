@@ -26,11 +26,12 @@ use zeroize::Zeroizing;
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_MEDIA_URL: &str = "https://media.deezer.com/v1/get_url";
 const DEEMIX_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.104.1";
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.104.2";
 const DOWNLOAD_EVENT: &str = "deemix-download-progress";
 const STREAM_CHUNK_SIZE: usize = 2048;
 const MAX_ARTWORK_BYTES: u64 = 20 * 1024 * 1024;
 const MAX_ALBUM_TRACKS: usize = 500;
+const MAX_MEDIA_FALLBACKS: usize = 8;
 const MAX_PATH_SEGMENT_CHARS: usize = 96;
 static DOWNLOAD_LOCK: Mutex<()> = Mutex::new(());
 
@@ -203,6 +204,7 @@ struct AlbumMetadata {
 #[derive(Debug, Clone)]
 struct TrackMetadata {
     id: String,
+    media_id: String,
     title: String,
     artists: Vec<String>,
     track_number: u32,
@@ -214,6 +216,8 @@ struct TrackMetadata {
     composers: Vec<String>,
     involved_people: Vec<(String, String)>,
     track_token: Zeroizing<String>,
+    track_token_expires_at: Option<u64>,
+    fallback_id: Option<String>,
     download_quality: DownloadQuality,
 }
 
@@ -428,7 +432,7 @@ pub fn download_album_for_app(
     let mut session = authenticate()?;
     let quality_candidates =
         account_quality_candidates(&session, quality, settings.deemix_download_fallback)?;
-    let album = fetch_album(&mut session, &input.album_id, &quality_candidates)?;
+    let mut album = fetch_album(&mut session, &input.album_id, &quality_candidates)?;
     let base_destination = destination_path(&root, &album, &settings.deemix_download_organization)?;
     let destination = if input.allow_duplicate {
         next_available_destination(&base_destination)?
@@ -449,7 +453,14 @@ pub fn download_album_for_app(
     }
     fs::create_dir(&stage_path).context("Could not create the Deemix staging folder")?;
 
-    let result = download_album_to_stage(app, &input, &session, &album, &stage_path)
+    let result = download_album_to_stage(
+        app,
+        &input,
+        &mut session,
+        &mut album,
+        &quality_candidates,
+        &stage_path,
+    )
         .and_then(|(cover_name, warning)| {
             if destination.exists() {
                 bail!(
@@ -546,8 +557,9 @@ pub fn download_album_for_app(
 fn download_album_to_stage(
     app: &AppHandle,
     input: &DeemixAlbumDownloadRequest,
-    session: &AuthenticatedSession,
-    album: &AlbumMetadata,
+    session: &mut AuthenticatedSession,
+    album: &mut AlbumMetadata,
+    quality_candidates: &[DownloadQuality],
     stage_path: &Path,
 ) -> Result<(Option<String>, Option<String>)> {
     emit_progress(
@@ -601,22 +613,28 @@ fn download_album_to_stage(
     };
 
     let mut used_names = HashSet::new();
-    for (index, track) in album.tracks.iter().enumerate() {
+    for index in 0..album.tracks.len() {
         let completed = index;
+        let track_title = album.tracks[index].title.clone();
         emit_progress(
             app,
             input,
             "downloading",
             &format!("Downloading track {} of {}…", index + 1, album.tracks.len()),
-            Some(track.title.clone()),
+            Some(track_title),
             completed,
             album.tracks.len(),
         );
-        let media_url = fetch_media_url(session, track, track.download_quality)?;
+        let (media_url, media_id) = {
+            let track = &mut album.tracks[index];
+            let media_url = authorize_track_media(session, track, quality_candidates)?;
+            (media_url, track.media_id.clone())
+        };
+        let track = &album.tracks[index];
         let file_name = unique_track_filename(track, album.disc_total, &mut used_names);
         let final_path = stage_path.join(&file_name);
         let part_path = stage_path.join(format!("{file_name}.part"));
-        download_and_decrypt_track(&media_url, &track.id, &part_path)
+        download_and_decrypt_track(&media_url, &media_id, &part_path)
             .with_context(|| format!("Could not download {}", track.title))?;
 
         emit_progress(
@@ -1101,6 +1119,8 @@ fn parse_album_metadata(
             .unwrap_or(1)
             .max(1);
         let track_token = required_string(gateway_track.get("TRACK_TOKEN"), "track token")?;
+        let track_token_expires_at = scalar_u64(gateway_track.get("TRACK_TOKEN_EXPIRE"));
+        let fallback_id = gateway_fallback_id(gateway_track, &track_id);
         let download_quality = select_download_quality(gateway_track, quality_candidates);
         let Some(download_quality) = download_quality else {
             let accepted = quality_candidates
@@ -1117,6 +1137,7 @@ fn parse_album_metadata(
         };
         let (composers, involved_people) = contributor_tags(gateway_track.get("SNG_CONTRIBUTORS"));
         tracks.push(TrackMetadata {
+            media_id: track_id.clone(),
             id: track_id,
             title: track_title,
             artists,
@@ -1133,6 +1154,8 @@ fn parse_album_metadata(
             composers,
             involved_people,
             track_token: Zeroizing::new(track_token),
+            track_token_expires_at,
+            fallback_id,
             download_quality,
         });
     }
@@ -1174,14 +1197,81 @@ fn select_download_quality(
         .find(|quality| scalar_u64(gateway_track.get(quality.filesize_field())).unwrap_or(0) > 0)
 }
 
-fn fetch_media_url(
+fn gateway_fallback_id(gateway_track: &Value, current_id: &str) -> Option<String> {
+    string_value(gateway_track.pointer("/FALLBACK/SNG_ID")).filter(|fallback_id| {
+        fallback_id != current_id
+            && fallback_id
+                .chars()
+                .all(|character| character.is_ascii_digit())
+    })
+}
+
+fn accepted_quality_names(quality_candidates: &[DownloadQuality]) -> String {
+    quality_candidates
+        .iter()
+        .map(|quality| quality.display_name())
+        .collect::<Vec<_>>()
+        .join(", then ")
+}
+
+fn update_track_media_source(
+    track: &mut TrackMetadata,
+    gateway_track: &Value,
+    quality_candidates: &[DownloadQuality],
+) -> Result<()> {
+    let media_id = required_string(gateway_track.get("SNG_ID"), "fallback track ID")?;
+    if !media_id.chars().all(|character| character.is_ascii_digit()) {
+        bail!("Deezer returned an invalid fallback track ID.");
+    }
+    let track_token = required_string(gateway_track.get("TRACK_TOKEN"), "refreshed track token")?;
+    let download_quality = select_download_quality(gateway_track, quality_candidates)
+        .with_context(|| {
+            format!(
+                "{} has no playable source at the accepted qualities: {}.",
+                track.title,
+                accepted_quality_names(quality_candidates)
+            )
+        })?;
+    track.media_id = media_id.clone();
+    track.track_token = Zeroizing::new(track_token);
+    track.track_token_expires_at = scalar_u64(gateway_track.get("TRACK_TOKEN_EXPIRE"));
+    track.fallback_id = gateway_fallback_id(gateway_track, &media_id);
+    track.download_quality = download_quality;
+    Ok(())
+}
+
+fn refresh_track_media_source_at(
+    session: &mut AuthenticatedSession,
+    track: &mut TrackMetadata,
+    source_id: &str,
+    quality_candidates: &[DownloadQuality],
+    gateway_endpoint: &str,
+) -> Result<()> {
+    let gateway_track = gateway_call_at(
+        session,
+        gateway_endpoint,
+        "song.getData",
+        json!({ "SNG_ID": source_id }),
+    )
+    .with_context(|| format!("Could not refresh the media source for {}", track.title))?;
+    update_track_media_source(track, &gateway_track, quality_candidates)
+}
+
+fn track_token_is_expired(track: &TrackMetadata, now_unix: u64) -> bool {
+    track
+        .track_token_expires_at
+        .is_some_and(|expires_at| expires_at <= now_unix.saturating_add(30))
+}
+
+fn request_media_url_from_endpoint(
     session: &AuthenticatedSession,
     track: &TrackMetadata,
     quality: DownloadQuality,
-) -> Result<String> {
+    media_endpoint: &str,
+) -> Result<Option<String>> {
     let response = session
         .agent
-        .post(DEEZER_MEDIA_URL)
+        .post(media_endpoint)
         .set("Accept", "application/json")
         .set("Content-Type", "application/json")
         .set("User-Agent", DEEMIX_USER_AGENT)
@@ -1198,18 +1288,94 @@ fn fetch_media_url(
         .into_json::<Value>()
         .context("Deezer returned an unreadable media authorization response")?;
     if has_api_error(payload.pointer("/data/0/errors")) {
+        return Ok(None);
+    }
+    let Some(media_url) = string_value(payload.pointer("/data/0/media/0/sources/0/url")) else {
+        return Ok(None);
+    };
+    validate_deezer_cdn_url(&media_url, false)?;
+    Ok(Some(media_url))
+}
+
+fn authorize_track_media(
+    session: &mut AuthenticatedSession,
+    track: &mut TrackMetadata,
+    quality_candidates: &[DownloadQuality],
+) -> Result<String> {
+    authorize_track_media_at(
+        session,
+        track,
+        quality_candidates,
+        DEEZER_GATEWAY_URL,
+        DEEZER_MEDIA_URL,
+        Utc::now().timestamp().max(0) as u64,
+    )
+}
+
+fn authorize_track_media_at(
+    session: &mut AuthenticatedSession,
+    track: &mut TrackMetadata,
+    quality_candidates: &[DownloadQuality],
+    gateway_endpoint: &str,
+    media_endpoint: &str,
+    now_unix: u64,
+) -> Result<String> {
+    let mut refreshed_current_source = false;
+    if track_token_is_expired(track, now_unix) {
+        let source_id = track.media_id.clone();
+        refresh_track_media_source_at(
+            session,
+            track,
+            &source_id,
+            quality_candidates,
+            gateway_endpoint,
+        )?;
+        refreshed_current_source = true;
+    }
+
+    let mut visited_sources = HashSet::from([track.media_id.clone()]);
+    let mut fallback_count = 0usize;
+    loop {
+        if let Some(media_url) =
+            request_media_url_from_endpoint(session, track, track.download_quality, media_endpoint)?
+        {
+            return Ok(media_url);
+        }
+
+        if let Some(fallback_id) = track.fallback_id.clone().filter(|fallback_id| {
+            fallback_count < MAX_MEDIA_FALLBACKS && visited_sources.insert(fallback_id.clone())
+        }) {
+            fallback_count += 1;
+            refresh_track_media_source_at(
+                session,
+                track,
+                &fallback_id,
+                quality_candidates,
+                gateway_endpoint,
+            )?;
+            refreshed_current_source = true;
+            continue;
+        }
+
+        if !refreshed_current_source {
+            let source_id = track.media_id.clone();
+            refresh_track_media_source_at(
+                session,
+                track,
+                &source_id,
+                quality_candidates,
+                gateway_endpoint,
+            )?;
+            refreshed_current_source = true;
+            continue;
+        }
+
         bail!(
-            "Deezer did not authorize {} as {}.",
+            "Deezer could not provide a playable source for {} at the accepted qualities: {}. The current track token and Deezer fallback were both checked.",
             track.title,
-            quality.display_name()
+            accepted_quality_names(quality_candidates)
         );
     }
-    let media_url = required_string(
-        payload.pointer("/data/0/media/0/sources/0/url"),
-        "Deezer media URL",
-    )?;
-    validate_deezer_cdn_url(&media_url, false)?;
-    Ok(media_url)
 }
 
 fn download_and_decrypt_track(url: &str, track_id: &str, path: &Path) -> Result<()> {
@@ -1852,6 +2018,40 @@ mod tests {
     use std::net::TcpListener;
     use std::thread;
 
+    fn read_complete_http_request(stream: &mut std::net::TcpStream) -> Vec<u8> {
+        let mut request = Vec::new();
+        let mut buffer = [0u8; 4096];
+        loop {
+            let count = stream.read(&mut buffer).expect("read mock request");
+            if count == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..count]);
+            let Some(header_end) = request
+                .windows(4)
+                .position(|window| window == b"\r\n\r\n")
+                .map(|position| position + 4)
+            else {
+                continue;
+            };
+            let headers = String::from_utf8_lossy(&request[..header_end]);
+            let content_length = headers
+                .lines()
+                .find_map(|line| {
+                    line.split_once(':').and_then(|(name, value)| {
+                        name.eq_ignore_ascii_case("content-length")
+                            .then(|| value.trim().parse::<usize>().ok())
+                            .flatten()
+                    })
+                })
+                .unwrap_or(0);
+            if request.len() >= header_end + content_length {
+                break;
+            }
+        }
+        request
+    }
+
     #[test]
     fn validates_ids_and_rejects_staging_path_characters() {
         let mut valid = DeemixAlbumDownloadRequest {
@@ -1902,18 +2102,7 @@ mod tests {
             let mut observed_requests = Vec::new();
             for request_index in 0..3 {
                 let (mut stream, _) = listener.accept().expect("accept mock request");
-                let mut request = Vec::new();
-                let mut buffer = [0u8; 4096];
-                loop {
-                    let count = stream.read(&mut buffer).expect("read mock request");
-                    if count == 0 {
-                        break;
-                    }
-                    request.extend_from_slice(&buffer[..count]);
-                    if request.windows(4).any(|window| window == b"\r\n\r\n") {
-                        break;
-                    }
-                }
+                let request = read_complete_http_request(&mut stream);
                 let request = String::from_utf8_lossy(&request);
                 let request_line = request.lines().next().unwrap_or_default().to_string();
                 let cookie_header = request
@@ -2188,7 +2377,9 @@ mod tests {
             "DURATION": 188,
             "ISRC": "USIR19200541",
             "TRACK_TOKEN": "token",
+            "TRACK_TOKEN_EXPIRE": 4102444800u64,
             "FILESIZE_MP3_320": 123456,
+            "FALLBACK": { "SNG_ID": 2445708 },
             "ARTISTS": [{ "ART_NAME": "Helmet" }],
             "SNG_CONTRIBUTORS": {
                 "composer": ["Page Hamilton"],
@@ -2208,6 +2399,9 @@ mod tests {
         assert_eq!(album.label.as_deref(), Some("Interscope"));
         assert_eq!(album.genres, vec!["Alternative", "Metal"]);
         assert_eq!(album.tracks[0].isrc.as_deref(), Some("USIR19200541"));
+        assert_eq!(album.tracks[0].media_id, "2445707");
+        assert_eq!(album.tracks[0].track_token_expires_at, Some(4_102_444_800));
+        assert_eq!(album.tracks[0].fallback_id.as_deref(), Some("2445708"));
         assert_eq!(album.tracks[0].download_quality, DownloadQuality::Mp3_320);
         assert_eq!(album.tracks[0].composers, vec!["Page Hamilton"]);
         assert_eq!(
@@ -2269,6 +2463,102 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn media_authorization_follows_the_deezer_track_fallback() {
+        let media_listener = TcpListener::bind("127.0.0.1:0").expect("bind mock media endpoint");
+        let media_endpoint = format!(
+            "http://{}",
+            media_listener.local_addr().expect("media endpoint address")
+        );
+        let media_server = thread::spawn(move || {
+            let bodies = [
+                r#"{"data":[{"errors":[{"code":2002}]}]}"#,
+                r#"{"data":[{"media":[{"sources":[{"url":"https://e-cdns-proxy-a.dzcdn.net/mobile/1/fallback"}]}]}]}"#,
+            ];
+            for body in bodies {
+                let (mut stream, _) = media_listener.accept().expect("accept media request");
+                let _ = read_complete_http_request(&mut stream);
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                stream
+                    .write_all(response.as_bytes())
+                    .expect("write media response");
+            }
+        });
+
+        let gateway_listener = TcpListener::bind("127.0.0.1:0").expect("bind mock track gateway");
+        let gateway_endpoint = format!(
+            "http://{}",
+            gateway_listener
+                .local_addr()
+                .expect("track gateway address")
+        );
+        let gateway_server = thread::spawn(move || {
+            let (mut stream, _) = gateway_listener
+                .accept()
+                .expect("accept fallback metadata request");
+            let _ = read_complete_http_request(&mut stream);
+            let body = r#"{"error":[],"results":{"SNG_ID":2445708,"TRACK_TOKEN":"fallback-token","TRACK_TOKEN_EXPIRE":4102444800,"FILESIZE_MP3_320":654321}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("write fallback metadata response");
+        });
+
+        let mut session = AuthenticatedSession {
+            agent: ureq::AgentBuilder::new()
+                .timeout(Duration::from_secs(5))
+                .redirects(0)
+                .build(),
+            api_token: Zeroizing::new("api-token".to_string()),
+            license_token: Zeroizing::new("license-token".to_string()),
+            can_stream_hq: true,
+            can_stream_lossless: false,
+        };
+        let mut track = fixture_track(DownloadQuality::Mp3_320);
+        track.fallback_id = Some("2445708".to_string());
+
+        let media_url = authorize_track_media_at(
+            &mut session,
+            &mut track,
+            &[DownloadQuality::Mp3_320],
+            &gateway_endpoint,
+            &media_endpoint,
+            1_800_000_000,
+        )
+        .expect("authorize fallback media");
+
+        assert_eq!(
+            media_url,
+            "https://e-cdns-proxy-a.dzcdn.net/mobile/1/fallback"
+        );
+        assert_eq!(track.id, "2445707");
+        assert_eq!(track.media_id, "2445708");
+        assert_eq!(track.track_token.as_str(), "fallback-token");
+        assert_eq!(track.download_quality, DownloadQuality::Mp3_320);
+        media_server.join().expect("mock media server");
+        gateway_server.join().expect("mock gateway server");
+    }
+
+    #[test]
+    fn expiring_track_tokens_are_refreshed_before_authorization() {
+        let mut track = fixture_track(DownloadQuality::Mp3_320);
+        track.track_token_expires_at = Some(1_000);
+        assert!(track_token_is_expired(&track, 971));
+        assert!(!track_token_is_expired(&track, 969));
+        assert!(!track_token_is_expired(
+            &fixture_track(DownloadQuality::Mp3_320),
+            u64::MAX
+        ));
     }
 
     #[test]
@@ -2396,6 +2686,7 @@ mod tests {
     fn fixture_track(download_quality: DownloadQuality) -> TrackMetadata {
         TrackMetadata {
             id: "2445707".to_string(),
+            media_id: "2445707".to_string(),
             title: "In The Meantime".to_string(),
             artists: vec!["Helmet".to_string()],
             track_number: 1,
@@ -2407,6 +2698,8 @@ mod tests {
             composers: vec!["Page Hamilton".to_string()],
             involved_people: vec![("producer".to_string(), "Steve Albini".to_string())],
             track_token: Zeroizing::new("token".to_string()),
+            track_token_expires_at: None,
+            fallback_id: None,
             download_quality,
         }
     }
