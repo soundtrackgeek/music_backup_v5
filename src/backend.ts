@@ -142,6 +142,9 @@ import type {
   DeemixAlbumSearchRequest,
   DeemixAlbumSearchResponse,
   DeemixConnectionTest,
+  DiscogsConnectionTest,
+  DiscogsCredentialStatus,
+  SaveDiscogsCredentialsRequest,
   LibraryCompletionCandidate,
   LibraryCompletionDecision,
   LibraryCompletionRequest,
@@ -294,8 +297,18 @@ let mockWishListItems: WishListItem[] = [
     },
   },
 ];
+const mockLibraryCompletionProviderDefaults = {
+  verificationProvider: null,
+  musicbrainzVerificationStatus: null,
+  musicbrainzVerificationMessage: null,
+  discogsVerificationStatus: null,
+  discogsVerificationMessage: null,
+  discogsMasterId: null,
+  discogsUrl: null,
+} as const;
 const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
   {
+    ...mockLibraryCompletionProviderDefaults,
     id: "massive attack\u001fmezzanine",
     artist: "Massive Attack",
     title: "Mezzanine",
@@ -329,6 +342,7 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     ],
   },
   {
+    ...mockLibraryCompletionProviderDefaults,
     id: "rem\u001fautomatic for the people",
     artist: "R.E.M.",
     title: "Automatic for the People",
@@ -354,6 +368,7 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     ],
   },
   {
+    ...mockLibraryCompletionProviderDefaults,
     id: "the chemical brothers\u001fdig your own hole",
     artist: "The Chemical Brothers",
     title: "Dig Your Own Hole",
@@ -379,6 +394,7 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     ],
   },
   {
+    ...mockLibraryCompletionProviderDefaults,
     id: "portishead\u001fportishead",
     artist: "Portishead",
     title: "Portishead",
@@ -404,6 +420,7 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     ],
   },
   {
+    ...mockLibraryCompletionProviderDefaults,
     id: "air\u001fmoon safari",
     artist: "Air",
     title: "Moon Safari",
@@ -429,6 +446,7 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     ],
   },
   {
+    ...mockLibraryCompletionProviderDefaults,
     id: "radiohead\u001fthe bends",
     artist: "Radiohead",
     title: "The Bends",
@@ -1304,6 +1322,41 @@ export async function testDeemixConnection() {
   return invoke<DeemixConnectionTest>("test_deemix_connection");
 }
 
+export async function getDiscogsCredentialStatus() {
+  if (!isTauriRuntime()) {
+    return {
+      configured: true,
+      source: "windowsCredentialManager",
+    } satisfies DiscogsCredentialStatus;
+  }
+  return invoke<DiscogsCredentialStatus>("get_discogs_credential_status");
+}
+
+export async function saveDiscogsCredentials(input: SaveDiscogsCredentialsRequest) {
+  if (!isTauriRuntime()) {
+    throw new Error(
+      "Discogs credentials can only be stored by the Tauri desktop app.",
+    );
+  }
+  return invoke<DiscogsConnectionTest>("save_discogs_credentials", { input });
+}
+
+export async function deleteDiscogsCredentials() {
+  if (!isTauriRuntime()) {
+    throw new Error(
+      "Discogs credentials can only be removed by the Tauri desktop app.",
+    );
+  }
+  return invoke<DiscogsCredentialStatus>("delete_discogs_credentials");
+}
+
+export async function testDiscogsConnection() {
+  if (!isTauriRuntime()) {
+    throw new Error("Discogs connection tests require the Tauri desktop app.");
+  }
+  return invoke<DiscogsConnectionTest>("test_discogs_connection");
+}
+
 export async function selectDeemixDownloadDirectory(defaultPath?: string) {
   if (!isTauriRuntime()) {
     return null;
@@ -1821,8 +1874,20 @@ export async function getLibraryCompletion(input: LibraryCompletionRequest | nul
         musicbrainzUrl:
           decision?.musicbrainzUrl ?? verification?.musicbrainzUrl ?? candidate.musicbrainzUrl,
         verificationStatus: verification?.state ?? candidate.verificationStatus,
+        verificationProvider:
+          verification?.provider ?? candidate.verificationProvider,
         verificationMessage: verification?.message ?? candidate.verificationMessage,
         verificationCheckedAt: verification?.updatedAt ?? candidate.verificationCheckedAt,
+        musicbrainzVerificationStatus:
+          verification?.musicbrainzVerificationStatus ?? candidate.musicbrainzVerificationStatus,
+        musicbrainzVerificationMessage:
+          verification?.musicbrainzVerificationMessage ?? candidate.musicbrainzVerificationMessage,
+        discogsVerificationStatus:
+          verification?.discogsVerificationStatus ?? candidate.discogsVerificationStatus,
+        discogsVerificationMessage:
+          verification?.discogsVerificationMessage ?? candidate.discogsVerificationMessage,
+        discogsMasterId: verification?.discogsMasterId ?? candidate.discogsMasterId,
+        discogsUrl: verification?.discogsUrl ?? candidate.discogsUrl,
       };
     });
     const candidates = decidedCandidates.filter((candidate) =>
@@ -1851,13 +1916,26 @@ function advanceMockLibraryCompletionVerification() {
   const now = new Date().toISOString();
   let items = mockLibraryCompletionVerificationStatus.recentItems.map((item) => {
     if (item.state !== "checking") return item;
+    const useDiscogsFallback = item.candidateId.startsWith("rem\u001f");
     const verified = {
       ...item,
       state: "verified" as const,
-      message:
-        "MusicBrainz confirmed a primary Album release group without secondary types and with an official release.",
-      musicbrainzId: `preview-${encodeURIComponent(item.candidateId)}`,
-      musicbrainzUrl: "https://musicbrainz.org/release-group/preview-release-group",
+      provider: useDiscogsFallback ? "discogs" as const : "musicbrainz" as const,
+      message: useDiscogsFallback
+        ? "Discogs confirmed one exact master with an accepted key release classified Album and no non-studio markers."
+        : "MusicBrainz confirmed a primary Album release group without secondary types and with an official release.",
+      musicbrainzId: useDiscogsFallback ? null : `preview-${encodeURIComponent(item.candidateId)}`,
+      musicbrainzUrl: useDiscogsFallback ? null : "https://musicbrainz.org/release-group/preview-release-group",
+      musicbrainzVerificationStatus: useDiscogsFallback ? "noMatch" as const : "verified" as const,
+      musicbrainzVerificationMessage: useDiscogsFallback
+        ? "MusicBrainz returned no exact artist and primary Album title match."
+        : "MusicBrainz confirmed a primary Album release group without secondary types and with an official release.",
+      discogsVerificationStatus: useDiscogsFallback ? "verified" as const : null,
+      discogsVerificationMessage: useDiscogsFallback
+        ? "Discogs confirmed one exact master with an accepted key release classified Album and no non-studio markers."
+        : null,
+      discogsMasterId: useDiscogsFallback ? "55555" : null,
+      discogsUrl: useDiscogsFallback ? "https://www.discogs.com/master/55555" : null,
       updatedAt: now,
     };
     mockLibraryCompletionVerifications.set(item.candidateId, verified);
@@ -1883,6 +1961,9 @@ function advanceMockLibraryCompletionVerification() {
       queuedCount,
       checkingCount,
       verifiedCount,
+      discogsVerifiedCount: items.filter(
+        (item) => item.state === "verified" && item.provider === "discogs",
+      ).length,
       noMatchCount,
       ambiguousCount,
       failedCount,
@@ -1940,9 +2021,16 @@ export async function startLibraryCompletionVerification(
       artist: candidate.artist,
       title: candidate.title,
       state: index === 0 ? "checking" as const : "queued" as const,
+      provider: "musicbrainz" as const,
       message: null,
       musicbrainzId: null,
       musicbrainzUrl: null,
+      musicbrainzVerificationStatus: null,
+      musicbrainzVerificationMessage: null,
+      discogsVerificationStatus: null,
+      discogsVerificationMessage: null,
+      discogsMasterId: null,
+      discogsUrl: null,
       updatedAt: now,
     }));
     const label = input.label ?? (
@@ -1963,6 +2051,7 @@ export async function startLibraryCompletionVerification(
         queuedCount: Math.max(0, candidates.length - 1),
         checkingCount: 1,
         verifiedCount: 0,
+        discogsVerifiedCount: 0,
         noMatchCount: 0,
         ambiguousCount: 0,
         failedCount: 0,
@@ -2012,7 +2101,19 @@ export async function retryLibraryCompletionVerificationFailures(batchId: number
     const now = new Date().toISOString();
     const recentItems = mockLibraryCompletionVerificationStatus.recentItems.map((item) =>
       item.state === "failed"
-        ? { ...item, state: "queued" as const, message: null, updatedAt: now }
+        ? {
+            ...item,
+            state: "queued" as const,
+            provider: "musicbrainz" as const,
+            message: null,
+            musicbrainzVerificationStatus: null,
+            musicbrainzVerificationMessage: null,
+            discogsVerificationStatus: null,
+            discogsVerificationMessage: null,
+            discogsMasterId: null,
+            discogsUrl: null,
+            updatedAt: now,
+          }
         : item,
     );
     mockLibraryCompletionVerificationStatus = {
@@ -2080,9 +2181,17 @@ export async function setLibraryCompletionDecision(
         artist: input.artist,
         title: input.title,
         state: "verified",
+        provider: "musicbrainz",
         message: "MusicBrainz confirmed an official studio-album release group.",
         musicbrainzId: input.musicbrainzId,
         musicbrainzUrl: input.musicbrainzUrl ?? null,
+        musicbrainzVerificationStatus: "verified",
+        musicbrainzVerificationMessage:
+          "MusicBrainz confirmed an official studio-album release group.",
+        discogsVerificationStatus: null,
+        discogsVerificationMessage: null,
+        discogsMasterId: null,
+        discogsUrl: null,
         updatedAt: decision.updatedAt,
       });
     }

@@ -1083,8 +1083,15 @@ export type LibraryCompletionCandidate = {
     | "noMatch"
     | "ambiguous"
     | "failed";
+  verificationProvider: "musicbrainz" | "discogs" | null;
   verificationMessage: string | null;
   verificationCheckedAt: string | null;
+  musicbrainzVerificationStatus: "verified" | "noMatch" | "ambiguous" | "failed" | null;
+  musicbrainzVerificationMessage: string | null;
+  discogsVerificationStatus: "verified" | "noMatch" | "ambiguous" | "failed" | null;
+  discogsVerificationMessage: string | null;
+  discogsMasterId: string | null;
+  discogsUrl: string | null;
   evidence: LibraryCompletionEvidence[];
 };
 
@@ -1155,9 +1162,16 @@ export type LibraryCompletionVerificationItemSummary = {
   artist: string;
   title: string;
   state: Exclude<LibraryCompletionCandidate["verificationStatus"], "unverified">;
+  provider: "musicbrainz" | "discogs";
   message: string | null;
   musicbrainzId: string | null;
   musicbrainzUrl: string | null;
+  musicbrainzVerificationStatus: LibraryCompletionCandidate["musicbrainzVerificationStatus"];
+  musicbrainzVerificationMessage: string | null;
+  discogsVerificationStatus: LibraryCompletionCandidate["discogsVerificationStatus"];
+  discogsVerificationMessage: string | null;
+  discogsMasterId: string | null;
+  discogsUrl: string | null;
   updatedAt: string;
 };
 
@@ -1171,6 +1185,7 @@ export type LibraryCompletionVerificationBatch = {
   queuedCount: number;
   checkingCount: number;
   verifiedCount: number;
+  discogsVerifiedCount: number;
   noMatchCount: number;
   ambiguousCount: number;
   failedCount: number;
@@ -1188,6 +1203,23 @@ export type LibraryCompletionVerificationStatus = {
 };
 
 export type DeemixCredentialSource = "windowsCredentialManager" | "none";
+
+export type DiscogsCredentialStatus = {
+  configured: boolean;
+  source: "windowsCredentialManager" | "none";
+};
+
+export type DiscogsConnectionTest = {
+  authenticated: boolean;
+  rateLimit: number | null;
+  rateLimitRemaining: number | null;
+  message: string;
+};
+
+export type SaveDiscogsCredentialsRequest = {
+  consumerKey: string;
+  consumerSecret: string;
+};
 
 export type DeemixCredentialStatus = {
   configured: boolean;

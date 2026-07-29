@@ -23,6 +23,7 @@ import {
   addWishListMusicBrainzCandidate,
   getLibraryCompletion,
   getLibraryCompletionVerificationStatus,
+  getDiscogsCredentialStatus,
   retryLibraryCompletionVerificationFailures,
   searchDeemixAlbums,
   searchWishListMusicBrainz,
@@ -32,6 +33,7 @@ import {
 } from "../backend";
 import type {
   DeemixAlbumSearchResponse,
+  DiscogsCredentialStatus,
   LibraryCompletionAtlasCell,
   LibraryCompletionCandidate,
   LibraryCompletionStatus,
@@ -125,6 +127,7 @@ export function LibraryCompletionWorkspace({
   const [deemixResult, setDeemixResult] = useState<DeemixAlbumSearchResponse | null>(null);
   const [isCheckingDeemix, setIsCheckingDeemix] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<LibraryCompletionVerificationStatus | null>(null);
+  const [discogsStatus, setDiscogsStatus] = useState<DiscogsCredentialStatus | null>(null);
   const [selectedForVerification, setSelectedForVerification] = useState<Set<string>>(() => new Set());
   const [pendingQueueAction, setPendingQueueAction] = useState(false);
   const completedBatchReloadRef = useRef<number | null>(null);
@@ -135,12 +138,14 @@ export function LibraryCompletionWorkspace({
     setError(null);
     setIsLoading(true);
     try {
-      const [response, queueStatus] = await Promise.all([
+      const [response, queueStatus, providerStatus] = await Promise.all([
         getLibraryCompletion(scope ? { source: scope.source, decade: scope.decade } : null),
         getLibraryCompletionVerificationStatus(),
+        getDiscogsCredentialStatus(),
       ]);
       setData(response);
       setVerificationStatus(queueStatus);
+      setDiscogsStatus(providerStatus);
       setSelectedForVerification((current) => {
         const available = new Set(response.candidates.map((candidate) => candidate.id));
         return new Set([...current].filter((candidateId) => available.has(candidateId)));
@@ -238,11 +243,19 @@ export function LibraryCompletionWorkspace({
       candidates
         .filter((candidate) =>
           candidate.status !== "notForMe" &&
-          (candidate.verificationStatus === "unverified" || candidate.verificationStatus === "failed"),
+          (
+            candidate.verificationStatus === "unverified" ||
+            candidate.verificationStatus === "failed" ||
+            (
+              discogsStatus?.configured === true &&
+              (candidate.verificationStatus === "noMatch" || candidate.verificationStatus === "ambiguous") &&
+              candidate.discogsVerificationStatus == null
+            )
+          ),
         )
         .map((candidate) => candidate.id),
     ),
-    [candidates],
+    [candidates, discogsStatus?.configured],
   );
   const selectedVerificationCount = useMemo(
     () => [...selectedForVerification].filter((candidateId) => eligibleCandidateIds.has(candidateId)).length,
@@ -257,9 +270,17 @@ export function LibraryCompletionWorkspace({
   const unverifiedOpenCount = useMemo(
     () => data?.candidates.filter((candidate) =>
       candidate.status === "candidate" &&
-      (candidate.verificationStatus === "unverified" || candidate.verificationStatus === "failed"),
+      (
+        candidate.verificationStatus === "unverified" ||
+        candidate.verificationStatus === "failed" ||
+        (
+          discogsStatus?.configured === true &&
+          (candidate.verificationStatus === "noMatch" || candidate.verificationStatus === "ambiguous") &&
+          candidate.discogsVerificationStatus == null
+        )
+      ),
     ).length ?? 0,
-    [data],
+    [data, discogsStatus?.configured],
   );
 
   const applyVerificationStatus = useCallback((status: LibraryCompletionVerificationStatus) => {
@@ -274,10 +295,17 @@ export function LibraryCompletionWorkspace({
         return {
           ...candidate,
           verificationStatus: item.state,
+          verificationProvider: item.provider,
           verificationMessage: item.message,
           verificationCheckedAt: item.updatedAt,
           musicbrainzId: item.musicbrainzId ?? candidate.musicbrainzId,
           musicbrainzUrl: item.musicbrainzUrl ?? candidate.musicbrainzUrl,
+          musicbrainzVerificationStatus: item.musicbrainzVerificationStatus,
+          musicbrainzVerificationMessage: item.musicbrainzVerificationMessage,
+          discogsVerificationStatus: item.discogsVerificationStatus,
+          discogsVerificationMessage: item.discogsVerificationMessage,
+          discogsMasterId: item.discogsMasterId,
+          discogsUrl: item.discogsUrl,
         };
       }),
     } : current);
@@ -557,8 +585,12 @@ export function LibraryCompletionWorkspace({
                       musicbrainzId: decision.musicbrainzId,
                       musicbrainzUrl: decision.musicbrainzUrl,
                       verificationStatus: "verified",
+                      verificationProvider: "musicbrainz",
                       verificationMessage: "MusicBrainz confirmed an official studio-album release group.",
                       verificationCheckedAt: decision.updatedAt,
+                      musicbrainzVerificationStatus: "verified",
+                      musicbrainzVerificationMessage:
+                        "MusicBrainz confirmed an official studio-album release group.",
                     }
                   : entry,
               ),
@@ -692,7 +724,7 @@ export function LibraryCompletionWorkspace({
         </div>
       </section>
 
-      <section className="completion-verification-panel" aria-label="MusicBrainz verification queue">
+      <section className="completion-verification-panel" aria-label="Album verification queue">
         <span className="completion-verification-icon"><ListChecks size={18} /></span>
         <div className="completion-verification-copy">
           <div className="completion-verification-heading">
@@ -711,11 +743,11 @@ export function LibraryCompletionWorkspace({
               </div>
               <p>
                 <strong>{verificationBatch.completedCount.toLocaleString()} / {verificationBatch.totalCount.toLocaleString()}</strong>
-                {` checked · ${verificationBatch.verifiedCount.toLocaleString()} verified · ${(verificationBatch.noMatchCount + verificationBatch.ambiguousCount).toLocaleString()} review · ${verificationBatch.failedCount.toLocaleString()} failed`}
+                {` checked · ${verificationBatch.verifiedCount.toLocaleString()} verified${verificationBatch.discogsVerifiedCount > 0 ? ` (${verificationBatch.discogsVerifiedCount.toLocaleString()} via Discogs)` : ""} · ${(verificationBatch.noMatchCount + verificationBatch.ambiguousCount).toLocaleString()} review · ${verificationBatch.failedCount.toLocaleString()} failed`}
               </p>
               <small className={verificationBatch.state === "completed" ? "completion-verification-guidance" : undefined}>
                 {currentVerificationItem
-                  ? `Checking ${currentVerificationItem.artist} — ${currentVerificationItem.title}`
+                  ? `${currentVerificationItem.provider === "discogs" ? "Trying Discogs fallback" : "Checking MusicBrainz"}: ${currentVerificationItem.artist} — ${currentVerificationItem.title}`
                   : verificationBatch.state === "paused"
                     ? "Paused safely. Progress is stored locally."
                     : verificationBatch.state === "completed"
@@ -772,7 +804,7 @@ export function LibraryCompletionWorkspace({
           <button
             className="completion-campaign-verify"
             type="button"
-            disabled={pendingQueueAction || hasActiveVerification}
+            disabled={pendingQueueAction || hasActiveVerification || unverifiedOpenCount === 0}
             onClick={() => verifyAtlasCampaign(campaign)}
           >
             <ShieldCheck size={14} /> Verify cohort
@@ -867,7 +899,11 @@ export function LibraryCompletionWorkspace({
                     <p>{selected.artist}</p>
                     <div className="completion-facts">
                       <span>First charted {selected.chartYear}</span>
-                      <span>{selected.verificationStatus === "verified" ? "Official studio album verified" : "Album type unverified"}</span>
+                      <span>
+                        {selected.verificationStatus === "verified"
+                          ? `Official studio album verified via ${selected.verificationProvider === "discogs" ? "Discogs" : "MusicBrainz"}`
+                          : "Album type unverified"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -905,9 +941,9 @@ export function LibraryCompletionWorkspace({
                     <span className="completion-ledger-icon"><ShieldCheck size={15} /></span>
                     <div>
                       <strong>MusicBrainz</strong>
-                      <p>{selected.verificationMessage ?? (selected.verificationStatus === "verified" ? "Official studio-album identity linked to this candidate." : "Check whether this is an official studio album, live album, or compilation.")}</p>
+                      <p>{selected.musicbrainzVerificationMessage ?? (selected.verificationProvider === "musicbrainz" ? selected.verificationMessage : null) ?? "Checks primary Album type, secondary classifications, and official release status first."}</p>
                     </div>
-                    {selected.verificationStatus === "verified" ? (
+                    {selected.musicbrainzVerificationStatus === "verified" || (selected.verificationStatus === "verified" && selected.verificationProvider === "musicbrainz") ? (
                       <div className="completion-ledger-actions">
                         <span className="completion-verified">Verified studio album</span>
                         {selected.status === "wanted" ? (
@@ -924,9 +960,9 @@ export function LibraryCompletionWorkspace({
                       </div>
                     ) : selected.verificationStatus === "queued" ? (
                       <span>Queued</span>
-                    ) : selected.verificationStatus === "checking" ? (
+                    ) : selected.verificationStatus === "checking" && selected.verificationProvider !== "discogs" ? (
                       <span>Checking…</span>
-                    ) : selected.verificationStatus === "ambiguous" || selected.verificationStatus === "noMatch" ? (
+                    ) : selected.musicbrainzVerificationStatus === "ambiguous" || selected.musicbrainzVerificationStatus === "noMatch" || selected.verificationStatus === "ambiguous" || selected.verificationStatus === "noMatch" ? (
                       <button type="button" disabled={isCheckingMusicBrainz} onClick={() => void checkMusicBrainz()}>
                         {isCheckingMusicBrainz
                           ? "Searching…"
@@ -944,13 +980,57 @@ export function LibraryCompletionWorkspace({
                       </button>
                     )}
                   </div>
-                  <div className="completion-ledger-row muted">
-                    <span className="completion-ledger-icon"><CircleHelp size={15} /></span>
+                  <div className={`completion-ledger-row ${discogsStatus?.configured || selected.discogsVerificationStatus ? "" : "muted"}`}>
+                    <span className="completion-ledger-icon"><Database size={15} /></span>
                     <div>
                       <strong>Discogs</strong>
-                      <p>Cross-catalog verification will join this ledger in the next phase.</p>
+                      <p>
+                        {selected.discogsVerificationMessage ?? (
+                          discogsStatus?.configured
+                            ? "Fallback ready after a MusicBrainz no-match or ambiguous result. Requires one exact accepted Album master without non-studio markers."
+                            : "Add a Consumer Key and Secret in Settings > Providers to enable the fallback."
+                        )}
+                      </p>
                     </div>
-                    <span>Next phase</span>
+                    {selected.discogsVerificationStatus === "verified" ? (
+                      <div className="completion-ledger-actions">
+                        <span className="completion-verified">Verified via Discogs</span>
+                        {selected.discogsMasterId ? <span>Master #{selected.discogsMasterId}</span> : null}
+                        {selected.status === "wanted" ? (
+                          <span>In Wanted</span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={pendingDecision !== null}
+                            onClick={() => void decide("wanted")}
+                          >
+                            <Heart size={13} /> Add to Wanted
+                          </button>
+                        )}
+                      </div>
+                    ) : selected.verificationStatus === "checking" && selected.verificationProvider === "discogs" ? (
+                      <span>Checking fallback…</span>
+                    ) : selected.discogsVerificationStatus === "failed" ? (
+                      <button
+                        type="button"
+                        disabled={pendingQueueAction || hasActiveVerification}
+                        onClick={() => verifyCandidate(selected)}
+                      >
+                        Retry fallback
+                      </button>
+                    ) : discogsStatus?.configured && selected.discogsVerificationStatus == null && (selected.verificationStatus === "noMatch" || selected.verificationStatus === "ambiguous") ? (
+                      <button
+                        type="button"
+                        disabled={pendingQueueAction || hasActiveVerification}
+                        onClick={() => verifyCandidate(selected)}
+                      >
+                        Try fallback
+                      </button>
+                    ) : selected.discogsVerificationStatus === "noMatch" || selected.discogsVerificationStatus === "ambiguous" ? (
+                      <span>Review needed</span>
+                    ) : (
+                      <span>{discogsStatus?.configured ? "Automatic fallback" : "Not configured"}</span>
+                    )}
                   </div>
                 </section>
 
@@ -1051,8 +1131,8 @@ export function LibraryCompletionWorkspace({
                 </section>
 
                 <footer className="completion-provider-strip">
-                  <span><i className="on" /> MusicBrainz <small>{verificationBatch?.state === "running" ? "Background queue active" : "On demand"}</small></span>
-                  <span><i /> Discogs <small>Next phase</small></span>
+                  <span><i className="on" /> MusicBrainz <small>{verificationBatch?.state === "running" && currentVerificationItem?.provider === "musicbrainz" ? "Checking first" : "Primary verifier"}</small></span>
+                  <span><i className={discogsStatus?.configured ? "on" : ""} /> Discogs <small>{verificationBatch?.state === "running" && currentVerificationItem?.provider === "discogs" ? "Fallback active" : discogsStatus?.configured ? "Fallback ready" : "Configure in Settings"}</small></span>
                   <span><i className={deemixResult ? "on" : ""} /> Deemix <small>{deemixResult ? "Ready" : "Idle"}</small></span>
                 </footer>
               </>

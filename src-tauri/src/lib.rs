@@ -6,6 +6,7 @@ mod covers;
 mod db;
 mod deemix;
 mod deemix_download;
+mod discogs;
 mod external_discovery;
 mod importer;
 mod library_completion;
@@ -174,6 +175,44 @@ async fn test_deemix_connection() -> Result<deemix::DeemixConnectionTest, String
     tauri::async_runtime::spawn_blocking(deemix::test_connection)
         .await
         .map_err(|error| format!("Deemix connection task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_discogs_credential_status() -> Result<discogs::DiscogsCredentialStatus, String> {
+    tauri::async_runtime::spawn_blocking(discogs::credential_status)
+        .await
+        .map_err(|error| format!("Discogs credential status task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn save_discogs_credentials(
+    input: discogs::SaveDiscogsCredentialsRequest,
+) -> Result<discogs::DiscogsConnectionTest, String> {
+    tauri::async_runtime::spawn_blocking(move || discogs::save_credentials(input))
+        .await
+        .map_err(|error| format!("Discogs credential save task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn delete_discogs_credentials() -> Result<discogs::DiscogsCredentialStatus, String> {
+    tauri::async_runtime::spawn_blocking(discogs::delete_credentials)
+        .await
+        .map_err(|error| format!("Discogs credential removal task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn test_discogs_connection() -> Result<discogs::DiscogsConnectionTest, String> {
+    tauri::async_runtime::spawn_blocking(discogs::test_connection)
+        .await
+        .map_err(|error| format!("Discogs connection task failed: {error}"))?
         .map_err(|error| error.to_string())
 }
 
@@ -1310,6 +1349,10 @@ pub fn run() {
             save_deemix_arl,
             delete_deemix_arl,
             test_deemix_connection,
+            get_discogs_credential_status,
+            save_discogs_credentials,
+            delete_discogs_credentials,
+            test_discogs_connection,
             search_deemix_albums,
             preflight_deemix_album_download,
             download_deemix_album,

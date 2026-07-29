@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.98.0] - 2026-07-29
+### Added
+- Added Discogs as a rate-limited fallback when MusicBrainz returns no exact album match or an ambiguous result, with exact master matching and conservative accepted-Album classification that rejects live, compilation, EP, single, mixtape, DJ-mix, bootleg, and unofficial markers.
+- Added secure Discogs Consumer Key and Secret validation, Windows Credential Manager storage, connection testing with request-limit status, credential replacement, and removal under **Settings → Providers**.
+- Added separate MusicBrainz and Discogs evidence, Discogs master identifiers, active-provider queue feedback, Discogs verification counts, and a **Try fallback** path for existing MusicBrainz no-match rows.
+
+### Changed
+- Advanced SQLite to schema version 42 and synchronized app metadata to `0.98.0`.
+- Verification queue estimates now allow for the slower three-request Discogs master/key-release classification path while keeping MusicBrainz as the primary verifier.
+
 ## [0.97.1] - 2026-07-29
 ### Changed
 - Completed verification runs now explain that **Verified** means MusicBrainz confirmed an official studio album, provide a **Review verified** filter, and expose a direct **Add to Wanted** action in the candidate dossier.

@@ -5,6 +5,7 @@ import { LibraryCompletionWorkspace } from "./LibraryCompletionWorkspace";
 
 const getLibraryCompletion = vi.fn();
 const getLibraryCompletionVerificationStatus = vi.fn();
+const getDiscogsCredentialStatus = vi.fn();
 const startLibraryCompletionVerification = vi.fn();
 const setLibraryCompletionVerificationState = vi.fn();
 const retryLibraryCompletionVerificationFailures = vi.fn();
@@ -17,6 +18,8 @@ vi.mock("../backend", () => ({
   getLibraryCompletion: (...args: unknown[]) => getLibraryCompletion(...args),
   getLibraryCompletionVerificationStatus: (...args: unknown[]) =>
     getLibraryCompletionVerificationStatus(...args),
+  getDiscogsCredentialStatus: (...args: unknown[]) =>
+    getDiscogsCredentialStatus(...args),
   startLibraryCompletionVerification: (...args: unknown[]) =>
     startLibraryCompletionVerification(...args),
   setLibraryCompletionVerificationState: (...args: unknown[]) =>
@@ -51,8 +54,15 @@ const response = {
       musicbrainzUrl: null,
       coverUrl: null,
       verificationStatus: "unverified",
+      verificationProvider: null,
       verificationMessage: null,
       verificationCheckedAt: null,
+      musicbrainzVerificationStatus: null,
+      musicbrainzVerificationMessage: null,
+      discogsVerificationStatus: null,
+      discogsVerificationMessage: null,
+      discogsMasterId: null,
+      discogsUrl: null,
       evidence: [
         {
           source: "officialUk",
@@ -97,6 +107,7 @@ const runningVerificationStatus = {
     queuedCount: 0,
     checkingCount: 1,
     verifiedCount: 0,
+    discogsVerifiedCount: 0,
     noMatchCount: 0,
     ambiguousCount: 0,
     failedCount: 0,
@@ -113,9 +124,16 @@ const runningVerificationStatus = {
       artist: "Talk Talk",
       title: "The Colour of Spring",
       state: "checking",
+      provider: "musicbrainz",
       message: null,
       musicbrainzId: null,
       musicbrainzUrl: null,
+      musicbrainzVerificationStatus: null,
+      musicbrainzVerificationMessage: null,
+      discogsVerificationStatus: null,
+      discogsVerificationMessage: null,
+      discogsMasterId: null,
+      discogsUrl: null,
       updatedAt: "2026-07-29T10:05:00Z",
     },
   ],
@@ -137,6 +155,8 @@ const completedVerificationStatus = {
     message: "MusicBrainz confirmed an official studio-album release group.",
     musicbrainzId: "01234567-89ab-cdef-0123-456789abcdef",
     musicbrainzUrl: "https://musicbrainz.org/release-group/01234567-89ab-cdef-0123-456789abcdef",
+    musicbrainzVerificationStatus: "verified",
+    musicbrainzVerificationMessage: "MusicBrainz confirmed an official studio-album release group.",
     updatedAt: "2026-07-29T10:05:02Z",
   }],
 } as const;
@@ -147,6 +167,10 @@ describe("LibraryCompletionWorkspace", () => {
     HTMLElement.prototype.scrollIntoView = vi.fn();
     getLibraryCompletion.mockResolvedValue(response);
     getLibraryCompletionVerificationStatus.mockResolvedValue(emptyVerificationStatus);
+    getDiscogsCredentialStatus.mockResolvedValue({
+      configured: true,
+      source: "windowsCredentialManager",
+    });
     startLibraryCompletionVerification.mockResolvedValue(runningVerificationStatus);
     setLibraryCompletionVerificationState.mockResolvedValue({
       ...runningVerificationStatus,
@@ -220,7 +244,7 @@ describe("LibraryCompletionWorkspace", () => {
       });
     });
     expect(screen.getByText("0 / 1")).toBeInTheDocument();
-    expect(screen.getByText(/Checking Talk Talk — The Colour of Spring/)).toBeInTheDocument();
+    expect(screen.getByText(/Checking MusicBrainz: Talk Talk — The Colour of Spring/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
   });
 
@@ -282,7 +306,7 @@ describe("LibraryCompletionWorkspace", () => {
       });
     });
     expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
-    expect(screen.getByText(/Checking Talk Talk — The Colour of Spring/i)).toBeInTheDocument();
+    expect(screen.getByText(/Checking MusicBrainz: Talk Talk — The Colour of Spring/i)).toBeInTheDocument();
   });
 
   it("persists a wanted decision with the chart evidence source", async () => {
@@ -354,5 +378,34 @@ describe("LibraryCompletionWorkspace", () => {
       );
     });
     expect(screen.getByText("Added to Wanted")).toBeInTheDocument();
+  });
+
+  it("offers Discogs fallback after MusicBrainz cannot confirm an exact album", async () => {
+    getLibraryCompletion.mockResolvedValue({
+      ...response,
+      candidates: [{
+        ...response.candidates[0],
+        verificationStatus: "noMatch",
+        verificationProvider: "musicbrainz",
+        verificationMessage: "MusicBrainz returned no exact artist and primary Album title match.",
+        verificationCheckedAt: "2026-07-29T10:05:00Z",
+        musicbrainzVerificationStatus: "noMatch",
+        musicbrainzVerificationMessage:
+          "MusicBrainz returned no exact artist and primary Album title match.",
+      }],
+    });
+    render(<LibraryCompletionWorkspace onOpenWishList={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Try fallback" }));
+
+    await waitFor(() => {
+      expect(startLibraryCompletionVerification).toHaveBeenCalledWith({
+        scope: "candidate",
+        candidateIds: [response.candidates[0].id],
+        source: null,
+        decade: null,
+        label: "Talk Talk — The Colour of Spring",
+      });
+    });
   });
 });

@@ -8981,7 +8981,8 @@ button {
   grid-column: span 2;
 }
 
-.deemix-settings-panel {
+.deemix-settings-panel,
+.discogs-settings-panel {
   grid-column: span 2;
 }
 
@@ -8996,6 +8997,20 @@ button {
   display: grid;
   grid-template-columns: minmax(300px, 1fr) auto auto auto;
   align-items: end;
+  gap: 10px;
+}
+
+.discogs-settings-toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  align-items: end;
+  gap: 12px;
+}
+
+.discogs-settings-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -10828,6 +10843,7 @@ button {
   }
 
   .deemix-settings-toolbar,
+  .discogs-settings-toolbar,
   .deemix-download-toolbar,
   .deemix-preference-grid {
     grid-template-columns: 1fr 1fr;
@@ -11110,6 +11126,7 @@ button {
   .layout-settings-panel,
   .ai-settings-panel,
   .deemix-settings-panel,
+  .discogs-settings-panel,
   .update-settings-panel,
   .backup-settings-panel,
   .performance-settings-panel,
@@ -11124,6 +11141,7 @@ button {
   .natural-query-result,
   .ai-settings-toolbar,
   .deemix-settings-toolbar,
+  .discogs-settings-toolbar,
   .deemix-download-toolbar,
   .deemix-preference-grid,
   .library-analyst-form {

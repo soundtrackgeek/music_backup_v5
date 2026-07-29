@@ -509,7 +509,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_one_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_two_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -1024,6 +1024,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             matched_year INTEGER,
             score INTEGER,
             message TEXT NOT NULL,
+            verification_provider TEXT NOT NULL DEFAULT 'musicbrainz',
+            musicbrainz_outcome TEXT,
+            musicbrainz_message TEXT,
+            discogs_outcome TEXT,
+            discogs_message TEXT,
+            discogs_master_id TEXT,
+            discogs_url TEXT,
             attempt_count INTEGER NOT NULL DEFAULT 1,
             checked_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -1062,6 +1069,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             title TEXT NOT NULL,
             chart_year INTEGER NOT NULL,
             source TEXT NOT NULL DEFAULT '',
+            provider TEXT NOT NULL DEFAULT 'musicbrainz',
             state TEXT NOT NULL CHECK(state IN ('queued', 'checking', 'verified', 'noMatch', 'ambiguous', 'failed')),
             attempt_count INTEGER NOT NULL DEFAULT 0,
             last_error TEXT,
@@ -1559,12 +1567,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_origin_country_tables(conn)?;
     ensure_musicbrainz_artist_info_tables(conn)?;
     ensure_musicbrainz_map_location_tables(conn)?;
+    ensure_library_completion_discogs_columns(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
     migrations::migrate_billboard_album_source_default(conn)?;
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 41;
+        PRAGMA user_version = 42;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -1839,6 +1848,38 @@ fn ensure_app_settings_deemix_columns(conn: &Connection) -> Result<()> {
         .context("Could not add app_settings.deemix_download_organization")?;
     }
 
+    Ok(())
+}
+
+fn ensure_library_completion_discogs_columns(conn: &Connection) -> Result<()> {
+    let verification_columns = [
+        (
+            "verification_provider",
+            "TEXT NOT NULL DEFAULT 'musicbrainz'",
+        ),
+        ("musicbrainz_outcome", "TEXT"),
+        ("musicbrainz_message", "TEXT"),
+        ("discogs_outcome", "TEXT"),
+        ("discogs_message", "TEXT"),
+        ("discogs_master_id", "TEXT"),
+        ("discogs_url", "TEXT"),
+    ];
+    for (name, definition) in verification_columns {
+        if !schema_column_exists(conn, "library_completion_verifications", name)? {
+            let sql = format!(
+                "ALTER TABLE library_completion_verifications ADD COLUMN {name} {definition}"
+            );
+            conn.execute(&sql, [])
+                .with_context(|| format!("Could not add Library Completion column {name}"))?;
+        }
+    }
+    if !schema_column_exists(conn, "library_completion_verification_items", "provider")? {
+        conn.execute(
+            "ALTER TABLE library_completion_verification_items ADD COLUMN provider TEXT NOT NULL DEFAULT 'musicbrainz'",
+            [],
+        )
+        .context("Could not add the Library Completion queue provider column")?;
+    }
     Ok(())
 }
 

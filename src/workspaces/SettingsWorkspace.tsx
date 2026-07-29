@@ -42,7 +42,7 @@ const settingsSections: SettingsSectionDefinition[] = [
   {
     id: "providers",
     label: "Providers",
-    description: "Deemix and external catalog connections",
+    description: "Discogs verification and Deemix downloads",
     icon: Plug,
   },
   {

@@ -1,5 +1,7 @@
 #[cfg(not(test))]
 use crate::db;
+#[cfg(not(test))]
+use crate::discogs;
 use crate::wishlist::{self, AddWishListItemRequest};
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
@@ -44,8 +46,15 @@ pub struct LibraryCompletionCandidate {
     pub musicbrainz_url: Option<String>,
     pub cover_url: Option<String>,
     pub verification_status: String,
+    pub verification_provider: Option<String>,
     pub verification_message: Option<String>,
     pub verification_checked_at: Option<String>,
+    pub musicbrainz_verification_status: Option<String>,
+    pub musicbrainz_verification_message: Option<String>,
+    pub discogs_verification_status: Option<String>,
+    pub discogs_verification_message: Option<String>,
+    pub discogs_master_id: Option<String>,
+    pub discogs_url: Option<String>,
     pub evidence: Vec<LibraryCompletionEvidence>,
 }
 
@@ -133,9 +142,16 @@ pub struct LibraryCompletionVerificationItemSummary {
     pub artist: String,
     pub title: String,
     pub state: String,
+    pub provider: String,
     pub message: Option<String>,
     pub musicbrainz_id: Option<String>,
     pub musicbrainz_url: Option<String>,
+    pub musicbrainz_verification_status: Option<String>,
+    pub musicbrainz_verification_message: Option<String>,
+    pub discogs_verification_status: Option<String>,
+    pub discogs_verification_message: Option<String>,
+    pub discogs_master_id: Option<String>,
+    pub discogs_url: Option<String>,
     pub updated_at: String,
 }
 
@@ -151,6 +167,7 @@ pub struct LibraryCompletionVerificationBatch {
     pub queued_count: i64,
     pub checking_count: i64,
     pub verified_count: i64,
+    pub discogs_verified_count: i64,
     pub no_match_count: i64,
     pub ambiguous_count: i64,
     pub failed_count: i64,
@@ -213,8 +230,15 @@ struct StoredDecision {
 #[derive(Debug, Clone)]
 struct StoredVerification {
     outcome: String,
+    provider: String,
     musicbrainz_id: Option<String>,
     musicbrainz_url: Option<String>,
+    musicbrainz_outcome: Option<String>,
+    musicbrainz_message: Option<String>,
+    discogs_outcome: Option<String>,
+    discogs_message: Option<String>,
+    discogs_master_id: Option<String>,
+    discogs_url: Option<String>,
     message: String,
     checked_at: String,
 }
@@ -232,6 +256,7 @@ struct VerificationQueueItem {
 #[derive(Debug, Clone)]
 struct VerificationResult {
     outcome: String,
+    provider: String,
     message: String,
     musicbrainz_id: Option<String>,
     musicbrainz_url: Option<String>,
@@ -239,6 +264,12 @@ struct VerificationResult {
     matched_title: Option<String>,
     matched_year: Option<i32>,
     score: Option<i32>,
+    musicbrainz_outcome: Option<String>,
+    musicbrainz_message: Option<String>,
+    discogs_outcome: Option<String>,
+    discogs_message: Option<String>,
+    discogs_master_id: Option<String>,
+    discogs_url: Option<String>,
 }
 
 fn source_label(source: &str) -> &'static str {
@@ -356,7 +387,10 @@ fn load_decisions(conn: &Connection) -> Result<HashMap<String, StoredDecision>> 
 fn load_verifications(conn: &Connection) -> Result<HashMap<String, StoredVerification>> {
     let mut statement = conn.prepare(
         "
-        SELECT candidate_key, outcome, musicbrainz_id, musicbrainz_url, message, checked_at
+        SELECT candidate_key, outcome, verification_provider, musicbrainz_id,
+               musicbrainz_url, musicbrainz_outcome, musicbrainz_message,
+               discogs_outcome, discogs_message, discogs_master_id, discogs_url,
+               message, checked_at
         FROM library_completion_verifications
         ",
     )?;
@@ -365,10 +399,17 @@ fn load_verifications(conn: &Connection) -> Result<HashMap<String, StoredVerific
             row.get::<_, String>(0)?,
             StoredVerification {
                 outcome: row.get(1)?,
-                musicbrainz_id: row.get(2)?,
-                musicbrainz_url: row.get(3)?,
-                message: row.get(4)?,
-                checked_at: row.get(5)?,
+                provider: row.get(2)?,
+                musicbrainz_id: row.get(3)?,
+                musicbrainz_url: row.get(4)?,
+                musicbrainz_outcome: row.get(5)?,
+                musicbrainz_message: row.get(6)?,
+                discogs_outcome: row.get(7)?,
+                discogs_message: row.get(8)?,
+                discogs_master_id: row.get(9)?,
+                discogs_url: row.get(10)?,
+                message: row.get(11)?,
+                checked_at: row.get(12)?,
             },
         ))
     })?;
@@ -564,8 +605,19 @@ fn get_for_connection_inner(
                 .or_else(|| verification.and_then(|value| value.musicbrainz_url.clone())),
             cover_url: None,
             verification_status,
+            verification_provider: verification.map(|value| value.provider.clone()),
             verification_message: verification.map(|value| value.message.clone()),
             verification_checked_at: verification.map(|value| value.checked_at.clone()),
+            musicbrainz_verification_status: verification
+                .and_then(|value| value.musicbrainz_outcome.clone()),
+            musicbrainz_verification_message: verification
+                .and_then(|value| value.musicbrainz_message.clone()),
+            discogs_verification_status: verification
+                .and_then(|value| value.discogs_outcome.clone()),
+            discogs_verification_message: verification
+                .and_then(|value| value.discogs_message.clone()),
+            discogs_master_id: verification.and_then(|value| value.discogs_master_id.clone()),
+            discogs_url: verification.and_then(|value| value.discogs_url.clone()),
             evidence: aggregate.evidence,
         });
     }
@@ -703,8 +755,13 @@ fn save_verification_result(
         INSERT INTO library_completion_verifications (
             candidate_key, outcome, artist, title, chart_year, musicbrainz_id,
             musicbrainz_url, matched_artist, matched_title, matched_year, score,
-            message, attempt_count, checked_at, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1, ?13, ?13)
+            message, verification_provider, musicbrainz_outcome, musicbrainz_message,
+            discogs_outcome, discogs_message, discogs_master_id, discogs_url,
+            attempt_count, checked_at, updated_at
+        ) VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
+            ?14, ?15, ?16, ?17, ?18, ?19, 1, ?20, ?20
+        )
         ON CONFLICT(candidate_key) DO UPDATE SET
             outcome = excluded.outcome,
             artist = excluded.artist,
@@ -717,6 +774,13 @@ fn save_verification_result(
             matched_year = excluded.matched_year,
             score = excluded.score,
             message = excluded.message,
+            verification_provider = excluded.verification_provider,
+            musicbrainz_outcome = excluded.musicbrainz_outcome,
+            musicbrainz_message = excluded.musicbrainz_message,
+            discogs_outcome = excluded.discogs_outcome,
+            discogs_message = excluded.discogs_message,
+            discogs_master_id = excluded.discogs_master_id,
+            discogs_url = excluded.discogs_url,
             attempt_count = library_completion_verifications.attempt_count + 1,
             checked_at = excluded.checked_at,
             updated_at = excluded.updated_at
@@ -734,6 +798,13 @@ fn save_verification_result(
             result.matched_year,
             result.score,
             result.message,
+            result.provider,
+            result.musicbrainz_outcome,
+            result.musicbrainz_message,
+            result.discogs_outcome,
+            result.discogs_message,
+            result.discogs_master_id,
+            result.discogs_url,
             now,
         ],
     )?;
@@ -807,6 +878,7 @@ fn set_decision_for_connection(
             request.chart_year,
             &VerificationResult {
                 outcome: "verified".to_string(),
+                provider: "musicbrainz".to_string(),
                 message: "MusicBrainz confirmed an official studio-album release group."
                     .to_string(),
                 musicbrainz_id: request.musicbrainz_id.clone(),
@@ -815,6 +887,14 @@ fn set_decision_for_connection(
                 matched_title: Some(request.title.clone()),
                 matched_year: Some(request.chart_year),
                 score: None,
+                musicbrainz_outcome: Some("verified".to_string()),
+                musicbrainz_message: Some(
+                    "MusicBrainz confirmed an official studio-album release group.".to_string(),
+                ),
+                discogs_outcome: None,
+                discogs_message: None,
+                discogs_master_id: None,
+                discogs_url: None,
             },
         )?;
     }
@@ -939,10 +1019,13 @@ fn candidates_for_verification(
             candidate.status == "candidate"
         } else {
             candidate.status != "notForMe"
-        }) && matches!(
+        }) && (matches!(
             candidate.verification_status.as_str(),
             "unverified" | "failed"
-        )
+        ) || (matches!(
+            candidate.verification_status.as_str(),
+            "noMatch" | "ambiguous"
+        ) && candidate.discogs_verification_status.is_none()))
     });
     Ok(candidates)
 }
@@ -1053,6 +1136,7 @@ fn verification_batch_for_connection(
             SUM(CASE WHEN item.state = 'queued' THEN 1 ELSE 0 END),
             SUM(CASE WHEN item.state = 'checking' THEN 1 ELSE 0 END),
             SUM(CASE WHEN item.state = 'verified' THEN 1 ELSE 0 END),
+            SUM(CASE WHEN item.state = 'verified' AND verification.verification_provider = 'discogs' THEN 1 ELSE 0 END),
             SUM(CASE WHEN item.state = 'noMatch' THEN 1 ELSE 0 END),
             SUM(CASE WHEN item.state = 'ambiguous' THEN 1 ELSE 0 END),
             SUM(CASE WHEN item.state = 'failed' THEN 1 ELSE 0 END),
@@ -1062,6 +1146,8 @@ fn verification_batch_for_connection(
             batch.completed_at
         FROM library_completion_verification_batches batch
         LEFT JOIN library_completion_verification_items item ON item.batch_id = batch.id
+        LEFT JOIN library_completion_verifications verification
+            ON verification.candidate_key = item.candidate_key
         WHERE batch.id = ?1
         GROUP BY batch.id
         ",
@@ -1071,9 +1157,10 @@ fn verification_batch_for_connection(
             let queued_count = row.get::<_, i64>(6)?;
             let checking_count = row.get::<_, i64>(7)?;
             let verified_count = row.get::<_, i64>(8)?;
-            let no_match_count = row.get::<_, i64>(9)?;
-            let ambiguous_count = row.get::<_, i64>(10)?;
-            let failed_count = row.get::<_, i64>(11)?;
+            let discogs_verified_count = row.get::<_, i64>(9)?;
+            let no_match_count = row.get::<_, i64>(10)?;
+            let ambiguous_count = row.get::<_, i64>(11)?;
+            let failed_count = row.get::<_, i64>(12)?;
             Ok(LibraryCompletionVerificationBatch {
                 id: row.get(0)?,
                 label: row.get(1)?,
@@ -1084,15 +1171,16 @@ fn verification_batch_for_connection(
                 queued_count,
                 checking_count,
                 verified_count,
+                discogs_verified_count,
                 no_match_count,
                 ambiguous_count,
                 failed_count,
-                cached_count: row.get(12)?,
+                cached_count: row.get(13)?,
                 completed_count: total_count - queued_count - checking_count,
-                estimated_seconds_remaining: (queued_count + checking_count) * 2,
-                created_at: row.get(13)?,
-                updated_at: row.get(14)?,
-                completed_at: row.get(15)?,
+                estimated_seconds_remaining: (queued_count + checking_count) * 6,
+                created_at: row.get(14)?,
+                updated_at: row.get(15)?,
+                completed_at: row.get(16)?,
             })
         },
     )
@@ -1118,9 +1206,16 @@ fn verification_status_for_connection(
             item.artist,
             item.title,
             item.state,
+            item.provider,
             CASE WHEN item.state = 'failed' THEN item.last_error ELSE verification.message END,
             verification.musicbrainz_id,
             verification.musicbrainz_url,
+            verification.musicbrainz_outcome,
+            verification.musicbrainz_message,
+            verification.discogs_outcome,
+            verification.discogs_message,
+            verification.discogs_master_id,
+            verification.discogs_url,
             COALESCE(item.finished_at, item.started_at, item.created_at)
         FROM library_completion_verification_items item
         LEFT JOIN library_completion_verifications verification
@@ -1138,10 +1233,17 @@ fn verification_status_for_connection(
             artist: row.get(1)?,
             title: row.get(2)?,
             state: row.get(3)?,
-            message: row.get(4)?,
-            musicbrainz_id: row.get(5)?,
-            musicbrainz_url: row.get(6)?,
-            updated_at: row.get(7)?,
+            provider: row.get(4)?,
+            message: row.get(5)?,
+            musicbrainz_id: row.get(6)?,
+            musicbrainz_url: row.get(7)?,
+            musicbrainz_verification_status: row.get(8)?,
+            musicbrainz_verification_message: row.get(9)?,
+            discogs_verification_status: row.get(10)?,
+            discogs_verification_message: row.get(11)?,
+            discogs_master_id: row.get(12)?,
+            discogs_url: row.get(13)?,
+            updated_at: row.get(14)?,
         })
     })?;
     Ok(LibraryCompletionVerificationStatus {
@@ -1193,7 +1295,8 @@ fn retry_verification_failures_for_connection(
     let changed = transaction.execute(
         "
         UPDATE library_completion_verification_items
-        SET state = 'queued', last_error = NULL, started_at = NULL, finished_at = NULL
+        SET state = 'queued', provider = 'musicbrainz', last_error = NULL,
+            started_at = NULL, finished_at = NULL
         WHERE batch_id = ?1 AND state = 'failed'
         ",
         params![batch_id],
@@ -1217,7 +1320,7 @@ fn recover_interrupted_verifications(conn: &Connection) -> Result<()> {
     conn.execute(
         "
         UPDATE library_completion_verification_items
-        SET state = 'queued', started_at = NULL
+        SET state = 'queued', provider = 'musicbrainz', started_at = NULL
         WHERE state = 'checking'
           AND batch_id IN (
               SELECT id FROM library_completion_verification_batches WHERE state = 'running'
@@ -1320,11 +1423,12 @@ fn complete_verification_item(
     transaction.execute(
         "
         UPDATE library_completion_verification_items
-        SET state = ?1, last_error = ?2, finished_at = ?3
-        WHERE id = ?4
+        SET state = ?1, provider = ?2, last_error = ?3, finished_at = ?4
+        WHERE id = ?5
         ",
         params![
             result.outcome,
+            result.provider,
             (result.outcome == "failed").then_some(result.message.as_str()),
             now,
             item.id,
@@ -1352,6 +1456,15 @@ fn complete_verification_item(
 }
 
 #[cfg(not(test))]
+fn set_checking_provider(conn: &Connection, item_id: i64, provider: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE library_completion_verification_items SET provider = ?1 WHERE id = ?2 AND state = 'checking'",
+        params![provider, item_id],
+    )?;
+    Ok(())
+}
+
+#[cfg(not(test))]
 fn verify_with_musicbrainz(item: &VerificationQueueItem) -> VerificationResult {
     let response = match wishlist::search_musicbrainz_for_wishlist(
         wishlist::WishListMusicBrainzSearchRequest {
@@ -1365,6 +1478,7 @@ fn verify_with_musicbrainz(item: &VerificationQueueItem) -> VerificationResult {
         Err(error) => {
             return VerificationResult {
                 outcome: "failed".to_string(),
+                provider: "musicbrainz".to_string(),
                 message: format!("MusicBrainz search failed: {error}"),
                 musicbrainz_id: None,
                 musicbrainz_url: None,
@@ -1372,6 +1486,12 @@ fn verify_with_musicbrainz(item: &VerificationQueueItem) -> VerificationResult {
                 matched_title: None,
                 matched_year: None,
                 score: None,
+                musicbrainz_outcome: Some("failed".to_string()),
+                musicbrainz_message: Some(format!("MusicBrainz search failed: {error}")),
+                discogs_outcome: None,
+                discogs_message: None,
+                discogs_master_id: None,
+                discogs_url: None,
             };
         }
     };
@@ -1387,6 +1507,7 @@ fn verify_with_musicbrainz(item: &VerificationQueueItem) -> VerificationResult {
     if exact_matches.is_empty() {
         return VerificationResult {
             outcome: "noMatch".to_string(),
+            provider: "musicbrainz".to_string(),
             message: "MusicBrainz returned no exact artist and primary Album title match."
                 .to_string(),
             musicbrainz_id: None,
@@ -1395,11 +1516,20 @@ fn verify_with_musicbrainz(item: &VerificationQueueItem) -> VerificationResult {
             matched_title: None,
             matched_year: None,
             score: None,
+            musicbrainz_outcome: Some("noMatch".to_string()),
+            musicbrainz_message: Some(
+                "MusicBrainz returned no exact artist and primary Album title match.".to_string(),
+            ),
+            discogs_outcome: None,
+            discogs_message: None,
+            discogs_master_id: None,
+            discogs_url: None,
         };
     }
     if exact_matches.len() > 1 {
         return VerificationResult {
             outcome: "ambiguous".to_string(),
+            provider: "musicbrainz".to_string(),
             message: format!(
                 "MusicBrainz returned {} exact studio-album candidates; choose the correct release group manually.",
                 exact_matches.len()
@@ -1410,6 +1540,15 @@ fn verify_with_musicbrainz(item: &VerificationQueueItem) -> VerificationResult {
             matched_title: None,
             matched_year: None,
             score: None,
+            musicbrainz_outcome: Some("ambiguous".to_string()),
+            musicbrainz_message: Some(format!(
+                "MusicBrainz returned {} exact studio-album candidates; choose the correct release group manually.",
+                exact_matches.len()
+            )),
+            discogs_outcome: None,
+            discogs_message: None,
+            discogs_master_id: None,
+            discogs_url: None,
         };
     }
 
@@ -1417,6 +1556,7 @@ fn verify_with_musicbrainz(item: &VerificationQueueItem) -> VerificationResult {
     match wishlist::validate_musicbrainz_album_candidate(candidate.clone()) {
         Ok(confirmed) => VerificationResult {
             outcome: "verified".to_string(),
+            provider: "musicbrainz".to_string(),
             message: "MusicBrainz confirmed a primary Album release group without secondary types and with an official release.".to_string(),
             musicbrainz_id: Some(confirmed.musicbrainz_id),
             musicbrainz_url: Some(confirmed.musicbrainz_url),
@@ -1424,6 +1564,12 @@ fn verify_with_musicbrainz(item: &VerificationQueueItem) -> VerificationResult {
             matched_title: Some(confirmed.title),
             matched_year: confirmed.year,
             score: Some(confirmed.score),
+            musicbrainz_outcome: Some("verified".to_string()),
+            musicbrainz_message: Some("MusicBrainz confirmed a primary Album release group without secondary types and with an official release.".to_string()),
+            discogs_outcome: None,
+            discogs_message: None,
+            discogs_master_id: None,
+            discogs_url: None,
         },
         Err(error) => {
             let message = error.to_string();
@@ -1438,15 +1584,74 @@ fn verify_with_musicbrainz(item: &VerificationQueueItem) -> VerificationResult {
             };
             VerificationResult {
                 outcome: outcome.to_string(),
-                message,
+                provider: "musicbrainz".to_string(),
+                message: message.clone(),
                 musicbrainz_id: None,
                 musicbrainz_url: None,
                 matched_artist: Some(candidate.artist),
                 matched_title: Some(candidate.title),
                 matched_year: candidate.year,
                 score: Some(candidate.score),
+                musicbrainz_outcome: Some(outcome.to_string()),
+                musicbrainz_message: Some(message.clone()),
+                discogs_outcome: None,
+                discogs_message: None,
+                discogs_master_id: None,
+                discogs_url: None,
             }
         }
+    }
+}
+
+#[cfg(not(test))]
+fn discogs_failure_result(
+    musicbrainz: &VerificationResult,
+    error: impl std::fmt::Display,
+) -> VerificationResult {
+    let message = format!("Discogs fallback failed: {error}");
+    VerificationResult {
+        outcome: "failed".to_string(),
+        provider: "discogs".to_string(),
+        message: message.clone(),
+        musicbrainz_id: musicbrainz.musicbrainz_id.clone(),
+        musicbrainz_url: musicbrainz.musicbrainz_url.clone(),
+        matched_artist: musicbrainz.matched_artist.clone(),
+        matched_title: musicbrainz.matched_title.clone(),
+        matched_year: musicbrainz.matched_year,
+        score: musicbrainz.score,
+        musicbrainz_outcome: musicbrainz.musicbrainz_outcome.clone(),
+        musicbrainz_message: musicbrainz.musicbrainz_message.clone(),
+        discogs_outcome: Some("failed".to_string()),
+        discogs_message: Some(message),
+        discogs_master_id: None,
+        discogs_url: None,
+    }
+}
+
+#[cfg(not(test))]
+fn verify_with_discogs(
+    item: &VerificationQueueItem,
+    musicbrainz: &VerificationResult,
+) -> VerificationResult {
+    match discogs::verify_album(&item.artist, &item.title, item.chart_year) {
+        Ok(verification) => VerificationResult {
+            outcome: verification.outcome.clone(),
+            provider: "discogs".to_string(),
+            message: verification.message.clone(),
+            musicbrainz_id: musicbrainz.musicbrainz_id.clone(),
+            musicbrainz_url: musicbrainz.musicbrainz_url.clone(),
+            matched_artist: verification.matched_artist,
+            matched_title: verification.matched_title,
+            matched_year: verification.matched_year,
+            score: None,
+            musicbrainz_outcome: musicbrainz.musicbrainz_outcome.clone(),
+            musicbrainz_message: musicbrainz.musicbrainz_message.clone(),
+            discogs_outcome: Some(verification.outcome),
+            discogs_message: Some(verification.message),
+            discogs_master_id: verification.master_id,
+            discogs_url: verification.discogs_url,
+        },
+        Err(error) => discogs_failure_result(musicbrainz, error),
     }
 }
 
@@ -1464,7 +1669,23 @@ fn verification_worker_loop(app: &AppHandle) -> Result<()> {
         let Some(item) = item else {
             return Ok(());
         };
-        let result = verify_with_musicbrainz(&item);
+        let musicbrainz_result = verify_with_musicbrainz(&item);
+        let should_fallback =
+            matches!(musicbrainz_result.outcome.as_str(), "noMatch" | "ambiguous");
+        let result = if should_fallback {
+            match discogs::is_configured() {
+                Ok(true) => {
+                    let (conn, _) = db::open(app)?;
+                    set_checking_provider(&conn, item.id, "discogs")?;
+                    drop(conn);
+                    verify_with_discogs(&item, &musicbrainz_result)
+                }
+                Ok(false) => musicbrainz_result,
+                Err(error) => discogs_failure_result(&musicbrainz_result, error),
+            }
+        } else {
+            musicbrainz_result
+        };
         let (mut conn, _) = db::open(app)?;
         complete_verification_item(&mut conn, &item, &result)?;
     }
@@ -1759,16 +1980,20 @@ mod tests {
             &item,
             &VerificationResult {
                 outcome: "verified".to_string(),
-                message: "Official studio album verified.".to_string(),
-                musicbrainz_id: Some("01234567-89ab-cdef-0123-456789abcdef".to_string()),
-                musicbrainz_url: Some(
-                    "https://musicbrainz.org/release-group/01234567-89ab-cdef-0123-456789abcdef"
-                        .to_string(),
-                ),
+                provider: "discogs".to_string(),
+                message: "Discogs confirmed an accepted Album master.".to_string(),
+                musicbrainz_id: None,
+                musicbrainz_url: None,
                 matched_artist: Some("Massive Attack".to_string()),
                 matched_title: Some("Mezzanine".to_string()),
                 matched_year: Some(1998),
-                score: Some(100),
+                score: None,
+                musicbrainz_outcome: Some("noMatch".to_string()),
+                musicbrainz_message: Some("MusicBrainz returned no exact match.".to_string()),
+                discogs_outcome: Some("verified".to_string()),
+                discogs_message: Some("Discogs confirmed an accepted Album master.".to_string()),
+                discogs_master_id: Some("12345".to_string()),
+                discogs_url: Some("https://www.discogs.com/master/12345".to_string()),
             },
         )
         .expect("complete verification");
@@ -1778,9 +2003,18 @@ mod tests {
         let completed = status.batch.expect("completed batch");
         assert_eq!(completed.state, "completed");
         assert_eq!(completed.verified_count, 1);
+        assert_eq!(completed.discogs_verified_count, 1);
 
         let completion = get_for_connection(&conn, None).expect("refresh completion data");
         assert_eq!(completion.candidates[0].verification_status, "verified");
+        assert_eq!(
+            completion.candidates[0].verification_provider.as_deref(),
+            Some("discogs")
+        );
+        assert_eq!(
+            completion.candidates[0].discogs_master_id.as_deref(),
+            Some("12345")
+        );
         assert_eq!(completion.atlas[0].verified, 1);
         assert_eq!(completion.atlas[0].candidates, 0);
     }
@@ -1828,6 +2062,7 @@ mod tests {
             &item,
             &VerificationResult {
                 outcome: "failed".to_string(),
+                provider: "musicbrainz".to_string(),
                 message: "Temporary MusicBrainz failure.".to_string(),
                 musicbrainz_id: None,
                 musicbrainz_url: None,
@@ -1835,6 +2070,12 @@ mod tests {
                 matched_title: None,
                 matched_year: None,
                 score: None,
+                musicbrainz_outcome: Some("failed".to_string()),
+                musicbrainz_message: Some("Temporary MusicBrainz failure.".to_string()),
+                discogs_outcome: None,
+                discogs_message: None,
+                discogs_master_id: None,
+                discogs_url: None,
             },
         )
         .expect("store failed verification");

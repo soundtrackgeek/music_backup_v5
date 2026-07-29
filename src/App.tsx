@@ -349,6 +349,7 @@ import {
 } from "./components/MusicBrainzReviewState";
 import { AiSettingsPanel } from "./components/AiSettingsPanel";
 import { DeemixSettingsPanel } from "./components/DeemixSettingsPanel";
+import { DiscogsSettingsPanel } from "./components/DiscogsSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
 import { ExportResultStatus } from "./components/ExportResultStatus";
 import { LibraryAnalystPanel } from "./components/LibraryAnalystPanel";
@@ -16804,6 +16805,7 @@ export default function App() {
               </SettingsSection>
 
               <SettingsSection id="providers">
+                <DiscogsSettingsPanel />
                 <DeemixSettingsPanel
                   downloadPath={settings.deemixDownloadPath}
                   quality={settings.deemixDownloadQuality}

@@ -1,7 +1,22 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 41;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 42;
+
+pub(super) fn phase_forty_two_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_forty_one_schema_exists(conn)?
+        && super::schema_column_exists(
+            conn,
+            "library_completion_verifications",
+            "verification_provider",
+        )?
+        && super::schema_column_exists(
+            conn,
+            "library_completion_verifications",
+            "discogs_master_id",
+        )?
+        && super::schema_column_exists(conn, "library_completion_verification_items", "provider")?)
+}
 
 pub(super) fn phase_forty_one_schema_exists(conn: &Connection) -> Result<bool> {
     Ok(phase_forty_schema_exists(conn)?
