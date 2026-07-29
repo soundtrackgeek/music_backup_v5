@@ -513,6 +513,20 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         return Ok(());
     }
 
+    if user_version == 41 && migrations::phase_forty_one_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 42 migration transaction")?;
+        ensure_library_completion_discogs_columns(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 42;")
+            .context("Could not mark the schema 42 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 42 migration")?;
+        return Ok(());
+    }
+
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS import_runs (
@@ -19615,6 +19629,74 @@ mod tests {
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .expect("read schema version");
         assert_eq!(user_version, LATEST_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn schema_forty_two_preserves_every_chart_table() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            INSERT INTO billboard_chart_entries
+                (source_file, year, rank, artist, album, artist_key, album_key, imported_at)
+            VALUES ('billboard.csv', 1998, 1, 'Artist', 'Album', 'artist', 'album', 'now');
+            INSERT INTO billboard_single_chart_entries
+                (source_file, year, rank, artist, display_artist, title, artist_key, title_key, imported_at)
+            VALUES ('billboard-singles.csv', 1998, 1, 'Artist', 'Artist', 'Song', 'artist', 'song', 'now');
+            INSERT INTO vg_lista_album_chart_entries
+                (source_file, year, week, rank, artist, title, artist_key, title_key, week_date, week_key, imported_at)
+            VALUES ('vg-albums.csv', 1998, 1, 1, 'Artist', 'Album', 'artist', 'album', '1998-01-01', '1998-01', 'now');
+            INSERT INTO vg_lista_single_chart_entries
+                (source_file, year, week, rank, artist, title, artist_key, title_key, week_date, week_key, imported_at)
+            VALUES ('vg-singles.csv', 1998, 1, 1, 'Artist', 'Song', 'artist', 'song', '1998-01-01', '1998-01', 'now');
+            INSERT INTO official_uk_album_chart_entries
+                (source_file, year, week, chart_date, rank, artist, title, artist_key, title_key, week_key, imported_at)
+            VALUES ('uk-albums.csv', 1998, 1, '1998-01-01', 1, 'Artist', 'Album', 'artist', 'album', '1998-01', 'now');
+            INSERT INTO official_uk_single_chart_entries
+                (source_file, year, week, chart_date, rank, artist, title, artist_key, title_key, week_key, imported_at)
+            VALUES ('uk-singles.csv', 1998, 1, '1998-01-01', 1, 'Artist', 'Song', 'artist', 'song', '1998-01', 'now');
+            INSERT INTO ti_i_skuddet_chart_entries
+                (source_file, year, week, chart_date, rank, rank_raw, artist, title, artist_key, title_key, imported_at)
+            VALUES ('ti.csv', 1998, 1, '1998-01-01', 1, '1', 'Artist', 'Song', 'artist', 'song', 'now');
+            INSERT INTO norsktoppen_chart_entries
+                (source_file, year, week, chart_date, rank, rank_raw, artist, title, artist_key, title_key, imported_at)
+            VALUES ('norsk.csv', 1998, 1, '1998-01-01', 1, '1', 'Artist', 'Song', 'artist', 'song', 'now');
+
+            ALTER TABLE library_completion_verifications DROP COLUMN verification_provider;
+            ALTER TABLE library_completion_verifications DROP COLUMN musicbrainz_outcome;
+            ALTER TABLE library_completion_verifications DROP COLUMN musicbrainz_message;
+            ALTER TABLE library_completion_verifications DROP COLUMN discogs_outcome;
+            ALTER TABLE library_completion_verifications DROP COLUMN discogs_message;
+            ALTER TABLE library_completion_verifications DROP COLUMN discogs_master_id;
+            ALTER TABLE library_completion_verifications DROP COLUMN discogs_url;
+            ALTER TABLE library_completion_verification_items DROP COLUMN provider;
+            PRAGMA user_version = 41;
+            ",
+        )
+        .expect("simulate schema forty-one with chart data");
+
+        migrate(&conn).expect("migrate isolated Discogs schema");
+
+        for table in [
+            "billboard_chart_entries",
+            "billboard_single_chart_entries",
+            "vg_lista_album_chart_entries",
+            "vg_lista_single_chart_entries",
+            "official_uk_album_chart_entries",
+            "official_uk_single_chart_entries",
+            "ti_i_skuddet_chart_entries",
+            "norsktoppen_chart_entries",
+        ] {
+            let count: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .unwrap_or_else(|error| panic!("count preserved rows in {table}: {error}"));
+            assert_eq!(count, 1, "schema 42 must preserve {table}");
+        }
+        assert!(migrations::phase_forty_two_schema_exists(&conn)
+            .expect("Discogs verification schema exists"));
     }
 
     #[test]

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.98.1] - 2026-07-29
+### Fixed
+- Fixed Discogs credential testing and album lookup when the database search response encodes its `year` field as a JSON string instead of a number.
+- Restricted the schema 41 to 42 upgrade to one transaction that only adds the Discogs verification columns, with regression coverage proving that all eight imported chart tables retain their rows.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.98.1`.
+
 ## [0.98.0] - 2026-07-29
 ### Added
 - Added Discogs as a rate-limited fallback when MusicBrainz returns no exact album match or an ambiguous result, with exact master matching and conservative accepted-Album classification that rejects live, compilation, EP, single, mixtape, DJ-mix, bootleg, and unofficial markers.

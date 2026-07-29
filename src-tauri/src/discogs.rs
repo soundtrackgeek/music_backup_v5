@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use keyring::Entry;
-use serde::{Deserialize, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -11,7 +11,7 @@ use zeroize::{Zeroize, Zeroizing};
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.discogs";
 const KEYRING_USER: &str = "consumer-credentials";
 const DISCOGS_API_BASE: &str = "https://api.discogs.com";
-const DISCOGS_USER_AGENT: &str = "music-backup-v5/0.98.0 (local desktop Discogs verifier)";
+const DISCOGS_USER_AGENT: &str = "music-backup-v5/0.98.1 (local desktop Discogs verifier)";
 const REQUEST_INTERVAL: Duration = Duration::from_millis(1_200);
 const MAX_CREDENTIAL_LENGTH: usize = 256;
 
@@ -74,7 +74,7 @@ struct SearchPayload {
 struct SearchResult {
     id: i64,
     title: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_year")]
     year: Option<i32>,
     #[serde(default)]
     format: Vec<String>,
@@ -84,7 +84,7 @@ struct SearchResult {
 struct MasterPayload {
     id: i64,
     title: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_year")]
     year: Option<i32>,
     #[serde(default)]
     artists: Vec<DiscogsArtist>,
@@ -95,7 +95,7 @@ struct MasterPayload {
 #[derive(Debug, Deserialize)]
 struct ReleasePayload {
     title: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_year")]
     year: Option<i32>,
     #[serde(default)]
     status: String,
@@ -115,6 +115,29 @@ struct DiscogsFormat {
     name: String,
     #[serde(default)]
     descriptions: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum DiscogsYear {
+    Number(i32),
+    Text(String),
+}
+
+fn deserialize_optional_year<'de, D>(deserializer: D) -> std::result::Result<Option<i32>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<DiscogsYear>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(DiscogsYear::Number(year)) => Ok(Some(year)),
+        Some(DiscogsYear::Text(year)) if year.trim().is_empty() => Ok(None),
+        Some(DiscogsYear::Text(year)) => year
+            .trim()
+            .parse::<i32>()
+            .map(Some)
+            .map_err(D::Error::custom),
+    }
 }
 
 struct DiscogsResponse<T> {
@@ -554,5 +577,23 @@ mod tests {
             descriptions: vec!["Album".to_string(), "Compilation".to_string()],
         }];
         assert!(album_classification(&compilation, &[]).is_err());
+    }
+
+    #[test]
+    fn search_payload_accepts_discogs_string_years() {
+        let payload = serde_json::from_str::<SearchPayload>(
+            r#"{
+                "results": [{
+                    "id": 23683,
+                    "title": "Massive Attack - Mezzanine",
+                    "year": "1998",
+                    "format": ["Vinyl", "LP", "Album"]
+                }]
+            }"#,
+        )
+        .expect("parse Discogs search response");
+
+        assert_eq!(payload.results.len(), 1);
+        assert_eq!(payload.results[0].year, Some(1998));
     }
 }
