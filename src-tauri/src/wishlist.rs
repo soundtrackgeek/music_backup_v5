@@ -24,7 +24,7 @@ const MAX_MUSICBRAINZ_SEARCH_QUERY_LENGTH: usize = 200;
 #[cfg(not(test))]
 const MUSICBRAINZ_SEARCH_LIMIT: usize = 8;
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.99.0 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.100.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_REQUEST_INTERVAL: Duration = Duration::from_millis(1_100);
 #[cfg(not(test))]
@@ -849,7 +849,14 @@ fn valid_musicbrainz_id(value: &str) -> bool {
 }
 
 fn candidate_add_request(
+    candidate: WishListMusicBrainzCandidate,
+) -> Result<AddWishListItemRequest> {
+    candidate_add_request_with_source(candidate, "MusicBrainz search")
+}
+
+fn candidate_add_request_with_source(
     mut candidate: WishListMusicBrainzCandidate,
+    source: &str,
 ) -> Result<AddWishListItemRequest> {
     candidate.entity = candidate.entity.trim().to_lowercase();
     if !matches!(candidate.entity.as_str(), "artist" | "album") {
@@ -871,7 +878,7 @@ fn candidate_add_request(
         year: candidate.year,
         musicbrainz_id: Some(musicbrainz_id),
         musicbrainz_url: Some(musicbrainz_url),
-        source: "MusicBrainz search".to_string(),
+        source: source.to_string(),
     };
     validate_request(&mut input)?;
     Ok(input)
@@ -882,7 +889,21 @@ fn add_validated_musicbrainz_candidate(
     candidate: WishListMusicBrainzCandidate,
     artist_albums: Option<(Vec<crate::musicbrainz::WishListOfficialAlbum>, String)>,
 ) -> Result<AddWishListMusicBrainzCandidateResponse> {
-    let input = candidate_add_request(candidate)?;
+    add_validated_musicbrainz_candidate_with_source(
+        conn,
+        candidate,
+        artist_albums,
+        "MusicBrainz search",
+    )
+}
+
+fn add_validated_musicbrainz_candidate_with_source(
+    conn: &Connection,
+    candidate: WishListMusicBrainzCandidate,
+    artist_albums: Option<(Vec<crate::musicbrainz::WishListOfficialAlbum>, String)>,
+    source: &str,
+) -> Result<AddWishListMusicBrainzCandidateResponse> {
+    let input = candidate_add_request_with_source(candidate, source)?;
     let existing_id = conn
         .query_row(
             "SELECT id FROM wish_list_items WHERE identity_key = ?1",
@@ -983,6 +1004,35 @@ fn add_validated_musicbrainz_candidate(
         item: Some(item),
         artist_album_summary: None,
     })
+}
+
+pub(crate) fn add_verified_chart_artist_for_connection(
+    conn: &Connection,
+    artist: &str,
+    musicbrainz_id: &str,
+) -> Result<AddWishListMusicBrainzCandidateResponse> {
+    let musicbrainz_id = musicbrainz_id.trim().to_lowercase();
+    let artist_albums = crate::musicbrainz::cached_official_album_release_groups_for_wishlist(
+        conn,
+        &musicbrainz_id,
+    )?
+    .context("Verify this artist's official albums before adding it to the Wish List.")?;
+    add_validated_musicbrainz_candidate_with_source(
+        conn,
+        WishListMusicBrainzCandidate {
+            entity: "artist".to_string(),
+            title: artist.trim().to_string(),
+            artist: String::new(),
+            year: None,
+            musicbrainz_id: musicbrainz_id.clone(),
+            musicbrainz_url: format!("https://musicbrainz.org/artist/{musicbrainz_id}"),
+            disambiguation: None,
+            country: None,
+            score: 100,
+        },
+        Some(artist_albums),
+        "Library Completion · Chart artist discovery",
+    )
 }
 
 fn missing_album_label(count: usize) -> String {

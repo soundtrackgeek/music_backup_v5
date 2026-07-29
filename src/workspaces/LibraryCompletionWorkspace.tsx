@@ -17,8 +17,11 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
+  UsersRound,
   X,
 } from "lucide-react";
+
+import { ArtistCompletionWorkspace } from "./ArtistCompletionWorkspace";
 
 import {
   addWishListMusicBrainzCandidate,
@@ -45,7 +48,7 @@ import type {
   WishListMusicBrainzCandidate,
 } from "../types";
 
-type CompletionView = "workbench" | "atlas";
+type CompletionView = "workbench" | "atlas" | "artists";
 type CompletionFilter =
   | "all"
   | "candidate"
@@ -161,6 +164,7 @@ export function LibraryCompletionWorkspace({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<CompletionView>("workbench");
+  const [artistRefreshToken, setArtistRefreshToken] = useState(0);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<CompletionFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -789,18 +793,41 @@ export function LibraryCompletionWorkspace({
             >
               <BarChart3 size={15} /> Coverage Atlas
             </button>
+            <button
+              type="button"
+              className={view === "artists" ? "active" : ""}
+              aria-pressed={view === "artists"}
+              onClick={() => setView("artists")}
+            >
+              <UsersRound size={15} /> Artist discovery
+            </button>
           </div>
           <button className="secondary-button" type="button" onClick={onOpenWishList}>
             <Heart size={15} />
             <span>Wanted {wantedCount > 0 ? wantedCount : ""}</span>
           </button>
-          <button className="primary-button" type="button" disabled={isLoading} onClick={() => void load(campaign)}>
-            <RefreshCw size={15} className={isLoading ? "spin" : ""} />
-            <span>{isLoading ? "Scanning" : "Scan local charts"}</span>
+          <button
+            className="primary-button"
+            type="button"
+            disabled={view !== "artists" && isLoading}
+            onClick={() => {
+              if (view === "artists") setArtistRefreshToken((current) => current + 1);
+              else void load(campaign);
+            }}
+          >
+            <RefreshCw size={15} className={view !== "artists" && isLoading ? "spin" : ""} />
+            <span>{view !== "artists" && isLoading ? "Scanning" : "Scan local charts"}</span>
           </button>
         </div>
       </header>
 
+      {view === "artists" ? (
+        <ArtistCompletionWorkspace
+          refreshToken={artistRefreshToken}
+          onOpenWishList={onOpenWishList}
+        />
+      ) : (
+      <>
       <section className="completion-command-bar" aria-label="Candidate controls">
         <label className="completion-search">
           <Search size={16} aria-hidden="true" />
@@ -1385,6 +1412,8 @@ export function LibraryCompletionWorkspace({
             ) : null}
           </aside>
         </div>
+      )}
+      </>
       )}
     </section>
   );

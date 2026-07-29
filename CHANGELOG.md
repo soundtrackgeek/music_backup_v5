@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.100.0] - 2026-07-29
+### Added
+- Added **Artist discovery** inside Library Completion, combining missing artists from Billboard, Official UK, and VG Lista album and singles charts while excluding normalized album artists, track album artists, and track artists already in the imported library.
+- Added a persistent, restart-safe artist verification queue with selection, progress, ETA, pause/resume, failed-check retry, per-provider activity, cached results, and manual MusicBrainz identity review.
+- Added exact MusicBrainz artist verification with cached official studio-album release groups, plus independent Discogs corroboration through accepted studio-album masters.
+- Added an explicit **Add artist to Wish List** handoff that creates or refreshes the existing Artist Wish List item with its verified missing official-album summary.
+
+### Changed
+- Added explicit MusicBrainz and Discogs outcome badges, album/singles provenance, local-absence evidence, official-album counts, and provider guidance to the artist dossier.
+- Advanced SQLite to schema version 44 and synchronized app metadata and provider user agents to `0.100.0`.
+
+### Fixed
+- Prevented a paused artist verification batch from repeatedly restarting its idle worker.
+- Added migration regression coverage proving that the schema 44 upgrade preserves every imported album and singles chart table.
+
 ## [0.99.0] - 2026-07-29
 ### Added
 - Added Phase 2C on-demand cover enrichment for verified Library Completion albums: MusicBrainz confirmations use Cover Art Archive release-group artwork, while Discogs confirmations use the primary master image.

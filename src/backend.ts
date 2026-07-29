@@ -146,6 +146,10 @@ import type {
   DiscogsCredentialStatus,
   SaveDiscogsCredentialsRequest,
   LibraryCompletionCandidate,
+  LibraryCompletionArtistCandidate,
+  LibraryCompletionArtistDecision,
+  LibraryCompletionArtistResponse,
+  LibraryCompletionArtistVerificationStatus,
   LibraryCompletionCoverEnrichment,
   LibraryCompletionDecision,
   LibraryCompletionRequest,
@@ -153,7 +157,11 @@ import type {
   LibraryCompletionVerificationStatus,
   SetLibraryCompletionVerificationStateRequest,
   SetLibraryCompletionDecisionRequest,
+  SetLibraryCompletionArtistDecisionRequest,
+  SetLibraryCompletionArtistVerificationStateRequest,
   StartLibraryCompletionVerificationRequest,
+  StartLibraryCompletionArtistVerificationRequest,
+  ConfirmLibraryCompletionArtistMatchRequest,
   DeemixCredentialStatus,
   WishListItem,
   WishListArtistAlbumSummary,
@@ -531,6 +539,96 @@ let mockLibraryCompletionVerificationStatus: LibraryCompletionVerificationStatus
   recentItems: [],
 };
 let mockLibraryCompletionVerificationSequence = 1;
+const mockLibraryCompletionArtistCandidates: LibraryCompletionArtistCandidate[] = [
+  {
+    id: "talk talk",
+    artist: "Talk Talk",
+    firstChartYear: 1982,
+    confidence: "best",
+    status: "candidate",
+    wishListItemId: null,
+    verificationStatus: "unverified",
+    verificationMessage: null,
+    verificationCheckedAt: null,
+    musicbrainzVerificationStatus: null,
+    musicbrainzVerificationMessage: null,
+    musicbrainzId: null,
+    musicbrainzUrl: null,
+    officialAlbumCount: 0,
+    discogsVerificationStatus: null,
+    discogsVerificationMessage: null,
+    discogsMasterId: null,
+    discogsUrl: null,
+    discogsStudioAlbumTitle: null,
+    evidence: [
+      { source: "officialUk", chartKind: "albums", label: "Official UK Albums", bestRank: 3, firstYear: 1984, lastYear: 1991, appearances: 42 },
+      { source: "officialUk", chartKind: "singles", label: "Official UK Singles", bestRank: 13, firstYear: 1982, lastYear: 1991, appearances: 68 },
+      { source: "vgLista", chartKind: "albums", label: "VG Lista Albums", bestRank: 9, firstYear: 1984, lastYear: 1988, appearances: 14 },
+    ],
+  },
+  {
+    id: "grace jones",
+    artist: "Grace Jones",
+    firstChartYear: 1977,
+    confidence: "best",
+    status: "candidate",
+    wishListItemId: null,
+    verificationStatus: "unverified",
+    verificationMessage: null,
+    verificationCheckedAt: null,
+    musicbrainzVerificationStatus: null,
+    musicbrainzVerificationMessage: null,
+    musicbrainzId: null,
+    musicbrainzUrl: null,
+    officialAlbumCount: 0,
+    discogsVerificationStatus: null,
+    discogsVerificationMessage: null,
+    discogsMasterId: null,
+    discogsUrl: null,
+    discogsStudioAlbumTitle: null,
+    evidence: [
+      { source: "billboard", chartKind: "albums", label: "Billboard 200", bestRank: 52, firstYear: 1981, lastYear: 1986, appearances: 18 },
+      { source: "officialUk", chartKind: "singles", label: "Official UK Singles", bestRank: 12, firstYear: 1977, lastYear: 1993, appearances: 51 },
+    ],
+  },
+  {
+    id: "the blue nile",
+    artist: "The Blue Nile",
+    firstChartYear: 1984,
+    confidence: "good",
+    status: "candidate",
+    wishListItemId: null,
+    verificationStatus: "unverified",
+    verificationMessage: null,
+    verificationCheckedAt: null,
+    musicbrainzVerificationStatus: null,
+    musicbrainzVerificationMessage: null,
+    musicbrainzId: null,
+    musicbrainzUrl: null,
+    officialAlbumCount: 0,
+    discogsVerificationStatus: null,
+    discogsVerificationMessage: null,
+    discogsMasterId: null,
+    discogsUrl: null,
+    discogsStudioAlbumTitle: null,
+    evidence: [
+      { source: "officialUk", chartKind: "albums", label: "Official UK Albums", bestRank: 10, firstYear: 1984, lastYear: 2004, appearances: 22 },
+    ],
+  },
+];
+const mockLibraryCompletionArtistVerifications = new Map<
+  string,
+  LibraryCompletionArtistCandidate
+>();
+const mockLibraryCompletionArtistDecisions = new Map<
+  string,
+  LibraryCompletionArtistDecision
+>();
+let mockLibraryCompletionArtistVerificationStatus: LibraryCompletionArtistVerificationStatus = {
+  batch: null,
+  recentItems: [],
+};
+let mockLibraryCompletionArtistVerificationSequence = 1;
 const mockDeemixDownloads = new Map<
   string,
   { destinationPath: string; downloadedAt: string }
@@ -2249,6 +2347,302 @@ export async function setLibraryCompletionDecision(
   }
   return invoke<LibraryCompletionDecision>(
     "set_library_completion_decision",
+    { input },
+  );
+}
+
+export async function getLibraryCompletionArtists() {
+  if (!isTauriRuntime()) {
+    const candidates = mockLibraryCompletionArtistCandidates.map((candidate) => {
+      const verification = mockLibraryCompletionArtistVerifications.get(candidate.id);
+      const decision = mockLibraryCompletionArtistDecisions.get(candidate.id);
+      return {
+        ...(verification ?? candidate),
+        status: decision?.status ?? verification?.status ?? candidate.status,
+        wishListItemId:
+          decision?.wishListItemId ?? verification?.wishListItemId ?? candidate.wishListItemId,
+      };
+    });
+    return {
+      generatedAt: new Date().toISOString(),
+      totalChartArtists: 3_862,
+      ownedArtistCount: 2_174,
+      totalCandidates: 1_688,
+      returnedCandidates: candidates.length,
+      truncated: true,
+      candidates,
+    } satisfies LibraryCompletionArtistResponse;
+  }
+  return invoke<LibraryCompletionArtistResponse>("get_library_completion_artists");
+}
+
+function verifiedMockArtist(candidate: LibraryCompletionArtistCandidate) {
+  const now = new Date().toISOString();
+  const officialAlbumCount = candidate.id === "talk talk" ? 5 : candidate.id === "grace jones" ? 10 : 4;
+  return {
+    ...candidate,
+    verificationStatus: "verified" as const,
+    verificationMessage: `MusicBrainz confirmed ${officialAlbumCount} official studio albums; Discogs independently corroborated the artist.`,
+    verificationCheckedAt: now,
+    musicbrainzVerificationStatus: "verified" as const,
+    musicbrainzVerificationMessage: `MusicBrainz confirmed ${officialAlbumCount} official studio albums for this artist.`,
+    musicbrainzId: "11111111-1111-4111-8111-111111111111",
+    musicbrainzUrl: "https://musicbrainz.org/artist/11111111-1111-4111-8111-111111111111",
+    officialAlbumCount,
+    discogsVerificationStatus: "verified" as const,
+    discogsVerificationMessage: "Discogs corroborated this artist with an accepted studio-album master.",
+    discogsMasterId: "424242",
+    discogsUrl: "https://www.discogs.com/master/424242",
+    discogsStudioAlbumTitle: candidate.id === "talk talk" ? "The Colour of Spring" : "Preview Studio Album",
+  } satisfies LibraryCompletionArtistCandidate;
+}
+
+function advanceMockLibraryCompletionArtistVerification() {
+  const batch = mockLibraryCompletionArtistVerificationStatus.batch;
+  if (!batch || batch.state !== "running") return;
+  const now = new Date().toISOString();
+  let items = mockLibraryCompletionArtistVerificationStatus.recentItems.map((item) => {
+    if (item.state !== "checking") return item;
+    const candidate = mockLibraryCompletionArtistCandidates.find(
+      (value) => value.id === item.artistId,
+    );
+    if (candidate) mockLibraryCompletionArtistVerifications.set(item.artistId, verifiedMockArtist(candidate));
+    return {
+      ...item,
+      state: "verified" as const,
+      provider: "discogs" as const,
+      message: "MusicBrainz confirmed official studio albums; Discogs corroborated the artist.",
+      officialAlbumCount: candidate?.id === "talk talk" ? 5 : 4,
+      updatedAt: now,
+    };
+  });
+  const nextIndex = items.findIndex((item) => item.state === "queued");
+  if (nextIndex >= 0) {
+    items = items.map((item, index) =>
+      index === nextIndex
+        ? { ...item, state: "checking" as const, provider: "musicbrainz" as const, updatedAt: now }
+        : item,
+    );
+  }
+  const queuedCount = items.filter((item) => item.state === "queued").length;
+  const checkingCount = items.filter((item) => item.state === "checking").length;
+  const completed = queuedCount + checkingCount === 0;
+  mockLibraryCompletionArtistVerificationStatus = {
+    batch: {
+      ...batch,
+      state: completed ? "completed" : "running",
+      queuedCount,
+      checkingCount,
+      verifiedCount: items.filter((item) => item.state === "verified").length,
+      noMatchCount: items.filter((item) => item.state === "noMatch").length,
+      ambiguousCount: items.filter((item) => item.state === "ambiguous").length,
+      failedCount: items.filter((item) => item.state === "failed").length,
+      completedCount: batch.totalCount - queuedCount - checkingCount,
+      estimatedSecondsRemaining: (queuedCount + checkingCount) * 2,
+      updatedAt: now,
+      completedAt: completed ? now : null,
+    },
+    recentItems: items,
+  };
+}
+
+export async function getLibraryCompletionArtistVerificationStatus() {
+  if (!isTauriRuntime()) {
+    advanceMockLibraryCompletionArtistVerification();
+    return mockLibraryCompletionArtistVerificationStatus;
+  }
+  return invoke<LibraryCompletionArtistVerificationStatus>(
+    "get_library_completion_artist_verification_status",
+  );
+}
+
+export async function startLibraryCompletionArtistVerification(
+  input: StartLibraryCompletionArtistVerificationRequest,
+) {
+  if (!isTauriRuntime()) {
+    const current = mockLibraryCompletionArtistVerificationStatus.batch;
+    if (current && current.state !== "completed") {
+      throw new Error("Finish or pause the current artist verification run before starting another one.");
+    }
+    const selected = new Set(input.artistIds);
+    const candidates = mockLibraryCompletionArtistCandidates.filter(
+      (candidate) =>
+        selected.has(candidate.id) &&
+        candidate.status === "candidate" &&
+        (candidate.verificationStatus === "unverified" || candidate.verificationStatus === "failed"),
+    );
+    if (candidates.length === 0) {
+      throw new Error("Every selected artist is already checked or no longer open for verification.");
+    }
+    const now = new Date().toISOString();
+    const recentItems = candidates.map((candidate, index) => ({
+      artistId: candidate.id,
+      artist: candidate.artist,
+      state: index === 0 ? "checking" as const : "queued" as const,
+      provider: "musicbrainz" as const,
+      message: null,
+      officialAlbumCount: 0,
+      updatedAt: now,
+    }));
+    mockLibraryCompletionArtistVerificationStatus = {
+      batch: {
+        id: mockLibraryCompletionArtistVerificationSequence++,
+        label: input.label ?? (candidates.length === 1 ? candidates[0].artist : `${candidates.length} chart artists`),
+        state: "running",
+        totalCount: candidates.length,
+        queuedCount: Math.max(0, candidates.length - 1),
+        checkingCount: 1,
+        verifiedCount: 0,
+        noMatchCount: 0,
+        ambiguousCount: 0,
+        failedCount: 0,
+        completedCount: 0,
+        estimatedSecondsRemaining: candidates.length * 2,
+        createdAt: now,
+        updatedAt: now,
+        completedAt: null,
+      },
+      recentItems,
+    };
+    return mockLibraryCompletionArtistVerificationStatus;
+  }
+  return invoke<LibraryCompletionArtistVerificationStatus>(
+    "start_library_completion_artist_verification",
+    { input },
+  );
+}
+
+export async function setLibraryCompletionArtistVerificationState(
+  input: SetLibraryCompletionArtistVerificationStateRequest,
+) {
+  if (!isTauriRuntime()) {
+    const batch = mockLibraryCompletionArtistVerificationStatus.batch;
+    if (!batch || batch.id !== input.batchId || batch.state === "completed") {
+      throw new Error("The selected artist verification run is already complete or no longer exists.");
+    }
+    mockLibraryCompletionArtistVerificationStatus = {
+      ...mockLibraryCompletionArtistVerificationStatus,
+      batch: { ...batch, state: input.state, updatedAt: new Date().toISOString() },
+    };
+    return mockLibraryCompletionArtistVerificationStatus;
+  }
+  return invoke<LibraryCompletionArtistVerificationStatus>(
+    "set_library_completion_artist_verification_state",
+    { input },
+  );
+}
+
+export async function retryLibraryCompletionArtistVerificationFailures(batchId: number) {
+  if (!isTauriRuntime()) {
+    const batch = mockLibraryCompletionArtistVerificationStatus.batch;
+    if (!batch || batch.failedCount === 0) {
+      throw new Error("This artist verification run has no failed checks to retry.");
+    }
+    return mockLibraryCompletionArtistVerificationStatus;
+  }
+  return invoke<LibraryCompletionArtistVerificationStatus>(
+    "retry_library_completion_artist_verification_failures",
+    { batchId },
+  );
+}
+
+export async function confirmLibraryCompletionArtistMatch(
+  input: ConfirmLibraryCompletionArtistMatchRequest,
+) {
+  if (!isTauriRuntime()) {
+    const candidate = mockLibraryCompletionArtistCandidates.find(
+      (value) => value.id === input.artistId,
+    );
+    if (!candidate) throw new Error("The selected chart artist is no longer missing from the library.");
+    const verified = {
+      ...verifiedMockArtist(candidate),
+      musicbrainzId: input.candidate.musicbrainzId,
+      musicbrainzUrl: input.candidate.musicbrainzUrl,
+    };
+    mockLibraryCompletionArtistVerifications.set(candidate.id, verified);
+    return verified;
+  }
+  return invoke<LibraryCompletionArtistCandidate>(
+    "confirm_library_completion_artist_match",
+    { input },
+  );
+}
+
+export async function setLibraryCompletionArtistDecision(
+  input: SetLibraryCompletionArtistDecisionRequest,
+) {
+  if (!isTauriRuntime()) {
+    if (input.status === "candidate") {
+      mockLibraryCompletionArtistDecisions.delete(input.artistId);
+      return {
+        artistId: input.artistId,
+        status: input.status,
+        wishListItemId: null,
+        missingAlbumCount: null,
+        message: "Returned this artist to the discovery queue.",
+        updatedAt: new Date().toISOString(),
+      } satisfies LibraryCompletionArtistDecision;
+    }
+    const verification = mockLibraryCompletionArtistVerifications.get(input.artistId);
+    let wishListItemId: number | null = null;
+    let missingAlbumCount: number | null = null;
+    let message = input.status === "needsReview"
+      ? "Saved this chart artist for manual review."
+      : "Excluded this chart artist from the active discovery queue.";
+    if (input.status === "wanted") {
+      if (!verification || verification.verificationStatus !== "verified") {
+        throw new Error("Only artists with confirmed official studio albums can be added to the Wish List.");
+      }
+      const existing = mockWishListItems.find(
+        (item) => item.entity === "artist" && item.title.toLocaleLowerCase() === input.artist.toLocaleLowerCase(),
+      );
+      const count = verification.officialAlbumCount;
+      const item = existing ?? {
+        id: mockWishListItems.reduce((largest, entry) => Math.max(largest, entry.id), 0) + 1,
+        entity: "artist" as const,
+        title: input.artist,
+        artist: "",
+        year: null,
+        musicbrainzId: verification.musicbrainzId,
+        musicbrainzUrl: verification.musicbrainzUrl,
+        source: "Library Completion · Chart artist discovery",
+        createdAt: new Date().toISOString(),
+        downloadedDeezerAlbumId: null,
+        downloadedPath: null,
+        downloadedAt: null,
+        artistAlbumSummary: {
+          officialAlbumCount: count,
+          ownedAlbumCount: 0,
+          missingAlbumCount: count,
+          missingAlbums: Array.from({ length: count }, (_, index) => ({
+            releaseGroupId: `33333333-3333-4333-8333-${String(index + 1).padStart(12, "0")}`,
+            title: `Official studio album ${index + 1}`,
+            year: 1982 + index * 2,
+            musicbrainzUrl: `https://musicbrainz.org/release-group/33333333-3333-4333-8333-${String(index + 1).padStart(12, "0")}`,
+          })),
+          updatedAt: new Date().toISOString(),
+        },
+      } satisfies WishListItem;
+      if (!existing) mockWishListItems = [item, ...mockWishListItems];
+      wishListItemId = item.id;
+      missingAlbumCount = count;
+      message = existing
+        ? `${input.artist} is already being tracked with ${count} albums missing.`
+        : `Added ${input.artist} with ${count} albums missing.`;
+    }
+    const decision = {
+      artistId: input.artistId,
+      status: input.status,
+      wishListItemId,
+      missingAlbumCount,
+      message,
+      updatedAt: new Date().toISOString(),
+    } satisfies LibraryCompletionArtistDecision;
+    mockLibraryCompletionArtistDecisions.set(input.artistId, decision);
+    return decision;
+  }
+  return invoke<LibraryCompletionArtistDecision>(
+    "set_library_completion_artist_decision",
     { input },
   );
 }

@@ -11,7 +11,7 @@ use zeroize::{Zeroize, Zeroizing};
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.discogs";
 const KEYRING_USER: &str = "consumer-credentials";
 const DISCOGS_API_BASE: &str = "https://api.discogs.com";
-const DISCOGS_USER_AGENT: &str = "music-backup-v5/0.99.0 (local desktop Discogs verifier)";
+const DISCOGS_USER_AGENT: &str = "music-backup-v5/0.100.0 (local desktop Discogs verifier)";
 const REQUEST_INTERVAL: Duration = Duration::from_millis(1_200);
 const MAX_CREDENTIAL_LENGTH: usize = 256;
 
@@ -62,6 +62,16 @@ pub(crate) struct DiscogsAlbumVerification {
     pub matched_artist: Option<String>,
     pub matched_title: Option<String>,
     pub matched_year: Option<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct DiscogsArtistVerification {
+    pub outcome: String,
+    pub message: String,
+    pub master_id: Option<String>,
+    pub discogs_url: Option<String>,
+    pub studio_album_title: Option<String>,
+    pub studio_album_count: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -384,6 +394,34 @@ fn exact_search_result(result: &SearchResult, artist: &str, title: &str) -> bool
         && normalize_key(result_title) == normalize_key(title)
 }
 
+fn exact_artist_search_result(result: &SearchResult, artist: &str) -> bool {
+    let Some((result_artist, _)) = result.title.split_once(" - ") else {
+        return false;
+    };
+    normalize_key(strip_discogs_artist_suffix(result_artist)) == normalize_key(artist)
+}
+
+fn search_result_looks_like_studio_album(result: &SearchResult) -> bool {
+    let labels = result
+        .format
+        .iter()
+        .map(|value| normalize_key(value))
+        .collect::<Vec<_>>();
+    labels.iter().any(|label| label == "album")
+        && ![
+            "compilation",
+            "live",
+            "mixtape",
+            "unofficial release",
+            "bootleg",
+            "dj mix",
+            "single",
+            "ep",
+        ]
+        .iter()
+        .any(|marker| labels.iter().any(|label| label == marker))
+}
+
 fn album_classification(formats: &[DiscogsFormat], search_formats: &[String]) -> Result<()> {
     let labels = formats
         .iter()
@@ -548,6 +586,96 @@ pub(crate) fn verify_album(
     })
 }
 
+pub(crate) fn verify_artist_has_studio_album(artist: &str) -> Result<DiscogsArtistVerification> {
+    let credentials = require_stored_credentials()?;
+    let search = get_json::<SearchPayload>(
+        &credentials,
+        "/database/search",
+        &[
+            ("artist", artist),
+            ("type", "master"),
+            ("format", "album"),
+            ("per_page", "25"),
+        ],
+        "artist studio-album search",
+    )?;
+    let mut exact = search
+        .payload
+        .results
+        .into_iter()
+        .filter(|result| {
+            exact_artist_search_result(result, artist)
+                && search_result_looks_like_studio_album(result)
+        })
+        .collect::<Vec<_>>();
+    exact.sort_by_key(|result| result.id);
+    exact.dedup_by_key(|result| result.id);
+    let studio_album_count = exact.len();
+    if studio_album_count == 0 {
+        return Ok(DiscogsArtistVerification {
+            outcome: "noMatch".to_string(),
+            message: "Discogs returned no exact accepted studio-album master for this artist."
+                .to_string(),
+            master_id: None,
+            discogs_url: None,
+            studio_album_title: None,
+            studio_album_count: 0,
+        });
+    }
+
+    for search_result in exact.into_iter().take(3) {
+        let master = get_json::<MasterPayload>(
+            &credentials,
+            &format!("/masters/{}", search_result.id),
+            &[],
+            "artist master lookup",
+        )?
+        .payload;
+        let master_artist = joined_artist(&master.artists);
+        if normalize_key(&master_artist) != normalize_key(artist) {
+            continue;
+        }
+        let Some(main_release) = master.main_release else {
+            continue;
+        };
+        let release = get_json::<ReleasePayload>(
+            &credentials,
+            &format!("/releases/{main_release}"),
+            &[],
+            "artist key release lookup",
+        )?
+        .payload;
+        let release_artist = joined_artist(&release.artists);
+        if normalize_key(&release_artist) != normalize_key(artist)
+            || normalize_key(&release.title) != normalize_key(&master.title)
+            || !release.status.eq_ignore_ascii_case("accepted")
+            || album_classification(&release.formats, &search_result.format).is_err()
+        {
+            continue;
+        }
+        return Ok(DiscogsArtistVerification {
+            outcome: "verified".to_string(),
+            message: format!(
+                "Discogs corroborated this artist with the accepted studio-album master ‘{}’.",
+                master.title
+            ),
+            master_id: Some(master.id.to_string()),
+            discogs_url: Some(format!("https://www.discogs.com/master/{}", master.id)),
+            studio_album_title: Some(master.title),
+            studio_album_count,
+        });
+    }
+
+    Ok(DiscogsArtistVerification {
+        outcome: "noMatch".to_string(),
+        message: "Discogs found album-shaped masters, but none of the first exact candidates had an accepted key release without live, compilation, EP, single, or unofficial markers.".to_string(),
+        master_id: None,
+        discogs_url: None,
+        studio_album_title: None,
+        studio_album_count,
+    })
+}
+
 pub(crate) fn master_cover_url(master_id: &str) -> Result<Option<String>> {
     let master_id = master_id.trim();
     if master_id.is_empty()
@@ -596,6 +724,27 @@ mod tests {
             "R.E.M.",
             "Automatic for the People"
         ));
+    }
+
+    #[test]
+    fn artist_search_requires_an_exact_artist_and_studio_album_markers() {
+        let studio = SearchResult {
+            id: 1,
+            title: "R.E.M. - Murmur".to_string(),
+            year: Some(1983),
+            format: vec!["Vinyl".to_string(), "LP".to_string(), "Album".to_string()],
+        };
+        assert!(exact_artist_search_result(&studio, "R.E.M."));
+        assert!(search_result_looks_like_studio_album(&studio));
+
+        let live = SearchResult {
+            id: 2,
+            title: "R.E.M. - Live At The Olympia".to_string(),
+            year: Some(2009),
+            format: vec!["Album".to_string(), "Live".to_string()],
+        };
+        assert!(exact_artist_search_result(&live, "R.E.M."));
+        assert!(!search_result_looks_like_studio_album(&live));
     }
 
     #[test]

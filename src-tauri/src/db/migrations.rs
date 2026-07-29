@@ -1,7 +1,19 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 43;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 44;
+
+pub(super) fn phase_forty_four_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_forty_three_schema_exists(conn)?
+        && super::schema_table_exists(conn, "library_completion_artist_verifications")?
+        && super::schema_table_exists(conn, "library_completion_artist_decisions")?
+        && super::schema_table_exists(conn, "library_completion_artist_verification_batches")?
+        && super::schema_table_exists(conn, "library_completion_artist_verification_items")?
+        && super::schema_index_exists(
+            conn,
+            "idx_library_completion_artist_verification_batches_one_active",
+        )?)
+}
 
 pub(super) fn phase_forty_three_schema_exists(conn: &Connection) -> Result<bool> {
     Ok(phase_forty_two_schema_exists(conn)?

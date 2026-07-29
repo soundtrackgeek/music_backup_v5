@@ -508,7 +508,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_three_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_four_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -537,6 +537,20 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         transaction
             .commit()
             .context("Could not commit the schema 43 migration")?;
+        user_version = 43;
+    }
+
+    if user_version == 43 && migrations::phase_forty_three_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 44 migration transaction")?;
+        ensure_library_completion_artist_schema(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 44;")
+            .context("Could not mark the schema 44 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 44 migration")?;
         return Ok(());
     }
 
@@ -1116,6 +1130,76 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_library_completion_verification_items_batch_state
             ON library_completion_verification_items(batch_id, state, id);
 
+        CREATE TABLE IF NOT EXISTS library_completion_artist_verifications (
+            artist_key TEXT PRIMARY KEY,
+            outcome TEXT NOT NULL CHECK(outcome IN ('verified', 'noMatch', 'ambiguous', 'failed')),
+            artist TEXT NOT NULL,
+            message TEXT NOT NULL,
+            musicbrainz_outcome TEXT,
+            musicbrainz_message TEXT,
+            musicbrainz_id TEXT,
+            musicbrainz_url TEXT,
+            official_album_count INTEGER NOT NULL DEFAULT 0,
+            discogs_outcome TEXT,
+            discogs_message TEXT,
+            discogs_master_id TEXT,
+            discogs_url TEXT,
+            discogs_studio_album_title TEXT,
+            attempt_count INTEGER NOT NULL DEFAULT 1,
+            checked_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_completion_artist_verifications_outcome
+            ON library_completion_artist_verifications(outcome, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS library_completion_artist_decisions (
+            artist_key TEXT PRIMARY KEY,
+            status TEXT NOT NULL CHECK(status IN ('wanted', 'notForMe', 'needsReview')),
+            artist TEXT NOT NULL,
+            wish_list_item_id INTEGER REFERENCES wish_list_items(id) ON DELETE SET NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_completion_artist_decisions_status
+            ON library_completion_artist_decisions(status, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS library_completion_artist_verification_batches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            label TEXT NOT NULL,
+            state TEXT NOT NULL CHECK(state IN ('running', 'paused', 'completed')),
+            total_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            completed_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_completion_artist_verification_batches_state
+            ON library_completion_artist_verification_batches(state, updated_at DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_library_completion_artist_verification_batches_one_active
+            ON library_completion_artist_verification_batches(
+                (CASE WHEN state IN ('running', 'paused') THEN 1 END)
+            );
+
+        CREATE TABLE IF NOT EXISTS library_completion_artist_verification_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id INTEGER NOT NULL REFERENCES library_completion_artist_verification_batches(id)
+                ON DELETE CASCADE,
+            artist_key TEXT NOT NULL,
+            artist TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT 'musicbrainz',
+            state TEXT NOT NULL CHECK(state IN ('queued', 'checking', 'verified', 'noMatch', 'ambiguous', 'failed')),
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            UNIQUE(batch_id, artist_key)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_completion_artist_verification_items_batch_state
+            ON library_completion_artist_verification_items(batch_id, state, id);
+
         CREATE TABLE IF NOT EXISTS deemix_downloads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             deezer_album_id TEXT NOT NULL,
@@ -1603,12 +1687,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_map_location_tables(conn)?;
     ensure_library_completion_discogs_columns(conn)?;
     ensure_library_completion_cover_columns(conn)?;
+    ensure_library_completion_artist_schema(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
     migrations::migrate_billboard_album_source_default(conn)?;
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 43;
+        PRAGMA user_version = 44;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -1936,6 +2021,80 @@ fn ensure_library_completion_cover_columns(conn: &Connection) -> Result<()> {
                 .with_context(|| format!("Could not add Library Completion cover column {name}"))?;
         }
     }
+    Ok(())
+}
+
+fn ensure_library_completion_artist_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS library_completion_artist_verifications (
+            artist_key TEXT PRIMARY KEY,
+            outcome TEXT NOT NULL CHECK(outcome IN ('verified', 'noMatch', 'ambiguous', 'failed')),
+            artist TEXT NOT NULL,
+            message TEXT NOT NULL,
+            musicbrainz_outcome TEXT,
+            musicbrainz_message TEXT,
+            musicbrainz_id TEXT,
+            musicbrainz_url TEXT,
+            official_album_count INTEGER NOT NULL DEFAULT 0,
+            discogs_outcome TEXT,
+            discogs_message TEXT,
+            discogs_master_id TEXT,
+            discogs_url TEXT,
+            discogs_studio_album_title TEXT,
+            attempt_count INTEGER NOT NULL DEFAULT 1,
+            checked_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_library_completion_artist_verifications_outcome
+            ON library_completion_artist_verifications(outcome, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS library_completion_artist_decisions (
+            artist_key TEXT PRIMARY KEY,
+            status TEXT NOT NULL CHECK(status IN ('wanted', 'notForMe', 'needsReview')),
+            artist TEXT NOT NULL,
+            wish_list_item_id INTEGER REFERENCES wish_list_items(id) ON DELETE SET NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_library_completion_artist_decisions_status
+            ON library_completion_artist_decisions(status, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS library_completion_artist_verification_batches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            label TEXT NOT NULL,
+            state TEXT NOT NULL CHECK(state IN ('running', 'paused', 'completed')),
+            total_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            completed_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_library_completion_artist_verification_batches_state
+            ON library_completion_artist_verification_batches(state, updated_at DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_library_completion_artist_verification_batches_one_active
+            ON library_completion_artist_verification_batches(
+                (CASE WHEN state IN ('running', 'paused') THEN 1 END)
+            );
+
+        CREATE TABLE IF NOT EXISTS library_completion_artist_verification_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id INTEGER NOT NULL REFERENCES library_completion_artist_verification_batches(id)
+                ON DELETE CASCADE,
+            artist_key TEXT NOT NULL,
+            artist TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT 'musicbrainz',
+            state TEXT NOT NULL CHECK(state IN ('queued', 'checking', 'verified', 'noMatch', 'ambiguous', 'failed')),
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            UNIQUE(batch_id, artist_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_library_completion_artist_verification_items_batch_state
+            ON library_completion_artist_verification_items(batch_id, state, id);
+        ",
+    )
+    .context("Could not create the Library Completion artist discovery schema")?;
     Ok(())
 }
 
@@ -19674,7 +19833,7 @@ mod tests {
     }
 
     #[test]
-    fn discogs_and_cover_schema_upgrades_preserve_every_chart_table() {
+    fn provider_cover_and_artist_schema_upgrades_preserve_every_chart_table() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -19741,6 +19900,8 @@ mod tests {
             .expect("Discogs verification schema exists"));
         assert!(migrations::phase_forty_three_schema_exists(&conn)
             .expect("cover enrichment schema exists"));
+        assert!(migrations::phase_forty_four_schema_exists(&conn)
+            .expect("chart artist discovery schema exists"));
     }
 
     #[test]

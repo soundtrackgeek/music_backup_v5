@@ -1,6 +1,7 @@
 #![cfg_attr(test, allow(dead_code, unused_imports))]
 
 mod ai;
+mod artist_completion;
 mod covers;
 mod db;
 mod deemix;
@@ -535,6 +536,100 @@ async fn set_library_completion_decision(
     })
     .await
     .map_err(|error| format!("Library Completion decision task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_library_completion_artists(
+    app: AppHandle,
+) -> Result<artist_completion::LibraryCompletionArtistResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || artist_completion::get_for_app(&app))
+        .await
+        .map_err(|error| format!("Chart artist discovery task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_library_completion_artist_verification_status(
+    app: AppHandle,
+) -> Result<artist_completion::LibraryCompletionArtistVerificationStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        artist_completion::verification_status_for_app(&app)
+    })
+    .await
+    .map_err(|error| format!("Chart artist verification status task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn start_library_completion_artist_verification(
+    app: AppHandle,
+    input: artist_completion::StartLibraryCompletionArtistVerificationRequest,
+) -> Result<artist_completion::LibraryCompletionArtistVerificationStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        artist_completion::start_verification_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Chart artist verification start task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn set_library_completion_artist_verification_state(
+    app: AppHandle,
+    input: artist_completion::SetLibraryCompletionArtistVerificationStateRequest,
+) -> Result<artist_completion::LibraryCompletionArtistVerificationStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        artist_completion::set_verification_state_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Chart artist verification control task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn retry_library_completion_artist_verification_failures(
+    app: AppHandle,
+    batch_id: i64,
+) -> Result<artist_completion::LibraryCompletionArtistVerificationStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        artist_completion::retry_failures_for_app(&app, batch_id)
+    })
+    .await
+    .map_err(|error| format!("Chart artist verification retry task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn confirm_library_completion_artist_match(
+    app: AppHandle,
+    input: artist_completion::ConfirmLibraryCompletionArtistMatchRequest,
+) -> Result<artist_completion::LibraryCompletionArtistCandidate, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        artist_completion::confirm_match_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Chart artist match confirmation task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn set_library_completion_artist_decision(
+    app: AppHandle,
+    input: artist_completion::SetLibraryCompletionArtistDecisionRequest,
+) -> Result<artist_completion::LibraryCompletionArtistDecision, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        artist_completion::set_decision_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Chart artist decision task failed: {error}"))?
     .map_err(|error| error.to_string())
 }
 
@@ -1359,6 +1454,7 @@ pub fn run() {
         )
         .setup(|app| {
             library_completion::resume_verification_worker(app.handle().clone());
+            artist_completion::resume_verification_worker(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1407,6 +1503,13 @@ pub fn run() {
             set_library_completion_verification_state,
             retry_library_completion_verification_failures,
             set_library_completion_decision,
+            get_library_completion_artists,
+            get_library_completion_artist_verification_status,
+            start_library_completion_artist_verification,
+            set_library_completion_artist_verification_state,
+            retry_library_completion_artist_verification_failures,
+            confirm_library_completion_artist_match,
+            set_library_completion_artist_decision,
             discover_wish_list_artist_albums,
             refresh_wish_list_artist_album_summary,
             search_wish_list_musicbrainz,

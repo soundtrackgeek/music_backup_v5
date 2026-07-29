@@ -1215,6 +1215,112 @@ export type LibraryCompletionVerificationStatus = {
   recentItems: LibraryCompletionVerificationItemSummary[];
 };
 
+export type LibraryCompletionArtistEvidence = {
+  source: LibraryCompletionEvidence["source"];
+  chartKind: "albums" | "singles";
+  label: string;
+  bestRank: number;
+  firstYear: number;
+  lastYear: number;
+  appearances: number;
+};
+
+export type LibraryCompletionArtistCandidate = {
+  id: string;
+  artist: string;
+  firstChartYear: number;
+  confidence: Exclude<LibraryCompletionConfidence, "needsReview">;
+  status: LibraryCompletionStatus;
+  wishListItemId: number | null;
+  verificationStatus: LibraryCompletionCandidate["verificationStatus"];
+  verificationMessage: string | null;
+  verificationCheckedAt: string | null;
+  musicbrainzVerificationStatus: LibraryCompletionCandidate["musicbrainzVerificationStatus"];
+  musicbrainzVerificationMessage: string | null;
+  musicbrainzId: string | null;
+  musicbrainzUrl: string | null;
+  officialAlbumCount: number;
+  discogsVerificationStatus: LibraryCompletionCandidate["discogsVerificationStatus"];
+  discogsVerificationMessage: string | null;
+  discogsMasterId: string | null;
+  discogsUrl: string | null;
+  discogsStudioAlbumTitle: string | null;
+  evidence: LibraryCompletionArtistEvidence[];
+};
+
+export type LibraryCompletionArtistResponse = {
+  generatedAt: string;
+  totalChartArtists: number;
+  ownedArtistCount: number;
+  totalCandidates: number;
+  returnedCandidates: number;
+  truncated: boolean;
+  candidates: LibraryCompletionArtistCandidate[];
+};
+
+export type StartLibraryCompletionArtistVerificationRequest = {
+  artistIds: string[];
+  label: string | null;
+};
+
+export type SetLibraryCompletionArtistVerificationStateRequest = {
+  batchId: number;
+  state: "running" | "paused";
+};
+
+export type ConfirmLibraryCompletionArtistMatchRequest = {
+  artistId: string;
+  candidate: WishListMusicBrainzCandidate;
+};
+
+export type SetLibraryCompletionArtistDecisionRequest = {
+  artistId: string;
+  artist: string;
+  status: LibraryCompletionStatus;
+};
+
+export type LibraryCompletionArtistDecision = {
+  artistId: string;
+  status: LibraryCompletionStatus;
+  wishListItemId: number | null;
+  missingAlbumCount: number | null;
+  message: string;
+  updatedAt: string;
+};
+
+export type LibraryCompletionArtistVerificationItemSummary = {
+  artistId: string;
+  artist: string;
+  state: Exclude<LibraryCompletionArtistCandidate["verificationStatus"], "unverified">;
+  provider: "musicbrainz" | "discogs";
+  message: string | null;
+  officialAlbumCount: number;
+  updatedAt: string;
+};
+
+export type LibraryCompletionArtistVerificationBatch = {
+  id: number;
+  label: string;
+  state: "running" | "paused" | "completed";
+  totalCount: number;
+  queuedCount: number;
+  checkingCount: number;
+  verifiedCount: number;
+  noMatchCount: number;
+  ambiguousCount: number;
+  failedCount: number;
+  completedCount: number;
+  estimatedSecondsRemaining: number;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+};
+
+export type LibraryCompletionArtistVerificationStatus = {
+  batch: LibraryCompletionArtistVerificationBatch | null;
+  recentItems: LibraryCompletionArtistVerificationItemSummary[];
+};
+
 export type DeemixCredentialSource = "windowsCredentialManager" | "none";
 
 export type DiscogsCredentialStatus = {

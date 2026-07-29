@@ -1284,6 +1284,221 @@ button {
   place-content: center;
 }
 
+.artist-completion-surface {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.artist-completion-command-bar .completion-filter select {
+  min-width: 196px;
+}
+
+.artist-completion-workbench {
+  grid-template-columns: minmax(330px, 0.82fr) minmax(560px, 1.48fr);
+}
+
+.completion-candidate-art {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid #d6e2de;
+  border-radius: 8px;
+  color: #5e7770;
+  background: #eaf1ef;
+}
+
+.completion-candidate-art.artist {
+  border-radius: 50%;
+}
+
+.completion-candidate-status {
+  border: 1px solid #d9e1de;
+  border-radius: 999px;
+  color: #70807a;
+  background: #f7f9f8;
+  padding: 3px 7px;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.completion-candidate-status.verified,
+.completion-candidate-status.wanted {
+  border-color: #86bbb2;
+  color: #08645c;
+  background: #dff3ee;
+}
+
+.completion-candidate-status.noMatch,
+.completion-candidate-status.ambiguous {
+  border-color: #d9c381;
+  color: #735616;
+  background: #fff4d8;
+}
+
+.completion-candidate-status.queued,
+.completion-candidate-status.checking {
+  border-color: #8bbdb4;
+  color: #08665d;
+  background: #e0f2ee;
+}
+
+.completion-candidate-status.failed {
+  border-color: #d7a4a4;
+  color: #813f3f;
+  background: #fae8e8;
+}
+
+.completion-dossier-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.completion-dossier-art {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border: 1px solid #cbdad5;
+  border-radius: 12px;
+  color: #446b62;
+  background: #e3efec;
+}
+
+.completion-dossier-art.artist {
+  border-radius: 50%;
+}
+
+.completion-dossier-header h2 {
+  margin: 0;
+  color: #17231f;
+  font-size: 26px;
+  line-height: 31px;
+}
+
+.completion-dossier-tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 9px;
+  flex-wrap: wrap;
+}
+
+.completion-dossier-tags span {
+  border: 1px solid #d6e0dc;
+  border-radius: 5px;
+  color: #5f6d68;
+  background: #f8faf9;
+  padding: 4px 7px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.completion-local-proof {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+  border: 1px solid #b9d8d2;
+  border-radius: 8px;
+  color: #17695f;
+  background: #edf8f5;
+  padding: 10px 12px;
+}
+
+.completion-local-proof strong,
+.completion-local-proof p {
+  display: block;
+  margin: 0;
+}
+
+.completion-local-proof strong {
+  font-size: 12px;
+}
+
+.completion-local-proof p {
+  margin-top: 2px;
+  color: #53736d;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.artist-album-proof {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  margin-top: 12px;
+  border: 1px solid #9bcfc5;
+  border-radius: 9px;
+  background: #e6f6f2;
+  padding: 11px 12px;
+}
+
+.artist-album-proof > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  border-radius: 8px;
+  color: #087168;
+  background: #ceeae4;
+}
+
+.artist-album-proof strong,
+.artist-album-proof p {
+  display: block;
+  margin: 0;
+}
+
+.artist-album-proof strong {
+  color: #164d46;
+  font-size: 12px;
+}
+
+.artist-album-proof p {
+  margin-top: 2px;
+  color: #52726c;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.artist-album-proof > span:last-child {
+  color: #09665d;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.artist-album-proof button {
+  min-height: 34px;
+  padding-inline: 11px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.artist-completion-notice {
+  margin: 0;
+  border: 1px solid #abd1c9;
+  border-radius: 8px;
+  color: #1d675e;
+  background: #edf8f5;
+  padding: 9px 12px;
+  font-size: 11px;
+}
+
+.artist-provider-results {
+  margin-top: 12px;
+}
+
+.artist-completion-decisions .primary-button:disabled {
+  color: #70807a;
+  background: #e3e9e7;
+}
+
 .completion-atlas-layout {
   display: grid;
   grid-template-columns: minmax(700px, 1fr) 260px;
@@ -1491,6 +1706,86 @@ button {
 
 :root[data-theme="dark"] .completion-workspace {
   background: #121816;
+}
+
+:root[data-theme="dark"] .completion-candidate-art,
+:root[data-theme="dark"] .completion-dossier-art {
+  border-color: #40534d;
+  color: #a8c8c0;
+  background: #25332f;
+}
+
+:root[data-theme="dark"] .completion-dossier-header h2 {
+  color: #edf4f1;
+}
+
+:root[data-theme="dark"] .completion-dossier-tags span {
+  border-color: #43534e;
+  color: #b9c9c4;
+  background: #222c29;
+}
+
+:root[data-theme="dark"] .completion-local-proof {
+  border-color: #3d766d;
+  color: #a9ddd2;
+  background: #1c302c;
+}
+
+:root[data-theme="dark"] .completion-local-proof p {
+  color: #aac5be;
+}
+
+:root[data-theme="dark"] .artist-album-proof {
+  border-color: #3d796f;
+  background: #1d332e;
+}
+
+:root[data-theme="dark"] .artist-album-proof > span:first-child {
+  color: #9ce0d3;
+  background: #27463f;
+}
+
+:root[data-theme="dark"] .artist-album-proof strong {
+  color: #d8f3ed;
+}
+
+:root[data-theme="dark"] .artist-album-proof p,
+:root[data-theme="dark"] .artist-album-proof > span:last-child {
+  color: #aaccc4;
+}
+
+:root[data-theme="dark"] .artist-completion-notice {
+  border-color: #3d7168;
+  color: #b6ded5;
+  background: #1c2e2a;
+}
+
+:root[data-theme="dark"] .completion-candidate-status {
+  border-color: #52615c;
+  color: #c0ccc8;
+  background: #29332f;
+}
+
+:root[data-theme="dark"] .completion-candidate-status.verified,
+:root[data-theme="dark"] .completion-candidate-status.wanted,
+:root[data-theme="dark"] .completion-candidate-status.queued,
+:root[data-theme="dark"] .completion-candidate-status.checking {
+  border-color: #4e9186;
+  color: #c6efe7;
+  background: #25433d;
+}
+
+:root[data-theme="dark"] .completion-candidate-status.noMatch,
+:root[data-theme="dark"] .completion-candidate-status.ambiguous {
+  border-color: #8b7845;
+  color: #f0dc98;
+  background: #3a321e;
+}
+
+:root[data-theme="dark"] .completion-candidate-status.failed {
+  border-color: #8c5656;
+  color: #f1baba;
+  background: #3b2525;
 }
 
 :root[data-theme="dark"] .completion-command-bar,
@@ -1716,6 +2011,10 @@ button {
     grid-template-columns: minmax(300px, 0.8fr) minmax(430px, 1.2fr);
   }
 
+  .artist-completion-workbench {
+    grid-template-columns: minmax(300px, 0.76fr) minmax(480px, 1.24fr);
+  }
+
   .completion-atlas-layout {
     grid-template-columns: 1fr;
   }
@@ -1748,6 +2047,16 @@ button {
 
   .completion-workbench {
     grid-template-columns: 1fr;
+  }
+
+  .artist-album-proof {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .artist-album-proof > button,
+  .artist-album-proof > span:last-child {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .completion-verification-panel {

@@ -15,6 +15,13 @@ const setLibraryCompletionDecision = vi.fn();
 const searchWishListMusicBrainz = vi.fn();
 const addWishListMusicBrainzCandidate = vi.fn();
 const searchDeemixAlbums = vi.fn();
+const getLibraryCompletionArtists = vi.fn();
+const getLibraryCompletionArtistVerificationStatus = vi.fn();
+const startLibraryCompletionArtistVerification = vi.fn();
+const setLibraryCompletionArtistVerificationState = vi.fn();
+const retryLibraryCompletionArtistVerificationFailures = vi.fn();
+const confirmLibraryCompletionArtistMatch = vi.fn();
+const setLibraryCompletionArtistDecision = vi.fn();
 
 vi.mock("../backend", () => ({
   getLibraryCompletion: (...args: unknown[]) => getLibraryCompletion(...args),
@@ -39,6 +46,19 @@ vi.mock("../backend", () => ({
   addWishListMusicBrainzCandidate: (...args: unknown[]) =>
     addWishListMusicBrainzCandidate(...args),
   searchDeemixAlbums: (...args: unknown[]) => searchDeemixAlbums(...args),
+  getLibraryCompletionArtists: (...args: unknown[]) => getLibraryCompletionArtists(...args),
+  getLibraryCompletionArtistVerificationStatus: (...args: unknown[]) =>
+    getLibraryCompletionArtistVerificationStatus(...args),
+  startLibraryCompletionArtistVerification: (...args: unknown[]) =>
+    startLibraryCompletionArtistVerification(...args),
+  setLibraryCompletionArtistVerificationState: (...args: unknown[]) =>
+    setLibraryCompletionArtistVerificationState(...args),
+  retryLibraryCompletionArtistVerificationFailures: (...args: unknown[]) =>
+    retryLibraryCompletionArtistVerificationFailures(...args),
+  confirmLibraryCompletionArtistMatch: (...args: unknown[]) =>
+    confirmLibraryCompletionArtistMatch(...args),
+  setLibraryCompletionArtistDecision: (...args: unknown[]) =>
+    setLibraryCompletionArtistDecision(...args),
 }));
 
 const response = {
@@ -224,6 +244,16 @@ describe("LibraryCompletionWorkspace", () => {
       matches: [],
       searchedAt: "2026-07-29T10:05:00Z",
     });
+    getLibraryCompletionArtists.mockResolvedValue({
+      generatedAt: "2026-07-29T10:00:00Z",
+      totalChartArtists: 0,
+      ownedArtistCount: 0,
+      totalCandidates: 0,
+      returnedCandidates: 0,
+      truncated: false,
+      candidates: [],
+    });
+    getLibraryCompletionArtistVerificationStatus.mockResolvedValue({ batch: null, recentItems: [] });
   });
 
   it("moves from an Atlas cohort into a filtered Workbench campaign", async () => {
