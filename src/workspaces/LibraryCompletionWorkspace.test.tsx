@@ -108,9 +108,33 @@ describe("LibraryCompletionWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Review candidates" }));
 
+    await waitFor(() => {
+      expect(getLibraryCompletion).toHaveBeenLastCalledWith({
+        source: "officialUk",
+        decade: 1980,
+      });
+    });
     expect(screen.getByText("Campaign")).toBeInTheDocument();
     expect(screen.getByText("Official UK Albums · 1980s")).toBeInTheDocument();
+    expect(screen.getByText("1 open loaded")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "The Colour of Spring" })).toBeInTheDocument();
+  });
+
+  it("keeps a visible result when MusicBrainz finds no studio album", async () => {
+    render(<LibraryCompletionWorkspace onOpenWishList={vi.fn()} />);
+
+    await screen.findByRole("heading", { name: "The Colour of Spring" });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+
+    expect(await screen.findByText("No studio-album match found")).toBeInTheDocument();
+    expect(screen.getByText(/candidate remains unverified/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
+    expect(searchWishListMusicBrainz).toHaveBeenCalledWith({
+      entity: "album",
+      query: "The Colour of Spring",
+      artist: "Talk Talk",
+      year: 1986,
+    });
   });
 
   it("persists a wanted decision with the chart evidence source", async () => {

@@ -66,6 +66,13 @@ pub struct LibraryCompletionResponse {
     pub atlas: Vec<LibraryCompletionAtlasCell>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryCompletionRequest {
+    pub source: Option<String>,
+    pub decade: Option<i32>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetLibraryCompletionDecisionRequest {
@@ -286,7 +293,37 @@ fn decision_order(status: &str) -> usize {
     }
 }
 
-fn get_for_connection(conn: &Connection) -> Result<LibraryCompletionResponse> {
+fn normalize_request(
+    request: Option<LibraryCompletionRequest>,
+) -> Result<Option<LibraryCompletionRequest>> {
+    let Some(mut request) = request else {
+        return Ok(None);
+    };
+    request.source = request
+        .source
+        .take()
+        .map(|source| source.trim().to_string())
+        .filter(|source| !source.is_empty());
+    match (&request.source, request.decade) {
+        (None, None) => Ok(None),
+        (Some(source), Some(decade)) => {
+            if !matches!(source.as_str(), "billboard" | "officialUk" | "vgLista") {
+                bail!("The Library Completion chart source is not supported.")
+            }
+            if !(1000..=3000).contains(&decade) || decade % 10 != 0 {
+                bail!("The Library Completion decade is outside the supported range.")
+            }
+            Ok(Some(request))
+        }
+        _ => bail!("Choose both a chart source and decade for a Library Completion campaign."),
+    }
+}
+
+fn get_for_connection(
+    conn: &Connection,
+    request: Option<LibraryCompletionRequest>,
+) -> Result<LibraryCompletionResponse> {
+    let request = normalize_request(request)?;
     let source_rows = load_source_rows(conn)?;
     let decisions = load_decisions(conn)?;
     let mut albums = HashMap::<String, AlbumAggregate>::new();
@@ -359,6 +396,21 @@ fn get_for_connection(conn: &Connection) -> Result<LibraryCompletionResponse> {
         });
     }
 
+    let total_candidates = candidates
+        .iter()
+        .filter(|candidate| candidate.status != "notForMe")
+        .count();
+
+    if let Some(request) = &request {
+        let source = request.source.as_deref().unwrap_or_default();
+        let decade = request.decade.unwrap_or_default();
+        candidates.retain(|candidate| {
+            candidate.evidence.iter().any(|evidence| {
+                evidence.source == source && evidence.first_year.div_euclid(10) * 10 == decade
+            })
+        });
+    }
+
     candidates.sort_by(|left, right| {
         confidence_order(&left.confidence)
             .cmp(&confidence_order(&right.confidence))
@@ -381,12 +433,10 @@ fn get_for_connection(conn: &Connection) -> Result<LibraryCompletionResponse> {
             .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
     });
 
-    let total_candidates = candidates
-        .iter()
-        .filter(|candidate| candidate.status != "notForMe")
-        .count();
-    let truncated = candidates.len() > MAX_RETURNED_CANDIDATES;
-    candidates.truncate(MAX_RETURNED_CANDIDATES);
+    let truncated = request.is_none() && candidates.len() > MAX_RETURNED_CANDIDATES;
+    if request.is_none() {
+        candidates.truncate(MAX_RETURNED_CANDIDATES);
+    }
     let returned_candidates = candidates.len();
 
     let mut atlas = atlas_counts
@@ -560,9 +610,12 @@ fn set_decision_for_connection(
 }
 
 #[cfg(not(test))]
-pub fn get_for_app(app: &AppHandle) -> Result<LibraryCompletionResponse> {
+pub fn get_for_app(
+    app: &AppHandle,
+    request: Option<LibraryCompletionRequest>,
+) -> Result<LibraryCompletionResponse> {
     let (conn, _) = db::open(app)?;
-    get_for_connection(&conn)
+    get_for_connection(&conn, request)
 }
 
 #[cfg(not(test))]
@@ -604,7 +657,7 @@ mod tests {
         let conn = connection();
         insert_billboard_candidate(&conn);
 
-        let response = get_for_connection(&conn).expect("get completion data");
+        let response = get_for_connection(&conn, None).expect("get completion data");
 
         assert_eq!(response.total_chart_albums, 1);
         assert_eq!(response.total_candidates, 1);
@@ -618,7 +671,7 @@ mod tests {
     fn wanted_decisions_persist_and_create_a_wish_list_item() {
         let conn = connection();
         insert_billboard_candidate(&conn);
-        let candidate = get_for_connection(&conn)
+        let candidate = get_for_connection(&conn, None)
             .expect("get completion data")
             .candidates
             .remove(0);
@@ -640,8 +693,40 @@ mod tests {
         .expect("save wanted decision");
 
         assert!(decision.wish_list_item_id.is_some());
-        let refreshed = get_for_connection(&conn).expect("refresh completion data");
+        let refreshed = get_for_connection(&conn, None).expect("refresh completion data");
         assert_eq!(refreshed.candidates[0].status, "wanted");
         assert_eq!(refreshed.atlas[0].wanted, 1);
+    }
+
+    #[test]
+    fn campaign_returns_the_complete_source_decade_cohort() {
+        let conn = connection();
+        insert_billboard_candidate(&conn);
+        conn.execute(
+            "
+            INSERT INTO billboard_chart_entries (
+                source_file, year, rank, artist, album, artist_key, album_key,
+                first_appearance_year, matched_album_id, imported_at
+            ) VALUES ('albums.csv', 1984, 12, 'Prince', 'Purple Rain',
+                      'prince', 'purple rain', 1984, NULL, '2026-07-29')
+            ",
+            [],
+        )
+        .expect("insert 1980s candidate");
+
+        let response = get_for_connection(
+            &conn,
+            Some(LibraryCompletionRequest {
+                source: Some("billboard".to_string()),
+                decade: Some(1980),
+            }),
+        )
+        .expect("get scoped completion data");
+
+        assert_eq!(response.candidates.len(), 1);
+        assert_eq!(response.candidates[0].title, "Purple Rain");
+        assert!(!response.truncated);
+        assert_eq!(response.atlas.len(), 2);
+        assert_eq!(response.total_candidates, 2);
     }
 }

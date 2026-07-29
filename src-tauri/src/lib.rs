@@ -423,8 +423,9 @@ async fn list_wish_list(app: AppHandle) -> Result<wishlist::WishListResponse, St
 #[tauri::command]
 async fn get_library_completion(
     app: AppHandle,
+    input: Option<library_completion::LibraryCompletionRequest>,
 ) -> Result<library_completion::LibraryCompletionResponse, String> {
-    tauri::async_runtime::spawn_blocking(move || library_completion::get_for_app(&app))
+    tauri::async_runtime::spawn_blocking(move || library_completion::get_for_app(&app, input))
         .await
         .map_err(|error| format!("Library Completion task failed: {error}"))?
         .map_err(|error| error.to_string())

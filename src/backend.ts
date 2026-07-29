@@ -144,6 +144,7 @@ import type {
   DeemixConnectionTest,
   LibraryCompletionCandidate,
   LibraryCompletionDecision,
+  LibraryCompletionRequest,
   LibraryCompletionResponse,
   SetLibraryCompletionDecisionRequest,
   DeemixCredentialStatus,
@@ -449,13 +450,17 @@ const mockLibraryCompletionAtlas = mockLibraryCompletionAtlasRows.flatMap(
     const owned = Math.round(total * (ownedPercents as number[])[index] / 100);
     const needsReview = Math.max(4, Math.round(total * 0.15));
     const wanted = Math.max(2, Math.round(total * 0.04));
-    const excluded = Math.max(1, Math.round(total * 0.03));
+    const previewCohort = source === "officialUk" && decade === 1990;
+    const candidates = previewCohort
+      ? 3
+      : Math.max(0, total - owned - needsReview - wanted - Math.max(1, Math.round(total * 0.03)));
+    const excluded = Math.max(1, total - owned - needsReview - wanted - candidates);
     return {
       source,
       label,
       decade,
       owned,
-      candidates: Math.max(0, total - owned - needsReview - wanted - excluded),
+      candidates,
       wanted,
       needsReview,
       excluded,
@@ -1770,9 +1775,9 @@ export async function listWishList() {
   return invoke<WishListResponse>("list_wish_list");
 }
 
-export async function getLibraryCompletion() {
+export async function getLibraryCompletion(input: LibraryCompletionRequest | null = null) {
   if (!isTauriRuntime()) {
-    const candidates = mockLibraryCompletionCandidates.map((candidate) => {
+    const decidedCandidates = mockLibraryCompletionCandidates.map((candidate) => {
       const decision = mockLibraryCompletionDecisions.get(candidate.id);
       if (!decision) return candidate;
       return {
@@ -1783,17 +1788,24 @@ export async function getLibraryCompletion() {
         musicbrainzUrl: decision.musicbrainzUrl,
       };
     });
+    const candidates = decidedCandidates.filter((candidate) =>
+      !input || candidate.evidence.some(
+        (evidence) =>
+          evidence.source === input.source &&
+          Math.floor(evidence.firstYear / 10) * 10 === input.decade,
+      ),
+    );
     return {
       generatedAt: new Date().toISOString(),
       totalChartAlbums: 2_164,
       totalCandidates: 1_248,
       returnedCandidates: candidates.length,
-      truncated: true,
+      truncated: input == null,
       candidates,
       atlas: mockLibraryCompletionAtlas,
     } satisfies LibraryCompletionResponse;
   }
-  return invoke<LibraryCompletionResponse>("get_library_completion");
+  return invoke<LibraryCompletionResponse>("get_library_completion", { input });
 }
 
 export async function setLibraryCompletionDecision(
@@ -1853,10 +1865,10 @@ export async function searchWishListMusicBrainz(
       ? null
       : title.match(/^(.+?)\s+by\s+(.+?)(?:\s+\((\d{4})\))?$/i);
     const previewAlbumTitle = albumQueryMatch?.[1]?.trim() || title;
-    const previewAlbumArtist = albumQueryMatch?.[2]?.trim() || "Pet Shop Boys";
-    const previewAlbumYear = albumQueryMatch?.[3]
+    const previewAlbumArtist = input.artist?.trim() || albumQueryMatch?.[2]?.trim() || "Pet Shop Boys";
+    const previewAlbumYear = input.year ?? (albumQueryMatch?.[3]
       ? Number(albumQueryMatch[3])
-      : 2002;
+      : 2002);
     return {
       entity: input.entity,
       query: title,

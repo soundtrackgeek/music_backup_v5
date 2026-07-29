@@ -33,6 +33,7 @@ import type {
 type CompletionView = "workbench" | "atlas";
 type CompletionFilter =
   | "all"
+  | "candidate"
   | "billboard"
   | "officialUk"
   | "vgLista"
@@ -46,8 +47,14 @@ type Campaign = {
   label: string;
 };
 
+type MusicBrainzNotice = {
+  kind: "empty" | "error" | "verified";
+  title: string;
+  detail: string;
+};
+
 const statusLabels: Record<LibraryCompletionStatus, string> = {
-  candidate: "Candidate",
+  candidate: "Unverified",
   wanted: "Wanted",
   notForMe: "Not for me",
   needsReview: "Needs review",
@@ -61,13 +68,6 @@ function sourceLabel(source: LibraryCompletionAtlasCell["source"]) {
   if (source === "billboard") return "Billboard 200";
   if (source === "officialUk") return "Official UK Albums";
   return "VG Lista";
-}
-
-function matchesCampaign(candidate: LibraryCompletionCandidate, campaign: Campaign) {
-  return (
-    Math.floor(candidate.chartYear / 10) * 10 === campaign.decade &&
-    candidate.evidence.some((evidence) => evidence.source === campaign.source)
-  );
 }
 
 export function LibraryCompletionWorkspace({
@@ -86,16 +86,21 @@ export function LibraryCompletionWorkspace({
   const [selectedAtlasId, setSelectedAtlasId] = useState<string | null>(null);
   const [pendingDecision, setPendingDecision] = useState<LibraryCompletionStatus | null>(null);
   const [musicBrainzCandidates, setMusicBrainzCandidates] = useState<WishListMusicBrainzCandidate[]>([]);
+  const [musicBrainzNotice, setMusicBrainzNotice] = useState<MusicBrainzNotice | null>(null);
   const [isCheckingMusicBrainz, setIsCheckingMusicBrainz] = useState(false);
   const [deemixResult, setDeemixResult] = useState<DeemixAlbumSearchResponse | null>(null);
   const [isCheckingDeemix, setIsCheckingDeemix] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (scope: Campaign | null = null) => {
     setError(null);
     setIsLoading(true);
+    setData((current) => current ? { ...current, candidates: [] } : current);
+    setSelectedId(null);
     try {
-      const response = await getLibraryCompletion();
+      const response = await getLibraryCompletion(
+        scope ? { source: scope.source, decade: scope.decade } : null,
+      );
       setData(response);
       setSelectedId((current) => current ?? response.candidates[0]?.id ?? null);
       setSelectedAtlasId((current) => {
@@ -133,7 +138,6 @@ export function LibraryCompletionWorkspace({
     if (!data) return [];
     const normalizedQuery = query.trim().toLocaleLowerCase();
     return data.candidates.filter((candidate) => {
-      if (campaign && !matchesCampaign(candidate, campaign)) return false;
       if (
         filter === "billboard" ||
         filter === "officialUk" ||
@@ -151,7 +155,7 @@ export function LibraryCompletionWorkspace({
         candidate.title.toLocaleLowerCase().includes(normalizedQuery)
       );
     });
-  }, [campaign, data, filter, query]);
+  }, [data, filter, query]);
 
   useEffect(() => {
     if (!candidates.length) return;
@@ -178,6 +182,7 @@ export function LibraryCompletionWorkspace({
 
   useEffect(() => {
     setMusicBrainzCandidates([]);
+    setMusicBrainzNotice(null);
     setDeemixResult(null);
   }, [selected?.id]);
 
@@ -226,14 +231,29 @@ export function LibraryCompletionWorkspace({
     if (!selected) return;
     setIsCheckingMusicBrainz(true);
     setError(null);
+    setMusicBrainzCandidates([]);
+    setMusicBrainzNotice(null);
     try {
       const response = await searchWishListMusicBrainz({
         entity: "album",
-        query: `${selected.title} by ${selected.artist} (${selected.chartYear})`,
+        query: selected.title,
+        artist: selected.artist,
+        year: selected.chartYear,
       });
       setMusicBrainzCandidates(response.candidates);
+      if (response.candidates.length === 0) {
+        setMusicBrainzNotice({
+          kind: "empty",
+          title: "No studio-album match found",
+          detail: "MusicBrainz returned no primary Album release group without live or compilation classifications. This candidate remains unverified.",
+        });
+      }
     } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : String(searchError));
+      setMusicBrainzNotice({
+        kind: "error",
+        title: "MusicBrainz check failed",
+        detail: searchError instanceof Error ? searchError.message : String(searchError),
+      });
     } finally {
       setIsCheckingMusicBrainz(false);
     }
@@ -243,6 +263,7 @@ export function LibraryCompletionWorkspace({
     if (!selected) return;
     setIsCheckingMusicBrainz(true);
     setError(null);
+    setMusicBrainzNotice(null);
     try {
       const added = await addWishListMusicBrainzCandidate(candidate);
       const decision = await setLibraryCompletionDecision({
@@ -275,8 +296,17 @@ export function LibraryCompletionWorkspace({
           : current,
       );
       setMusicBrainzCandidates([]);
+      setMusicBrainzNotice({
+        kind: "verified",
+        title: "Official studio album verified",
+        detail: "MusicBrainz confirmed a primary Album release group with no live or compilation type and at least one official release.",
+      });
     } catch (candidateError) {
-      setError(candidateError instanceof Error ? candidateError.message : String(candidateError));
+      setMusicBrainzNotice({
+        kind: "error",
+        title: "MusicBrainz could not verify this album",
+        detail: candidateError instanceof Error ? candidateError.message : String(candidateError),
+      });
     } finally {
       setIsCheckingMusicBrainz(false);
     }
@@ -302,11 +332,20 @@ export function LibraryCompletionWorkspace({
     }
   }
 
-  function reviewAtlasCell(cell: LibraryCompletionAtlasCell) {
-    setCampaign({ source: cell.source, decade: cell.decade, label: cell.label });
-    setFilter("all");
+  async function reviewAtlasCell(cell: LibraryCompletionAtlasCell) {
+    const nextCampaign = { source: cell.source, decade: cell.decade, label: cell.label };
+    setCampaign(nextCampaign);
+    setFilter("candidate");
     setQuery("");
     setView("workbench");
+    await load(nextCampaign);
+  }
+
+  async function clearCampaign() {
+    setCampaign(null);
+    setFilter("all");
+    setQuery("");
+    await load(null);
   }
 
   return (
@@ -340,7 +379,7 @@ export function LibraryCompletionWorkspace({
             <Heart size={15} />
             <span>Wanted {wantedCount > 0 ? wantedCount : ""}</span>
           </button>
-          <button className="primary-button" type="button" disabled={isLoading} onClick={() => void load()}>
+          <button className="primary-button" type="button" disabled={isLoading} onClick={() => void load(campaign)}>
             <RefreshCw size={15} className={isLoading ? "spin" : ""} />
             <span>{isLoading ? "Scanning" : "Scan local charts"}</span>
           </button>
@@ -367,6 +406,7 @@ export function LibraryCompletionWorkspace({
             aria-label="Filter completion candidates"
           >
             <option value="all">All active candidates</option>
+            <option value="candidate">Open unverified</option>
             <option value="billboard">Billboard 200</option>
             <option value="officialUk">Official UK Albums</option>
             <option value="vgLista">VG Lista</option>
@@ -385,7 +425,8 @@ export function LibraryCompletionWorkspace({
         <div className="completion-campaign" role="status">
           <span>Campaign</span>
           <strong>{campaign.label} · {campaign.decade}s</strong>
-          <button type="button" aria-label="Clear Coverage Atlas campaign" onClick={() => setCampaign(null)}>
+          <span>{candidates.length.toLocaleString()} open loaded</span>
+          <button type="button" aria-label="Clear Coverage Atlas campaign" onClick={() => void clearCampaign()}>
             <X size={15} />
           </button>
         </div>
@@ -451,7 +492,7 @@ export function LibraryCompletionWorkspace({
                     <p>{selected.artist}</p>
                     <div className="completion-facts">
                       <span>First charted {selected.chartYear}</span>
-                      <span>{selected.musicbrainzId ? "Official album verified" : "Studio album candidate"}</span>
+                      <span>{selected.musicbrainzId ? "Official studio album verified" : "Album type unverified"}</span>
                     </div>
                   </div>
                 </div>
@@ -472,7 +513,7 @@ export function LibraryCompletionWorkspace({
                       <h3>Why this is here</h3>
                     </div>
                     <span className={`completion-confidence completion-confidence-${selected.confidence}`}>
-                      {selected.confidence === "best" ? "High confidence" : selected.confidence === "good" ? "Good confidence" : "Review suggested"}
+                      {selected.confidence === "best" ? "Strong chart match" : selected.confidence === "good" ? "Good chart match" : "Review suggested"}
                     </span>
                   </header>
                   {selected.evidence.map((evidence) => (
@@ -489,13 +530,21 @@ export function LibraryCompletionWorkspace({
                     <span className="completion-ledger-icon"><ShieldCheck size={15} /></span>
                     <div>
                       <strong>MusicBrainz</strong>
-                      <p>{selected.musicbrainzId ? "Official album identity linked to this candidate." : "Verify the release-group identity on demand."}</p>
+                      <p>{selected.musicbrainzId ? "Official studio-album identity linked to this candidate." : "Check whether this is an official studio album, live album, or compilation."}</p>
                     </div>
                     {selected.musicbrainzId ? (
                       <span className="completion-verified">Verified</span>
                     ) : (
                       <button type="button" disabled={isCheckingMusicBrainz} onClick={() => void checkMusicBrainz()}>
-                        {isCheckingMusicBrainz ? "Checking…" : "Check"}
+                        {isCheckingMusicBrainz
+                          ? "Checking…"
+                          : musicBrainzCandidates.length > 0
+                            ? `${musicBrainzCandidates.length} found`
+                          : musicBrainzNotice?.kind === "error"
+                            ? "Retry"
+                            : musicBrainzNotice?.kind === "empty"
+                              ? "Check again"
+                              : "Check"}
                       </button>
                     )}
                   </div>
@@ -513,7 +562,7 @@ export function LibraryCompletionWorkspace({
                   <section className="completion-provider-results" aria-live="polite">
                     <header>
                       <strong>MusicBrainz candidates</strong>
-                      <span>Choose the official album that matches this chart entry.</span>
+                      <span>Choose the primary album match; MusicBrainz will recheck its type and official release status.</span>
                     </header>
                     {musicBrainzCandidates.map((candidate) => (
                       <button
@@ -530,6 +579,19 @@ export function LibraryCompletionWorkspace({
                       </button>
                     ))}
                   </section>
+                ) : null}
+
+                {musicBrainzNotice ? (
+                  <div
+                    className={`completion-provider-notice ${musicBrainzNotice.kind}`}
+                    role={musicBrainzNotice.kind === "error" ? "alert" : "status"}
+                  >
+                    {musicBrainzNotice.kind === "verified" ? <CheckCircle2 size={17} /> : <CircleHelp size={17} />}
+                    <div>
+                      <strong>{musicBrainzNotice.title}</strong>
+                      <span>{musicBrainzNotice.detail}</span>
+                    </div>
+                  </div>
                 ) : null}
 
                 <div className="completion-decisions">
@@ -608,11 +670,11 @@ export function LibraryCompletionWorkspace({
               <div>
                 <span className="completion-kicker">Coverage Atlas</span>
                 <h2>Where the collection is thin</h2>
-                <p>Owned albums and open chart gaps, organized by source and decade.</p>
+                <p>Owned albums and unverified chart gaps, organized by source and decade.</p>
               </div>
               <div className="completion-atlas-legend" aria-label="Atlas legend">
                 <span><i className="owned" />Owned</span>
-                <span><i className="open" />Open</span>
+                <span><i className="open" />Open unverified</span>
                 <span><i className="review" />Review</span>
               </div>
             </header>
@@ -660,12 +722,12 @@ export function LibraryCompletionWorkspace({
                 </div>
                 <dl>
                   <div><dt>Owned</dt><dd>{selectedAtlas.owned.toLocaleString()}</dd></div>
-                  <div><dt>Open candidates</dt><dd>{selectedAtlas.candidates.toLocaleString()}</dd></div>
+                  <div><dt>Open unverified</dt><dd>{selectedAtlas.candidates.toLocaleString()}</dd></div>
                   <div><dt>Wanted</dt><dd>{selectedAtlas.wanted.toLocaleString()}</dd></div>
                   <div><dt>Needs review</dt><dd>{selectedAtlas.needsReview.toLocaleString()}</dd></div>
                   <div><dt>Not for me</dt><dd>{selectedAtlas.excluded.toLocaleString()}</dd></div>
                 </dl>
-                <button className="primary-button" type="button" onClick={() => reviewAtlasCell(selectedAtlas)}>
+                <button className="primary-button" type="button" disabled={isLoading} onClick={() => void reviewAtlasCell(selectedAtlas)}>
                   <LayoutList size={15} /> <span>Review candidates</span>
                 </button>
               </>

@@ -982,6 +982,8 @@ export type WishListResponse = {
 export type WishListMusicBrainzSearchRequest = {
   entity: WishListEntity;
   query: string;
+  artist?: string;
+  year?: number;
 };
 
 export type WishListMusicBrainzCandidate = {
@@ -1096,6 +1098,11 @@ export type LibraryCompletionResponse = {
   truncated: boolean;
   candidates: LibraryCompletionCandidate[];
   atlas: LibraryCompletionAtlasCell[];
+};
+
+export type LibraryCompletionRequest = {
+  source: LibraryCompletionEvidence["source"];
+  decade: number;
 };
 
 export type SetLibraryCompletionDecisionRequest = {

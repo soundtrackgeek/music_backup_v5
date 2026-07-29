@@ -83,6 +83,9 @@ pub struct WishListResponse {
 pub struct WishListMusicBrainzSearchRequest {
     pub entity: String,
     pub query: String,
+    #[serde(default)]
+    pub artist: String,
+    pub year: Option<i32>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -156,9 +159,18 @@ struct MusicBrainzReleaseGroupSearchRow {
     score: i32,
     first_release_date: Option<String>,
     primary_type: Option<String>,
+    #[serde(default)]
+    secondary_types: Vec<String>,
     disambiguation: Option<String>,
     #[serde(default)]
     artist_credit: Vec<MusicBrainzArtistCredit>,
+    #[serde(default)]
+    releases: Vec<MusicBrainzReleaseSummary>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MusicBrainzReleaseSummary {
+    status: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -218,6 +230,7 @@ fn album_search_candidates(
                 .primary_type
                 .as_deref()
                 .is_some_and(|value| value.eq_ignore_ascii_case("album"))
+                && album.secondary_types.is_empty()
         })
         .filter_map(|album| {
             let artist = musicbrainz_artist_credit(&album.artist_credit);
@@ -258,21 +271,38 @@ fn normalize_musicbrainz_search_request(
     if request.query.chars().count() < 2 {
         bail!("Enter at least two characters to search MusicBrainz.")
     }
+    request.artist = request
+        .artist
+        .trim()
+        .chars()
+        .take(MAX_ARTIST_LENGTH)
+        .collect();
+    if request
+        .year
+        .is_some_and(|year| !(1000..=3000).contains(&year))
+    {
+        bail!("The MusicBrainz search year is outside the supported range.")
+    }
     Ok(request)
 }
 
 #[cfg(not(test))]
-fn musicbrainz_search_url(entity: &str, query: &str) -> Result<Url> {
-    let endpoint = if entity == "artist" {
+fn musicbrainz_search_url(request: &WishListMusicBrainzSearchRequest) -> Result<Url> {
+    let endpoint = if request.entity == "artist" {
         "https://musicbrainz.org/ws/2/artist"
     } else {
         "https://musicbrainz.org/ws/2/release-group"
     };
-    let escaped_query = query.replace('\\', "\\\\").replace('"', "\\\"");
-    let search_query = if entity == "artist" {
+    let escaped_query = request.query.replace('\\', "\\\\").replace('"', "\\\"");
+    let escaped_artist = request.artist.replace('\\', "\\\\").replace('"', "\\\"");
+    let search_query = if request.entity == "artist" {
         format!("artist:\"{escaped_query}\"")
-    } else {
+    } else if escaped_artist.is_empty() {
         format!("releasegroup:\"{escaped_query}\" AND primarytype:album")
+    } else {
+        format!(
+            "releasegroup:\"{escaped_query}\" AND artist:\"{escaped_artist}\" AND primarytype:album"
+        )
     };
     let mut url = Url::parse(endpoint).context("Could not create the MusicBrainz search URL")?;
     url.query_pairs_mut()
@@ -287,7 +317,7 @@ pub fn search_musicbrainz_for_wishlist(
     request: WishListMusicBrainzSearchRequest,
 ) -> Result<WishListMusicBrainzSearchResponse> {
     let request = normalize_musicbrainz_search_request(request)?;
-    let url = musicbrainz_search_url(&request.entity, &request.query)?;
+    let url = musicbrainz_search_url(&request)?;
     let response = ureq::AgentBuilder::new()
         .timeout(std::time::Duration::from_secs(20))
         .build()
@@ -295,7 +325,7 @@ pub fn search_musicbrainz_for_wishlist(
         .set("User-Agent", MUSICBRAINZ_USER_AGENT)
         .call()
         .context("Could not search MusicBrainz for this Wish List item")?;
-    let candidates = if request.entity == "artist" {
+    let mut candidates = if request.entity == "artist" {
         artist_search_candidates(
             response
                 .into_json::<MusicBrainzArtistSearchPayload>()
@@ -308,6 +338,20 @@ pub fn search_musicbrainz_for_wishlist(
                 .context("MusicBrainz returned an unreadable album search response")?,
         )
     };
+    if let Some(year) = request.year {
+        candidates.sort_by(|left, right| {
+            left.year
+                .map(|candidate_year| (candidate_year - year).abs())
+                .unwrap_or(i32::MAX)
+                .cmp(
+                    &right
+                        .year
+                        .map(|candidate_year| (candidate_year - year).abs())
+                        .unwrap_or(i32::MAX),
+                )
+                .then_with(|| right.score.cmp(&left.score))
+        });
+    }
     Ok(WishListMusicBrainzSearchResponse {
         entity: request.entity,
         query: request.query,
@@ -332,7 +376,7 @@ fn validate_musicbrainz_album_candidate(
         .join(&musicbrainz_id)
         .context("Could not address the selected MusicBrainz album")?;
     url.query_pairs_mut()
-        .append_pair("inc", "artist-credits")
+        .append_pair("inc", "artist-credits+releases")
         .append_pair("fmt", "json");
     let response = ureq::AgentBuilder::new()
         .timeout(std::time::Duration::from_secs(20))
@@ -344,6 +388,20 @@ fn validate_musicbrainz_album_candidate(
     let row = response
         .into_json::<MusicBrainzReleaseGroupSearchRow>()
         .context("MusicBrainz returned an unreadable album validation response")?;
+    if !row.secondary_types.is_empty() {
+        bail!(
+            "The selected MusicBrainz release group is classified as {} rather than a studio album.",
+            row.secondary_types.join(", ")
+        )
+    }
+    if !row.releases.iter().any(|release| {
+        release
+            .status
+            .as_deref()
+            .is_some_and(|status| status.eq_ignore_ascii_case("official"))
+    }) {
+        bail!("The selected MusicBrainz release group has no official release.")
+    }
     let score = candidate.score;
     let mut confirmed = album_search_candidates(MusicBrainzReleaseGroupSearchPayload {
         release_groups: vec![row],
@@ -1429,6 +1487,13 @@ mod tests {
                         "title": "Single",
                         "score": 95,
                         "primary-type": "Single",
+                        "artist-credit": [{"name": "Pet Shop Boys", "joinphrase": ""}]
+                    }, {
+                        "id": "44444444-4444-4444-8444-444444444444",
+                        "title": "PopArt",
+                        "score": 93,
+                        "primary-type": "Album",
+                        "secondary-types": ["Compilation"],
                         "artist-credit": [{"name": "Pet Shop Boys", "joinphrase": ""}]
                     }]
                 }"#,

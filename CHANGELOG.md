@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.96.1] - 2026-07-29
+### Changed
+- Library Completion now labels chart-derived rows as unverified until MusicBrainz confirms a pure primary Album release group with at least one official release; live albums and compilations are excluded from MusicBrainz album choices.
+- Improved dark-theme contrast and type sizing throughout the Candidate Queue, Provenance Ledger, provider results, and supporting metadata.
+
+### Fixed
+- Coverage Atlas campaigns now fetch the complete selected chart-source and decade cohort from SQLite instead of filtering the globally capped 5,000-row queue, so the Workbench open count reconciles with the Atlas cell.
+- MusicBrainz album checks now use structured title and artist fields, rank matches near the chart year, and keep visible found, empty, error, retry, and verified states after the request completes.
+- Synchronized app metadata to `0.96.1`.
+
 ## [0.96.0] - 2026-07-29
 ### Added
 - Added the **Library Completion** command centre, which scans local Billboard 200, Official UK Albums, and VG Lista album entries against the imported library and merges repeated chart evidence into a prioritized missing-album queue.
