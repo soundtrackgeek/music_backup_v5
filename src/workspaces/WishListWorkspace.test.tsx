@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { SoulseekTransferQueue } from "../types";
 import { WishListWorkspace } from "./WishListWorkspace";
 
 const discoverWishListArtistAlbums = vi.fn();
@@ -18,6 +19,9 @@ const removeWishListItem = vi.fn();
 const searchDeemixAlbums = vi.fn();
 const searchSoulseekAlbum = vi.fn();
 const searchWishListMusicBrainz = vi.fn();
+let soulseekTransferListener:
+  | ((snapshot: SoulseekTransferQueue) => void)
+  | null = null;
 
 vi.mock("../backend", () => ({
   addWishListMusicBrainzCandidate: (...args: unknown[]) =>
@@ -103,10 +107,16 @@ function soulseekResponse(title: string, year: number) {
 describe("WishListWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    soulseekTransferListener = null;
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
     listenToDeemixDownloadProgress.mockResolvedValue(() => undefined);
-    listenToSoulseekTransfers.mockResolvedValue(() => undefined);
+    listenToSoulseekTransfers.mockImplementation(
+      async (handler: (snapshot: SoulseekTransferQueue) => void) => {
+        soulseekTransferListener = handler;
+        return () => undefined;
+      },
+    );
     getSoulseekTransfers.mockResolvedValue({
       transfers: [],
       activeCount: 0,
@@ -682,6 +692,72 @@ describe("WishListWorkspace", () => {
     );
     expect(await screen.findByText("2 files queued from lossless-listener.")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Soulseek download queue" })).toBeInTheDocument();
+
+    const releaseStatus = screen.getByRole("status", {
+      name: "Download status for Release from lossless-listener",
+    });
+    expect(within(releaseStatus).getByText("Queued locally")).toBeInTheDocument();
+    expect(
+      within(releaseStatus).getByText(
+        "0 of 2 files complete · Queued in this app · 0 of 3 transfer slots active",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(releaseStatus).getByRole("progressbar", {
+        name: "Release download progress",
+      }),
+    ).toHaveAttribute("value", "0");
+
+    const queuedSnapshot = (await enqueueSoulseekRelease.mock.results[0]
+      ?.value) as SoulseekTransferQueue;
+    act(() => {
+      soulseekTransferListener?.({
+        ...queuedSnapshot,
+        activeCount: 1,
+        transfers: queuedSnapshot.transfers.map((transfer, index) =>
+          index === 0
+            ? { ...transfer, status: "remotelyQueued", queuePosition: 7 }
+            : transfer,
+        ),
+      });
+    });
+    expect(await within(releaseStatus).findByText("Peer queue #7")).toBeInTheDocument();
+    expect(
+      within(releaseStatus).getByText(
+        "0 of 2 files complete · Waiting in lossless-listener's peer queue at position 7",
+      ),
+    ).toBeInTheDocument();
+
+    act(() => {
+      soulseekTransferListener?.({
+        ...queuedSnapshot,
+        activeCount: 1,
+        transfers: queuedSnapshot.transfers.map((transfer, index) =>
+          index === 0
+            ? {
+                ...transfer,
+                status: "completed",
+                transferredBytes: transfer.sizeBytes,
+              }
+            : {
+                ...transfer,
+                status: "downloading",
+                transferredBytes: transfer.sizeBytes / 2,
+                speedBytesPerSecond: 2_500_000,
+                etaSeconds: 45,
+                queuePosition: null,
+              },
+        ),
+      });
+    });
+    expect(await within(releaseStatus).findByText("Downloading 75%")).toBeInTheDocument();
+    expect(within(releaseStatus).getByText(/1 of 2 files complete/)).toBeInTheDocument();
+    expect(within(releaseStatus).getByText(/2\.4 MB\/s/)).toBeInTheDocument();
+    expect(
+      within(releaseStatus).getByRole("progressbar", {
+        name: "Release download progress",
+      }),
+    ).toHaveAttribute("value", "75");
   });
 
   it("completes the download with a warning when Deezer has no artwork", async () => {

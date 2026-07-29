@@ -152,6 +152,7 @@ import type {
   SoulseekReleaseDownloadRequest,
   SoulseekSearchEvent,
   SoulseekSearchResult,
+  SoulseekTransfer,
   SoulseekTransferQueue,
   SoulseekUploadQueue,
   DiscogsConnectionTest,
@@ -1749,22 +1750,100 @@ export async function searchSoulseekAlbum(
   });
 }
 
+let mockSoulseekTransfers: SoulseekTransfer[] = [];
+let mockSoulseekReleaseSequence = 0;
+const mockSoulseekTransferHandlers = new Set<
+  (snapshot: SoulseekTransferQueue) => void
+>();
+
+function mockSoulseekTransferSnapshot() {
+  return {
+    transfers: mockSoulseekTransfers,
+    activeCount: mockSoulseekTransfers.filter((transfer) =>
+      ["requesting", "remotelyQueued", "connecting", "downloading"].includes(
+        transfer.status,
+      ),
+    ).length,
+    maxConcurrentDownloads: 3,
+    relaySuggestionMinutes: 10,
+    soundcheckEnabled: true,
+    safetyState: "running",
+  } satisfies SoulseekTransferQueue;
+}
+
+function publishMockSoulseekTransfers() {
+  const snapshot = mockSoulseekTransferSnapshot();
+  for (const handler of mockSoulseekTransferHandlers) handler(snapshot);
+  return snapshot;
+}
+
 export async function getSoulseekTransfers() {
-  if (!isTauriRuntime()) {
-    return {
-      transfers: [],
-      activeCount: 0,
-      maxConcurrentDownloads: 3,
-      relaySuggestionMinutes: 10,
-      soundcheckEnabled: true,
-      safetyState: "running",
-    } satisfies SoulseekTransferQueue;
-  }
+  if (!isTauriRuntime()) return mockSoulseekTransferSnapshot();
   return invoke<SoulseekTransferQueue>("transfers_snapshot");
 }
 
 export async function enqueueSoulseekRelease(input: SoulseekReleaseDownloadRequest) {
-  if (!isTauriRuntime()) return getSoulseekTransfers();
+  if (!isTauriRuntime()) {
+    const now = Date.now();
+    const releaseId = `preview-release-${now}-${++mockSoulseekReleaseSequence}`;
+    const fileCount = input.files.length;
+    mockSoulseekTransfers = [
+      ...mockSoulseekTransfers,
+      ...input.files.map(
+        (file, index) =>
+          ({
+            id: `${releaseId}-${index + 1}`,
+            releaseId,
+            releaseTitle: input.title,
+            releaseFolder: `Preview\\${input.title}`,
+            fileIndex: index + 1,
+            fileCount,
+            expectedTrackCount: input.expectedTrackCount,
+            releaseGroupId: input.releaseGroupId,
+            title: file.title,
+            username: input.username,
+            remoteFilename: file.remoteFilename,
+            sizeBytes: file.sizeBytes,
+            transferredBytes: 0,
+            speedBytesPerSecond: 0,
+            etaSeconds: null,
+            status: "queued",
+            queuePosition: null,
+            localPath: `Preview\\${input.title}\\${file.title}`,
+            error: null,
+            createdAtMs: now + index,
+            updatedAtMs: now,
+          }) satisfies SoulseekTransfer,
+      ),
+    ];
+    const queuedSnapshot = publishMockSoulseekTransfers();
+    window.setTimeout(() => {
+      mockSoulseekTransfers = mockSoulseekTransfers.map((transfer) => {
+        if (transfer.releaseId !== releaseId) return transfer;
+        if (transfer.fileIndex === 1) {
+          return {
+            ...transfer,
+            status: "completed",
+            transferredBytes: transfer.sizeBytes,
+            updatedAtMs: Date.now(),
+          };
+        }
+        if (transfer.fileIndex === 2) {
+          return {
+            ...transfer,
+            status: "downloading",
+            transferredBytes: Math.round(transfer.sizeBytes * 0.4),
+            speedBytesPerSecond: 2_500_000,
+            etaSeconds: 45,
+            updatedAtMs: Date.now(),
+          };
+        }
+        return transfer;
+      });
+      publishMockSoulseekTransfers();
+    }, 700);
+    return queuedSnapshot;
+  }
   return invoke<SoulseekTransferQueue>("transfer_enqueue_release", { request: input });
 }
 
@@ -5337,7 +5416,10 @@ export async function listenToSoulseekConnection(
 export async function listenToSoulseekTransfers(
   handler: (snapshot: SoulseekTransferQueue) => void,
 ) {
-  if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
+  if (!isTauriRuntime()) {
+    mockSoulseekTransferHandlers.add(handler);
+    return (() => mockSoulseekTransferHandlers.delete(handler)) satisfies UnlistenFn;
+  }
   return listen<SoulseekTransferQueue>("music-library://soulseek-transfers", (event) => {
     handler(event.payload);
   });

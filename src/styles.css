@@ -14248,6 +14248,167 @@ button {
   font-size: 9px;
 }
 
+.soulseek-transfer-button:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.soulseek-transfer-button.queued,
+.soulseek-transfer-button.retrying,
+.soulseek-transfer-button.requesting,
+.soulseek-transfer-button.remotelyQueued,
+.soulseek-transfer-button.connecting,
+.soulseek-transfer-button.downloading {
+  border-color: #9fc6dd;
+  color: #315e80;
+  background: #eaf4fb;
+}
+
+.soulseek-transfer-button.completed {
+  border-color: #9bd3c5;
+  color: #176b5e;
+  background: #e8f7f3;
+}
+
+.soulseek-transfer-button.failed {
+  border-color: #dfb2b6;
+  color: #96444c;
+  background: #fff0f1;
+}
+
+.soulseek-transfer-button.paused {
+  border-color: #d7c28d;
+  color: #775f24;
+  background: #fff8e7;
+}
+
+.soulseek-release-progress {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid #c8ddea;
+  border-radius: 8px;
+  color: #4c687b;
+  background: #f1f7fb;
+  padding: 8px 10px;
+}
+
+.soulseek-release-progress-heading,
+.soulseek-release-progress-heading > div {
+  display: flex;
+  align-items: center;
+}
+
+.soulseek-release-progress-heading {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.soulseek-release-progress-heading > div {
+  min-width: 0;
+  gap: 6px;
+}
+
+.soulseek-release-progress-heading strong,
+.soulseek-release-progress-heading span,
+.soulseek-release-progress small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soulseek-release-progress-heading strong {
+  color: #2d5c7e;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.soulseek-release-progress-heading span,
+.soulseek-release-progress small {
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.soulseek-release-progress-heading span {
+  flex: 0 0 auto;
+  font-weight: 750;
+}
+
+.soulseek-release-progress progress {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  color: #3f82aa;
+  background: transparent;
+  accent-color: #3f82aa;
+}
+
+.soulseek-release-progress progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: #d7e5ec;
+}
+
+.soulseek-release-progress progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: #3f82aa;
+}
+
+.soulseek-release-progress progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: #3f82aa;
+}
+
+.soulseek-release-progress.completed {
+  border-color: #abdacc;
+  color: #397466;
+  background: #edf9f5;
+}
+
+.soulseek-release-progress.completed .soulseek-release-progress-heading strong {
+  color: #176b5e;
+}
+
+.soulseek-release-progress.completed progress {
+  color: #238675;
+  accent-color: #238675;
+}
+
+.soulseek-release-progress.completed progress::-webkit-progress-value,
+.soulseek-release-progress.completed progress::-moz-progress-bar {
+  background: #238675;
+}
+
+.soulseek-release-progress.failed {
+  border-color: #e4bec1;
+  color: #8e5157;
+  background: #fff4f5;
+}
+
+.soulseek-release-progress.failed .soulseek-release-progress-heading strong {
+  color: #9d454e;
+}
+
+.soulseek-release-progress.failed progress {
+  color: #b85a63;
+  accent-color: #b85a63;
+}
+
+.soulseek-release-progress.failed progress::-webkit-progress-value,
+.soulseek-release-progress.failed progress::-moz-progress-bar {
+  background: #b85a63;
+}
+
+.soulseek-release-progress.paused {
+  border-color: #dfce9f;
+  color: #77652e;
+  background: #fffaec;
+}
+
 .deemix-search-state {
   display: flex;
   align-items: center;
@@ -15005,6 +15166,75 @@ button {
   background: #17352f;
 }
 
+:root[data-theme="dark"] .soulseek-transfer-button.queued,
+:root[data-theme="dark"] .soulseek-transfer-button.retrying,
+:root[data-theme="dark"] .soulseek-transfer-button.requesting,
+:root[data-theme="dark"] .soulseek-transfer-button.remotelyQueued,
+:root[data-theme="dark"] .soulseek-transfer-button.connecting,
+:root[data-theme="dark"] .soulseek-transfer-button.downloading {
+  border-color: #36647e;
+  color: #9ed7f6;
+  background: #163545;
+}
+
+:root[data-theme="dark"] .soulseek-transfer-button.completed {
+  border-color: #32675c;
+  color: #88dece;
+  background: #173b34;
+}
+
+:root[data-theme="dark"] .soulseek-transfer-button.failed {
+  border-color: #74444a;
+  color: #efadb4;
+  background: #3d2428;
+}
+
+:root[data-theme="dark"] .soulseek-transfer-button.paused {
+  border-color: #6f6038;
+  color: #e3ca82;
+  background: #382f18;
+}
+
+:root[data-theme="dark"] .soulseek-release-progress {
+  border-color: #31566d;
+  color: #99b9ca;
+  background: #142c39;
+}
+
+:root[data-theme="dark"] .soulseek-release-progress-heading strong {
+  color: #9bd5f4;
+}
+
+:root[data-theme="dark"] .soulseek-release-progress progress::-webkit-progress-bar {
+  background: #294554;
+}
+
+:root[data-theme="dark"] .soulseek-release-progress.completed {
+  border-color: #32675c;
+  color: #8bc8bc;
+  background: #17352f;
+}
+
+:root[data-theme="dark"] .soulseek-release-progress.completed .soulseek-release-progress-heading strong {
+  color: #8ee0d1;
+}
+
+:root[data-theme="dark"] .soulseek-release-progress.failed {
+  border-color: #74444a;
+  color: #d99aa1;
+  background: #382329;
+}
+
+:root[data-theme="dark"] .soulseek-release-progress.failed .soulseek-release-progress-heading strong {
+  color: #f0aeb5;
+}
+
+:root[data-theme="dark"] .soulseek-release-progress.paused {
+  border-color: #6f613d;
+  color: #ddc886;
+  background: #332c19;
+}
+
 :root[data-theme="dark"] .outside-library-result-actions button {
   border-color: #415a53;
   color: #a8c0b9;
@@ -15065,6 +15295,14 @@ button {
 
   .soulseek-source-list article {
     grid-template-columns: 1fr;
+  }
+
+  .soulseek-release-progress-heading {
+    align-items: flex-start;
+  }
+
+  .soulseek-release-progress small {
+    white-space: normal;
   }
 
   .deemix-match-badge {

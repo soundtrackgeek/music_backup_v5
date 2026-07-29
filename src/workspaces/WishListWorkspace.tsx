@@ -51,7 +51,9 @@ import type {
   DeemixAlbumSearchResponse,
   SoulseekAlbumSearchResponse,
   SoulseekSearchResult,
+  SoulseekTransfer,
   SoulseekTransferQueue,
+  SoulseekTransferStatus,
   WishListArtistAlbumDiscoveryRow,
   WishListArtistAlbumDiscoveryResponse,
   WishListArtistAlbumSummary,
@@ -179,17 +181,301 @@ function formatSoulseekSpeed(value: number) {
   return value > 0 ? `${formatSoulseekBytes(value)}/s` : "speed unknown";
 }
 
+function formatSoulseekDuration(seconds: number) {
+  if (seconds < 60) return `${Math.max(1, Math.ceil(seconds))} sec`;
+  if (seconds < 3_600) return `${Math.ceil(seconds / 60)} min`;
+  const hours = Math.floor(seconds / 3_600);
+  const minutes = Math.ceil((seconds % 3_600) / 60);
+  return minutes ? `${hours} hr ${minutes} min` : `${hours} hr`;
+}
+
+function soulseekSourceKey(username: string, folder: string) {
+  return `${username.trim().toLocaleLowerCase()}\u0000${folder
+    .replace(/\//g, "\\")
+    .replace(/[\\]+$/, "")
+    .toLocaleLowerCase()}`;
+}
+
+type SoulseekReleaseProgressSummary = {
+  status: SoulseekTransferStatus;
+  fileCount: number;
+  completedFiles: number;
+  failedFiles: number;
+  totalBytes: number;
+  transferredBytes: number;
+  speedBytesPerSecond: number;
+  etaSeconds: number | null;
+  queuePosition: number | null;
+  error: string | null;
+};
+
+type SoulseekReleaseProgressAccumulator = Omit<
+  SoulseekReleaseProgressSummary,
+  "status"
+> & {
+  statuses: Set<SoulseekTransferStatus>;
+};
+
+function resolveSoulseekReleaseStatus(
+  summary: SoulseekReleaseProgressAccumulator,
+): SoulseekTransferStatus {
+  if (summary.completedFiles === summary.fileCount) return "completed";
+  if (summary.failedFiles > 0) return "failed";
+  for (const status of [
+    "downloading",
+    "connecting",
+    "requesting",
+    "remotelyQueued",
+    "retrying",
+    "queued",
+    "paused",
+  ] as const) {
+    if (summary.statuses.has(status)) return status;
+  }
+  return "queued";
+}
+
+function buildSoulseekReleaseProgress(
+  queue: SoulseekTransferQueue | null,
+) {
+  const progress = new Map<string, SoulseekReleaseProgressAccumulator>();
+  for (const transfer of queue?.transfers ?? []) {
+    const key = soulseekSourceKey(
+      transfer.username,
+      remoteFolder(transfer.remoteFilename),
+    );
+    const summary = progress.get(key) ?? {
+      fileCount: 0,
+      completedFiles: 0,
+      failedFiles: 0,
+      totalBytes: 0,
+      transferredBytes: 0,
+      speedBytesPerSecond: 0,
+      etaSeconds: null,
+      queuePosition: null,
+      error: null,
+      statuses: new Set<SoulseekTransferStatus>(),
+    };
+    summary.fileCount += 1;
+    summary.completedFiles += Number(transfer.status === "completed");
+    summary.failedFiles += Number(transfer.status === "failed");
+    summary.totalBytes += transfer.sizeBytes;
+    summary.transferredBytes += Math.min(
+      transfer.transferredBytes,
+      transfer.sizeBytes,
+    );
+    summary.speedBytesPerSecond += transfer.speedBytesPerSecond;
+    summary.etaSeconds =
+      transfer.etaSeconds === null
+        ? summary.etaSeconds
+        : Math.max(summary.etaSeconds ?? 0, transfer.etaSeconds);
+    if (
+      transfer.status === "remotelyQueued" &&
+      transfer.queuePosition !== null
+    ) {
+      summary.queuePosition = Math.min(
+        summary.queuePosition ?? transfer.queuePosition,
+        transfer.queuePosition,
+      );
+    }
+    summary.error ??= transfer.error;
+    summary.statuses.add(transfer.status);
+    progress.set(key, summary);
+  }
+
+  return new Map<string, SoulseekReleaseProgressSummary>(
+    [...progress].map(([key, summary]) => [
+      key,
+      { ...summary, status: resolveSoulseekReleaseStatus(summary) },
+    ]),
+  );
+}
+
+function soulseekProgressPercent(summary: SoulseekReleaseProgressSummary) {
+  return summary.totalBytes
+    ? Math.min(
+        100,
+        Math.round((summary.transferredBytes / summary.totalBytes) * 100),
+      )
+    : 0;
+}
+
+function soulseekReleaseStatusLabel(summary: SoulseekReleaseProgressSummary) {
+  const progress = soulseekProgressPercent(summary);
+  switch (summary.status) {
+    case "downloading":
+      return `Downloading ${progress}%`;
+    case "connecting":
+      return "Connecting";
+    case "requesting":
+      return "Requesting peer";
+    case "remotelyQueued":
+      return summary.queuePosition
+        ? `Peer queue #${summary.queuePosition}`
+        : "Waiting in peer queue";
+    case "retrying":
+      return "Retrying automatically";
+    case "paused":
+      return "Paused";
+    case "completed":
+      return "Downloaded";
+    case "failed":
+      return "Download failed";
+    default:
+      return "Queued locally";
+  }
+}
+
+function soulseekReleaseStatusDetail(
+  summary: SoulseekReleaseProgressSummary,
+  username: string,
+  queue: SoulseekTransferQueue,
+) {
+  const fileProgress = `${summary.completedFiles} of ${summary.fileCount} files complete`;
+  const progress = soulseekProgressPercent(summary);
+  switch (summary.status) {
+    case "downloading":
+      return [
+        fileProgress,
+        `${progress}%`,
+        `${formatSoulseekBytes(summary.transferredBytes)} of ${formatSoulseekBytes(summary.totalBytes)}`,
+        formatSoulseekSpeed(summary.speedBytesPerSecond),
+        summary.etaSeconds === null
+          ? null
+          : `${formatSoulseekDuration(summary.etaSeconds)} left`,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    case "connecting":
+      return `${fileProgress} · ${username} accepted the request; opening the transfer connection`;
+    case "requesting":
+      return `${fileProgress} · Contacting ${username} and requesting the next file`;
+    case "remotelyQueued":
+      return `${fileProgress} · Waiting in ${username}'s peer queue${
+        summary.queuePosition ? ` at position ${summary.queuePosition}` : ""
+      }`;
+    case "retrying":
+      return `${fileProgress} · A temporary problem occurred; Soulseek is retrying automatically`;
+    case "paused":
+      return `${fileProgress} · The release is paused`;
+    case "completed":
+      return `${summary.fileCount} ${summary.fileCount === 1 ? "file" : "files"} downloaded · ${formatSoulseekBytes(summary.totalBytes)}`;
+    case "failed":
+      return `${summary.failedFiles} of ${summary.fileCount} ${
+        summary.fileCount === 1 ? "file" : "files"
+      } failed · ${summary.error ?? "Open Soulseek transfers for the failure details."}`;
+    default:
+      if (queue.safetyState === "pausedForRestart") {
+        return `${fileProgress} · Transfers are paused while the app prepares to restart`;
+      }
+      if (queue.safetyState === "draining") {
+        return `${fileProgress} · Waiting while current files finish before restart`;
+      }
+      return `${fileProgress} · Queued in this app · ${queue.activeCount} of ${queue.maxConcurrentDownloads} transfer slots active`;
+  }
+}
+
+function SoulseekProgressIcon({ status }: { status: SoulseekTransferStatus }) {
+  if (status === "completed") return <CheckCircle2 size={15} aria-hidden="true" />;
+  if (status === "failed") return <AlertTriangle size={15} aria-hidden="true" />;
+  if (status === "downloading" || status === "connecting" || status === "requesting") {
+    return <RefreshCw size={15} className="spin" aria-hidden="true" />;
+  }
+  if (status === "remotelyQueued") return <RadioTower size={15} aria-hidden="true" />;
+  return <Clock3 size={15} aria-hidden="true" />;
+}
+
+function SoulseekReleaseProgress({
+  summary,
+  target,
+  username,
+  queue,
+}: {
+  summary: SoulseekReleaseProgressSummary;
+  target: SoulseekDownloadTarget;
+  username: string;
+  queue: SoulseekTransferQueue;
+}) {
+  const percent = soulseekProgressPercent(summary);
+  return (
+    <div
+      className={`soulseek-release-progress ${summary.status}`}
+      role="status"
+      aria-label={`Download status for ${target.title} from ${username}`}
+    >
+      <div className="soulseek-release-progress-heading">
+        <div>
+          <SoulseekProgressIcon status={summary.status} />
+          <strong>{soulseekReleaseStatusLabel(summary)}</strong>
+        </div>
+        <span>{percent}%</span>
+      </div>
+      <progress
+        aria-label={`${target.title} download progress`}
+        max={100}
+        value={percent}
+      />
+      <small>{soulseekReleaseStatusDetail(summary, username, queue)}</small>
+    </div>
+  );
+}
+
+function soulseekTransferStatusDetail(transfer: SoulseekTransfer) {
+  const progress = transfer.sizeBytes
+    ? Math.min(
+        100,
+        Math.round((transfer.transferredBytes / transfer.sizeBytes) * 100),
+      )
+    : 0;
+  const filePosition =
+    transfer.fileIndex && transfer.fileCount
+      ? `File ${transfer.fileIndex} of ${transfer.fileCount} · `
+      : "";
+  switch (transfer.status) {
+    case "downloading":
+      return `${filePosition}Downloading ${progress}% · ${transfer.username}${
+        transfer.speedBytesPerSecond
+          ? ` · ${formatSoulseekSpeed(transfer.speedBytesPerSecond)}`
+          : ""
+      }${
+        transfer.etaSeconds === null
+          ? ""
+          : ` · ${formatSoulseekDuration(transfer.etaSeconds)} left`
+      }`;
+    case "connecting":
+      return `${filePosition}Connecting to ${transfer.username}`;
+    case "requesting":
+      return `${filePosition}Requesting the file from ${transfer.username}`;
+    case "remotelyQueued":
+      return `${filePosition}Waiting in ${transfer.username}'s queue${
+        transfer.queuePosition ? ` at position ${transfer.queuePosition}` : ""
+      }`;
+    case "retrying":
+      return `${filePosition}Retrying automatically · ${transfer.username}`;
+    case "paused":
+      return `${filePosition}Paused · ${transfer.username}`;
+    case "completed":
+      return `${filePosition}Downloaded · ${transfer.username}`;
+    case "failed":
+      return `${filePosition}${transfer.error ?? "Download failed"}`;
+    default:
+      return `${filePosition}Waiting for an app transfer slot · ${transfer.username}`;
+  }
+}
+
 function SoulseekSourceList({
   candidates,
   notice,
   target,
   transfers,
+  transferProgress,
   onDownload,
 }: {
   candidates: SoulseekReleaseCandidate[];
   notice: string | null;
   target: SoulseekDownloadTarget;
   transfers: SoulseekTransferQueue | null;
+  transferProgress: ReadonlyMap<string, SoulseekReleaseProgressSummary>;
   onDownload: (candidate: SoulseekReleaseCandidate) => void;
 }) {
   return (
@@ -201,12 +487,12 @@ function SoulseekSourceList({
       ) : null}
       <div className="soulseek-source-list">
         {candidates.map((candidate) => {
-          const queued = transfers?.transfers.some(
-            (transfer) =>
-              transfer.username === candidate.username &&
-              remoteFolder(transfer.remoteFilename) === candidate.remoteFolder &&
-              transfer.status !== "failed",
+          const summary = transferProgress.get(
+            soulseekSourceKey(candidate.username, candidate.remoteFolder),
           );
+          const statusLabel = summary
+            ? soulseekReleaseStatusLabel(summary)
+            : "Download release";
           return (
             <article key={candidate.id}>
               <div className="soulseek-source-format">
@@ -231,16 +517,34 @@ function SoulseekSourceList({
               </div>
               <div className="deemix-match-actions">
                 <button
-                  className="primary-button deemix-download-button"
+                  className={`primary-button deemix-download-button soulseek-transfer-button${
+                    summary ? ` ${summary.status}` : ""
+                  }`}
                   type="button"
-                  disabled={queued}
-                  aria-label={`Download ${target.title} from ${candidate.username}`}
+                  disabled={Boolean(summary)}
+                  aria-label={
+                    summary
+                      ? `${statusLabel}: ${target.title} from ${candidate.username}`
+                      : `Download ${target.title} from ${candidate.username}`
+                  }
                   onClick={() => onDownload(candidate)}
                 >
-                  {queued ? <Clock3 size={15} /> : <Download size={15} />}
-                  <span>{queued ? "Queued" : "Download release"}</span>
+                  {summary ? (
+                    <SoulseekProgressIcon status={summary.status} />
+                  ) : (
+                    <Download size={15} />
+                  )}
+                  <span>{statusLabel}</span>
                 </button>
               </div>
+              {summary && transfers ? (
+                <SoulseekReleaseProgress
+                  summary={summary}
+                  target={target}
+                  username={candidate.username}
+                  queue={transfers}
+                />
+              ) : null}
             </article>
           );
         })}
@@ -858,6 +1162,10 @@ export function WishListWorkspace() {
   const soulseekCandidates = useMemo(
     () => soulseekReleaseCandidates(soulseekResults),
     [soulseekResults],
+  );
+  const soulseekTransferProgress = useMemo(
+    () => buildSoulseekReleaseProgress(soulseekTransfers),
+    [soulseekTransfers],
   );
   const artistSoulseekCandidates = useMemo(() => {
     const candidates = new Map<string, SoulseekReleaseCandidate[]>();
@@ -1932,6 +2240,7 @@ export function WishListWorkspace() {
                 releaseGroupId: soulseekSearchedItem.musicbrainzId,
               }}
               transfers={soulseekTransfers}
+              transferProgress={soulseekTransferProgress}
               onDownload={(candidate) => void downloadSoulseekRelease(candidate)}
             />
           ) : soulseekResults ? (
@@ -1959,9 +2268,6 @@ export function WishListWorkspace() {
           </header>
           <div className="deemix-download-queue-list">
             {soulseekTransfers.transfers.slice(-30).map((transfer) => {
-              const progress = transfer.sizeBytes
-                ? Math.min(100, Math.round((transfer.transferredBytes / transfer.sizeBytes) * 100))
-                : 0;
               return (
                 <article key={transfer.id} className={transfer.status}>
                   {transfer.status === "downloading" || transfer.status === "connecting" ? (
@@ -1975,14 +2281,7 @@ export function WishListWorkspace() {
                   )}
                   <div>
                     <strong>{transfer.title}</strong>
-                    <span>
-                      {transfer.error ??
-                        `${transfer.status} · ${progress}% · ${transfer.username}${
-                          transfer.speedBytesPerSecond
-                            ? ` · ${formatSoulseekSpeed(transfer.speedBytesPerSecond)}`
-                            : ""
-                        }`}
-                    </span>
+                    <span>{soulseekTransferStatusDetail(transfer)}</span>
                   </div>
                 </article>
               );
@@ -2222,6 +2521,7 @@ export function WishListWorkspace() {
                             releaseGroupId: album.releaseGroupId,
                           }}
                           transfers={soulseekTransfers}
+                          transferProgress={soulseekTransferProgress}
                           onDownload={(candidate) =>
                             void downloadArtistSoulseekRelease(album, candidate)
                           }

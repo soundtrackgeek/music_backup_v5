@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.104.0] - 2026-07-29
+### Added
+- Added live release-level Soulseek feedback directly beneath the selected Wish List source, including local queue and peer queue distinction, file and byte progress, speed, ETA, transfer-slot use, completion, pause, retry, and failure states.
+- Added readable per-file Soulseek transfer activity so the background queue explains whether each file is waiting for an app slot, requesting a peer, remotely queued, connecting, downloading, completed, paused, retrying, or failed.
+
+### Changed
+- Added an interactive Soulseek transfer simulation to the browser preview so queued and downloading states can be visually tested without the native runtime.
+- Synchronized app metadata and provider user agents to `0.104.0`.
+
 ## [0.103.1] - 2026-07-29
 ### Fixed
 - Fixed Wish List Soulseek searches being rejected before reaching the network by generating session identifiers that satisfy the native client's validation contract.
