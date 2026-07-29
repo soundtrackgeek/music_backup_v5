@@ -1075,6 +1075,16 @@ export type LibraryCompletionCandidate = {
   musicbrainzId: string | null;
   musicbrainzUrl: string | null;
   coverUrl: string | null;
+  verificationStatus:
+    | "unverified"
+    | "queued"
+    | "checking"
+    | "verified"
+    | "noMatch"
+    | "ambiguous"
+    | "failed";
+  verificationMessage: string | null;
+  verificationCheckedAt: string | null;
   evidence: LibraryCompletionEvidence[];
 };
 
@@ -1084,6 +1094,7 @@ export type LibraryCompletionAtlasCell = {
   decade: number;
   owned: number;
   candidates: number;
+  verified: number;
   wanted: number;
   needsReview: number;
   excluded: number;
@@ -1124,6 +1135,56 @@ export type LibraryCompletionDecision = {
   musicbrainzId: string | null;
   musicbrainzUrl: string | null;
   updatedAt: string;
+};
+
+export type StartLibraryCompletionVerificationRequest = {
+  scope: "candidate" | "selection" | "campaign";
+  candidateIds: string[];
+  source: LibraryCompletionEvidence["source"] | null;
+  decade: number | null;
+  label: string | null;
+};
+
+export type SetLibraryCompletionVerificationStateRequest = {
+  batchId: number;
+  state: "running" | "paused";
+};
+
+export type LibraryCompletionVerificationItemSummary = {
+  candidateId: string;
+  artist: string;
+  title: string;
+  state: Exclude<LibraryCompletionCandidate["verificationStatus"], "unverified">;
+  message: string | null;
+  musicbrainzId: string | null;
+  musicbrainzUrl: string | null;
+  updatedAt: string;
+};
+
+export type LibraryCompletionVerificationBatch = {
+  id: number;
+  label: string;
+  source: LibraryCompletionEvidence["source"] | null;
+  decade: number | null;
+  state: "running" | "paused" | "completed";
+  totalCount: number;
+  queuedCount: number;
+  checkingCount: number;
+  verifiedCount: number;
+  noMatchCount: number;
+  ambiguousCount: number;
+  failedCount: number;
+  cachedCount: number;
+  completedCount: number;
+  estimatedSecondsRemaining: number;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+};
+
+export type LibraryCompletionVerificationStatus = {
+  batch: LibraryCompletionVerificationBatch | null;
+  recentItems: LibraryCompletionVerificationItemSummary[];
 };
 
 export type DeemixCredentialSource = "windowsCredentialManager" | "none";

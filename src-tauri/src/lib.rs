@@ -433,6 +433,61 @@ async fn get_library_completion(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_library_completion_verification_status(
+    app: AppHandle,
+) -> Result<library_completion::LibraryCompletionVerificationStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        library_completion::verification_status_for_app(&app)
+    })
+    .await
+    .map_err(|error| format!("Library Completion verification status task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn start_library_completion_verification(
+    app: AppHandle,
+    input: library_completion::StartLibraryCompletionVerificationRequest,
+) -> Result<library_completion::LibraryCompletionVerificationStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        library_completion::start_verification_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Library Completion verification start task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn set_library_completion_verification_state(
+    app: AppHandle,
+    input: library_completion::SetLibraryCompletionVerificationStateRequest,
+) -> Result<library_completion::LibraryCompletionVerificationStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        library_completion::set_verification_state_for_app(&app, input)
+    })
+    .await
+    .map_err(|error| format!("Library Completion verification control task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn retry_library_completion_verification_failures(
+    app: AppHandle,
+    batch_id: i64,
+) -> Result<library_completion::LibraryCompletionVerificationStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        library_completion::retry_verification_failures_for_app(&app, batch_id)
+    })
+    .await
+    .map_err(|error| format!("Library Completion verification retry task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn set_library_completion_decision(
     app: AppHandle,
     input: library_completion::SetLibraryCompletionDecisionRequest,
@@ -1236,6 +1291,10 @@ pub fn run() {
                 .with_state_flags(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)
                 .build(),
         )
+        .setup(|app| {
+            library_completion::resume_verification_worker(app.handle().clone());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_library_status,
             run_performance_probe,
@@ -1273,6 +1332,10 @@ pub fn run() {
             delete_saved_external_discovery,
             list_wish_list,
             get_library_completion,
+            get_library_completion_verification_status,
+            start_library_completion_verification,
+            set_library_completion_verification_state,
+            retry_library_completion_verification_failures,
             set_library_completion_decision,
             discover_wish_list_artist_albums,
             refresh_wish_list_artist_album_summary,

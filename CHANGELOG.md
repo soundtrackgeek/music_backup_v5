@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.97.0] - 2026-07-29
+### Added
+- Added a persistent, single-worker MusicBrainz verification queue for individual albums, selected Workbench rows, and complete Coverage Atlas cohorts.
+- Added locally cached verification outcomes, resumable queue batches, restart recovery, progress and ETA reporting, pause/resume controls, and failed-item retry.
+- Added **Verified missing** Coverage Atlas counts and explicit candidate states for queued, checking, verified, no-match, ambiguous, and failed checks.
+
+### Changed
+- MusicBrainz requests in the Library Completion and Wish List verification path now share a 1.1-second request gate, and automatic verification requires one exact normalized artist/title match before official-release validation.
+- Verification remains separate from Wanted: background checks never add an album to the acquisition queue without an explicit user decision.
+- Advanced SQLite to schema version 41 and synchronized app metadata to `0.97.0`.
+
 ## [0.96.1] - 2026-07-29
 ### Changed
 - Library Completion now labels chart-derived rows as unverified until MusicBrainz confirms a pure primary Album release group with at least one official release; live albums and compilations are excluded from MusicBrainz album choices.

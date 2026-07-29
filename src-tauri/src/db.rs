@@ -509,7 +509,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_one_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -1011,6 +1011,69 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_library_completion_decisions_status
             ON library_completion_decisions(status, updated_at DESC);
 
+        CREATE TABLE IF NOT EXISTS library_completion_verifications (
+            candidate_key TEXT PRIMARY KEY,
+            outcome TEXT NOT NULL CHECK(outcome IN ('verified', 'noMatch', 'ambiguous', 'failed')),
+            artist TEXT NOT NULL,
+            title TEXT NOT NULL,
+            chart_year INTEGER NOT NULL,
+            musicbrainz_id TEXT,
+            musicbrainz_url TEXT,
+            matched_artist TEXT,
+            matched_title TEXT,
+            matched_year INTEGER,
+            score INTEGER,
+            message TEXT NOT NULL,
+            attempt_count INTEGER NOT NULL DEFAULT 1,
+            checked_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_completion_verifications_outcome
+            ON library_completion_verifications(outcome, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS library_completion_verification_batches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            label TEXT NOT NULL,
+            source TEXT,
+            decade INTEGER,
+            state TEXT NOT NULL CHECK(state IN ('running', 'paused', 'completed')),
+            total_count INTEGER NOT NULL DEFAULT 0,
+            cached_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            updated_at TEXT NOT NULL,
+            completed_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_completion_verification_batches_state
+            ON library_completion_verification_batches(state, updated_at DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_library_completion_verification_batches_one_active
+            ON library_completion_verification_batches(
+                (CASE WHEN state IN ('running', 'paused') THEN 1 END)
+            );
+
+        CREATE TABLE IF NOT EXISTS library_completion_verification_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id INTEGER NOT NULL REFERENCES library_completion_verification_batches(id)
+                ON DELETE CASCADE,
+            candidate_key TEXT NOT NULL,
+            artist TEXT NOT NULL,
+            title TEXT NOT NULL,
+            chart_year INTEGER NOT NULL,
+            source TEXT NOT NULL DEFAULT '',
+            state TEXT NOT NULL CHECK(state IN ('queued', 'checking', 'verified', 'noMatch', 'ambiguous', 'failed')),
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            UNIQUE(batch_id, candidate_key)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_completion_verification_items_batch_state
+            ON library_completion_verification_items(batch_id, state, id);
+
         CREATE TABLE IF NOT EXISTS deemix_downloads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             deezer_album_id TEXT NOT NULL,
@@ -1501,7 +1564,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 40;
+        PRAGMA user_version = 41;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -19108,6 +19171,8 @@ mod tests {
         assert!(migrations::phase_thirty_seven_schema_exists(&conn)
             .expect("phase thirty-seven schema exists"));
         assert!(migrations::phase_forty_schema_exists(&conn).expect("phase forty schema exists"));
+        assert!(migrations::phase_forty_one_schema_exists(&conn)
+            .expect("phase forty-one schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -19480,6 +19545,31 @@ mod tests {
         assert!(
             migrations::phase_forty_schema_exists(&conn).expect("Library Completion schema exists")
         );
+        let user_version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("read schema version");
+        assert_eq!(user_version, LATEST_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn schema_forty_one_adds_library_completion_verification_queue() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            DROP TABLE library_completion_verification_items;
+            DROP TABLE library_completion_verification_batches;
+            DROP TABLE library_completion_verifications;
+            PRAGMA user_version = 40;
+            ",
+        )
+        .expect("simulate schema forty");
+
+        migrate(&conn).expect("migrate verification queue schema");
+
+        assert!(migrations::phase_forty_one_schema_exists(&conn)
+            .expect("Library Completion verification schema exists"));
         let user_version: i32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .expect("read schema version");

@@ -5,13 +5,19 @@ use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
+#[cfg(not(test))]
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(not(test))]
 use tauri::AppHandle;
 
 const MAX_RETURNED_CANDIDATES: usize = 5_000;
 const MAX_CANDIDATE_KEY_LENGTH: usize = 800;
 const MAX_TEXT_LENGTH: usize = 300;
+const MAX_VERIFICATION_SELECTION: usize = 5_000;
+const RECENT_VERIFICATION_ITEMS: usize = 8;
+#[cfg(not(test))]
+static VERIFICATION_WORKER_RUNNING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +43,9 @@ pub struct LibraryCompletionCandidate {
     pub musicbrainz_id: Option<String>,
     pub musicbrainz_url: Option<String>,
     pub cover_url: Option<String>,
+    pub verification_status: String,
+    pub verification_message: Option<String>,
+    pub verification_checked_at: Option<String>,
     pub evidence: Vec<LibraryCompletionEvidence>,
 }
 
@@ -48,6 +57,7 @@ pub struct LibraryCompletionAtlasCell {
     pub decade: i32,
     pub owned: i64,
     pub candidates: i64,
+    pub verified: i64,
     pub wanted: i64,
     pub needs_review: i64,
     pub excluded: i64,
@@ -98,6 +108,67 @@ pub struct LibraryCompletionDecision {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartLibraryCompletionVerificationRequest {
+    pub scope: String,
+    #[serde(default)]
+    pub candidate_ids: Vec<String>,
+    pub source: Option<String>,
+    pub decade: Option<i32>,
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetLibraryCompletionVerificationStateRequest {
+    pub batch_id: i64,
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryCompletionVerificationItemSummary {
+    pub candidate_id: String,
+    pub artist: String,
+    pub title: String,
+    pub state: String,
+    pub message: Option<String>,
+    pub musicbrainz_id: Option<String>,
+    pub musicbrainz_url: Option<String>,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryCompletionVerificationBatch {
+    pub id: i64,
+    pub label: String,
+    pub source: Option<String>,
+    pub decade: Option<i32>,
+    pub state: String,
+    pub total_count: i64,
+    pub queued_count: i64,
+    pub checking_count: i64,
+    pub verified_count: i64,
+    pub no_match_count: i64,
+    pub ambiguous_count: i64,
+    pub failed_count: i64,
+    pub cached_count: i64,
+    pub completed_count: i64,
+    pub estimated_seconds_remaining: i64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryCompletionVerificationStatus {
+    pub batch: Option<LibraryCompletionVerificationBatch>,
+    pub recent_items: Vec<LibraryCompletionVerificationItemSummary>,
+}
+
 #[derive(Debug, Clone)]
 struct SourceAlbumRow {
     source: String,
@@ -125,6 +196,7 @@ struct AlbumAggregate {
 struct AtlasCounts {
     owned: i64,
     candidates: i64,
+    verified: i64,
     wanted: i64,
     needs_review: i64,
     excluded: i64,
@@ -136,6 +208,37 @@ struct StoredDecision {
     wish_list_item_id: Option<i64>,
     musicbrainz_id: Option<String>,
     musicbrainz_url: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct StoredVerification {
+    outcome: String,
+    musicbrainz_id: Option<String>,
+    musicbrainz_url: Option<String>,
+    message: String,
+    checked_at: String,
+}
+
+#[derive(Debug, Clone)]
+struct VerificationQueueItem {
+    id: i64,
+    batch_id: i64,
+    candidate_id: String,
+    artist: String,
+    title: String,
+    chart_year: i32,
+}
+
+#[derive(Debug, Clone)]
+struct VerificationResult {
+    outcome: String,
+    message: String,
+    musicbrainz_id: Option<String>,
+    musicbrainz_url: Option<String>,
+    matched_artist: Option<String>,
+    matched_title: Option<String>,
+    matched_year: Option<i32>,
+    score: Option<i32>,
 }
 
 fn source_label(source: &str) -> &'static str {
@@ -250,6 +353,50 @@ fn load_decisions(conn: &Connection) -> Result<HashMap<String, StoredDecision>> 
     Ok(rows.collect::<rusqlite::Result<HashMap<_, _>>>()?)
 }
 
+fn load_verifications(conn: &Connection) -> Result<HashMap<String, StoredVerification>> {
+    let mut statement = conn.prepare(
+        "
+        SELECT candidate_key, outcome, musicbrainz_id, musicbrainz_url, message, checked_at
+        FROM library_completion_verifications
+        ",
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            StoredVerification {
+                outcome: row.get(1)?,
+                musicbrainz_id: row.get(2)?,
+                musicbrainz_url: row.get(3)?,
+                message: row.get(4)?,
+                checked_at: row.get(5)?,
+            },
+        ))
+    })?;
+    Ok(rows.collect::<rusqlite::Result<HashMap<_, _>>>()?)
+}
+
+fn load_pending_verification_states(conn: &Connection) -> Result<HashMap<String, String>> {
+    let mut statement = conn.prepare(
+        "
+        SELECT item.candidate_key, item.state
+        FROM library_completion_verification_items item
+        JOIN library_completion_verification_batches batch ON batch.id = item.batch_id
+        WHERE batch.state IN ('running', 'paused')
+          AND item.state IN ('queued', 'checking')
+        ORDER BY batch.id DESC, item.id
+        ",
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    let mut states = HashMap::new();
+    for row in rows {
+        let (candidate_id, state) = row?;
+        states.entry(candidate_id).or_insert(state);
+    }
+    Ok(states)
+}
+
 fn confidence_for(aggregate: &AlbumAggregate) -> String {
     let best_rank = aggregate
         .evidence
@@ -326,6 +473,8 @@ fn get_for_connection(
     let request = normalize_request(request)?;
     let source_rows = load_source_rows(conn)?;
     let decisions = load_decisions(conn)?;
+    let verifications = load_verifications(conn)?;
+    let pending_verifications = load_pending_verification_states(conn)?;
     let mut albums = HashMap::<String, AlbumAggregate>::new();
 
     for row in source_rows {
@@ -356,6 +505,12 @@ fn get_for_connection(
             .evidence
             .sort_by_key(|evidence| source_order(&evidence.source));
         let decision = decisions.get(&candidate_id);
+        let verification = verifications.get(&candidate_id);
+        let verification_status = pending_verifications
+            .get(&candidate_id)
+            .cloned()
+            .or_else(|| verification.map(|value| value.outcome.clone()))
+            .unwrap_or_else(|| "unverified".to_string());
         let status = decision
             .map(|value| value.status.clone())
             .unwrap_or_else(|| "candidate".to_string());
@@ -372,6 +527,10 @@ fn get_for_connection(
                     "wanted" => counts.wanted += 1,
                     "needsReview" => counts.needs_review += 1,
                     "notForMe" => counts.excluded += 1,
+                    _ if verification_status == "verified" => counts.verified += 1,
+                    _ if matches!(verification_status.as_str(), "noMatch" | "ambiguous") => {
+                        counts.needs_review += 1
+                    }
                     _ => counts.candidates += 1,
                 }
             }
@@ -389,9 +548,16 @@ fn get_for_connection(
             confidence: confidence_for(&aggregate),
             status,
             wish_list_item_id: decision.and_then(|value| value.wish_list_item_id),
-            musicbrainz_id: decision.and_then(|value| value.musicbrainz_id.clone()),
-            musicbrainz_url: decision.and_then(|value| value.musicbrainz_url.clone()),
+            musicbrainz_id: decision
+                .and_then(|value| value.musicbrainz_id.clone())
+                .or_else(|| verification.and_then(|value| value.musicbrainz_id.clone())),
+            musicbrainz_url: decision
+                .and_then(|value| value.musicbrainz_url.clone())
+                .or_else(|| verification.and_then(|value| value.musicbrainz_url.clone())),
             cover_url: None,
+            verification_status,
+            verification_message: verification.map(|value| value.message.clone()),
+            verification_checked_at: verification.map(|value| value.checked_at.clone()),
             evidence: aggregate.evidence,
         });
     }
@@ -447,11 +613,13 @@ fn get_for_connection(
             decade,
             owned: counts.owned,
             candidates: counts.candidates,
+            verified: counts.verified,
             wanted: counts.wanted,
             needs_review: counts.needs_review,
             excluded: counts.excluded,
             total: counts.owned
                 + counts.candidates
+                + counts.verified
                 + counts.wanted
                 + counts.needs_review
                 + counts.excluded,
@@ -508,6 +676,57 @@ fn validate_decision_request(request: &mut SetLibraryCompletionDecisionRequest) 
         .take()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
+    Ok(())
+}
+
+fn save_verification_result(
+    conn: &Connection,
+    candidate_id: &str,
+    artist: &str,
+    title: &str,
+    chart_year: i32,
+    result: &VerificationResult,
+) -> Result<()> {
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "
+        INSERT INTO library_completion_verifications (
+            candidate_key, outcome, artist, title, chart_year, musicbrainz_id,
+            musicbrainz_url, matched_artist, matched_title, matched_year, score,
+            message, attempt_count, checked_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1, ?13, ?13)
+        ON CONFLICT(candidate_key) DO UPDATE SET
+            outcome = excluded.outcome,
+            artist = excluded.artist,
+            title = excluded.title,
+            chart_year = excluded.chart_year,
+            musicbrainz_id = excluded.musicbrainz_id,
+            musicbrainz_url = excluded.musicbrainz_url,
+            matched_artist = excluded.matched_artist,
+            matched_title = excluded.matched_title,
+            matched_year = excluded.matched_year,
+            score = excluded.score,
+            message = excluded.message,
+            attempt_count = library_completion_verifications.attempt_count + 1,
+            checked_at = excluded.checked_at,
+            updated_at = excluded.updated_at
+        ",
+        params![
+            candidate_id,
+            result.outcome,
+            artist,
+            title,
+            chart_year,
+            result.musicbrainz_id,
+            result.musicbrainz_url,
+            result.matched_artist,
+            result.matched_title,
+            result.matched_year,
+            result.score,
+            result.message,
+            now,
+        ],
+    )?;
     Ok(())
 }
 
@@ -569,6 +788,27 @@ fn set_decision_for_connection(
         None
     };
 
+    if request.musicbrainz_id.is_some() {
+        save_verification_result(
+            conn,
+            &request.candidate_id,
+            &request.artist,
+            &request.title,
+            request.chart_year,
+            &VerificationResult {
+                outcome: "verified".to_string(),
+                message: "MusicBrainz confirmed an official studio-album release group."
+                    .to_string(),
+                musicbrainz_id: request.musicbrainz_id.clone(),
+                musicbrainz_url: request.musicbrainz_url.clone(),
+                matched_artist: Some(request.artist.clone()),
+                matched_title: Some(request.title.clone()),
+                matched_year: Some(request.chart_year),
+                score: None,
+            },
+        )?;
+    }
+
     let updated_at = Utc::now().to_rfc3339();
     conn.execute(
         "
@@ -607,6 +847,693 @@ fn set_decision_for_connection(
         musicbrainz_url: request.musicbrainz_url,
         updated_at,
     })
+}
+
+fn normalize_verification_request(
+    mut request: StartLibraryCompletionVerificationRequest,
+) -> Result<StartLibraryCompletionVerificationRequest> {
+    request.scope = request.scope.trim().to_string();
+    if !matches!(
+        request.scope.as_str(),
+        "candidate" | "selection" | "campaign"
+    ) {
+        bail!("Choose a candidate, selection, or Coverage Atlas campaign to verify.")
+    }
+    if request.candidate_ids.len() > MAX_VERIFICATION_SELECTION {
+        bail!("A verification selection can contain at most {MAX_VERIFICATION_SELECTION} albums.")
+    }
+    let mut seen = HashSet::new();
+    request.candidate_ids = request
+        .candidate_ids
+        .into_iter()
+        .map(|candidate_id| trimmed(candidate_id, MAX_CANDIDATE_KEY_LENGTH))
+        .filter(|candidate_id| !candidate_id.is_empty() && seen.insert(candidate_id.clone()))
+        .collect();
+    request.source = request
+        .source
+        .take()
+        .map(|source| source.trim().to_string())
+        .filter(|source| !source.is_empty());
+    request.label = request
+        .label
+        .take()
+        .map(|label| trimmed(label, 120))
+        .filter(|label| !label.is_empty());
+
+    match request.scope.as_str() {
+        "campaign" => {
+            normalize_request(Some(LibraryCompletionRequest {
+                source: request.source.clone(),
+                decade: request.decade,
+            }))?;
+        }
+        _ if request.candidate_ids.is_empty() => {
+            bail!("Select at least one Library Completion candidate to verify.")
+        }
+        _ => {}
+    }
+    Ok(request)
+}
+
+fn active_verification_batch_id(conn: &Connection) -> Result<Option<i64>> {
+    conn.query_row(
+        "
+        SELECT id
+        FROM library_completion_verification_batches
+        WHERE state IN ('running', 'paused')
+        ORDER BY id DESC
+        LIMIT 1
+        ",
+        [],
+        |row| row.get(0),
+    )
+    .optional()
+    .context("Could not inspect the active Library Completion verification batch")
+}
+
+fn candidates_for_verification(
+    conn: &Connection,
+    request: &StartLibraryCompletionVerificationRequest,
+) -> Result<Vec<LibraryCompletionCandidate>> {
+    let completion_request = (request.scope == "campaign").then(|| LibraryCompletionRequest {
+        source: request.source.clone(),
+        decade: request.decade,
+    });
+    let mut candidates = get_for_connection(conn, completion_request)?.candidates;
+    if request.scope != "campaign" {
+        let selected = request.candidate_ids.iter().collect::<HashSet<_>>();
+        candidates.retain(|candidate| selected.contains(&candidate.id));
+    }
+    candidates.retain(|candidate| {
+        (if request.scope == "campaign" {
+            candidate.status == "candidate"
+        } else {
+            candidate.status != "notForMe"
+        }) && matches!(
+            candidate.verification_status.as_str(),
+            "unverified" | "failed"
+        )
+    });
+    Ok(candidates)
+}
+
+fn start_verification_for_connection(
+    conn: &mut Connection,
+    request: StartLibraryCompletionVerificationRequest,
+) -> Result<LibraryCompletionVerificationStatus> {
+    let request = normalize_verification_request(request)?;
+    if active_verification_batch_id(conn)?.is_some() {
+        bail!("Finish the current verification batch before starting another one.")
+    }
+    let candidates = candidates_for_verification(conn, &request)?;
+    if candidates.is_empty() {
+        bail!("Every album in this scope is already checked or no longer open for verification.")
+    }
+
+    let label = request
+        .label
+        .clone()
+        .unwrap_or_else(|| match request.scope.as_str() {
+            "campaign" => format!(
+                "{} · {}s",
+                source_label(request.source.as_deref().unwrap_or_default()),
+                request.decade.unwrap_or_default()
+            ),
+            "candidate" => format!("{} — {}", candidates[0].artist, candidates[0].title),
+            _ => format!("Selected albums ({})", candidates.len()),
+        });
+    let now = Utc::now().to_rfc3339();
+    let transaction = conn.transaction()?;
+    transaction.execute(
+        "
+        INSERT INTO library_completion_verification_batches (
+            label, source, decade, state, total_count, cached_count,
+            created_at, started_at, updated_at
+        ) VALUES (?1, ?2, ?3, 'running', ?4, 0, ?5, ?5, ?5)
+        ",
+        params![
+            request.label.as_deref().unwrap_or(&label),
+            request.source,
+            request.decade,
+            candidates.len() as i64,
+            now
+        ],
+    )?;
+    let batch_id = transaction.last_insert_rowid();
+    for candidate in candidates {
+        transaction.execute(
+            "
+            INSERT INTO library_completion_verification_items (
+                batch_id, candidate_key, artist, title, chart_year, source,
+                state, created_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'queued', ?7)
+            ",
+            params![
+                batch_id,
+                candidate.id,
+                candidate.artist,
+                candidate.title,
+                candidate.chart_year,
+                candidate
+                    .evidence
+                    .iter()
+                    .map(|evidence| evidence.label.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                now,
+            ],
+        )?;
+    }
+    transaction.commit()?;
+    verification_status_for_connection(conn, Some(batch_id))
+}
+
+fn verification_batch_for_connection(
+    conn: &Connection,
+    batch_id: Option<i64>,
+) -> Result<Option<LibraryCompletionVerificationBatch>> {
+    let selected_id = match batch_id {
+        Some(batch_id) => Some(batch_id),
+        None => conn
+            .query_row(
+                "
+                SELECT id
+                FROM library_completion_verification_batches
+                ORDER BY CASE WHEN state IN ('running', 'paused') THEN 0 ELSE 1 END, id DESC
+                LIMIT 1
+                ",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?,
+    };
+    let Some(selected_id) = selected_id else {
+        return Ok(None);
+    };
+
+    conn.query_row(
+        "
+        SELECT
+            batch.id,
+            batch.label,
+            batch.source,
+            batch.decade,
+            batch.state,
+            batch.total_count,
+            SUM(CASE WHEN item.state = 'queued' THEN 1 ELSE 0 END),
+            SUM(CASE WHEN item.state = 'checking' THEN 1 ELSE 0 END),
+            SUM(CASE WHEN item.state = 'verified' THEN 1 ELSE 0 END),
+            SUM(CASE WHEN item.state = 'noMatch' THEN 1 ELSE 0 END),
+            SUM(CASE WHEN item.state = 'ambiguous' THEN 1 ELSE 0 END),
+            SUM(CASE WHEN item.state = 'failed' THEN 1 ELSE 0 END),
+            batch.cached_count,
+            batch.created_at,
+            batch.updated_at,
+            batch.completed_at
+        FROM library_completion_verification_batches batch
+        LEFT JOIN library_completion_verification_items item ON item.batch_id = batch.id
+        WHERE batch.id = ?1
+        GROUP BY batch.id
+        ",
+        params![selected_id],
+        |row| {
+            let total_count = row.get::<_, i64>(5)?;
+            let queued_count = row.get::<_, i64>(6)?;
+            let checking_count = row.get::<_, i64>(7)?;
+            let verified_count = row.get::<_, i64>(8)?;
+            let no_match_count = row.get::<_, i64>(9)?;
+            let ambiguous_count = row.get::<_, i64>(10)?;
+            let failed_count = row.get::<_, i64>(11)?;
+            Ok(LibraryCompletionVerificationBatch {
+                id: row.get(0)?,
+                label: row.get(1)?,
+                source: row.get(2)?,
+                decade: row.get(3)?,
+                state: row.get(4)?,
+                total_count,
+                queued_count,
+                checking_count,
+                verified_count,
+                no_match_count,
+                ambiguous_count,
+                failed_count,
+                cached_count: row.get(12)?,
+                completed_count: total_count - queued_count - checking_count,
+                estimated_seconds_remaining: (queued_count + checking_count) * 2,
+                created_at: row.get(13)?,
+                updated_at: row.get(14)?,
+                completed_at: row.get(15)?,
+            })
+        },
+    )
+    .optional()
+    .context("Could not load the Library Completion verification batch")
+}
+
+fn verification_status_for_connection(
+    conn: &Connection,
+    batch_id: Option<i64>,
+) -> Result<LibraryCompletionVerificationStatus> {
+    let batch = verification_batch_for_connection(conn, batch_id)?;
+    let Some(batch_id) = batch.as_ref().map(|batch| batch.id) else {
+        return Ok(LibraryCompletionVerificationStatus {
+            batch: None,
+            recent_items: Vec::new(),
+        });
+    };
+    let mut statement = conn.prepare(
+        "
+        SELECT
+            item.candidate_key,
+            item.artist,
+            item.title,
+            item.state,
+            CASE WHEN item.state = 'failed' THEN item.last_error ELSE verification.message END,
+            verification.musicbrainz_id,
+            verification.musicbrainz_url,
+            COALESCE(item.finished_at, item.started_at, item.created_at)
+        FROM library_completion_verification_items item
+        LEFT JOIN library_completion_verifications verification
+            ON verification.candidate_key = item.candidate_key
+        WHERE item.batch_id = ?1
+        ORDER BY CASE WHEN item.state = 'checking' THEN 0 ELSE 1 END,
+                 COALESCE(item.finished_at, item.started_at, item.created_at) DESC,
+                 item.id DESC
+        LIMIT ?2
+        ",
+    )?;
+    let rows = statement.query_map(params![batch_id, RECENT_VERIFICATION_ITEMS as i64], |row| {
+        Ok(LibraryCompletionVerificationItemSummary {
+            candidate_id: row.get(0)?,
+            artist: row.get(1)?,
+            title: row.get(2)?,
+            state: row.get(3)?,
+            message: row.get(4)?,
+            musicbrainz_id: row.get(5)?,
+            musicbrainz_url: row.get(6)?,
+            updated_at: row.get(7)?,
+        })
+    })?;
+    Ok(LibraryCompletionVerificationStatus {
+        batch,
+        recent_items: rows.collect::<rusqlite::Result<Vec<_>>>()?,
+    })
+}
+
+fn set_verification_state_for_connection(
+    conn: &Connection,
+    request: SetLibraryCompletionVerificationStateRequest,
+) -> Result<LibraryCompletionVerificationStatus> {
+    let state = request.state.trim();
+    if !matches!(state, "running" | "paused") {
+        bail!("A verification batch can only be running or paused.")
+    }
+    let changed = conn.execute(
+        "
+        UPDATE library_completion_verification_batches
+        SET state = ?1, updated_at = ?2
+        WHERE id = ?3 AND state IN ('running', 'paused')
+        ",
+        params![state, Utc::now().to_rfc3339(), request.batch_id],
+    )?;
+    if changed == 0 {
+        bail!("The selected verification batch is already complete or no longer exists.")
+    }
+    verification_status_for_connection(conn, Some(request.batch_id))
+}
+
+fn retry_verification_failures_for_connection(
+    conn: &mut Connection,
+    batch_id: i64,
+) -> Result<LibraryCompletionVerificationStatus> {
+    let now = Utc::now().to_rfc3339();
+    let transaction = conn.transaction()?;
+    transaction.execute(
+        "
+        DELETE FROM library_completion_verifications
+        WHERE outcome = 'failed'
+          AND candidate_key IN (
+              SELECT candidate_key
+              FROM library_completion_verification_items
+              WHERE batch_id = ?1 AND state = 'failed'
+          )
+        ",
+        params![batch_id],
+    )?;
+    let changed = transaction.execute(
+        "
+        UPDATE library_completion_verification_items
+        SET state = 'queued', last_error = NULL, started_at = NULL, finished_at = NULL
+        WHERE batch_id = ?1 AND state = 'failed'
+        ",
+        params![batch_id],
+    )?;
+    if changed == 0 {
+        bail!("This verification batch has no failed checks to retry.")
+    }
+    transaction.execute(
+        "
+        UPDATE library_completion_verification_batches
+        SET state = 'running', updated_at = ?1, completed_at = NULL
+        WHERE id = ?2
+        ",
+        params![now, batch_id],
+    )?;
+    transaction.commit()?;
+    verification_status_for_connection(conn, Some(batch_id))
+}
+
+fn recover_interrupted_verifications(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "
+        UPDATE library_completion_verification_items
+        SET state = 'queued', started_at = NULL
+        WHERE state = 'checking'
+          AND batch_id IN (
+              SELECT id FROM library_completion_verification_batches WHERE state = 'running'
+          )
+        ",
+        [],
+    )?;
+    Ok(())
+}
+
+fn claim_next_verification(conn: &mut Connection) -> Result<Option<VerificationQueueItem>> {
+    loop {
+        let batch_id = conn
+            .query_row(
+                "
+                SELECT id
+                FROM library_completion_verification_batches
+                WHERE state = 'running'
+                ORDER BY id
+                LIMIT 1
+                ",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?;
+        let Some(batch_id) = batch_id else {
+            return Ok(None);
+        };
+        let transaction = conn.transaction()?;
+        let item = transaction
+            .query_row(
+                "
+                SELECT id, batch_id, candidate_key, artist, title, chart_year
+                FROM library_completion_verification_items
+                WHERE batch_id = ?1 AND state = 'queued'
+                ORDER BY id
+                LIMIT 1
+                ",
+                params![batch_id],
+                |row| {
+                    Ok(VerificationQueueItem {
+                        id: row.get(0)?,
+                        batch_id: row.get(1)?,
+                        candidate_id: row.get(2)?,
+                        artist: row.get(3)?,
+                        title: row.get(4)?,
+                        chart_year: row.get(5)?,
+                    })
+                },
+            )
+            .optional()?;
+        let Some(item) = item else {
+            transaction.execute(
+                "
+                UPDATE library_completion_verification_batches
+                SET state = 'completed', completed_at = ?1, updated_at = ?1
+                WHERE id = ?2 AND NOT EXISTS (
+                    SELECT 1 FROM library_completion_verification_items
+                    WHERE batch_id = ?2 AND state IN ('queued', 'checking')
+                )
+                ",
+                params![Utc::now().to_rfc3339(), batch_id],
+            )?;
+            transaction.commit()?;
+            continue;
+        };
+        let now = Utc::now().to_rfc3339();
+        transaction.execute(
+            "
+            UPDATE library_completion_verification_items
+            SET state = 'checking', attempt_count = attempt_count + 1, started_at = ?1
+            WHERE id = ?2
+            ",
+            params![now, item.id],
+        )?;
+        transaction.execute(
+            "UPDATE library_completion_verification_batches SET updated_at = ?1 WHERE id = ?2",
+            params![now, batch_id],
+        )?;
+        transaction.commit()?;
+        return Ok(Some(item));
+    }
+}
+
+fn complete_verification_item(
+    conn: &mut Connection,
+    item: &VerificationQueueItem,
+    result: &VerificationResult,
+) -> Result<()> {
+    let transaction = conn.transaction()?;
+    save_verification_result(
+        &transaction,
+        &item.candidate_id,
+        &item.artist,
+        &item.title,
+        item.chart_year,
+        result,
+    )?;
+    let now = Utc::now().to_rfc3339();
+    transaction.execute(
+        "
+        UPDATE library_completion_verification_items
+        SET state = ?1, last_error = ?2, finished_at = ?3
+        WHERE id = ?4
+        ",
+        params![
+            result.outcome,
+            (result.outcome == "failed").then_some(result.message.as_str()),
+            now,
+            item.id,
+        ],
+    )?;
+    transaction.execute(
+        "
+        UPDATE library_completion_verification_batches
+        SET
+            state = CASE WHEN NOT EXISTS (
+                SELECT 1 FROM library_completion_verification_items
+                WHERE batch_id = ?1 AND state IN ('queued', 'checking')
+            ) THEN 'completed' ELSE state END,
+            completed_at = CASE WHEN NOT EXISTS (
+                SELECT 1 FROM library_completion_verification_items
+                WHERE batch_id = ?1 AND state IN ('queued', 'checking')
+            ) THEN ?2 ELSE completed_at END,
+            updated_at = ?2
+        WHERE id = ?1
+        ",
+        params![item.batch_id, now],
+    )?;
+    transaction.commit()?;
+    Ok(())
+}
+
+#[cfg(not(test))]
+fn verify_with_musicbrainz(item: &VerificationQueueItem) -> VerificationResult {
+    let response = match wishlist::search_musicbrainz_for_wishlist(
+        wishlist::WishListMusicBrainzSearchRequest {
+            entity: "album".to_string(),
+            query: item.title.clone(),
+            artist: item.artist.clone(),
+            year: Some(item.chart_year),
+        },
+    ) {
+        Ok(response) => response,
+        Err(error) => {
+            return VerificationResult {
+                outcome: "failed".to_string(),
+                message: format!("MusicBrainz search failed: {error}"),
+                musicbrainz_id: None,
+                musicbrainz_url: None,
+                matched_artist: None,
+                matched_title: None,
+                matched_year: None,
+                score: None,
+            };
+        }
+    };
+
+    let exact_matches = response
+        .candidates
+        .into_iter()
+        .filter(|candidate| {
+            wishlist::normalize_key(&candidate.artist) == wishlist::normalize_key(&item.artist)
+                && wishlist::normalize_key(&candidate.title) == wishlist::normalize_key(&item.title)
+        })
+        .collect::<Vec<_>>();
+    if exact_matches.is_empty() {
+        return VerificationResult {
+            outcome: "noMatch".to_string(),
+            message: "MusicBrainz returned no exact artist and primary Album title match."
+                .to_string(),
+            musicbrainz_id: None,
+            musicbrainz_url: None,
+            matched_artist: None,
+            matched_title: None,
+            matched_year: None,
+            score: None,
+        };
+    }
+    if exact_matches.len() > 1 {
+        return VerificationResult {
+            outcome: "ambiguous".to_string(),
+            message: format!(
+                "MusicBrainz returned {} exact studio-album candidates; choose the correct release group manually.",
+                exact_matches.len()
+            ),
+            musicbrainz_id: None,
+            musicbrainz_url: None,
+            matched_artist: None,
+            matched_title: None,
+            matched_year: None,
+            score: None,
+        };
+    }
+
+    let candidate = exact_matches.into_iter().next().expect("one exact match");
+    match wishlist::validate_musicbrainz_album_candidate(candidate.clone()) {
+        Ok(confirmed) => VerificationResult {
+            outcome: "verified".to_string(),
+            message: "MusicBrainz confirmed a primary Album release group without secondary types and with an official release.".to_string(),
+            musicbrainz_id: Some(confirmed.musicbrainz_id),
+            musicbrainz_url: Some(confirmed.musicbrainz_url),
+            matched_artist: Some(confirmed.artist),
+            matched_title: Some(confirmed.title),
+            matched_year: confirmed.year,
+            score: Some(confirmed.score),
+        },
+        Err(error) => {
+            let message = error.to_string();
+            let normalized = message.to_lowercase();
+            let outcome = if normalized.contains("no official release")
+                || normalized.contains("rather than a studio album")
+                || normalized.contains("is not an album")
+            {
+                "noMatch"
+            } else {
+                "failed"
+            };
+            VerificationResult {
+                outcome: outcome.to_string(),
+                message,
+                musicbrainz_id: None,
+                musicbrainz_url: None,
+                matched_artist: Some(candidate.artist),
+                matched_title: Some(candidate.title),
+                matched_year: candidate.year,
+                score: Some(candidate.score),
+            }
+        }
+    }
+}
+
+#[cfg(not(test))]
+fn verification_worker_loop(app: &AppHandle) -> Result<()> {
+    {
+        let (conn, _) = db::open(app)?;
+        recover_interrupted_verifications(&conn)?;
+    }
+    loop {
+        let item = {
+            let (mut conn, _) = db::open(app)?;
+            claim_next_verification(&mut conn)?
+        };
+        let Some(item) = item else {
+            return Ok(());
+        };
+        let result = verify_with_musicbrainz(&item);
+        let (mut conn, _) = db::open(app)?;
+        complete_verification_item(&mut conn, &item, &result)?;
+    }
+}
+
+#[cfg(not(test))]
+fn has_running_verification_for_app(app: &AppHandle) -> bool {
+    db::open(app)
+        .and_then(|(conn, _)| active_verification_batch_id(&conn))
+        .ok()
+        .flatten()
+        .is_some_and(|batch_id| {
+            db::open(app)
+                .and_then(|(conn, _)| verification_batch_for_connection(&conn, Some(batch_id)))
+                .ok()
+                .flatten()
+                .is_some_and(|batch| batch.state == "running")
+        })
+}
+
+#[cfg(not(test))]
+pub fn resume_verification_worker(app: AppHandle) {
+    if VERIFICATION_WORKER_RUNNING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        if let Err(error) = verification_worker_loop(&app) {
+            eprintln!("Library Completion verification worker stopped: {error:#}");
+        }
+        VERIFICATION_WORKER_RUNNING.store(false, Ordering::SeqCst);
+        if has_running_verification_for_app(&app) {
+            resume_verification_worker(app);
+        }
+    });
+}
+
+#[cfg(not(test))]
+pub fn verification_status_for_app(app: &AppHandle) -> Result<LibraryCompletionVerificationStatus> {
+    let (conn, _) = db::open(app)?;
+    verification_status_for_connection(&conn, None)
+}
+
+#[cfg(not(test))]
+pub fn start_verification_for_app(
+    app: &AppHandle,
+    request: StartLibraryCompletionVerificationRequest,
+) -> Result<LibraryCompletionVerificationStatus> {
+    let (mut conn, _) = db::open(app)?;
+    let status = start_verification_for_connection(&mut conn, request)?;
+    resume_verification_worker(app.clone());
+    Ok(status)
+}
+
+#[cfg(not(test))]
+pub fn set_verification_state_for_app(
+    app: &AppHandle,
+    request: SetLibraryCompletionVerificationStateRequest,
+) -> Result<LibraryCompletionVerificationStatus> {
+    let should_resume = request.state.trim() == "running";
+    let (conn, _) = db::open(app)?;
+    let status = set_verification_state_for_connection(&conn, request)?;
+    if should_resume {
+        resume_verification_worker(app.clone());
+    }
+    Ok(status)
+}
+
+#[cfg(not(test))]
+pub fn retry_verification_failures_for_app(
+    app: &AppHandle,
+    batch_id: i64,
+) -> Result<LibraryCompletionVerificationStatus> {
+    let (mut conn, _) = db::open(app)?;
+    let status = retry_verification_failures_for_connection(&mut conn, batch_id)?;
+    resume_verification_worker(app.clone());
+    Ok(status)
 }
 
 #[cfg(not(test))]
@@ -728,5 +1655,121 @@ mod tests {
         assert!(!response.truncated);
         assert_eq!(response.atlas.len(), 2);
         assert_eq!(response.total_candidates, 2);
+    }
+
+    #[test]
+    fn verification_batches_persist_results_and_update_the_atlas() {
+        let mut conn = connection();
+        insert_billboard_candidate(&conn);
+
+        let started = start_verification_for_connection(
+            &mut conn,
+            StartLibraryCompletionVerificationRequest {
+                scope: "campaign".to_string(),
+                candidate_ids: Vec::new(),
+                source: Some("billboard".to_string()),
+                decade: Some(1990),
+                label: None,
+            },
+        )
+        .expect("start campaign verification");
+        let batch = started.batch.expect("verification batch");
+        assert_eq!(batch.total_count, 1);
+        assert_eq!(batch.queued_count, 1);
+
+        let item = claim_next_verification(&mut conn)
+            .expect("claim verification")
+            .expect("queued verification item");
+        complete_verification_item(
+            &mut conn,
+            &item,
+            &VerificationResult {
+                outcome: "verified".to_string(),
+                message: "Official studio album verified.".to_string(),
+                musicbrainz_id: Some("01234567-89ab-cdef-0123-456789abcdef".to_string()),
+                musicbrainz_url: Some(
+                    "https://musicbrainz.org/release-group/01234567-89ab-cdef-0123-456789abcdef"
+                        .to_string(),
+                ),
+                matched_artist: Some("Massive Attack".to_string()),
+                matched_title: Some("Mezzanine".to_string()),
+                matched_year: Some(1998),
+                score: Some(100),
+            },
+        )
+        .expect("complete verification");
+
+        let status = verification_status_for_connection(&conn, Some(batch.id))
+            .expect("load completed status");
+        let completed = status.batch.expect("completed batch");
+        assert_eq!(completed.state, "completed");
+        assert_eq!(completed.verified_count, 1);
+
+        let completion = get_for_connection(&conn, None).expect("refresh completion data");
+        assert_eq!(completion.candidates[0].verification_status, "verified");
+        assert_eq!(completion.atlas[0].verified, 1);
+        assert_eq!(completion.atlas[0].candidates, 0);
+    }
+
+    #[test]
+    fn paused_and_failed_batches_can_be_resumed_and_retried() {
+        let mut conn = connection();
+        insert_billboard_candidate(&conn);
+        let started = start_verification_for_connection(
+            &mut conn,
+            StartLibraryCompletionVerificationRequest {
+                scope: "candidate".to_string(),
+                candidate_ids: vec!["massive attack\u{1f}mezzanine".to_string()],
+                source: None,
+                decade: None,
+                label: None,
+            },
+        )
+        .expect("start candidate verification");
+        let batch_id = started.batch.expect("batch").id;
+
+        let paused = set_verification_state_for_connection(
+            &conn,
+            SetLibraryCompletionVerificationStateRequest {
+                batch_id,
+                state: "paused".to_string(),
+            },
+        )
+        .expect("pause verification");
+        assert_eq!(paused.batch.expect("paused batch").state, "paused");
+        set_verification_state_for_connection(
+            &conn,
+            SetLibraryCompletionVerificationStateRequest {
+                batch_id,
+                state: "running".to_string(),
+            },
+        )
+        .expect("resume verification");
+
+        let item = claim_next_verification(&mut conn)
+            .expect("claim verification")
+            .expect("queued item");
+        complete_verification_item(
+            &mut conn,
+            &item,
+            &VerificationResult {
+                outcome: "failed".to_string(),
+                message: "Temporary MusicBrainz failure.".to_string(),
+                musicbrainz_id: None,
+                musicbrainz_url: None,
+                matched_artist: None,
+                matched_title: None,
+                matched_year: None,
+                score: None,
+            },
+        )
+        .expect("store failed verification");
+
+        let retried = retry_verification_failures_for_connection(&mut conn, batch_id)
+            .expect("retry failures");
+        let retried_batch = retried.batch.expect("retried batch");
+        assert_eq!(retried_batch.state, "running");
+        assert_eq!(retried_batch.queued_count, 1);
+        assert_eq!(retried_batch.failed_count, 0);
     }
 }

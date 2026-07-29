@@ -9,7 +9,11 @@ import {
   Download,
   Heart,
   LayoutList,
+  ListChecks,
+  Pause,
+  Play,
   RefreshCw,
+  RotateCcw,
   Search,
   ShieldCheck,
   X,
@@ -18,15 +22,21 @@ import {
 import {
   addWishListMusicBrainzCandidate,
   getLibraryCompletion,
+  getLibraryCompletionVerificationStatus,
+  retryLibraryCompletionVerificationFailures,
   searchDeemixAlbums,
   searchWishListMusicBrainz,
+  setLibraryCompletionVerificationState,
   setLibraryCompletionDecision,
+  startLibraryCompletionVerification,
 } from "../backend";
 import type {
   DeemixAlbumSearchResponse,
   LibraryCompletionAtlasCell,
   LibraryCompletionCandidate,
   LibraryCompletionStatus,
+  LibraryCompletionVerificationStatus,
+  StartLibraryCompletionVerificationRequest,
   WishListMusicBrainzCandidate,
 } from "../types";
 
@@ -70,6 +80,29 @@ function sourceLabel(source: LibraryCompletionAtlasCell["source"]) {
   return "VG Lista";
 }
 
+function verificationLabel(candidate: LibraryCompletionCandidate) {
+  if (candidate.status !== "candidate") return statusLabels[candidate.status];
+  switch (candidate.verificationStatus) {
+    case "queued": return "Queued";
+    case "checking": return "Checking";
+    case "verified": return "Verified";
+    case "noMatch": return "No match";
+    case "ambiguous": return "Review";
+    case "failed": return "Failed";
+    default: return "Unverified";
+  }
+}
+
+function verificationEta(seconds: number) {
+  if (seconds <= 0) return "Finishing now";
+  if (seconds < 60) return "Less than a minute remaining";
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) return `About ${minutes} minutes remaining`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return `About ${hours}h${remainder ? ` ${remainder}m` : ""} remaining`;
+}
+
 export function LibraryCompletionWorkspace({
   onOpenWishList,
 }: {
@@ -90,6 +123,10 @@ export function LibraryCompletionWorkspace({
   const [isCheckingMusicBrainz, setIsCheckingMusicBrainz] = useState(false);
   const [deemixResult, setDeemixResult] = useState<DeemixAlbumSearchResponse | null>(null);
   const [isCheckingDeemix, setIsCheckingDeemix] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState<LibraryCompletionVerificationStatus | null>(null);
+  const [selectedForVerification, setSelectedForVerification] = useState<Set<string>>(() => new Set());
+  const [pendingQueueAction, setPendingQueueAction] = useState(false);
+  const completedBatchReloadRef = useRef<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (scope: Campaign | null = null) => {
@@ -98,10 +135,16 @@ export function LibraryCompletionWorkspace({
     setData((current) => current ? { ...current, candidates: [] } : current);
     setSelectedId(null);
     try {
-      const response = await getLibraryCompletion(
-        scope ? { source: scope.source, decade: scope.decade } : null,
-      );
+      const [response, queueStatus] = await Promise.all([
+        getLibraryCompletion(scope ? { source: scope.source, decade: scope.decade } : null),
+        getLibraryCompletionVerificationStatus(),
+      ]);
       setData(response);
+      setVerificationStatus(queueStatus);
+      setSelectedForVerification((current) => {
+        const available = new Set(response.candidates.map((candidate) => candidate.id));
+        return new Set([...current].filter((candidateId) => available.has(candidateId)));
+      });
       setSelectedId((current) => current ?? response.candidates[0]?.id ?? null);
       setSelectedAtlasId((current) => {
         if (current) return current;
@@ -179,12 +222,196 @@ export function LibraryCompletionWorkspace({
     [data],
   );
   const wantedCount = data?.candidates.filter((candidate) => candidate.status === "wanted").length ?? 0;
+  const verificationBatch = verificationStatus?.batch ?? null;
+  const hasActiveVerification = verificationBatch?.state === "running" || verificationBatch?.state === "paused";
+  const currentVerificationItem = verificationStatus?.recentItems.find(
+    (item) => item.state === "checking",
+  ) ?? null;
+  const eligibleCandidateIds = useMemo(
+    () => new Set(
+      candidates
+        .filter((candidate) =>
+          candidate.status !== "notForMe" &&
+          (candidate.verificationStatus === "unverified" || candidate.verificationStatus === "failed"),
+        )
+        .map((candidate) => candidate.id),
+    ),
+    [candidates],
+  );
+  const selectedVerificationCount = useMemo(
+    () => [...selectedForVerification].filter((candidateId) => eligibleCandidateIds.has(candidateId)).length,
+    [eligibleCandidateIds, selectedForVerification],
+  );
+
+  const applyVerificationStatus = useCallback((status: LibraryCompletionVerificationStatus) => {
+    setVerificationStatus(status);
+    if (status.recentItems.length === 0) return;
+    const recentById = new Map(status.recentItems.map((item) => [item.candidateId, item]));
+    setData((current) => current ? {
+      ...current,
+      candidates: current.candidates.map((candidate) => {
+        const item = recentById.get(candidate.id);
+        if (!item) return candidate;
+        return {
+          ...candidate,
+          verificationStatus: item.state,
+          verificationMessage: item.message,
+          verificationCheckedAt: item.updatedAt,
+          musicbrainzId: item.musicbrainzId ?? candidate.musicbrainzId,
+          musicbrainzUrl: item.musicbrainzUrl ?? candidate.musicbrainzUrl,
+        };
+      }),
+    } : current);
+  }, []);
+
+  useEffect(() => {
+    if (
+      verificationBatch?.state !== "running" &&
+      !(verificationBatch?.state === "paused" && verificationBatch.checkingCount > 0)
+    ) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const status = await getLibraryCompletionVerificationStatus();
+        if (cancelled) return;
+        applyVerificationStatus(status);
+        if (
+          status.batch?.state === "completed" &&
+          completedBatchReloadRef.current !== status.batch.id
+        ) {
+          completedBatchReloadRef.current = status.batch.id;
+          await load(campaign);
+        }
+      } catch (statusError) {
+        if (!cancelled) {
+          setError(statusError instanceof Error ? statusError.message : String(statusError));
+        }
+      }
+    };
+    const timer = window.setInterval(() => void refresh(), 1_500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [
+    applyVerificationStatus,
+    campaign,
+    load,
+    verificationBatch?.checkingCount,
+    verificationBatch?.id,
+    verificationBatch?.state,
+  ]);
 
   useEffect(() => {
     setMusicBrainzCandidates([]);
     setMusicBrainzNotice(null);
     setDeemixResult(null);
   }, [selected?.id]);
+
+  function toggleVerificationCandidate(candidateId: string) {
+    setSelectedForVerification((current) => {
+      const next = new Set(current);
+      if (next.has(candidateId)) next.delete(candidateId);
+      else next.add(candidateId);
+      return next;
+    });
+  }
+
+  function toggleAllVisibleCandidates() {
+    setSelectedForVerification((current) => {
+      const next = new Set(current);
+      const visibleIds = [...eligibleCandidateIds];
+      const allSelected = visibleIds.length > 0 && visibleIds.every((candidateId) => next.has(candidateId));
+      visibleIds.forEach((candidateId) => {
+        if (allSelected) next.delete(candidateId);
+        else next.add(candidateId);
+      });
+      return next;
+    });
+  }
+
+  async function startVerification(input: StartLibraryCompletionVerificationRequest) {
+    setPendingQueueAction(true);
+    setError(null);
+    try {
+      const status = await startLibraryCompletionVerification(input);
+      completedBatchReloadRef.current = null;
+      applyVerificationStatus(status);
+      setSelectedForVerification(new Set());
+    } catch (queueError) {
+      setError(queueError instanceof Error ? queueError.message : String(queueError));
+    } finally {
+      setPendingQueueAction(false);
+    }
+  }
+
+  async function controlVerification(state: "running" | "paused") {
+    if (!verificationBatch) return;
+    setPendingQueueAction(true);
+    setError(null);
+    try {
+      applyVerificationStatus(await setLibraryCompletionVerificationState({
+        batchId: verificationBatch.id,
+        state,
+      }));
+    } catch (queueError) {
+      setError(queueError instanceof Error ? queueError.message : String(queueError));
+    } finally {
+      setPendingQueueAction(false);
+    }
+  }
+
+  async function retryVerificationFailures() {
+    if (!verificationBatch) return;
+    setPendingQueueAction(true);
+    setError(null);
+    try {
+      completedBatchReloadRef.current = null;
+      applyVerificationStatus(
+        await retryLibraryCompletionVerificationFailures(verificationBatch.id),
+      );
+    } catch (queueError) {
+      setError(queueError instanceof Error ? queueError.message : String(queueError));
+    } finally {
+      setPendingQueueAction(false);
+    }
+  }
+
+  function verifySelectedCandidates() {
+    const candidateIds = [...selectedForVerification].filter((candidateId) =>
+      eligibleCandidateIds.has(candidateId),
+    );
+    if (candidateIds.length === 0) return;
+    void startVerification({
+      scope: candidateIds.length === 1 ? "candidate" : "selection",
+      candidateIds,
+      source: null,
+      decade: null,
+      label: candidateIds.length === 1 ? null : `Selected albums (${candidateIds.length})`,
+    });
+  }
+
+  function verifyCandidate(candidate: LibraryCompletionCandidate) {
+    void startVerification({
+      scope: "candidate",
+      candidateIds: [candidate.id],
+      source: null,
+      decade: null,
+      label: `${candidate.artist} — ${candidate.title}`,
+    });
+  }
+
+  function verifyAtlasCampaign(
+    cell: Pick<LibraryCompletionAtlasCell, "source" | "decade" | "label">,
+  ) {
+    void startVerification({
+      scope: "campaign",
+      candidateIds: [],
+      source: cell.source,
+      decade: cell.decade,
+      label: `${cell.label} · ${cell.decade}s`,
+    });
+  }
 
   async function decide(status: LibraryCompletionStatus) {
     if (!selected) return;
@@ -289,6 +516,9 @@ export function LibraryCompletionWorkspace({
                       wishListItemId: decision.wishListItemId,
                       musicbrainzId: decision.musicbrainzId,
                       musicbrainzUrl: decision.musicbrainzUrl,
+                      verificationStatus: "verified",
+                      verificationMessage: "MusicBrainz confirmed an official studio-album release group.",
+                      verificationCheckedAt: decision.updatedAt,
                     }
                   : entry,
               ),
@@ -421,11 +651,80 @@ export function LibraryCompletionWorkspace({
         </div>
       </section>
 
+      <section className="completion-verification-panel" aria-label="MusicBrainz verification queue">
+        <span className="completion-verification-icon"><ListChecks size={18} /></span>
+        <div className="completion-verification-copy">
+          <div className="completion-verification-heading">
+            <span className="completion-kicker">Verification queue</span>
+            <strong>{verificationBatch?.label ?? "Ready for a verification run"}</strong>
+            {verificationBatch ? (
+              <span className={`completion-queue-state ${verificationBatch.state}`}>
+                {verificationBatch.state}
+              </span>
+            ) : null}
+          </div>
+          {verificationBatch ? (
+            <>
+              <div className="completion-verification-progress" aria-label={`${verificationBatch.completedCount} of ${verificationBatch.totalCount} checked`}>
+                <i style={{ width: `${percentage(verificationBatch.completedCount, verificationBatch.totalCount)}%` }} />
+              </div>
+              <p>
+                <strong>{verificationBatch.completedCount.toLocaleString()} / {verificationBatch.totalCount.toLocaleString()}</strong>
+                {` checked · ${verificationBatch.verifiedCount.toLocaleString()} verified · ${(verificationBatch.noMatchCount + verificationBatch.ambiguousCount).toLocaleString()} review · ${verificationBatch.failedCount.toLocaleString()} failed`}
+              </p>
+              <small>
+                {currentVerificationItem
+                  ? `Checking ${currentVerificationItem.artist} — ${currentVerificationItem.title}`
+                  : verificationBatch.state === "paused"
+                    ? "Paused safely. Progress is stored locally."
+                    : verificationBatch.state === "completed"
+                      ? "Run complete. Every result is stored locally."
+                      : verificationEta(verificationBatch.estimatedSecondsRemaining)}
+              </small>
+            </>
+          ) : (
+            <p>Select albums below or start directly from a Coverage Atlas cohort.</p>
+          )}
+        </div>
+        <div className="completion-verification-actions">
+          {verificationBatch?.state === "running" ? (
+            <button className="secondary-button" type="button" disabled={pendingQueueAction} onClick={() => void controlVerification("paused")}>
+              <Pause size={14} /> Pause
+            </button>
+          ) : verificationBatch?.state === "paused" ? (
+            <button className="primary-button" type="button" disabled={pendingQueueAction} onClick={() => void controlVerification("running")}>
+              <Play size={14} /> Resume
+            </button>
+          ) : null}
+          {verificationBatch && verificationBatch.failedCount > 0 ? (
+            <button className="secondary-button" type="button" disabled={pendingQueueAction || hasActiveVerification} onClick={() => void retryVerificationFailures()}>
+              <RotateCcw size={14} /> Retry failed
+            </button>
+          ) : null}
+          <button
+            className="primary-button"
+            type="button"
+            disabled={pendingQueueAction || hasActiveVerification || selectedVerificationCount === 0}
+            onClick={verifySelectedCandidates}
+          >
+            <ShieldCheck size={14} /> Verify selected{selectedVerificationCount > 0 ? ` (${selectedVerificationCount})` : ""}
+          </button>
+        </div>
+      </section>
+
       {campaign ? (
         <div className="completion-campaign" role="status">
           <span>Campaign</span>
           <strong>{campaign.label} · {campaign.decade}s</strong>
           <span>{candidates.length.toLocaleString()} open loaded</span>
+          <button
+            className="completion-campaign-verify"
+            type="button"
+            disabled={pendingQueueAction || hasActiveVerification}
+            onClick={() => verifyAtlasCampaign(campaign)}
+          >
+            <ShieldCheck size={14} /> Verify cohort
+          </button>
           <button type="button" aria-label="Clear Coverage Atlas campaign" onClick={() => void clearCampaign()}>
             <X size={15} />
           </button>
@@ -442,30 +741,47 @@ export function LibraryCompletionWorkspace({
                 <span>Candidate queue</span>
                 <strong>{candidates.length.toLocaleString()} shown</strong>
               </div>
-              <span>{data?.truncated ? `Top ${data.returnedCandidates.toLocaleString()} loaded` : "All loaded"}</span>
+              <div className="completion-candidate-batch-actions">
+                <button type="button" disabled={eligibleCandidateIds.size === 0} onClick={toggleAllVisibleCandidates}>
+                  {eligibleCandidateIds.size > 0 && [...eligibleCandidateIds].every((candidateId) => selectedForVerification.has(candidateId))
+                    ? "Clear selection"
+                    : "Select shown"}
+                </button>
+                <span>{data?.truncated ? `Top ${data.returnedCandidates.toLocaleString()} loaded` : "All loaded"}</span>
+              </div>
             </header>
             <div className="completion-candidate-list">
               {candidates.map((candidate) => (
-                <button
-                  className={candidate.id === selected?.id ? "completion-candidate active" : "completion-candidate"}
-                  type="button"
-                  key={candidate.id}
-                  onClick={() => setSelectedId(candidate.id)}
-                >
-                  {candidate.coverUrl ? (
-                    <img src={candidate.coverUrl} alt="" />
-                  ) : (
-                    <span className="completion-cover-fallback"><Album size={19} /></span>
-                  )}
-                  <span className="completion-candidate-copy">
-                    <strong>{candidate.title}</strong>
-                    <span>{candidate.artist} · {candidate.chartYear}</span>
-                    <small>{candidate.evidence.map((evidence) => evidence.label).join(" + ")}</small>
-                  </span>
-                  <span className={`completion-status completion-status-${candidate.status}`}>
-                    {statusLabels[candidate.status]}
-                  </span>
-                </button>
+                <div className="completion-candidate-row" key={candidate.id}>
+                  <label className="completion-candidate-select">
+                    <input
+                      type="checkbox"
+                      checked={selectedForVerification.has(candidate.id)}
+                      disabled={!eligibleCandidateIds.has(candidate.id) || hasActiveVerification}
+                      onChange={() => toggleVerificationCandidate(candidate.id)}
+                      aria-label={`Select ${candidate.artist} — ${candidate.title} for verification`}
+                    />
+                  </label>
+                  <button
+                    className={candidate.id === selected?.id ? "completion-candidate active" : "completion-candidate"}
+                    type="button"
+                    onClick={() => setSelectedId(candidate.id)}
+                  >
+                    {candidate.coverUrl ? (
+                      <img src={candidate.coverUrl} alt="" />
+                    ) : (
+                      <span className="completion-cover-fallback"><Album size={19} /></span>
+                    )}
+                    <span className="completion-candidate-copy">
+                      <strong>{candidate.title}</strong>
+                      <span>{candidate.artist} · {candidate.chartYear}</span>
+                      <small>{candidate.evidence.map((evidence) => evidence.label).join(" + ")}</small>
+                    </span>
+                    <span className={`completion-status completion-status-${candidate.status === "candidate" ? candidate.verificationStatus : candidate.status}`}>
+                      {verificationLabel(candidate)}
+                    </span>
+                  </button>
+                </div>
               ))}
               {!isLoading && candidates.length === 0 ? (
                 <div className="completion-empty">
@@ -492,7 +808,7 @@ export function LibraryCompletionWorkspace({
                     <p>{selected.artist}</p>
                     <div className="completion-facts">
                       <span>First charted {selected.chartYear}</span>
-                      <span>{selected.musicbrainzId ? "Official studio album verified" : "Album type unverified"}</span>
+                      <span>{selected.verificationStatus === "verified" ? "Official studio album verified" : "Album type unverified"}</span>
                     </div>
                   </div>
                 </div>
@@ -530,21 +846,29 @@ export function LibraryCompletionWorkspace({
                     <span className="completion-ledger-icon"><ShieldCheck size={15} /></span>
                     <div>
                       <strong>MusicBrainz</strong>
-                      <p>{selected.musicbrainzId ? "Official studio-album identity linked to this candidate." : "Check whether this is an official studio album, live album, or compilation."}</p>
+                      <p>{selected.verificationMessage ?? (selected.verificationStatus === "verified" ? "Official studio-album identity linked to this candidate." : "Check whether this is an official studio album, live album, or compilation.")}</p>
                     </div>
-                    {selected.musicbrainzId ? (
+                    {selected.verificationStatus === "verified" ? (
                       <span className="completion-verified">Verified</span>
-                    ) : (
+                    ) : selected.verificationStatus === "queued" ? (
+                      <span>Queued</span>
+                    ) : selected.verificationStatus === "checking" ? (
+                      <span>Checking…</span>
+                    ) : selected.verificationStatus === "ambiguous" || selected.verificationStatus === "noMatch" ? (
                       <button type="button" disabled={isCheckingMusicBrainz} onClick={() => void checkMusicBrainz()}>
                         {isCheckingMusicBrainz
-                          ? "Checking…"
+                          ? "Searching…"
                           : musicBrainzCandidates.length > 0
                             ? `${musicBrainzCandidates.length} found`
-                          : musicBrainzNotice?.kind === "error"
-                            ? "Retry"
-                            : musicBrainzNotice?.kind === "empty"
-                              ? "Check again"
-                              : "Check"}
+                            : "Review matches"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={pendingQueueAction || hasActiveVerification}
+                        onClick={() => verifyCandidate(selected)}
+                      >
+                        {selected.verificationStatus === "failed" ? "Retry in queue" : "Verify album"}
                       </button>
                     )}
                   </div>
@@ -649,7 +973,7 @@ export function LibraryCompletionWorkspace({
                 </section>
 
                 <footer className="completion-provider-strip">
-                  <span><i className="on" /> MusicBrainz <small>On demand</small></span>
+                  <span><i className="on" /> MusicBrainz <small>{verificationBatch?.state === "running" ? "Background queue active" : "On demand"}</small></span>
                   <span><i /> Discogs <small>Next phase</small></span>
                   <span><i className={deemixResult ? "on" : ""} /> Deemix <small>{deemixResult ? "Ready" : "Idle"}</small></span>
                 </footer>
@@ -674,6 +998,7 @@ export function LibraryCompletionWorkspace({
               </div>
               <div className="completion-atlas-legend" aria-label="Atlas legend">
                 <span><i className="owned" />Owned</span>
+                <span><i className="verified" />Verified missing</span>
                 <span><i className="open" />Open unverified</span>
                 <span><i className="review" />Review</span>
               </div>
@@ -700,6 +1025,7 @@ export function LibraryCompletionWorkspace({
                         <span>{cell.owned.toLocaleString()} owned</span>
                         <i className="completion-atlas-bar">
                           <i className="owned" style={{ width: `${percentage(cell.owned, cell.total)}%` }} />
+                          <i className="verified" style={{ width: `${percentage(cell.verified, cell.total)}%` }} />
                           <i className="review" style={{ width: `${percentage(cell.needsReview, cell.total)}%` }} />
                         </i>
                       </button>
@@ -722,14 +1048,20 @@ export function LibraryCompletionWorkspace({
                 </div>
                 <dl>
                   <div><dt>Owned</dt><dd>{selectedAtlas.owned.toLocaleString()}</dd></div>
+                  <div><dt>Verified missing</dt><dd>{selectedAtlas.verified.toLocaleString()}</dd></div>
                   <div><dt>Open unverified</dt><dd>{selectedAtlas.candidates.toLocaleString()}</dd></div>
                   <div><dt>Wanted</dt><dd>{selectedAtlas.wanted.toLocaleString()}</dd></div>
                   <div><dt>Needs review</dt><dd>{selectedAtlas.needsReview.toLocaleString()}</dd></div>
                   <div><dt>Not for me</dt><dd>{selectedAtlas.excluded.toLocaleString()}</dd></div>
                 </dl>
-                <button className="primary-button" type="button" disabled={isLoading} onClick={() => void reviewAtlasCell(selectedAtlas)}>
-                  <LayoutList size={15} /> <span>Review candidates</span>
-                </button>
+                <div className="completion-atlas-actions">
+                  <button className="primary-button" type="button" disabled={isLoading} onClick={() => void reviewAtlasCell(selectedAtlas)}>
+                    <LayoutList size={15} /> <span>Review candidates</span>
+                  </button>
+                  <button className="secondary-button" type="button" disabled={pendingQueueAction || hasActiveVerification || selectedAtlas.candidates === 0} onClick={() => verifyAtlasCampaign(selectedAtlas)}>
+                    <ShieldCheck size={15} /> <span>Verify this cohort</span>
+                  </button>
+                </div>
               </>
             ) : null}
           </aside>

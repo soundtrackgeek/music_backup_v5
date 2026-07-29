@@ -146,7 +146,10 @@ import type {
   LibraryCompletionDecision,
   LibraryCompletionRequest,
   LibraryCompletionResponse,
+  LibraryCompletionVerificationStatus,
+  SetLibraryCompletionVerificationStateRequest,
   SetLibraryCompletionDecisionRequest,
+  StartLibraryCompletionVerificationRequest,
   DeemixCredentialStatus,
   WishListItem,
   WishListArtistAlbumSummary,
@@ -303,6 +306,9 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     musicbrainzId: null,
     musicbrainzUrl: null,
     coverUrl: mockTimelineCoverUrls[5],
+    verificationStatus: "unverified",
+    verificationMessage: null,
+    verificationCheckedAt: null,
     evidence: [
       {
         source: "officialUk",
@@ -333,6 +339,9 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     musicbrainzId: null,
     musicbrainzUrl: null,
     coverUrl: mockTimelineCoverUrls[0],
+    verificationStatus: "unverified",
+    verificationMessage: null,
+    verificationCheckedAt: null,
     evidence: [
       {
         source: "billboard",
@@ -355,6 +364,9 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     musicbrainzId: null,
     musicbrainzUrl: null,
     coverUrl: mockTimelineCoverUrls[2],
+    verificationStatus: "unverified",
+    verificationMessage: null,
+    verificationCheckedAt: null,
     evidence: [
       {
         source: "officialUk",
@@ -377,6 +389,9 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     musicbrainzId: null,
     musicbrainzUrl: null,
     coverUrl: mockTimelineCoverUrls[1],
+    verificationStatus: "unverified",
+    verificationMessage: null,
+    verificationCheckedAt: null,
     evidence: [
       {
         source: "vgLista",
@@ -399,6 +414,9 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     musicbrainzId: null,
     musicbrainzUrl: null,
     coverUrl: mockTimelineCoverUrls[3],
+    verificationStatus: "unverified",
+    verificationMessage: null,
+    verificationCheckedAt: null,
     evidence: [
       {
         source: "officialUk",
@@ -421,6 +439,9 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     musicbrainzId: null,
     musicbrainzUrl: null,
     coverUrl: mockTimelineCoverUrls[4],
+    verificationStatus: "unverified",
+    verificationMessage: null,
+    verificationCheckedAt: null,
     evidence: [
       {
         source: "billboard",
@@ -450,17 +471,19 @@ const mockLibraryCompletionAtlas = mockLibraryCompletionAtlasRows.flatMap(
     const owned = Math.round(total * (ownedPercents as number[])[index] / 100);
     const needsReview = Math.max(4, Math.round(total * 0.15));
     const wanted = Math.max(2, Math.round(total * 0.04));
+    const verified = Math.max(1, Math.round(total * 0.03));
     const previewCohort = source === "officialUk" && decade === 1990;
     const candidates = previewCohort
       ? 3
-      : Math.max(0, total - owned - needsReview - wanted - Math.max(1, Math.round(total * 0.03)));
-    const excluded = Math.max(1, total - owned - needsReview - wanted - candidates);
+      : Math.max(0, total - owned - needsReview - wanted - verified - Math.max(1, Math.round(total * 0.03)));
+    const excluded = Math.max(1, total - owned - needsReview - wanted - verified - candidates);
     return {
       source,
       label,
       decade,
       owned,
       candidates,
+      verified,
       wanted,
       needsReview,
       excluded,
@@ -472,6 +495,15 @@ const mockLibraryCompletionDecisions = new Map<
   string,
   LibraryCompletionDecision
 >();
+const mockLibraryCompletionVerifications = new Map<
+  string,
+  LibraryCompletionVerificationStatus["recentItems"][number]
+>();
+let mockLibraryCompletionVerificationStatus: LibraryCompletionVerificationStatus = {
+  batch: null,
+  recentItems: [],
+};
+let mockLibraryCompletionVerificationSequence = 1;
 const mockDeemixDownloads = new Map<
   string,
   { destinationPath: string; downloadedAt: string }
@@ -1779,13 +1811,18 @@ export async function getLibraryCompletion(input: LibraryCompletionRequest | nul
   if (!isTauriRuntime()) {
     const decidedCandidates = mockLibraryCompletionCandidates.map((candidate) => {
       const decision = mockLibraryCompletionDecisions.get(candidate.id);
-      if (!decision) return candidate;
+      const verification = mockLibraryCompletionVerifications.get(candidate.id);
       return {
         ...candidate,
-        status: decision.status,
-        wishListItemId: decision.wishListItemId,
-        musicbrainzId: decision.musicbrainzId,
-        musicbrainzUrl: decision.musicbrainzUrl,
+        status: decision?.status ?? candidate.status,
+        wishListItemId: decision?.wishListItemId ?? candidate.wishListItemId,
+        musicbrainzId:
+          decision?.musicbrainzId ?? verification?.musicbrainzId ?? candidate.musicbrainzId,
+        musicbrainzUrl:
+          decision?.musicbrainzUrl ?? verification?.musicbrainzUrl ?? candidate.musicbrainzUrl,
+        verificationStatus: verification?.state ?? candidate.verificationStatus,
+        verificationMessage: verification?.message ?? candidate.verificationMessage,
+        verificationCheckedAt: verification?.updatedAt ?? candidate.verificationCheckedAt,
       };
     });
     const candidates = decidedCandidates.filter((candidate) =>
@@ -1806,6 +1843,196 @@ export async function getLibraryCompletion(input: LibraryCompletionRequest | nul
     } satisfies LibraryCompletionResponse;
   }
   return invoke<LibraryCompletionResponse>("get_library_completion", { input });
+}
+
+function advanceMockLibraryCompletionVerification() {
+  const batch = mockLibraryCompletionVerificationStatus.batch;
+  if (!batch || batch.state !== "running") return;
+  const now = new Date().toISOString();
+  let items = mockLibraryCompletionVerificationStatus.recentItems.map((item) => {
+    if (item.state !== "checking") return item;
+    const verified = {
+      ...item,
+      state: "verified" as const,
+      message:
+        "MusicBrainz confirmed a primary Album release group without secondary types and with an official release.",
+      musicbrainzId: `preview-${encodeURIComponent(item.candidateId)}`,
+      musicbrainzUrl: "https://musicbrainz.org/release-group/preview-release-group",
+      updatedAt: now,
+    };
+    mockLibraryCompletionVerifications.set(item.candidateId, verified);
+    return verified;
+  });
+  const nextIndex = items.findIndex((item) => item.state === "queued");
+  if (nextIndex >= 0) {
+    items = items.map((item, index) =>
+      index === nextIndex ? { ...item, state: "checking" as const, updatedAt: now } : item,
+    );
+  }
+  const queuedCount = items.filter((item) => item.state === "queued").length;
+  const checkingCount = items.filter((item) => item.state === "checking").length;
+  const verifiedCount = items.filter((item) => item.state === "verified").length;
+  const noMatchCount = items.filter((item) => item.state === "noMatch").length;
+  const ambiguousCount = items.filter((item) => item.state === "ambiguous").length;
+  const failedCount = items.filter((item) => item.state === "failed").length;
+  const completed = queuedCount + checkingCount === 0;
+  mockLibraryCompletionVerificationStatus = {
+    batch: {
+      ...batch,
+      state: completed ? "completed" : "running",
+      queuedCount,
+      checkingCount,
+      verifiedCount,
+      noMatchCount,
+      ambiguousCount,
+      failedCount,
+      completedCount: batch.totalCount - queuedCount - checkingCount,
+      estimatedSecondsRemaining: (queuedCount + checkingCount) * 2,
+      updatedAt: now,
+      completedAt: completed ? now : null,
+    },
+    recentItems: items,
+  };
+}
+
+export async function getLibraryCompletionVerificationStatus() {
+  if (!isTauriRuntime()) {
+    advanceMockLibraryCompletionVerification();
+    return mockLibraryCompletionVerificationStatus;
+  }
+  return invoke<LibraryCompletionVerificationStatus>(
+    "get_library_completion_verification_status",
+  );
+}
+
+export async function startLibraryCompletionVerification(
+  input: StartLibraryCompletionVerificationRequest,
+) {
+  if (!isTauriRuntime()) {
+    if (
+      mockLibraryCompletionVerificationStatus.batch &&
+      mockLibraryCompletionVerificationStatus.batch.state !== "completed"
+    ) {
+      throw new Error("Finish the current verification batch before starting another one.");
+    }
+    const selectedIds = new Set(input.candidateIds);
+    const candidates = mockLibraryCompletionCandidates.filter((candidate) => {
+      if (
+        (input.scope === "campaign" && candidate.status !== "candidate") ||
+        (input.scope !== "campaign" && candidate.status === "notForMe")
+      ) return false;
+      if (mockLibraryCompletionVerifications.has(candidate.id)) return false;
+      if (input.scope === "campaign") {
+        return candidate.evidence.some(
+          (evidence) =>
+            evidence.source === input.source &&
+            Math.floor(evidence.firstYear / 10) * 10 === input.decade,
+        );
+      }
+      return selectedIds.has(candidate.id);
+    });
+    if (candidates.length === 0) {
+      throw new Error("Every album in this scope is already checked or no longer open for verification.");
+    }
+    const now = new Date().toISOString();
+    const recentItems = candidates.map((candidate, index) => ({
+      candidateId: candidate.id,
+      artist: candidate.artist,
+      title: candidate.title,
+      state: index === 0 ? "checking" as const : "queued" as const,
+      message: null,
+      musicbrainzId: null,
+      musicbrainzUrl: null,
+      updatedAt: now,
+    }));
+    const label = input.label ?? (
+      input.scope === "campaign"
+        ? `${input.source === "billboard" ? "Billboard 200" : input.source === "officialUk" ? "Official UK Albums" : "VG Lista"} · ${input.decade}s`
+        : input.scope === "candidate"
+          ? `${candidates[0].artist} — ${candidates[0].title}`
+          : `Selected albums (${candidates.length})`
+    );
+    mockLibraryCompletionVerificationStatus = {
+      batch: {
+        id: mockLibraryCompletionVerificationSequence++,
+        label,
+        source: input.source,
+        decade: input.decade,
+        state: "running",
+        totalCount: candidates.length,
+        queuedCount: Math.max(0, candidates.length - 1),
+        checkingCount: 1,
+        verifiedCount: 0,
+        noMatchCount: 0,
+        ambiguousCount: 0,
+        failedCount: 0,
+        cachedCount: 0,
+        completedCount: 0,
+        estimatedSecondsRemaining: candidates.length * 2,
+        createdAt: now,
+        updatedAt: now,
+        completedAt: null,
+      },
+      recentItems,
+    };
+    return mockLibraryCompletionVerificationStatus;
+  }
+  return invoke<LibraryCompletionVerificationStatus>(
+    "start_library_completion_verification",
+    { input },
+  );
+}
+
+export async function setLibraryCompletionVerificationState(
+  input: SetLibraryCompletionVerificationStateRequest,
+) {
+  if (!isTauriRuntime()) {
+    const batch = mockLibraryCompletionVerificationStatus.batch;
+    if (!batch || batch.id !== input.batchId || batch.state === "completed") {
+      throw new Error("The selected verification batch is already complete or no longer exists.");
+    }
+    mockLibraryCompletionVerificationStatus = {
+      ...mockLibraryCompletionVerificationStatus,
+      batch: { ...batch, state: input.state, updatedAt: new Date().toISOString() },
+    };
+    return mockLibraryCompletionVerificationStatus;
+  }
+  return invoke<LibraryCompletionVerificationStatus>(
+    "set_library_completion_verification_state",
+    { input },
+  );
+}
+
+export async function retryLibraryCompletionVerificationFailures(batchId: number) {
+  if (!isTauriRuntime()) {
+    const batch = mockLibraryCompletionVerificationStatus.batch;
+    if (!batch || batch.id !== batchId || batch.failedCount === 0) {
+      throw new Error("This verification batch has no failed checks to retry.");
+    }
+    const now = new Date().toISOString();
+    const recentItems = mockLibraryCompletionVerificationStatus.recentItems.map((item) =>
+      item.state === "failed"
+        ? { ...item, state: "queued" as const, message: null, updatedAt: now }
+        : item,
+    );
+    mockLibraryCompletionVerificationStatus = {
+      batch: {
+        ...batch,
+        state: "running",
+        queuedCount: batch.queuedCount + batch.failedCount,
+        failedCount: 0,
+        completedCount: batch.completedCount - batch.failedCount,
+        completedAt: null,
+        updatedAt: now,
+      },
+      recentItems,
+    };
+    return mockLibraryCompletionVerificationStatus;
+  }
+  return invoke<LibraryCompletionVerificationStatus>(
+    "retry_library_completion_verification_failures",
+    { batchId },
+  );
 }
 
 export async function setLibraryCompletionDecision(
@@ -1847,6 +2074,18 @@ export async function setLibraryCompletionDecision(
       updatedAt: new Date().toISOString(),
     } satisfies LibraryCompletionDecision;
     mockLibraryCompletionDecisions.set(input.candidateId, decision);
+    if (input.musicbrainzId) {
+      mockLibraryCompletionVerifications.set(input.candidateId, {
+        candidateId: input.candidateId,
+        artist: input.artist,
+        title: input.title,
+        state: "verified",
+        message: "MusicBrainz confirmed an official studio-album release group.",
+        musicbrainzId: input.musicbrainzId,
+        musicbrainzUrl: input.musicbrainzUrl ?? null,
+        updatedAt: decision.updatedAt,
+      });
+    }
     return decision;
   }
   return invoke<LibraryCompletionDecision>(

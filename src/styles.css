@@ -287,6 +287,121 @@ button {
   box-shadow: 0 5px 18px rgba(25, 43, 38, 0.035);
 }
 
+.completion-verification-panel {
+  display: grid;
+  grid-template-columns: auto minmax(280px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #c9dcd7;
+  border-radius: 10px;
+  background: #f0f7f5;
+  padding: 11px 12px;
+  box-shadow: 0 5px 18px rgba(25, 43, 38, 0.035);
+}
+
+.completion-verification-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  color: #0b7066;
+  background: #dcefeb;
+}
+
+.completion-verification-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.completion-verification-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.completion-verification-heading .completion-kicker {
+  margin: 0;
+}
+
+.completion-verification-heading strong {
+  overflow: hidden;
+  color: #21332e;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.completion-queue-state {
+  border-radius: 999px;
+  color: #0b6b62;
+  background: #d9ece8;
+  padding: 3px 7px;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.completion-queue-state.paused {
+  color: #735714;
+  background: #f6e9bd;
+}
+
+.completion-queue-state.completed {
+  color: #53635e;
+  background: #dde5e2;
+}
+
+.completion-verification-progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dbe5e2;
+}
+
+.completion-verification-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #128277;
+  transition: width 220ms ease;
+}
+
+.completion-verification-copy p,
+.completion-verification-copy small {
+  margin: 0;
+  color: #65756f;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.completion-verification-copy p strong {
+  color: #33443f;
+}
+
+.completion-verification-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.completion-verification-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.completion-verification-actions button {
+  min-height: 34px;
+  padding-inline: 10px;
+  font-size: 10px;
+}
+
 .completion-search {
   display: flex;
   flex: 1 1 320px;
@@ -406,6 +521,17 @@ button {
   cursor: pointer;
 }
 
+.completion-campaign .completion-campaign-verify {
+  display: inline-flex;
+  width: auto;
+  gap: 5px;
+  padding: 0 7px;
+  color: #0a685f;
+  background: #d9efea;
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .completion-workbench {
   display: grid;
   grid-template-columns: minmax(340px, 0.92fr) minmax(510px, 1.35fr);
@@ -441,6 +567,26 @@ button {
   gap: 1px;
 }
 
+.completion-candidate-panel > header .completion-candidate-batch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.completion-candidate-batch-actions button {
+  color: #0b6d64;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.completion-candidate-batch-actions button:disabled {
+  color: #9ba6a2;
+  cursor: default;
+}
+
 .completion-candidate-panel > header span {
   color: #77847f;
   font-size: 10px;
@@ -461,6 +607,30 @@ button {
   overflow-y: auto;
   padding: 5px;
   scrollbar-width: thin;
+}
+
+.completion-candidate-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+}
+
+.completion-candidate-select {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+}
+
+.completion-candidate-select input {
+  width: 14px;
+  height: 14px;
+  accent-color: #0d766d;
+  cursor: pointer;
+}
+
+.completion-candidate-select input:disabled {
+  cursor: default;
+  opacity: 0.42;
 }
 
 .completion-candidate {
@@ -561,6 +731,32 @@ button {
 .completion-status-notForMe {
   color: #7d6868;
   background: #f7f3f3;
+}
+
+.completion-status-queued,
+.completion-status-checking {
+  border-color: #a9cfc8;
+  color: #0b665d;
+  background: #e7f5f2;
+}
+
+.completion-status-verified {
+  border-color: #7db9ae;
+  color: #075e56;
+  background: #daf1ec;
+}
+
+.completion-status-noMatch,
+.completion-status-ambiguous {
+  border-color: #dfcd9d;
+  color: #755715;
+  background: #fff7df;
+}
+
+.completion-status-failed {
+  border-color: #d9adad;
+  color: #7d3f3f;
+  background: #faecec;
 }
 
 .completion-dossier {
@@ -1047,6 +1243,10 @@ button {
   background: #277d72;
 }
 
+.completion-atlas-legend i.verified {
+  background: #75b9ae;
+}
+
 .completion-atlas-legend i.open {
   background: #e2e8e5;
 }
@@ -1133,6 +1333,10 @@ button {
   background: #277d72;
 }
 
+.completion-atlas-bar > i.verified {
+  background: #75b9ae;
+}
+
 .completion-atlas-bar > i.review {
   background: #d3a947;
 }
@@ -1190,11 +1394,21 @@ button {
   width: 100%;
 }
 
+.completion-atlas-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.completion-atlas-actions .secondary-button {
+  width: 100%;
+}
+
 :root[data-theme="dark"] .completion-workspace {
   background: #121816;
 }
 
 :root[data-theme="dark"] .completion-command-bar,
+:root[data-theme="dark"] .completion-verification-panel,
 :root[data-theme="dark"] .completion-candidate-panel,
 :root[data-theme="dark"] .completion-dossier,
 :root[data-theme="dark"] .completion-atlas,
@@ -1202,6 +1416,30 @@ button {
 :root[data-theme="dark"] .completion-provider-results > button {
   border-color: #34423e;
   background: #1a2320;
+}
+
+:root[data-theme="dark"] .completion-verification-panel {
+  border-color: #3d514b;
+  background: #1b2925;
+}
+
+:root[data-theme="dark"] .completion-verification-icon {
+  color: #8fd4c8;
+  background: #243d37;
+}
+
+:root[data-theme="dark"] .completion-verification-heading strong,
+:root[data-theme="dark"] .completion-verification-copy p strong {
+  color: #e4ece9;
+}
+
+:root[data-theme="dark"] .completion-verification-copy p,
+:root[data-theme="dark"] .completion-verification-copy small {
+  color: #abc0b9;
+}
+
+:root[data-theme="dark"] .completion-verification-progress {
+  background: #33443f;
 }
 
 :root[data-theme="dark"] .completion-search,
@@ -1337,6 +1575,15 @@ button {
     flex-wrap: wrap;
   }
 
+  .completion-verification-panel {
+    grid-template-columns: auto minmax(260px, 1fr);
+  }
+
+  .completion-verification-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
   .completion-workbench {
     grid-template-columns: minmax(300px, 0.8fr) minmax(430px, 1.2fr);
   }
@@ -1373,6 +1620,24 @@ button {
 
   .completion-workbench {
     grid-template-columns: 1fr;
+  }
+
+  .completion-verification-panel {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .completion-verification-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .completion-verification-actions {
+    grid-column: 1 / -1;
+  }
+
+  .completion-verification-actions button {
+    flex: 1 1 auto;
   }
 
   .completion-candidate-list {
