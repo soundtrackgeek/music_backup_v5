@@ -121,9 +121,30 @@ const runningVerificationStatus = {
   ],
 } as const;
 
+const completedVerificationStatus = {
+  batch: {
+    ...runningVerificationStatus.batch,
+    state: "completed",
+    checkingCount: 0,
+    verifiedCount: 1,
+    completedCount: 1,
+    estimatedSecondsRemaining: 0,
+    completedAt: "2026-07-29T10:05:02Z",
+  },
+  recentItems: [{
+    ...runningVerificationStatus.recentItems[0],
+    state: "verified",
+    message: "MusicBrainz confirmed an official studio-album release group.",
+    musicbrainzId: "01234567-89ab-cdef-0123-456789abcdef",
+    musicbrainzUrl: "https://musicbrainz.org/release-group/01234567-89ab-cdef-0123-456789abcdef",
+    updatedAt: "2026-07-29T10:05:02Z",
+  }],
+} as const;
+
 describe("LibraryCompletionWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    HTMLElement.prototype.scrollIntoView = vi.fn();
     getLibraryCompletion.mockResolvedValue(response);
     getLibraryCompletionVerificationStatus.mockResolvedValue(emptyVerificationStatus);
     startLibraryCompletionVerification.mockResolvedValue(runningVerificationStatus);
@@ -179,7 +200,7 @@ describe("LibraryCompletionWorkspace", () => {
     });
     expect(screen.getByText("Campaign")).toBeInTheDocument();
     expect(screen.getByText("Official UK Albums · 1980s")).toBeInTheDocument();
-    expect(screen.getByText("1 open loaded")).toBeInTheDocument();
+    expect(screen.getByText("1 album loaded · 1 to verify · 0 verified")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "The Colour of Spring" })).toBeInTheDocument();
   });
 
@@ -280,5 +301,58 @@ describe("LibraryCompletionWorkspace", () => {
       );
     });
     expect(screen.getAllByText("Wanted").length).toBeGreaterThan(0);
+  });
+
+  it("keeps the selected album in place while completion data refreshes", async () => {
+    getLibraryCompletion.mockResolvedValue({
+      ...response,
+      returnedCandidates: 2,
+      candidates: [
+        response.candidates[0],
+        {
+          ...response.candidates[0],
+          id: "second artist\u001fsecond album",
+          artist: "Second Artist",
+          title: "Second Album",
+          chartYear: 1991,
+        },
+      ],
+    });
+    render(<LibraryCompletionWorkspace onOpenWishList={vi.fn()} />);
+
+    await screen.findByRole("heading", { name: "The Colour of Spring" });
+    fireEvent.click(screen.getByRole("button", { name: /Second Album/i }));
+    expect(screen.getByRole("heading", { name: "Second Album" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Scan local charts" }));
+
+    await waitFor(() => expect(getLibraryCompletion).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("heading", { name: "Second Album" })).toBeInTheDocument();
+  });
+
+  it("explains verified results and offers a direct Add to Wanted action", async () => {
+    getLibraryCompletion.mockResolvedValue({
+      ...response,
+      candidates: [{
+        ...response.candidates[0],
+        verificationStatus: "verified",
+        verificationMessage: "MusicBrainz confirmed an official studio-album release group.",
+        verificationCheckedAt: "2026-07-29T10:05:02Z",
+      }],
+    });
+    getLibraryCompletionVerificationStatus.mockResolvedValue(completedVerificationStatus);
+    render(<LibraryCompletionWorkspace onOpenWishList={vi.fn()} />);
+
+    expect(await screen.findByText(/official studio album was confirmed/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review verified (1)" }));
+    expect(screen.getByRole("combobox", { name: "Filter completion candidates" })).toHaveValue("verified");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Add to Wanted" })[0]);
+    await waitFor(() => {
+      expect(setLibraryCompletionDecision).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "wanted" }),
+      );
+    });
+    expect(screen.getByText("Added to Wanted")).toBeInTheDocument();
   });
 });

@@ -470,6 +470,14 @@ fn get_for_connection(
     conn: &Connection,
     request: Option<LibraryCompletionRequest>,
 ) -> Result<LibraryCompletionResponse> {
+    get_for_connection_inner(conn, request, true)
+}
+
+fn get_for_connection_inner(
+    conn: &Connection,
+    request: Option<LibraryCompletionRequest>,
+    truncate_unscoped_candidates: bool,
+) -> Result<LibraryCompletionResponse> {
     let request = normalize_request(request)?;
     let source_rows = load_source_rows(conn)?;
     let decisions = load_decisions(conn)?;
@@ -599,8 +607,10 @@ fn get_for_connection(
             .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
     });
 
-    let truncated = request.is_none() && candidates.len() > MAX_RETURNED_CANDIDATES;
-    if request.is_none() {
+    let truncated = truncate_unscoped_candidates
+        && request.is_none()
+        && candidates.len() > MAX_RETURNED_CANDIDATES;
+    if truncate_unscoped_candidates && request.is_none() {
         candidates.truncate(MAX_RETURNED_CANDIDATES);
     }
     let returned_candidates = candidates.len();
@@ -919,7 +929,7 @@ fn candidates_for_verification(
         source: request.source.clone(),
         decade: request.decade,
     });
-    let mut candidates = get_for_connection(conn, completion_request)?.candidates;
+    let mut candidates = get_for_connection_inner(conn, completion_request, false)?.candidates;
     if request.scope != "campaign" {
         let selected = request.candidate_ids.iter().collect::<HashSet<_>>();
         candidates.retain(|candidate| selected.contains(&candidate.id));
@@ -1655,6 +1665,70 @@ mod tests {
         assert!(!response.truncated);
         assert_eq!(response.atlas.len(), 2);
         assert_eq!(response.total_candidates, 2);
+    }
+
+    #[test]
+    fn selected_verification_reaches_candidates_beyond_the_workbench_limit() {
+        let mut conn = connection();
+        {
+            let transaction = conn.transaction().expect("start candidate transaction");
+            let mut statement = transaction
+                .prepare(
+                    "
+                    INSERT INTO billboard_chart_entries (
+                        source_file, year, rank, artist, album, artist_key, album_key,
+                        first_appearance_year, matched_album_id, imported_at
+                    ) VALUES ('albums.csv', 1998, 1, ?1, ?2, ?3, ?4, 1998, NULL, '2026-07-29')
+                    ",
+                )
+                .expect("prepare candidate insert");
+            for index in 0..MAX_RETURNED_CANDIDATES {
+                let artist = format!("A Artist {index:04}");
+                let title = format!("Album {index:04}");
+                statement
+                    .execute(params![
+                        artist,
+                        title,
+                        format!("a artist {index:04}"),
+                        format!("album {index:04}"),
+                    ])
+                    .expect("insert visible candidate");
+            }
+            statement
+                .execute(params![
+                    "ZZZ Hidden Artist",
+                    "Hidden Album",
+                    "zzz hidden artist",
+                    "hidden album",
+                ])
+                .expect("insert candidate beyond the Workbench limit");
+            drop(statement);
+            transaction.commit().expect("commit candidate transaction");
+        }
+
+        let workbench = get_for_connection(&conn, None).expect("load Workbench candidates");
+        assert!(workbench.truncated);
+        assert_eq!(workbench.candidates.len(), MAX_RETURNED_CANDIDATES);
+        assert!(!workbench
+            .candidates
+            .iter()
+            .any(|candidate| candidate.title == "Hidden Album"));
+
+        let started = start_verification_for_connection(
+            &mut conn,
+            StartLibraryCompletionVerificationRequest {
+                scope: "candidate".to_string(),
+                candidate_ids: vec!["zzz hidden artist\u{1f}hidden album".to_string()],
+                source: None,
+                decade: None,
+                label: None,
+            },
+        )
+        .expect("start verification beyond the Workbench limit");
+
+        let batch = started.batch.expect("verification batch");
+        assert_eq!(batch.total_count, 1);
+        assert_eq!(started.recent_items[0].title, "Hidden Album");
     }
 
     #[test]

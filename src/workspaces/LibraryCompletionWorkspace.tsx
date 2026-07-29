@@ -47,6 +47,7 @@ type CompletionFilter =
   | "billboard"
   | "officialUk"
   | "vgLista"
+  | "verified"
   | "wanted"
   | "needsReview"
   | "notForMe";
@@ -128,12 +129,11 @@ export function LibraryCompletionWorkspace({
   const [pendingQueueAction, setPendingQueueAction] = useState(false);
   const completedBatchReloadRef = useRef<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const candidateRowsRef = useRef(new Map<string, HTMLDivElement>());
 
   const load = useCallback(async (scope: Campaign | null = null) => {
     setError(null);
     setIsLoading(true);
-    setData((current) => current ? { ...current, candidates: [] } : current);
-    setSelectedId(null);
     try {
       const [response, queueStatus] = await Promise.all([
         getLibraryCompletion(scope ? { source: scope.source, decade: scope.decade } : null),
@@ -145,7 +145,11 @@ export function LibraryCompletionWorkspace({
         const available = new Set(response.candidates.map((candidate) => candidate.id));
         return new Set([...current].filter((candidateId) => available.has(candidateId)));
       });
-      setSelectedId((current) => current ?? response.candidates[0]?.id ?? null);
+      setSelectedId((current) =>
+        current && response.candidates.some((candidate) => candidate.id === current)
+          ? current
+          : response.candidates[0]?.id ?? null,
+      );
       setSelectedAtlasId((current) => {
         if (current) return current;
         const preferred = response.atlas.find(
@@ -181,7 +185,9 @@ export function LibraryCompletionWorkspace({
     if (!data) return [];
     const normalizedQuery = query.trim().toLocaleLowerCase();
     return data.candidates.filter((candidate) => {
-      if (
+      if (filter === "verified") {
+        if (candidate.verificationStatus !== "verified") return false;
+      } else if (
         filter === "billboard" ||
         filter === "officialUk" ||
         filter === "vgLista"
@@ -241,6 +247,19 @@ export function LibraryCompletionWorkspace({
   const selectedVerificationCount = useMemo(
     () => [...selectedForVerification].filter((candidateId) => eligibleCandidateIds.has(candidateId)).length,
     [eligibleCandidateIds, selectedForVerification],
+  );
+  const verifiedOpenCandidates = useMemo(
+    () => data?.candidates.filter((candidate) =>
+      candidate.status === "candidate" && candidate.verificationStatus === "verified",
+    ) ?? [],
+    [data],
+  );
+  const unverifiedOpenCount = useMemo(
+    () => data?.candidates.filter((candidate) =>
+      candidate.status === "candidate" &&
+      (candidate.verificationStatus === "unverified" || candidate.verificationStatus === "failed"),
+    ).length ?? 0,
+    [data],
   );
 
   const applyVerificationStatus = useCallback((status: LibraryCompletionVerificationStatus) => {
@@ -327,6 +346,20 @@ export function LibraryCompletionWorkspace({
         else next.add(candidateId);
       });
       return next;
+    });
+  }
+
+  function reviewVerifiedCandidates() {
+    const firstVerified = selected?.status === "candidate" && selected.verificationStatus === "verified"
+      ? selected
+      : verifiedOpenCandidates[0];
+    setError(null);
+    setQuery("");
+    setFilter("verified");
+    if (!firstVerified) return;
+    setSelectedId(firstVerified.id);
+    window.requestAnimationFrame(() => {
+      candidateRowsRef.current.get(firstVerified.id)?.scrollIntoView({ block: "nearest" });
     });
   }
 
@@ -447,6 +480,13 @@ export function LibraryCompletionWorkspace({
             }
           : current,
       );
+      if (status === "wanted" && selected.verificationStatus === "verified") {
+        setMusicBrainzNotice({
+          kind: "verified",
+          title: "Added to Wanted",
+          detail: "This verified studio album is now in the Wish List and ready for download searches.",
+        });
+      }
     } catch (decisionError) {
       setError(decisionError instanceof Error ? decisionError.message : String(decisionError));
     } finally {
@@ -636,10 +676,11 @@ export function LibraryCompletionWorkspace({
             aria-label="Filter completion candidates"
           >
             <option value="all">All active candidates</option>
-            <option value="candidate">Open unverified</option>
+            <option value="candidate">Open candidates</option>
             <option value="billboard">Billboard 200</option>
             <option value="officialUk">Official UK Albums</option>
             <option value="vgLista">VG Lista</option>
+            <option value="verified">Verified studio albums</option>
             <option value="wanted">Wanted</option>
             <option value="needsReview">Needs review</option>
             <option value="notForMe">Not for me</option>
@@ -672,13 +713,15 @@ export function LibraryCompletionWorkspace({
                 <strong>{verificationBatch.completedCount.toLocaleString()} / {verificationBatch.totalCount.toLocaleString()}</strong>
                 {` checked · ${verificationBatch.verifiedCount.toLocaleString()} verified · ${(verificationBatch.noMatchCount + verificationBatch.ambiguousCount).toLocaleString()} review · ${verificationBatch.failedCount.toLocaleString()} failed`}
               </p>
-              <small>
+              <small className={verificationBatch.state === "completed" ? "completion-verification-guidance" : undefined}>
                 {currentVerificationItem
                   ? `Checking ${currentVerificationItem.artist} — ${currentVerificationItem.title}`
                   : verificationBatch.state === "paused"
                     ? "Paused safely. Progress is stored locally."
                     : verificationBatch.state === "completed"
-                      ? "Run complete. Every result is stored locally."
+                      ? verificationBatch.verifiedCount > 0
+                        ? `${verificationBatch.verifiedCount.toLocaleString()} official studio ${verificationBatch.verifiedCount === 1 ? "album was" : "albums were"} confirmed. Review ${verificationBatch.verifiedCount === 1 ? "it" : "them"} and add the albums you want to Wanted.`
+                        : "Run complete. Review any unmatched or ambiguous albums manually."
                       : verificationEta(verificationBatch.estimatedSecondsRemaining)}
               </small>
             </>
@@ -701,14 +744,21 @@ export function LibraryCompletionWorkspace({
               <RotateCcw size={14} /> Retry failed
             </button>
           ) : null}
-          <button
-            className="primary-button"
-            type="button"
-            disabled={pendingQueueAction || hasActiveVerification || selectedVerificationCount === 0}
-            onClick={verifySelectedCandidates}
-          >
-            <ShieldCheck size={14} /> Verify selected{selectedVerificationCount > 0 ? ` (${selectedVerificationCount})` : ""}
-          </button>
+          {verificationBatch?.state === "completed" && verifiedOpenCandidates.length > 0 ? (
+            <button className="secondary-button" type="button" onClick={reviewVerifiedCandidates}>
+              <CheckCircle2 size={14} /> Review verified ({verifiedOpenCandidates.length})
+            </button>
+          ) : null}
+          {selectedVerificationCount > 0 ? (
+            <button
+              className="primary-button"
+              type="button"
+              disabled={pendingQueueAction || hasActiveVerification}
+              onClick={verifySelectedCandidates}
+            >
+              <ShieldCheck size={14} /> Verify selected ({selectedVerificationCount})
+            </button>
+          ) : null}
         </div>
       </section>
 
@@ -716,7 +766,9 @@ export function LibraryCompletionWorkspace({
         <div className="completion-campaign" role="status">
           <span>Campaign</span>
           <strong>{campaign.label} · {campaign.decade}s</strong>
-          <span>{candidates.length.toLocaleString()} open loaded</span>
+          <span>
+            {data?.candidates.length.toLocaleString() ?? "0"} {data?.candidates.length === 1 ? "album" : "albums"} loaded · {unverifiedOpenCount.toLocaleString()} to verify · {verifiedOpenCandidates.length.toLocaleString()} verified
+          </span>
           <button
             className="completion-campaign-verify"
             type="button"
@@ -750,9 +802,16 @@ export function LibraryCompletionWorkspace({
                 <span>{data?.truncated ? `Top ${data.returnedCandidates.toLocaleString()} loaded` : "All loaded"}</span>
               </div>
             </header>
-            <div className="completion-candidate-list">
+            <div className="completion-candidate-list" aria-label="Completion candidates">
               {candidates.map((candidate) => (
-                <div className="completion-candidate-row" key={candidate.id}>
+                <div
+                  className="completion-candidate-row"
+                  key={candidate.id}
+                  ref={(node) => {
+                    if (node) candidateRowsRef.current.set(candidate.id, node);
+                    else candidateRowsRef.current.delete(candidate.id);
+                  }}
+                >
                   <label className="completion-candidate-select">
                     <input
                       type="checkbox"
@@ -849,7 +908,20 @@ export function LibraryCompletionWorkspace({
                       <p>{selected.verificationMessage ?? (selected.verificationStatus === "verified" ? "Official studio-album identity linked to this candidate." : "Check whether this is an official studio album, live album, or compilation.")}</p>
                     </div>
                     {selected.verificationStatus === "verified" ? (
-                      <span className="completion-verified">Verified</span>
+                      <div className="completion-ledger-actions">
+                        <span className="completion-verified">Verified studio album</span>
+                        {selected.status === "wanted" ? (
+                          <span>In Wanted</span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={pendingDecision !== null}
+                            onClick={() => void decide("wanted")}
+                          >
+                            <Heart size={13} /> Add to Wanted
+                          </button>
+                        )}
+                      </div>
                     ) : selected.verificationStatus === "queued" ? (
                       <span>Queued</span>
                     ) : selected.verificationStatus === "checking" ? (
@@ -926,7 +998,13 @@ export function LibraryCompletionWorkspace({
                     onClick={() => void decide("wanted")}
                   >
                     <Heart size={15} />
-                    <span>{pendingDecision === "wanted" ? "Saving" : selected.status === "wanted" ? "Wanted" : "Mark wanted"}</span>
+                    <span>{pendingDecision === "wanted"
+                      ? "Saving"
+                      : selected.status === "wanted"
+                        ? "Wanted"
+                        : selected.verificationStatus === "verified"
+                          ? "Add to Wanted"
+                          : "Mark wanted"}</span>
                   </button>
                   <button
                     className="secondary-button"

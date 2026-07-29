@@ -388,6 +388,11 @@ button {
   white-space: nowrap;
 }
 
+.completion-verification-copy small.completion-verification-guidance {
+  overflow: visible;
+  white-space: normal;
+}
+
 .completion-verification-actions {
   display: flex;
   align-items: center;
@@ -960,6 +965,40 @@ button {
 
 .completion-verified {
   color: #0b7066 !important;
+}
+
+.completion-ledger-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.completion-ledger-actions > span {
+  color: #71807b;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.completion-ledger-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  border: 1px solid #91c9be;
+  border-radius: 6px;
+  color: #075f57;
+  background: #dcf1ec;
+  padding: 0 9px;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.completion-ledger-actions > button:disabled {
+  cursor: default;
+  opacity: 0.58;
 }
 
 .completion-provider-results {
@@ -1559,6 +1598,12 @@ button {
   border-color: #3b766d;
   color: #a9ddd2;
   background: #1c302c;
+}
+
+:root[data-theme="dark"] .completion-ledger-actions > button {
+  border-color: #4d8d82;
+  color: #c5f0e7;
+  background: #24433d;
 }
 
 @media (max-width: 1180px) {

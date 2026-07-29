@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.97.1] - 2026-07-29
+### Changed
+- Completed verification runs now explain that **Verified** means MusicBrainz confirmed an official studio album, provide a **Review verified** filter, and expose a direct **Add to Wanted** action in the candidate dossier.
+- Coverage Atlas campaign badges now distinguish the complete loaded cohort from albums still awaiting verification and albums already verified.
+- Synchronized app metadata to `0.97.1`.
+
+### Fixed
+- Preserved the selected candidate and its list position while verification completion refreshes the Workbench instead of resetting the queue to its first album.
+- Explicit album and multi-selection verification now searches the complete local candidate set rather than only the globally loaded top 5,000 rows, eliminating false “already checked” errors for albums opened through larger Atlas cohorts.
+
 ## [0.97.0] - 2026-07-29
 ### Added
 - Added a persistent, single-worker MusicBrainz verification queue for individual albums, selected Workbench rows, and complete Coverage Atlas cohorts.
