@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.104.1] - 2026-07-29
+### Added
+- Added a direct MusicBrainz artist-page link to every candidate in Artist Discovery's manual identity review, while preserving **Check identity** as a separate verification action.
+- Added **Clear completed** to the Wish List Soulseek transfer history so finished releases can be dismissed without deleting downloaded files.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.104.1`.
+
+### Fixed
+- Preserved the selected artist and Artist Queue scroll position when a verification result refreshes the candidate data for manual review.
+- Kept newly searched artist albums above the persistent Soulseek transfer history instead of forcing users to scroll past old downloads.
+
 ## [0.104.0] - 2026-07-29
 ### Added
 - Added live release-level Soulseek feedback directly beneath the selected Wish List source, including local queue and peer queue distinction, file and byte progress, speed, ETA, transfer-slot use, completion, pause, retry, and failure states.

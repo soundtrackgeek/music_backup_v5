@@ -6,6 +6,7 @@ import { WishListWorkspace } from "./WishListWorkspace";
 
 const discoverWishListArtistAlbums = vi.fn();
 const addWishListMusicBrainzCandidate = vi.fn();
+const clearCompletedSoulseekTransfers = vi.fn();
 const downloadDeemixAlbum = vi.fn();
 const enqueueSoulseekRelease = vi.fn();
 const getSoulseekTransfers = vi.fn();
@@ -26,6 +27,8 @@ let soulseekTransferListener:
 vi.mock("../backend", () => ({
   addWishListMusicBrainzCandidate: (...args: unknown[]) =>
     addWishListMusicBrainzCandidate(...args),
+  clearCompletedSoulseekTransfers: (...args: unknown[]) =>
+    clearCompletedSoulseekTransfers(...args),
   discoverWishListArtistAlbums: (...args: unknown[]) =>
     discoverWishListArtistAlbums(...args),
   downloadDeemixAlbum: (...args: unknown[]) => downloadDeemixAlbum(...args),
@@ -118,6 +121,14 @@ describe("WishListWorkspace", () => {
       },
     );
     getSoulseekTransfers.mockResolvedValue({
+      transfers: [],
+      activeCount: 0,
+      maxConcurrentDownloads: 3,
+      relaySuggestionMinutes: 10,
+      soundcheckEnabled: true,
+      safetyState: "running",
+    });
+    clearCompletedSoulseekTransfers.mockResolvedValue({
       transfers: [],
       activeCount: 0,
       maxConcurrentDownloads: 3,
@@ -758,6 +769,59 @@ describe("WishListWorkspace", () => {
         name: "Release download progress",
       }),
     ).toHaveAttribute("value", "75");
+  });
+
+  it("shows searched albums before transfer history and clears completed Soulseek releases", async () => {
+    const completedQueue = {
+      transfers: [1, 2].map((index) => ({
+        id: `completed-transfer-${index}`,
+        releaseId: "completed-release",
+        releaseTitle: "Pet Shop Boys - Please (1986)",
+        releaseFolder: "Pet Shop Boys - Please (1986)",
+        fileIndex: index,
+        fileCount: 2,
+        expectedTrackCount: 2,
+        releaseGroupId: "00000000-0000-4000-8000-000000000001",
+        title: `0${index} - Track ${index}.flac`,
+        username: "lossless-listener",
+        remoteFilename: `Music\\Pet Shop Boys\\Please (1986)\\0${index} - Track ${index}.flac`,
+        sizeBytes: 30_000_000,
+        transferredBytes: 30_000_000,
+        speedBytesPerSecond: 0,
+        etaSeconds: null,
+        status: "completed" as const,
+        queuePosition: null,
+        localPath: `D:\\Music\\Pet Shop Boys - Please (1986)\\0${index} - Track ${index}.flac`,
+        error: null,
+        createdAtMs: index,
+        updatedAtMs: index,
+      })),
+      activeCount: 0,
+      maxConcurrentDownloads: 3,
+      relaySuggestionMinutes: 10,
+      soundcheckEnabled: true,
+      safetyState: "running" as const,
+    } satisfies SoulseekTransferQueue;
+    getSoulseekTransfers.mockResolvedValueOnce(completedQueue);
+    render(<WishListWorkspace />);
+
+    await screen.findByText("Pet Shop Boys");
+    fireEvent.click(
+      screen.getByLabelText(
+        "Search Pet Shop Boys official albums with Deemix and Soulseek",
+      ),
+    );
+    const albumsHeading = await screen.findByRole("heading", { name: "Albums found" });
+    const transfersHeading = screen.getByRole("heading", { name: "Soulseek transfers" });
+
+    expect(
+      albumsHeading.compareDocumentPosition(transfersHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear completed (2)" }));
+
+    await waitFor(() => expect(clearCompletedSoulseekTransfers).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("region", { name: "Soulseek download queue" })).not.toBeInTheDocument();
   });
 
   it("completes the download with a warning when Deezer has no artwork", async () => {

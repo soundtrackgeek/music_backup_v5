@@ -1555,6 +1555,83 @@ button {
   margin-top: 12px;
 }
 
+.artist-provider-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #e0e8e5;
+  color: #1f312c;
+  background: #ffffff;
+  padding: 9px 11px;
+}
+
+.artist-provider-result-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.artist-provider-result-copy strong,
+.artist-provider-result-copy small {
+  overflow-wrap: anywhere;
+}
+
+.artist-provider-result-copy small {
+  color: #6f7d79;
+}
+
+.artist-provider-result-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.artist-provider-result-actions a,
+.artist-provider-result-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  border: 1px solid #bcd7d1;
+  border-radius: 6px;
+  color: #0b6c63;
+  background: #f5faf8;
+  padding: 0 9px;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.artist-provider-result-actions button {
+  border-color: #91c9be;
+  background: #dcf1ec;
+}
+
+.artist-provider-result-actions a:hover,
+.artist-provider-result-actions a:focus-visible,
+.artist-provider-result-actions button:hover:not(:disabled),
+.artist-provider-result-actions button:focus-visible {
+  border-color: #5ba99c;
+  outline: none;
+  background: #e5f5f1;
+}
+
+.artist-provider-result-actions a:focus-visible,
+.artist-provider-result-actions button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.artist-provider-result-actions button:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
 .artist-completion-decisions .primary-button:disabled {
   color: #70807a;
   background: #e3e9e7;
@@ -1860,6 +1937,24 @@ button {
   background: #1a2320;
 }
 
+:root[data-theme="dark"] .artist-provider-result-row {
+  border-color: #34423e;
+  color: #e7f0ed;
+  background: #1a2320;
+}
+
+:root[data-theme="dark"] .artist-provider-result-actions a {
+  border-color: #42645d;
+  color: #a9ddd2;
+  background: #22332f;
+}
+
+:root[data-theme="dark"] .artist-provider-result-actions button {
+  border-color: #477970;
+  color: #c5eee6;
+  background: #29443e;
+}
+
 :root[data-theme="dark"] .completion-verification-panel {
   border-color: #3d514b;
   background: #1b2925;
@@ -2144,6 +2239,20 @@ button {
   .artist-album-proof > span:last-child {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .artist-provider-result-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .artist-provider-result-actions {
+    width: 100%;
+  }
+
+  .artist-provider-result-actions a,
+  .artist-provider-result-actions button {
+    flex: 1 1 0;
   }
 
   .completion-verification-panel {
@@ -14851,6 +14960,15 @@ button {
 
 .deemix-download-queue > header svg {
   color: #276c62;
+}
+
+.soulseek-transfer-queue > header {
+  flex-wrap: wrap;
+}
+
+.soulseek-clear-completed {
+  min-height: 32px;
+  white-space: nowrap;
 }
 
 .deemix-download-queue-list {

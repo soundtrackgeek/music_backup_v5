@@ -1782,6 +1782,28 @@ export async function getSoulseekTransfers() {
   return invoke<SoulseekTransferQueue>("transfers_snapshot");
 }
 
+export async function clearCompletedSoulseekTransfers() {
+  if (!isTauriRuntime()) {
+    const completedReleaseIds = new Set(
+      mockSoulseekTransfers
+        .map((transfer) => transfer.releaseId)
+        .filter((releaseId): releaseId is string => Boolean(releaseId))
+        .filter((releaseId) =>
+          mockSoulseekTransfers
+            .filter((transfer) => transfer.releaseId === releaseId)
+            .every((transfer) => transfer.status === "completed"),
+        ),
+    );
+    mockSoulseekTransfers = mockSoulseekTransfers.filter((transfer) =>
+      transfer.releaseId
+        ? !completedReleaseIds.has(transfer.releaseId)
+        : transfer.status !== "completed",
+    );
+    return publishMockSoulseekTransfers();
+  }
+  return invoke<SoulseekTransferQueue>("transfer_clear_completed");
+}
+
 export async function enqueueSoulseekRelease(input: SoulseekReleaseDownloadRequest) {
   if (!isTauriRuntime()) {
     const now = Date.now();

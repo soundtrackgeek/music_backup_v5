@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ArtistCompletionWorkspace } from "./ArtistCompletionWorkspace";
@@ -10,6 +10,7 @@ const startLibraryCompletionArtistVerification = vi.fn();
 const setLibraryCompletionArtistVerificationState = vi.fn();
 const retryLibraryCompletionArtistVerificationFailures = vi.fn();
 const searchWishListMusicBrainz = vi.fn();
+const openExternalUrl = vi.fn();
 const confirmLibraryCompletionArtistMatch = vi.fn();
 const setLibraryCompletionArtistDecision = vi.fn();
 
@@ -25,6 +26,7 @@ vi.mock("../backend", () => ({
   retryLibraryCompletionArtistVerificationFailures: (...args: unknown[]) =>
     retryLibraryCompletionArtistVerificationFailures(...args),
   searchWishListMusicBrainz: (...args: unknown[]) => searchWishListMusicBrainz(...args),
+  openExternalUrl: (...args: unknown[]) => openExternalUrl(...args),
   confirmLibraryCompletionArtistMatch: (...args: unknown[]) =>
     confirmLibraryCompletionArtistMatch(...args),
   setLibraryCompletionArtistDecision: (...args: unknown[]) =>
@@ -130,6 +132,7 @@ describe("ArtistCompletionWorkspace", () => {
       candidates: [],
       searchedAt: "2026-07-29T10:02:00Z",
     });
+    openExternalUrl.mockResolvedValue(undefined);
     setLibraryCompletionArtistDecision.mockResolvedValue({
       artistId: "talk talk",
       status: "wanted",
@@ -190,6 +193,73 @@ describe("ArtistCompletionWorkspace", () => {
       });
     });
     expect(screen.getByRole("button", { name: "Clear artist chart filters" })).toBeInTheDocument();
+  });
+
+  it("links every manual artist candidate to its exact MusicBrainz page", async () => {
+    const musicbrainzUrl = "https://musicbrainz.org/artist/11111111-1111-4111-8111-111111111111";
+    getLibraryCompletionArtists.mockResolvedValue({
+      ...response,
+      candidates: [{
+        ...candidate,
+        verificationStatus: "ambiguous",
+        verificationMessage: "MusicBrainz returned multiple exact artists.",
+        musicbrainzVerificationStatus: "ambiguous",
+        musicbrainzVerificationMessage: "MusicBrainz returned multiple exact artists.",
+      }],
+    });
+    searchWishListMusicBrainz.mockResolvedValue({
+      entity: "artist",
+      query: "Talk Talk",
+      candidates: [{
+        entity: "artist",
+        title: "Talk Talk",
+        artist: "Talk Talk",
+        year: null,
+        musicbrainzId: "11111111-1111-4111-8111-111111111111",
+        musicbrainzUrl,
+        disambiguation: "English band",
+        country: "GB",
+        score: 100,
+      }],
+      searchedAt: "2026-07-29T10:02:00Z",
+    });
+    render(<ArtistCompletionWorkspace refreshToken={0} onOpenWishList={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Review matches" }));
+    const musicbrainzLink = await screen.findByRole("link", { name: "View Talk Talk on MusicBrainz" });
+
+    expect(musicbrainzLink).toHaveAttribute("href", musicbrainzUrl);
+    expect(screen.getByRole("button", { name: "Check Talk Talk identity" })).toBeInTheDocument();
+    fireEvent.click(musicbrainzLink);
+
+    await waitFor(() => expect(openExternalUrl).toHaveBeenCalledWith(musicbrainzUrl));
+    expect(confirmLibraryCompletionArtistMatch).not.toHaveBeenCalled();
+  });
+
+  it("restores the artist queue position after verification data refreshes", async () => {
+    let resolveRefresh!: (value: typeof response) => void;
+    const refreshedArtists = new Promise<typeof response>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    getLibraryCompletionArtists
+      .mockResolvedValueOnce(response)
+      .mockReturnValueOnce(refreshedArtists);
+    const { rerender } = render(
+      <ArtistCompletionWorkspace refreshToken={0} onOpenWishList={vi.fn()} />,
+    );
+
+    await screen.findByRole("heading", { name: "Talk Talk" });
+    const queue = screen.getByLabelText("Artist discovery candidates");
+    queue.scrollTop = 320;
+    fireEvent.scroll(queue);
+
+    rerender(<ArtistCompletionWorkspace refreshToken={1} onOpenWishList={vi.fn()} />);
+    await waitFor(() => expect(getLibraryCompletionArtists).toHaveBeenCalledTimes(2));
+    queue.scrollTop = 0;
+    await act(async () => resolveRefresh({ ...response }));
+
+    await waitFor(() => expect(queue.scrollTop).toBe(320));
+    expect(screen.getByRole("heading", { name: "Talk Talk" })).toBeInTheDocument();
   });
 
   it("shows both provider outcomes and promotes a verified artist into Wish List Artists", async () => {

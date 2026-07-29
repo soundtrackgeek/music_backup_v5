@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   CheckCircle2,
   CircleHelp,
   Database,
+  ExternalLink,
   Heart,
   ListChecks,
   Pause,
@@ -22,6 +23,7 @@ import {
   getDiscogsCredentialStatus,
   getLibraryCompletionArtists,
   getLibraryCompletionArtistVerificationStatus,
+  openExternalUrl,
   retryLibraryCompletionArtistVerificationFailures,
   searchWishListMusicBrainz,
   setLibraryCompletionArtistDecision,
@@ -128,6 +130,9 @@ export function ArtistCompletionWorkspace({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const completedBatchReloadRef = useRef<number | null>(null);
+  const candidateListRef = useRef<HTMLDivElement>(null);
+  const candidateRowsRef = useRef(new Map<string, HTMLDivElement>());
+  const candidateListScrollTopRef = useRef(0);
 
   const load = useCallback(async (request: LibraryCompletionArtistRequest | null = null) => {
     setIsLoading(true);
@@ -205,6 +210,21 @@ export function ArtistCompletionWorkspace({
     () => candidates.find((candidate) => candidate.id === selectedId) ?? candidates[0] ?? null,
     [candidates, selectedId],
   );
+
+  useLayoutEffect(() => {
+    const list = candidateListRef.current;
+    if (!list || !data) return;
+    list.scrollTop = candidateListScrollTopRef.current;
+
+    const selectedRow = selectedId ? candidateRowsRef.current.get(selectedId) : null;
+    if (!selectedRow) return;
+    const listBounds = list.getBoundingClientRect();
+    const rowBounds = selectedRow.getBoundingClientRect();
+    if (rowBounds.top < listBounds.top || rowBounds.bottom > listBounds.bottom) {
+      selectedRow.scrollIntoView({ block: "nearest" });
+    }
+  }, [data, selectedId]);
+
   const currentItem = verificationStatus?.recentItems.find((item) => item.state === "checking") ?? null;
   const hasActiveBatch = batch?.state === "running" || batch?.state === "paused";
   const eligibleIds = useMemo(
@@ -293,6 +313,15 @@ export function ArtistCompletionWorkspace({
     }
   }
 
+  async function openMusicBrainz(url: string) {
+    setError(null);
+    try {
+      await openExternalUrl(url);
+    } catch (openError) {
+      setError(openError instanceof Error ? openError.message : String(openError));
+    }
+  }
+
   async function confirmMusicBrainz(candidate: WishListMusicBrainzCandidate) {
     if (!selected) return;
     setIsSearchingMusicBrainz(true);
@@ -355,6 +384,7 @@ export function ArtistCompletionWorkspace({
       return;
     }
     setError(null);
+    candidateListScrollTopRef.current = 0;
     setActiveRequest(
       chartSource === "all" && yearFrom == null && yearTo == null
         ? null
@@ -371,6 +401,7 @@ export function ArtistCompletionWorkspace({
     setYearFrom(null);
     setYearTo(null);
     setError(null);
+    candidateListScrollTopRef.current = 0;
     setActiveRequest(null);
   }
 
@@ -545,12 +576,26 @@ export function ArtistCompletionWorkspace({
               <span>{data?.truncated ? `Top ${data.returnedCandidates.toLocaleString()} loaded` : "All loaded"}</span>
             </div>
           </header>
-          <div className="completion-candidate-list" aria-label="Artist discovery candidates">
+          <div
+            ref={candidateListRef}
+            className="completion-candidate-list"
+            aria-label="Artist discovery candidates"
+            onScroll={(event) => {
+              candidateListScrollTopRef.current = event.currentTarget.scrollTop;
+            }}
+          >
             {candidates.map((candidate) => {
               const eligible = candidate.status === "candidate" &&
                 (candidate.verificationStatus === "unverified" || candidate.verificationStatus === "failed");
               return (
-                <div className="completion-candidate-row" key={candidate.id}>
+                <div
+                  className="completion-candidate-row"
+                  key={candidate.id}
+                  ref={(node) => {
+                    if (node) candidateRowsRef.current.set(candidate.id, node);
+                    else candidateRowsRef.current.delete(candidate.id);
+                  }}
+                >
                   <label className="completion-candidate-select">
                     <input
                       type="checkbox"
@@ -704,13 +749,35 @@ export function ArtistCompletionWorkspace({
                     <span>Choose an identity; its official studio albums and Discogs evidence will be checked before anything is added.</span>
                   </header>
                   {musicBrainzCandidates.map((candidate) => (
-                    <button type="button" key={candidate.musicbrainzId} disabled={isSearchingMusicBrainz} onClick={() => void confirmMusicBrainz(candidate)}>
-                      <span>
+                    <div className="artist-provider-result-row" key={candidate.musicbrainzId}>
+                      <span className="artist-provider-result-copy">
                         <strong>{candidate.title}</strong>
                         <small>{[candidate.disambiguation, candidate.country].filter(Boolean).join(" · ") || "No disambiguation"}</small>
                       </span>
-                      <span>Check identity</span>
-                    </button>
+                      <span className="artist-provider-result-actions">
+                        <a
+                          href={candidate.musicbrainzUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`View ${candidate.title} on MusicBrainz`}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            void openMusicBrainz(candidate.musicbrainzUrl);
+                          }}
+                        >
+                          <ExternalLink size={13} aria-hidden="true" />
+                          MusicBrainz
+                        </a>
+                        <button
+                          type="button"
+                          disabled={isSearchingMusicBrainz}
+                          aria-label={`Check ${candidate.title} identity`}
+                          onClick={() => void confirmMusicBrainz(candidate)}
+                        >
+                          Check identity
+                        </button>
+                      </span>
+                    </div>
                   ))}
                 </section>
               ) : null}

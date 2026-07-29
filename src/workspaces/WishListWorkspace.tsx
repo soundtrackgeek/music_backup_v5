@@ -29,6 +29,7 @@ import {
 
 import {
   addWishListMusicBrainzCandidate,
+  clearCompletedSoulseekTransfers,
   discoverWishListArtistAlbums,
   downloadDeemixAlbum,
   enqueueSoulseekRelease,
@@ -288,6 +289,26 @@ function buildSoulseekReleaseProgress(
       key,
       { ...summary, status: resolveSoulseekReleaseStatus(summary) },
     ]),
+  );
+}
+
+function clearableSoulseekTransferCount(queue: SoulseekTransferQueue | null) {
+  if (!queue) return 0;
+  const releases = new Map<string, SoulseekTransfer[]>();
+  let standaloneCompleted = 0;
+  for (const transfer of queue.transfers) {
+    if (!transfer.releaseId) {
+      standaloneCompleted += Number(transfer.status === "completed");
+      continue;
+    }
+    const release = releases.get(transfer.releaseId) ?? [];
+    release.push(transfer);
+    releases.set(transfer.releaseId, release);
+  }
+  return standaloneCompleted + [...releases.values()].reduce(
+    (count, release) =>
+      count + (release.every((transfer) => transfer.status === "completed") ? release.length : 0),
+    0,
   );
 }
 
@@ -1003,6 +1024,8 @@ export function WishListWorkspace() {
     useState<SoulseekAlbumSearchResponse | null>(null);
   const [soulseekTransfers, setSoulseekTransfers] =
     useState<SoulseekTransferQueue | null>(null);
+  const [isClearingSoulseekTransfers, setIsClearingSoulseekTransfers] =
+    useState(false);
   const [soulseekNotice, setSoulseekNotice] = useState<string | null>(null);
   const [artistDiscovery, setArtistDiscovery] =
     useState<WishListArtistAlbumDiscoveryResponse | null>(null);
@@ -1165,6 +1188,10 @@ export function WishListWorkspace() {
   );
   const soulseekTransferProgress = useMemo(
     () => buildSoulseekReleaseProgress(soulseekTransfers),
+    [soulseekTransfers],
+  );
+  const clearableSoulseekTransfers = useMemo(
+    () => clearableSoulseekTransferCount(soulseekTransfers),
     [soulseekTransfers],
   );
   const artistSoulseekCandidates = useMemo(() => {
@@ -1549,6 +1576,18 @@ export function WishListWorkspace() {
     });
     setSoulseekTransfers(snapshot);
     return `${candidate.files.length} ${candidate.files.length === 1 ? "file" : "files"} queued from ${candidate.username}.`;
+  }
+
+  async function clearCompletedSoulseekDownloads() {
+    setIsClearingSoulseekTransfers(true);
+    setError(null);
+    try {
+      setSoulseekTransfers(await clearCompletedSoulseekTransfers());
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : String(clearError));
+    } finally {
+      setIsClearingSoulseekTransfers(false);
+    }
   }
 
   async function runArtistSoulseekSearch(
@@ -2253,43 +2292,6 @@ export function WishListWorkspace() {
         </section>
       ) : null}
 
-      {soulseekTransfers?.transfers.length ? (
-        <section className="deemix-download-queue soulseek-transfer-queue" aria-label="Soulseek download queue">
-          <header>
-            <div>
-              <RadioTower size={18} aria-hidden="true" />
-              <div>
-                <h2>Soulseek transfers</h2>
-                <p>
-                  {soulseekTransfers.activeCount} active · {soulseekTransfers.transfers.length} files
-                </p>
-              </div>
-            </div>
-          </header>
-          <div className="deemix-download-queue-list">
-            {soulseekTransfers.transfers.slice(-30).map((transfer) => {
-              return (
-                <article key={transfer.id} className={transfer.status}>
-                  {transfer.status === "downloading" || transfer.status === "connecting" ? (
-                    <RefreshCw size={16} className="spin" aria-hidden="true" />
-                  ) : transfer.status === "completed" ? (
-                    <CheckCircle2 size={16} aria-hidden="true" />
-                  ) : transfer.status === "failed" ? (
-                    <AlertTriangle size={16} aria-hidden="true" />
-                  ) : (
-                    <Clock3 size={16} aria-hidden="true" />
-                  )}
-                  <div>
-                    <strong>{transfer.title}</strong>
-                    <span>{soulseekTransferStatusDetail(transfer)}</span>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
       {artistDiscovery ? (
         <section className="artist-albums-found" aria-live="polite">
           <header>
@@ -2554,6 +2556,60 @@ export function WishListWorkspace() {
               Checking official MusicBrainz albums with Deemix; Soulseek starts
               automatically for every missing album…
             </span>
+          </div>
+        </section>
+      ) : null}
+
+      {soulseekTransfers?.transfers.length ? (
+        <section className="deemix-download-queue soulseek-transfer-queue" aria-label="Soulseek download queue">
+          <header>
+            <div>
+              <RadioTower size={18} aria-hidden="true" />
+              <div>
+                <h2>Soulseek transfers</h2>
+                <p>
+                  {soulseekTransfers.activeCount} active · {soulseekTransfers.transfers.length} files
+                </p>
+              </div>
+            </div>
+            {clearableSoulseekTransfers > 0 ? (
+              <button
+                className="secondary-button soulseek-clear-completed"
+                type="button"
+                disabled={isClearingSoulseekTransfers}
+                onClick={() => void clearCompletedSoulseekDownloads()}
+              >
+                {isClearingSoulseekTransfers ? (
+                  <RefreshCw size={14} className="spin" aria-hidden="true" />
+                ) : (
+                  <Trash2 size={14} aria-hidden="true" />
+                )}
+                {isClearingSoulseekTransfers
+                  ? "Clearing…"
+                  : `Clear completed (${clearableSoulseekTransfers})`}
+              </button>
+            ) : null}
+          </header>
+          <div className="deemix-download-queue-list">
+            {soulseekTransfers.transfers.slice(-30).map((transfer) => {
+              return (
+                <article key={transfer.id} className={transfer.status}>
+                  {transfer.status === "downloading" || transfer.status === "connecting" ? (
+                    <RefreshCw size={16} className="spin" aria-hidden="true" />
+                  ) : transfer.status === "completed" ? (
+                    <CheckCircle2 size={16} aria-hidden="true" />
+                  ) : transfer.status === "failed" ? (
+                    <AlertTriangle size={16} aria-hidden="true" />
+                  ) : (
+                    <Clock3 size={16} aria-hidden="true" />
+                  )}
+                  <div>
+                    <strong>{transfer.title}</strong>
+                    <span>{soulseekTransferStatusDetail(transfer)}</span>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       ) : null}
