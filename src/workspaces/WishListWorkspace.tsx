@@ -52,6 +52,7 @@ import type {
   SoulseekAlbumSearchResponse,
   SoulseekSearchResult,
   SoulseekTransferQueue,
+  WishListArtistAlbumDiscoveryRow,
   WishListArtistAlbumDiscoveryResponse,
   WishListArtistAlbumSummary,
   WishListEntity,
@@ -71,6 +72,22 @@ type SoulseekReleaseCandidate = {
   averageSpeed: number;
   queueLength: number;
 };
+
+type SoulseekDownloadTarget = {
+  artist: string;
+  title: string;
+  year: number | null;
+  releaseGroupId: string | null;
+};
+
+type ArtistSoulseekSearchEntry = {
+  status: "queued" | "searching" | "complete" | "error";
+  response: SoulseekAlbumSearchResponse | null;
+  error: string | null;
+  notice: string | null;
+};
+
+const ARTIST_SOULSEEK_SEARCH_CONCURRENCY = 6;
 
 const SOULSEEK_AUDIO_EXTENSIONS = new Set([
   "flac",
@@ -160,6 +177,76 @@ function formatSoulseekBytes(value: number) {
 
 function formatSoulseekSpeed(value: number) {
   return value > 0 ? `${formatSoulseekBytes(value)}/s` : "speed unknown";
+}
+
+function SoulseekSourceList({
+  candidates,
+  notice,
+  target,
+  transfers,
+  onDownload,
+}: {
+  candidates: SoulseekReleaseCandidate[];
+  notice: string | null;
+  target: SoulseekDownloadTarget;
+  transfers: SoulseekTransferQueue | null;
+  onDownload: (candidate: SoulseekReleaseCandidate) => void;
+}) {
+  return (
+    <>
+      {notice ? (
+        <p className="artist-albums-queue-notice" role="status">
+          {notice}
+        </p>
+      ) : null}
+      <div className="soulseek-source-list">
+        {candidates.map((candidate) => {
+          const queued = transfers?.transfers.some(
+            (transfer) =>
+              transfer.username === candidate.username &&
+              remoteFolder(transfer.remoteFilename) === candidate.remoteFolder &&
+              transfer.status !== "failed",
+          );
+          return (
+            <article key={candidate.id}>
+              <div className="soulseek-source-format">
+                <strong>{candidate.format}</strong>
+                <span>{candidate.files.length} files</span>
+              </div>
+              <div className="deemix-match-copy">
+                <strong>{candidate.remoteFolder.split(/[\\/]/).pop()}</strong>
+                <span>
+                  {candidate.username} · {formatSoulseekBytes(candidate.totalSizeBytes)}
+                </span>
+                <small title={candidate.remoteFolder}>
+                  {candidate.slotFree ? "Free upload slot" : `Queue ${candidate.queueLength}`}
+                  {` · ${formatSoulseekSpeed(candidate.averageSpeed)}`}
+                  {candidate.files[0]?.sampleRate
+                    ? ` · ${(candidate.files[0].sampleRate! / 1_000).toFixed(1)} kHz`
+                    : ""}
+                  {candidate.files[0]?.bitDepth
+                    ? ` / ${candidate.files[0].bitDepth}-bit`
+                    : ""}
+                </small>
+              </div>
+              <div className="deemix-match-actions">
+                <button
+                  className="primary-button deemix-download-button"
+                  type="button"
+                  disabled={queued}
+                  aria-label={`Download ${target.title} from ${candidate.username}`}
+                  onClick={() => onDownload(candidate)}
+                >
+                  {queued ? <Clock3 size={15} /> : <Download size={15} />}
+                  <span>{queued ? "Queued" : "Download release"}</span>
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </>
+  );
 }
 
 type DownloadContext = {
@@ -521,12 +608,12 @@ function WishListGroup({
                   type="button"
                   title={
                     isArtist
-                      ? "Find official albums with MusicBrainz and Deezer"
+                      ? "Find official albums with MusicBrainz, Deemix, and Soulseek"
                       : "Search with Deemix"
                   }
                   aria-label={
                     isArtist
-                      ? `Search ${item.title} official albums with Deezer`
+                      ? `Search ${item.title} official albums with Deemix and Soulseek`
                       : `Search ${item.title} with Deemix`
                   }
                   disabled={searchingId !== null || (isArtist && !item.musicbrainzId)}
@@ -615,6 +702,10 @@ export function WishListWorkspace() {
   const [soulseekNotice, setSoulseekNotice] = useState<string | null>(null);
   const [artistDiscovery, setArtistDiscovery] =
     useState<WishListArtistAlbumDiscoveryResponse | null>(null);
+  const [artistSoulseekSearches, setArtistSoulseekSearches] = useState<
+    Record<string, ArtistSoulseekSearchEntry>
+  >({});
+  const artistSoulseekGeneration = useRef(0);
   const [checkingArtistIds, setCheckingArtistIds] = useState<Set<number>>(
     () => new Set(),
   );
@@ -767,6 +858,22 @@ export function WishListWorkspace() {
   const soulseekCandidates = useMemo(
     () => soulseekReleaseCandidates(soulseekResults),
     [soulseekResults],
+  );
+  const artistSoulseekCandidates = useMemo(() => {
+    const candidates = new Map<string, SoulseekReleaseCandidate[]>();
+    for (const [releaseGroupId, search] of Object.entries(
+      artistSoulseekSearches,
+    )) {
+      candidates.set(releaseGroupId, soulseekReleaseCandidates(search.response));
+    }
+    return candidates;
+  }, [artistSoulseekSearches]);
+  const artistSoulseekBatchBusy = useMemo(
+    () =>
+      Object.values(artistSoulseekSearches).some(
+        (search) => search.status === "queued" || search.status === "searching",
+      ),
+    [artistSoulseekSearches],
   );
 
   const queueCounts = useMemo(
@@ -1032,7 +1139,9 @@ export function WishListWorkspace() {
         setSoulseekResults(null);
       }
       if (artistDiscovery?.wishListItemId === item.id) {
+        artistSoulseekGeneration.current += 1;
         setArtistDiscovery(null);
+        setArtistSoulseekSearches({});
       }
     } catch (removeError) {
       setError(removeError instanceof Error ? removeError.message : String(removeError));
@@ -1044,7 +1153,9 @@ export function WishListWorkspace() {
     setSearchingId(item.id);
     setSearchedItem(item);
     setDeemixResults(null);
+    artistSoulseekGeneration.current += 1;
     setArtistDiscovery(null);
+    setArtistSoulseekSearches({});
     setQueueNotice(null);
     setError(null);
     try {
@@ -1090,25 +1201,182 @@ export function WishListWorkspace() {
     setError(null);
     setSoulseekNotice(null);
     try {
-      const snapshot = await enqueueSoulseekRelease({
-        title: `${soulseekSearchedItem.artist} - ${soulseekSearchedItem.title}${
-          soulseekSearchedItem.year ? ` (${soulseekSearchedItem.year})` : ""
-        }`,
-        username: candidate.username,
-        remoteFolder: candidate.remoteFolder,
-        files: candidate.files.map((file) => ({
-          title: remoteTitle(file.filename),
-          remoteFilename: file.filename,
-          sizeBytes: file.sizeBytes,
-        })),
-        expectedTrackCount: candidate.files.length,
-        releaseGroupId: soulseekSearchedItem.musicbrainzId,
-        alternatives: [],
-      });
-      setSoulseekTransfers(snapshot);
-      setSoulseekNotice(
-        `${candidate.files.length} ${candidate.files.length === 1 ? "file" : "files"} queued from ${candidate.username}.`,
+      const notice = await queueSoulseekRelease(
+        {
+          artist: soulseekSearchedItem.artist,
+          title: soulseekSearchedItem.title,
+          year: soulseekSearchedItem.year,
+          releaseGroupId: soulseekSearchedItem.musicbrainzId,
+        },
+        candidate,
       );
+      setSoulseekNotice(notice);
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : String(downloadError),
+      );
+    }
+  }
+
+  async function queueSoulseekRelease(
+    target: SoulseekDownloadTarget,
+    candidate: SoulseekReleaseCandidate,
+  ) {
+    const snapshot = await enqueueSoulseekRelease({
+      title: `${target.artist} - ${target.title}${
+        target.year ? ` (${target.year})` : ""
+      }`,
+      username: candidate.username,
+      remoteFolder: candidate.remoteFolder,
+      files: candidate.files.map((file) => ({
+        title: remoteTitle(file.filename),
+        remoteFilename: file.filename,
+        sizeBytes: file.sizeBytes,
+      })),
+      expectedTrackCount: candidate.files.length,
+      releaseGroupId: target.releaseGroupId,
+      alternatives: [],
+    });
+    setSoulseekTransfers(snapshot);
+    return `${candidate.files.length} ${candidate.files.length === 1 ? "file" : "files"} queued from ${candidate.username}.`;
+  }
+
+  async function runArtistSoulseekSearch(
+    artist: string,
+    album: WishListArtistAlbumDiscoveryRow,
+    generation: number,
+  ) {
+    if (artistSoulseekGeneration.current !== generation) return;
+    setArtistSoulseekSearches((previous) => ({
+      ...previous,
+      [album.releaseGroupId]: {
+        status: "searching",
+        response: null,
+        error: null,
+        notice: null,
+      },
+    }));
+    try {
+      const response = await searchSoulseekAlbum({
+        title: album.title,
+        artist,
+        year: album.year,
+      });
+      if (artistSoulseekGeneration.current !== generation) return;
+      setArtistSoulseekSearches((previous) => ({
+        ...previous,
+        [album.releaseGroupId]: {
+          status: "complete",
+          response,
+          error: null,
+          notice: previous[album.releaseGroupId]?.notice ?? null,
+        },
+      }));
+    } catch (searchError) {
+      if (artistSoulseekGeneration.current !== generation) return;
+      setArtistSoulseekSearches((previous) => ({
+        ...previous,
+        [album.releaseGroupId]: {
+          status: "error",
+          response: null,
+          error:
+            searchError instanceof Error
+              ? searchError.message
+              : String(searchError),
+          notice: null,
+        },
+      }));
+    }
+  }
+
+  async function searchArtistAlbumsWithSoulseek(
+    discovery: WishListArtistAlbumDiscoveryResponse,
+    generation: number,
+  ) {
+    const missingAlbums = discovery.albums.filter(
+      (album) => !album.inLibrary && !album.downloadedAt,
+    );
+    if (artistSoulseekGeneration.current !== generation) return;
+    setArtistSoulseekSearches(
+      Object.fromEntries(
+        missingAlbums.map((album) => [
+          album.releaseGroupId,
+          {
+            status: "queued",
+            response: null,
+            error: null,
+            notice: null,
+          } satisfies ArtistSoulseekSearchEntry,
+        ]),
+      ),
+    );
+    let nextIndex = 0;
+    async function worker() {
+      while (
+        nextIndex < missingAlbums.length &&
+        artistSoulseekGeneration.current === generation
+      ) {
+        const album = missingAlbums[nextIndex];
+        nextIndex += 1;
+        await runArtistSoulseekSearch(discovery.artist, album, generation);
+      }
+    }
+    await Promise.all(
+      Array.from(
+        {
+          length: Math.min(
+            ARTIST_SOULSEEK_SEARCH_CONCURRENCY,
+            missingAlbums.length,
+          ),
+        },
+        () => worker(),
+      ),
+    );
+  }
+
+  async function retryArtistSoulseekSearch(
+    album: WishListArtistAlbumDiscoveryRow,
+  ) {
+    if (!artistDiscovery) return;
+    await runArtistSoulseekSearch(
+      artistDiscovery.artist,
+      album,
+      artistSoulseekGeneration.current,
+    );
+  }
+
+  async function downloadArtistSoulseekRelease(
+    album: WishListArtistAlbumDiscoveryRow,
+    candidate: SoulseekReleaseCandidate,
+  ) {
+    if (!artistDiscovery) return;
+    setError(null);
+    setArtistSoulseekSearches((previous) => ({
+      ...previous,
+      [album.releaseGroupId]: {
+        ...previous[album.releaseGroupId],
+        notice: null,
+      },
+    }));
+    try {
+      const notice = await queueSoulseekRelease(
+        {
+          artist: artistDiscovery.artist,
+          title: album.title,
+          year: album.year,
+          releaseGroupId: album.releaseGroupId,
+        },
+        candidate,
+      );
+      setArtistSoulseekSearches((previous) => ({
+        ...previous,
+        [album.releaseGroupId]: {
+          ...previous[album.releaseGroupId],
+          notice,
+        },
+      }));
     } catch (downloadError) {
       setError(
         downloadError instanceof Error
@@ -1120,15 +1388,20 @@ export function WishListWorkspace() {
 
   async function discoverArtist(item: WishListItem) {
     if (item.entity !== "artist") return;
+    const generation = artistSoulseekGeneration.current + 1;
+    artistSoulseekGeneration.current = generation;
     setSearchingId(item.id);
     setSearchedItem(null);
     setDeemixResults(null);
     setArtistDiscovery(null);
+    setArtistSoulseekSearches({});
     setQueueNotice(null);
     setError(null);
     try {
       const response = await discoverWishListArtistAlbums(item.id);
+      if (artistSoulseekGeneration.current !== generation) return;
       setArtistDiscovery(response);
+      void searchArtistAlbumsWithSoulseek(response, generation);
       setItems((previous) =>
         previous.map((entry) =>
           entry.id === item.id
@@ -1649,59 +1922,18 @@ export function WishListWorkspace() {
               <span>Listening for Soulseek peers for up to 15 seconds…</span>
             </div>
           ) : soulseekCandidates.length ? (
-            <>
-              {soulseekNotice ? (
-                <p className="artist-albums-queue-notice" role="status">
-                  {soulseekNotice}
-                </p>
-              ) : null}
-              <div className="soulseek-source-list">
-                {soulseekCandidates.map((candidate) => {
-                  const queued = soulseekTransfers?.transfers.some(
-                    (transfer) =>
-                      transfer.username === candidate.username &&
-                      remoteFolder(transfer.remoteFilename) === candidate.remoteFolder &&
-                      transfer.status !== "failed",
-                  );
-                  return (
-                    <article key={candidate.id}>
-                      <div className="soulseek-source-format">
-                        <strong>{candidate.format}</strong>
-                        <span>{candidate.files.length} files</span>
-                      </div>
-                      <div className="deemix-match-copy">
-                        <strong>{candidate.remoteFolder.split(/[\\/]/).pop()}</strong>
-                        <span>
-                          {candidate.username} · {formatSoulseekBytes(candidate.totalSizeBytes)}
-                        </span>
-                        <small title={candidate.remoteFolder}>
-                          {candidate.slotFree ? "Free upload slot" : `Queue ${candidate.queueLength}`}
-                          {` · ${formatSoulseekSpeed(candidate.averageSpeed)}`}
-                          {candidate.files[0]?.sampleRate
-                            ? ` · ${(candidate.files[0].sampleRate! / 1_000).toFixed(1)} kHz`
-                            : ""}
-                          {candidate.files[0]?.bitDepth
-                            ? ` / ${candidate.files[0].bitDepth}-bit`
-                            : ""}
-                        </small>
-                      </div>
-                      <div className="deemix-match-actions">
-                        <button
-                          className="primary-button deemix-download-button"
-                          type="button"
-                          disabled={queued}
-                          aria-label={`Download ${soulseekSearchedItem.title} from ${candidate.username}`}
-                          onClick={() => void downloadSoulseekRelease(candidate)}
-                        >
-                          {queued ? <Clock3 size={15} /> : <Download size={15} />}
-                          <span>{queued ? "Queued" : "Download release"}</span>
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </>
+            <SoulseekSourceList
+              candidates={soulseekCandidates}
+              notice={soulseekNotice}
+              target={{
+                artist: soulseekSearchedItem.artist,
+                title: soulseekSearchedItem.title,
+                year: soulseekSearchedItem.year,
+                releaseGroupId: soulseekSearchedItem.musicbrainzId,
+              }}
+              transfers={soulseekTransfers}
+              onDownload={(candidate) => void downloadSoulseekRelease(candidate)}
+            />
           ) : soulseekResults ? (
             <div className="deemix-search-state empty">
               <RadioTower size={19} aria-hidden="true" />
@@ -1786,14 +2018,20 @@ export function WishListWorkspace() {
                 ) : (
                   <ListPlus size={15} />
                 )}
-                <span>{isQueueingAll ? "Checking folders" : "Download all albums"}</span>
+                <span>
+                  {isQueueingAll ? "Checking folders" : "Download all with Deemix"}
+                </span>
               </button>
               <button
                 className="icon-button"
                 type="button"
                 title="Close Albums found"
                 aria-label="Close Albums found"
-                onClick={() => setArtistDiscovery(null)}
+                onClick={() => {
+                  artistSoulseekGeneration.current += 1;
+                  setArtistDiscovery(null);
+                  setArtistSoulseekSearches({});
+                }}
               >
                 <X size={16} />
               </button>
@@ -1814,6 +2052,12 @@ export function WishListWorkspace() {
                 label: album.title,
               } satisfies DownloadContext;
               const status = match ? jobStatus(match, context) : null;
+              const soulseekSearch =
+                artistSoulseekSearches[album.releaseGroupId] ?? null;
+              const soulseekCandidatesForAlbum =
+                artistSoulseekCandidates.get(album.releaseGroupId) ?? [];
+              const isSoulseekSearching = soulseekSearch?.status === "searching";
+              const isSoulseekQueued = soulseekSearch?.status === "queued";
               return (
                 <article key={album.releaseGroupId}>
                   <div className="artist-album-source">
@@ -1883,7 +2127,7 @@ export function WishListWorkspace() {
                         className="primary-button deemix-download-button"
                         type="button"
                         disabled={status === "queued" || status === "downloading"}
-                        aria-label={`Download ${album.title}`}
+                        aria-label={`Download ${album.title} with Deemix`}
                         onClick={() => void requestDownload(match, context)}
                       >
                         {status === "downloading" ? (
@@ -1895,18 +2139,108 @@ export function WishListWorkspace() {
                         )}
                         <span>
                           {status === "downloading"
-                            ? "Downloading"
+                            ? "Deemix downloading"
                             : status === "queued"
-                              ? "Queued"
+                              ? "Deemix queued"
                               : album.downloadedAt
-                                ? "Download again"
+                                ? "Deemix again"
                                 : album.inLibrary
-                                  ? "Download copy"
-                                : "Download"}
+                                  ? "Deemix copy"
+                                : "Download with Deemix"}
                         </span>
                       </button>
                     ) : null}
+                    <button
+                      className="secondary-button soulseek-album-search-button"
+                      type="button"
+                      disabled={
+                        artistSoulseekBatchBusy ||
+                        soulseekSearchingId !== null
+                      }
+                      aria-label={`${soulseekSearch ? "Refresh" : "Search"} ${album.title} with Soulseek`}
+                      onClick={() => void retryArtistSoulseekSearch(album)}
+                    >
+                      <RadioTower
+                        size={15}
+                        className={isSoulseekSearching ? "spin" : ""}
+                      />
+                      <span>
+                        {isSoulseekSearching
+                          ? "Searching Soulseek"
+                          : isSoulseekQueued
+                            ? "Soulseek queued"
+                            : soulseekSearch
+                              ? "Refresh Soulseek"
+                              : "Search Soulseek"}
+                      </span>
+                    </button>
                   </div>
+                  {soulseekSearch ? (
+                    <section
+                      className="artist-album-soulseek"
+                      aria-label={`Soulseek sources for ${album.title}`}
+                    >
+                      <header>
+                        <div>
+                          <RadioTower size={16} aria-hidden="true" />
+                          <div>
+                            <strong>Soulseek sources</strong>
+                            <span>
+                              {artistDiscovery.artist} · {album.title}
+                              {album.year ? ` · ${album.year}` : ""}
+                            </span>
+                          </div>
+                        </div>
+                        <span className={`soulseek-search-status ${soulseekSearch.status}`}>
+                          {soulseekSearch.status === "queued"
+                            ? "Waiting"
+                            : soulseekSearch.status === "searching"
+                              ? "Searching"
+                              : soulseekSearch.status === "complete"
+                                ? `${soulseekCandidatesForAlbum.length} sources`
+                                : "Unavailable"}
+                        </span>
+                      </header>
+                      {isSoulseekQueued ? (
+                        <div className="deemix-search-state">
+                          <Clock3 size={18} aria-hidden="true" />
+                          <span>Waiting for an available Soulseek search slot…</span>
+                        </div>
+                      ) : isSoulseekSearching ? (
+                        <div className="deemix-search-state">
+                          <RadioTower size={18} className="spin" aria-hidden="true" />
+                          <span>Listening for Soulseek peers for up to 15 seconds…</span>
+                        </div>
+                      ) : soulseekCandidatesForAlbum.length ? (
+                        <SoulseekSourceList
+                          candidates={soulseekCandidatesForAlbum}
+                          notice={soulseekSearch.notice}
+                          target={{
+                            artist: artistDiscovery.artist,
+                            title: album.title,
+                            year: album.year,
+                            releaseGroupId: album.releaseGroupId,
+                          }}
+                          transfers={soulseekTransfers}
+                          onDownload={(candidate) =>
+                            void downloadArtistSoulseekRelease(album, candidate)
+                          }
+                        />
+                      ) : soulseekSearch.status === "error" ? (
+                        <div className="deemix-search-state empty">
+                          <AlertTriangle size={18} aria-hidden="true" />
+                          <strong>Soulseek search failed</strong>
+                          <span>{soulseekSearch.error}</span>
+                        </div>
+                      ) : soulseekSearch.response ? (
+                        <div className="deemix-search-state empty">
+                          <RadioTower size={18} aria-hidden="true" />
+                          <strong>No public audio folders answered</strong>
+                          <span>Try the album again later or check its spelling.</span>
+                        </div>
+                      ) : null}
+                    </section>
+                  ) : null}
                 </article>
               );
             })}
@@ -1916,7 +2250,10 @@ export function WishListWorkspace() {
         <section className="artist-albums-found" aria-live="polite">
           <div className="deemix-search-state">
             <RefreshCw size={19} className="spin" aria-hidden="true" />
-            <span>Checking official MusicBrainz albums and matching them with Deezer…</span>
+            <span>
+              Checking official MusicBrainz albums with Deemix; Soulseek starts
+              automatically for every missing album…
+            </span>
           </div>
         </section>
       ) : null}

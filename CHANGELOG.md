@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.103.0] - 2026-07-29
+### Added
+- Added automatic Soulseek searches to artist Wish List discovery so every still-missing MusicBrainz album receives peer release-folder options alongside its Deemix match.
+- Added inline per-album Soulseek waiting, searching, source, empty, error, retry, and queued-download states, with six-search concurrency that preserves two native search slots for other app activity.
+
+### Changed
+- Renamed artist download actions to identify Deemix explicitly and kept **Download all with Deemix** as the bulk-provider action while Soulseek remains a deliberate per-source choice.
+- Synchronized app metadata and provider user agents to `0.103.0`.
+
 ## [0.102.0] - 2026-07-29
 ### Added
 - Added an in-process native Soulseek client, adapted from the standalone Forever client, with secure account storage, automatic reconnect, live peer search, persistent release downloads, queue progress, file verification, retry support, and direct Wish List integration.

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WishListWorkspace } from "./WishListWorkspace";
@@ -61,6 +61,42 @@ function match(id: string, title: string, year: number) {
     matchLevel: "exact",
     downloadedAt: null,
     downloadedPath: null,
+  };
+}
+
+function soulseekResponse(title: string, year: number) {
+  const query = `Pet Shop Boys ${title}`;
+  return {
+    query,
+    snapshot: {
+      state: "completed",
+      token: 7,
+      clientId: "wishlist-test",
+      query,
+      resultCount: 2,
+      peerCount: 1,
+      message: "Found 2 files from 1 person.",
+      startedAtMs: 1,
+      finishedAtMs: 2,
+    },
+    searchedAt: "2026-07-29T12:00:00Z",
+    results: [1, 2].map((index) => ({
+      id: `soulseek-${title}-${index}`,
+      token: 7,
+      username: "lossless-listener",
+      filename: `Music\\Pet Shop Boys\\${title} (${year})\\0${index} - Track ${index}.flac`,
+      sizeBytes: 30_000_000,
+      extension: "flac",
+      bitrate: 900,
+      durationSeconds: 220,
+      vbr: false,
+      sampleRate: 44_100,
+      bitDepth: 16,
+      slotFree: true,
+      averageSpeed: 5_000_000,
+      queueLength: 0,
+      isPrivate: false,
+    })),
   };
 }
 
@@ -171,38 +207,10 @@ describe("WishListWorkspace", () => {
       searchedAt: "2026-07-26T12:00:00Z",
       matches: [match("123", "Release (2017 Remaster)", 2002)],
     });
-    searchSoulseekAlbum.mockResolvedValue({
-      query: "Pet Shop Boys Release",
-      snapshot: {
-        state: "completed",
-        token: 7,
-        clientId: "wishlist-test",
-        query: "Pet Shop Boys Release",
-        resultCount: 2,
-        peerCount: 1,
-        message: "Found 2 files from 1 person.",
-        startedAtMs: 1,
-        finishedAtMs: 2,
-      },
-      searchedAt: "2026-07-29T12:00:00Z",
-      results: [1, 2].map((index) => ({
-        id: `soulseek-${index}`,
-        token: 7,
-        username: "lossless-listener",
-        filename: `Music\\Pet Shop Boys\\Release (2002)\\0${index} - Track ${index}.flac`,
-        sizeBytes: 30_000_000,
-        extension: "flac",
-        bitrate: 900,
-        durationSeconds: 220,
-        vbr: false,
-        sampleRate: 44_100,
-        bitDepth: 16,
-        slotFree: true,
-        averageSpeed: 5_000_000,
-        queueLength: 0,
-        isPrivate: false,
-      })),
-    });
+    searchSoulseekAlbum.mockImplementation(
+      async (input: { title: string; year: number | null }) =>
+        soulseekResponse(input.title, input.year ?? 0),
+    );
     enqueueSoulseekRelease.mockImplementation(
       async (request: { files: Array<{ title: string; remoteFilename: string; sizeBytes: number }> }) => ({
         transfers: request.files.map((file, index) => ({
@@ -774,14 +782,20 @@ describe("WishListWorkspace", () => {
     render(<WishListWorkspace />);
     await screen.findByText("Pet Shop Boys");
     fireEvent.click(
-      screen.getByLabelText("Search Pet Shop Boys official albums with Deezer"),
+      screen.getByLabelText(
+        "Search Pet Shop Boys official albums with Deemix and Soulseek",
+      ),
     );
 
     expect(await screen.findByRole("heading", { name: "Albums found" })).toBeInTheDocument();
     expect(discoverWishListArtistAlbums).toHaveBeenCalledWith(1);
-    fireEvent.click(screen.getByRole("button", { name: "Download Please" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Download Please with Deemix" }),
+    );
     await waitFor(() => expect(downloadDeemixAlbum).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole("button", { name: "Download Actually" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Download Actually with Deemix" }),
+    );
     expect(await screen.findByText("Waiting for the current album")).toBeInTheDocument();
 
     resolveFirst?.(undefined);
@@ -798,15 +812,75 @@ describe("WishListWorkspace", () => {
     );
   });
 
+  it("automatically searches Soulseek for every missing artist album and queues a selected source", async () => {
+    render(<WishListWorkspace />);
+    await screen.findByText("Pet Shop Boys");
+    fireEvent.click(
+      screen.getByLabelText(
+        "Search Pet Shop Boys official albums with Deemix and Soulseek",
+      ),
+    );
+    await screen.findByRole("heading", { name: "Albums found" });
+
+    await waitFor(() =>
+      expect(searchSoulseekAlbum).toHaveBeenCalledWith({
+        artist: "Pet Shop Boys",
+        title: "Please",
+        year: 1986,
+      }),
+    );
+    expect(searchSoulseekAlbum).toHaveBeenCalledWith({
+      artist: "Pet Shop Boys",
+      title: "Actually",
+      year: 1987,
+    });
+    expect(
+      screen.getByRole("button", { name: "Download Please with Deemix" }),
+    ).toBeInTheDocument();
+
+    const sources = await screen.findByRole("region", {
+      name: "Soulseek sources for Please",
+    });
+    expect(
+      screen.getByRole("region", { name: "Soulseek sources for Actually" }),
+    ).toBeInTheDocument();
+    expect(within(sources).getByText("Please (1986)")).toBeInTheDocument();
+    expect(within(sources).getByText("2 files")).toBeInTheDocument();
+    fireEvent.click(
+      within(sources).getByRole("button", {
+        name: "Download Please from lossless-listener",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(enqueueSoulseekRelease).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Pet Shop Boys - Please (1986)",
+          username: "lossless-listener",
+          remoteFolder: "Music\\Pet Shop Boys\\Please (1986)",
+          expectedTrackCount: 2,
+          releaseGroupId: "00000000-0000-4000-8000-000000000001",
+        }),
+      ),
+    );
+    expect(
+      await within(sources).findByText("2 files queued from lossless-listener."),
+    ).toBeInTheDocument();
+  });
+
   it("queues every missing matched artist album with Download all", async () => {
     render(<WishListWorkspace />);
     await screen.findByText("Pet Shop Boys");
     fireEvent.click(
-      screen.getByLabelText("Search Pet Shop Boys official albums with Deezer"),
+      screen.getByLabelText(
+        "Search Pet Shop Boys official albums with Deemix and Soulseek",
+      ),
     );
     await screen.findByRole("heading", { name: "Albums found" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Download all albums" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Download all with Deemix" }),
+    );
 
     await waitFor(() => expect(downloadDeemixAlbum).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/2 albums added to the queue/)).toBeInTheDocument();
