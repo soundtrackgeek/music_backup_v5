@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.101.0] - 2026-07-29
+### Added
+- Added independent **Charts**, **From**, and **To** filters to Library Completion Workbench and Artist Discovery, including Billboard, Official UK, and VG Lista source scopes.
+- Added clear-filter actions and synchronized Coverage Atlas campaign filters so the active chart and decade remain visible when a cohort opens in Workbench.
+
+### Changed
+- Moved album and artist source/year filtering into the backend query path before the normal 5,000-row display cap, while preserving complete Coverage Atlas decade campaigns.
+- Collapsed Artist Discovery provenance into one aggregate row per chart and chart type, combining peak rank, appearances, and first/last chart years even when imported rows carry equivalent raw artist keys.
+- Synchronized app metadata and provider user agents to `0.101.0`.
+
+### Fixed
+- Fixed low-contrast native **Show** and **Charts** dropdown menus in the dark Library Completion theme by explicitly styling popup options and selecting the correct browser color scheme.
+
 ## [0.100.0] - 2026-07-29
 ### Added
 - Added **Artist discovery** inside Library Completion, combining missing artists from Billboard, Official UK, and VG Lista album and singles charts while excluding normalized album artists, track album artists, and track artists already in the imported library.

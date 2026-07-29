@@ -1132,8 +1132,10 @@ export type LibraryCompletionResponse = {
 };
 
 export type LibraryCompletionRequest = {
-  source: LibraryCompletionEvidence["source"];
-  decade: number;
+  source?: LibraryCompletionEvidence["source"] | null;
+  decade?: number | null;
+  yearFrom?: number | null;
+  yearTo?: number | null;
 };
 
 export type SetLibraryCompletionDecisionRequest = {
@@ -1256,6 +1258,12 @@ export type LibraryCompletionArtistResponse = {
   returnedCandidates: number;
   truncated: boolean;
   candidates: LibraryCompletionArtistCandidate[];
+};
+
+export type LibraryCompletionArtistRequest = {
+  source?: LibraryCompletionEvidence["source"] | null;
+  yearFrom?: number | null;
+  yearTo?: number | null;
 };
 
 export type StartLibraryCompletionArtistVerificationRequest = {

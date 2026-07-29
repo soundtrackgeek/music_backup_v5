@@ -94,6 +94,8 @@ pub struct LibraryCompletionResponse {
 pub struct LibraryCompletionRequest {
     pub source: Option<String>,
     pub decade: Option<i32>,
+    pub year_from: Option<i32>,
+    pub year_to: Option<i32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -505,18 +507,39 @@ fn normalize_request(
         .take()
         .map(|source| source.trim().to_string())
         .filter(|source| !source.is_empty());
-    match (&request.source, request.decade) {
-        (None, None) => Ok(None),
-        (Some(source), Some(decade)) => {
-            if !matches!(source.as_str(), "billboard" | "officialUk" | "vgLista") {
-                bail!("The Library Completion chart source is not supported.")
-            }
-            if !(1000..=3000).contains(&decade) || decade % 10 != 0 {
-                bail!("The Library Completion decade is outside the supported range.")
-            }
-            Ok(Some(request))
+    if let Some(source) = request.source.as_deref() {
+        if !matches!(source, "billboard" | "officialUk" | "vgLista") {
+            bail!("The Library Completion chart source is not supported.")
         }
-        _ => bail!("Choose both a chart source and decade for a Library Completion campaign."),
+    }
+    if let Some(decade) = request.decade {
+        if request.source.is_none() {
+            bail!("Choose a chart source for a Library Completion decade campaign.")
+        }
+        if !(1000..=3000).contains(&decade) || decade % 10 != 0 {
+            bail!("The Library Completion decade is outside the supported range.")
+        }
+    }
+    for year in [request.year_from, request.year_to].into_iter().flatten() {
+        if !(1000..=3000).contains(&year) {
+            bail!("The Library Completion year filter is outside the supported range.")
+        }
+    }
+    if request
+        .year_from
+        .zip(request.year_to)
+        .is_some_and(|(from, to)| from > to)
+    {
+        bail!("The Library Completion start year must not be later than the end year.")
+    }
+    if request.source.is_none()
+        && request.decade.is_none()
+        && request.year_from.is_none()
+        && request.year_to.is_none()
+    {
+        Ok(None)
+    } else {
+        Ok(Some(request))
     }
 }
 
@@ -645,11 +668,21 @@ fn get_for_connection_inner(
         .count();
 
     if let Some(request) = &request {
-        let source = request.source.as_deref().unwrap_or_default();
-        let decade = request.decade.unwrap_or_default();
         candidates.retain(|candidate| {
             candidate.evidence.iter().any(|evidence| {
-                evidence.source == source && evidence.first_year.div_euclid(10) * 10 == decade
+                request
+                    .source
+                    .as_deref()
+                    .is_none_or(|source| evidence.source == source)
+                    && request
+                        .decade
+                        .is_none_or(|decade| evidence.first_year.div_euclid(10) * 10 == decade)
+                    && request
+                        .year_from
+                        .is_none_or(|year_from| evidence.last_year >= year_from)
+                    && request
+                        .year_to
+                        .is_none_or(|year_to| evidence.first_year <= year_to)
             })
         });
     }
@@ -676,10 +709,12 @@ fn get_for_connection_inner(
             .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
     });
 
-    let truncated = truncate_unscoped_candidates
-        && request.is_none()
-        && candidates.len() > MAX_RETURNED_CANDIDATES;
-    if truncate_unscoped_candidates && request.is_none() {
+    let is_atlas_campaign = request
+        .as_ref()
+        .is_some_and(|request| request.decade.is_some());
+    let should_truncate = truncate_unscoped_candidates && !is_atlas_campaign;
+    let truncated = should_truncate && candidates.len() > MAX_RETURNED_CANDIDATES;
+    if should_truncate {
         candidates.truncate(MAX_RETURNED_CANDIDATES);
     }
     let returned_candidates = candidates.len();
@@ -992,6 +1027,7 @@ fn normalize_verification_request(
             normalize_request(Some(LibraryCompletionRequest {
                 source: request.source.clone(),
                 decade: request.decade,
+                ..Default::default()
             }))?;
         }
         _ if request.candidate_ids.is_empty() => {
@@ -1025,6 +1061,7 @@ fn candidates_for_verification(
     let completion_request = (request.scope == "campaign").then(|| LibraryCompletionRequest {
         source: request.source.clone(),
         decade: request.decade,
+        ..Default::default()
     });
     let mut candidates = get_for_connection_inner(conn, completion_request, false)?.candidates;
     if request.scope != "campaign" {
@@ -1894,6 +1931,7 @@ mod tests {
             Some(LibraryCompletionRequest {
                 source: Some("billboard".to_string()),
                 decade: Some(1980),
+                ..Default::default()
             }),
         )
         .expect("get scoped completion data");
@@ -1903,6 +1941,61 @@ mod tests {
         assert!(!response.truncated);
         assert_eq!(response.atlas.len(), 2);
         assert_eq!(response.total_candidates, 2);
+    }
+
+    #[test]
+    fn source_and_year_filters_run_before_the_workbench_limit() {
+        let mut conn = connection();
+        {
+            let transaction = conn.transaction().expect("start candidate transaction");
+            let mut statement = transaction
+                .prepare(
+                    "INSERT INTO billboard_chart_entries
+                        (source_file, year, rank, artist, album, artist_key, album_key,
+                         first_appearance_year, imported_at)
+                     VALUES ('billboard.csv', 1998, 1, ?1, ?2, ?3, ?4, 1998, 'now')",
+                )
+                .expect("prepare Billboard candidates");
+            for index in 0..MAX_RETURNED_CANDIDATES {
+                statement
+                    .execute(params![
+                        format!("Billboard Artist {index}"),
+                        format!("Billboard Album {index}"),
+                        format!("billboard artist {index}"),
+                        format!("billboard album {index}"),
+                    ])
+                    .expect("insert Billboard candidate");
+            }
+            drop(statement);
+            transaction.commit().expect("commit Billboard candidates");
+        }
+        conn.execute(
+            "
+            INSERT INTO vg_lista_album_chart_entries (
+                source_file, year, week, rank, artist, title, artist_key, title_key,
+                week_date, week_key, matched_album_id, imported_at
+            ) VALUES ('vg-albums.csv', 1985, 1, 3, 'A-ha', 'Hunting High and Low',
+                      'a ha', 'hunting high and low', '1985-01-01', '1985-01', NULL, '2026-07-29')
+            ",
+            [],
+        )
+        .expect("insert VG Lista candidate");
+
+        let response = get_for_connection(
+            &conn,
+            Some(LibraryCompletionRequest {
+                source: Some("vgLista".to_string()),
+                year_from: Some(1980),
+                year_to: Some(1989),
+                ..Default::default()
+            }),
+        )
+        .expect("filter completion data");
+
+        assert_eq!(response.total_candidates, MAX_RETURNED_CANDIDATES + 1);
+        assert_eq!(response.returned_candidates, 1);
+        assert_eq!(response.candidates[0].artist, "A-ha");
+        assert_eq!(response.candidates[0].evidence[0].source, "vgLista");
     }
 
     #[test]

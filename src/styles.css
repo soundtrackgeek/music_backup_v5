@@ -469,10 +469,67 @@ button {
   outline: 0;
   color: #283632;
   background: transparent;
+  color-scheme: light;
   font-size: 12px;
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0;
+}
+
+.completion-filter select option {
+  color: #283632;
+  background: #ffffff;
+}
+
+.completion-chart-filter select {
+  min-width: 142px;
+}
+
+.completion-year-filter {
+  gap: 6px;
+}
+
+.completion-year-filter input {
+  width: 58px;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #283632;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.completion-year-filter input::placeholder {
+  color: #89948f;
+}
+
+.completion-filter-apply {
+  align-self: stretch;
+  min-height: 40px;
+  padding-inline: 12px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.completion-filter-clear {
+  display: grid;
+  flex: 0 0 40px;
+  align-self: stretch;
+  place-items: center;
+  min-height: 40px;
+  border: 1px solid #ccd8d4;
+  border-radius: 8px;
+  color: #61716b;
+  background: #fafcfb;
+  cursor: pointer;
+}
+
+.completion-filter-clear:hover {
+  border-color: #74aaa3;
+  color: #0b625b;
+  background: #f0f7f5;
 }
 
 .completion-scan-summary {
@@ -1290,8 +1347,12 @@ button {
   min-width: 0;
 }
 
-.artist-completion-command-bar .completion-filter select {
+.artist-completion-command-bar .completion-filter:not(.completion-chart-filter) select {
   min-width: 196px;
+}
+
+.artist-completion-command-bar .completion-chart-filter select {
+  min-width: 184px;
 }
 
 .artist-completion-workbench {
@@ -1834,6 +1895,7 @@ button {
 
 :root[data-theme="dark"] .completion-search input,
 :root[data-theme="dark"] .completion-filter select,
+:root[data-theme="dark"] .completion-year-filter input,
 :root[data-theme="dark"] .completion-dossier-heading h2,
 :root[data-theme="dark"] .completion-ledger h3,
 :root[data-theme="dark"] .completion-atlas h2,
@@ -1841,6 +1903,31 @@ button {
 :root[data-theme="dark"] .completion-candidate-copy strong,
 :root[data-theme="dark"] .completion-atlas-cell > strong {
   color: #e4ece9;
+}
+
+:root[data-theme="dark"] .completion-filter select {
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] .completion-filter select option {
+  color: #e4ece9;
+  background: #202a27;
+}
+
+:root[data-theme="dark"] .completion-year-filter input::placeholder {
+  color: #82938d;
+}
+
+:root[data-theme="dark"] .completion-filter-clear {
+  border-color: #36443f;
+  color: #b5c4bf;
+  background: #202a27;
+}
+
+:root[data-theme="dark"] .completion-filter-clear:hover {
+  border-color: #4b887f;
+  color: #d7eee8;
+  background: #243530;
 }
 
 :root[data-theme="dark"] .completion-candidate:hover,

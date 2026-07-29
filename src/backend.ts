@@ -150,6 +150,7 @@ import type {
   LibraryCompletionArtistDecision,
   LibraryCompletionArtistResponse,
   LibraryCompletionArtistVerificationStatus,
+  LibraryCompletionArtistRequest,
   LibraryCompletionCoverEnrichment,
   LibraryCompletionDecision,
   LibraryCompletionRequest,
@@ -2005,8 +2006,10 @@ export async function getLibraryCompletion(input: LibraryCompletionRequest | nul
     const candidates = decidedCandidates.filter((candidate) =>
       !input || candidate.evidence.some(
         (evidence) =>
-          evidence.source === input.source &&
-          Math.floor(evidence.firstYear / 10) * 10 === input.decade,
+          (!input.source || evidence.source === input.source) &&
+          (input.decade == null || Math.floor(evidence.firstYear / 10) * 10 === input.decade) &&
+          (input.yearFrom == null || evidence.lastYear >= input.yearFrom) &&
+          (input.yearTo == null || evidence.firstYear <= input.yearTo),
       ),
     );
     return {
@@ -2351,9 +2354,11 @@ export async function setLibraryCompletionDecision(
   );
 }
 
-export async function getLibraryCompletionArtists() {
+export async function getLibraryCompletionArtists(
+  input: LibraryCompletionArtistRequest | null = null,
+) {
   if (!isTauriRuntime()) {
-    const candidates = mockLibraryCompletionArtistCandidates.map((candidate) => {
+    const decidedCandidates = mockLibraryCompletionArtistCandidates.map((candidate) => {
       const verification = mockLibraryCompletionArtistVerifications.get(candidate.id);
       const decision = mockLibraryCompletionArtistDecisions.get(candidate.id);
       return {
@@ -2363,6 +2368,13 @@ export async function getLibraryCompletionArtists() {
           decision?.wishListItemId ?? verification?.wishListItemId ?? candidate.wishListItemId,
       };
     });
+    const candidates = decidedCandidates.filter((candidate) =>
+      !input || candidate.evidence.some((evidence) =>
+        (!input.source || evidence.source === input.source) &&
+        (input.yearFrom == null || evidence.lastYear >= input.yearFrom) &&
+        (input.yearTo == null || evidence.firstYear <= input.yearTo),
+      ),
+    );
     return {
       generatedAt: new Date().toISOString(),
       totalChartArtists: 3_862,
@@ -2373,7 +2385,7 @@ export async function getLibraryCompletionArtists() {
       candidates,
     } satisfies LibraryCompletionArtistResponse;
   }
-  return invoke<LibraryCompletionArtistResponse>("get_library_completion_artists");
+  return invoke<LibraryCompletionArtistResponse>("get_library_completion_artists", { input });
 }
 
 function verifiedMockArtist(candidate: LibraryCompletionArtistCandidate) {

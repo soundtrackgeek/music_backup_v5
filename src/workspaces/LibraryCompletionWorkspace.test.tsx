@@ -279,6 +279,32 @@ describe("LibraryCompletionWorkspace", () => {
     expect(screen.getByRole("heading", { name: "The Colour of Spring" })).toBeInTheDocument();
   });
 
+  it("loads album chart-source and year filters before the Workbench cap", async () => {
+    render(<LibraryCompletionWorkspace onOpenWishList={vi.fn()} />);
+
+    await screen.findByRole("heading", { name: "The Colour of Spring" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter album chart source" }), {
+      target: { value: "vgLista" },
+    });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Album chart year from" }), {
+      target: { value: "1980" },
+    });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Album chart year to" }), {
+      target: { value: "1989" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    await waitFor(() => {
+      expect(getLibraryCompletion).toHaveBeenLastCalledWith({
+        source: "vgLista",
+        decade: null,
+        yearFrom: 1980,
+        yearTo: 1989,
+      });
+    });
+    expect(screen.getByRole("button", { name: "Clear album chart filters" })).toBeInTheDocument();
+  });
+
   it("queues the current album for persistent MusicBrainz verification", async () => {
     render(<LibraryCompletionWorkspace onOpenWishList={vi.fn()} />);
 

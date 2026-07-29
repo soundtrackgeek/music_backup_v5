@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   UserRound,
   UsersRound,
+  X,
 } from "lucide-react";
 
 import {
@@ -30,7 +31,9 @@ import {
 import type {
   DiscogsCredentialStatus,
   LibraryCompletionArtistCandidate,
+  LibraryCompletionArtistRequest,
   LibraryCompletionArtistVerificationStatus,
+  LibraryCompletionEvidence,
   LibraryCompletionStatus,
   WishListMusicBrainzCandidate,
 } from "../types";
@@ -44,6 +47,7 @@ type ArtistFilter =
   | "wanted"
   | "needsReview"
   | "notForMe";
+type ArtistChartSourceFilter = "all" | LibraryCompletionEvidence["source"];
 
 function artistVerificationLabel(candidate: LibraryCompletionArtistCandidate) {
   if (candidate.status === "wanted") return "In Wish List";
@@ -107,6 +111,10 @@ export function ArtistCompletionWorkspace({
   const [discogsStatus, setDiscogsStatus] = useState<DiscogsCredentialStatus | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ArtistFilter>("all");
+  const [chartSource, setChartSource] = useState<ArtistChartSourceFilter>("all");
+  const [yearFrom, setYearFrom] = useState<number | null>(null);
+  const [yearTo, setYearTo] = useState<number | null>(null);
+  const [activeRequest, setActiveRequest] = useState<LibraryCompletionArtistRequest | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedForVerification, setSelectedForVerification] = useState<Set<string>>(
     () => new Set(),
@@ -121,12 +129,12 @@ export function ArtistCompletionWorkspace({
   const [error, setError] = useState<string | null>(null);
   const completedBatchReloadRef = useRef<number | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (request: LibraryCompletionArtistRequest | null = null) => {
     setIsLoading(true);
     setError(null);
     try {
       const [response, queue, provider] = await Promise.all([
-        getLibraryCompletionArtists(),
+        getLibraryCompletionArtists(request),
         getLibraryCompletionArtistVerificationStatus(),
         getDiscogsCredentialStatus(),
       ]);
@@ -150,8 +158,8 @@ export function ArtistCompletionWorkspace({
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load, refreshToken]);
+    void load(activeRequest);
+  }, [activeRequest, load, refreshToken]);
 
   const batch = verificationStatus?.batch ?? null;
   useEffect(() => {
@@ -167,8 +175,8 @@ export function ArtistCompletionWorkspace({
   useEffect(() => {
     if (!batch || batch.state !== "completed" || completedBatchReloadRef.current === batch.id) return;
     completedBatchReloadRef.current = batch.id;
-    void load();
-  }, [batch, load]);
+    void load(activeRequest);
+  }, [activeRequest, batch, load]);
 
   const candidates = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -186,9 +194,16 @@ export function ArtistCompletionWorkspace({
     });
   }, [data, filter, query]);
 
+  useEffect(() => {
+    if (!candidates.length) return;
+    if (!candidates.some((candidate) => candidate.id === selectedId)) {
+      setSelectedId(candidates[0].id);
+    }
+  }, [candidates, selectedId]);
+
   const selected = useMemo(
-    () => data?.candidates.find((candidate) => candidate.id === selectedId) ?? null,
-    [data, selectedId],
+    () => candidates.find((candidate) => candidate.id === selectedId) ?? candidates[0] ?? null,
+    [candidates, selectedId],
   );
   const currentItem = verificationStatus?.recentItems.find((item) => item.state === "checking") ?? null;
   const hasActiveBatch = batch?.state === "running" || batch?.state === "paused";
@@ -326,6 +341,39 @@ export function ArtistCompletionWorkspace({
     }
   }
 
+  function applyChartFilters() {
+    if (yearFrom != null && (yearFrom < 1000 || yearFrom > 3000)) {
+      setError("Choose a four-digit start year between 1000 and 3000.");
+      return;
+    }
+    if (yearTo != null && (yearTo < 1000 || yearTo > 3000)) {
+      setError("Choose a four-digit end year between 1000 and 3000.");
+      return;
+    }
+    if (yearFrom != null && yearTo != null && yearFrom > yearTo) {
+      setError("The start year must not be later than the end year.");
+      return;
+    }
+    setError(null);
+    setActiveRequest(
+      chartSource === "all" && yearFrom == null && yearTo == null
+        ? null
+        : {
+            source: chartSource === "all" ? null : chartSource,
+            yearFrom,
+            yearTo,
+          },
+    );
+  }
+
+  function clearChartFilters() {
+    setChartSource("all");
+    setYearFrom(null);
+    setYearTo(null);
+    setError(null);
+    setActiveRequest(null);
+  }
+
   return (
     <div className="artist-completion-surface">
       <section className="completion-command-bar artist-completion-command-bar" aria-label="Artist discovery controls">
@@ -355,6 +403,64 @@ export function ArtistCompletionWorkspace({
             <option value="notForMe">Not for me</option>
           </select>
         </label>
+        <label className="completion-filter completion-chart-filter">
+          <span>Charts</span>
+          <select
+            value={chartSource}
+            onChange={(event) => setChartSource(event.target.value as ArtistChartSourceFilter)}
+            aria-label="Filter artist chart source"
+          >
+            <option value="all">All album + singles charts</option>
+            <option value="billboard">Billboard charts</option>
+            <option value="officialUk">Official UK charts</option>
+            <option value="vgLista">VG Lista charts</option>
+          </select>
+        </label>
+        <label className="completion-filter completion-year-filter">
+          <span>From</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min="1000"
+            max="3000"
+            value={yearFrom ?? ""}
+            placeholder="Any"
+            onChange={(event) => setYearFrom(event.target.value ? Number(event.target.value) : null)}
+            aria-label="Artist chart year from"
+          />
+        </label>
+        <label className="completion-filter completion-year-filter">
+          <span>To</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min="1000"
+            max="3000"
+            value={yearTo ?? ""}
+            placeholder="Any"
+            onChange={(event) => setYearTo(event.target.value ? Number(event.target.value) : null)}
+            aria-label="Artist chart year to"
+          />
+        </label>
+        <button
+          className="secondary-button completion-filter-apply"
+          type="button"
+          disabled={isLoading}
+          onClick={applyChartFilters}
+        >
+          Apply filters
+        </button>
+        {activeRequest ? (
+          <button
+            className="completion-filter-clear"
+            type="button"
+            disabled={isLoading}
+            onClick={clearChartFilters}
+            aria-label="Clear artist chart filters"
+          >
+            <X size={14} />
+          </button>
+        ) : null}
         <div className="completion-scan-summary">
           <strong>{data?.totalCandidates.toLocaleString() ?? "—"}</strong>
           <span>artists absent locally</span>

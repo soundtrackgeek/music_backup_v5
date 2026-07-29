@@ -543,8 +543,9 @@ async fn set_library_completion_decision(
 #[tauri::command]
 async fn get_library_completion_artists(
     app: AppHandle,
+    input: Option<artist_completion::LibraryCompletionArtistRequest>,
 ) -> Result<artist_completion::LibraryCompletionArtistResponse, String> {
-    tauri::async_runtime::spawn_blocking(move || artist_completion::get_for_app(&app))
+    tauri::async_runtime::spawn_blocking(move || artist_completion::get_for_app(&app, input))
         .await
         .map_err(|error| format!("Chart artist discovery task failed: {error}"))?
         .map_err(|error| error.to_string())

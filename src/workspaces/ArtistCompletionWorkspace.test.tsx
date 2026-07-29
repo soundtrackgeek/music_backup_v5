@@ -62,7 +62,7 @@ const candidate = {
       appearances: 73,
     },
     {
-      source: "billboardSingles",
+      source: "billboard",
       chartKind: "singles",
       label: "Billboard Hot 100",
       bestRank: 31,
@@ -165,6 +165,31 @@ describe("ArtistCompletionWorkspace", () => {
     });
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
     expect(screen.getByText(/Checking MusicBrainz: Talk Talk/i)).toBeInTheDocument();
+  });
+
+  it("loads chart-source and year filters against the complete artist set", async () => {
+    render(<ArtistCompletionWorkspace refreshToken={0} onOpenWishList={vi.fn()} />);
+
+    await screen.findByRole("heading", { name: "Talk Talk" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter artist chart source" }), {
+      target: { value: "vgLista" },
+    });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Artist chart year from" }), {
+      target: { value: "1980" },
+    });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Artist chart year to" }), {
+      target: { value: "1989" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    await waitFor(() => {
+      expect(getLibraryCompletionArtists).toHaveBeenLastCalledWith({
+        source: "vgLista",
+        yearFrom: 1980,
+        yearTo: 1989,
+      });
+    });
+    expect(screen.getByRole("button", { name: "Clear artist chart filters" })).toBeInTheDocument();
   });
 
   it("shows both provider outcomes and promotes a verified artist into Wish List Artists", async () => {

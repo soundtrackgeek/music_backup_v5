@@ -74,6 +74,14 @@ pub struct LibraryCompletionArtistResponse {
     pub candidates: Vec<LibraryCompletionArtistCandidate>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryCompletionArtistRequest {
+    pub source: Option<String>,
+    pub year_from: Option<i32>,
+    pub year_to: Option<i32>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartLibraryCompletionArtistVerificationRequest {
@@ -444,10 +452,70 @@ fn ignored_artist(artist: &str) -> bool {
     )
 }
 
+fn normalize_request(
+    request: Option<LibraryCompletionArtistRequest>,
+) -> Result<Option<LibraryCompletionArtistRequest>> {
+    let Some(mut request) = request else {
+        return Ok(None);
+    };
+    request.source = request
+        .source
+        .take()
+        .map(|source| source.trim().to_string())
+        .filter(|source| !source.is_empty());
+    if let Some(source) = request.source.as_deref() {
+        if !matches!(source, "billboard" | "officialUk" | "vgLista") {
+            bail!("The Artist Discovery chart source is not supported.")
+        }
+    }
+    for year in [request.year_from, request.year_to].into_iter().flatten() {
+        if !(1000..=3000).contains(&year) {
+            bail!("The Artist Discovery year filter is outside the supported range.")
+        }
+    }
+    if request
+        .year_from
+        .zip(request.year_to)
+        .is_some_and(|(from, to)| from > to)
+    {
+        bail!("The Artist Discovery start year must not be later than the end year.")
+    }
+    if request.source.is_none() && request.year_from.is_none() && request.year_to.is_none() {
+        Ok(None)
+    } else {
+        Ok(Some(request))
+    }
+}
+
+fn merge_artist_evidence(aggregate: &mut ArtistAggregate, row: SourceArtistRow) {
+    if let Some(evidence) = aggregate
+        .evidence
+        .iter_mut()
+        .find(|evidence| evidence.source == row.source && evidence.chart_kind == row.chart_kind)
+    {
+        evidence.best_rank = evidence.best_rank.min(row.best_rank);
+        evidence.first_year = evidence.first_year.min(row.first_year);
+        evidence.last_year = evidence.last_year.max(row.last_year);
+        evidence.appearances += row.appearances;
+        return;
+    }
+    aggregate.evidence.push(LibraryCompletionArtistEvidence {
+        label: source_label(&row.source, &row.chart_kind).to_string(),
+        source: row.source,
+        chart_kind: row.chart_kind,
+        best_rank: row.best_rank,
+        first_year: row.first_year,
+        last_year: row.last_year,
+        appearances: row.appearances,
+    });
+}
+
 fn get_for_connection(
     conn: &Connection,
+    request: Option<LibraryCompletionArtistRequest>,
     truncate: bool,
 ) -> Result<LibraryCompletionArtistResponse> {
+    let request = normalize_request(request)?;
     let owned = load_owned_artist_keys(conn)?;
     let decisions = load_decisions(conn)?;
     let verifications = load_verifications(conn)?;
@@ -465,15 +533,7 @@ fn get_for_connection(
             aggregate.artist = row.artist.clone();
             aggregate.first_year = row.first_year;
         }
-        aggregate.evidence.push(LibraryCompletionArtistEvidence {
-            label: source_label(&row.source, &row.chart_kind).to_string(),
-            source: row.source,
-            chart_kind: row.chart_kind,
-            best_rank: row.best_rank,
-            first_year: row.first_year,
-            last_year: row.last_year,
-            appearances: row.appearances,
-        });
+        merge_artist_evidence(aggregate, row);
     }
 
     let total_chart_artists = artists.len();
@@ -536,6 +596,22 @@ fn get_for_connection(
         .iter()
         .filter(|candidate| candidate.status != "notForMe")
         .count();
+    if let Some(request) = &request {
+        candidates.retain(|candidate| {
+            candidate.evidence.iter().any(|evidence| {
+                request
+                    .source
+                    .as_deref()
+                    .is_none_or(|source| evidence.source == source)
+                    && request
+                        .year_from
+                        .is_none_or(|year_from| evidence.last_year >= year_from)
+                    && request
+                        .year_to
+                        .is_none_or(|year_to| evidence.first_year <= year_to)
+            })
+        });
+    }
     candidates.sort_by(|left, right| {
         confidence_order(&left.confidence)
             .cmp(&confidence_order(&right.confidence))
@@ -671,7 +747,7 @@ fn start_verification_for_connection(
         bail!("Finish the current artist verification run before starting another one.")
     }
     let selected = request.artist_ids.iter().cloned().collect::<HashSet<_>>();
-    let candidates = get_for_connection(conn, false)?
+    let candidates = get_for_connection(conn, None, false)?
         .candidates
         .into_iter()
         .filter(|candidate| {
@@ -1328,9 +1404,12 @@ pub fn resume_verification_worker(app: AppHandle) {
 }
 
 #[cfg(not(test))]
-pub fn get_for_app(app: &AppHandle) -> Result<LibraryCompletionArtistResponse> {
+pub fn get_for_app(
+    app: &AppHandle,
+    request: Option<LibraryCompletionArtistRequest>,
+) -> Result<LibraryCompletionArtistResponse> {
     let (conn, _) = db::open(app)?;
-    get_for_connection(&conn, true)
+    get_for_connection(&conn, request, true)
 }
 
 #[cfg(not(test))]
@@ -1384,14 +1463,14 @@ pub fn confirm_match_for_app(
 ) -> Result<LibraryCompletionArtistCandidate> {
     let (mut conn, _) = db::open(app)?;
     let artist_id = trimmed(request.artist_id, MAX_ARTIST_KEY_LENGTH);
-    let candidate = get_for_connection(&conn, false)?
+    let candidate = get_for_connection(&conn, None, false)?
         .candidates
         .into_iter()
         .find(|candidate| candidate.id == artist_id)
         .context("The selected chart artist is no longer missing from the library.")?;
     let result = run_verification(&mut conn, None, &candidate.artist, Some(request.candidate));
     save_verification_result(&conn, &candidate.id, &candidate.artist, &result)?;
-    get_for_connection(&conn, false)?
+    get_for_connection(&conn, None, false)?
         .candidates
         .into_iter()
         .find(|value| value.id == candidate.id)
@@ -1448,7 +1527,7 @@ mod tests {
         )
         .expect("insert owned artist");
 
-        let response = get_for_connection(&conn, true).expect("discover chart artists");
+        let response = get_for_connection(&conn, None, true).expect("discover chart artists");
         assert_eq!(response.total_chart_artists, 2);
         assert_eq!(response.owned_artist_count, 1);
         assert_eq!(response.candidates.len(), 1);
@@ -1458,6 +1537,85 @@ mod tests {
             .evidence
             .iter()
             .any(|evidence| evidence.chart_kind == "singles"));
+    }
+
+    #[test]
+    fn merges_duplicate_artist_keys_into_one_chart_summary() {
+        let conn = connection();
+        conn.execute_batch(
+            "
+            INSERT INTO billboard_chart_entries
+                (source_file, year, rank, artist, album, artist_key, album_key, imported_at)
+            VALUES ('albums-2017.csv', 2017, 48, 'Chart Artist', 'First Album',
+                    'chart artist', 'first album', 'now');
+            INSERT INTO billboard_chart_entries
+                (source_file, year, rank, artist, album, artist_key, album_key, imported_at)
+            VALUES ('albums-2023.csv', 2023, 34, 'Chart Artist', 'Second Album',
+                    'chart_artist', 'second album', 'now');
+            ",
+        )
+        .expect("insert duplicate artist-key variants");
+
+        let response = get_for_connection(&conn, None, true).expect("discover chart artist");
+        assert_eq!(response.candidates.len(), 1);
+        assert_eq!(response.candidates[0].evidence.len(), 1);
+        let evidence = &response.candidates[0].evidence[0];
+        assert_eq!(evidence.label, "Billboard 200");
+        assert_eq!(evidence.best_rank, 34);
+        assert_eq!(evidence.appearances, 2);
+        assert_eq!((evidence.first_year, evidence.last_year), (2017, 2023));
+    }
+
+    #[test]
+    fn filters_artists_by_chart_source_and_year_before_truncation() {
+        let mut conn = connection();
+        {
+            let transaction = conn.transaction().expect("start artist transaction");
+            let mut statement = transaction
+                .prepare(
+                    "INSERT INTO billboard_chart_entries
+                        (source_file, year, rank, artist, album, artist_key, album_key, imported_at)
+                     VALUES ('billboard.csv', 1998, 1, ?1, ?2, ?3, ?4, 'now')",
+                )
+                .expect("prepare Billboard artists");
+            for index in 0..MAX_RETURNED_ARTISTS {
+                statement
+                    .execute(params![
+                        format!("Billboard Artist {index}"),
+                        format!("Billboard Album {index}"),
+                        format!("billboard artist {index}"),
+                        format!("billboard album {index}"),
+                    ])
+                    .expect("insert Billboard artist");
+            }
+            drop(statement);
+            transaction.commit().expect("commit Billboard artists");
+        }
+        conn.execute(
+            "INSERT INTO vg_lista_single_chart_entries
+                (source_file, year, week, rank, artist, title, artist_key, title_key,
+                 week_date, week_key, imported_at)
+             VALUES ('vg-singles.csv', 1985, 1, 4, 'Norwegian Artist', 'Chart Song',
+                     'norwegian artist', 'chart song', '1985-01-01', '1985-01', 'now')",
+            [],
+        )
+        .expect("insert VG Lista artist");
+
+        let response = get_for_connection(
+            &conn,
+            Some(LibraryCompletionArtistRequest {
+                source: Some("vgLista".to_string()),
+                year_from: Some(1980),
+                year_to: Some(1989),
+            }),
+            true,
+        )
+        .expect("filter chart artists");
+
+        assert_eq!(response.total_candidates, MAX_RETURNED_ARTISTS + 1);
+        assert_eq!(response.returned_candidates, 1);
+        assert_eq!(response.candidates[0].artist, "Norwegian Artist");
+        assert_eq!(response.candidates[0].evidence[0].source, "vgLista");
     }
 
     #[test]

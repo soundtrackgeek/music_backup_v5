@@ -42,6 +42,7 @@ import type {
   DiscogsCredentialStatus,
   LibraryCompletionAtlasCell,
   LibraryCompletionCandidate,
+  LibraryCompletionRequest,
   LibraryCompletionStatus,
   LibraryCompletionVerificationStatus,
   StartLibraryCompletionVerificationRequest,
@@ -52,13 +53,11 @@ type CompletionView = "workbench" | "atlas" | "artists";
 type CompletionFilter =
   | "all"
   | "candidate"
-  | "billboard"
-  | "officialUk"
-  | "vgLista"
   | "verified"
   | "wanted"
   | "needsReview"
   | "notForMe";
+type ChartSourceFilter = "all" | LibraryCompletionAtlasCell["source"];
 
 type Campaign = {
   source: LibraryCompletionAtlasCell["source"];
@@ -167,6 +166,10 @@ export function LibraryCompletionWorkspace({
   const [artistRefreshToken, setArtistRefreshToken] = useState(0);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<CompletionFilter>("all");
+  const [chartSource, setChartSource] = useState<ChartSourceFilter>("all");
+  const [yearFrom, setYearFrom] = useState<number | null>(null);
+  const [yearTo, setYearTo] = useState<number | null>(null);
+  const [activeRequest, setActiveRequest] = useState<LibraryCompletionRequest | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [selectedAtlasId, setSelectedAtlasId] = useState<string | null>(null);
@@ -186,12 +189,12 @@ export function LibraryCompletionWorkspace({
   const searchRef = useRef<HTMLInputElement>(null);
   const candidateRowsRef = useRef(new Map<string, HTMLDivElement>());
 
-  const load = useCallback(async (scope: Campaign | null = null) => {
+  const load = useCallback(async (request: LibraryCompletionRequest | null = null) => {
     setError(null);
     setIsLoading(true);
     try {
       const [response, queueStatus, providerStatus] = await Promise.all([
-        getLibraryCompletion(scope ? { source: scope.source, decade: scope.decade } : null),
+        getLibraryCompletion(request),
         getLibraryCompletionVerificationStatus(),
         getDiscogsCredentialStatus(),
       ]);
@@ -244,12 +247,6 @@ export function LibraryCompletionWorkspace({
     return data.candidates.filter((candidate) => {
       if (filter === "verified") {
         if (candidate.verificationStatus !== "verified") return false;
-      } else if (
-        filter === "billboard" ||
-        filter === "officialUk" ||
-        filter === "vgLista"
-      ) {
-        if (!candidate.evidence.some((evidence) => evidence.source === filter)) return false;
       } else if (filter !== "all" && candidate.status !== filter) {
         return false;
       } else if (filter === "all" && candidate.status === "notForMe") {
@@ -403,7 +400,7 @@ export function LibraryCompletionWorkspace({
           completedBatchReloadRef.current !== status.batch.id
         ) {
           completedBatchReloadRef.current = status.batch.id;
-          await load(campaign);
+          await load(activeRequest);
         }
       } catch (statusError) {
         if (!cancelled) {
@@ -418,7 +415,7 @@ export function LibraryCompletionWorkspace({
     };
   }, [
     applyVerificationStatus,
-    campaign,
+    activeRequest,
     load,
     verificationBatch?.checkingCount,
     verificationBatch?.id,
@@ -751,20 +748,59 @@ export function LibraryCompletionWorkspace({
     }
   }
 
+  async function applyChartFilters() {
+    if (yearFrom != null && (yearFrom < 1000 || yearFrom > 3000)) {
+      setError("Choose a four-digit start year between 1000 and 3000.");
+      return;
+    }
+    if (yearTo != null && (yearTo < 1000 || yearTo > 3000)) {
+      setError("Choose a four-digit end year between 1000 and 3000.");
+      return;
+    }
+    if (yearFrom != null && yearTo != null && yearFrom > yearTo) {
+      setError("The start year must not be later than the end year.");
+      return;
+    }
+    const request = chartSource === "all" && yearFrom == null && yearTo == null
+      ? null
+      : {
+          source: chartSource === "all" ? null : chartSource,
+          decade: null,
+          yearFrom,
+          yearTo,
+        } satisfies LibraryCompletionRequest;
+    setCampaign(null);
+    setActiveRequest(request);
+    await load(request);
+  }
+
+  async function clearChartFilters() {
+    setChartSource("all");
+    setYearFrom(null);
+    setYearTo(null);
+    setCampaign(null);
+    setActiveRequest(null);
+    await load(null);
+  }
+
   async function reviewAtlasCell(cell: LibraryCompletionAtlasCell) {
     const nextCampaign = { source: cell.source, decade: cell.decade, label: cell.label };
+    const request = { source: cell.source, decade: cell.decade } satisfies LibraryCompletionRequest;
     setCampaign(nextCampaign);
+    setChartSource(cell.source);
+    setYearFrom(cell.decade);
+    setYearTo(cell.decade + 9);
+    setActiveRequest(request);
     setFilter("candidate");
     setQuery("");
     setView("workbench");
-    await load(nextCampaign);
+    await load(request);
   }
 
   async function clearCampaign() {
-    setCampaign(null);
     setFilter("all");
     setQuery("");
-    await load(null);
+    await clearChartFilters();
   }
 
   return (
@@ -812,7 +848,7 @@ export function LibraryCompletionWorkspace({
             disabled={view !== "artists" && isLoading}
             onClick={() => {
               if (view === "artists") setArtistRefreshToken((current) => current + 1);
-              else void load(campaign);
+              else void load(activeRequest);
             }}
           >
             <RefreshCw size={15} className={view !== "artists" && isLoading ? "spin" : ""} />
@@ -849,15 +885,70 @@ export function LibraryCompletionWorkspace({
           >
             <option value="all">All active candidates</option>
             <option value="candidate">Open candidates</option>
-            <option value="billboard">Billboard 200</option>
-            <option value="officialUk">Official UK Albums</option>
-            <option value="vgLista">VG Lista</option>
             <option value="verified">Verified studio albums</option>
             <option value="wanted">Wanted</option>
             <option value="needsReview">Needs review</option>
             <option value="notForMe">Not for me</option>
           </select>
         </label>
+        <label className="completion-filter completion-chart-filter">
+          <span>Charts</span>
+          <select
+            value={chartSource}
+            onChange={(event) => setChartSource(event.target.value as ChartSourceFilter)}
+            aria-label="Filter album chart source"
+          >
+            <option value="all">All album charts</option>
+            <option value="billboard">Billboard 200</option>
+            <option value="officialUk">Official UK Albums</option>
+            <option value="vgLista">VG Lista</option>
+          </select>
+        </label>
+        <label className="completion-filter completion-year-filter">
+          <span>From</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min="1000"
+            max="3000"
+            value={yearFrom ?? ""}
+            placeholder="Any"
+            onChange={(event) => setYearFrom(event.target.value ? Number(event.target.value) : null)}
+            aria-label="Album chart year from"
+          />
+        </label>
+        <label className="completion-filter completion-year-filter">
+          <span>To</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min="1000"
+            max="3000"
+            value={yearTo ?? ""}
+            placeholder="Any"
+            onChange={(event) => setYearTo(event.target.value ? Number(event.target.value) : null)}
+            aria-label="Album chart year to"
+          />
+        </label>
+        <button
+          className="secondary-button completion-filter-apply"
+          type="button"
+          disabled={isLoading}
+          onClick={() => void applyChartFilters()}
+        >
+          Apply filters
+        </button>
+        {activeRequest ? (
+          <button
+            className="completion-filter-clear"
+            type="button"
+            disabled={isLoading}
+            onClick={() => void clearChartFilters()}
+            aria-label="Clear album chart filters"
+          >
+            <X size={14} />
+          </button>
+        ) : null}
         <div className="completion-scan-summary">
           <strong>{data?.totalCandidates.toLocaleString() ?? "—"}</strong>
           <span>missing chart albums</span>
