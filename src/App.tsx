@@ -349,6 +349,7 @@ import {
 } from "./components/MusicBrainzReviewState";
 import { AiSettingsPanel } from "./components/AiSettingsPanel";
 import { DeemixSettingsPanel } from "./components/DeemixSettingsPanel";
+import { SoulseekSettingsPanel } from "./components/SoulseekSettingsPanel";
 import { DiscogsSettingsPanel } from "./components/DiscogsSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
 import { ExportResultStatus } from "./components/ExportResultStatus";
@@ -16824,6 +16825,7 @@ export default function App() {
                     saveAppSettings({ deemixDownloadOrganization: organization })
                   }
                 />
+                <SoulseekSettingsPanel />
               </SettingsSection>
 
               <SettingsSection id="updates">

@@ -28,12 +28,15 @@ export function openUrl(url: string) {
   return tauriOpenUrl(url);
 }
 
-export async function selectDirectory(defaultPath?: string) {
+export async function selectDirectory(
+  defaultPath?: string,
+  title = "Choose Deemix download folder",
+) {
   const selected = await tauriOpenDialog({
     directory: true,
     multiple: false,
     defaultPath: defaultPath || undefined,
-    title: "Choose Deemix download folder",
+    title,
   });
   return typeof selected === "string" ? selected : null;
 }

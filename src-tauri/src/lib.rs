@@ -14,6 +14,7 @@ mod models;
 mod music_map;
 mod musicbrainz;
 mod musicbrainz_sync;
+mod soulseek;
 mod wishlist;
 
 #[cfg(not(test))]
@@ -41,7 +42,7 @@ use models::{
 #[cfg(not(test))]
 use models::{ImportPreview, ImportRun, ImportSummary, LibraryStatus};
 #[cfg(not(test))]
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 #[cfg(not(test))]
 use tauri_plugin_window_state::StateFlags;
 
@@ -1454,6 +1455,7 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            app.manage(soulseek::initialize(app.handle())?);
             library_completion::resume_verification_worker(app.handle().clone());
             artist_completion::resume_verification_worker(app.handle().clone());
             Ok(())
@@ -1480,6 +1482,32 @@ pub fn run() {
             search_deemix_albums,
             preflight_deemix_album_download,
             download_deemix_album,
+            soulseek::connection_bootstrap,
+            soulseek::connection_save_profile,
+            soulseek::connection_connect,
+            soulseek::connection_disconnect,
+            soulseek::connection_reset,
+            soulseek::search_snapshot,
+            soulseek::search_start,
+            soulseek::search_stop,
+            soulseek::search_close,
+            soulseek::transfers_snapshot,
+            soulseek::transfer_set_max_concurrent_downloads,
+            soulseek::transfer_enqueue_release,
+            soulseek::transfer_pause_release,
+            soulseek::transfer_resume_release,
+            soulseek::transfer_cancel_release,
+            soulseek::transfer_clear_completed,
+            soulseek::transfer_reveal_release_path,
+            soulseek::local_shares_snapshot,
+            soulseek::local_shares_add,
+            soulseek::local_shares_remove,
+            soulseek::local_shares_set_enabled,
+            soulseek::local_shares_rescan,
+            soulseek::local_shares_set_upload_slots,
+            soulseek::uploads_snapshot,
+            soulseek::upload_cancel,
+            soulseek::upload_clear_finished,
             compile_natural_language_query,
             ask_current_view,
             research_music,

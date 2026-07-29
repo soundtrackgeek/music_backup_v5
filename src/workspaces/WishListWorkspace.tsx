@@ -18,6 +18,7 @@ import {
   Heart,
   ListPlus,
   Plus,
+  RadioTower,
   RefreshCw,
   Search,
   Sparkles,
@@ -30,20 +31,27 @@ import {
   addWishListMusicBrainzCandidate,
   discoverWishListArtistAlbums,
   downloadDeemixAlbum,
+  enqueueSoulseekRelease,
+  getSoulseekTransfers,
   listWishList,
   listenToDeemixDownloadProgress,
+  listenToSoulseekTransfers,
   openExternalUrl,
   preflightDeemixAlbumDownload,
   refreshWishListArtistAlbumSummary,
   removeWishListItem,
   searchWishListMusicBrainz,
   searchDeemixAlbums,
+  searchSoulseekAlbum,
 } from "../backend";
 import type {
   DeemixAlbumDownloadProgress,
   DeemixAlbumDownloadSummary,
   DeemixAlbumMatch,
   DeemixAlbumSearchResponse,
+  SoulseekAlbumSearchResponse,
+  SoulseekSearchResult,
+  SoulseekTransferQueue,
   WishListArtistAlbumDiscoveryResponse,
   WishListArtistAlbumSummary,
   WishListEntity,
@@ -51,6 +59,108 @@ import type {
   WishListMusicBrainzCandidate,
   WishListMusicBrainzSearchResponse,
 } from "../types";
+
+type SoulseekReleaseCandidate = {
+  id: string;
+  username: string;
+  remoteFolder: string;
+  files: SoulseekSearchResult[];
+  format: string;
+  totalSizeBytes: number;
+  slotFree: boolean;
+  averageSpeed: number;
+  queueLength: number;
+};
+
+const SOULSEEK_AUDIO_EXTENSIONS = new Set([
+  "flac",
+  "mp3",
+  "m4a",
+  "aac",
+  "ogg",
+  "opus",
+  "wav",
+  "aiff",
+  "ape",
+  "wv",
+]);
+
+function remoteFolder(filename: string) {
+  const normalized = filename.replace(/\//g, "\\");
+  const separator = normalized.lastIndexOf("\\");
+  return separator > 0 ? normalized.slice(0, separator) : "Shared music";
+}
+
+function remoteTitle(filename: string) {
+  const normalized = filename.replace(/\//g, "\\");
+  return normalized.slice(normalized.lastIndexOf("\\") + 1);
+}
+
+function soulseekReleaseCandidates(
+  response: SoulseekAlbumSearchResponse | null,
+) {
+  if (!response) return [];
+  const groups = new Map<string, SoulseekReleaseCandidate>();
+  for (const result of response.results) {
+    const extension = result.extension.toLowerCase().replace(/^\./, "");
+    if (result.isPrivate || !SOULSEEK_AUDIO_EXTENSIONS.has(extension)) continue;
+    const folder = remoteFolder(result.filename);
+    const key = `${result.username.toLowerCase()}\u001f${folder.toLowerCase()}`;
+    const current = groups.get(key);
+    if (current) {
+      if (!current.files.some((file) => file.filename === result.filename)) {
+        current.files.push(result);
+        current.totalSizeBytes += result.sizeBytes;
+      }
+      current.slotFree ||= result.slotFree;
+      current.averageSpeed = Math.max(current.averageSpeed, result.averageSpeed);
+      current.queueLength = Math.min(current.queueLength, result.queueLength);
+      const formats = new Set(current.format.split(" / "));
+      formats.add(extension.toUpperCase());
+      current.format = [...formats].join(" / ");
+      continue;
+    }
+    groups.set(key, {
+      id: key,
+      username: result.username,
+      remoteFolder: folder,
+      files: [result],
+      format: extension.toUpperCase(),
+      totalSizeBytes: result.sizeBytes,
+      slotFree: result.slotFree,
+      averageSpeed: result.averageSpeed,
+      queueLength: result.queueLength,
+    });
+  }
+  return [...groups.values()]
+    .map((candidate) => ({
+      ...candidate,
+      files: candidate.files.sort((left, right) =>
+        left.filename.localeCompare(right.filename, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        }),
+      ),
+    }))
+    .sort(
+      (left, right) =>
+        Number(right.slotFree) - Number(left.slotFree) ||
+        right.files.length - left.files.length ||
+        right.averageSpeed - left.averageSpeed ||
+        left.queueLength - right.queueLength,
+    )
+    .slice(0, 25);
+}
+
+function formatSoulseekBytes(value: number) {
+  if (value < 1_048_576) return `${Math.max(1, Math.round(value / 1_024))} KB`;
+  if (value < 1_073_741_824) return `${(value / 1_048_576).toFixed(1)} MB`;
+  return `${(value / 1_073_741_824).toFixed(2)} GB`;
+}
+
+function formatSoulseekSpeed(value: number) {
+  return value > 0 ? `${formatSoulseekBytes(value)}/s` : "speed unknown";
+}
 
 type DownloadContext = {
   wishListItemId: number | null;
@@ -303,8 +413,10 @@ function WishListGroup({
   onOpen,
   onRemove,
   onSearchAlbum,
+  onSearchSoulseek,
   onDiscoverArtist,
   searchingId,
+  soulseekSearchingId,
   checkingArtistIds,
   artistSummaryErrors,
 }: {
@@ -313,8 +425,10 @@ function WishListGroup({
   onOpen: (item: WishListItem) => void;
   onRemove: (item: WishListItem) => void;
   onSearchAlbum: (item: WishListItem) => void;
+  onSearchSoulseek: (item: WishListItem) => void;
   onDiscoverArtist: (item: WishListItem) => void;
   searchingId: number | null;
+  soulseekSearchingId: number | null;
   checkingArtistIds: ReadonlySet<number>;
   artistSummaryErrors: Readonly<Record<number, string>>;
 }) {
@@ -422,6 +536,21 @@ function WishListGroup({
                 >
                   <Search size={16} className={searchingId === item.id ? "spin" : ""} />
                 </button>
+                {!isArtist ? (
+                  <button
+                    className="icon-button soulseek-search-button"
+                    type="button"
+                    title="Search with Soulseek"
+                    aria-label={`Search ${item.title} with Soulseek`}
+                    disabled={soulseekSearchingId !== null}
+                    onClick={() => onSearchSoulseek(item)}
+                  >
+                    <RadioTower
+                      size={16}
+                      className={soulseekSearchingId === item.id ? "spin" : ""}
+                    />
+                  </button>
+                ) : null}
                 {item.musicbrainzUrl ? (
                   <button
                     className="icon-button"
@@ -475,6 +604,15 @@ export function WishListWorkspace() {
   const [searchedItem, setSearchedItem] = useState<WishListItem | null>(null);
   const [deemixResults, setDeemixResults] =
     useState<DeemixAlbumSearchResponse | null>(null);
+  const [soulseekSearchedItem, setSoulseekSearchedItem] =
+    useState<WishListItem | null>(null);
+  const [soulseekSearchingId, setSoulseekSearchingId] =
+    useState<number | null>(null);
+  const [soulseekResults, setSoulseekResults] =
+    useState<SoulseekAlbumSearchResponse | null>(null);
+  const [soulseekTransfers, setSoulseekTransfers] =
+    useState<SoulseekTransferQueue | null>(null);
+  const [soulseekNotice, setSoulseekNotice] = useState<string | null>(null);
   const [artistDiscovery, setArtistDiscovery] =
     useState<WishListArtistAlbumDiscoveryResponse | null>(null);
   const [checkingArtistIds, setCheckingArtistIds] = useState<Set<number>>(
@@ -598,12 +736,37 @@ export function WishListWorkspace() {
     };
   }, []);
 
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void getSoulseekTransfers()
+      .then((snapshot) => {
+        if (!disposed) setSoulseekTransfers(snapshot);
+      })
+      .catch(() => undefined);
+    void listenToSoulseekTransfers((snapshot) => {
+      if (!disposed) setSoulseekTransfers(snapshot);
+    }).then((nextUnlisten) => {
+      if (disposed) nextUnlisten();
+      else unlisten = nextUnlisten;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   const grouped = useMemo(
     () => ({
       artists: items.filter((item) => item.entity === "artist"),
       albums: items.filter((item) => item.entity === "album"),
     }),
     [items],
+  );
+
+  const soulseekCandidates = useMemo(
+    () => soulseekReleaseCandidates(soulseekResults),
+    [soulseekResults],
   );
 
   const queueCounts = useMemo(
@@ -864,6 +1027,10 @@ export function WishListWorkspace() {
         setSearchedItem(null);
         setDeemixResults(null);
       }
+      if (soulseekSearchedItem?.id === item.id) {
+        setSoulseekSearchedItem(null);
+        setSoulseekResults(null);
+      }
       if (artistDiscovery?.wishListItemId === item.id) {
         setArtistDiscovery(null);
       }
@@ -892,6 +1059,62 @@ export function WishListWorkspace() {
       setError(searchError instanceof Error ? searchError.message : String(searchError));
     } finally {
       setSearchingId(null);
+    }
+  }
+
+  async function searchItemWithSoulseek(item: WishListItem) {
+    if (item.entity !== "album") return;
+    setSoulseekSearchingId(item.id);
+    setSoulseekSearchedItem(item);
+    setSoulseekResults(null);
+    setSoulseekNotice(null);
+    setError(null);
+    try {
+      const response = await searchSoulseekAlbum({
+        title: item.title,
+        artist: item.artist,
+        year: item.year,
+      });
+      setSoulseekResults(response);
+    } catch (searchError) {
+      setError(
+        searchError instanceof Error ? searchError.message : String(searchError),
+      );
+    } finally {
+      setSoulseekSearchingId(null);
+    }
+  }
+
+  async function downloadSoulseekRelease(candidate: SoulseekReleaseCandidate) {
+    if (!soulseekSearchedItem) return;
+    setError(null);
+    setSoulseekNotice(null);
+    try {
+      const snapshot = await enqueueSoulseekRelease({
+        title: `${soulseekSearchedItem.artist} - ${soulseekSearchedItem.title}${
+          soulseekSearchedItem.year ? ` (${soulseekSearchedItem.year})` : ""
+        }`,
+        username: candidate.username,
+        remoteFolder: candidate.remoteFolder,
+        files: candidate.files.map((file) => ({
+          title: remoteTitle(file.filename),
+          remoteFilename: file.filename,
+          sizeBytes: file.sizeBytes,
+        })),
+        expectedTrackCount: candidate.files.length,
+        releaseGroupId: soulseekSearchedItem.musicbrainzId,
+        alternatives: [],
+      });
+      setSoulseekTransfers(snapshot);
+      setSoulseekNotice(
+        `${candidate.files.length} ${candidate.files.length === 1 ? "file" : "files"} queued from ${candidate.username}.`,
+      );
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : String(downloadError),
+      );
     }
   }
 
@@ -1255,8 +1478,10 @@ export function WishListWorkspace() {
           onOpen={(item) => item.musicbrainzUrl && void openUrl(item.musicbrainzUrl)}
           onRemove={(item) => void removeItem(item)}
           onSearchAlbum={(item) => void searchItemWithDeemix(item)}
+          onSearchSoulseek={(item) => void searchItemWithSoulseek(item)}
           onDiscoverArtist={(item) => void discoverArtist(item)}
           searchingId={searchingId}
+          soulseekSearchingId={soulseekSearchingId}
           checkingArtistIds={checkingArtistIds}
           artistSummaryErrors={artistSummaryErrors}
         />
@@ -1266,8 +1491,10 @@ export function WishListWorkspace() {
           onOpen={(item) => item.musicbrainzUrl && void openUrl(item.musicbrainzUrl)}
           onRemove={(item) => void removeItem(item)}
           onSearchAlbum={(item) => void searchItemWithDeemix(item)}
+          onSearchSoulseek={(item) => void searchItemWithSoulseek(item)}
           onDiscoverArtist={(item) => void discoverArtist(item)}
           searchingId={searchingId}
+          soulseekSearchingId={soulseekSearchingId}
           checkingArtistIds={checkingArtistIds}
           artistSummaryErrors={artistSummaryErrors}
         />
@@ -1383,6 +1610,152 @@ export function WishListWorkspace() {
               <span>This wish remains on the list for another provider.</span>
             </div>
           ) : null}
+        </section>
+      ) : null}
+
+      {soulseekSearchedItem ? (
+        <section className="deemix-search-results soulseek-search-results" aria-live="polite">
+          <header>
+            <div>
+              <span className="deemix-search-icon soulseek">
+                <RadioTower size={18} aria-hidden="true" />
+              </span>
+              <div>
+                <h2>Soulseek sources</h2>
+                <p>
+                  {soulseekSearchedItem.artist} · {soulseekSearchedItem.title}
+                  {soulseekSearchedItem.year ? ` · ${soulseekSearchedItem.year}` : ""}
+                </p>
+              </div>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              title="Close Soulseek results"
+              aria-label="Close Soulseek results"
+              onClick={() => {
+                setSoulseekSearchedItem(null);
+                setSoulseekResults(null);
+                setSoulseekNotice(null);
+              }}
+            >
+              <X size={16} />
+            </button>
+          </header>
+
+          {soulseekSearchingId === soulseekSearchedItem.id ? (
+            <div className="deemix-search-state">
+              <RadioTower size={19} className="spin" aria-hidden="true" />
+              <span>Listening for Soulseek peers for up to 15 seconds…</span>
+            </div>
+          ) : soulseekCandidates.length ? (
+            <>
+              {soulseekNotice ? (
+                <p className="artist-albums-queue-notice" role="status">
+                  {soulseekNotice}
+                </p>
+              ) : null}
+              <div className="soulseek-source-list">
+                {soulseekCandidates.map((candidate) => {
+                  const queued = soulseekTransfers?.transfers.some(
+                    (transfer) =>
+                      transfer.username === candidate.username &&
+                      remoteFolder(transfer.remoteFilename) === candidate.remoteFolder &&
+                      transfer.status !== "failed",
+                  );
+                  return (
+                    <article key={candidate.id}>
+                      <div className="soulseek-source-format">
+                        <strong>{candidate.format}</strong>
+                        <span>{candidate.files.length} files</span>
+                      </div>
+                      <div className="deemix-match-copy">
+                        <strong>{candidate.remoteFolder.split(/[\\/]/).pop()}</strong>
+                        <span>
+                          {candidate.username} · {formatSoulseekBytes(candidate.totalSizeBytes)}
+                        </span>
+                        <small title={candidate.remoteFolder}>
+                          {candidate.slotFree ? "Free upload slot" : `Queue ${candidate.queueLength}`}
+                          {` · ${formatSoulseekSpeed(candidate.averageSpeed)}`}
+                          {candidate.files[0]?.sampleRate
+                            ? ` · ${(candidate.files[0].sampleRate! / 1_000).toFixed(1)} kHz`
+                            : ""}
+                          {candidate.files[0]?.bitDepth
+                            ? ` / ${candidate.files[0].bitDepth}-bit`
+                            : ""}
+                        </small>
+                      </div>
+                      <div className="deemix-match-actions">
+                        <button
+                          className="primary-button deemix-download-button"
+                          type="button"
+                          disabled={queued}
+                          aria-label={`Download ${soulseekSearchedItem.title} from ${candidate.username}`}
+                          onClick={() => void downloadSoulseekRelease(candidate)}
+                        >
+                          {queued ? <Clock3 size={15} /> : <Download size={15} />}
+                          <span>{queued ? "Queued" : "Download release"}</span>
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
+          ) : soulseekResults ? (
+            <div className="deemix-search-state empty">
+              <RadioTower size={19} aria-hidden="true" />
+              <strong>No public audio folders answered</strong>
+              <span>Try again later, or broaden the artist or album spelling.</span>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {soulseekTransfers?.transfers.length ? (
+        <section className="deemix-download-queue soulseek-transfer-queue" aria-label="Soulseek download queue">
+          <header>
+            <div>
+              <RadioTower size={18} aria-hidden="true" />
+              <div>
+                <h2>Soulseek transfers</h2>
+                <p>
+                  {soulseekTransfers.activeCount} active · {soulseekTransfers.transfers.length} files
+                </p>
+              </div>
+            </div>
+          </header>
+          <div className="deemix-download-queue-list">
+            {soulseekTransfers.transfers.slice(-30).map((transfer) => {
+              const progress = transfer.sizeBytes
+                ? Math.min(100, Math.round((transfer.transferredBytes / transfer.sizeBytes) * 100))
+                : 0;
+              return (
+                <article key={transfer.id} className={transfer.status}>
+                  {transfer.status === "downloading" || transfer.status === "connecting" ? (
+                    <RefreshCw size={16} className="spin" aria-hidden="true" />
+                  ) : transfer.status === "completed" ? (
+                    <CheckCircle2 size={16} aria-hidden="true" />
+                  ) : transfer.status === "failed" ? (
+                    <AlertTriangle size={16} aria-hidden="true" />
+                  ) : (
+                    <Clock3 size={16} aria-hidden="true" />
+                  )}
+                  <div>
+                    <strong>{transfer.title}</strong>
+                    <span>
+                      {transfer.error ??
+                        `${transfer.status} · ${progress}% · ${transfer.username}${
+                          transfer.speedBytesPerSecond
+                            ? ` · ${formatSoulseekSpeed(transfer.speedBytesPerSecond)}`
+                            : ""
+                        }`}
+                    </span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </section>
       ) : null}
 

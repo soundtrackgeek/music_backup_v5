@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.102.0] - 2026-07-29
+### Added
+- Added an in-process native Soulseek client, adapted from the standalone Forever client, with secure account storage, automatic reconnect, live peer search, persistent release downloads, queue progress, file verification, retry support, and direct Wish List integration.
+- Added **Search with Soulseek** to album wishes. Results are grouped into peer release folders, ranked by free slots, track count, speed, and queue length, and can be queued as complete multi-file releases without launching another application.
+- Added opt-in Soulseek sharing under **Settings → Providers**, including native folder selection, enabled/disabled shared roots, bounded local indexing, manual rescans, upload-slot controls, live upload totals, and peer upload handling.
+
+### Changed
+- Expanded provider settings and Wish List download feedback to show Soulseek connection, source quality, queue, transfer, and sharing state alongside the existing Deemix workflow.
+- Kept Soulseek passwords in Windows Credential Manager and made sharing explicit per folder; credentials, peer addresses, and remote share lists are excluded from SQLite and app backups.
+- Synchronized app metadata and provider user agents to `0.102.0`.
+
 ## [0.101.0] - 2026-07-29
 ### Added
 - Added independent **Charts**, **From**, and **To** filters to Library Completion Workbench and Artist Discovery, including Billboard, Official UK, and VG Lista source scopes.

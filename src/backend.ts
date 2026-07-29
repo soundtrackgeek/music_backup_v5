@@ -142,6 +142,17 @@ import type {
   DeemixAlbumSearchRequest,
   DeemixAlbumSearchResponse,
   DeemixConnectionTest,
+  SoulseekAlbumSearchRequest,
+  SoulseekAlbumSearchResponse,
+  SoulseekConnectionBootstrap,
+  SoulseekConnectionProfile,
+  SoulseekConnectionSnapshot,
+  SoulseekLocalShares,
+  SoulseekReleaseDownloadRequest,
+  SoulseekSearchEvent,
+  SoulseekSearchResult,
+  SoulseekTransferQueue,
+  SoulseekUploadQueue,
   DiscogsConnectionTest,
   DiscogsCredentialStatus,
   SaveDiscogsCredentialsRequest,
@@ -1470,6 +1481,302 @@ export async function selectDeemixDownloadDirectory(defaultPath?: string) {
     return null;
   }
   return selectDirectory(defaultPath);
+}
+
+const soulseekPreviewProfile: SoulseekConnectionProfile = {
+  username: "",
+  serverHost: "server.slsknet.org",
+  serverPort: 2242,
+  downloadDirectory: "C:\\Users\\Music\\Downloads\\Soulseek",
+  rememberPassword: true,
+  autoConnect: true,
+};
+
+export async function getSoulseekConnection() {
+  if (!isTauriRuntime()) {
+    return {
+      profile: null,
+      suggestedProfile: soulseekPreviewProfile,
+      hasPassword: false,
+      snapshot: {
+        state: "unconfigured",
+        username: null,
+        server: null,
+        message: "Add your Soulseek account to get started.",
+        attempt: 0,
+        connectedAtMs: null,
+        retryInSeconds: null,
+        updatedAtMs: Date.now(),
+      },
+      diagnosticsPath: "Preview runtime",
+    } satisfies SoulseekConnectionBootstrap;
+  }
+  return invoke<SoulseekConnectionBootstrap>("connection_bootstrap");
+}
+
+export async function saveSoulseekConnection(
+  profile: SoulseekConnectionProfile,
+  password: string | null,
+) {
+  if (!isTauriRuntime()) {
+    return {
+      profile,
+      suggestedProfile: soulseekPreviewProfile,
+      hasPassword: Boolean(password),
+      snapshot: {
+        state: "offline",
+        username: profile.username,
+        server: `${profile.serverHost}:${profile.serverPort}`,
+        message: "Ready to connect.",
+        attempt: 0,
+        connectedAtMs: null,
+        retryInSeconds: null,
+        updatedAtMs: Date.now(),
+      },
+      diagnosticsPath: "Preview runtime",
+    } satisfies SoulseekConnectionBootstrap;
+  }
+  return invoke<SoulseekConnectionBootstrap>("connection_save_profile", {
+    request: { profile, password },
+  });
+}
+
+export async function connectSoulseek() {
+  if (!isTauriRuntime()) {
+    return {
+      state: "online",
+      username: "preview-listener",
+      server: "server.slsknet.org:2242",
+      message: "Connected to Soulseek.",
+      attempt: 1,
+      connectedAtMs: Date.now(),
+      retryInSeconds: null,
+      updatedAtMs: Date.now(),
+    } satisfies SoulseekConnectionSnapshot;
+  }
+  return invoke<SoulseekConnectionSnapshot>("connection_connect");
+}
+
+export async function disconnectSoulseek() {
+  if (!isTauriRuntime()) {
+    return {
+      state: "offline",
+      username: "preview-listener",
+      server: "server.slsknet.org:2242",
+      message: "Ready to connect.",
+      attempt: 0,
+      connectedAtMs: null,
+      retryInSeconds: null,
+      updatedAtMs: Date.now(),
+    } satisfies SoulseekConnectionSnapshot;
+  }
+  return invoke<SoulseekConnectionSnapshot>("connection_disconnect");
+}
+
+export async function resetSoulseekConnection() {
+  if (!isTauriRuntime()) return getSoulseekConnection();
+  return invoke<SoulseekConnectionBootstrap>("connection_reset");
+}
+
+export async function selectSoulseekDownloadDirectory(defaultPath?: string) {
+  if (!isTauriRuntime()) return null;
+  return selectDirectory(defaultPath, "Choose Soulseek download folder");
+}
+
+export async function selectSoulseekShareDirectory() {
+  if (!isTauriRuntime()) return null;
+  return selectDirectory(undefined, "Choose a music folder to share on Soulseek");
+}
+
+const emptySoulseekShares = (): SoulseekLocalShares => ({
+  roots: [],
+  uploadSlots: 1,
+  scanning: false,
+  totalFileCount: 0,
+  totalDirectoryCount: 0,
+  totalSizeBytes: 0,
+  lastScanAtMs: null,
+});
+
+export async function getSoulseekLocalShares() {
+  if (!isTauriRuntime()) return emptySoulseekShares();
+  return invoke<SoulseekLocalShares>("local_shares_snapshot");
+}
+
+export async function addSoulseekLocalShare(path: string) {
+  if (!isTauriRuntime()) return emptySoulseekShares();
+  return invoke<SoulseekLocalShares>("local_shares_add", { path });
+}
+
+export async function removeSoulseekLocalShare(id: string) {
+  if (!isTauriRuntime()) return emptySoulseekShares();
+  return invoke<SoulseekLocalShares>("local_shares_remove", { id });
+}
+
+export async function setSoulseekLocalShareEnabled(id: string, enabled: boolean) {
+  if (!isTauriRuntime()) return emptySoulseekShares();
+  return invoke<SoulseekLocalShares>("local_shares_set_enabled", { id, enabled });
+}
+
+export async function rescanSoulseekLocalShares() {
+  if (!isTauriRuntime()) return emptySoulseekShares();
+  return invoke<SoulseekLocalShares>("local_shares_rescan");
+}
+
+export async function setSoulseekUploadSlots(uploadSlots: number) {
+  if (!isTauriRuntime()) return emptySoulseekShares();
+  return invoke<SoulseekLocalShares>("local_shares_set_upload_slots", {
+    uploadSlots,
+  });
+}
+
+export async function searchSoulseekAlbum(
+  input: SoulseekAlbumSearchRequest,
+) {
+  const query = `${input.artist} ${input.title}`.trim();
+  if (!isTauriRuntime()) {
+    const folder = `Music\\${input.artist}\\${input.title}${input.year ? ` (${input.year})` : ""}`;
+    const results = Array.from({ length: 10 }, (_, index) => ({
+      id: `preview-${index + 1}`,
+      token: 1,
+      username: "lossless-listener",
+      filename: `${folder}\\${String(index + 1).padStart(2, "0")} - Track ${index + 1}.flac`,
+      sizeBytes: 31_000_000 + index * 420_000,
+      extension: "flac",
+      bitrate: 950,
+      durationSeconds: 220 + index,
+      vbr: false,
+      sampleRate: 44_100,
+      bitDepth: 16,
+      slotFree: true,
+      averageSpeed: 5_500_000,
+      queueLength: 0,
+      isPrivate: false,
+    })) satisfies SoulseekSearchResult[];
+    return {
+      query,
+      snapshot: {
+        state: "completed",
+        token: 1,
+        clientId: "wishlist-preview",
+        query,
+        resultCount: results.length,
+        peerCount: 1,
+        message: "Found 10 files from 1 person.",
+        startedAtMs: Date.now() - 500,
+        finishedAtMs: Date.now(),
+      },
+      results,
+      searchedAt: new Date().toISOString(),
+    } satisfies SoulseekAlbumSearchResponse;
+  }
+
+  const clientId = `wishlist:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+  return new Promise<SoulseekAlbumSearchResponse>(async (resolve, reject) => {
+    const results = new Map<string, SoulseekSearchResult>();
+    let settled = false;
+    let unlisten: UnlistenFn | undefined;
+    const finish = (
+      snapshot: SoulseekSearchEvent["snapshot"],
+      failure?: string,
+    ) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      unlisten?.();
+      void invoke<boolean>("search_close", { clientId }).catch(() => undefined);
+      if (failure) {
+        reject(new Error(failure));
+      } else {
+        resolve({
+          query,
+          snapshot,
+          results: [...results.values()],
+          searchedAt: new Date().toISOString(),
+        });
+      }
+    };
+    const timeout = window.setTimeout(() => {
+      void invoke("search_stop", { clientId }).catch(() => undefined);
+      finish(
+        {
+          state: "error",
+          token: null,
+          clientId,
+          query,
+          resultCount: results.size,
+          peerCount: 0,
+          message: "Soulseek search timed out.",
+          startedAtMs: null,
+          finishedAtMs: Date.now(),
+        },
+        "Soulseek search timed out.",
+      );
+    }, 25_000);
+
+    try {
+      unlisten = await listen<SoulseekSearchEvent>(
+        "music-library://soulseek-search",
+        (event) => {
+        const payload = event.payload;
+        if (payload.snapshot.clientId !== clientId) return;
+        for (const result of payload.results) results.set(result.id, result);
+        if (payload.event === "completed" || payload.event === "stopped") {
+          finish(payload.snapshot);
+        } else if (payload.event === "error") {
+          finish(payload.snapshot, payload.snapshot.message);
+        }
+        },
+      );
+      await invoke("search_start", { clientId, query });
+    } catch (error) {
+      finish(
+        {
+          state: "error",
+          token: null,
+          clientId,
+          query,
+          resultCount: results.size,
+          peerCount: 0,
+          message: error instanceof Error ? error.message : String(error),
+          startedAtMs: null,
+          finishedAtMs: Date.now(),
+        },
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  });
+}
+
+export async function getSoulseekTransfers() {
+  if (!isTauriRuntime()) {
+    return {
+      transfers: [],
+      activeCount: 0,
+      maxConcurrentDownloads: 3,
+      relaySuggestionMinutes: 10,
+      soundcheckEnabled: true,
+      safetyState: "running",
+    } satisfies SoulseekTransferQueue;
+  }
+  return invoke<SoulseekTransferQueue>("transfers_snapshot");
+}
+
+export async function enqueueSoulseekRelease(input: SoulseekReleaseDownloadRequest) {
+  if (!isTauriRuntime()) return getSoulseekTransfers();
+  return invoke<SoulseekTransferQueue>("transfer_enqueue_release", { request: input });
+}
+
+export async function getSoulseekUploads() {
+  if (!isTauriRuntime()) {
+    return {
+      uploads: [],
+      activeCount: 0,
+      queuedCount: 0,
+      sessionUploadedBytes: 0,
+    } satisfies SoulseekUploadQueue;
+  }
+  return invoke<SoulseekUploadQueue>("uploads_snapshot");
 }
 
 export async function compileNaturalLanguageQuery(input: AiCompileRequest) {
@@ -5015,6 +5322,42 @@ export async function listenToDeemixDownloadProgress(
       handler(event.payload);
     },
   );
+}
+
+export async function listenToSoulseekConnection(
+  handler: (snapshot: SoulseekConnectionSnapshot) => void,
+) {
+  if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
+  return listen<SoulseekConnectionSnapshot>("music-library://soulseek-connection", (event) => {
+    handler(event.payload);
+  });
+}
+
+export async function listenToSoulseekTransfers(
+  handler: (snapshot: SoulseekTransferQueue) => void,
+) {
+  if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
+  return listen<SoulseekTransferQueue>("music-library://soulseek-transfers", (event) => {
+    handler(event.payload);
+  });
+}
+
+export async function listenToSoulseekLocalShares(
+  handler: (snapshot: SoulseekLocalShares) => void,
+) {
+  if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
+  return listen<SoulseekLocalShares>("music-library://soulseek-local-shares", (event) => {
+    handler(event.payload);
+  });
+}
+
+export async function listenToSoulseekUploads(
+  handler: (snapshot: SoulseekUploadQueue) => void,
+) {
+  if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
+  return listen<SoulseekUploadQueue>("music-library://soulseek-uploads", (event) => {
+    handler(event.payload);
+  });
 }
 
 export async function listenToCoverImportProgress(

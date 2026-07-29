@@ -6,13 +6,17 @@ import { WishListWorkspace } from "./WishListWorkspace";
 const discoverWishListArtistAlbums = vi.fn();
 const addWishListMusicBrainzCandidate = vi.fn();
 const downloadDeemixAlbum = vi.fn();
+const enqueueSoulseekRelease = vi.fn();
+const getSoulseekTransfers = vi.fn();
 const listWishList = vi.fn();
 const listenToDeemixDownloadProgress = vi.fn();
+const listenToSoulseekTransfers = vi.fn();
 const openExternalUrl = vi.fn();
 const preflightDeemixAlbumDownload = vi.fn();
 const refreshWishListArtistAlbumSummary = vi.fn();
 const removeWishListItem = vi.fn();
 const searchDeemixAlbums = vi.fn();
+const searchSoulseekAlbum = vi.fn();
 const searchWishListMusicBrainz = vi.fn();
 
 vi.mock("../backend", () => ({
@@ -21,9 +25,13 @@ vi.mock("../backend", () => ({
   discoverWishListArtistAlbums: (...args: unknown[]) =>
     discoverWishListArtistAlbums(...args),
   downloadDeemixAlbum: (...args: unknown[]) => downloadDeemixAlbum(...args),
+  enqueueSoulseekRelease: (...args: unknown[]) => enqueueSoulseekRelease(...args),
+  getSoulseekTransfers: (...args: unknown[]) => getSoulseekTransfers(...args),
   listWishList: (...args: unknown[]) => listWishList(...args),
   listenToDeemixDownloadProgress: (...args: unknown[]) =>
     listenToDeemixDownloadProgress(...args),
+  listenToSoulseekTransfers: (...args: unknown[]) =>
+    listenToSoulseekTransfers(...args),
   openExternalUrl: (...args: unknown[]) => openExternalUrl(...args),
   preflightDeemixAlbumDownload: (...args: unknown[]) =>
     preflightDeemixAlbumDownload(...args),
@@ -31,6 +39,7 @@ vi.mock("../backend", () => ({
     refreshWishListArtistAlbumSummary(...args),
   removeWishListItem: (...args: unknown[]) => removeWishListItem(...args),
   searchDeemixAlbums: (...args: unknown[]) => searchDeemixAlbums(...args),
+  searchSoulseekAlbum: (...args: unknown[]) => searchSoulseekAlbum(...args),
   searchWishListMusicBrainz: (...args: unknown[]) =>
     searchWishListMusicBrainz(...args),
 }));
@@ -61,6 +70,15 @@ describe("WishListWorkspace", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
     listenToDeemixDownloadProgress.mockResolvedValue(() => undefined);
+    listenToSoulseekTransfers.mockResolvedValue(() => undefined);
+    getSoulseekTransfers.mockResolvedValue({
+      transfers: [],
+      activeCount: 0,
+      maxConcurrentDownloads: 3,
+      relaySuggestionMinutes: 10,
+      soundcheckEnabled: true,
+      safetyState: "running",
+    });
     listWishList.mockResolvedValue({
       autoRemovedCount: 1,
       items: [
@@ -153,6 +171,70 @@ describe("WishListWorkspace", () => {
       searchedAt: "2026-07-26T12:00:00Z",
       matches: [match("123", "Release (2017 Remaster)", 2002)],
     });
+    searchSoulseekAlbum.mockResolvedValue({
+      query: "Pet Shop Boys Release",
+      snapshot: {
+        state: "completed",
+        token: 7,
+        clientId: "wishlist-test",
+        query: "Pet Shop Boys Release",
+        resultCount: 2,
+        peerCount: 1,
+        message: "Found 2 files from 1 person.",
+        startedAtMs: 1,
+        finishedAtMs: 2,
+      },
+      searchedAt: "2026-07-29T12:00:00Z",
+      results: [1, 2].map((index) => ({
+        id: `soulseek-${index}`,
+        token: 7,
+        username: "lossless-listener",
+        filename: `Music\\Pet Shop Boys\\Release (2002)\\0${index} - Track ${index}.flac`,
+        sizeBytes: 30_000_000,
+        extension: "flac",
+        bitrate: 900,
+        durationSeconds: 220,
+        vbr: false,
+        sampleRate: 44_100,
+        bitDepth: 16,
+        slotFree: true,
+        averageSpeed: 5_000_000,
+        queueLength: 0,
+        isPrivate: false,
+      })),
+    });
+    enqueueSoulseekRelease.mockImplementation(
+      async (request: { files: Array<{ title: string; remoteFilename: string; sizeBytes: number }> }) => ({
+        transfers: request.files.map((file, index) => ({
+          id: `transfer-${index}`,
+          releaseId: "release-1",
+          releaseTitle: "Pet Shop Boys - Release (2002)",
+          releaseFolder: "Pet Shop Boys - Release (2002)",
+          fileIndex: index + 1,
+          fileCount: request.files.length,
+          expectedTrackCount: request.files.length,
+          releaseGroupId: albumMbid,
+          title: file.title,
+          username: "lossless-listener",
+          remoteFilename: file.remoteFilename,
+          sizeBytes: file.sizeBytes,
+          transferredBytes: 0,
+          speedBytesPerSecond: 0,
+          etaSeconds: null,
+          status: "queued",
+          queuePosition: index + 1,
+          localPath: `D:\\Music\\${file.title}`,
+          error: null,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        })),
+        activeCount: 0,
+        maxConcurrentDownloads: 3,
+        relaySuggestionMinutes: 10,
+        soundcheckEnabled: true,
+        safetyState: "running",
+      }),
+    );
     searchWishListMusicBrainz.mockResolvedValue({
       entity: "artist",
       query: "Engine Alley",
@@ -562,6 +644,36 @@ describe("WishListWorkspace", () => {
     });
     expect(await screen.findByText("Downloaded and tagged 10 tracks")).toBeInTheDocument();
     expect(screen.getAllByText("Downloaded").length).toBeGreaterThan(0);
+  });
+
+  it("searches Soulseek, groups a peer folder, and queues the release", async () => {
+    render(<WishListWorkspace />);
+    await screen.findByText("Release");
+
+    fireEvent.click(screen.getByLabelText("Search Release with Soulseek"));
+    expect(await screen.findByText("Soulseek sources")).toBeInTheDocument();
+    expect(screen.getByText("Release (2002)")).toBeInTheDocument();
+    expect(screen.getByText("2 files")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Download Release from lossless-listener",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(enqueueSoulseekRelease).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Pet Shop Boys - Release (2002)",
+          username: "lossless-listener",
+          remoteFolder: "Music\\Pet Shop Boys\\Release (2002)",
+          expectedTrackCount: 2,
+          releaseGroupId: albumMbid,
+        }),
+      ),
+    );
+    expect(await screen.findByText("2 files queued from lossless-listener.")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Soulseek download queue" })).toBeInTheDocument();
   });
 
   it("completes the download with a warning when Deezer has no artwork", async () => {

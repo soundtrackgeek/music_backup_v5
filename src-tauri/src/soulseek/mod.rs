@@ -1,0 +1,898 @@
+#![allow(dead_code)]
+
+mod credentials;
+mod diagnostics;
+mod distributed;
+mod downloads;
+mod folders;
+mod local_shares;
+mod messages;
+mod people;
+mod protocol;
+mod radar;
+mod rooms;
+mod search;
+mod service;
+mod settings;
+mod shares;
+mod soundcheck;
+mod uploads;
+mod wanted;
+
+use search::SearchSnapshot;
+use service::{
+    ConnectionBootstrap, ConnectionManager, ConnectionPaths, ConnectionSnapshot,
+    SaveConnectionRequest,
+};
+use tauri::{AppHandle, Manager, State};
+
+pub fn initialize(app: &AppHandle) -> Result<ConnectionManager, String> {
+    let config_directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
+    let download_directory = app
+        .path()
+        .download_dir()
+        .unwrap_or_else(|_| config_directory.clone())
+        .join("Music Library")
+        .join("Soulseek");
+
+    let manager = ConnectionManager::new(
+        app.clone(),
+        ConnectionPaths {
+            settings: config_directory.join("connection.json"),
+            transfers: config_directory.join("transfers.json"),
+            sharing: config_directory.join("sharing.json"),
+            people: config_directory.join("people.json"),
+            messages: config_directory.join("messages.json"),
+            rooms: config_directory.join("rooms.json"),
+            wanted: config_directory.join("wanted.json"),
+            diagnostics: config_directory.join("logs").join("connection.log"),
+        },
+        download_directory,
+    )
+    .map_err(|error| error.to_string())?;
+
+    if manager.bootstrap().is_ok_and(|bootstrap| {
+        bootstrap.has_password
+            && bootstrap
+                .profile
+                .is_some_and(|profile| profile.auto_connect)
+    }) {
+        let _ = manager.connect();
+    }
+
+    Ok(manager)
+}
+
+#[tauri::command]
+pub async fn rooms_snapshot(
+    manager: State<'_, ConnectionManager>,
+) -> Result<rooms::RoomsSnapshot, String> {
+    Ok(manager.current_rooms())
+}
+
+#[tauri::command]
+pub async fn rooms_refresh(
+    manager: State<'_, ConnectionManager>,
+) -> Result<rooms::RoomsSnapshot, String> {
+    manager.refresh_rooms().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn rooms_join(
+    manager: State<'_, ConnectionManager>,
+    room: String,
+) -> Result<rooms::RoomsSnapshot, String> {
+    manager.join_room(room).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn rooms_leave(
+    manager: State<'_, ConnectionManager>,
+    room: String,
+) -> Result<rooms::RoomsSnapshot, String> {
+    manager.leave_room(room).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn rooms_send(
+    manager: State<'_, ConnectionManager>,
+    room: String,
+    message: String,
+) -> Result<rooms::RoomsSnapshot, String> {
+    manager
+        .send_room_message(room, message)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn rooms_mark_read(
+    manager: State<'_, ConnectionManager>,
+    room: String,
+) -> Result<rooms::RoomsSnapshot, String> {
+    manager
+        .mark_room_read(&room)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn rooms_set_favorite(
+    manager: State<'_, ConnectionManager>,
+    room: String,
+    favorite: bool,
+) -> Result<rooms::RoomsSnapshot, String> {
+    manager
+        .set_room_favorite(&room, favorite)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn wanted_snapshot(
+    manager: State<'_, ConnectionManager>,
+) -> Result<wanted::WantedSnapshot, String> {
+    Ok(manager.current_wanted())
+}
+
+#[tauri::command]
+pub async fn wanted_add(
+    manager: State<'_, ConnectionManager>,
+    request: wanted::WantedAlbumRequest,
+) -> Result<wanted::WantedSnapshot, String> {
+    manager
+        .add_wanted(request)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn wanted_add_many(
+    manager: State<'_, ConnectionManager>,
+    requests: Vec<wanted::WantedAlbumRequest>,
+    preferences: wanted::WantedPreferences,
+) -> Result<wanted::WantedSnapshot, String> {
+    manager
+        .add_many_wanted(requests, preferences)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn wanted_remove(
+    manager: State<'_, ConnectionManager>,
+    album_id: String,
+) -> Result<wanted::WantedSnapshot, String> {
+    manager
+        .remove_wanted(&album_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn wanted_set_paused(
+    manager: State<'_, ConnectionManager>,
+    album_id: String,
+    paused: bool,
+) -> Result<wanted::WantedSnapshot, String> {
+    manager
+        .set_wanted_paused(&album_id, paused)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn wanted_set_interval(
+    manager: State<'_, ConnectionManager>,
+    interval_minutes: u32,
+) -> Result<wanted::WantedSnapshot, String> {
+    manager
+        .set_wanted_interval(interval_minutes)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn wanted_set_preferences(
+    manager: State<'_, ConnectionManager>,
+    album_id: String,
+    preferences: wanted::WantedPreferences,
+) -> Result<wanted::WantedSnapshot, String> {
+    manager
+        .set_wanted_preferences(&album_id, preferences)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn wanted_set_default_preferences(
+    manager: State<'_, ConnectionManager>,
+    preferences: wanted::WantedPreferences,
+) -> Result<wanted::WantedSnapshot, String> {
+    manager
+        .set_default_wanted_preferences(preferences)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn wanted_sync_fulfilled(
+    manager: State<'_, ConnectionManager>,
+    fulfillments: Vec<wanted::WantedFulfillmentRequest>,
+) -> Result<wanted::WantedSnapshot, String> {
+    manager
+        .sync_wanted_fulfilled(fulfillments)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn wanted_fulfill_downloaded(
+    manager: State<'_, ConnectionManager>,
+    fulfillments: Vec<wanted::WantedDownloadFulfillmentRequest>,
+) -> Result<wanted::WantedSnapshot, String> {
+    manager
+        .fulfill_downloaded_wanted(fulfillments)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn wanted_restore(
+    manager: State<'_, ConnectionManager>,
+    album_id: String,
+) -> Result<wanted::WantedSnapshot, String> {
+    manager
+        .restore_wanted(&album_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn wanted_check(
+    manager: State<'_, ConnectionManager>,
+    album_id: String,
+) -> Result<wanted::WantedSnapshot, String> {
+    manager
+        .check_wanted(&album_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn radar_snapshot(
+    manager: State<'_, ConnectionManager>,
+) -> Result<radar::RadarSnapshot, String> {
+    Ok(manager.current_radar())
+}
+
+#[tauri::command]
+pub async fn radar_start(
+    manager: State<'_, ConnectionManager>,
+    albums: Vec<radar::RadarAlbumRequest>,
+) -> Result<radar::RadarSnapshot, String> {
+    manager
+        .start_radar(albums)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn radar_stop(
+    manager: State<'_, ConnectionManager>,
+) -> Result<radar::RadarSnapshot, String> {
+    Ok(manager.stop_radar())
+}
+
+#[tauri::command]
+pub async fn people_snapshot(
+    manager: State<'_, ConnectionManager>,
+) -> Result<people::PeopleSnapshot, String> {
+    Ok(manager.current_people())
+}
+
+#[tauri::command]
+pub async fn people_profile(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+    refresh: bool,
+) -> Result<people::PersonProfile, String> {
+    manager
+        .open_person_profile(username, refresh)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn people_set_favorite(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+    favorite: bool,
+) -> Result<people::PeopleSnapshot, String> {
+    manager
+        .set_person_favorite(&username, favorite)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn people_set_blocked(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+    blocked: bool,
+) -> Result<people::PeopleSnapshot, String> {
+    manager
+        .set_person_blocked(&username, blocked)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn people_set_ignored(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+    ignored: bool,
+) -> Result<people::PeopleSnapshot, String> {
+    manager
+        .set_person_ignored(&username, ignored)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn messages_snapshot(
+    manager: State<'_, ConnectionManager>,
+) -> Result<messages::MessagesSnapshot, String> {
+    Ok(manager.current_messages())
+}
+
+#[tauri::command]
+pub async fn messages_send(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+    message: String,
+) -> Result<messages::MessagesSnapshot, String> {
+    manager
+        .send_private_message(username, message)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn messages_retry(
+    manager: State<'_, ConnectionManager>,
+    id: String,
+) -> Result<messages::MessagesSnapshot, String> {
+    manager
+        .retry_private_message(&id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn messages_open(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+) -> Result<messages::MessagesSnapshot, String> {
+    manager
+        .open_conversation(&username)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn messages_mark_read(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+) -> Result<messages::MessagesSnapshot, String> {
+    manager
+        .mark_conversation_read(&username)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn messages_mark_unread(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+) -> Result<messages::MessagesSnapshot, String> {
+    manager
+        .mark_conversation_unread(&username)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn messages_clear(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+) -> Result<messages::MessagesSnapshot, String> {
+    manager
+        .clear_conversation(&username)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn messages_remove(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+) -> Result<messages::MessagesSnapshot, String> {
+    manager
+        .remove_conversation(&username)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn local_shares_snapshot(
+    manager: State<'_, ConnectionManager>,
+) -> Result<local_shares::LocalSharesSnapshot, String> {
+    Ok(manager.current_local_shares())
+}
+
+#[tauri::command]
+pub async fn local_shares_add(
+    manager: State<'_, ConnectionManager>,
+    path: String,
+) -> Result<local_shares::LocalSharesSnapshot, String> {
+    let manager = manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.add_local_share(&path))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn local_shares_remove(
+    manager: State<'_, ConnectionManager>,
+    id: String,
+) -> Result<local_shares::LocalSharesSnapshot, String> {
+    let manager = manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.remove_local_share(&id))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn local_shares_set_enabled(
+    manager: State<'_, ConnectionManager>,
+    id: String,
+    enabled: bool,
+) -> Result<local_shares::LocalSharesSnapshot, String> {
+    let manager = manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.set_local_share_enabled(&id, enabled))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn local_shares_rescan(
+    manager: State<'_, ConnectionManager>,
+) -> Result<local_shares::LocalSharesSnapshot, String> {
+    let manager = manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.rescan_local_shares())
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn local_shares_set_upload_slots(
+    manager: State<'_, ConnectionManager>,
+    upload_slots: u8,
+) -> Result<local_shares::LocalSharesSnapshot, String> {
+    manager
+        .set_upload_slots(upload_slots)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn uploads_snapshot(
+    manager: State<'_, ConnectionManager>,
+) -> Result<uploads::UploadQueueSnapshot, String> {
+    Ok(manager.current_uploads())
+}
+
+#[tauri::command]
+pub async fn upload_cancel(
+    manager: State<'_, ConnectionManager>,
+    id: String,
+) -> Result<uploads::UploadQueueSnapshot, String> {
+    manager
+        .cancel_upload(&id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn upload_clear_finished(
+    manager: State<'_, ConnectionManager>,
+) -> Result<uploads::UploadQueueSnapshot, String> {
+    Ok(manager.clear_finished_uploads())
+}
+
+#[tauri::command]
+pub async fn transfers_snapshot(
+    manager: State<'_, ConnectionManager>,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    Ok(manager.current_transfers())
+}
+
+#[tauri::command]
+pub async fn transfers_prepare_for_restart(
+    manager: State<'_, ConnectionManager>,
+    mode: downloads::TransferPreparationMode,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .prepare_transfers_for_restart(mode)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfers_cancel_restart_preparation(
+    manager: State<'_, ConnectionManager>,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .cancel_restart_preparation()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_set_max_concurrent_downloads(
+    manager: State<'_, ConnectionManager>,
+    max_concurrent_downloads: u8,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .set_max_concurrent_downloads(max_concurrent_downloads)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_set_relay_suggestion_minutes(
+    manager: State<'_, ConnectionManager>,
+    minutes: u32,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .set_relay_suggestion_minutes(minutes)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_set_soundcheck_enabled(
+    manager: State<'_, ConnectionManager>,
+    enabled: bool,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .set_soundcheck_enabled(enabled)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_enqueue(
+    manager: State<'_, ConnectionManager>,
+    request: downloads::EnqueueTransferRequest,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .enqueue_transfer(request)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_enqueue_release(
+    manager: State<'_, ConnectionManager>,
+    request: downloads::EnqueueReleaseRequest,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .enqueue_release(request)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_pause(
+    manager: State<'_, ConnectionManager>,
+    id: String,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .pause_transfer(&id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_resume(
+    manager: State<'_, ConnectionManager>,
+    id: String,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .resume_transfer(&id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_cancel(
+    manager: State<'_, ConnectionManager>,
+    id: String,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .cancel_transfer(&id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_reveal_path(
+    manager: State<'_, ConnectionManager>,
+    id: String,
+) -> Result<String, String> {
+    manager
+        .reveal_transfer_path(&id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_pause_release(
+    manager: State<'_, ConnectionManager>,
+    release_id: String,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .pause_release(&release_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_resume_release(
+    manager: State<'_, ConnectionManager>,
+    release_id: String,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .resume_release(&release_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_cancel_release(
+    manager: State<'_, ConnectionManager>,
+    release_id: String,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .cancel_release(&release_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_reorder_release(
+    manager: State<'_, ConnectionManager>,
+    release_id: String,
+    before_transfer_id: Option<String>,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .reorder_release(&release_id, before_transfer_id.as_deref())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_clear_completed(
+    manager: State<'_, ConnectionManager>,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .clear_completed_transfers()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_set_release_filed(
+    manager: State<'_, ConnectionManager>,
+    release_id: String,
+    filed: bool,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .set_release_filed(&release_id, filed)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_clear_release_history(
+    manager: State<'_, ConnectionManager>,
+    release_ids: Vec<String>,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .clear_release_history(&release_ids)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_verify_release(
+    manager: State<'_, ConnectionManager>,
+    release_id: String,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .verify_release(&release_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfers_verify_completed(
+    manager: State<'_, ConnectionManager>,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .verify_completed()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_soundcheck_release(
+    manager: State<'_, ConnectionManager>,
+    release_id: String,
+    deep: bool,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    let manager = manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.soundcheck_release(&release_id, deep))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_retry_release_issues(
+    manager: State<'_, ConnectionManager>,
+    release_id: String,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .retry_release_issues(&release_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_switch_release_source(
+    manager: State<'_, ConnectionManager>,
+    release_id: String,
+    username: String,
+    remote_folder: String,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .switch_release_source(&release_id, &username, &remote_folder)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_relay_release_source(
+    manager: State<'_, ConnectionManager>,
+    release_id: String,
+    source: downloads::ReleaseAlternativeSource,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .relay_release_source(&release_id, source)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_patch_release_file(
+    manager: State<'_, ConnectionManager>,
+    request: downloads::PatchReleaseFileRequest,
+) -> Result<downloads::TransferQueueSnapshot, String> {
+    manager
+        .patch_release_file(request)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn transfer_reveal_release_path(
+    manager: State<'_, ConnectionManager>,
+    release_id: String,
+) -> Result<String, String> {
+    manager
+        .reveal_release_path(&release_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn folder_inspect(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+    folder: String,
+) -> Result<folders::FolderInspection, String> {
+    manager
+        .inspect_folder(username, folder)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn shares_browse(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+    refresh: bool,
+) -> Result<shares::UserSharesOverview, String> {
+    manager
+        .browse_shares(username, refresh)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn shares_folder(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+    directory: String,
+) -> Result<shares::ShareFolderSnapshot, String> {
+    manager
+        .shared_folder(&username, &directory)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn shares_search(
+    manager: State<'_, ConnectionManager>,
+    username: String,
+    query: String,
+    extension: Option<String>,
+) -> Result<shares::ShareSearchSnapshot, String> {
+    manager
+        .search_shares(&username, &query, extension.as_deref())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn connection_bootstrap(
+    manager: State<'_, ConnectionManager>,
+) -> Result<ConnectionBootstrap, String> {
+    manager.bootstrap().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn connection_save_profile(
+    manager: State<'_, ConnectionManager>,
+    request: SaveConnectionRequest,
+) -> Result<ConnectionBootstrap, String> {
+    manager
+        .save_profile(request)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn connection_connect(
+    manager: State<'_, ConnectionManager>,
+) -> Result<ConnectionSnapshot, String> {
+    manager.connect().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn connection_disconnect(
+    manager: State<'_, ConnectionManager>,
+) -> Result<ConnectionSnapshot, String> {
+    manager.disconnect().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn connection_reset(
+    manager: State<'_, ConnectionManager>,
+) -> Result<ConnectionBootstrap, String> {
+    manager.reset().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn connection_diagnostics(
+    manager: State<'_, ConnectionManager>,
+) -> Result<Vec<diagnostics::DiagnosticEntry>, String> {
+    Ok(manager.diagnostics())
+}
+
+#[tauri::command]
+pub async fn search_snapshot(
+    manager: State<'_, ConnectionManager>,
+) -> Result<Vec<SearchSnapshot>, String> {
+    Ok(manager.current_searches())
+}
+
+#[tauri::command]
+pub async fn search_start(
+    manager: State<'_, ConnectionManager>,
+    client_id: String,
+    query: String,
+) -> Result<SearchSnapshot, String> {
+    manager
+        .start_search(client_id, query)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn search_stop(
+    manager: State<'_, ConnectionManager>,
+    client_id: String,
+) -> Result<Option<SearchSnapshot>, String> {
+    Ok(manager.stop_search(&client_id))
+}
+
+#[tauri::command]
+pub async fn search_stop_all(
+    manager: State<'_, ConnectionManager>,
+) -> Result<Vec<SearchSnapshot>, String> {
+    Ok(manager.stop_all_searches())
+}
+
+#[tauri::command]
+pub async fn search_close(
+    manager: State<'_, ConnectionManager>,
+    client_id: String,
+) -> Result<bool, String> {
+    Ok(manager.close_search(&client_id))
+}

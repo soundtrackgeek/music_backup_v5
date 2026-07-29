@@ -1450,6 +1450,208 @@ export type DeemixAlbumDownloadSummary = {
   completedAt: string;
 };
 
+export type SoulseekConnectionState =
+  | "unconfigured"
+  | "offline"
+  | "connecting"
+  | "authenticating"
+  | "online"
+  | "reconnecting"
+  | "error";
+
+export type SoulseekConnectionProfile = {
+  username: string;
+  serverHost: string;
+  serverPort: number;
+  downloadDirectory: string;
+  rememberPassword: boolean;
+  autoConnect: boolean;
+};
+
+export type SoulseekConnectionSnapshot = {
+  state: SoulseekConnectionState;
+  username: string | null;
+  server: string | null;
+  message: string;
+  attempt: number;
+  connectedAtMs: number | null;
+  retryInSeconds: number | null;
+  updatedAtMs: number;
+};
+
+export type SoulseekConnectionBootstrap = {
+  profile: SoulseekConnectionProfile | null;
+  suggestedProfile: SoulseekConnectionProfile;
+  hasPassword: boolean;
+  snapshot: SoulseekConnectionSnapshot;
+  diagnosticsPath: string;
+};
+
+export type SaveSoulseekConnectionRequest = {
+  profile: SoulseekConnectionProfile;
+  password: string | null;
+};
+
+export type SoulseekSearchState =
+  | "idle"
+  | "searching"
+  | "completed"
+  | "stopped"
+  | "error";
+
+export type SoulseekSearchSnapshot = {
+  state: SoulseekSearchState;
+  token: number | null;
+  clientId: string;
+  query: string;
+  resultCount: number;
+  peerCount: number;
+  message: string;
+  startedAtMs: number | null;
+  finishedAtMs: number | null;
+};
+
+export type SoulseekSearchResult = {
+  id: string;
+  token: number;
+  username: string;
+  filename: string;
+  sizeBytes: number;
+  extension: string;
+  bitrate: number | null;
+  durationSeconds: number | null;
+  vbr: boolean | null;
+  sampleRate: number | null;
+  bitDepth: number | null;
+  slotFree: boolean;
+  averageSpeed: number;
+  queueLength: number;
+  isPrivate: boolean;
+};
+
+export type SoulseekSearchEvent = {
+  event: "started" | "results" | "completed" | "stopped" | "error";
+  snapshot: SoulseekSearchSnapshot;
+  results: SoulseekSearchResult[];
+};
+
+export type SoulseekAlbumSearchRequest = {
+  title: string;
+  artist: string;
+  year: number | null;
+};
+
+export type SoulseekAlbumSearchResponse = {
+  query: string;
+  snapshot: SoulseekSearchSnapshot;
+  results: SoulseekSearchResult[];
+  searchedAt: string;
+};
+
+export type SoulseekReleaseFileRequest = {
+  title: string;
+  remoteFilename: string;
+  sizeBytes: number;
+};
+
+export type SoulseekReleaseDownloadRequest = {
+  title: string;
+  username: string;
+  remoteFolder: string;
+  files: SoulseekReleaseFileRequest[];
+  expectedTrackCount: number | null;
+  releaseGroupId: string | null;
+  alternatives: never[];
+};
+
+export type SoulseekTransferStatus =
+  | "queued"
+  | "retrying"
+  | "requesting"
+  | "remotelyQueued"
+  | "connecting"
+  | "downloading"
+  | "paused"
+  | "completed"
+  | "failed";
+
+export type SoulseekTransfer = {
+  id: string;
+  releaseId: string | null;
+  releaseTitle: string | null;
+  releaseFolder: string | null;
+  fileIndex: number | null;
+  fileCount: number | null;
+  expectedTrackCount: number | null;
+  releaseGroupId: string | null;
+  title: string;
+  username: string;
+  remoteFilename: string;
+  sizeBytes: number;
+  transferredBytes: number;
+  speedBytesPerSecond: number;
+  etaSeconds: number | null;
+  status: SoulseekTransferStatus;
+  queuePosition: number | null;
+  localPath: string;
+  error: string | null;
+  createdAtMs: number;
+  updatedAtMs: number;
+};
+
+export type SoulseekTransferQueue = {
+  transfers: SoulseekTransfer[];
+  activeCount: number;
+  maxConcurrentDownloads: number;
+  relaySuggestionMinutes: number;
+  soundcheckEnabled: boolean;
+  safetyState: "running" | "draining" | "pausedForRestart";
+};
+
+export type SoulseekSharedRoot = {
+  id: string;
+  path: string;
+  alias: string;
+  enabled: boolean;
+  fileCount: number;
+  directoryCount: number;
+  totalSizeBytes: number;
+  error: string | null;
+};
+
+export type SoulseekLocalShares = {
+  roots: SoulseekSharedRoot[];
+  uploadSlots: number;
+  scanning: boolean;
+  totalFileCount: number;
+  totalDirectoryCount: number;
+  totalSizeBytes: number;
+  lastScanAtMs: number | null;
+};
+
+export type SoulseekUpload = {
+  id: string;
+  username: string;
+  remoteFilename: string;
+  filename: string;
+  sizeBytes: number;
+  transferredBytes: number;
+  speedBytesPerSecond: number;
+  etaSeconds: number | null;
+  status: "queued" | "connecting" | "uploading" | "completed" | "failed" | "cancelled";
+  queuePosition: number | null;
+  error: string | null;
+  createdAtMs: number;
+  updatedAtMs: number;
+};
+
+export type SoulseekUploadQueue = {
+  uploads: SoulseekUpload[];
+  activeCount: number;
+  queuedCount: number;
+  sessionUploadedBytes: number;
+};
+
 export type AiConnectionTest = {
   model: string;
   message: string;
