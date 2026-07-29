@@ -9,6 +9,7 @@ import {
   type UnlistenFn,
 } from "./backend/tauriClient";
 export { isTauriRuntime } from "./backend/tauriClient";
+import { createSoulseekSearchClientId } from "./backend/soulseek";
 import {
   defaultBillboardSinglesSourcePath,
   defaultBillboardSourcePath,
@@ -1671,7 +1672,7 @@ export async function searchSoulseekAlbum(
     } satisfies SoulseekAlbumSearchResponse;
   }
 
-  const clientId = `wishlist:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+  const clientId = createSoulseekSearchClientId();
   return new Promise<SoulseekAlbumSearchResponse>(async (resolve, reject) => {
     const results = new Map<string, SoulseekSearchResult>();
     let settled = false;

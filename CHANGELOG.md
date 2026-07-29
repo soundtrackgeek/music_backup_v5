@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.103.1] - 2026-07-29
+### Fixed
+- Fixed Wish List Soulseek searches being rejected before reaching the network by generating session identifiers that satisfy the native client's validation contract.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.103.1`.
+
 ## [0.103.0] - 2026-07-29
 ### Added
 - Added automatic Soulseek searches to artist Wish List discovery so every still-missing MusicBrainz album receives peer release-folder options alongside its Deemix match.
