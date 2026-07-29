@@ -42,7 +42,8 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 #[cfg(not(test))]
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::Emitter;
+use tauri::{AppHandle, Manager};
 
 #[cfg(not(test))]
 type ProgressApp<'a> = &'a AppHandle;
@@ -467,7 +468,6 @@ const MUSIC_TOOLS: &[MusicToolDefinition] = &[
     },
 ];
 
-#[cfg(not(test))]
 pub fn database_path(app: &AppHandle) -> Result<PathBuf> {
     let app_data_dir = app
         .path()
@@ -477,7 +477,6 @@ pub fn database_path(app: &AppHandle) -> Result<PathBuf> {
     Ok(app_data_dir.join(DB_FILE_NAME))
 }
 
-#[cfg(not(test))]
 pub fn open(app: &AppHandle) -> Result<(Connection, PathBuf)> {
     let db_path = database_path(app)?;
     let conn = Connection::open(&db_path)
@@ -505,11 +504,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     let _migration_guard = MIGRATION_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let user_version = conn
+    let mut user_version = conn
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_two_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_three_schema_exists(conn)? {
         return Ok(());
     }
 
@@ -524,6 +523,20 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         transaction
             .commit()
             .context("Could not commit the schema 42 migration")?;
+        user_version = 42;
+    }
+
+    if user_version == 42 && migrations::phase_forty_two_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 43 migration transaction")?;
+        ensure_library_completion_cover_columns(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 43;")
+            .context("Could not mark the schema 43 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 43 migration")?;
         return Ok(());
     }
 
@@ -1045,6 +1058,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             discogs_message TEXT,
             discogs_master_id TEXT,
             discogs_url TEXT,
+            cover_state TEXT,
+            cover_provider TEXT,
+            cover_source_url TEXT,
+            cover_cache_path TEXT,
+            cover_mime_type TEXT,
+            cover_message TEXT,
+            cover_checked_at TEXT,
             attempt_count INTEGER NOT NULL DEFAULT 1,
             checked_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -1582,12 +1602,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_musicbrainz_artist_info_tables(conn)?;
     ensure_musicbrainz_map_location_tables(conn)?;
     ensure_library_completion_discogs_columns(conn)?;
+    ensure_library_completion_cover_columns(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
     migrations::migrate_billboard_album_source_default(conn)?;
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 42;
+        PRAGMA user_version = 43;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -1893,6 +1914,27 @@ fn ensure_library_completion_discogs_columns(conn: &Connection) -> Result<()> {
             [],
         )
         .context("Could not add the Library Completion queue provider column")?;
+    }
+    Ok(())
+}
+
+fn ensure_library_completion_cover_columns(conn: &Connection) -> Result<()> {
+    for (name, definition) in [
+        ("cover_state", "TEXT"),
+        ("cover_provider", "TEXT"),
+        ("cover_source_url", "TEXT"),
+        ("cover_cache_path", "TEXT"),
+        ("cover_mime_type", "TEXT"),
+        ("cover_message", "TEXT"),
+        ("cover_checked_at", "TEXT"),
+    ] {
+        if !schema_column_exists(conn, "library_completion_verifications", name)? {
+            let sql = format!(
+                "ALTER TABLE library_completion_verifications ADD COLUMN {name} {definition}"
+            );
+            conn.execute(&sql, [])
+                .with_context(|| format!("Could not add Library Completion cover column {name}"))?;
+        }
     }
     Ok(())
 }
@@ -19632,7 +19674,7 @@ mod tests {
     }
 
     #[test]
-    fn schema_forty_two_preserves_every_chart_table() {
+    fn discogs_and_cover_schema_upgrades_preserve_every_chart_table() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
         migrate(&conn).expect("initial migration");
@@ -19693,10 +19735,12 @@ mod tests {
                     row.get(0)
                 })
                 .unwrap_or_else(|error| panic!("count preserved rows in {table}: {error}"));
-            assert_eq!(count, 1, "schema 42 must preserve {table}");
+            assert_eq!(count, 1, "provider schema upgrades must preserve {table}");
         }
         assert!(migrations::phase_forty_two_schema_exists(&conn)
             .expect("Discogs verification schema exists"));
+        assert!(migrations::phase_forty_three_schema_exists(&conn)
+            .expect("cover enrichment schema exists"));
     }
 
     #[test]

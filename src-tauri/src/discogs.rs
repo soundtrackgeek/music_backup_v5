@@ -11,7 +11,7 @@ use zeroize::{Zeroize, Zeroizing};
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.discogs";
 const KEYRING_USER: &str = "consumer-credentials";
 const DISCOGS_API_BASE: &str = "https://api.discogs.com";
-const DISCOGS_USER_AGENT: &str = "music-backup-v5/0.98.1 (local desktop Discogs verifier)";
+const DISCOGS_USER_AGENT: &str = "music-backup-v5/0.99.0 (local desktop Discogs verifier)";
 const REQUEST_INTERVAL: Duration = Duration::from_millis(1_200);
 const MAX_CREDENTIAL_LENGTH: usize = 256;
 
@@ -90,6 +90,8 @@ struct MasterPayload {
     artists: Vec<DiscogsArtist>,
     #[serde(default)]
     main_release: Option<i64>,
+    #[serde(default)]
+    images: Vec<DiscogsImage>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,6 +117,13 @@ struct DiscogsFormat {
     name: String,
     #[serde(default)]
     descriptions: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DiscogsImage {
+    #[serde(rename = "type", default)]
+    image_type: String,
+    uri: String,
 }
 
 #[derive(Deserialize)]
@@ -539,6 +548,31 @@ pub(crate) fn verify_album(
     })
 }
 
+pub(crate) fn master_cover_url(master_id: &str) -> Result<Option<String>> {
+    let master_id = master_id.trim();
+    if master_id.is_empty()
+        || !master_id
+            .chars()
+            .all(|character| character.is_ascii_digit())
+    {
+        bail!("The Discogs master identifier is invalid.")
+    }
+    let credentials = require_stored_credentials()?;
+    let master = get_json::<MasterPayload>(
+        &credentials,
+        &format!("/masters/{master_id}"),
+        &[],
+        "cover master lookup",
+    )?
+    .payload;
+    Ok(master
+        .images
+        .iter()
+        .find(|image| image.image_type.eq_ignore_ascii_case("primary"))
+        .or_else(|| master.images.first())
+        .map(|image| image.uri.clone()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -562,6 +596,32 @@ mod tests {
             "R.E.M.",
             "Automatic for the People"
         ));
+    }
+
+    #[test]
+    fn master_payload_prefers_primary_cover_images() {
+        let master = serde_json::from_str::<MasterPayload>(
+            r#"{
+                "id": 23683,
+                "title": "Mezzanine",
+                "year": 1998,
+                "artists": [{"name": "Massive Attack"}],
+                "main_release": 6530,
+                "images": [
+                    {"type": "secondary", "uri": "https://i.discogs.com/back.jpeg"},
+                    {"type": "primary", "uri": "https://i.discogs.com/front.jpeg"}
+                ]
+            }"#,
+        )
+        .expect("parse Discogs master response");
+
+        let cover = master
+            .images
+            .iter()
+            .find(|image| image.image_type.eq_ignore_ascii_case("primary"))
+            .or_else(|| master.images.first())
+            .map(|image| image.uri.as_str());
+        assert_eq!(cover, Some("https://i.discogs.com/front.jpeg"));
     }
 
     #[test]

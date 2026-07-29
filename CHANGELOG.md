@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.99.0] - 2026-07-29
+### Added
+- Added Phase 2C on-demand cover enrichment for verified Library Completion albums: MusicBrainz confirmations use Cover Art Archive release-group artwork, while Discogs confirmations use the primary master image.
+- Added independent persisted artwork states, local image caching, trusted-provider URL and content limits, cover retrieval after restart, and visible find, retry, unavailable, failed, and cached states in the candidate dossier.
+
+### Changed
+- Replaced ambiguous MusicBrainz and Discogs ledger labels with explicit per-provider badges for not checked, queued, checking, verified, no exact match, multiple matches, and failed outcomes.
+- Advanced SQLite to schema version 43 and synchronized app metadata and provider user agents to `0.99.0`.
+
+### Fixed
+- Kept cover enrichment isolated from album verification so a missing or temporarily unavailable image cannot change a confirmed studio-album result.
+- Extended the provider-schema migration regression to prove that all eight imported chart tables retain their rows while upgrading through the Discogs and cover-enrichment schemas.
+- Fixed Wish List Deemix jobs failing before audio download when Deezer omits artwork; the album now downloads and receives all non-picture tags, completes successfully, and shows a non-blocking artwork warning.
+
 ## [0.98.1] - 2026-07-29
 ### Fixed
 - Fixed Discogs credential testing and album lookup when the database search response encodes its `year` field as a JSON string instead of a number.

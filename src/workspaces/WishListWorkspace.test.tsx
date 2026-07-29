@@ -298,6 +298,7 @@ describe("WishListWorkspace", () => {
         quality: "mp3_320",
         destinationPath: `D:\\Music\\${input.expectedArtist} - ${input.expectedAlbum} (${input.expectedYear})`,
         coverPath: `D:\\Music\\${input.expectedArtist} - ${input.expectedAlbum} (${input.expectedYear})\\cover.jpg`,
+        warning: null,
         trackCount: 10,
         completedAt: "2026-07-26T12:30:00Z",
       }),
@@ -563,6 +564,40 @@ describe("WishListWorkspace", () => {
     expect(screen.getAllByText("Downloaded").length).toBeGreaterThan(0);
   });
 
+  it("completes the download with a warning when Deezer has no artwork", async () => {
+    downloadDeemixAlbum.mockResolvedValueOnce({
+      requestId: "no-cover-request",
+      albumId: "123",
+      artist: "Pet Shop Boys",
+      album: "Release (2017 Remaster)",
+      year: 2002,
+      quality: "mp3_320",
+      destinationPath: "D:\\Music\\Pet Shop Boys - Release (2017 Remaster) (2002)",
+      coverPath: null,
+      warning: "Downloaded without artwork because Deezer did not provide an album image.",
+      trackCount: 10,
+      completedAt: "2026-07-26T12:30:00Z",
+    });
+    render(<WishListWorkspace />);
+    await screen.findByText("Release");
+
+    fireEvent.click(screen.getByLabelText("Search Release with Deemix"));
+    await screen.findByText("Release (2017 Remaster)");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Download Release (2017 Remaster)" }),
+    );
+
+    expect(await screen.findByText("Downloaded and tagged 10 tracks")).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "Downloaded without artwork because Deezer did not provide an album image.",
+        { exact: false },
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("0 queued · 1 completed")).toBeInTheDocument();
+    expect(screen.queryByText(/1 failed/)).not.toBeInTheDocument();
+  });
+
   it("warns before a duplicate and only queues another copy after confirmation", async () => {
     preflightDeemixAlbumDownload.mockResolvedValue({
       alreadyDownloaded: true,
@@ -604,6 +639,7 @@ describe("WishListWorkspace", () => {
                 quality: "mp3_320",
                 destinationPath: "D:\\Music\\Pet Shop Boys - Please (1986)",
                 coverPath: "D:\\Music\\Pet Shop Boys - Please (1986)\\cover.jpg",
+                warning: null,
                 trackCount: 10,
                 completedAt: "2026-07-26T12:30:00Z",
               });
@@ -618,6 +654,7 @@ describe("WishListWorkspace", () => {
         quality: "mp3_320",
         destinationPath: "D:\\Music\\Pet Shop Boys - Actually (1987)",
         coverPath: "D:\\Music\\Pet Shop Boys - Actually (1987)\\cover.jpg",
+        warning: null,
         trackCount: 10,
         completedAt: "2026-07-26T12:31:00Z",
       }));

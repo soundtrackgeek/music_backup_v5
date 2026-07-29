@@ -8,6 +8,7 @@ import {
   Database,
   Download,
   Heart,
+  Image as ImageIcon,
   LayoutList,
   ListChecks,
   Pause,
@@ -21,7 +22,9 @@ import {
 
 import {
   addWishListMusicBrainzCandidate,
+  enrichLibraryCompletionCover,
   getLibraryCompletion,
+  getLibraryCompletionCoverDataUrl,
   getLibraryCompletionVerificationStatus,
   getDiscogsCredentialStatus,
   retryLibraryCompletionVerificationFailures,
@@ -89,11 +92,54 @@ function verificationLabel(candidate: LibraryCompletionCandidate) {
     case "queued": return "Queued";
     case "checking": return "Checking";
     case "verified": return "Verified";
-    case "noMatch": return "No match";
-    case "ambiguous": return "Review";
+    case "noMatch":
+    case "ambiguous": return "Manual review";
     case "failed": return "Failed";
     default: return "Unverified";
   }
+}
+
+type CompletionProviderStatus = LibraryCompletionCandidate["musicbrainzVerificationStatus"];
+
+function providerStatus(
+  candidate: LibraryCompletionCandidate,
+  provider: "musicbrainz" | "discogs",
+): CompletionProviderStatus {
+  const stored = provider === "musicbrainz"
+    ? candidate.musicbrainzVerificationStatus
+    : candidate.discogsVerificationStatus;
+  if (stored) return stored;
+  if (candidate.verificationProvider !== provider) return null;
+  return candidate.verificationStatus === "verified" ||
+    candidate.verificationStatus === "noMatch" ||
+    candidate.verificationStatus === "ambiguous" ||
+    candidate.verificationStatus === "failed"
+    ? candidate.verificationStatus
+    : null;
+}
+
+function ProviderStatusBadge({
+  status,
+  activity,
+}: {
+  status: CompletionProviderStatus;
+  activity?: "checking" | "queued" | null;
+}) {
+  const key = activity ?? status ?? "notChecked";
+  const label = activity === "checking"
+    ? "Checking…"
+    : activity === "queued"
+      ? "Queued"
+      : status === "verified"
+        ? "Checked · verified"
+        : status === "noMatch"
+          ? "Checked · no exact match"
+          : status === "ambiguous"
+            ? "Checked · multiple matches"
+            : status === "failed"
+              ? "Failed"
+              : "Not checked";
+  return <span className={`completion-provider-status ${key}`}>{label}</span>;
 }
 
 function verificationEta(seconds: number) {
@@ -130,6 +176,8 @@ export function LibraryCompletionWorkspace({
   const [discogsStatus, setDiscogsStatus] = useState<DiscogsCredentialStatus | null>(null);
   const [selectedForVerification, setSelectedForVerification] = useState<Set<string>>(() => new Set());
   const [pendingQueueAction, setPendingQueueAction] = useState(false);
+  const [pendingCoverId, setPendingCoverId] = useState<string | null>(null);
+  const [coverUrls, setCoverUrls] = useState<Map<string, string>>(() => new Map());
   const completedBatchReloadRef = useRef<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const candidateRowsRef = useRef(new Map<string, HTMLDivElement>());
@@ -224,6 +272,9 @@ export function LibraryCompletionWorkspace({
     data?.atlas.find((cell) => `${cell.source}-${cell.decade}` === selectedAtlasId) ??
     data?.atlas[0] ??
     null;
+  const selectedCoverUrl = selected
+    ? coverUrls.get(selected.id) ?? selected.coverUrl
+    : null;
   const decades = useMemo(
     () => [...new Set(data?.atlas.map((cell) => cell.decade) ?? [])].sort((a, b) => a - b),
     [data],
@@ -310,6 +361,27 @@ export function LibraryCompletionWorkspace({
       }),
     } : current);
   }, []);
+
+  useEffect(() => {
+    if (
+      !selected ||
+      selected.coverStatus !== "available" ||
+      selected.coverUrl ||
+      coverUrls.has(selected.id)
+    ) return;
+    let cancelled = false;
+    void getLibraryCompletionCoverDataUrl(selected.id).then((dataUrl) => {
+      if (cancelled || !dataUrl) return;
+      setCoverUrls((current) => {
+        const next = new Map(current);
+        next.set(selected.id, dataUrl);
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [coverUrls, selected]);
 
   useEffect(() => {
     if (
@@ -634,6 +706,47 @@ export function LibraryCompletionWorkspace({
     }
   }
 
+  async function enrichCover() {
+    if (!selected) return;
+    setPendingCoverId(selected.id);
+    setError(null);
+    setData((current) => current ? {
+      ...current,
+      candidates: current.candidates.map((candidate) => candidate.id === selected.id
+        ? { ...candidate, coverStatus: "checking" }
+        : candidate),
+    } : current);
+    try {
+      const result = await enrichLibraryCompletionCover(selected.id);
+      setData((current) => current ? {
+        ...current,
+        candidates: current.candidates.map((candidate) => candidate.id === selected.id
+          ? {
+              ...candidate,
+              coverStatus: result.state,
+              coverProvider: result.provider,
+              coverMessage: result.message,
+              coverCheckedAt: result.checkedAt,
+            }
+          : candidate),
+      } : current);
+      if (result.hasCover) {
+        const dataUrl = await getLibraryCompletionCoverDataUrl(selected.id);
+        if (dataUrl) {
+          setCoverUrls((current) => {
+            const next = new Map(current);
+            next.set(selected.id, dataUrl);
+            return next;
+          });
+        }
+      }
+    } catch (coverError) {
+      setError(coverError instanceof Error ? coverError.message : String(coverError));
+    } finally {
+      setPendingCoverId(null);
+    }
+  }
+
   async function reviewAtlasCell(cell: LibraryCompletionAtlasCell) {
     const nextCampaign = { source: cell.source, decade: cell.decade, label: cell.label };
     setCampaign(nextCampaign);
@@ -858,8 +971,8 @@ export function LibraryCompletionWorkspace({
                     type="button"
                     onClick={() => setSelectedId(candidate.id)}
                   >
-                    {candidate.coverUrl ? (
-                      <img src={candidate.coverUrl} alt="" />
+                    {coverUrls.get(candidate.id) ?? candidate.coverUrl ? (
+                      <img src={(coverUrls.get(candidate.id) ?? candidate.coverUrl)!} alt="" />
                     ) : (
                       <span className="completion-cover-fallback"><Album size={19} /></span>
                     )}
@@ -888,8 +1001,8 @@ export function LibraryCompletionWorkspace({
             {selected ? (
               <>
                 <div className="completion-dossier-heading">
-                  {selected.coverUrl ? (
-                    <img src={selected.coverUrl} alt={`${selected.title} cover artwork`} />
+                  {selectedCoverUrl ? (
+                    <img src={selectedCoverUrl} alt={`${selected.title} cover artwork`} />
                   ) : (
                     <span className="completion-dossier-cover-fallback"><Album size={28} /></span>
                   )}
@@ -943,10 +1056,17 @@ export function LibraryCompletionWorkspace({
                       <strong>MusicBrainz</strong>
                       <p>{selected.musicbrainzVerificationMessage ?? (selected.verificationProvider === "musicbrainz" ? selected.verificationMessage : null) ?? "Checks primary Album type, secondary classifications, and official release status first."}</p>
                     </div>
-                    {selected.musicbrainzVerificationStatus === "verified" || (selected.verificationStatus === "verified" && selected.verificationProvider === "musicbrainz") ? (
-                      <div className="completion-ledger-actions">
-                        <span className="completion-verified">Verified studio album</span>
-                        {selected.status === "wanted" ? (
+                    <div className="completion-ledger-actions">
+                      <ProviderStatusBadge
+                        status={providerStatus(selected, "musicbrainz")}
+                        activity={selected.verificationStatus === "queued"
+                          ? "queued"
+                          : selected.verificationStatus === "checking" && selected.verificationProvider !== "discogs"
+                            ? "checking"
+                            : null}
+                      />
+                      {providerStatus(selected, "musicbrainz") === "verified" ? (
+                        selected.status === "wanted" ? (
                           <span>In Wanted</span>
                         ) : (
                           <button
@@ -956,13 +1076,8 @@ export function LibraryCompletionWorkspace({
                           >
                             <Heart size={13} /> Add to Wanted
                           </button>
-                        )}
-                      </div>
-                    ) : selected.verificationStatus === "queued" ? (
-                      <span>Queued</span>
-                    ) : selected.verificationStatus === "checking" && selected.verificationProvider !== "discogs" ? (
-                      <span>Checking…</span>
-                    ) : selected.musicbrainzVerificationStatus === "ambiguous" || selected.musicbrainzVerificationStatus === "noMatch" || selected.verificationStatus === "ambiguous" || selected.verificationStatus === "noMatch" ? (
+                        )
+                      ) : providerStatus(selected, "musicbrainz") === "ambiguous" || providerStatus(selected, "musicbrainz") === "noMatch" ? (
                       <button type="button" disabled={isCheckingMusicBrainz} onClick={() => void checkMusicBrainz()}>
                         {isCheckingMusicBrainz
                           ? "Searching…"
@@ -970,15 +1085,24 @@ export function LibraryCompletionWorkspace({
                             ? `${musicBrainzCandidates.length} found`
                             : "Review matches"}
                       </button>
-                    ) : (
+                      ) : providerStatus(selected, "musicbrainz") === "failed" ? (
                       <button
                         type="button"
                         disabled={pendingQueueAction || hasActiveVerification}
                         onClick={() => verifyCandidate(selected)}
                       >
-                        {selected.verificationStatus === "failed" ? "Retry in queue" : "Verify album"}
+                        Retry in queue
                       </button>
-                    )}
+                      ) : selected.verificationStatus !== "queued" && selected.verificationStatus !== "checking" ? (
+                        <button
+                          type="button"
+                          disabled={pendingQueueAction || hasActiveVerification}
+                          onClick={() => verifyCandidate(selected)}
+                        >
+                          Verify album
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   <div className={`completion-ledger-row ${discogsStatus?.configured || selected.discogsVerificationStatus ? "" : "muted"}`}>
                     <span className="completion-ledger-icon"><Database size={15} /></span>
@@ -992,9 +1116,15 @@ export function LibraryCompletionWorkspace({
                         )}
                       </p>
                     </div>
-                    {selected.discogsVerificationStatus === "verified" ? (
-                      <div className="completion-ledger-actions">
-                        <span className="completion-verified">Verified via Discogs</span>
+                    <div className="completion-ledger-actions">
+                      <ProviderStatusBadge
+                        status={providerStatus(selected, "discogs")}
+                        activity={selected.verificationStatus === "checking" && selected.verificationProvider === "discogs"
+                          ? "checking"
+                          : null}
+                      />
+                      {providerStatus(selected, "discogs") === "verified" ? (
+                        <>
                         {selected.discogsMasterId ? <span>Master #{selected.discogsMasterId}</span> : null}
                         {selected.status === "wanted" ? (
                           <span>In Wanted</span>
@@ -1007,10 +1137,8 @@ export function LibraryCompletionWorkspace({
                             <Heart size={13} /> Add to Wanted
                           </button>
                         )}
-                      </div>
-                    ) : selected.verificationStatus === "checking" && selected.verificationProvider === "discogs" ? (
-                      <span>Checking fallback…</span>
-                    ) : selected.discogsVerificationStatus === "failed" ? (
+                        </>
+                      ) : providerStatus(selected, "discogs") === "failed" ? (
                       <button
                         type="button"
                         disabled={pendingQueueAction || hasActiveVerification}
@@ -1018,7 +1146,7 @@ export function LibraryCompletionWorkspace({
                       >
                         Retry fallback
                       </button>
-                    ) : discogsStatus?.configured && selected.discogsVerificationStatus == null && (selected.verificationStatus === "noMatch" || selected.verificationStatus === "ambiguous") ? (
+                      ) : discogsStatus?.configured && providerStatus(selected, "discogs") == null && (selected.verificationStatus === "noMatch" || selected.verificationStatus === "ambiguous") ? (
                       <button
                         type="button"
                         disabled={pendingQueueAction || hasActiveVerification}
@@ -1026,11 +1154,44 @@ export function LibraryCompletionWorkspace({
                       >
                         Try fallback
                       </button>
-                    ) : selected.discogsVerificationStatus === "noMatch" || selected.discogsVerificationStatus === "ambiguous" ? (
-                      <span>Review needed</span>
-                    ) : (
-                      <span>{discogsStatus?.configured ? "Automatic fallback" : "Not configured"}</span>
-                    )}
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="completion-ledger-row">
+                    <span className="completion-ledger-icon"><ImageIcon size={15} /></span>
+                    <div>
+                      <strong>Cover artwork</strong>
+                      <p>
+                        {selected.coverMessage ?? (
+                          selected.verificationStatus === "verified"
+                            ? "Fetch one cover from the provider that verified this studio album and cache it locally."
+                            : "Cover search becomes available after this album is verified."
+                        )}
+                      </p>
+                    </div>
+                    <div className="completion-ledger-actions" aria-live="polite">
+                      <span className={`completion-provider-status cover-${selected.coverStatus ?? "notChecked"}`}>
+                        {selected.coverStatus === "available"
+                          ? `Cached · ${selected.coverProvider === "discogs" ? "Discogs" : "Cover Art Archive"}`
+                          : selected.coverStatus === "checking"
+                            ? "Fetching…"
+                            : selected.coverStatus === "unavailable"
+                              ? "Checked · no cover"
+                              : selected.coverStatus === "failed"
+                                ? "Failed"
+                                : "Not checked"}
+                      </span>
+                      {selected.verificationStatus === "verified" && selected.coverStatus !== "checking" && selected.coverStatus !== "available" ? (
+                        <button
+                          type="button"
+                          disabled={pendingCoverId === selected.id}
+                          onClick={() => void enrichCover()}
+                        >
+                          <ImageIcon size={13} />
+                          {selected.coverStatus === "failed" || selected.coverStatus === "unavailable" ? "Check again" : "Find cover"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </section>
 

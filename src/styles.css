@@ -972,13 +972,60 @@ button {
   flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
+  max-width: 44%;
 }
 
 .completion-ledger-actions > span {
   color: #71807b;
   font-size: 10px;
   font-weight: 750;
+}
+
+.completion-provider-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  border: 1px solid #d4ddda;
+  border-radius: 999px;
+  color: #5e6c67 !important;
+  background: #f2f5f4;
+  padding: 2px 8px;
+  font-size: 9px !important;
+  font-weight: 850 !important;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.completion-provider-status.verified,
+.completion-provider-status.cover-available {
+  border-color: #8abdb4;
+  color: #09665d !important;
+  background: #dff2ee;
+}
+
+.completion-provider-status.noMatch,
+.completion-provider-status.ambiguous,
+.completion-provider-status.cover-unavailable {
+  border-color: #d9c381;
+  color: #735616 !important;
+  background: #fff4d8;
+}
+
+.completion-provider-status.failed,
+.completion-provider-status.cover-failed {
+  border-color: #d7a4a4;
+  color: #813f3f !important;
+  background: #fae8e8;
+}
+
+.completion-provider-status.checking,
+.completion-provider-status.queued,
+.completion-provider-status.cover-checking {
+  border-color: #8bbdb4;
+  color: #08665d !important;
+  background: #e0f2ee;
 }
 
 .completion-ledger-actions > button {
@@ -1604,6 +1651,42 @@ button {
   border-color: #4d8d82;
   color: #c5f0e7;
   background: #24433d;
+}
+
+:root[data-theme="dark"] .completion-provider-status {
+  border-color: #55655f;
+  color: #c4d0cc !important;
+  background: #29332f;
+}
+
+:root[data-theme="dark"] .completion-provider-status.verified,
+:root[data-theme="dark"] .completion-provider-status.cover-available {
+  border-color: #4f9589;
+  color: #c9f3ea !important;
+  background: #25453e;
+}
+
+:root[data-theme="dark"] .completion-provider-status.noMatch,
+:root[data-theme="dark"] .completion-provider-status.ambiguous,
+:root[data-theme="dark"] .completion-provider-status.cover-unavailable {
+  border-color: #8b7845;
+  color: #f0dc98 !important;
+  background: #3a321e;
+}
+
+:root[data-theme="dark"] .completion-provider-status.failed,
+:root[data-theme="dark"] .completion-provider-status.cover-failed {
+  border-color: #8c5656;
+  color: #f1baba !important;
+  background: #3b2525;
+}
+
+:root[data-theme="dark"] .completion-provider-status.checking,
+:root[data-theme="dark"] .completion-provider-status.queued,
+:root[data-theme="dark"] .completion-provider-status.cover-checking {
+  border-color: #528f84;
+  color: #c5eee6 !important;
+  background: #29443e;
 }
 
 @media (max-width: 1180px) {
@@ -13733,6 +13816,11 @@ button {
   padding: 12px 14px;
 }
 
+.deemix-download-complete small.warning {
+  color: #8a651d;
+  font-weight: 700;
+}
+
 .deemix-download-progress > div,
 .deemix-download-complete {
   display: flex;
@@ -14191,6 +14279,10 @@ button {
   border-color: #37665c;
   color: #88d7c8;
   background: #17352f;
+}
+
+:root[data-theme="dark"] .deemix-download-complete small.warning {
+  color: #e4c876;
 }
 
 :root[data-theme="dark"] .deemix-account-card span {

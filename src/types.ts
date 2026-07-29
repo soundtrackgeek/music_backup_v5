@@ -1075,6 +1075,10 @@ export type LibraryCompletionCandidate = {
   musicbrainzId: string | null;
   musicbrainzUrl: string | null;
   coverUrl: string | null;
+  coverStatus: "checking" | "available" | "unavailable" | "failed" | null;
+  coverProvider: "musicbrainz" | "discogs" | null;
+  coverMessage: string | null;
+  coverCheckedAt: string | null;
   verificationStatus:
     | "unverified"
     | "queued"
@@ -1093,6 +1097,15 @@ export type LibraryCompletionCandidate = {
   discogsMasterId: string | null;
   discogsUrl: string | null;
   evidence: LibraryCompletionEvidence[];
+};
+
+export type LibraryCompletionCoverEnrichment = {
+  candidateId: string;
+  state: Exclude<LibraryCompletionCandidate["coverStatus"], null>;
+  provider: LibraryCompletionCandidate["coverProvider"];
+  message: string;
+  hasCover: boolean;
+  checkedAt: string;
 };
 
 export type LibraryCompletionAtlasCell = {
@@ -1317,7 +1330,8 @@ export type DeemixAlbumDownloadSummary = {
   year: number | null;
   quality: DeemixDownloadQuality;
   destinationPath: string;
-  coverPath: string;
+  coverPath: string | null;
+  warning: string | null;
   trackCount: number;
   completedAt: string;
 };

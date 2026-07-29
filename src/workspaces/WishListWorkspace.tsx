@@ -1617,7 +1617,9 @@ export function WishListWorkspace() {
                     {job.status === "downloading"
                       ? downloadProgress?.message ?? "Downloading…"
                       : job.status === "complete"
-                        ? job.summary?.destinationPath ?? "Download complete"
+                        ? job.summary?.warning
+                          ? `${job.summary.warning} · ${job.summary.destinationPath}`
+                          : job.summary?.destinationPath ?? "Download complete"
                         : job.status === "failed"
                           ? job.error ?? "Download failed"
                           : "Waiting for the current album"}
@@ -1655,8 +1657,12 @@ export function WishListWorkspace() {
               <div>
                 <strong>Downloaded and tagged {downloadSummary.trackCount} tracks</strong>
                 <span>{downloadSummary.destinationPath}</span>
-                <small>
-                  Cover embedded and saved as {downloadSummary.coverPath.split(/[\\/]/).pop()}
+                <small className={downloadSummary.warning ? "warning" : undefined}>
+                  {downloadSummary.warning ?? (
+                    downloadSummary.coverPath
+                      ? `Cover embedded and saved as ${downloadSummary.coverPath.split(/[\\/]/).pop()}`
+                      : "Downloaded without artwork"
+                  )}
                 </small>
               </div>
             </div>

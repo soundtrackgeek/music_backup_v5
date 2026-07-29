@@ -6,6 +6,8 @@ import { LibraryCompletionWorkspace } from "./LibraryCompletionWorkspace";
 const getLibraryCompletion = vi.fn();
 const getLibraryCompletionVerificationStatus = vi.fn();
 const getDiscogsCredentialStatus = vi.fn();
+const getLibraryCompletionCoverDataUrl = vi.fn();
+const enrichLibraryCompletionCover = vi.fn();
 const startLibraryCompletionVerification = vi.fn();
 const setLibraryCompletionVerificationState = vi.fn();
 const retryLibraryCompletionVerificationFailures = vi.fn();
@@ -20,6 +22,10 @@ vi.mock("../backend", () => ({
     getLibraryCompletionVerificationStatus(...args),
   getDiscogsCredentialStatus: (...args: unknown[]) =>
     getDiscogsCredentialStatus(...args),
+  getLibraryCompletionCoverDataUrl: (...args: unknown[]) =>
+    getLibraryCompletionCoverDataUrl(...args),
+  enrichLibraryCompletionCover: (...args: unknown[]) =>
+    enrichLibraryCompletionCover(...args),
   startLibraryCompletionVerification: (...args: unknown[]) =>
     startLibraryCompletionVerification(...args),
   setLibraryCompletionVerificationState: (...args: unknown[]) =>
@@ -53,6 +59,10 @@ const response = {
       musicbrainzId: null,
       musicbrainzUrl: null,
       coverUrl: null,
+      coverStatus: null,
+      coverProvider: null,
+      coverMessage: null,
+      coverCheckedAt: null,
       verificationStatus: "unverified",
       verificationProvider: null,
       verificationMessage: null,
@@ -171,6 +181,17 @@ describe("LibraryCompletionWorkspace", () => {
       configured: true,
       source: "windowsCredentialManager",
     });
+    getLibraryCompletionCoverDataUrl.mockResolvedValue(
+      "data:image/png;base64,cHJldmlldw==",
+    );
+    enrichLibraryCompletionCover.mockResolvedValue({
+      candidateId: response.candidates[0].id,
+      state: "available",
+      provider: "musicbrainz",
+      message: "Cover Art Archive artwork is cached locally.",
+      hasCover: true,
+      checkedAt: "2026-07-29T10:06:00Z",
+    });
     startLibraryCompletionVerification.mockResolvedValue(runningVerificationStatus);
     setLibraryCompletionVerificationState.mockResolvedValue({
       ...runningVerificationStatus,
@@ -254,13 +275,19 @@ describe("LibraryCompletionWorkspace", () => {
       candidates: [{
         ...response.candidates[0],
         verificationStatus: "noMatch",
+        verificationProvider: "musicbrainz",
         verificationMessage: "MusicBrainz returned no exact artist and primary Album title match.",
         verificationCheckedAt: "2026-07-29T10:05:00Z",
+        musicbrainzVerificationStatus: "noMatch",
+        musicbrainzVerificationMessage:
+          "MusicBrainz returned no exact artist and primary Album title match.",
       }],
     });
     render(<LibraryCompletionWorkspace onOpenWishList={vi.fn()} />);
 
     await screen.findByRole("heading", { name: "The Colour of Spring" });
+    expect(screen.getByText("Checked · no exact match")).toBeInTheDocument();
+    expect(screen.getAllByText("Manual review").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Review matches" }));
 
     expect(await screen.findByText("No studio-album match found")).toBeInTheDocument();
@@ -407,5 +434,53 @@ describe("LibraryCompletionWorkspace", () => {
         label: "Talk Talk — The Colour of Spring",
       });
     });
+  });
+
+  it("shows explicit provider outcomes after both providers were checked", async () => {
+    getLibraryCompletion.mockResolvedValue({
+      ...response,
+      candidates: [{
+        ...response.candidates[0],
+        verificationStatus: "noMatch",
+        verificationProvider: "discogs",
+        verificationMessage: "Neither provider returned one exact studio-album match.",
+        verificationCheckedAt: "2026-07-29T10:05:02Z",
+        musicbrainzVerificationStatus: "noMatch",
+        musicbrainzVerificationMessage: "MusicBrainz returned no exact artist and primary Album title match.",
+        discogsVerificationStatus: "noMatch",
+        discogsVerificationMessage: "Discogs returned no exact artist and master-title match.",
+      }],
+    });
+    render(<LibraryCompletionWorkspace onOpenWishList={vi.fn()} />);
+
+    await screen.findByRole("heading", { name: "The Colour of Spring" });
+    expect(screen.getAllByText("Checked · no exact match")).toHaveLength(2);
+    expect(screen.queryByText("Review needed")).not.toBeInTheDocument();
+  });
+
+  it("fetches and displays a cover for a verified studio album", async () => {
+    getLibraryCompletion.mockResolvedValue({
+      ...response,
+      candidates: [{
+        ...response.candidates[0],
+        verificationStatus: "verified",
+        verificationProvider: "musicbrainz",
+        verificationMessage: "MusicBrainz confirmed an official studio album.",
+        verificationCheckedAt: "2026-07-29T10:05:02Z",
+        musicbrainzId: "01234567-89ab-cdef-0123-456789abcdef",
+        musicbrainzVerificationStatus: "verified",
+        musicbrainzVerificationMessage: "MusicBrainz confirmed an official studio album.",
+      }],
+    });
+    render(<LibraryCompletionWorkspace onOpenWishList={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Find cover" }));
+
+    await waitFor(() => {
+      expect(enrichLibraryCompletionCover).toHaveBeenCalledWith(response.candidates[0].id);
+    });
+    expect(await screen.findByText("Cached · Cover Art Archive")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "The Colour of Spring cover artwork" }))
+      .toHaveAttribute("src", "data:image/png;base64,cHJldmlldw==");
   });
 });

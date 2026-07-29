@@ -1,7 +1,6 @@
 #![cfg_attr(test, allow(dead_code, unused_imports))]
 
 mod ai;
-#[cfg(not(test))]
 mod covers;
 mod db;
 mod deemix;
@@ -1048,6 +1047,34 @@ async fn get_album_cover_data_url(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn enrich_library_completion_cover(
+    app: AppHandle,
+    candidate_id: String,
+) -> Result<covers::LibraryCompletionCoverEnrichment, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        covers::enrich_library_completion_cover(app, candidate_id)
+    })
+    .await
+    .map_err(|error| format!("Cover enrichment task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_library_completion_cover_data_url(
+    app: AppHandle,
+    candidate_id: String,
+) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        covers::library_completion_cover_data_url(app, candidate_id)
+    })
+    .await
+    .map_err(|error| format!("Enriched cover image task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn import_billboard_singles(
     app: AppHandle,
     source_path: String,
@@ -1428,6 +1455,8 @@ pub fn run() {
             import_ti_i_skuddet_singles,
             import_norsktoppen_singles,
             get_album_cover_data_url,
+            enrich_library_completion_cover,
+            get_library_completion_cover_data_url,
             search_library,
             list_artists,
             list_genres,

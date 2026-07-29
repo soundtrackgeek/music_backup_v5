@@ -96,7 +96,8 @@ pub struct DeemixAlbumDownloadSummary {
     pub year: Option<i32>,
     pub quality: String,
     pub destination_path: String,
-    pub cover_path: String,
+    pub cover_path: Option<String>,
+    pub warning: Option<String>,
     pub track_count: usize,
     pub completed_at: String,
 }
@@ -194,7 +195,7 @@ struct AlbumMetadata {
     genres: Vec<String>,
     upc: Option<String>,
     copyright: Option<String>,
-    cover_url: String,
+    cover_url: Option<String>,
     disc_total: u32,
     tracks: Vec<TrackMetadata>,
 }
@@ -449,7 +450,7 @@ pub fn download_album_for_app(
     fs::create_dir(&stage_path).context("Could not create the Deemix staging folder")?;
 
     let result = download_album_to_stage(app, &input, &session, &album, &stage_path)
-        .and_then(|cover_name| {
+        .and_then(|(cover_name, warning)| {
             if destination.exists() {
                 bail!(
                     "The destination album folder was created by another process. Existing files were not changed."
@@ -461,7 +462,9 @@ pub fn download_album_for_app(
             }
             fs::rename(&stage_path, &destination)
                 .context("Could not finalize the downloaded album folder")?;
-            let cover_path = destination.join(cover_name);
+            let cover_path = cover_name
+                .as_deref()
+                .map(|name| destination.join(name).to_string_lossy().into_owned());
             Ok(DeemixAlbumDownloadSummary {
                 request_id: input.request_id.clone(),
                 album_id: album.id.clone(),
@@ -470,7 +473,8 @@ pub fn download_album_for_app(
                 year: album.year,
                 quality: quality.setting_value().to_string(),
                 destination_path: destination.to_string_lossy().into_owned(),
-                cover_path: cover_path.to_string_lossy().into_owned(),
+                cover_path,
+                warning,
                 track_count: album.tracks.len(),
                 completed_at: Utc::now().to_rfc3339(),
             })
@@ -492,7 +496,7 @@ pub fn download_album_for_app(
                 &receipt_input,
                 &summary.quality,
                 Path::new(&summary.destination_path),
-                Some(Path::new(&summary.cover_path)),
+                summary.cover_path.as_deref().map(Path::new),
                 summary.track_count,
                 &summary.completed_at,
                 "download",
@@ -501,11 +505,19 @@ pub fn download_album_for_app(
                 app,
                 &input,
                 "complete",
-                &format!(
-                    "Downloaded and tagged {} tracks: {}.",
-                    summary.track_count,
-                    quality_breakdown(&album)
-                ),
+                &if summary.warning.is_some() {
+                    format!(
+                        "Downloaded and tagged {} tracks without album artwork: {}.",
+                        summary.track_count,
+                        quality_breakdown(&album)
+                    )
+                } else {
+                    format!(
+                        "Downloaded and tagged {} tracks: {}.",
+                        summary.track_count,
+                        quality_breakdown(&album)
+                    )
+                },
                 None,
                 summary.track_count,
                 summary.track_count,
@@ -537,7 +549,7 @@ fn download_album_to_stage(
     session: &AuthenticatedSession,
     album: &AlbumMetadata,
     stage_path: &Path,
-) -> Result<String> {
+) -> Result<(Option<String>, Option<String>)> {
     emit_progress(
         app,
         input,
@@ -547,10 +559,46 @@ fn download_album_to_stage(
         0,
         album.tracks.len(),
     );
-    let artwork = download_artwork(&album.cover_url)?;
-    let cover_name = format!("cover.{}", artwork.extension);
-    fs::write(stage_path.join(&cover_name), &artwork.bytes)
-        .context("Could not save the album cover")?;
+    let (artwork, cover_name, artwork_warning) = match album.cover_url.as_deref() {
+        Some(cover_url) => match download_artwork(cover_url) {
+            Ok(artwork) => {
+                let cover_name = format!("cover.{}", artwork.extension);
+                fs::write(stage_path.join(&cover_name), &artwork.bytes)
+                    .context("Could not save the album cover")?;
+                (Some(artwork), Some(cover_name), None)
+            }
+            Err(error) => {
+                let warning = format!(
+                    "Downloaded without artwork because Deezer artwork was unavailable: {error}"
+                );
+                emit_progress(
+                    app,
+                    input,
+                    "artwork",
+                    "Album artwork is unavailable; continuing with the audio download.",
+                    None,
+                    0,
+                    album.tracks.len(),
+                );
+                (None, None, Some(warning))
+            }
+        },
+        None => {
+            let warning =
+                "Downloaded without artwork because Deezer did not provide an album image."
+                    .to_string();
+            emit_progress(
+                app,
+                input,
+                "artwork",
+                "Deezer did not provide album artwork; continuing with the audio download.",
+                None,
+                0,
+                album.tracks.len(),
+            );
+            (None, None, Some(warning))
+        }
+    };
 
     let mut used_names = HashSet::new();
     for (index, track) in album.tracks.iter().enumerate() {
@@ -580,12 +628,12 @@ fn download_album_to_stage(
             completed,
             album.tracks.len(),
         );
-        write_audio_tags(&part_path, album, track, &artwork)
+        write_audio_tags(&part_path, album, track, artwork.as_ref())
             .with_context(|| format!("Could not tag {}", track.title))?;
         fs::rename(&part_path, &final_path)
             .with_context(|| format!("Could not finalize {}", file_name))?;
     }
-    Ok(cover_name)
+    Ok((cover_name, artwork_warning))
 }
 
 #[cfg(not(test))]
@@ -1004,8 +1052,7 @@ fn parse_album_metadata(
     let cover_url = first_nonempty([
         string_value(public_album.get("cover_xl")),
         string_value(public_album.get("cover_big")),
-    ])
-    .context("Deezer did not provide album artwork")?;
+    ]);
 
     let gw_values = gateway_tracks
         .get("data")
@@ -1291,7 +1338,7 @@ fn write_audio_tags(
     path: &Path,
     album: &AlbumMetadata,
     track: &TrackMetadata,
-    artwork: &Artwork,
+    artwork: Option<&Artwork>,
 ) -> Result<()> {
     match track.download_quality {
         DownloadQuality::Mp3_128 | DownloadQuality::Mp3_320 => {
@@ -1305,7 +1352,7 @@ fn write_mp3_tags(
     path: &Path,
     album: &AlbumMetadata,
     track: &TrackMetadata,
-    artwork: &Artwork,
+    artwork: Option<&Artwork>,
 ) -> Result<()> {
     let mut tag = Tag::new();
     tag.set_title(&track.title);
@@ -1373,12 +1420,14 @@ fn write_mp3_tags(
         description: "SOURCEID".to_string(),
         value: track.id.clone(),
     });
-    tag.add_frame(Picture {
-        mime_type: artwork.mime_type.clone(),
-        picture_type: PictureType::CoverFront,
-        description: "cover".to_string(),
-        data: artwork.bytes.clone(),
-    });
+    if let Some(artwork) = artwork {
+        tag.add_frame(Picture {
+            mime_type: artwork.mime_type.clone(),
+            picture_type: PictureType::CoverFront,
+            description: "cover".to_string(),
+            data: artwork.bytes.clone(),
+        });
+    }
     tag.write_to_path(path, Version::Id3v24)
         .context("Could not write ID3 tags")?;
     Ok(())
@@ -1388,7 +1437,7 @@ fn write_flac_tags(
     path: &Path,
     album: &AlbumMetadata,
     track: &TrackMetadata,
-    artwork: &Artwork,
+    artwork: Option<&Artwork>,
 ) -> Result<()> {
     let mut tag = FlacTag::read_from_path(path).context("Could not read FLAC metadata")?;
     tag.set_vorbis("TITLE", vec![track.title.clone()]);
@@ -1447,11 +1496,13 @@ fn write_flac_tags(
     );
     tag.set_vorbis("SOURCE", vec!["Deezer".to_string()]);
     tag.set_vorbis("SOURCEID", vec![track.id.clone()]);
-    tag.add_picture(
-        artwork.mime_type.clone(),
-        FlacPictureType::CoverFront,
-        artwork.bytes.clone(),
-    );
+    if let Some(artwork) = artwork {
+        tag.add_picture(
+            artwork.mime_type.clone(),
+            FlacPictureType::CoverFront,
+            artwork.bytes.clone(),
+        );
+    }
     tag.save().context("Could not write FLAC tags")?;
     Ok(())
 }
@@ -2163,6 +2214,21 @@ mod tests {
             album.tracks[0].involved_people,
             vec![("producer".to_string(), "Steve Albini".to_string())]
         );
+
+        let mut public_without_cover = public.clone();
+        public_without_cover
+            .as_object_mut()
+            .expect("public album object")
+            .remove("cover_xl");
+        let album_without_cover = parse_album_metadata(
+            "240766",
+            &public_without_cover,
+            &gateway_album,
+            &gateway_tracks,
+            &[DownloadQuality::Mp3_320],
+        )
+        .expect("album metadata without optional artwork");
+        assert!(album_without_cover.cover_url.is_none());
     }
 
     #[test]
@@ -2245,7 +2311,7 @@ mod tests {
             Utc::now().timestamp_nanos_opt().unwrap_or_default()
         ));
         fs::write(&path, [0xFF, 0xFB, 0x90, 0x64, 0, 0, 0, 0]).expect("seed mp3");
-        write_mp3_tags(&path, &album, &track, &artwork).expect("write tags");
+        write_mp3_tags(&path, &album, &track, Some(&artwork)).expect("write tags");
 
         let tag = Tag::read_from_path(&path).expect("read tags");
         assert_eq!(tag.title(), Some("In The Meantime"));
@@ -2269,6 +2335,27 @@ mod tests {
     }
 
     #[test]
+    fn writes_complete_mp3_tags_without_optional_artwork() {
+        let mut album = fixture_album();
+        album.cover_url = None;
+        let track = fixture_track(DownloadQuality::Mp3_320);
+        album.tracks.push(track.clone());
+        let path = std::env::temp_dir().join(format!(
+            "music-library-deemix-no-cover-tag-test-{}-{}.mp3",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        fs::write(&path, [0xFF, 0xFB, 0x90, 0x64, 0, 0, 0, 0]).expect("seed mp3");
+
+        write_mp3_tags(&path, &album, &track, None).expect("write tags without artwork");
+
+        let tag = Tag::read_from_path(&path).expect("read tags without artwork");
+        assert_eq!(tag.album(), Some("Meantime"));
+        assert_eq!(tag.pictures().count(), 0);
+        fs::remove_file(&path).expect("remove no-cover tag test file");
+    }
+
+    #[test]
     fn writes_complete_flac_tags_and_embedded_cover() {
         let mut album = fixture_album();
         let track = fixture_track(DownloadQuality::Flac);
@@ -2287,7 +2374,7 @@ mod tests {
         minimal_flac.extend_from_slice(&[0x80, 0x00, 0x00, 0x22]);
         minimal_flac.extend_from_slice(&[0; 34]);
         fs::write(&path, minimal_flac).expect("seed FLAC");
-        write_flac_tags(&path, &album, &track, &artwork).expect("write FLAC tags");
+        write_flac_tags(&path, &album, &track, Some(&artwork)).expect("write FLAC tags");
 
         let tag = FlacTag::read_from_path(&path).expect("read FLAC tags");
         assert_eq!(
@@ -2336,7 +2423,9 @@ mod tests {
             genres: vec!["Alternative".to_string()],
             upc: Some("606949216221".to_string()),
             copyright: Some("1992 Interscope".to_string()),
-            cover_url: "https://cdn-images.dzcdn.net/images/cover/hash/1000x1000.jpg".to_string(),
+            cover_url: Some(
+                "https://cdn-images.dzcdn.net/images/cover/hash/1000x1000.jpg".to_string(),
+            ),
             disc_total: 1,
             tracks: Vec::new(),
         }

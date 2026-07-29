@@ -45,6 +45,10 @@ pub struct LibraryCompletionCandidate {
     pub musicbrainz_id: Option<String>,
     pub musicbrainz_url: Option<String>,
     pub cover_url: Option<String>,
+    pub cover_status: Option<String>,
+    pub cover_provider: Option<String>,
+    pub cover_message: Option<String>,
+    pub cover_checked_at: Option<String>,
     pub verification_status: String,
     pub verification_provider: Option<String>,
     pub verification_message: Option<String>,
@@ -239,6 +243,10 @@ struct StoredVerification {
     discogs_message: Option<String>,
     discogs_master_id: Option<String>,
     discogs_url: Option<String>,
+    cover_state: Option<String>,
+    cover_provider: Option<String>,
+    cover_message: Option<String>,
+    cover_checked_at: Option<String>,
     message: String,
     checked_at: String,
 }
@@ -390,6 +398,7 @@ fn load_verifications(conn: &Connection) -> Result<HashMap<String, StoredVerific
         SELECT candidate_key, outcome, verification_provider, musicbrainz_id,
                musicbrainz_url, musicbrainz_outcome, musicbrainz_message,
                discogs_outcome, discogs_message, discogs_master_id, discogs_url,
+               cover_state, cover_provider, cover_message, cover_checked_at,
                message, checked_at
         FROM library_completion_verifications
         ",
@@ -408,8 +417,12 @@ fn load_verifications(conn: &Connection) -> Result<HashMap<String, StoredVerific
                 discogs_message: row.get(8)?,
                 discogs_master_id: row.get(9)?,
                 discogs_url: row.get(10)?,
-                message: row.get(11)?,
-                checked_at: row.get(12)?,
+                cover_state: row.get(11)?,
+                cover_provider: row.get(12)?,
+                cover_message: row.get(13)?,
+                cover_checked_at: row.get(14)?,
+                message: row.get(15)?,
+                checked_at: row.get(16)?,
             },
         ))
     })?;
@@ -604,6 +617,10 @@ fn get_for_connection_inner(
                 .and_then(|value| value.musicbrainz_url.clone())
                 .or_else(|| verification.and_then(|value| value.musicbrainz_url.clone())),
             cover_url: None,
+            cover_status: verification.and_then(|value| value.cover_state.clone()),
+            cover_provider: verification.and_then(|value| value.cover_provider.clone()),
+            cover_message: verification.and_then(|value| value.cover_message.clone()),
+            cover_checked_at: verification.and_then(|value| value.cover_checked_at.clone()),
             verification_status,
             verification_provider: verification.map(|value| value.provider.clone()),
             verification_message: verification.map(|value| value.message.clone()),
@@ -2005,6 +2022,19 @@ mod tests {
         assert_eq!(completed.verified_count, 1);
         assert_eq!(completed.discogs_verified_count, 1);
 
+        conn.execute(
+            "
+            UPDATE library_completion_verifications
+            SET cover_state = 'available',
+                cover_provider = 'discogs',
+                cover_message = 'Discogs primary master artwork cached locally.',
+                cover_checked_at = '2026-07-29T10:05:00Z'
+            WHERE candidate_key = ?1
+            ",
+            params![item.candidate_id],
+        )
+        .expect("store cover enrichment state");
+
         let completion = get_for_connection(&conn, None).expect("refresh completion data");
         assert_eq!(completion.candidates[0].verification_status, "verified");
         assert_eq!(
@@ -2014,6 +2044,18 @@ mod tests {
         assert_eq!(
             completion.candidates[0].discogs_master_id.as_deref(),
             Some("12345")
+        );
+        assert_eq!(
+            completion.candidates[0].cover_status.as_deref(),
+            Some("available")
+        );
+        assert_eq!(
+            completion.candidates[0].cover_provider.as_deref(),
+            Some("discogs")
+        );
+        assert_eq!(
+            completion.candidates[0].cover_message.as_deref(),
+            Some("Discogs primary master artwork cached locally.")
         );
         assert_eq!(completion.atlas[0].verified, 1);
         assert_eq!(completion.atlas[0].candidates, 0);

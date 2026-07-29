@@ -146,6 +146,7 @@ import type {
   DiscogsCredentialStatus,
   SaveDiscogsCredentialsRequest,
   LibraryCompletionCandidate,
+  LibraryCompletionCoverEnrichment,
   LibraryCompletionDecision,
   LibraryCompletionRequest,
   LibraryCompletionResponse,
@@ -298,6 +299,10 @@ let mockWishListItems: WishListItem[] = [
   },
 ];
 const mockLibraryCompletionProviderDefaults = {
+  coverStatus: null,
+  coverProvider: null,
+  coverMessage: null,
+  coverCheckedAt: null,
   verificationProvider: null,
   musicbrainzVerificationStatus: null,
   musicbrainzVerificationMessage: null,
@@ -352,7 +357,7 @@ const mockLibraryCompletionCandidates: LibraryCompletionCandidate[] = [
     wishListItemId: null,
     musicbrainzId: null,
     musicbrainzUrl: null,
-    coverUrl: mockTimelineCoverUrls[0],
+    coverUrl: null,
     verificationStatus: "unverified",
     verificationMessage: null,
     verificationCheckedAt: null,
@@ -516,6 +521,10 @@ const mockLibraryCompletionDecisions = new Map<
 const mockLibraryCompletionVerifications = new Map<
   string,
   LibraryCompletionVerificationStatus["recentItems"][number]
+>();
+const mockLibraryCompletionCovers = new Map<
+  string,
+  LibraryCompletionCoverEnrichment & { dataUrl: string | null }
 >();
 let mockLibraryCompletionVerificationStatus: LibraryCompletionVerificationStatus = {
   batch: null,
@@ -1865,6 +1874,7 @@ export async function getLibraryCompletion(input: LibraryCompletionRequest | nul
     const decidedCandidates = mockLibraryCompletionCandidates.map((candidate) => {
       const decision = mockLibraryCompletionDecisions.get(candidate.id);
       const verification = mockLibraryCompletionVerifications.get(candidate.id);
+      const cover = mockLibraryCompletionCovers.get(candidate.id);
       return {
         ...candidate,
         status: decision?.status ?? candidate.status,
@@ -1888,6 +1898,10 @@ export async function getLibraryCompletion(input: LibraryCompletionRequest | nul
           verification?.discogsVerificationMessage ?? candidate.discogsVerificationMessage,
         discogsMasterId: verification?.discogsMasterId ?? candidate.discogsMasterId,
         discogsUrl: verification?.discogsUrl ?? candidate.discogsUrl,
+        coverStatus: cover?.state ?? candidate.coverStatus,
+        coverProvider: cover?.provider ?? candidate.coverProvider,
+        coverMessage: cover?.message ?? candidate.coverMessage,
+        coverCheckedAt: cover?.checkedAt ?? candidate.coverCheckedAt,
       };
     });
     const candidates = decidedCandidates.filter((candidate) =>
@@ -1983,6 +1997,42 @@ export async function getLibraryCompletionVerificationStatus() {
   }
   return invoke<LibraryCompletionVerificationStatus>(
     "get_library_completion_verification_status",
+  );
+}
+
+export async function getLibraryCompletionCoverDataUrl(candidateId: string) {
+  if (!isTauriRuntime()) {
+    return mockLibraryCompletionCovers.get(candidateId)?.dataUrl ?? null;
+  }
+  return invoke<string | null>("get_library_completion_cover_data_url", {
+    candidateId,
+  });
+}
+
+export async function enrichLibraryCompletionCover(candidateId: string) {
+  if (!isTauriRuntime()) {
+    const verification = mockLibraryCompletionVerifications.get(candidateId);
+    if (!verification || verification.state !== "verified") {
+      throw new Error("Verify this album before looking for cover artwork.");
+    }
+    const provider = verification.provider === "discogs" ? "discogs" : "musicbrainz";
+    const result = {
+      candidateId,
+      state: "available",
+      provider,
+      message: provider === "discogs"
+        ? "Discogs master artwork is cached locally."
+        : "Cover Art Archive artwork is cached locally.",
+      hasCover: true,
+      checkedAt: new Date().toISOString(),
+      dataUrl: mockTimelineCoverUrls[0],
+    } satisfies LibraryCompletionCoverEnrichment & { dataUrl: string | null };
+    mockLibraryCompletionCovers.set(candidateId, result);
+    return result;
+  }
+  return invoke<LibraryCompletionCoverEnrichment>(
+    "enrich_library_completion_cover",
+    { candidateId },
   );
 }
 
@@ -2560,6 +2610,7 @@ export async function downloadDeemixAlbum(input: DeemixAlbumDownloadRequest) {
       destinationPath: `D:\\Music\\Incoming\\${destinationName}`,
       coverPath:
         `D:\\Music\\Incoming\\${destinationName}\\cover.jpg`,
+      warning: null,
       trackCount: 10,
       completedAt,
     } satisfies DeemixAlbumDownloadSummary;
