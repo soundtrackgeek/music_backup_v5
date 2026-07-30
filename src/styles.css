@@ -3939,6 +3939,26 @@ button {
   font-weight: 760;
 }
 
+.album-cover-preview.with-caption {
+  grid-template-rows: auto 44px;
+}
+
+.album-cover-preview-caption {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-top: 1px solid rgba(18, 65, 59, 0.16);
+  padding: 0 13px;
+  overflow: hidden;
+  color: #21342f;
+  background: #f7faf9;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @keyframes album-cover-preview-reveal {
   from {
     opacity: 0.25;
@@ -12107,6 +12127,12 @@ button {
   color: #8ee4d8;
 }
 
+:root[data-theme="dark"] .album-cover-preview-caption {
+  border-color: rgba(142, 228, 216, 0.16);
+  color: #e6efec;
+  background: #111b1a;
+}
+
 :root[data-theme="dark"] .artist-album-cover-card {
   border-color: #2f3d38;
   background: #111815;
@@ -17570,15 +17596,27 @@ button {
 }
 
 .artist-career-peaks-page {
+  --text: #17211f;
+  --muted: #66746f;
+  --border: #d5dfdc;
+  --panel: #ffffff;
   --career-line: color-mix(in srgb, var(--border) 74%, transparent);
   --career-muted: var(--muted);
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 13px;
+  color: var(--text);
   background:
     radial-gradient(circle at 66% 30%, color-mix(in srgb, #ce7b2e 5%, transparent), transparent 33%),
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 97%, #04110f 3%), var(--panel));
+}
+
+:root[data-theme="dark"] .artist-career-peaks-page {
+  --text: #e5eeeb;
+  --muted: #899995;
+  --border: #2c3a3b;
+  --panel: #081116;
 }
 
 .artist-career-peaks-toolbar {
@@ -17700,7 +17738,7 @@ button {
 
 .artist-career-peaks-filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1.25fr) repeat(2, minmax(180px, 1fr)) 112px 112px 108px auto;
+  grid-template-columns: minmax(330px, 1.6fr) repeat(2, minmax(150px, 0.9fr)) 100px 100px 90px auto;
   gap: 9px;
   align-items: end;
   margin: 12px 17px 0;
@@ -17720,6 +17758,17 @@ button {
   font-size: 0.68rem;
 }
 
+.artist-peaks-token-field > span,
+.artist-career-peaks-number > span:first-child,
+.artist-career-peaks-limit > span:first-child {
+  color: color-mix(in srgb, var(--muted) 82%, transparent);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .artist-peaks-token-field > div,
 .artist-career-peaks-number > span:last-child,
 .artist-career-peaks-limit select {
@@ -17732,6 +17781,14 @@ button {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
+}
+
+.artist-peaks-token-field > div {
+  scrollbar-width: none;
+}
+
+.artist-peaks-token-field > div::-webkit-scrollbar {
+  display: none;
 }
 
 .artist-peaks-token-field button {
@@ -17791,9 +17848,27 @@ button {
   color: var(--muted);
 }
 
+.artist-peaks-token-field > div:focus-within,
+.artist-career-peaks-number > span:last-child:focus-within,
+.artist-career-peaks-limit select:focus-visible,
+.artist-career-peaks-reset:focus-visible {
+  border-color: color-mix(in srgb, #55cabe 58%, var(--border));
+  outline: 2px solid color-mix(in srgb, #55cabe 18%, transparent);
+  outline-offset: 1px;
+}
+
+.artist-career-peaks-visual {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 204px;
+  min-width: 0;
+  border-bottom: 1px solid var(--career-line);
+}
+
 .artist-career-peaks-chart {
   position: relative;
+  min-width: 0;
   min-height: 650px;
+  overflow: hidden;
   transition: opacity 160ms ease;
 }
 
@@ -17816,8 +17891,14 @@ button {
 }
 
 .artist-career-peaks-grid text {
-  fill: color-mix(in srgb, var(--text) 48%, transparent);
+  fill: #687976;
   font-size: 11px;
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-theme="dark"] .artist-career-peaks-grid text {
+  fill: #91a19e;
 }
 
 .artist-career-peaks-rows > g {
@@ -17852,6 +17933,59 @@ button {
   opacity: 1;
   stroke-width: 3.2px !important;
   outline: none;
+}
+
+.artist-career-peaks-markers {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  min-width: 900px;
+  height: 650px;
+  pointer-events: none;
+}
+
+.artist-career-peak-marker {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 5px;
+  border: 0;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: zoom-in;
+  transition: opacity 180ms ease, transform 160ms ease;
+}
+
+.artist-career-peak-marker.is-dimmed {
+  opacity: 0.28;
+}
+
+.artist-career-peak-marker:hover,
+.artist-career-peak-marker:focus-visible {
+  z-index: 4;
+  outline: none;
+  transform: translate(-50%, -50%) scale(1.25);
+}
+
+.artist-career-peak-marker .cover-placeholder {
+  width: 8px;
+  height: 8px;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+  background: currentColor;
+  box-shadow: 0 0 7px currentColor;
+}
+
+.artist-career-peak-marker .cover-placeholder img,
+.artist-career-peak-marker .cover-placeholder > span {
+  opacity: 0.78;
+}
+
+.artist-career-peak-marker .cover-placeholder > span {
+  font-size: 0;
 }
 
 .artist-career-peaks-labels {
@@ -17914,6 +18048,7 @@ button {
 
 .artist-career-peaks-covers {
   position: absolute;
+  z-index: 3;
   inset: 0;
   pointer-events: none;
 }
@@ -17941,11 +18076,10 @@ button {
 }
 
 .artist-career-peaks-card {
-  position: absolute;
-  z-index: 3;
-  top: 54px;
-  right: 18px;
-  width: 180px;
+  position: relative;
+  align-self: start;
+  width: auto;
+  margin: 54px 14px 0 0;
   padding: 13px;
   border: 1px solid color-mix(in srgb, var(--border) 74%, #f2a43c 26%);
   border-radius: 10px;
@@ -18148,8 +18282,12 @@ button {
     overflow-x: auto;
   }
 
+  .artist-career-peaks-visual {
+    grid-template-columns: 1fr;
+  }
+
   .artist-career-peaks-card {
-    right: 10px;
+    margin: 0 14px 14px;
   }
 }
 

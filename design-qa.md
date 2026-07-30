@@ -1,53 +1,49 @@
-# Artist Career Peaks Design QA
+# Artist Career Peaks Refinement Design QA
 
 ## Comparison target
 
 - Selected reference: `C:\_code\music_backup_v5\docs\design\artist-career-peaks-concept.png` at 1584×1024.
-- Portrait reference: `C:\_code\music_backup_v5\docs\design\artist-career-comets-portrait-reference.png`.
-- Browser implementation: `C:\_code\music_backup_v5\docs\design\artist-career-peaks-implementation.png` at 1584×1024.
-- Same-frame comparison: `C:\_code\music_backup_v5\docs\design\artist-career-peaks-comparison.png`.
+- Reported pre-fix state: `C:\Users\jtill\AppData\Local\Temp\codex-clipboard-287ce904-91e1-4ef6-8e42-f2d55399f71f.png` at 1765×903.
+- Browser implementation: `C:\_code\music_backup_v5\docs\design\artist-career-peaks-refinement-implementation.png` at 1584×900.
+- Same-frame review input: `C:\_code\music_backup_v5\docs\design\artist-career-peaks-refinement-comparison.png` at 3168×900. The reference's top 900 pixels and the implementation were placed side by side at the same physical scale.
 - Browser-rendered URL: `http://127.0.0.1:4178/`.
-- Desktop QA viewport: 1584×1024 CSS pixels. Compact QA viewport: 1000×800 CSS pixels. The temporary viewport overrides were reset after testing.
+- Browser capture: 1267×720 CSS pixels at 1.25 device scale, yielding 1584×900 physical pixels.
 
 ## State and coverage
 
-- Desktop comparison state: Timelines → Artists, Charts metric, Top 7 artists, Kate Bush focused, filters collapsed.
-- The implementation includes the centered Charts / Genres / Artists navigation, glowing album peaks, circular artist portraits, selected album covers, a focused artist summary card, and a miniature overview strip.
-- Compact QA verifies that the shell, timeline tabs, metric controls, portrait labels, focus card, and data-dense chart remain usable without compressing the visualization into illegibility.
-- Browser preview data is deterministic and realistic. The desktop build renders the same view from SQLite albums, chart positions, personal album scores, cached album covers, and cached Last.fm portraits.
+- QA state: Timelines → Artists, My Scores, filters expanded, KISS and Ozzy Osbourne selected, 37 albums visible, KISS focused.
+- The comparison covers the dark-theme year ruler, framed filter controls, per-album square peak markers, focused-artist treatment, selected-album covers, dedicated artist detail rail, and overall career-peak composition.
+- The reference and final browser capture were reviewed together in the same comparison input rather than as independent screenshots.
+- The rendered implementation intentionally uses the user's two-artist state instead of the seven example artists in the concept.
 
 ## Fidelity review
 
-- Typography: Uses the reference's restrained sans-serif hierarchy and compact year/artist metadata while preserving the existing application type system.
-- Layout: Reproduces the left artist labels, top year guide, stacked career baselines, selected-row covers, floating summary card, and bottom range overview.
-- Color and light: Preserves the near-black blue-green field, warm amber selected career, distinct secondary artist colors, restrained glow, and softly faded focus state.
-- Data semantics: Every peak maps to an album. Chart peaks combine Billboard and Official UK at 42% each and VG Lista at 16%; My Scores normalizes the user's album scores across the visible response.
-- Portraits: Small circular artist images follow the Career Comets reference. Last.fm portraits are cached locally and shared by Career Peaks, Artists, and Artist Index; a representative album cover is the immediate fallback.
-- Interaction: Charts/My Scores, search, artist add/remove, genre include/exclude, Scores umbrella, year bounds, Top 7/12/20, focus/fade, album opening, and artist opening are functional.
-- Accessibility: Timeline tabs, metric controls, filter fields, peaks, artist labels, and navigation actions expose semantic names, pressed states, keyboard access, loading feedback, and empty/error states.
+- Typography and contrast: Year labels now use explicit light-on-dark SVG text colors and tabular numerals. Filter labels retain the product's compact Manrope hierarchy.
+- Layout: The chart preserves the reference's left artist labels, top year guide, luminous career baselines, and album peaks. A 204-pixel detail rail reserves space for artist information without reducing or covering plotted years.
+- Album semantics: Every rendered peak has a small square album-cover marker at its summit. The three strongest selected albums retain the larger reference-style cover treatment.
+- Hover behavior: Peak markers use the shared album-cover preview system. Hovering displays a 300×300 cover plus a separate album-and-year caption without shrinking the artwork.
+- Filters: Artist, include genre, exclude genre, From, To, and Top count controls now use the same framed panel treatment and teal focus language as the Genre timeline.
+- Focus behavior: Selecting or hovering an artist preserves the warm luminous focus and gently fades other careers without removing them.
 
 ## Findings and fixes
 
-- P1 peak fidelity: The initial implementation rendered isolated outline curves, which looked thinner and less luminous than the selected reference.
-  - Fix: Closed and softly filled each peak, retained a crisp stroke and glow, and raised non-selected opacity to create the agreed gentle fade instead of near-disappearing rows.
-- P1 vertical composition: The first browser pass left too much unused space below the overview strip at the reference viewport.
-  - Fix: Increased the main plot and overview heights to align the composition with the reference's tall framed canvas.
-- P2 overview fidelity: The first overview used plain colored baselines.
-  - Fix: Replaced them with data-derived miniature album peaks and retained the teal range-window handles.
-- P2 portrait continuity: Artist Index previously used generic initial circles.
-  - Fix: Added a shared portrait component with Last.fm image, representative album-cover, and initial fallbacks in that order.
-
-## Final comparison
-
-- The selected reference and final implementation were reviewed together in `artist-career-peaks-comparison.png` at the same 1584×1024 scale.
-- Intentional differences reflect the final product decision: `Charts / My Scores` replaces the mock's decorative `Peaks / Covers` switch, portraits are added beside artists, and peak density comes from actual albums rather than AI-generated decorative noise.
-- Browser console errors: none.
-- Verified interactions: Artists timeline tab, Charts/My Scores switch, filter disclosure, artist/genre/year controls, selected-artist focus, album peak navigation, artist navigation, and compact layout.
+- P1 unreadable year ruler: Career Peaks referenced local `--text`, `--muted`, `--border`, and `--panel` tokens that were undefined in this component scope, allowing SVG year text to fall back to black in the dark theme.
+  - Fix: Defined scoped light/dark tokens and added explicit year-label fills for both themes.
+- P1 artist card obstruction: The selected-artist card was absolutely positioned over the late-year portion of the SVG.
+  - Fix: Wrapped the plot and card in a two-column visual container and placed the card in a dedicated right rail; compact layouts stack it beneath the plot.
+- P1 incomplete album hover: SVG native title text produced an `Album (Year)` browser tooltip without artwork.
+  - Fix: Removed SVG titles and attached the shared 300×300 `AlbumCover` preview with an album-and-year caption to every peak marker.
+- P2 missing summit markers: Peaks had only their line shape, while the agreed concept showed a distinct square album point at each summit.
+  - Fix: Added one cover-backed, focusable square marker per album at the computed peak coordinate.
+- P2 flat filters: Missing local border and panel tokens made the controls look unframed and visually disconnected.
+  - Fix: Restored bordered fields, compact uppercase labels, consistent panel backgrounds, and visible teal focus states.
 
 ## Verification
 
-- Dedicated Artist Career Peaks helper, component, and Timelines workspace suites: passed.
-- Dedicated Rust weighted artist-timeline query test: passed.
-- Full repository release gate: passed (`49` Vitest files / `194` tests, `15` Python tests, release/security checks, production TypeScript/Vite build, `315` Rust tests passed with `20` network-dependent tests ignored, and final `cargo check`).
+- Browser console errors: none.
+- Browser interaction: My Scores, filter disclosure, artist add/remove state, selected-artist focus, peak-marker presence, album navigation affordances, and non-overlapping detail placement verified.
+- Component coverage: verifies all peaks receive cover markers, the artist card is outside the plot, native SVG titles are absent, and captioned previews preserve a 300×300 artwork area.
+- Same-frame visual comparison: reviewed and passed, including the intentional user-requested deviation that moves the info card out of the plotted timeline.
+- Automated release checks: passed (`49` Vitest files / `196` tests, Python trimmer tests, release/security checks, production TypeScript/Vite build, Rust tests, and final `cargo check`).
 
 final result: passed

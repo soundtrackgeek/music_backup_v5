@@ -29,6 +29,7 @@ const COVER_PREVIEW_HIDE_DELAY = 55;
 const COVER_PREVIEW_EXIT_DURATION = 180;
 
 type CoverPreviewRequest = {
+  caption: string | null;
   id: string;
   imageUrl: string | null;
   initial: string;
@@ -60,7 +61,7 @@ function isDirectCoverUrl(coverPath: string) {
   return /^(?:blob:|data:|https?:\/\/|\/)/i.test(coverPath);
 }
 
-function coverPreviewPosition(element: HTMLElement) {
+function coverPreviewPosition(element: HTMLElement, hasCaption: boolean) {
   const bounds = element.getBoundingClientRect();
   const size = Math.max(
     1,
@@ -70,6 +71,7 @@ function coverPreviewPosition(element: HTMLElement) {
       window.innerHeight - COVER_PREVIEW_MARGIN * 2,
     ),
   );
+  const previewHeight = size + (hasCaption ? 44 : 0);
   const preferredRight = bounds.right + COVER_PREVIEW_GAP;
   const preferredLeft = bounds.left - size - COVER_PREVIEW_GAP;
   const left =
@@ -84,12 +86,12 @@ function coverPreviewPosition(element: HTMLElement) {
               window.innerWidth - size - COVER_PREVIEW_MARGIN,
             ),
           );
-  const centeredTop = bounds.top + (bounds.height - size) / 2;
+  const centeredTop = bounds.top + (bounds.height - previewHeight) / 2;
   const top = Math.max(
     COVER_PREVIEW_MARGIN,
     Math.min(
       centeredTop,
-      window.innerHeight - size - COVER_PREVIEW_MARGIN,
+      window.innerHeight - previewHeight - COVER_PREVIEW_MARGIN,
     ),
   );
 
@@ -149,7 +151,7 @@ export function AlbumCoverPreviewProvider({
   const previewStyle = preview
     ? ({
         width: `${preview.size}px`,
-        height: `${preview.size}px`,
+        height: `${preview.size + (preview.caption ? 44 : 0)}px`,
         transform: `translate3d(${preview.left}px, ${preview.top}px, 0) scale(${
           preview.visible ? 1 : 0.965
         })`,
@@ -164,7 +166,7 @@ export function AlbumCoverPreviewProvider({
             <div
               className={`album-cover-preview${
                 preview.visible ? " is-visible" : ""
-              }`}
+              }${preview.caption ? " with-caption" : ""}`}
               style={previewStyle}
               data-album-cover={preview.label}
               aria-hidden="true"
@@ -172,6 +174,7 @@ export function AlbumCoverPreviewProvider({
               <div
                 className="album-cover-preview-art"
                 key={`${preview.id}:${preview.imageUrl ?? "fallback"}`}
+                style={{ height: `${preview.size}px` }}
               >
                 {preview.imageUrl ? (
                   <img src={preview.imageUrl} alt="" draggable={false} />
@@ -179,6 +182,11 @@ export function AlbumCoverPreviewProvider({
                   <span>{preview.initial}</span>
                 )}
               </div>
+              {preview.caption ? (
+                <div className="album-cover-preview-caption">
+                  {preview.caption}
+                </div>
+              ) : null}
             </div>,
             preview.portalTarget,
           )
@@ -192,11 +200,13 @@ export function AlbumCover({
   className = "",
   decorative = true,
   previewOnHover = false,
+  previewCaption = null,
 }: {
   row: AlbumCoverSource | null;
   className?: string;
   decorative?: boolean;
   previewOnHover?: boolean;
+  previewCaption?: string | null;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -249,12 +259,13 @@ export function AlbumCover({
         return;
       }
       coverPreview.showPreview({
+        caption: previewCaption,
         id: previewId,
         imageUrl: displayImageUrl,
         initial,
         label,
         portalTarget: document.fullscreenElement ?? document.body,
-        ...coverPreviewPosition(element),
+        ...coverPreviewPosition(element, Boolean(previewCaption)),
       });
     },
     [
@@ -262,6 +273,7 @@ export function AlbumCover({
       displayImageUrl,
       initial,
       label,
+      previewCaption,
       previewId,
       previewOnHover,
     ],

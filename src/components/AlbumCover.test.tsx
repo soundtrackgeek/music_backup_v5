@@ -70,6 +70,31 @@ describe("album cover hover preview", () => {
     );
   });
 
+  it("adds an album-and-year caption without shrinking the 300px artwork", () => {
+    render(
+      <AlbumCoverPreviewProvider>
+        <AlbumCover
+          row={albumRow("album-1", "Actually")}
+          className="cover-mini"
+          previewOnHover
+          previewCaption="Actually (1987)"
+        />
+      </AlbumCoverPreviewProvider>,
+    );
+
+    fireEvent.mouseEnter(document.body.querySelector(".cover-mini")!);
+
+    const preview = document.body.querySelector(".album-cover-preview");
+    expect(preview).toHaveClass("with-caption", "is-visible");
+    expect(preview).toHaveStyle({ height: "344px", width: "300px" });
+    expect(document.body.querySelector(".album-cover-preview-art")).toHaveStyle({
+      height: "300px",
+    });
+    expect(document.body.querySelector(".album-cover-preview-caption")).toHaveTextContent(
+      "Actually (1987)",
+    );
+  });
+
   it("keeps one preview visible while the pointer moves between list covers", () => {
     vi.useFakeTimers();
     render(

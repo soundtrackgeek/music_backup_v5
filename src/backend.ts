@@ -5465,6 +5465,8 @@ const mockArtistCareerProfiles = [
   { id: "radiohead", name: "Radiohead", genre: "Alternative", start: 1993, years: [1993, 1995, 1997, 2000, 2007, 2011, 2016] },
   { id: "joni mitchell", name: "Joni Mitchell", genre: "Folk", start: 1968, years: [1968, 1971, 1974, 1976, 1982, 1994, 2007] },
   { id: "kendrick lamar", name: "Kendrick Lamar", genre: "Hip-Hop", start: 2011, years: [2011, 2012, 2015, 2016, 2017, 2022, 2024] },
+  { id: "kiss", name: "KISS", genre: "Hard Rock", start: 1974, years: [1974, 1975, 1976, 1977, 1978, 1979, 1980, 1981, 1982, 1983, 1984, 1985, 1987, 1989, 1992, 1997, 1998, 2009, 2010, 2012] },
+  { id: "ozzy osbourne", name: "Ozzy Osbourne", genre: "Heavy Metal", start: 1980, years: [1980, 1981, 1982, 1983, 1986, 1988, 1991, 1995, 2001, 2005, 2007, 2010, 2014, 2016, 2018, 2020, 2022] },
 ] as const;
 
 function mockArtistTimeline(request: ArtistTimelineRequest): ArtistTimelineResponse {

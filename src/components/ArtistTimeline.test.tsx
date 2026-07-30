@@ -96,4 +96,23 @@ describe("ArtistTimeline", () => {
     await user.click(await screen.findByRole("button", { name: "Open artist" }));
     expect(onOpenArtist).toHaveBeenCalledWith("kate bush", "Kate Bush");
   });
+
+  it("keeps artist details outside the plot and gives every peak a cover marker", async () => {
+    render(
+      <ArtistTimeline
+        genreOptions={["Art Pop"]}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+      />,
+    );
+
+    const marker = await screen.findByRole("button", {
+      name: "Open Hounds of Love (1985)",
+    });
+    expect(marker).toHaveClass("artist-career-peak-marker");
+    expect(document.querySelector(".artist-career-peaks-card")?.closest(
+      ".artist-career-peaks-chart",
+    )).toBeNull();
+    expect(document.querySelector(".artist-career-peaks-chart title")).toBeNull();
+  });
 });

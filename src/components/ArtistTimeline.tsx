@@ -465,8 +465,9 @@ export function ArtistTimeline({
         </div>
       ) : (
         <>
-          <div className={`artist-career-peaks-chart${isLoading ? " is-refreshing" : ""}`} aria-busy={isLoading}>
-            <svg
+          <div className="artist-career-peaks-visual">
+            <div className={`artist-career-peaks-chart${isLoading ? " is-refreshing" : ""}`} aria-busy={isLoading}>
+              <svg
               viewBox={`0 0 ${layout.width} ${layout.height}`}
               role="img"
               aria-label={`Artist career peaks from ${layout.yearFrom} to ${layout.yearTo}`}
@@ -524,46 +525,74 @@ export function ArtistTimeline({
                               onOpenAlbum(point.album.albumId);
                             }
                           }}
-                        >
-                          <title>{point.album.album ?? "Untitled album"} ({point.album.year})</title>
-                        </path>
+                        />
                       ))}
                     </g>
                   );
                 })}
               </g>
-            </svg>
+              </svg>
 
-            <div className="artist-career-peaks-labels">
-              {layout.rows.map((row) => {
-                const top = `${(row.baselineY / layout.height) * 100}%`;
-                const dimmed = isDimmed(row.artist.id, row.artist.name);
-                return (
-                  <button
-                    type="button"
-                    key={row.artist.id}
-                    className={`${selectedArtistId === row.artist.id ? "is-selected" : ""}${dimmed ? " is-dimmed" : ""}`}
-                    style={{ top }}
-                    onMouseEnter={() => setHoveredArtistId(row.artist.id)}
-                    onMouseLeave={() => setHoveredArtistId(null)}
-                    onClick={() => setSelectedArtistId(row.artist.id)}
-                  >
-                    <ArtistPortrait
-                      artistId={row.artist.id}
-                      artistName={row.artist.name}
-                      portraitAvailable={row.artist.portraitAvailable}
-                      representativeAlbumId={row.artist.representativeAlbumId}
-                      representativeAlbum={row.artist.representativeAlbum}
-                      representativeCoverPath={row.artist.representativeCoverPath}
-                    />
-                    <span><strong>{row.artist.name}</strong><small>{row.artist.firstYear}–{row.artist.lastYear}</small></span>
-                  </button>
-                );
-              })}
-            </div>
+              <div className="artist-career-peaks-labels">
+                {layout.rows.map((row) => {
+                  const top = `${(row.baselineY / layout.height) * 100}%`;
+                  const dimmed = isDimmed(row.artist.id, row.artist.name);
+                  return (
+                    <button
+                      type="button"
+                      key={row.artist.id}
+                      className={`${selectedArtistId === row.artist.id ? "is-selected" : ""}${dimmed ? " is-dimmed" : ""}`}
+                      style={{ top }}
+                      onMouseEnter={() => setHoveredArtistId(row.artist.id)}
+                      onMouseLeave={() => setHoveredArtistId(null)}
+                      onClick={() => setSelectedArtistId(row.artist.id)}
+                    >
+                      <ArtistPortrait
+                        artistId={row.artist.id}
+                        artistName={row.artist.name}
+                        portraitAvailable={row.artist.portraitAvailable}
+                        representativeAlbumId={row.artist.representativeAlbumId}
+                        representativeAlbum={row.artist.representativeAlbum}
+                        representativeCoverPath={row.artist.representativeCoverPath}
+                      />
+                      <span><strong>{row.artist.name}</strong><small>{row.artist.firstYear}–{row.artist.lastYear}</small></span>
+                    </button>
+                  );
+                })}
+              </div>
 
-            {selectedRow ? (
-              <>
+              <div className="artist-career-peaks-markers" aria-label="Album peak markers">
+                {layout.rows.flatMap((row) => {
+                  const dimmed = isDimmed(row.artist.id, row.artist.name);
+                  return row.points.map((point) => {
+                    const caption = `${point.album.album ?? "Untitled album"} (${point.album.year})`;
+                    return (
+                      <button
+                        type="button"
+                        key={point.album.albumId}
+                        className={`artist-career-peak-marker${dimmed ? " is-dimmed" : ""}`}
+                        style={{
+                          color: row.color,
+                          left: `${(point.x / layout.width) * 100}%`,
+                          top: `${(point.peakY / layout.height) * 100}%`,
+                        }}
+                        aria-label={`Open ${caption}`}
+                        onMouseEnter={() => setHoveredArtistId(row.artist.id)}
+                        onMouseLeave={() => setHoveredArtistId(null)}
+                        onClick={() => onOpenAlbum(point.album.albumId)}
+                      >
+                        <AlbumCover
+                          row={point.album}
+                          previewOnHover
+                          previewCaption={caption}
+                        />
+                      </button>
+                    );
+                  });
+                })}
+              </div>
+
+              {selectedRow ? (
                 <div className="artist-career-peaks-covers" aria-label={`${selectedRow.artist.name} strongest peaks`}>
                   {selectedRow.strongest.map((point) => (
                     <button
@@ -576,11 +605,19 @@ export function ArtistTimeline({
                       aria-label={`Open ${point.album.album ?? "album"}`}
                       onClick={() => onOpenAlbum(point.album.albumId)}
                     >
-                      <AlbumCover row={point.album} />
+                      <AlbumCover
+                        row={point.album}
+                        previewOnHover
+                        previewCaption={`${point.album.album ?? "Untitled album"} (${point.album.year})`}
+                      />
                     </button>
                   ))}
                 </div>
-                <aside className="artist-career-peaks-card">
+              ) : null}
+            </div>
+
+            {selectedRow ? (
+              <aside className="artist-career-peaks-card">
                   <header>
                     <ArtistPortrait
                       artistId={selectedRow.artist.id}
@@ -599,8 +636,7 @@ export function ArtistTimeline({
                     <div><dt>Loved</dt><dd>{formatCount(selectedRow.artist.lovedTracks)}</dd></div>
                   </dl>
                   <button type="button" onClick={() => onOpenArtist(selectedRow.artist.id, selectedRow.artist.name)}>Open artist</button>
-                </aside>
-              </>
+              </aside>
             ) : null}
           </div>
 

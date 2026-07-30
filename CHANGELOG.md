@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.110.1] - 2026-07-30
+### Changed
+- Added a small square album-cover marker to every Career Peaks summit and replaced native text tooltips with the shared 300×300 cover preview labeled with album title and year.
+- Restyled the artist, genre, year, and display-size filters as compact framed controls consistent with the Genre timeline.
+- Synchronized app metadata and provider user agents to `0.110.1`.
+
+### Fixed
+- Restored readable Career Peaks year labels and filter borders in the dark theme by defining the timeline's missing local color tokens and explicit SVG text colors.
+- Moved the selected-artist summary into a dedicated side rail so it no longer covers late-year peaks or album markers.
+
 ## [0.110.0] - 2026-07-30
 ### Added
 - Added the Career Peaks artist timeline with circular artist portraits, album-derived peak shapes, selected album covers, an overview strip, focused-artist dimming, artist add/remove controls, include/exclude genre filters with the `scores` umbrella, editable year bounds, and Top 7/12/20 views.
