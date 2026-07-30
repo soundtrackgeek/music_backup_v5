@@ -2065,6 +2065,7 @@ export async function getUsenetBootstrap() {
       hasProwlarrApiKey: false,
       hasNewsPassword: false,
       extractorPath: null,
+      par2Path: null,
     } satisfies UsenetBootstrap;
   }
   return invoke<UsenetBootstrap>("usenet_bootstrap");
@@ -2078,6 +2079,7 @@ export async function saveUsenetProfile(input: SaveUsenetProfileRequest) {
       hasProwlarrApiKey: Boolean(input.prowlarrApiKey),
       hasNewsPassword: Boolean(input.newsPassword),
       extractorPath: null,
+      par2Path: null,
     } satisfies UsenetBootstrap;
   }
   return invoke<UsenetBootstrap>("usenet_save_profile", { request: input });
@@ -2090,6 +2092,7 @@ export async function resetUsenet() {
       hasProwlarrApiKey: false,
       hasNewsPassword: false,
       extractorPath: null,
+      par2Path: null,
     } satisfies UsenetBootstrap;
   }
   return invoke<UsenetBootstrap>("usenet_reset");
@@ -2101,6 +2104,7 @@ export async function testUsenetConnections() {
       prowlarrVersion: "preview",
       newsServer: `${mockUsenetProfile.newsHost}:${mockUsenetProfile.newsPort}`,
       extractorPath: null,
+      par2Path: null,
       message: "Desktop runtime required for a live connection test.",
     } satisfies UsenetConnectionTest;
   }

@@ -328,6 +328,11 @@ export function UsenetSettingsPanel() {
             ? `RAR extraction ready: ${bootstrap.extractorPath}`
             : "Install UnRAR to unpack compressed releases automatically."}
         </span>
+        <span>
+          {bootstrap?.par2Path
+            ? `PAR2 recovery ready: ${bootstrap.par2Path}`
+            : "Install par2cmdline-turbo to repair missing or corrupt Usenet articles."}
+        </span>
       </div>
 
       {!desktopRuntime ? (

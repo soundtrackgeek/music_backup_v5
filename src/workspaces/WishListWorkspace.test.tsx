@@ -875,6 +875,21 @@ describe("WishListWorkspace", () => {
     );
     expect(await screen.findByText(/queued from NZBFinder/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Usenet transfers" })).toBeInTheDocument();
+
+    const queued = (await enqueueUsenetDownload.mock.results[0]
+      ?.value) as UsenetTransferQueue;
+    act(() => {
+      usenetTransferListener?.({
+        ...queued,
+        transfers: queued.transfers.map((transfer) => ({
+          ...transfer,
+          status: "repairing",
+          progressPercent: 82,
+          message: "Repairing incomplete files with PAR2",
+        })),
+      });
+    });
+    expect(await screen.findByText("Repairing with PAR2")).toBeInTheDocument();
   });
 
   it("shows searched albums before transfer history and clears completed Soulseek releases", async () => {

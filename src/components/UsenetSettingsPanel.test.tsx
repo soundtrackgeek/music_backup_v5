@@ -37,19 +37,22 @@ describe("UsenetSettingsPanel", () => {
       hasProwlarrApiKey: false,
       hasNewsPassword: false,
       extractorPath: "C:\\Tools\\UnRAR\\UnRAR.exe",
+      par2Path: "C:\\Tools\\par2cmdline-turbo\\par2.exe",
     });
     saveUsenetProfile.mockImplementation(async (request) => ({
       profile: request.profile,
       hasProwlarrApiKey: true,
       hasNewsPassword: true,
       extractorPath: "C:\\Tools\\UnRAR\\UnRAR.exe",
+      par2Path: "C:\\Tools\\par2cmdline-turbo\\par2.exe",
     }));
     testUsenetConnections.mockResolvedValue({
       prowlarrVersion: "1.37.0",
       newsServer: "news.newsgroup.ninja:563",
       extractorPath: "C:\\Tools\\UnRAR\\UnRAR.exe",
+      par2Path: "C:\\Tools\\par2cmdline-turbo\\par2.exe",
       message:
-        "Prowlarr search, Newsgroup Ninja authentication, and UnRAR are ready.",
+        "Prowlarr search, Newsgroup Ninja authentication, PAR2 repair, and UnRAR are ready.",
     });
     selectUsenetDownloadDirectory.mockResolvedValue("E:\\Incoming\\Usenet");
   });
@@ -57,6 +60,11 @@ describe("UsenetSettingsPanel", () => {
   it("stores both provider secrets and tests the configured services", async () => {
     render(<UsenetSettingsPanel />);
     await screen.findByText(/Connect Prowlarr search/);
+    expect(
+      screen.getByText(
+        "PAR2 recovery ready: C:\\Tools\\par2cmdline-turbo\\par2.exe",
+      ),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Prowlarr API key"), {
       target: { value: "prowlarr-secret" },

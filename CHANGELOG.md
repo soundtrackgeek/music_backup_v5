@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.108.0] - 2026-07-30
+### Added
+- Added native PAR2 verification and repair for Usenet releases, including installed `par2cmdline-turbo` detection, dedicated verifying/repairing transfer states, and live readiness details in provider settings.
+- Added selective recovery-volume downloads that try the smallest PAR2 volume first and stop as soon as repair succeeds.
+
+### Changed
+- Preserved sparse partial payloads and PAR2 data after failed downloads so retries of the same NZB can reuse recovery staging; clearing finished transfers now also removes that retained staging.
+- Treated unavailable optional Usenet metadata separately from missing payload segments and synchronized app metadata and provider user agents to `0.108.0`.
+
+### Fixed
+- Prevented missing `.nfo` and similar optional articles from aborting otherwise usable downloads, and repaired missing or checksum-failed payload segments before RAR extraction or final delivery.
+
 ## [0.107.0] - 2026-07-30
 ### Added
 - Added a standalone Updates workspace with searchable, date-filtered, and status-filtered album change history, semantic new/changed/removed/rating icons and colors, old/new value details, and import provenance.

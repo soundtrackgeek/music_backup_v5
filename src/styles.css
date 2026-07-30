@@ -14444,6 +14444,8 @@ button {
 
 .usenet-fetchingNzb,
 .usenet-downloading,
+.usenet-verifying,
+.usenet-repairing,
 .usenet-extracting,
 .usenet-queued {
   border-color: #dec388;

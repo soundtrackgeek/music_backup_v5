@@ -602,8 +602,12 @@ function usenetTransferLabel(transfer: UsenetTransfer) {
       return "Fetching NZB";
     case "downloading":
       return `Downloading ${transfer.progressPercent}%`;
+    case "verifying":
+      return "Verifying with PAR2";
+    case "repairing":
+      return "Repairing with PAR2";
     case "extracting":
-      return "Verifying & unpacking";
+      return "Unpacking release";
     case "completed":
       return "Downloaded";
     case "failed":

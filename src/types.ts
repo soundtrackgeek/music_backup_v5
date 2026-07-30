@@ -1713,6 +1713,7 @@ export type UsenetBootstrap = {
   hasProwlarrApiKey: boolean;
   hasNewsPassword: boolean;
   extractorPath: string | null;
+  par2Path: string | null;
 };
 
 export type SaveUsenetProfileRequest = {
@@ -1725,6 +1726,7 @@ export type UsenetConnectionTest = {
   prowlarrVersion: string;
   newsServer: string;
   extractorPath: string | null;
+  par2Path: string | null;
   message: string;
 };
 
@@ -1771,6 +1773,8 @@ export type UsenetTransferStatus =
   | "queued"
   | "fetchingNzb"
   | "downloading"
+  | "verifying"
+  | "repairing"
   | "extracting"
   | "completed"
   | "failed";
