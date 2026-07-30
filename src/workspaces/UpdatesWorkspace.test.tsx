@@ -8,10 +8,12 @@ describe("UpdatesWorkspace", () => {
   it("shows semantic change labels and filters the durable activity ledger", async () => {
     const user = userEvent.setup();
     const onSelectUpdate = vi.fn();
+    const onOpenArtist = vi.fn();
     render(
       <UpdatesWorkspace
         selectedUpdateId={null}
         onSelectUpdate={onSelectUpdate}
+        onOpenArtist={onOpenArtist}
       />,
     );
 
@@ -23,6 +25,13 @@ describe("UpdatesWorkspace", () => {
     expect(screen.getAllByText("Changed").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Removed").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Ratings").length).toBeGreaterThan(0);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Open Michael Stanley Band in Artists",
+      }),
+    );
+    expect(onOpenArtist).toHaveBeenCalledWith("Michael Stanley Band");
 
     await user.type(screen.getByRole("searchbox", { name: "Search updates" }), "Django");
 

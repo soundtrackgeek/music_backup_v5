@@ -16,7 +16,7 @@ Settings is split into **General**, **Providers**, **AI**, **Data & Backups**, *
 
 ## Updates
 
-The standalone **Updates** workspace is a permanent, searchable audit trail of meaningful library changes detected when an import is applied. New albums, removed albums, metadata changes, track-count changes, and track-rating changes receive distinct icons, labels, and colors. Summary cards and controls filter the ledger by status, date, artist, album, field, value, description, or import source, while selecting an entry opens its exact old value, new value, source import, timestamp, and event ID.
+The standalone **Updates** workspace is a permanent, searchable audit trail of meaningful library changes detected when an import is applied. New albums, removed albums, metadata changes, track-count changes, and track-rating changes receive distinct icons, labels, and colors. Summary cards and controls filter the ledger by status, date, artist, album, field, value, description, or import source, while selecting an entry opens its exact old value, new value, source import, timestamp, and event ID. Artist names in both the ledger and selected-change details open the Artists workspace with that artist searched and selected.
 
 SQLite schema version 45 stores these events in the append-only `library_updates` table. Applying another MusicBee export rebuilds the current track and album snapshot without clearing this history. The history is part of the app database, so the rolling SQLite backups remain the disaster-recovery copy if the disk containing the database itself fails.
 

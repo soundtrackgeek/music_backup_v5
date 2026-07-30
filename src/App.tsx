@@ -142,6 +142,7 @@ import {
   runPerformanceProbe,
   undoMusicToolFix,
 } from "./backend";
+import { normalizeArtistKey } from "./backend/normalization";
 import type {
   AppSettings,
   AlbumDebutTimelineResponse,
@@ -10505,6 +10506,10 @@ export default function App() {
     setActiveSection("Artists");
   }
 
+  function openArtistFromUpdates(artistName: string) {
+    openArtistFromMusicMap(normalizeArtistKey(artistName), artistName);
+  }
+
   function selectArtistAlbum(albumId: string) {
     setSelectedArtistAlbumId(albumId);
     setArtistAlbumTracksResponse(null);
@@ -13077,6 +13082,7 @@ export default function App() {
           <UpdatesWorkspace
             selectedUpdateId={selectedUpdate?.id ?? null}
             onSelectUpdate={setSelectedUpdate}
+            onOpenArtist={openArtistFromUpdates}
           />
         ) : activeSection === "Imports" ? (
           <section className="workspace">
@@ -19612,7 +19618,10 @@ export default function App() {
         onKeyDown={handleDetailDrawerKeyDown}
       >
         {activeSection === "Updates" ? (
-          <UpdateDetailPanel update={selectedUpdate} />
+          <UpdateDetailPanel
+            update={selectedUpdate}
+            onOpenArtist={openArtistFromUpdates}
+          />
         ) : activeSection === "Imports" ? (
           <aside className="detail-panel" aria-label="Selected import details">
             <div className="detail-header">

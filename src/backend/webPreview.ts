@@ -1273,6 +1273,24 @@ const mockRows: BrowseRow[] = (
 const mockArtists: ArtistSummary[] = (
   [
     {
+      id: "head east",
+      name: "Head East",
+      albumCount: 1,
+      ratedAlbumCount: 1,
+      partialAlbumCount: 0,
+      unratedAlbumCount: 0,
+      trackCount: 9,
+      totalSeconds: 2268,
+      lovedTracks: 1,
+      tmoeSeconds: 540,
+      averageRatingCompleteness: 1,
+      averageAlbumRating: 82,
+      averageAlbumScore: 103.8,
+      firstYear: 1977,
+      lastYear: 1977,
+      topGenre: "AOR",
+    },
+    {
       id: "pet shop boys",
       name: "Pet Shop Boys",
       albumCount: 1,

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.108.1] - 2026-07-30
+### Changed
+- Made artist names in the Updates ledger and selected-change details open the Artists workspace with the matching normalized artist selected.
+- Synchronized app metadata and provider user agents to `0.108.1`.
+
+### Fixed
+- Fixed unreadable Type and Time dropdown options in the Updates workspace by giving native light- and dark-theme option menus explicit high-contrast colors.
+
 ## [0.108.0] - 2026-07-30
 ### Added
 - Added native PAR2 verification and repair for Usenet releases, including installed `par2cmdline-turbo` detection, dedicated verifying/repairing transfer states, and live readiness details in provider settings.

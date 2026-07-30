@@ -28,6 +28,7 @@ import type {
 type UpdatesWorkspaceProps = {
   selectedUpdateId: number | null;
   onSelectUpdate: (update: LibraryUpdate | null) => void;
+  onOpenArtist: (artistName: string) => void;
 };
 
 type UpdateDateRange = "all" | "today" | "7d" | "30d" | "365d";
@@ -136,6 +137,30 @@ function UpdateDescription({ update }: { update: LibraryUpdate }) {
   return <span className="update-description">{update.description}</span>;
 }
 
+function UpdateArtistLink({
+  artistName,
+  onOpenArtist,
+}: {
+  artistName: string | null;
+  onOpenArtist: (artistName: string) => void;
+}) {
+  const displayName = artistName?.trim();
+  if (!displayName) {
+    return <strong>Unknown artist</strong>;
+  }
+
+  return (
+    <button
+      className="update-artist-link"
+      type="button"
+      aria-label={`Open ${displayName} in Artists`}
+      onClick={() => onOpenArtist(displayName)}
+    >
+      <strong>{displayName}</strong>
+    </button>
+  );
+}
+
 function SummaryButton({
   label,
   count,
@@ -178,6 +203,7 @@ function SummaryButton({
 export function UpdatesWorkspace({
   selectedUpdateId,
   onSelectUpdate,
+  onOpenArtist,
 }: UpdatesWorkspaceProps) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -402,28 +428,33 @@ export function UpdatesWorkspace({
                 </header>
                 <div className="updates-list">
                   {updates.map((update) => (
-                    <button
+                    <div
                       className={`update-row${selectedUpdateId === update.id ? " selected" : ""}`}
-                      type="button"
                       key={update.id}
-                      aria-pressed={selectedUpdateId === update.id}
-                      onClick={() => onSelectUpdate(update)}
                     >
+                      <button
+                        className="update-row-select"
+                        type="button"
+                        aria-label={`Select update for ${update.albumArtistDisplay ?? "Unknown artist"} — ${update.album ?? "Untitled album"}`}
+                        aria-pressed={selectedUpdateId === update.id}
+                        onClick={() => onSelectUpdate(update)}
+                      />
                       <time dateTime={update.createdAt}>
                         {formatUpdateTime(update.createdAt)}
                       </time>
                       <UpdateStatus update={update} />
                       <span className="update-identity">
-                        <strong>
-                          {update.albumArtistDisplay ?? "Unknown artist"}
-                        </strong>
+                        <UpdateArtistLink
+                          artistName={update.albumArtistDisplay}
+                          onOpenArtist={onOpenArtist}
+                        />
                         <span>
                           {update.album ?? "Untitled album"}
                           {update.year != null ? ` (${update.year})` : ""}
                         </span>
                       </span>
                       <UpdateDescription update={update} />
-                    </button>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -464,8 +495,10 @@ export function UpdatesWorkspace({
 
 export function UpdateDetailPanel({
   update,
+  onOpenArtist,
 }: {
   update: LibraryUpdate | null;
+  onOpenArtist: (artistName: string) => void;
 }) {
   if (!update) {
     return (
@@ -508,7 +541,12 @@ export function UpdateDetailPanel({
       <dl className="run-details update-detail-list">
         <div>
           <dt>Artist</dt>
-          <dd>{update.albumArtistDisplay ?? "Unknown artist"}</dd>
+          <dd>
+            <UpdateArtistLink
+              artistName={update.albumArtistDisplay}
+              onOpenArtist={onOpenArtist}
+            />
+          </dd>
         </div>
         <div>
           <dt>Album</dt>
