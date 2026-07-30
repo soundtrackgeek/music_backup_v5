@@ -9,24 +9,25 @@ use crate::ai::{
 use crate::models::AppSettings;
 use crate::models::{
     AlbumDebutTimelineAlbum, AlbumDebutTimelineResponse, AlbumDebutTimelineYear, ArtistListRequest,
-    ArtistListResponse, ArtistSummary, BillboardImportSummary, BillboardSinglesImportSummary,
-    BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, CatalogConcentrationStats,
-    ChartConfig, ConcentrationPoint, DecadeProgressStats, DiscoveryAlbumPoint,
-    DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell, DiscoveryMission,
-    DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats, ExportMusicToolRequest,
-    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressRequest,
-    GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint, GenreTimelineGenre,
-    GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount, ImportRun,
-    LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus, LovedDensityStat,
-    LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption, MusicToolFieldDiff,
-    MusicToolFixDiff, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
-    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress,
-    MusicToolSummary, MusicToolUndoSummary, NorsktoppenImportSummary, OfficialUkImportSummary,
-    OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse, RatingBucket, RatingEvent,
-    RatingHistoryPoint, RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart,
-    SavedSearch, StatisticsResponse, TextFilter, TiISkuddetImportSummary,
-    TrackDebutTimelineResponse, TrackDebutTimelineTrack, TrackDebutTimelineYear,
-    VgListaImportSummary, YearProgressRequest, YearProgressStats,
+    ArtistListResponse, ArtistSummary, ArtistTimelineAlbum, ArtistTimelineArtist,
+    ArtistTimelineRequest, ArtistTimelineResponse, BillboardImportSummary,
+    BillboardSinglesImportSummary, BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow,
+    BrowseSort, CatalogConcentrationStats, ChartConfig, ConcentrationPoint, DecadeProgressStats,
+    DiscoveryAlbumPoint, DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell,
+    DiscoveryMission, DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats,
+    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    GenreProgressRequest, GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint,
+    GenreTimelineGenre, GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount,
+    ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus,
+    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption,
+    MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry, MusicToolFixRequest,
+    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
+    MusicToolProgress, MusicToolSummary, MusicToolUndoSummary, NorsktoppenImportSummary,
+    OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse,
+    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
+    TiISkuddetImportSummary, TrackDebutTimelineResponse, TrackDebutTimelineTrack,
+    TrackDebutTimelineYear, VgListaImportSummary, YearProgressRequest, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, NaiveDate, Utc, Weekday};
@@ -510,21 +511,36 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_five_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_six_schema_exists(conn)? {
+        return Ok(());
+    }
+
+    if user_version == 45 && migrations::phase_forty_five_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 46 migration transaction")?;
+        ensure_artist_images_schema(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 46;")
+            .context("Could not mark the schema 46 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 46 migration")?;
         return Ok(());
     }
 
     if user_version == 44 && migrations::phase_forty_four_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 45 migration transaction")?;
+            .context("Could not start the schema 45–46 migration transaction")?;
         ensure_library_updates_schema(&transaction)?;
+        ensure_artist_images_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 45;")
-            .context("Could not mark the schema 45 migration complete")?;
+            .execute_batch("PRAGMA user_version = 46;")
+            .context("Could not mark the schema 45–46 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 45 migration")?;
+            .context("Could not commit the schema 45–46 migration")?;
         return Ok(());
     }
 
@@ -1735,12 +1751,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_library_completion_discogs_columns(conn)?;
     ensure_library_completion_cover_columns(conn)?;
     ensure_library_completion_artist_schema(conn)?;
+    ensure_artist_images_schema(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
     migrations::migrate_billboard_album_source_default(conn)?;
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 45;
+        PRAGMA user_version = 46;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -2181,6 +2198,28 @@ fn ensure_library_updates_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create the durable library update history schema")?;
+    Ok(())
+}
+
+fn ensure_artist_images_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS artist_images (
+            artist_key TEXT PRIMARY KEY,
+            artist_name TEXT NOT NULL,
+            source TEXT NOT NULL,
+            source_url TEXT,
+            cache_path TEXT,
+            mime_type TEXT,
+            state TEXT NOT NULL CHECK(state IN ('available', 'unavailable', 'failed')),
+            message TEXT NOT NULL DEFAULT '',
+            fetched_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_artist_images_state_fetched_at
+            ON artist_images(state, fetched_at DESC);
+        ",
+    )
+    .context("Could not create the artist portrait cache schema")?;
     Ok(())
 }
 
@@ -8494,6 +8533,142 @@ pub fn genre_timeline_for_app(
 }
 
 #[cfg(not(test))]
+pub fn artist_timeline_for_app(
+    app: &AppHandle,
+    request: ArtistTimelineRequest,
+) -> Result<ArtistTimelineResponse> {
+    let (conn, _) = open(app)?;
+    artist_timeline(&conn, request)
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ArtistImageCandidate {
+    pub artist_key: String,
+    pub artist_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ArtistImageCacheRecord {
+    pub artist_key: String,
+    pub artist_name: String,
+    pub source_url: Option<String>,
+    pub cache_path: Option<String>,
+    pub mime_type: Option<String>,
+    pub state: String,
+    pub message: String,
+}
+
+pub(crate) fn artist_image_candidates_for_app(
+    app: &AppHandle,
+    limit: u32,
+) -> Result<Vec<ArtistImageCandidate>> {
+    let (conn, _) = open(app)?;
+    let artist_key = artist_key_sql("a.album_artist_display");
+    let mut stmt = conn.prepare(&format!(
+        "
+        SELECT
+            {artist_key} AS artist_key,
+            COALESCE(MIN(NULLIF(TRIM(a.album_artist_display), '')), 'Unknown Artist') AS artist_name
+        FROM albums a
+        LEFT JOIN artist_images image ON image.artist_key = {artist_key}
+        WHERE image.artist_key IS NULL OR image.state = 'failed'
+        GROUP BY {artist_key}
+        ORDER BY COUNT(*) DESC, LOWER(artist_name) ASC
+        LIMIT ?
+        "
+    ))?;
+    let candidates = stmt
+        .query_map([i64::from(limit.clamp(1, 200))], |row| {
+            Ok(ArtistImageCandidate {
+                artist_key: row.get(0)?,
+                artist_name: row.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load artists awaiting portrait enrichment")?;
+    Ok(candidates)
+}
+
+pub(crate) fn artist_image_remaining_for_app(app: &AppHandle) -> Result<i64> {
+    let (conn, _) = open(app)?;
+    let artist_key = artist_key_sql("a.album_artist_display");
+    conn.query_row(
+        &format!(
+            "
+            SELECT COUNT(*) FROM (
+                SELECT {artist_key} AS artist_key
+                FROM albums a
+                LEFT JOIN artist_images image ON image.artist_key = {artist_key}
+                WHERE image.artist_key IS NULL OR image.state = 'failed'
+                GROUP BY {artist_key}
+            )
+            "
+        ),
+        [],
+        |row| row.get(0),
+    )
+    .context("Could not count artists awaiting portrait enrichment")
+}
+
+pub(crate) fn upsert_artist_image_for_app(
+    app: &AppHandle,
+    record: &ArtistImageCacheRecord,
+) -> Result<()> {
+    let (conn, _) = open(app)?;
+    conn.execute(
+        "
+        INSERT INTO artist_images (
+            artist_key, artist_name, source, source_url, cache_path,
+            mime_type, state, message, fetched_at
+        ) VALUES (?, ?, 'lastfm', ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(artist_key) DO UPDATE SET
+            artist_name = excluded.artist_name,
+            source = excluded.source,
+            source_url = excluded.source_url,
+            cache_path = excluded.cache_path,
+            mime_type = excluded.mime_type,
+            state = excluded.state,
+            message = excluded.message,
+            fetched_at = excluded.fetched_at
+        ",
+        params![
+            &record.artist_key,
+            &record.artist_name,
+            &record.source_url,
+            &record.cache_path,
+            &record.mime_type,
+            &record.state,
+            &record.message,
+            Utc::now().to_rfc3339(),
+        ],
+    )
+    .context("Could not save the artist portrait cache record")?;
+    Ok(())
+}
+
+pub(crate) fn artist_image_file_for_app(
+    app: &AppHandle,
+    artist_id: &str,
+) -> Result<Option<(String, String)>> {
+    let (conn, _) = open(app)?;
+    let artist_key = normalize_artist_text(artist_id);
+    conn.query_row(
+        "
+        SELECT cache_path, mime_type
+        FROM artist_images
+        WHERE artist_key = ?
+          AND state = 'available'
+          AND NULLIF(TRIM(COALESCE(cache_path, '')), '') IS NOT NULL
+          AND NULLIF(TRIM(COALESCE(mime_type, '')), '') IS NOT NULL
+        ",
+        [artist_key],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()
+    .context("Could not load the cached artist portrait")
+}
+
+#[cfg(not(test))]
 pub fn genre_suggestion_names_for_app(app: &AppHandle) -> Result<Vec<String>> {
     let (conn, _) = open(app)?;
     genre_suggestion_names(&conn)
@@ -10675,6 +10850,7 @@ fn list_artists(
     let (where_sql, values) = artist_search_where(&request.search_text);
     let album_artist_key_sql = artist_key_sql("album_artist_display");
     let album_artist_key_sql_a2 = artist_key_sql("a2.album_artist_display");
+    let album_artist_key_sql_a3 = artist_key_sql("a3.album_artist_display");
 
     let count_sql = format!(
         "
@@ -10757,7 +10933,34 @@ fn list_artists(
             origin.country_code AS origin_country_code,
             origin.country_name AS origin_country_name,
             origin.raw_area_name AS origin_country_raw_area,
-            origin.review_state AS origin_country_review_state
+            origin.review_state AS origin_country_review_state,
+            EXISTS(
+                SELECT 1 FROM artist_images image
+                WHERE image.artist_key = grouped.artist_key
+                  AND image.state = 'available'
+                  AND NULLIF(TRIM(COALESCE(image.cache_path, '')), '') IS NOT NULL
+            ) AS portrait_available,
+            (
+                SELECT a3.id FROM albums a3
+                LEFT JOIN album_covers c3 ON c3.album_id = a3.id
+                WHERE {album_artist_key_sql_a3} = grouped.artist_key
+                ORDER BY c3.cache_path IS NOT NULL DESC, a3.album_score DESC, a3.year ASC, a3.id ASC
+                LIMIT 1
+            ) AS representative_album_id,
+            (
+                SELECT a3.album FROM albums a3
+                LEFT JOIN album_covers c3 ON c3.album_id = a3.id
+                WHERE {album_artist_key_sql_a3} = grouped.artist_key
+                ORDER BY c3.cache_path IS NOT NULL DESC, a3.album_score DESC, a3.year ASC, a3.id ASC
+                LIMIT 1
+            ) AS representative_album,
+            (
+                SELECT c3.cache_path FROM albums a3
+                JOIN album_covers c3 ON c3.album_id = a3.id
+                WHERE {album_artist_key_sql_a3} = grouped.artist_key
+                ORDER BY a3.album_score DESC, a3.year ASC, a3.id ASC
+                LIMIT 1
+            ) AS representative_cover_path
         FROM grouped
         LEFT JOIN musicbrainz_artist_infos info
           ON info.local_artist_key = grouped.artist_key
@@ -10822,6 +11025,10 @@ fn artist_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArtistSu
         origin_country_name: row.get(30)?,
         origin_country_raw_area: row.get(31)?,
         origin_country_review_state: row.get(32)?,
+        portrait_available: row.get(33)?,
+        representative_album_id: row.get(34)?,
+        representative_album: row.get(35)?,
+        representative_cover_path: row.get(36)?,
     })
 }
 
@@ -11171,6 +11378,247 @@ fn genre_timeline(
         albums,
         matching_album_count,
         matching_genre_count,
+        dated_album_count,
+        available_year_from,
+        available_year_to,
+    })
+}
+
+fn chart_rank_strength(rank: Option<i32>, chart_size: i32) -> f64 {
+    let Some(rank) = rank else { return 0.0 };
+    let maximum = chart_size.max(2) - 1;
+    let clamped = rank.clamp(1, chart_size) - 1;
+    1.0 - f64::from(clamped) / f64::from(maximum)
+}
+
+fn artist_timeline(
+    conn: &Connection,
+    request: ArtistTimelineRequest,
+) -> Result<ArtistTimelineResponse> {
+    let (dated_album_count, available_year_from, available_year_to) = conn
+        .query_row(
+            "SELECT COUNT(*), MIN(year), MAX(year) FROM albums WHERE year IS NOT NULL",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .context("Could not load artist timeline year extent")?;
+
+    let artist_key = artist_key_sql("a.album_artist_display");
+    let artist_key_a2 = artist_key_sql("a2.album_artist_display");
+    let mut conditions = vec!["a.year IS NOT NULL".to_string()];
+    let mut values = Vec::new();
+    add_i32_range(
+        &mut conditions,
+        &mut values,
+        "a.year",
+        request.year_from,
+        request.year_to,
+    );
+    add_text_list_condition(
+        &mut conditions,
+        &mut values,
+        "a.genre_normalized",
+        &request.genres,
+        false,
+    );
+    add_text_list_condition(
+        &mut conditions,
+        &mut values,
+        "a.genre_normalized",
+        &request.excluded_genres,
+        true,
+    );
+    let requested_artists = request
+        .artists
+        .iter()
+        .map(|artist| normalize_artist_text(artist))
+        .filter(|artist| !artist.is_empty())
+        .collect::<HashSet<_>>();
+    if !requested_artists.is_empty() {
+        let placeholders = std::iter::repeat("?")
+            .take(requested_artists.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        conditions.push(format!("{artist_key} IN ({placeholders})"));
+        let mut ordered = requested_artists.into_iter().collect::<Vec<_>>();
+        ordered.sort();
+        values.extend(ordered.into_iter().map(Value::Text));
+    }
+    let where_sql = conditions.join(" AND ");
+    let (matching_album_count, matching_artist_count) = conn
+        .query_row(
+            &format!(
+                "SELECT COUNT(*), COUNT(DISTINCT {artist_key}) FROM albums a WHERE {where_sql}"
+            ),
+            params_from_iter(values.iter()),
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .context("Could not count artist timeline matches")?;
+
+    let artist_limit = request.artist_limit.clamp(1, 20);
+    let mut artist_values = values.clone();
+    artist_values.push(Value::Integer(i64::from(artist_limit)));
+    let mut artist_stmt = conn.prepare(&format!(
+        "
+        WITH filtered AS (
+            SELECT a.*,
+                   {artist_key} AS artist_key,
+                   COALESCE(NULLIF(TRIM(a.album_artist_display), ''), 'Unknown Artist') AS artist_name
+            FROM albums a
+            WHERE {where_sql}
+        ), grouped AS (
+            SELECT artist_key,
+                   MIN(artist_name) AS artist_name,
+                   COUNT(*) AS album_count,
+                   MIN(year) AS first_year,
+                   MAX(year) AS last_year,
+                   AVG(album_score) AS average_album_score,
+                   COALESCE(SUM(loved_tracks), 0) AS loved_tracks
+            FROM filtered
+            GROUP BY artist_key
+        )
+        SELECT
+            grouped.artist_key,
+            grouped.artist_name,
+            grouped.album_count,
+            grouped.first_year,
+            grouped.last_year,
+            grouped.average_album_score,
+            grouped.loved_tracks,
+            (
+                SELECT COALESCE(NULLIF(TRIM(a2.canonical_genre), ''), 'Unknown')
+                FROM albums a2
+                WHERE {artist_key_a2} = grouped.artist_key
+                GROUP BY COALESCE(NULLIF(TRIM(LOWER(a2.genre_normalized)), ''), 'unknown')
+                ORDER BY COUNT(*) DESC, LOWER(COALESCE(a2.canonical_genre, '')) ASC
+                LIMIT 1
+            ) AS top_genre,
+            EXISTS(
+                SELECT 1 FROM artist_images image
+                WHERE image.artist_key = grouped.artist_key
+                  AND image.state = 'available'
+                  AND NULLIF(TRIM(COALESCE(image.cache_path, '')), '') IS NOT NULL
+            ) AS portrait_available,
+            (
+                SELECT f.id FROM filtered f
+                LEFT JOIN album_covers c ON c.album_id = f.id
+                WHERE f.artist_key = grouped.artist_key
+                ORDER BY c.cache_path IS NOT NULL DESC, f.album_score DESC, f.year ASC, f.id ASC
+                LIMIT 1
+            ) AS representative_album_id,
+            (
+                SELECT f.album FROM filtered f
+                LEFT JOIN album_covers c ON c.album_id = f.id
+                WHERE f.artist_key = grouped.artist_key
+                ORDER BY c.cache_path IS NOT NULL DESC, f.album_score DESC, f.year ASC, f.id ASC
+                LIMIT 1
+            ) AS representative_album,
+            (
+                SELECT c.cache_path FROM filtered f
+                JOIN album_covers c ON c.album_id = f.id
+                WHERE f.artist_key = grouped.artist_key
+                ORDER BY f.album_score DESC, f.year ASC, f.id ASC
+                LIMIT 1
+            ) AS representative_cover_path
+        FROM grouped
+        ORDER BY grouped.album_count DESC, LOWER(grouped.artist_name) ASC
+        LIMIT ?
+        "
+    ))?;
+    let artists = artist_stmt
+        .query_map(params_from_iter(artist_values.iter()), |row| {
+            Ok(ArtistTimelineArtist {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                album_count: row.get(2)?,
+                first_year: row.get(3)?,
+                last_year: row.get(4)?,
+                average_album_score: row.get(5)?,
+                loved_tracks: row.get(6)?,
+                top_genre: row.get(7)?,
+                portrait_available: row.get(8)?,
+                representative_album_id: row.get(9)?,
+                representative_album: row.get(10)?,
+                representative_cover_path: row.get(11)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load artist timeline artists")?;
+
+    if artists.is_empty() {
+        return Ok(ArtistTimelineResponse {
+            artists,
+            albums: Vec::new(),
+            matching_album_count,
+            matching_artist_count,
+            dated_album_count,
+            available_year_from,
+            available_year_to,
+        });
+    }
+
+    let selected_ids = artists
+        .iter()
+        .map(|artist| artist.id.clone())
+        .collect::<Vec<_>>();
+    let placeholders = std::iter::repeat("?")
+        .take(selected_ids.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut album_values = values;
+    album_values.extend(selected_ids.iter().cloned().map(Value::Text));
+    let mut album_stmt = conn.prepare(&format!(
+        "
+        SELECT
+            a.id,
+            a.album,
+            {artist_key} AS artist_id,
+            COALESCE(NULLIF(TRIM(a.album_artist_display), ''), 'Unknown Artist') AS artist,
+            a.year,
+            a.album_score,
+            COALESCE(a.loved_tracks, 0),
+            a.billboard_rank,
+            a.official_uk_rank,
+            a.vg_lista_rank,
+            c.cache_path
+        FROM albums a
+        LEFT JOIN album_covers c ON c.album_id = a.id
+        WHERE {where_sql}
+          AND {artist_key} IN ({placeholders})
+        ORDER BY a.year ASC, LOWER(COALESCE(a.album, '')) ASC, a.id ASC
+        "
+    ))?;
+    let albums = album_stmt
+        .query_map(params_from_iter(album_values.iter()), |row| {
+            let billboard_rank = row.get(7)?;
+            let official_uk_rank = row.get(8)?;
+            let vg_lista_rank = row.get(9)?;
+            let chart_peak = 0.42 * chart_rank_strength(billboard_rank, 200)
+                + 0.42 * chart_rank_strength(official_uk_rank, 100)
+                + 0.16 * chart_rank_strength(vg_lista_rank, 40);
+            Ok(ArtistTimelineAlbum {
+                album_id: row.get(0)?,
+                album: row.get(1)?,
+                artist_id: row.get(2)?,
+                artist: row.get(3)?,
+                year: row.get(4)?,
+                album_score: row.get(5)?,
+                loved_tracks: row.get(6)?,
+                billboard_rank,
+                official_uk_rank,
+                vg_lista_rank,
+                chart_peak,
+                cover_path: row.get(10)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load artist timeline albums")?;
+
+    Ok(ArtistTimelineResponse {
+        artists,
+        albums,
+        matching_album_count,
+        matching_artist_count,
         dated_album_count,
         available_year_from,
         available_year_to,
@@ -19279,6 +19727,55 @@ mod tests {
     }
 
     #[test]
+    fn builds_artist_career_peaks_with_weighted_chart_data() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score,
+                billboard_rank, official_uk_rank, vg_lista_rank
+            ) VALUES
+            (
+                'mb:kate-1', 1, 'kate-1', 'The Kick Inside', 'Kate Bush',
+                'Art Pop', 'art pop', 'EMI', 1978, 1978,
+                13, 13, 1.0, 2600, 2, 500, 0.2, 92, 140.0,
+                30, 3, NULL
+            ),
+            (
+                'mb:kate-2', 1, 'kate-2', 'Hounds of Love', 'Kate Bush',
+                'Art Pop', 'art pop', 'EMI', 1985, 1985,
+                12, 12, 1.0, 2800, 4, 800, 0.3, 96, 240.0,
+                12, 1, 4
+            )
+            ",
+            [],
+        )
+        .expect("insert artist timeline albums");
+
+        let timeline = artist_timeline(
+            &conn,
+            ArtistTimelineRequest {
+                year_from: Some(1970),
+                year_to: Some(1990),
+                artists: vec!["Kate Bush".to_string()],
+                ..ArtistTimelineRequest::default()
+            },
+        )
+        .expect("load artist timeline");
+
+        assert_eq!(timeline.matching_artist_count, 1);
+        assert_eq!(timeline.matching_album_count, 2);
+        assert_eq!(timeline.artists[0].name, "Kate Bush");
+        assert_eq!(timeline.artists[0].first_year, 1978);
+        assert_eq!(timeline.albums.len(), 2);
+        assert!(timeline.albums[1].chart_peak > timeline.albums[0].chart_peak);
+        assert_eq!(timeline.albums[1].official_uk_rank, Some(1));
+    }
+
+    #[test]
     fn expands_scores_genre_group_for_include_and_exclude_filters() {
         let conn = seeded_connection();
         conn.execute(
@@ -19812,6 +20309,8 @@ mod tests {
             .expect("phase forty-one schema exists"));
         assert!(migrations::phase_forty_five_schema_exists(&conn)
             .expect("phase forty-five schema exists"));
+        assert!(migrations::phase_forty_six_schema_exists(&conn)
+            .expect("phase forty-six schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -19863,6 +20362,29 @@ mod tests {
 
         assert!(migrations::phase_forty_five_schema_exists(&conn)
             .expect("phase forty-five schema exists"));
+        let user_version = conn
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+            .expect("read migrated user version");
+        assert_eq!(user_version, LATEST_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn schema_forty_six_adds_the_shared_artist_portrait_cache() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            DROP TABLE artist_images;
+            PRAGMA user_version = 45;
+            ",
+        )
+        .expect("simulate schema forty-five database");
+
+        migrate(&conn).expect("migrate artist portrait cache schema");
+
+        assert!(migrations::phase_forty_six_schema_exists(&conn)
+            .expect("phase forty-six schema exists"));
         let user_version = conn
             .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
             .expect("read migrated user version");

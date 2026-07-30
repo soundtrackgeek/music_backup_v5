@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.110.0] - 2026-07-30
+### Added
+- Added the Career Peaks artist timeline with circular artist portraits, album-derived peak shapes, selected album covers, an overview strip, focused-artist dimming, artist add/remove controls, include/exclude genre filters with the `scores` umbrella, editable year bounds, and Top 7/12/20 views.
+- Added separate **Charts** and **My Scores** peak modes. Chart peaks weight Billboard and Official UK equally at 42% each, with VG Lista contributing the remaining 16%; My Scores derives each peak from the user's saved Album Score.
+- Added optional Last.fm artist-image enrichment in Settings → Providers, including secure Windows Credential Manager storage for the API key, explicit 50-artist sync batches, local image caching, retryable failures, and shared portraits in Career Peaks, Artist Index, and Artist detail views.
+
+### Changed
+- Replaced the Timelines workspace's Artists placeholder with the complete Career Peaks experience and synchronized app metadata and provider user agents to `0.110.0`.
+- Added representative album-cover and artist-initial fallbacks so artist portraits remain useful without a Last.fm key or network access.
+
 ## [0.109.0] - 2026-07-30
 ### Added
 - Added a luminous Genre constellation to the Timelines workspace with real album-dot clouds, density contours, Dots/Density modes, focused-genre highlighting, overview strip, per-genre summaries, include/exclude filters, the Scores umbrella, editable year bounds, and Top 7/12/20 views.

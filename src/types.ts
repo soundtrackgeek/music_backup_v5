@@ -1944,6 +1944,10 @@ export type ArtistSummary = {
   originCountryName: string | null;
   originCountryRawArea: string | null;
   originCountryReviewState: string | null;
+  portraitAvailable?: boolean;
+  representativeAlbumId?: string | null;
+  representativeAlbum?: string | null;
+  representativeCoverPath?: string | null;
 };
 
 export type ArtistListResponse = {
@@ -2029,6 +2033,81 @@ export type GenreTimelineResponse = {
   datedAlbumCount: number;
   availableYearFrom: number | null;
   availableYearTo: number | null;
+};
+
+export type ArtistTimelineMetric = "charts" | "albumScore";
+
+export type ArtistTimelineRequest = {
+  yearFrom: number | null;
+  yearTo: number | null;
+  genres: string[];
+  excludedGenres: string[];
+  artists: string[];
+  artistLimit: number;
+  metric: ArtistTimelineMetric;
+};
+
+export type ArtistTimelineArtist = {
+  id: string;
+  name: string;
+  albumCount: number;
+  firstYear: number;
+  lastYear: number;
+  averageAlbumScore: number | null;
+  lovedTracks: number;
+  topGenre: string | null;
+  portraitAvailable: boolean;
+  representativeAlbumId: string | null;
+  representativeAlbum: string | null;
+  representativeCoverPath: string | null;
+};
+
+export type ArtistTimelineAlbum = {
+  albumId: string;
+  album: string | null;
+  artistId: string;
+  artist: string;
+  year: number;
+  albumScore: number | null;
+  lovedTracks: number;
+  billboardRank: number | null;
+  officialUkRank: number | null;
+  vgListaRank: number | null;
+  chartPeak: number;
+  coverPath: string | null;
+};
+
+export type ArtistTimelineResponse = {
+  artists: ArtistTimelineArtist[];
+  albums: ArtistTimelineAlbum[];
+  matchingAlbumCount: number;
+  matchingArtistCount: number;
+  datedAlbumCount: number;
+  availableYearFrom: number | null;
+  availableYearTo: number | null;
+};
+
+export type LastFmCredentialStatus = {
+  configured: boolean;
+  source: "windowsCredentialManager" | "none";
+};
+
+export type LastFmConnectionTest = {
+  authenticated: boolean;
+  message: string;
+};
+
+export type SaveLastFmApiKeyRequest = {
+  apiKey: string;
+};
+
+export type LastFmArtistImageRefreshSummary = {
+  requested: number;
+  downloaded: number;
+  unavailable: number;
+  failed: number;
+  remaining: number;
+  message: string;
 };
 
 export type DiscoveryResponse = {

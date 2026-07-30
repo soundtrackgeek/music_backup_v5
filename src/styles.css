@@ -17520,6 +17520,639 @@ button {
   line-height: 1.6;
 }
 
+/* Artist Career Peaks */
+.artist-portrait {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, #74d9ce 22%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--panel) 80%, #143b38 20%);
+  color: #62cfc4;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #51cfc3 8%, transparent);
+}
+
+.artist-portrait img,
+.artist-portrait.cover-placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.artist-portrait-cover.cover-placeholder {
+  border-radius: 50%;
+}
+
+.artist-portrait-fallback > span {
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.artist-index-results .artist-mini {
+  width: 34px;
+  height: 34px;
+}
+
+.artist-detail-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.artist-detail-heading > .artist-portrait {
+  width: 44px;
+  height: 44px;
+}
+
+.artist-career-peaks-page {
+  --career-line: color-mix(in srgb, var(--border) 74%, transparent);
+  --career-muted: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 66% 30%, color-mix(in srgb, #ce7b2e 5%, transparent), transparent 33%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 97%, #04110f 3%), var(--panel));
+}
+
+.artist-career-peaks-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 62px;
+  padding: 13px 17px;
+  border-bottom: 1px solid var(--career-line);
+}
+
+.artist-career-peaks-title h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.artist-career-peaks-title span {
+  display: block;
+  margin-top: 4px;
+  color: var(--career-muted);
+  font-size: 0.73rem;
+}
+
+.artist-career-peaks-actions,
+.artist-career-peaks-metric {
+  display: flex;
+  align-items: center;
+}
+
+.artist-career-peaks-actions {
+  gap: 8px;
+}
+
+.artist-career-peaks-metric {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--panel) 89%, transparent);
+}
+
+.artist-career-peaks-actions button,
+.artist-career-peaks-search button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.artist-career-peaks-actions > button {
+  width: 36px;
+  padding: 0;
+}
+
+.artist-career-peaks-metric button {
+  min-width: 94px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.artist-career-peaks-metric button + button {
+  border-left: 1px solid var(--border);
+}
+
+.artist-career-peaks-actions button:hover,
+.artist-career-peaks-actions button:focus-visible,
+.artist-career-peaks-actions button.active {
+  color: var(--text);
+  background: color-mix(in srgb, #2d8c80 18%, var(--panel));
+}
+
+.artist-career-peaks-metric button:first-child.active {
+  color: #f1a642;
+  background: color-mix(in srgb, #e89731 14%, var(--panel));
+}
+
+.artist-career-peaks-metric button:last-child.active {
+  color: #65d6ca;
+  background: color-mix(in srgb, #3aa99d 15%, var(--panel));
+}
+
+.artist-career-peaks-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 12px 17px 0;
+  padding: 0 11px;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+}
+
+.artist-career-peaks-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.artist-career-peaks-search button {
+  min-height: 26px;
+  width: 26px;
+  border: 0;
+  background: transparent;
+}
+
+.artist-career-peaks-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.25fr) repeat(2, minmax(180px, 1fr)) 112px 112px 108px auto;
+  gap: 9px;
+  align-items: end;
+  margin: 12px 17px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 94%, #153631 6%);
+}
+
+.artist-peaks-token-field,
+.artist-career-peaks-number,
+.artist-career-peaks-limit {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.artist-peaks-token-field > div,
+.artist-career-peaks-number > span:last-child,
+.artist-career-peaks-limit select {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  gap: 5px;
+  padding: 4px 7px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+}
+
+.artist-peaks-token-field button {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 4px;
+  min-height: 25px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, #55cabe 32%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, #3aa99d 13%, var(--panel));
+  color: var(--text);
+  font-size: 0.68rem;
+}
+
+.artist-peaks-token-field.tone-exclude button {
+  border-color: color-mix(in srgb, #d95c75 34%, var(--border));
+  background: color-mix(in srgb, #d95c75 12%, var(--panel));
+}
+
+.artist-peaks-token-field input,
+.artist-career-peaks-number input,
+.artist-career-peaks-limit select {
+  min-width: 68px;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.artist-career-peaks-number > span:last-child {
+  overflow: hidden;
+  color: var(--muted);
+}
+
+.artist-career-peaks-number input {
+  width: 66px;
+}
+
+.artist-career-peaks-limit select {
+  width: 100%;
+  appearance: auto;
+}
+
+.artist-career-peaks-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.artist-career-peaks-chart {
+  position: relative;
+  min-height: 650px;
+  transition: opacity 160ms ease;
+}
+
+.artist-career-peaks-chart.is-refreshing {
+  opacity: 0.58;
+}
+
+.artist-career-peaks-chart svg {
+  display: block;
+  width: 100%;
+  min-width: 900px;
+  height: 650px;
+  overflow: visible;
+}
+
+.artist-career-peaks-grid line {
+  stroke: var(--career-line);
+  stroke-width: 0.75;
+  stroke-dasharray: 2 5;
+}
+
+.artist-career-peaks-grid text {
+  fill: color-mix(in srgb, var(--text) 48%, transparent);
+  font-size: 11px;
+}
+
+.artist-career-peaks-rows > g {
+  opacity: 0.78;
+  cursor: pointer;
+  transition: opacity 180ms ease;
+}
+
+.artist-career-peaks-rows > g.is-active {
+  opacity: 1;
+}
+
+.artist-career-peaks-rows > g.is-dimmed {
+  opacity: 0.32;
+}
+
+.artist-career-peaks-baseline {
+  opacity: 0.25;
+  stroke-width: 0.8;
+}
+
+.artist-career-peak {
+  pointer-events: stroke;
+  cursor: pointer;
+  opacity: 0.85;
+  fill-opacity: 0.2;
+  transition: opacity 160ms ease, stroke-width 160ms ease;
+}
+
+.artist-career-peak:hover,
+.artist-career-peak:focus-visible {
+  opacity: 1;
+  stroke-width: 3.2px !important;
+  outline: none;
+}
+
+.artist-career-peaks-labels {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 174px;
+  pointer-events: none;
+}
+
+.artist-career-peaks-labels > button {
+  position: absolute;
+  left: 13px;
+  display: flex;
+  align-items: center;
+  width: 148px;
+  gap: 9px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  transform: translateY(-50%);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity 180ms ease;
+}
+
+.artist-career-peaks-labels > button.is-dimmed {
+  opacity: 0.42;
+}
+
+.artist-career-peaks-labels > button.is-selected .artist-portrait {
+  border-color: #f1a642;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #f1a642 15%, transparent), 0 0 17px color-mix(in srgb, #f1a642 26%, transparent);
+}
+
+.artist-career-peaks-labels .artist-portrait {
+  width: 37px;
+  height: 37px;
+}
+
+.artist-career-peaks-labels strong,
+.artist-career-peaks-labels small {
+  display: block;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artist-career-peaks-labels strong {
+  font-size: 0.76rem;
+}
+
+.artist-career-peaks-labels small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.artist-career-peaks-covers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.artist-career-peaks-covers > button {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  overflow: visible;
+  border: 2px solid color-mix(in srgb, #f2a43c 74%, white 26%);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: 0 3px 18px color-mix(in srgb, #f2a43c 34%, transparent);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.artist-career-peaks-covers .cover-placeholder {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 5px;
+}
+
+.artist-career-peaks-card {
+  position: absolute;
+  z-index: 3;
+  top: 54px;
+  right: 18px;
+  width: 180px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--border) 74%, #f2a43c 26%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: 0 16px 40px color-mix(in srgb, #020807 38%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+.artist-career-peaks-card header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.artist-career-peaks-card .artist-portrait {
+  width: 35px;
+  height: 35px;
+}
+
+.artist-career-peaks-card strong,
+.artist-career-peaks-card span {
+  display: block;
+}
+
+.artist-career-peaks-card header strong {
+  color: #f1a642;
+  font-size: 0.78rem;
+}
+
+.artist-career-peaks-card header span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.artist-career-peaks-card dl {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0;
+}
+
+.artist-career-peaks-card dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.artist-career-peaks-card dt,
+.artist-career-peaks-card dd {
+  margin: 0;
+  font-size: 0.66rem;
+}
+
+.artist-career-peaks-card dt {
+  color: var(--muted);
+}
+
+.artist-career-peaks-card dd {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.artist-career-peaks-card > button {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid color-mix(in srgb, #f2a43c 40%, var(--border));
+  border-radius: 7px;
+  background: color-mix(in srgb, #f2a43c 12%, var(--panel));
+  color: #f1a642;
+  font-size: 0.68rem;
+}
+
+.artist-career-peaks-overview {
+  position: relative;
+  height: 100px;
+  margin: 0 22px 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--panel) 91%, #17342f 9%);
+}
+
+.artist-career-peaks-overview > svg {
+  position: absolute;
+  inset: 6px 3px 18px;
+  width: calc(100% - 6px);
+  height: calc(100% - 24px);
+  opacity: 0.45;
+}
+
+.artist-career-peaks-overview > svg line {
+  stroke-width: 0.75;
+  opacity: 0.42;
+}
+
+.artist-career-peaks-overview > svg path {
+  stroke-width: 0.55;
+  fill-opacity: 0.42;
+}
+
+.artist-career-peaks-window {
+  position: absolute;
+  inset-block: 5px 16px;
+  border: 1px solid color-mix(in srgb, #5ad0c5 55%, var(--border));
+  border-radius: 7px;
+  background: color-mix(in srgb, #5ad0c5 4%, transparent);
+  box-shadow: inset 0 0 16px color-mix(in srgb, #5ad0c5 8%, transparent);
+}
+
+.artist-career-peaks-window i {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 19px;
+  border-radius: 2px;
+  background: #68d5ca;
+  transform: translateY(-50%);
+}
+
+.artist-career-peaks-window i:first-child { left: 4px; }
+.artist-career-peaks-window i:last-child { right: 4px; }
+
+.artist-career-peaks-overview > span {
+  position: absolute;
+  bottom: 3px;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.artist-career-peaks-overview > span:nth-last-child(2) { left: 7px; }
+.artist-career-peaks-overview > span:last-child { right: 7px; }
+
+.artist-career-peaks-state {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-height: 420px;
+  place-content: center;
+  color: var(--muted);
+  text-align: center;
+}
+
+.artist-career-peaks-state strong { color: var(--text); }
+.artist-career-peaks-state.error svg { color: var(--danger); }
+
+.lastfm-settings-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(420px, 1.4fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.lastfm-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lastfm-sync-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #54cbbf 28%, var(--border));
+  border-radius: 9px;
+  background: color-mix(in srgb, #54cbbf 7%, var(--panel));
+}
+
+.lastfm-sync-summary strong { color: var(--text); }
+.lastfm-sync-summary span { color: var(--muted); font-size: 0.74rem; }
+
+@media (max-width: 1180px) {
+  .artist-career-peaks-filters {
+    grid-template-columns: repeat(3, minmax(190px, 1fr));
+  }
+
+  .lastfm-settings-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 780px) {
+  .artist-career-peaks-toolbar {
+    align-items: flex-start;
+  }
+
+  .artist-career-peaks-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .artist-career-peaks-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .artist-career-peaks-chart {
+    overflow-x: auto;
+  }
+
+  .artist-career-peaks-card {
+    right: 10px;
+  }
+}
+
 @media (max-width: 820px) {
   .timelines-header {
     grid-template-columns: 1fr;

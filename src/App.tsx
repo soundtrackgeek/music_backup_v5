@@ -354,6 +354,7 @@ import { DeemixSettingsPanel } from "./components/DeemixSettingsPanel";
 import { SoulseekSettingsPanel } from "./components/SoulseekSettingsPanel";
 import { UsenetSettingsPanel } from "./components/UsenetSettingsPanel";
 import { DiscogsSettingsPanel } from "./components/DiscogsSettingsPanel";
+import { LastFmSettingsPanel } from "./components/LastFmSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
 import { ExportResultStatus } from "./components/ExportResultStatus";
 import { LibraryAnalystPanel } from "./components/LibraryAnalystPanel";
@@ -366,6 +367,8 @@ import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPane
 import { MusicResearchPanel } from "./components/MusicResearchPanel";
 import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
 import { GenreTimeline } from "./components/GenreTimeline";
+import { ArtistTimeline } from "./components/ArtistTimeline";
+import { ArtistPortrait } from "./components/ArtistPortrait";
 import { ImportSafetyPanel } from "./components/ImportSafetyPanel";
 import { InsightActionDock } from "./components/InsightActionDock";
 import { AlbumCover } from "./components/AlbumCover";
@@ -374,11 +377,7 @@ import {
   type AlbumTimeRibbonPlaylist,
   type TimelineMode,
 } from "./components/AlbumTimeRibbon";
-import {
-  ArtistsTimelinePlaceholder,
-  TimelinesWorkspace,
-  type TimelinesView,
-} from "./components/TimelinesWorkspace";
+import { TimelinesWorkspace, type TimelinesView } from "./components/TimelinesWorkspace";
 import {
   ChartAdvancedControls,
   ChartFilterSourceGroup,
@@ -3073,12 +3072,15 @@ function ArtistIndexTable({
             }}
           >
             <span className="album-index-title" role="cell">
-              <span
-                className="cover-placeholder cover-mini artist-mini"
-                aria-hidden="true"
-              >
-                <span>{artistInitial(artist)}</span>
-              </span>
+              <ArtistPortrait
+                artistId={artist.id}
+                artistName={artist.name}
+                portraitAvailable={artist.portraitAvailable}
+                representativeAlbumId={artist.representativeAlbumId}
+                representativeAlbum={artist.representativeAlbum}
+                representativeCoverPath={artist.representativeCoverPath}
+                className="cover-mini artist-mini"
+              />
               <span>
                 <strong>{artist.name}</strong>
                 <small>{formatNumber(artist.trackCount)} tracks</small>
@@ -13049,7 +13051,12 @@ export default function App() {
                 onOpenAlbum={openTimelineAlbum}
               />
             ) : (
-              <ArtistsTimelinePlaceholder />
+              <ArtistTimeline
+                genreOptions={genreSuggestionOptions}
+                onRequestGenreOptions={requestGenreSuggestionRefresh}
+                onOpenAlbum={openTimelineAlbum}
+                onOpenArtist={openArtistFromMusicMap}
+              />
             )}
           </TimelinesWorkspace>
         ) : activeSection === "Updates" ? (
@@ -15154,13 +15161,25 @@ export default function App() {
                   aria-label="Selected artist albums"
                 >
                   <div className="panel-heading compact">
-                    <div>
-                      <h2>{selectedArtist?.name ?? "Artist albums"}</h2>
-                      <p>
-                        {isArtistAlbumsLoading
-                          ? "Loading albums"
-                          : `${formatNumber(artistAlbumsResponse?.rows.length ?? 0)} of ${formatNumber(selectedArtistAlbumCount)} albums`}
-                      </p>
+                    <div className="artist-detail-heading">
+                      {selectedArtist ? (
+                        <ArtistPortrait
+                          artistId={selectedArtist.id}
+                          artistName={selectedArtist.name}
+                          portraitAvailable={selectedArtist.portraitAvailable}
+                          representativeAlbumId={selectedArtist.representativeAlbumId}
+                          representativeAlbum={selectedArtist.representativeAlbum}
+                          representativeCoverPath={selectedArtist.representativeCoverPath}
+                        />
+                      ) : null}
+                      <div>
+                        <h2>{selectedArtist?.name ?? "Artist albums"}</h2>
+                        <p>
+                          {isArtistAlbumsLoading
+                            ? "Loading albums"
+                            : `${formatNumber(artistAlbumsResponse?.rows.length ?? 0)} of ${formatNumber(selectedArtistAlbumCount)} albums`}
+                        </p>
+                      </div>
                     </div>
                     <span className="run-status">
                       {selectedArtist?.topGenre ?? "Artist"}
@@ -16786,6 +16805,7 @@ export default function App() {
 
               <SettingsSection id="providers">
                 <DiscogsSettingsPanel />
+                <LastFmSettingsPanel />
                 <DeemixSettingsPanel
                   downloadPath={settings.deemixDownloadPath}
                   quality={settings.deemixDownloadQuality}

@@ -1136,6 +1136,10 @@ pub struct ArtistSummary {
     pub origin_country_name: Option<String>,
     pub origin_country_raw_area: Option<String>,
     pub origin_country_review_state: Option<String>,
+    pub portrait_available: bool,
+    pub representative_album_id: Option<String>,
+    pub representative_album: Option<String>,
+    pub representative_cover_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1281,6 +1285,93 @@ pub struct GenreTimelineResponse {
     pub albums: Vec<GenreTimelineAlbumPoint>,
     pub matching_album_count: i64,
     pub matching_genre_count: i64,
+    pub dated_album_count: i64,
+    pub available_year_from: Option<i32>,
+    pub available_year_to: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistTimelineRequest {
+    #[serde(default)]
+    pub year_from: Option<i32>,
+    #[serde(default)]
+    pub year_to: Option<i32>,
+    #[serde(default)]
+    pub genres: Vec<String>,
+    #[serde(default)]
+    pub excluded_genres: Vec<String>,
+    #[serde(default)]
+    pub artists: Vec<String>,
+    #[serde(default = "default_artist_timeline_limit")]
+    pub artist_limit: u32,
+    #[serde(default = "default_artist_timeline_metric")]
+    pub metric: String,
+}
+
+fn default_artist_timeline_limit() -> u32 {
+    7
+}
+
+fn default_artist_timeline_metric() -> String {
+    "charts".to_string()
+}
+
+impl Default for ArtistTimelineRequest {
+    fn default() -> Self {
+        Self {
+            year_from: None,
+            year_to: None,
+            genres: Vec::new(),
+            excluded_genres: Vec::new(),
+            artists: Vec::new(),
+            artist_limit: default_artist_timeline_limit(),
+            metric: default_artist_timeline_metric(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistTimelineArtist {
+    pub id: String,
+    pub name: String,
+    pub album_count: i64,
+    pub first_year: i32,
+    pub last_year: i32,
+    pub average_album_score: Option<f64>,
+    pub loved_tracks: i64,
+    pub top_genre: Option<String>,
+    pub portrait_available: bool,
+    pub representative_album_id: Option<String>,
+    pub representative_album: Option<String>,
+    pub representative_cover_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistTimelineAlbum {
+    pub album_id: String,
+    pub album: Option<String>,
+    pub artist_id: String,
+    pub artist: String,
+    pub year: i32,
+    pub album_score: Option<f64>,
+    pub loved_tracks: i64,
+    pub billboard_rank: Option<i32>,
+    pub official_uk_rank: Option<i32>,
+    pub vg_lista_rank: Option<i32>,
+    pub chart_peak: f64,
+    pub cover_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistTimelineResponse {
+    pub artists: Vec<ArtistTimelineArtist>,
+    pub albums: Vec<ArtistTimelineAlbum>,
+    pub matching_album_count: i64,
+    pub matching_artist_count: i64,
     pub dated_album_count: i64,
     pub available_year_from: Option<i32>,
     pub available_year_to: Option<i32>,

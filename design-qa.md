@@ -1,59 +1,53 @@
-# Genre Constellation Design QA
+# Artist Career Peaks Design QA
 
 ## Comparison target
 
-- Confirmed reference: `C:\_code\music_backup_v5\docs\design\genre-constellation-concept.jpg` at 1280×800.
-- Final focused implementation: `C:\_code\music_backup_v5\docs\design\genre-constellation-focused.png` at 1265×790.
-- Same-frame comparison: `C:\_code\music_backup_v5\docs\design\genre-constellation-qa-comparison.png`.
-- Default-state evidence: `C:\_code\music_backup_v5\docs\design\genre-constellation-implementation.png`.
-- Full-page evidence: `C:\_code\music_backup_v5\docs\design\genre-constellation-full.png`.
-- Responsive evidence: `C:\_code\music_backup_v5\docs\design\genre-constellation-compact.png` at 760×900.
+- Selected reference: `C:\_code\music_backup_v5\docs\design\artist-career-peaks-concept.png` at 1584×1024.
+- Portrait reference: `C:\_code\music_backup_v5\docs\design\artist-career-comets-portrait-reference.png`.
+- Browser implementation: `C:\_code\music_backup_v5\docs\design\artist-career-peaks-implementation.png` at 1584×1024.
+- Same-frame comparison: `C:\_code\music_backup_v5\docs\design\artist-career-peaks-comparison.png`.
 - Browser-rendered URL: `http://127.0.0.1:4178/`.
-- Desktop QA viewport: 1280×800 CSS pixels. Compact QA viewport: 760×900 CSS pixels. Browser screenshots were captured at device scale factor 1.
+- Desktop QA viewport: 1584×1024 CSS pixels. Compact QA viewport: 1000×800 CSS pixels. The temporary viewport overrides were reset after testing.
 
 ## State and coverage
 
-- Desktop comparison state: Timelines → Genres, Dots mode, Top 7, default 1900–2026 range, no include/exclude tokens, and Rock focused.
-- The full view includes the Timelines navigation, genre controls, year guides, seven genre constellations, focused-genre card, overview strip, and explanatory data note.
-- The compact view verifies the responsive tabs and toolbar plus intentional horizontal scrolling for the data-dense timeline.
-- The browser preview uses a deterministic realistic mock library spanning 1900–2026. The desktop backend renders the same design from real SQLite albums and exact per-year genre totals.
+- Desktop comparison state: Timelines → Artists, Charts metric, Top 7 artists, Kate Bush focused, filters collapsed.
+- The implementation includes the centered Charts / Genres / Artists navigation, glowing album peaks, circular artist portraits, selected album covers, a focused artist summary card, and a miniature overview strip.
+- Compact QA verifies that the shell, timeline tabs, metric controls, portrait labels, focus card, and data-dense chart remain usable without compressing the visualization into illegibility.
+- Browser preview data is deterministic and realistic. The desktop build renders the same view from SQLite albums, chart positions, personal album scores, cached album covers, and cached Last.fm portraits.
 
 ## Fidelity review
 
-- Typography: Matches the reference's restrained sans-serif hierarchy, compact chart labels, and colored focused-genre emphasis while staying within the existing application shell.
-- Layout: Reproduces the centered Charts / Genres / Artists switcher, slim chart toolbar, left-aligned genre rows, top year guide, floating detail card, and bottom overview strip.
-- Color and light: Preserves the near-black blue-green field, distinct teal/blue/amber/pink/red/olive genre palette, soft contour haze, bright album points, and focused-selection glow.
-- Data semantics: Every dot maps to an album. Contours are smoothed from exact per-year counts, and the overview is derived from those same genre densities. Large libraries use deterministic even sampling above 3,600 visible points without changing totals.
-- Interaction: Dots/Density mode, search, include/exclude genre tokens, the Scores umbrella, year bounds, Top 7/12/20 controls, genre focus/fade, and album opening are functional.
-- Accessibility: Uses semantic timeline tabs, labeled controls, keyboard-operable genre rows and album points, pressed states, live loading feedback, and readable empty/error states.
+- Typography: Uses the reference's restrained sans-serif hierarchy and compact year/artist metadata while preserving the existing application type system.
+- Layout: Reproduces the left artist labels, top year guide, stacked career baselines, selected-row covers, floating summary card, and bottom range overview.
+- Color and light: Preserves the near-black blue-green field, warm amber selected career, distinct secondary artist colors, restrained glow, and softly faded focus state.
+- Data semantics: Every peak maps to an album. Chart peaks combine Billboard and Official UK at 42% each and VG Lista at 16%; My Scores normalizes the user's album scores across the visible response.
+- Portraits: Small circular artist images follow the Career Comets reference. Last.fm portraits are cached locally and shared by Career Peaks, Artists, and Artist Index; a representative album cover is the immediate fallback.
+- Interaction: Charts/My Scores, search, artist add/remove, genre include/exclude, Scores umbrella, year bounds, Top 7/12/20, focus/fade, album opening, and artist opening are functional.
+- Accessibility: Timeline tabs, metric controls, filter fields, peaks, artist labels, and navigation actions expose semantic names, pressed states, keyboard access, loading feedback, and empty/error states.
 
 ## Findings and fixes
 
-### Direction correction
+- P1 peak fidelity: The initial implementation rendered isolated outline curves, which looked thinner and less luminous than the selected reference.
+  - Fix: Closed and softly filled each peak, retained a crisp stroke and glow, and raised non-selected opacity to create the agreed gentle fade instead of near-disappearing rows.
+- P1 vertical composition: The first browser pass left too much unused space below the overview strip at the reference viewport.
+  - Fix: Increased the main plot and overview heights to align the composition with the reference's tall framed canvas.
+- P2 overview fidelity: The first overview used plain colored baselines.
+  - Fix: Replaced them with data-derived miniature album peaks and retained the teal range-window handles.
+- P2 portrait continuity: Artist Index previously used generic initial circles.
+  - Fix: Added a shared portrait component with Last.fm image, representative album-cover, and initial fallbacks in that order.
 
-- P0 visual target: The first implementation followed the wrong generated River concept.
-- Fix: Removed the River-specific implementation and rebuilt the feature from the user-confirmed first image: the horizontal Genre constellation with album-dot clouds and density contours.
+## Final comparison
 
-### Visual QA passes
-
-- P1 composition: Early constellation passes used generic ordering, sparse mock dates, and a chart height that pushed the overview below the desktop viewport.
-- Fix: Matched the reference's seven-genre ordering, added a realistic deterministic 1900–2026 mock distribution, forced true boundary coverage, and tuned the chart/overview proportions for the 1280×800 target.
-- P2 focus fidelity: The focused state initially over-enlarged album dots and displayed a stale mock peak value in an intermediate capture.
-- Fix: Reduced focused dot size, retained the soft halo, recalculated density peaks from the final mock series, and recaptured the focused state with Rock at 1950–2026 and a 1975 peak.
-- P2 responsive layout: The compact chart cannot legibly fit 126 years and seven album clouds in 760 px.
-- Fix: Preserved row height and dot readability inside an explicitly scrollable timeline instead of compressing the visualization into illegibility.
-
-### Final comparison
-
-- The reference and final focused implementation were reviewed together in `genre-constellation-qa-comparison.png` at matching desktop scale.
-- Remaining differences are intentional: the production app shell occupies the left edge, and the implementation uses real/deterministic data geometry rather than reproducing decorative AI noise pixel-for-pixel.
-- Browser console warnings/errors: none.
-- Verified interactions: Charts/Genres tabs, Dots/Density mode, search, focused Rock selection and clearing, include Scores, exclude Scores, year filtering, reset, responsive reflow, and album-dot navigation.
+- The selected reference and final implementation were reviewed together in `artist-career-peaks-comparison.png` at the same 1584×1024 scale.
+- Intentional differences reflect the final product decision: `Charts / My Scores` replaces the mock's decorative `Peaks / Covers` switch, portraits are added beside artists, and peak density comes from actual albums rather than AI-generated decorative noise.
+- Browser console errors: none.
+- Verified interactions: Artists timeline tab, Charts/My Scores switch, filter disclosure, artist/genre/year controls, selected-artist focus, album peak navigation, artist navigation, and compact layout.
 
 ## Verification
 
-- Dedicated frontend constellation, Timelines workspace, and chart timeline suites: passed.
-- Dedicated Rust genre-timeline query test: passed.
-- Full repository release gate: passed (`npm run check`) with 188 frontend tests, 15 Python tool tests, the security check, production TypeScript/Vite build, 311 Rust tests passed (20 live-network tests ignored), and `cargo check`.
+- Dedicated Artist Career Peaks helper, component, and Timelines workspace suites: passed.
+- Dedicated Rust weighted artist-timeline query test: passed.
+- Full repository release gate: passed (`49` Vitest files / `194` tests, `15` Python tests, release/security checks, production TypeScript/Vite build, `315` Rust tests passed with `20` network-dependent tests ignored, and final `cargo check`).
 
 final result: passed

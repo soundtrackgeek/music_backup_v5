@@ -42,31 +42,17 @@ export function TimelinesWorkspace({
                 key={view.id}
                 className={isActive ? "active" : ""}
                 aria-current={isActive ? "page" : undefined}
-                aria-label={view.id === "artists" ? "Artists, later" : view.label}
+                aria-label={view.label}
                 onClick={() => onViewChange(view.id)}
               >
                 <Icon size={16} />
                 <span>{view.label}</span>
-                {view.id === "artists" ? <small>Later</small> : null}
               </button>
             );
           })}
         </nav>
       </header>
       <div className="timelines-content">{children}</div>
-    </section>
-  );
-}
-
-export function ArtistsTimelinePlaceholder() {
-  return (
-    <section className="artist-timeline-placeholder" aria-label="Artists timeline">
-      <UsersThree size={34} weight="light" />
-      <span>Coming later</span>
-      <h2>Artists through time</h2>
-      <p>
-        The Artists timeline will join Charts and Genres here in a later pass.
-      </p>
     </section>
   );
 }

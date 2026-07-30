@@ -165,6 +165,10 @@ import type {
   DiscogsConnectionTest,
   DiscogsCredentialStatus,
   SaveDiscogsCredentialsRequest,
+  LastFmArtistImageRefreshSummary,
+  LastFmConnectionTest,
+  LastFmCredentialStatus,
+  SaveLastFmApiKeyRequest,
   LibraryCompletionCandidate,
   LibraryCompletionArtistCandidate,
   LibraryCompletionArtistDecision,
@@ -196,6 +200,10 @@ import type {
   ArtistListRequest,
   ArtistListResponse,
   ArtistSummary,
+  ArtistTimelineAlbum,
+  ArtistTimelineArtist,
+  ArtistTimelineRequest,
+  ArtistTimelineResponse,
   AlbumDebutTimelineAlbum,
   AlbumDebutTimelineResponse,
   TrackDebutTimelineResponse,
@@ -1640,6 +1648,57 @@ export async function testDiscogsConnection() {
     throw new Error("Discogs connection tests require the Tauri desktop app.");
   }
   return invoke<DiscogsConnectionTest>("test_discogs_connection");
+}
+
+export async function getLastFmCredentialStatus() {
+  if (!isTauriRuntime()) {
+    return { configured: false, source: "none" } satisfies LastFmCredentialStatus;
+  }
+  return invoke<LastFmCredentialStatus>("get_lastfm_credential_status");
+}
+
+export async function saveLastFmApiKey(input: SaveLastFmApiKeyRequest) {
+  if (!isTauriRuntime()) {
+    throw new Error("Last.fm API keys can only be stored by the Tauri desktop app.");
+  }
+  return invoke<LastFmConnectionTest>("save_lastfm_api_key", { input });
+}
+
+export async function deleteLastFmApiKey() {
+  if (!isTauriRuntime()) {
+    throw new Error("Last.fm API keys can only be removed by the Tauri desktop app.");
+  }
+  return invoke<LastFmCredentialStatus>("delete_lastfm_api_key");
+}
+
+export async function testLastFmConnection() {
+  if (!isTauriRuntime()) {
+    throw new Error("Last.fm connection tests require the Tauri desktop app.");
+  }
+  return invoke<LastFmConnectionTest>("test_lastfm_connection");
+}
+
+export async function refreshLastFmArtistImages(limit = 50) {
+  if (!isTauriRuntime()) {
+    return {
+      requested: 0,
+      downloaded: 0,
+      unavailable: 0,
+      failed: 0,
+      remaining: 0,
+      message: "Portrait sync is available in the desktop app.",
+    } satisfies LastFmArtistImageRefreshSummary;
+  }
+  return invoke<LastFmArtistImageRefreshSummary>("refresh_lastfm_artist_images", {
+    limit,
+  });
+}
+
+export async function getArtistImageDataUrl(artistId: string) {
+  if (!isTauriRuntime()) return null;
+  return invoke<string | null>("get_artist_image_data_url", { artistId }).catch(
+    () => null,
+  );
 }
 
 export async function selectDeemixDownloadDirectory(defaultPath?: string) {
@@ -5396,6 +5455,99 @@ export async function getGenreTimeline(request: GenreTimelineRequest) {
   }
 
   return invoke<GenreTimelineResponse>("get_genre_timeline", { request });
+}
+
+const mockArtistCareerProfiles = [
+  { id: "kate bush", name: "Kate Bush", genre: "Art Pop", start: 1978, years: [1978, 1980, 1985, 1989, 1993, 2005, 2011] },
+  { id: "david bowie", name: "David Bowie", genre: "Rock", start: 1967, years: [1967, 1971, 1972, 1977, 1983, 2002, 2016] },
+  { id: "the cure", name: "The Cure", genre: "Post-Punk", start: 1979, years: [1979, 1982, 1985, 1989, 1992, 2004, 2008] },
+  { id: "bjork", name: "Björk", genre: "Electronic", start: 1993, years: [1993, 1995, 1997, 2001, 2007, 2015, 2022] },
+  { id: "radiohead", name: "Radiohead", genre: "Alternative", start: 1993, years: [1993, 1995, 1997, 2000, 2007, 2011, 2016] },
+  { id: "joni mitchell", name: "Joni Mitchell", genre: "Folk", start: 1968, years: [1968, 1971, 1974, 1976, 1982, 1994, 2007] },
+  { id: "kendrick lamar", name: "Kendrick Lamar", genre: "Hip-Hop", start: 2011, years: [2011, 2012, 2015, 2016, 2017, 2022, 2024] },
+] as const;
+
+function mockArtistTimeline(request: ArtistTimelineRequest): ArtistTimelineResponse {
+  const requestedArtists = new Set(request.artists.map(normalizedTimelineGenre));
+  const included = expandedTimelineGenres(request.genres);
+  const excluded = expandedTimelineGenres(request.excludedGenres);
+  const yearFrom = Math.min(
+    request.yearFrom ?? Number.NEGATIVE_INFINITY,
+    request.yearTo ?? Number.POSITIVE_INFINITY,
+  );
+  const yearTo = Math.max(
+    request.yearFrom ?? Number.NEGATIVE_INFINITY,
+    request.yearTo ?? Number.POSITIVE_INFINITY,
+  );
+  const profiles = mockArtistCareerProfiles
+    .filter((profile) => {
+      const genre = normalizedTimelineGenre(profile.genre);
+      if (requestedArtists.size > 0 && !requestedArtists.has(profile.id) && !requestedArtists.has(normalizedTimelineGenre(profile.name))) return false;
+      if (included.size > 0 && !included.has(genre)) return false;
+      return !excluded.has(genre);
+    })
+    .slice(0, Math.max(1, request.artistLimit));
+  const albums: ArtistTimelineAlbum[] = profiles.flatMap((profile, profileIndex) =>
+    profile.years
+      .filter((year) => year >= yearFrom && year <= yearTo)
+      .map((year, albumIndex) => {
+        const emphasis = [0.42, 0.7, 0.95, 0.58, 0.82, 0.48, 0.9][albumIndex] ?? 0.5;
+        const billboardRank = albumIndex % 3 === 0 ? Math.max(1, Math.round(145 - emphasis * 140)) : null;
+        const officialUkRank = albumIndex % 3 !== 1 ? Math.max(1, Math.round(92 - emphasis * 90)) : null;
+        const vgListaRank = albumIndex % 2 === 0 ? Math.max(1, Math.round(38 - emphasis * 36)) : null;
+        const chartPeak =
+          (billboardRank == null ? 0 : 0.42 * (1 - (billboardRank - 1) / 199)) +
+          (officialUkRank == null ? 0 : 0.42 * (1 - (officialUkRank - 1) / 99)) +
+          (vgListaRank == null ? 0 : 0.16 * (1 - (vgListaRank - 1) / 39));
+        return {
+          albumId: `mock-career:${profile.id}:${year}`,
+          album: `${profile.name} · ${year}`,
+          artistId: profile.id,
+          artist: profile.name,
+          year,
+          albumScore: Math.round((70 + emphasis * 165 + profileIndex * 3) * 10) / 10,
+          lovedTracks: 1 + ((albumIndex + profileIndex) % 6),
+          billboardRank,
+          officialUkRank,
+          vgListaRank,
+          chartPeak,
+          coverPath: mockTimelineCoverUrls[(albumIndex + profileIndex) % mockTimelineCoverUrls.length],
+        };
+      }),
+  );
+  const artists: ArtistTimelineArtist[] = profiles.flatMap((profile, index) => {
+    const artistAlbums = albums.filter((album) => album.artistId === profile.id);
+    if (artistAlbums.length === 0) return [];
+    return [{
+      id: profile.id,
+      name: profile.name,
+      albumCount: artistAlbums.length,
+      firstYear: Math.min(...artistAlbums.map((album) => album.year)),
+      lastYear: Math.max(...artistAlbums.map((album) => album.year)),
+      averageAlbumScore: artistAlbums.reduce((total, album) => total + (album.albumScore ?? 0), 0) / artistAlbums.length,
+      lovedTracks: artistAlbums.reduce((total, album) => total + album.lovedTracks, 0),
+      topGenre: profile.genre,
+      portraitAvailable: false,
+      representativeAlbumId: artistAlbums[0]?.albumId ?? null,
+      representativeAlbum: artistAlbums[0]?.album ?? null,
+      representativeCoverPath: mockTimelineCoverUrls[index % mockTimelineCoverUrls.length],
+    }];
+  });
+  const allYears = mockArtistCareerProfiles.flatMap((profile) => [...profile.years]);
+  return {
+    artists,
+    albums,
+    matchingAlbumCount: albums.length,
+    matchingArtistCount: artists.length,
+    datedAlbumCount: allYears.length,
+    availableYearFrom: Math.min(...allYears),
+    availableYearTo: Math.max(...allYears),
+  };
+}
+
+export async function getArtistTimeline(request: ArtistTimelineRequest) {
+  if (!isTauriRuntime()) return mockArtistTimeline(request);
+  return invoke<ArtistTimelineResponse>("get_artist_timeline", { request });
 }
 
 export async function listGenreSuggestions() {

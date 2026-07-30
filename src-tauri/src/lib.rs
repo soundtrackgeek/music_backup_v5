@@ -9,6 +9,7 @@ mod deemix_download;
 mod discogs;
 mod external_discovery;
 mod importer;
+mod lastfm;
 mod library_completion;
 mod models;
 mod music_map;
@@ -22,19 +23,20 @@ mod wishlist;
 #[cfg(not(test))]
 use models::{
     AlbumDebutTimelineResponse, AppSettings, ArtistListRequest, ArtistListResponse,
-    BillboardImportSummary, BillboardSinglesImportSummary, BrowseRequest, BrowseResponse,
-    CoverImportRequest, CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary,
-    DiscoveryResponse, ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest,
-    GenreListResponse, GenreProgressRequest, GenreProgressStats, GenreTimelineRequest,
-    GenreTimelineResponse, LibraryUpdateRequest, LibraryUpdateResponse,
-    MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
-    MusicBrainzArtistExportRequest, MusicBrainzArtistInfoImportRequest,
-    MusicBrainzArtistInfoImportSummary, MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus,
-    MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginCountryRequest,
-    MusicBrainzArtistOriginCountryUpdate, MusicBrainzArtistRefreshRequest,
-    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzOriginCountryImportRequest,
-    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
-    MusicBrainzOriginCountryStatus, MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
+    ArtistTimelineRequest, ArtistTimelineResponse, BillboardImportSummary,
+    BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
+    CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
+    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    GenreProgressRequest, GenreProgressStats, GenreTimelineRequest, GenreTimelineResponse,
+    LibraryUpdateRequest, LibraryUpdateResponse, MusicBrainzArtistDiscographyRequest,
+    MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
+    MusicBrainzArtistInfoImportRequest, MusicBrainzArtistInfoImportSummary,
+    MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus, MusicBrainzArtistLinkRequest,
+    MusicBrainzArtistOriginCountryRequest, MusicBrainzArtistOriginCountryUpdate,
+    MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus,
+    MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
+    MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryStatus,
+    MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
     MusicBrainzReleaseDecisionRequest, MusicMapLocationDetails, MusicMapRefreshSummary,
     MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
@@ -217,6 +219,68 @@ async fn test_discogs_connection() -> Result<discogs::DiscogsConnectionTest, Str
     tauri::async_runtime::spawn_blocking(discogs::test_connection)
         .await
         .map_err(|error| format!("Discogs connection task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_lastfm_credential_status() -> Result<lastfm::LastFmCredentialStatus, String> {
+    tauri::async_runtime::spawn_blocking(lastfm::credential_status)
+        .await
+        .map_err(|error| format!("Last.fm credential status task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn save_lastfm_api_key(
+    input: lastfm::SaveLastFmApiKeyRequest,
+) -> Result<lastfm::LastFmConnectionTest, String> {
+    tauri::async_runtime::spawn_blocking(move || lastfm::save_api_key(input))
+        .await
+        .map_err(|error| format!("Last.fm API key save task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn delete_lastfm_api_key() -> Result<lastfm::LastFmCredentialStatus, String> {
+    tauri::async_runtime::spawn_blocking(lastfm::delete_api_key)
+        .await
+        .map_err(|error| format!("Last.fm API key removal task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn test_lastfm_connection() -> Result<lastfm::LastFmConnectionTest, String> {
+    tauri::async_runtime::spawn_blocking(lastfm::test_connection)
+        .await
+        .map_err(|error| format!("Last.fm connection task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn refresh_lastfm_artist_images(
+    app: AppHandle,
+    limit: u32,
+) -> Result<lastfm::LastFmArtistImageRefreshSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || lastfm::refresh_artist_images(app, limit))
+        .await
+        .map_err(|error| format!("Last.fm portrait sync task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_artist_image_data_url(
+    app: AppHandle,
+    artist_id: String,
+) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || lastfm::artist_image_data_url(app, artist_id))
+        .await
+        .map_err(|error| format!("Artist portrait load task failed: {error}"))?
         .map_err(|error| error.to_string())
 }
 
@@ -1330,6 +1394,18 @@ async fn get_genre_timeline(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_artist_timeline(
+    app: AppHandle,
+    request: ArtistTimelineRequest,
+) -> Result<ArtistTimelineResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || db::artist_timeline_for_app(&app, request))
+        .await
+        .map_err(|error| format!("Artist timeline task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn list_genre_suggestions(app: AppHandle) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || db::genre_suggestion_names_for_app(&app))
         .await
@@ -1507,6 +1583,12 @@ pub fn run() {
             save_discogs_credentials,
             delete_discogs_credentials,
             test_discogs_connection,
+            get_lastfm_credential_status,
+            save_lastfm_api_key,
+            delete_lastfm_api_key,
+            test_lastfm_connection,
+            refresh_lastfm_artist_images,
+            get_artist_image_data_url,
             search_deemix_albums,
             preflight_deemix_album_download,
             download_deemix_album,
@@ -1630,6 +1712,7 @@ pub fn run() {
             list_artists,
             list_genres,
             get_genre_timeline,
+            get_artist_timeline,
             list_genre_suggestions,
             list_music_tools,
             list_music_tool_issues,
