@@ -17817,10 +17817,16 @@ button {
   outline: 0;
   color: #cfe4e2;
   background: transparent;
+  color-scheme: dark;
   font: inherit;
   font-size: 10px;
   font-weight: 650;
   cursor: pointer;
+}
+
+.album-time-ribbon-order-select select option {
+  color: #e7f1ef;
+  background: #101b22;
 }
 
 .album-time-ribbon-order-select:focus-within {

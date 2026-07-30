@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.108.2] - 2026-07-30
+### Changed
+- Synchronized app metadata and provider user agents to `0.108.2`.
+
+### Fixed
+- Fixed unreadable Timeline Order menu choices by giving the native dropdown an explicit dark palette with high-contrast option text.
+
 ## [0.108.1] - 2026-07-30
 ### Changed
 - Made artist names in the Updates ledger and selected-change details open the Artists workspace with the matching normalized artist selected.
