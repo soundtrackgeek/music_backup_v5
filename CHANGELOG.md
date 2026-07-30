@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.111.0] - 2026-07-30
+### Added
+- Added Ti i Skuddet and Norsktoppen singles evidence to Completion → Artist Discovery.
+
+### Changed
+- Split the Artist Discovery chart filter into individual album and singles options for Billboard, Official UK, and VG Lista, with dedicated Ti i Skuddet and Norsktoppen options.
+- Synchronized app metadata and provider user agents to `0.111.0`.
+
+### Fixed
+- Ignored the trailing Norwegian `[NO]` chart marker when matching and displaying Artist Discovery candidates, preventing false missing artists such as `The Act [NO]`.
+
 ## [0.110.1] - 2026-07-30
 ### Changed
 - Added a small square album-cover marker to every Career Peaks summit and replaced native text tooltips with the shared 300×300 cover preview labeled with album title and year.

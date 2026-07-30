@@ -33,9 +33,10 @@ import {
 import type {
   DiscogsCredentialStatus,
   LibraryCompletionArtistCandidate,
+  LibraryCompletionArtistChartSource,
+  LibraryCompletionArtistEvidence,
   LibraryCompletionArtistRequest,
   LibraryCompletionArtistVerificationStatus,
-  LibraryCompletionEvidence,
   LibraryCompletionStatus,
   WishListMusicBrainzCandidate,
 } from "../types";
@@ -49,7 +50,64 @@ type ArtistFilter =
   | "wanted"
   | "needsReview"
   | "notForMe";
-type ArtistChartSourceFilter = "all" | LibraryCompletionEvidence["source"];
+
+const artistChartOptions = [
+  {
+    value: "billboardAlbums",
+    source: "billboard",
+    chartKind: "albums",
+    label: "Billboard Charts Albums",
+  },
+  {
+    value: "billboardSingles",
+    source: "billboard",
+    chartKind: "singles",
+    label: "Billboard Charts Singles",
+  },
+  {
+    value: "officialUkAlbums",
+    source: "officialUk",
+    chartKind: "albums",
+    label: "Official UK Charts Albums",
+  },
+  {
+    value: "officialUkSingles",
+    source: "officialUk",
+    chartKind: "singles",
+    label: "Official UK Charts Singles",
+  },
+  {
+    value: "vgListaAlbums",
+    source: "vgLista",
+    chartKind: "albums",
+    label: "VG Lista Charts Albums",
+  },
+  {
+    value: "vgListaSingles",
+    source: "vgLista",
+    chartKind: "singles",
+    label: "VG Lista Charts Singles",
+  },
+  {
+    value: "tiISkuddetSingles",
+    source: "tiISkuddet",
+    chartKind: "singles",
+    label: "Ti i Skuddet Singles",
+  },
+  {
+    value: "norsktoppenSingles",
+    source: "norsktoppen",
+    chartKind: "singles",
+    label: "Norsktoppen Singles",
+  },
+] as const satisfies ReadonlyArray<{
+  value: string;
+  source: LibraryCompletionArtistChartSource;
+  chartKind: LibraryCompletionArtistEvidence["chartKind"];
+  label: string;
+}>;
+
+type ArtistChartFilter = "all" | (typeof artistChartOptions)[number]["value"];
 
 function artistVerificationLabel(candidate: LibraryCompletionArtistCandidate) {
   if (candidate.status === "wanted") return "In Wish List";
@@ -113,7 +171,7 @@ export function ArtistCompletionWorkspace({
   const [discogsStatus, setDiscogsStatus] = useState<DiscogsCredentialStatus | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ArtistFilter>("all");
-  const [chartSource, setChartSource] = useState<ArtistChartSourceFilter>("all");
+  const [chartFilter, setChartFilter] = useState<ArtistChartFilter>("all");
   const [yearFrom, setYearFrom] = useState<number | null>(null);
   const [yearTo, setYearTo] = useState<number | null>(null);
   const [activeRequest, setActiveRequest] = useState<LibraryCompletionArtistRequest | null>(null);
@@ -385,11 +443,16 @@ export function ArtistCompletionWorkspace({
     }
     setError(null);
     candidateListScrollTopRef.current = 0;
+    const selectedChart =
+      chartFilter === "all"
+        ? null
+        : artistChartOptions.find((option) => option.value === chartFilter) ?? null;
     setActiveRequest(
-      chartSource === "all" && yearFrom == null && yearTo == null
+      selectedChart == null && yearFrom == null && yearTo == null
         ? null
         : {
-            source: chartSource === "all" ? null : chartSource,
+            source: selectedChart?.source ?? null,
+            chartKind: selectedChart?.chartKind ?? null,
             yearFrom,
             yearTo,
           },
@@ -397,7 +460,7 @@ export function ArtistCompletionWorkspace({
   }
 
   function clearChartFilters() {
-    setChartSource("all");
+    setChartFilter("all");
     setYearFrom(null);
     setYearTo(null);
     setError(null);
@@ -437,14 +500,16 @@ export function ArtistCompletionWorkspace({
         <label className="completion-filter completion-chart-filter">
           <span>Charts</span>
           <select
-            value={chartSource}
-            onChange={(event) => setChartSource(event.target.value as ArtistChartSourceFilter)}
+            value={chartFilter}
+            onChange={(event) => setChartFilter(event.target.value as ArtistChartFilter)}
             aria-label="Filter artist chart source"
           >
             <option value="all">All album + singles charts</option>
-            <option value="billboard">Billboard charts</option>
-            <option value="officialUk">Official UK charts</option>
-            <option value="vgLista">VG Lista charts</option>
+            {artistChartOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="completion-filter completion-year-filter">

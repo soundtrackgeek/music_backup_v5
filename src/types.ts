@@ -1263,8 +1263,13 @@ export type LibraryCompletionVerificationStatus = {
   recentItems: LibraryCompletionVerificationItemSummary[];
 };
 
+export type LibraryCompletionArtistChartSource =
+  | LibraryCompletionEvidence["source"]
+  | "tiISkuddet"
+  | "norsktoppen";
+
 export type LibraryCompletionArtistEvidence = {
-  source: LibraryCompletionEvidence["source"];
+  source: LibraryCompletionArtistChartSource;
   chartKind: "albums" | "singles";
   label: string;
   bestRank: number;
@@ -1307,7 +1312,8 @@ export type LibraryCompletionArtistResponse = {
 };
 
 export type LibraryCompletionArtistRequest = {
-  source?: LibraryCompletionEvidence["source"] | null;
+  source?: LibraryCompletionArtistChartSource | null;
+  chartKind?: LibraryCompletionArtistEvidence["chartKind"] | null;
   yearFrom?: number | null;
   yearTo?: number | null;
 };

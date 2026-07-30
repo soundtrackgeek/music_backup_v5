@@ -3131,6 +3131,7 @@ export async function getLibraryCompletionArtists(
     const candidates = decidedCandidates.filter((candidate) =>
       !input || candidate.evidence.some((evidence) =>
         (!input.source || evidence.source === input.source) &&
+        (!input.chartKind || evidence.chartKind === input.chartKind) &&
         (input.yearFrom == null || evidence.lastYear >= input.yearFrom) &&
         (input.yearTo == null || evidence.firstYear <= input.yearTo),
       ),

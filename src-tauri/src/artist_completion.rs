@@ -78,6 +78,7 @@ pub struct LibraryCompletionArtistResponse {
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionArtistRequest {
     pub source: Option<String>,
+    pub chart_kind: Option<String>,
     pub year_from: Option<i32>,
     pub year_to: Option<i32>,
 }
@@ -235,6 +236,8 @@ fn source_label(source: &str, chart_kind: &str) -> &'static str {
         ("officialUk", "singles") => "Official UK Singles",
         ("vgLista", "albums") => "VG Lista Albums",
         ("vgLista", "singles") => "VG Lista Singles",
+        ("tiISkuddet", "singles") => "Ti i Skuddet Singles",
+        ("norsktoppen", "singles") => "Norsktoppen Singles",
         _ => "Imported chart",
     }
 }
@@ -247,7 +250,9 @@ fn evidence_order(evidence: &LibraryCompletionArtistEvidence) -> usize {
         ("officialUk", "singles") => 3,
         ("vgLista", "albums") => 4,
         ("vgLista", "singles") => 5,
-        _ => 6,
+        ("tiISkuddet", "singles") => 6,
+        ("norsktoppen", "singles") => 7,
+        _ => 8,
     }
 }
 
@@ -274,6 +279,12 @@ fn load_source_rows(conn: &Connection) -> Result<Vec<SourceArtistRow>> {
             UNION ALL
             SELECT 'vgLista', 'singles', artist_key, artist, year, rank
             FROM vg_lista_single_chart_entries
+            UNION ALL
+            SELECT 'tiISkuddet', 'singles', artist_key, artist, year, rank
+            FROM ti_i_skuddet_chart_entries
+            UNION ALL
+            SELECT 'norsktoppen', 'singles', artist_key, artist, year, rank
+            FROM norsktoppen_chart_entries
         )
         SELECT source, chart_kind, MIN(artist), MIN(chart_year), MAX(chart_year),
                MIN(rank), COUNT(*)
@@ -452,6 +463,19 @@ fn ignored_artist(artist: &str) -> bool {
     )
 }
 
+fn normalized_chart_artist_name(artist: &str) -> String {
+    let artist = artist.trim();
+    let suffix_start = artist.len().saturating_sub(4);
+    if artist
+        .get(suffix_start..)
+        .is_some_and(|suffix| suffix.eq_ignore_ascii_case("[no]"))
+    {
+        artist[..suffix_start].trim_end().to_string()
+    } else {
+        artist.to_string()
+    }
+}
+
 fn normalize_request(
     request: Option<LibraryCompletionArtistRequest>,
 ) -> Result<Option<LibraryCompletionArtistRequest>> {
@@ -463,10 +487,29 @@ fn normalize_request(
         .take()
         .map(|source| source.trim().to_string())
         .filter(|source| !source.is_empty());
+    request.chart_kind = request
+        .chart_kind
+        .take()
+        .map(|chart_kind| chart_kind.trim().to_string())
+        .filter(|chart_kind| !chart_kind.is_empty());
     if let Some(source) = request.source.as_deref() {
-        if !matches!(source, "billboard" | "officialUk" | "vgLista") {
+        if !matches!(
+            source,
+            "billboard" | "officialUk" | "vgLista" | "tiISkuddet" | "norsktoppen"
+        ) {
             bail!("The Artist Discovery chart source is not supported.")
         }
+    }
+    if let Some(chart_kind) = request.chart_kind.as_deref() {
+        if !matches!(chart_kind, "albums" | "singles") {
+            bail!("The Artist Discovery chart type is not supported.")
+        }
+    }
+    if matches!(
+        (request.source.as_deref(), request.chart_kind.as_deref()),
+        (Some("tiISkuddet" | "norsktoppen"), Some("albums"))
+    ) {
+        bail!("The selected Artist Discovery source does not have an album chart.")
     }
     for year in [request.year_from, request.year_to].into_iter().flatten() {
         if !(1000..=3000).contains(&year) {
@@ -480,7 +523,11 @@ fn normalize_request(
     {
         bail!("The Artist Discovery start year must not be later than the end year.")
     }
-    if request.source.is_none() && request.year_from.is_none() && request.year_to.is_none() {
+    if request.source.is_none()
+        && request.chart_kind.is_none()
+        && request.year_from.is_none()
+        && request.year_to.is_none()
+    {
         Ok(None)
     } else {
         Ok(Some(request))
@@ -523,7 +570,8 @@ fn get_for_connection(
     let wish_list_artists = load_wish_list_artists(conn)?;
     let mut artists = HashMap::<String, ArtistAggregate>::new();
 
-    for row in load_source_rows(conn)? {
+    for mut row in load_source_rows(conn)? {
+        row.artist = normalized_chart_artist_name(&row.artist);
         let artist_id = wishlist::normalize_key(&row.artist);
         if artist_id.is_empty() || ignored_artist(&row.artist) {
             continue;
@@ -603,6 +651,10 @@ fn get_for_connection(
                     .source
                     .as_deref()
                     .is_none_or(|source| evidence.source == source)
+                    && request
+                        .chart_kind
+                        .as_deref()
+                        .is_none_or(|chart_kind| evidence.chart_kind == chart_kind)
                     && request
                         .year_from
                         .is_none_or(|year_from| evidence.last_year >= year_from)
@@ -1521,6 +1573,22 @@ mod tests {
         let conn = connection();
         insert_chart_artist(&conn, "Missing Artist", "missing artist");
         insert_chart_artist(&conn, "Owned Artist", "owned artist");
+        conn.execute_batch(
+            "
+            INSERT INTO ti_i_skuddet_chart_entries
+                (source_file, year, week, chart_date, rank, rank_raw, artist, title,
+                 artist_key, title_key, imported_at)
+            VALUES ('ti.csv', 1989, 1, '1989-01-01', 3, '3', 'Missing Artist',
+                    'Ti Song', 'missing artist', 'ti song', 'now');
+            INSERT INTO norsktoppen_chart_entries
+                (source_file, year, week, chart_date, rank, rank_raw, artist, title,
+                 artist_key, title_key, imported_at)
+            VALUES ('norsktoppen.csv', 1990, 1, '1990-01-01', 5, '5',
+                    'Missing Artist', 'Norsktoppen Song', 'missing artist',
+                    'norsktoppen song', 'now');
+            ",
+        )
+        .expect("insert Norwegian chart artists");
         conn.execute(
             "INSERT INTO albums (id, import_run_id, album, album_artist_display, total_tracks, rated_tracks, rating_completeness, total_seconds, loved_tracks, tmoe_seconds, ae_ratio) VALUES ('owned', 1, 'Owned Album', 'Owned Artist', 1, 0, 0, 180, 0, 0, 0)",
             [],
@@ -1532,11 +1600,14 @@ mod tests {
         assert_eq!(response.owned_artist_count, 1);
         assert_eq!(response.candidates.len(), 1);
         assert_eq!(response.candidates[0].artist, "Missing Artist");
-        assert_eq!(response.candidates[0].evidence.len(), 2);
-        assert!(response.candidates[0]
+        assert_eq!(response.candidates[0].evidence.len(), 4);
+        let labels = response.candidates[0]
             .evidence
             .iter()
-            .any(|evidence| evidence.chart_kind == "singles"));
+            .map(|evidence| evidence.label.as_str())
+            .collect::<Vec<_>>();
+        assert!(labels.contains(&"Ti i Skuddet Singles"));
+        assert!(labels.contains(&"Norsktoppen Singles"));
     }
 
     #[test]
@@ -1567,6 +1638,34 @@ mod tests {
     }
 
     #[test]
+    fn ignores_trailing_norwegian_artist_marker_when_matching_local_artists() {
+        let conn = connection();
+        conn.execute(
+            "INSERT INTO vg_lista_album_chart_entries
+                (source_file, year, week, rank, artist, title, artist_key, title_key,
+                 week_date, week_key, imported_at)
+             VALUES ('vg-albums.csv', 1986, 1, 4, 'The Act [NO]', 'September Field',
+                     'the act no', 'september field', '1986-01-01', '1986-01', 'now')",
+            [],
+        )
+        .expect("insert Norwegian-tagged artist");
+        conn.execute(
+            "INSERT INTO albums
+                (id, import_run_id, album, album_artist_display, total_tracks, rated_tracks,
+                 rating_completeness, total_seconds, loved_tracks, tmoe_seconds, ae_ratio)
+             VALUES ('the-act', 1, 'September Field', 'The Act', 1, 0, 0, 180, 0, 0, 0)",
+            [],
+        )
+        .expect("insert local artist without Norwegian marker");
+
+        let response = get_for_connection(&conn, None, true).expect("discover chart artists");
+
+        assert_eq!(response.total_chart_artists, 1);
+        assert_eq!(response.owned_artist_count, 1);
+        assert!(response.candidates.is_empty());
+    }
+
+    #[test]
     fn filters_artists_by_chart_source_and_year_before_truncation() {
         let mut conn = connection();
         {
@@ -1591,20 +1690,28 @@ mod tests {
             drop(statement);
             transaction.commit().expect("commit Billboard artists");
         }
-        conn.execute(
-            "INSERT INTO vg_lista_single_chart_entries
+        conn.execute_batch(
+            "
+            INSERT INTO vg_lista_album_chart_entries
+                (source_file, year, week, rank, artist, title, artist_key, title_key,
+                 week_date, week_key, imported_at)
+             VALUES ('vg-albums.csv', 1985, 1, 2, 'Norwegian Album Artist',
+                     'Chart Album', 'norwegian album artist', 'chart album',
+                     '1985-01-01', '1985-01', 'now');
+            INSERT INTO vg_lista_single_chart_entries
                 (source_file, year, week, rank, artist, title, artist_key, title_key,
                  week_date, week_key, imported_at)
              VALUES ('vg-singles.csv', 1985, 1, 4, 'Norwegian Artist', 'Chart Song',
-                     'norwegian artist', 'chart song', '1985-01-01', '1985-01', 'now')",
-            [],
+                     'norwegian artist', 'chart song', '1985-01-01', '1985-01', 'now');
+            ",
         )
-        .expect("insert VG Lista artist");
+        .expect("insert VG Lista artists");
 
         let response = get_for_connection(
             &conn,
             Some(LibraryCompletionArtistRequest {
                 source: Some("vgLista".to_string()),
+                chart_kind: Some("singles".to_string()),
                 year_from: Some(1980),
                 year_to: Some(1989),
             }),
@@ -1612,10 +1719,11 @@ mod tests {
         )
         .expect("filter chart artists");
 
-        assert_eq!(response.total_candidates, MAX_RETURNED_ARTISTS + 1);
+        assert_eq!(response.total_candidates, MAX_RETURNED_ARTISTS + 2);
         assert_eq!(response.returned_candidates, 1);
         assert_eq!(response.candidates[0].artist, "Norwegian Artist");
         assert_eq!(response.candidates[0].evidence[0].source, "vgLista");
+        assert_eq!(response.candidates[0].evidence[0].chart_kind, "singles");
     }
 
     #[test]

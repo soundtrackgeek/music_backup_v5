@@ -170,12 +170,27 @@ describe("ArtistCompletionWorkspace", () => {
     expect(screen.getByText(/Checking MusicBrainz: Talk Talk/i)).toBeInTheDocument();
   });
 
-  it("loads chart-source and year filters against the complete artist set", async () => {
+  it("offers every artist chart and loads chart-specific year filters", async () => {
     render(<ArtistCompletionWorkspace refreshToken={0} onOpenWishList={vi.fn()} />);
 
     await screen.findByRole("heading", { name: "Talk Talk" });
-    fireEvent.change(screen.getByRole("combobox", { name: "Filter artist chart source" }), {
-      target: { value: "vgLista" },
+    const chartFilter = screen.getByRole("combobox", {
+      name: "Filter artist chart source",
+    });
+    for (const label of [
+      "Billboard Charts Albums",
+      "Billboard Charts Singles",
+      "Official UK Charts Albums",
+      "Official UK Charts Singles",
+      "VG Lista Charts Albums",
+      "VG Lista Charts Singles",
+      "Ti i Skuddet Singles",
+      "Norsktoppen Singles",
+    ]) {
+      expect(screen.getByRole("option", { name: label })).toBeInTheDocument();
+    }
+    fireEvent.change(chartFilter, {
+      target: { value: "billboardSingles" },
     });
     fireEvent.change(screen.getByRole("spinbutton", { name: "Artist chart year from" }), {
       target: { value: "1980" },
@@ -187,7 +202,8 @@ describe("ArtistCompletionWorkspace", () => {
 
     await waitFor(() => {
       expect(getLibraryCompletionArtists).toHaveBeenLastCalledWith({
-        source: "vgLista",
+        source: "billboard",
+        chartKind: "singles",
         yearFrom: 1980,
         yearTo: 1989,
       });
