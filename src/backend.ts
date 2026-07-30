@@ -237,6 +237,8 @@ import type {
   GenreListRequest,
   GenreListResponse,
   GenreSummary,
+  GenreTimelineRequest,
+  GenreTimelineResponse,
   MusicToolFixRequest,
   MusicToolFixDiff,
   MusicToolFixHistoryEntry,
@@ -5184,6 +5186,216 @@ export async function listGenres(request: GenreListRequest) {
   }
 
   return invoke<GenreListResponse>("list_genres", { request });
+}
+
+function normalizedTimelineGenre(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function expandedTimelineGenres(values: string[]) {
+  const expanded = new Set<string>();
+  values.forEach((value) => {
+    const normalized = normalizedTimelineGenre(value);
+    if (!normalized) return;
+    if (normalized === "score" || normalized === "scores") {
+      scoreGenreGroup.forEach((genre) => expanded.add(genre));
+    } else {
+      expanded.add(normalized);
+    }
+  });
+  return expanded;
+}
+
+type MockTimelineAlbum = {
+  albumId: string;
+  album: string | null;
+  albumArtistDisplay: string | null;
+  canonicalGenre: string;
+  year: number;
+};
+
+const mockTimelineProfiles = [
+  { genre: "Classical", start: 1900, end: 1994, peak: 1934, count: 360 },
+  { genre: "Jazz", start: 1910, end: 2014, peak: 1948, count: 320 },
+  { genre: "Rock", start: 1950, end: 2026, peak: 1978, count: 480 },
+  { genre: "Electronic", start: 1948, end: 2026, peak: 2001, count: 340 },
+  { genre: "Hip-Hop", start: 1978, end: 2026, peak: 2000, count: 250 },
+  { genre: "Metal", start: 1965, end: 2026, peak: 2005, count: 230 },
+  { genre: "Ambient", start: 1960, end: 2026, peak: 1997, count: 210 },
+] as const;
+
+function mockTimelineUnit(seed: number) {
+  const value = Math.sin(seed * 12.9898 + 78.233) * 43_758.5453;
+  return value - Math.floor(value);
+}
+
+function mockTimelineAlbums(): MockTimelineAlbum[] {
+  return mockTimelineProfiles.flatMap((profile, profileIndex) =>
+    Array.from({ length: profile.count }, (_, index) => {
+      const unit = mockTimelineUnit(index + profileIndex * 1009 + 1);
+      const year =
+        index === 0
+          ? profile.start
+          : index === 1
+            ? profile.end
+            : index === 2
+              ? profile.peak
+              : Math.round(
+                  unit < 0.5
+                    ? profile.start +
+                        Math.sqrt(unit * 2) * (profile.peak - profile.start)
+                    : profile.end -
+                        Math.sqrt((1 - unit) * 2) *
+                          (profile.end - profile.peak),
+                );
+      return {
+        albumId: `mock-timeline:${normalizedTimelineGenre(profile.genre)}:${index}`,
+        album: `${profile.genre} Archive ${String(index + 1).padStart(3, "0")}`,
+        albumArtistDisplay: `${profile.genre} Ensemble ${1 + (index % 23)}`,
+        canonicalGenre: profile.genre,
+        year,
+      };
+    }),
+  );
+}
+
+function mockGenreTimeline(request: GenreTimelineRequest): GenreTimelineResponse {
+  const actualAlbumRows = Array.from(
+    new Map(
+      mockRows
+        .filter(
+          (row) =>
+            row.trackId == null &&
+            row.year != null &&
+            row.canonicalGenre?.trim(),
+        )
+        .map((row) => [row.albumId, row]),
+    ).values(),
+  ).map((row) => ({
+    albumId: row.albumId,
+    album: row.album,
+    albumArtistDisplay: row.albumArtistDisplay,
+    canonicalGenre: row.canonicalGenre ?? "Unknown",
+    year: row.year ?? 0,
+  }));
+  const albumRows: MockTimelineAlbum[] = [
+    ...mockTimelineAlbums(),
+    ...actualAlbumRows,
+  ];
+  const availableYears = albumRows
+    .map((row) => row.year)
+    .filter((year): year is number => year != null);
+  const included = expandedTimelineGenres(request.genres);
+  const excluded = expandedTimelineGenres(request.excludedGenres);
+  const rawYearFrom = request.yearFrom ?? Number.NEGATIVE_INFINITY;
+  const rawYearTo = request.yearTo ?? Number.POSITIVE_INFINITY;
+  const minimumYear = Math.min(rawYearFrom, rawYearTo);
+  const maximumYear = Math.max(rawYearFrom, rawYearTo);
+  const hasYearFilter = request.yearFrom != null || request.yearTo != null;
+  const filtered = albumRows.filter((row) => {
+    const genreId = normalizedTimelineGenre(row.canonicalGenre ?? "");
+    const year = row.year ?? 0;
+    if (hasYearFilter && (year < minimumYear || year > maximumYear)) return false;
+    if (included.size > 0 && !included.has(genreId)) return false;
+    return !excluded.has(genreId);
+  });
+  const grouped = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      albumCount: number;
+      firstYear: number;
+      lastYear: number;
+      peakYear: number;
+      peakAlbumCount: number;
+      years: Map<number, number>;
+    }
+  >();
+  filtered.forEach((row) => {
+    const id = normalizedTimelineGenre(row.canonicalGenre ?? "Unknown");
+    const year = row.year ?? 0;
+    const existing = grouped.get(id) ?? {
+      id,
+      name: row.canonicalGenre ?? "Unknown",
+      albumCount: 0,
+      firstYear: year,
+      lastYear: year,
+      peakYear: year,
+      peakAlbumCount: 0,
+      years: new Map<number, number>(),
+    };
+    existing.albumCount += 1;
+    existing.firstYear = Math.min(existing.firstYear, year);
+    existing.lastYear = Math.max(existing.lastYear, year);
+    existing.years.set(year, (existing.years.get(year) ?? 0) + 1);
+    grouped.set(id, existing);
+  });
+  const selected = Array.from(grouped.values())
+    .sort(
+      (left, right) =>
+        right.albumCount - left.albumCount || left.name.localeCompare(right.name),
+    )
+    .slice(0, Math.max(1, request.genreLimit));
+  selected.forEach((genre) => {
+    genre.years.forEach((albumCount, year) => {
+      if (albumCount > genre.peakAlbumCount) {
+        genre.peakAlbumCount = albumCount;
+        genre.peakYear = year;
+      }
+    });
+  });
+  const selectedIds = new Set(selected.map((genre) => genre.id));
+  const allAlbumPoints = filtered
+    .filter((row) => selectedIds.has(normalizedTimelineGenre(row.canonicalGenre ?? "")))
+    .sort(
+      (left, right) =>
+        left.year - right.year ||
+        left.canonicalGenre.localeCompare(right.canonicalGenre) ||
+        left.albumId.localeCompare(right.albumId),
+    )
+    .map((row) => ({
+      albumId: row.albumId,
+      album: row.album,
+      albumArtistDisplay: row.albumArtistDisplay,
+      genreId: normalizedTimelineGenre(row.canonicalGenre ?? "Unknown"),
+      genre: row.canonicalGenre ?? "Unknown",
+      year: row.year ?? 0,
+    }));
+  const pointLimit = Math.max(0, request.albumPointLimit);
+  const albums =
+    allAlbumPoints.length <= pointLimit
+      ? allAlbumPoints
+      : Array.from({ length: pointLimit }, (_, index) =>
+          allAlbumPoints[Math.floor((index * allAlbumPoints.length) / pointLimit)],
+        );
+
+  return {
+    genres: selected.map(({ years: _years, ...genre }) => genre),
+    yearCounts: selected.flatMap((genre) =>
+      Array.from(genre.years, ([year, albumCount]) => ({
+        genreId: genre.id,
+        year,
+        albumCount,
+      })),
+    ),
+    albums,
+    matchingAlbumCount: filtered.length,
+    matchingGenreCount: grouped.size,
+    datedAlbumCount: albumRows.length,
+    availableYearFrom:
+      availableYears.length > 0 ? Math.min(...availableYears) : null,
+    availableYearTo:
+      availableYears.length > 0 ? Math.max(...availableYears) : null,
+  };
+}
+
+export async function getGenreTimeline(request: GenreTimelineRequest) {
+  if (!isTauriRuntime()) {
+    return mockGenreTimeline(request);
+  }
+
+  return invoke<GenreTimelineResponse>("get_genre_timeline", { request });
 }
 
 export async function listGenreSuggestions() {

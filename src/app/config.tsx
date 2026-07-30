@@ -38,7 +38,7 @@ export const EXPORT_FORMATS = ["csv", "tsv", "xlsx", "json", "txt"];
 export const navigation: { label: string; icon: LucideIcon; enabled: boolean; shortcut: string }[] = [
   { label: "Search", icon: Search, enabled: true, shortcut: "1" },
   { label: "Charts", icon: BarChart3, enabled: true, shortcut: "2" },
-  { label: "Timeline", icon: History, enabled: true, shortcut: "y" },
+  { label: "Timelines", icon: History, enabled: true, shortcut: "y" },
   { label: "Discovery", icon: Compass, enabled: true, shortcut: "3" },
   { label: "Music Map", icon: MapPinned, enabled: true, shortcut: "m" },
   { label: "Completion", icon: Target, enabled: true, shortcut: "c" },

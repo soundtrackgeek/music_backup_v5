@@ -1986,6 +1986,51 @@ export type GenreListResponse = {
   offset: number;
 };
 
+export type GenreTimelineRequest = {
+  yearFrom: number | null;
+  yearTo: number | null;
+  genres: string[];
+  excludedGenres: string[];
+  genreLimit: number;
+  albumPointLimit: number;
+};
+
+export type GenreTimelineGenre = {
+  id: string;
+  name: string;
+  albumCount: number;
+  firstYear: number;
+  lastYear: number;
+  peakYear: number;
+  peakAlbumCount: number;
+};
+
+export type GenreTimelineYearCount = {
+  genreId: string;
+  year: number;
+  albumCount: number;
+};
+
+export type GenreTimelineAlbumPoint = {
+  albumId: string;
+  album: string | null;
+  albumArtistDisplay: string | null;
+  genreId: string;
+  genre: string;
+  year: number;
+};
+
+export type GenreTimelineResponse = {
+  genres: GenreTimelineGenre[];
+  yearCounts: GenreTimelineYearCount[];
+  albums: GenreTimelineAlbumPoint[];
+  matchingAlbumCount: number;
+  matchingGenreCount: number;
+  datedAlbumCount: number;
+  availableYearFrom: number | null;
+  availableYearTo: number | null;
+};
+
 export type DiscoveryResponse = {
   heatmap: DiscoveryHeatmapCell[];
   backlogMissions: DiscoveryMission[];

@@ -1,196 +1,327 @@
-import type { GenreSummary } from "../types";
+import type {
+  GenreTimelineAlbumPoint,
+  GenreTimelineGenre,
+  GenreTimelineRequest,
+  GenreTimelineResponse,
+} from "../types";
 
-export const genreTimelineLimits = [12, 25, 50, "all"] as const;
+export const genreConstellationLimits = [7, 12, 20] as const;
+export type GenreConstellationLimit = (typeof genreConstellationLimits)[number];
 
-export type GenreTimelineLimit = number | "all";
-export type GenreTimelineRangeMode =
-  | "overlaps"
-  | "starts"
-  | "ends"
-  | "contained";
-export type GenreTimelineSort =
-  | "earliest"
-  | "latest"
-  | "longest"
-  | "albums"
-  | "name";
-export type GenreTimelineColorMetric =
-  | "none"
-  | "albums"
-  | "completeness"
-  | "loved";
+export const genreConstellationPalette = [
+  "#4ed8d0",
+  "#6d8fe8",
+  "#f2a33d",
+  "#55b9a6",
+  "#df5b8b",
+  "#f06a4f",
+  "#a9bd72",
+  "#a482df",
+  "#e7c75d",
+  "#4fa9d3",
+  "#d174a6",
+  "#81b98e",
+  "#e1845c",
+  "#758bd0",
+  "#c7995e",
+  "#6ab9b1",
+  "#ce6e7e",
+  "#9aaccc",
+  "#b48bc7",
+  "#8faaa4",
+] as const;
 
-export type GenreTimelineOptions = {
-  searchText: string;
+const genreConstellationOrder = new Map(
+  ["classical", "jazz", "rock", "electronic", "hip-hop", "metal", "ambient"].map(
+    (genre, index) => [genre, index],
+  ),
+);
+
+const genreConstellationColor = new Map(
+  Array.from(genreConstellationOrder, ([genre, index]) => [
+    genre,
+    genreConstellationPalette[index],
+  ]),
+);
+
+export type GenreConstellationCoordinate = {
+  x: number;
+  y: number;
+  year: number;
+};
+
+export type GenreConstellationBand = {
+  genre: GenreTimelineGenre;
+  color: string;
+  centerY: number;
+  amplitudeByYear: number[];
+  outerPath: string;
+  contourPaths: string[];
+};
+
+export type GenreConstellationLayout = {
+  bands: GenreConstellationBand[];
+  ticks: number[];
   yearFrom: number;
   yearTo: number;
-  rangeMode: GenreTimelineRangeMode;
-  minimumAlbums: number;
-  sort: GenreTimelineSort;
-  limit: GenreTimelineLimit;
+  plotLeft: number;
+  plotRight: number;
+  plotTop: number;
+  plotBottom: number;
+  width: number;
+  height: number;
 };
 
-export type GenreTimelineSelection = {
-  rows: GenreSummary[];
-  matchedRows: GenreSummary[];
-  datedTotal: number;
-};
-
-export type GenreTimelineSummary = {
-  earliestStart: number | null;
-  latestRelease: number | null;
-  longestSpan: number;
-};
-
-export function hasObservedGenreYears(
-  genre: GenreSummary,
-): genre is GenreSummary & { firstYear: number; lastYear: number } {
-  return Number.isFinite(genre.firstYear) && Number.isFinite(genre.lastYear);
-}
-
-export function genreTimelineExtent(rows: GenreSummary[]) {
-  const datedRows = rows.filter(hasObservedGenreYears);
-  if (datedRows.length === 0) return null;
-
+export function createGenreTimelineRequest(options: {
+  yearFrom: number | null;
+  yearTo: number | null;
+  includedGenres: string[];
+  excludedGenres: string[];
+  genreLimit: GenreConstellationLimit;
+  albumPointLimit?: number;
+}): GenreTimelineRequest {
+  const hasBothYears = options.yearFrom != null && options.yearTo != null;
   return {
-    minimum: Math.min(...datedRows.map((row) => row.firstYear)),
-    maximum: Math.max(...datedRows.map((row) => row.lastYear)),
-  };
-}
-
-export function observedGenreSpan(genre: GenreSummary) {
-  if (!hasObservedGenreYears(genre)) return 0;
-  return Math.max(1, genre.lastYear - genre.firstYear + 1);
-}
-
-function matchesRange(
-  genre: GenreSummary & { firstYear: number; lastYear: number },
-  from: number,
-  to: number,
-  mode: GenreTimelineRangeMode,
-) {
-  switch (mode) {
-    case "starts":
-      return genre.firstYear >= from && genre.firstYear <= to;
-    case "ends":
-      return genre.lastYear >= from && genre.lastYear <= to;
-    case "contained":
-      return genre.firstYear >= from && genre.lastYear <= to;
-    default:
-      return genre.firstYear <= to && genre.lastYear >= from;
-  }
-}
-
-export function selectGenreTimelineRows(
-  rows: GenreSummary[],
-  options: GenreTimelineOptions,
-): GenreTimelineSelection {
-  const searchText = options.searchText.trim().toLocaleLowerCase();
-  const from = Math.min(options.yearFrom, options.yearTo);
-  const to = Math.max(options.yearFrom, options.yearTo);
-  const minimumAlbums = Math.max(0, Math.floor(options.minimumAlbums));
-  const datedRows = rows.filter(hasObservedGenreYears);
-  const matchedRows = datedRows
-    .filter(
-      (row) =>
-        (!searchText || row.name.toLocaleLowerCase().includes(searchText)) &&
-        row.albumCount >= minimumAlbums &&
-        matchesRange(row, from, to, options.rangeMode),
-    )
-    .sort((left, right) => {
-      const byName = left.name.localeCompare(right.name, undefined, {
-        sensitivity: "base",
-      });
-      switch (options.sort) {
-        case "latest":
-          return (
-            (right.lastYear ?? 0) - (left.lastYear ?? 0) ||
-            (left.firstYear ?? 0) - (right.firstYear ?? 0) ||
-            byName
-          );
-        case "longest":
-          return observedGenreSpan(right) - observedGenreSpan(left) || byName;
-        case "albums":
-          return right.albumCount - left.albumCount || byName;
-        case "name":
-          return byName;
-        default:
-          return (
-            (left.firstYear ?? 0) - (right.firstYear ?? 0) ||
-            (right.lastYear ?? 0) - (left.lastYear ?? 0) ||
-            byName
-          );
-      }
-    });
-
-  return {
-    rows:
-      options.limit === "all"
-        ? matchedRows
-        : matchedRows.slice(0, Math.max(0, options.limit)),
-    matchedRows,
-    datedTotal: datedRows.length,
-  };
-}
-
-export function summarizeGenreTimeline(
-  rows: GenreSummary[],
-): GenreTimelineSummary {
-  const datedRows = rows.filter(hasObservedGenreYears);
-  if (datedRows.length === 0) {
-    return { earliestStart: null, latestRelease: null, longestSpan: 0 };
-  }
-
-  return {
-    earliestStart: Math.min(...datedRows.map((row) => row.firstYear)),
-    latestRelease: Math.max(...datedRows.map((row) => row.lastYear)),
-    longestSpan: Math.max(...datedRows.map(observedGenreSpan)),
+    yearFrom: hasBothYears
+      ? Math.min(options.yearFrom as number, options.yearTo as number)
+      : options.yearFrom,
+    yearTo: hasBothYears
+      ? Math.max(options.yearFrom as number, options.yearTo as number)
+      : options.yearTo,
+    genres: options.includedGenres,
+    excludedGenres: options.excludedGenres,
+    genreLimit: options.genreLimit,
+    albumPointLimit: options.albumPointLimit ?? 3600,
   };
 }
 
 export function genreTimelineTicks(yearFrom: number, yearTo: number) {
   const from = Math.min(yearFrom, yearTo);
   const to = Math.max(yearFrom, yearTo);
-  if (from === to) return [from];
-
-  const span = to - from;
-  const step = span > 160 ? 50 : span > 80 ? 20 : 10;
-  const firstGuide = Math.ceil(from / step) * step;
-  const ticks = [from];
-  for (let year = firstGuide; year < to; year += step) {
-    if (year !== from) ticks.push(year);
-  }
-  if (ticks.length === 1 || to - ticks[ticks.length - 1] >= step / 2) {
-    ticks.push(to);
-  }
-  return ticks;
+  const span = Math.max(1, to - from);
+  const roughStep = span / 7;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+  const step = Math.max(
+    1,
+    (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) *
+      magnitude,
+  );
+  const first = Math.ceil(from / step) * step;
+  const ticks: number[] = [];
+  for (let year = first; year <= to; year += step) ticks.push(year);
+  if (!ticks.includes(from)) ticks.unshift(from);
+  if (!ticks.includes(to)) ticks.push(to);
+  return Array.from(new Set(ticks));
 }
 
-export function genreTimelineColor(
-  genre: GenreSummary,
-  rows: GenreSummary[],
-  metric: GenreTimelineColorMetric,
-) {
-  if (metric === "none") return "hsl(175 78% 25%)";
-
-  const values = rows.map((row) => {
-    switch (metric) {
-      case "albums":
-        return row.albumCount;
-      case "completeness":
-        return row.averageRatingCompleteness ?? 0;
-      default:
-        return row.lovedTracks;
+function smoothSeries(values: number[], radius = 5) {
+  return values.map((_, index) => {
+    let total = 0;
+    let weightTotal = 0;
+    for (let offset = -radius; offset <= radius; offset += 1) {
+      const source = values[index + offset];
+      if (source == null) continue;
+      const distance = Math.abs(offset) / Math.max(1, radius);
+      const weight = Math.exp(-3.2 * distance * distance);
+      total += source * weight;
+      weightTotal += weight;
     }
+    return weightTotal > 0 ? total / weightTotal : 0;
   });
-  const maximum = Math.max(1, ...values);
-  const value =
-    metric === "albums"
-      ? genre.albumCount
-      : metric === "completeness"
-        ? genre.averageRatingCompleteness ?? 0
-        : genre.lovedTracks;
-  const strength = Math.min(1, Math.max(0, value / maximum));
-  const lightness = 43 - strength * 20;
-  return `hsl(175 68% ${lightness.toFixed(1)}%)`;
+}
+
+function curvedLine(points: GenreConstellationCoordinate[]) {
+  if (points.length === 0) return "";
+  let path = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1];
+    const current = points[index];
+    const midX = (previous.x + current.x) / 2;
+    path += ` C ${midX.toFixed(2)} ${previous.y.toFixed(2)}, ${midX.toFixed(2)} ${current.y.toFixed(2)}, ${current.x.toFixed(2)} ${current.y.toFixed(2)}`;
+  }
+  return path;
+}
+
+function densityAreaPath(
+  years: number[],
+  amplitudes: number[],
+  centerY: number,
+  plotLeft: number,
+  plotRight: number,
+  factor: number,
+) {
+  const points = years.map((year, index) => ({
+    x:
+      plotLeft +
+      ((year - years[0]) / Math.max(1, years[years.length - 1] - years[0])) *
+        (plotRight - plotLeft),
+    y: centerY - amplitudes[index] * factor,
+    year,
+  }));
+  const lower = years.map((year, index) => ({
+    x:
+      plotLeft +
+      ((year - years[0]) / Math.max(1, years[years.length - 1] - years[0])) *
+        (plotRight - plotLeft),
+    y: centerY + amplitudes[index] * factor,
+    year,
+  }));
+  if (points.length === 0 || lower.length === 0) return "";
+  const reversedLower = [...lower].reverse();
+  return `${curvedLine(points)} L ${reversedLower[0].x.toFixed(2)} ${reversedLower[0].y.toFixed(2)} ${curvedLine(reversedLower).replace(/^M [^C]+/, "")} Z`;
+}
+
+export function buildGenreConstellationLayout(
+  response: GenreTimelineResponse,
+  options: {
+    width?: number;
+    height?: number;
+    yearFrom?: number | null;
+    yearTo?: number | null;
+  } = {},
+): GenreConstellationLayout {
+  const width = options.width ?? 1200;
+  const height = options.height ?? 500;
+  const fallbackFrom = response.availableYearFrom ?? 1900;
+  const fallbackTo = response.availableYearTo ?? fallbackFrom + 1;
+  const requestedFrom = options.yearFrom ?? fallbackFrom;
+  const requestedTo = options.yearTo ?? fallbackTo;
+  const requestedMinimum = Math.min(requestedFrom, requestedTo);
+  const requestedMaximum = Math.max(requestedFrom, requestedTo);
+  const yearFrom = Math.max(fallbackFrom, Math.min(fallbackTo, requestedMinimum));
+  const yearTo = Math.max(
+    yearFrom,
+    Math.min(fallbackTo, Math.max(fallbackFrom, requestedMaximum)),
+  );
+  const plotLeft = 92;
+  const plotRight = width - 24;
+  const plotTop = 54;
+  const plotBottom = height - 24;
+  const years = Array.from(
+    { length: Math.max(1, yearTo - yearFrom + 1) },
+    (_, index) => yearFrom + index,
+  );
+  const orderedGenres = [...response.genres].sort((left, right) => {
+    const leftOrder = genreConstellationOrder.get(left.name.toLocaleLowerCase());
+    const rightOrder = genreConstellationOrder.get(right.name.toLocaleLowerCase());
+    if (leftOrder != null || rightOrder != null) {
+      return (leftOrder ?? Number.MAX_SAFE_INTEGER) -
+        (rightOrder ?? Number.MAX_SAFE_INTEGER);
+    }
+    return right.albumCount - left.albumCount || left.name.localeCompare(right.name);
+  });
+  const rowHeight =
+    (plotBottom - plotTop) / Math.max(1, orderedGenres.length);
+  const cellCounts = new Map(
+    response.yearCounts.map((cell) => [
+      `${cell.genreId}\u0000${cell.year}`,
+      cell.albumCount,
+    ]),
+  );
+  const smoothedByGenre = orderedGenres.map((genre) =>
+    smoothSeries(
+      years.map((year) => cellCounts.get(`${genre.id}\u0000${year}`) ?? 0),
+    ),
+  );
+  const globalMaximum = Math.max(1, ...smoothedByGenre.flat());
+  const maximumGenreTotal = Math.max(
+    1,
+    ...orderedGenres.map((genre) => genre.albumCount),
+  );
+
+  const bands = orderedGenres.map((genre, index) => {
+    const centerY = plotTop + rowHeight * (index + 0.5);
+    const relativeTotal = Math.sqrt(genre.albumCount / maximumGenreTotal);
+    const amplitudeByYear = smoothedByGenre[index].map((value) => {
+      const density = Math.sqrt(value / globalMaximum);
+      return value <= 0.01
+        ? 0.15
+        : 0.4 + rowHeight * (0.05 * relativeTotal + 0.4 * density);
+    });
+    return {
+      genre,
+      color:
+        genreConstellationColor.get(genre.name.toLocaleLowerCase()) ??
+        genreConstellationPalette[index % genreConstellationPalette.length],
+      centerY,
+      amplitudeByYear,
+      outerPath: densityAreaPath(
+        years,
+        amplitudeByYear,
+        centerY,
+        plotLeft,
+        plotRight,
+        1,
+      ),
+      contourPaths: [0.82, 0.62, 0.42, 0.24].map((factor) =>
+        densityAreaPath(
+          years,
+          amplitudeByYear,
+          centerY,
+          plotLeft,
+          plotRight,
+          factor,
+        ),
+      ),
+    } satisfies GenreConstellationBand;
+  });
+
+  return {
+    bands,
+    ticks: genreTimelineTicks(yearFrom, yearTo),
+    yearFrom,
+    yearTo,
+    plotLeft,
+    plotRight,
+    plotTop,
+    plotBottom,
+    width,
+    height,
+  };
+}
+
+function stableHash(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function genreConstellationAlbumPosition(
+  album: GenreTimelineAlbumPoint,
+  band: GenreConstellationBand,
+  layout: GenreConstellationLayout,
+) {
+  const index = Math.max(
+    0,
+    Math.min(band.amplitudeByYear.length - 1, album.year - layout.yearFrom),
+  );
+  const hash = stableHash(album.albumId);
+  const secondHash = stableHash(`${album.albumId}:vertical`);
+  const horizontalRatio = ((hash >>> 8) % 10_000) / 10_000 - 0.5;
+  const uniformA = Math.max(0.0001, (hash % 10_000) / 10_000);
+  const uniformB = (secondHash % 10_000) / 10_000;
+  const gaussian = Math.max(
+    -2.35,
+    Math.min(
+      2.35,
+      Math.sqrt(-2 * Math.log(uniformA)) * Math.cos(2 * Math.PI * uniformB),
+    ),
+  );
+  const yearWidth =
+    (layout.plotRight - layout.plotLeft) /
+    Math.max(1, layout.yearTo - layout.yearFrom);
+  const x =
+    layout.plotLeft +
+    ((album.year - layout.yearFrom) /
+      Math.max(1, layout.yearTo - layout.yearFrom)) *
+      (layout.plotRight - layout.plotLeft) +
+    horizontalRatio * yearWidth * 0.82;
+  return {
+    x: Math.max(layout.plotLeft, Math.min(layout.plotRight, x)),
+    y: band.centerY + (gaussian / 2.35) * band.amplitudeByYear[index] * 0.92,
+  };
 }

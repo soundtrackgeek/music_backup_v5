@@ -15,16 +15,18 @@ use crate::models::{
     DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell, DiscoveryMission,
     DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats, ExportMusicToolRequest,
     ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressRequest,
-    GenreProgressStats, GenreSummary, ImportRun, LibraryHealthScore, LibraryOverviewStats,
-    LibraryShapeStats, LibraryStatus, LovedDensityStat, LovedTrackStats, MetadataCoverageMetric,
-    MusicBrainzOriginCountryOption, MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry,
-    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
-    MusicToolIssueRow, MusicToolProgress, MusicToolSummary, MusicToolUndoSummary,
-    NorsktoppenImportSummary, OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation,
-    PerformanceProbeResponse, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
-    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
-    TiISkuddetImportSummary, TrackDebutTimelineResponse, TrackDebutTimelineTrack,
-    TrackDebutTimelineYear, VgListaImportSummary, YearProgressRequest, YearProgressStats,
+    GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint, GenreTimelineGenre,
+    GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount, ImportRun,
+    LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus, LovedDensityStat,
+    LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption, MusicToolFieldDiff,
+    MusicToolFixDiff, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
+    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress,
+    MusicToolSummary, MusicToolUndoSummary, NorsktoppenImportSummary, OfficialUkImportSummary,
+    OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse, RatingBucket, RatingEvent,
+    RatingHistoryPoint, RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart,
+    SavedSearch, StatisticsResponse, TextFilter, TiISkuddetImportSummary,
+    TrackDebutTimelineResponse, TrackDebutTimelineTrack, TrackDebutTimelineYear,
+    VgListaImportSummary, YearProgressRequest, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, NaiveDate, Utc, Weekday};
@@ -8483,6 +8485,15 @@ pub fn list_genres_for_app(
 }
 
 #[cfg(not(test))]
+pub fn genre_timeline_for_app(
+    app: &AppHandle,
+    request: GenreTimelineRequest,
+) -> Result<GenreTimelineResponse> {
+    let (conn, _) = open(app)?;
+    genre_timeline(&conn, request)
+}
+
+#[cfg(not(test))]
 pub fn genre_suggestion_names_for_app(app: &AppHandle) -> Result<Vec<String>> {
     let (conn, _) = open(app)?;
     genre_suggestion_names(&conn)
@@ -10949,6 +10960,220 @@ fn list_genres(
         total,
         limit,
         offset,
+    })
+}
+
+fn genre_timeline(
+    conn: &Connection,
+    request: GenreTimelineRequest,
+) -> Result<GenreTimelineResponse> {
+    let (dated_album_count, available_year_from, available_year_to) = conn
+        .query_row(
+            "SELECT COUNT(*), MIN(year), MAX(year) FROM albums WHERE year IS NOT NULL",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .context("Could not load genre timeline year extent")?;
+
+    let mut conditions = vec![
+        "year IS NOT NULL".to_string(),
+        "NULLIF(TRIM(COALESCE(genre_normalized, '')), '') IS NOT NULL".to_string(),
+    ];
+    let mut values = Vec::new();
+    add_i32_range(
+        &mut conditions,
+        &mut values,
+        "year",
+        request.year_from,
+        request.year_to,
+    );
+    add_text_list_condition(
+        &mut conditions,
+        &mut values,
+        "genre_normalized",
+        &request.genres,
+        false,
+    );
+    add_text_list_condition(
+        &mut conditions,
+        &mut values,
+        "genre_normalized",
+        &request.excluded_genres,
+        true,
+    );
+    let where_sql = conditions.join(" AND ");
+
+    let (matching_album_count, matching_genre_count) = conn
+        .query_row(
+            &format!(
+                "SELECT COUNT(*), COUNT(DISTINCT LOWER(TRIM(genre_normalized))) FROM albums WHERE {where_sql}"
+            ),
+            params_from_iter(values.iter()),
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .context("Could not count genre timeline matches")?;
+
+    let genre_limit = request.genre_limit.clamp(1, 24);
+    let mut genre_values = values.clone();
+    genre_values.push(Value::Integer(i64::from(genre_limit)));
+    let mut genre_stmt = conn.prepare(&format!(
+        "
+        SELECT
+            LOWER(TRIM(genre_normalized)) AS genre_id,
+            COALESCE(MIN(NULLIF(TRIM(canonical_genre), '')), 'Unknown') AS genre,
+            COUNT(*) AS album_count,
+            MIN(year) AS first_year,
+            MAX(year) AS last_year
+        FROM albums
+        WHERE {where_sql}
+        GROUP BY LOWER(TRIM(genre_normalized))
+        ORDER BY album_count DESC, LOWER(genre) ASC
+        LIMIT ?
+        "
+    ))?;
+    let mut genres = genre_stmt
+        .query_map(params_from_iter(genre_values.iter()), |row| {
+            let first_year = row.get(3)?;
+            Ok(GenreTimelineGenre {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                album_count: row.get(2)?,
+                first_year,
+                last_year: row.get(4)?,
+                peak_year: first_year,
+                peak_album_count: 0,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load genre timeline genres")?;
+
+    if genres.is_empty() {
+        return Ok(GenreTimelineResponse {
+            genres,
+            year_counts: Vec::new(),
+            albums: Vec::new(),
+            matching_album_count,
+            matching_genre_count,
+            dated_album_count,
+            available_year_from,
+            available_year_to,
+        });
+    }
+
+    let selected_genre_ids = genres
+        .iter()
+        .map(|genre| genre.id.clone())
+        .collect::<HashSet<_>>();
+    let genre_indexes = genres
+        .iter()
+        .enumerate()
+        .map(|(index, genre)| (genre.id.clone(), index))
+        .collect::<HashMap<_, _>>();
+
+    let mut year_stmt = conn.prepare(&format!(
+        "
+        SELECT
+            LOWER(TRIM(genre_normalized)) AS genre_id,
+            year,
+            COUNT(*) AS album_count
+        FROM albums
+        WHERE {where_sql}
+        GROUP BY LOWER(TRIM(genre_normalized)), year
+        ORDER BY year ASC, genre_id ASC
+        "
+    ))?;
+    let mut year_counts = year_stmt
+        .query_map(params_from_iter(values.iter()), |row| {
+            Ok(GenreTimelineYearCount {
+                genre_id: row.get(0)?,
+                year: row.get(1)?,
+                album_count: row.get(2)?,
+            })
+        })?
+        .filter_map(|row| match row {
+            Ok(count) if selected_genre_ids.contains(&count.genre_id) => Some(Ok(count)),
+            Ok(_) => None,
+            Err(error) => Some(Err(error)),
+        })
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load genre timeline year counts")?;
+
+    for count in &year_counts {
+        if let Some(index) = genre_indexes.get(&count.genre_id) {
+            let genre = &mut genres[*index];
+            if count.album_count > genre.peak_album_count {
+                genre.peak_album_count = count.album_count;
+                genre.peak_year = count.year;
+            }
+        }
+    }
+
+    let selected_placeholders = std::iter::repeat("?")
+        .take(selected_genre_ids.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut album_values = values;
+    let mut ordered_selected_ids = selected_genre_ids.into_iter().collect::<Vec<_>>();
+    ordered_selected_ids.sort();
+    album_values.extend(ordered_selected_ids.iter().cloned().map(Value::Text));
+    let mut album_stmt = conn.prepare(&format!(
+        "
+        SELECT
+            id,
+            album,
+            album_artist_display,
+            LOWER(TRIM(genre_normalized)) AS genre_id,
+            COALESCE(NULLIF(TRIM(canonical_genre), ''), 'Unknown') AS genre,
+            year
+        FROM albums
+        WHERE {where_sql}
+          AND LOWER(TRIM(genre_normalized)) IN ({selected_placeholders})
+        ORDER BY year ASC, genre_id ASC, LOWER(COALESCE(album, '')) ASC, id ASC
+        "
+    ))?;
+    let all_album_points = album_stmt
+        .query_map(params_from_iter(album_values.iter()), |row| {
+            Ok(GenreTimelineAlbumPoint {
+                album_id: row.get(0)?,
+                album: row.get(1)?,
+                album_artist_display: row.get(2)?,
+                genre_id: row.get(3)?,
+                genre: row.get(4)?,
+                year: row.get(5)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load genre timeline album points")?;
+
+    let album_point_limit = request.album_point_limit.min(12_000) as usize;
+    let albums = if album_point_limit == 0 {
+        Vec::new()
+    } else if all_album_points.len() <= album_point_limit {
+        all_album_points
+    } else {
+        (0..album_point_limit)
+            .map(|index| {
+                let source_index = index * all_album_points.len() / album_point_limit;
+                all_album_points[source_index].clone()
+            })
+            .collect()
+    };
+
+    year_counts.sort_by(|left, right| {
+        left.year
+            .cmp(&right.year)
+            .then_with(|| left.genre_id.cmp(&right.genre_id))
+    });
+
+    Ok(GenreTimelineResponse {
+        genres,
+        year_counts,
+        albums,
+        matching_album_count,
+        matching_genre_count,
+        dated_album_count,
+        available_year_from,
+        available_year_to,
     })
 }
 
@@ -18979,6 +19204,78 @@ mod tests {
         let genres = genre_suggestion_names(&conn).expect("list genre suggestion names");
 
         assert_eq!(genres, vec!["Synthpop"]);
+    }
+
+    #[test]
+    fn builds_filtered_genre_timeline_with_album_points() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+            ) VALUES
+            (
+                'mb:score-1', 1, 'score-1', 'Action One', 'Example Composer',
+                'Action', 'action', 'Example', 2024, 2024,
+                12, 12, 1.0, 3600, 0, 0, 0.0, 90, 90.0
+            ),
+            (
+                'mb:score-2', 1, 'score-2', 'Action Two', 'Example Composer',
+                'Action', 'action', 'Example', 2025, 2025,
+                12, 12, 1.0, 3600, 0, 0, 0.0, 90, 90.0
+            ),
+            (
+                'mb:score-3', 1, 'score-3', 'Action Three', 'Example Composer',
+                'Action', 'action', 'Example', 2025, 2025,
+                12, 12, 1.0, 3600, 0, 0, 0.0, 90, 90.0
+            ),
+            (
+                'mb:score-4', 1, 'score-4', 'Action Four', 'Example Composer',
+                'Action', 'action', 'Example', 2026, 2026,
+                12, 12, 1.0, 3600, 0, 0, 0.0, 90, 90.0
+            )
+            ",
+            [],
+        )
+        .expect("insert timeline score albums");
+
+        let timeline = genre_timeline(
+            &conn,
+            GenreTimelineRequest {
+                year_from: Some(2020),
+                year_to: Some(2026),
+                genres: vec!["scores".to_string()],
+                excluded_genres: Vec::new(),
+                genre_limit: 12,
+                album_point_limit: 2,
+            },
+        )
+        .expect("load score timeline");
+
+        assert_eq!(timeline.matching_album_count, 4);
+        assert_eq!(timeline.matching_genre_count, 1);
+        assert_eq!(timeline.genres.len(), 1);
+        assert_eq!(timeline.genres[0].id, "action");
+        assert_eq!(timeline.genres[0].peak_year, 2025);
+        assert_eq!(timeline.genres[0].peak_album_count, 2);
+        assert_eq!(timeline.year_counts.len(), 3);
+        assert_eq!(timeline.albums.len(), 2);
+        assert_eq!(timeline.available_year_from, Some(1987));
+        assert_eq!(timeline.available_year_to, Some(2026));
+
+        let without_scores = genre_timeline(
+            &conn,
+            GenreTimelineRequest {
+                excluded_genres: vec!["scores".to_string()],
+                ..GenreTimelineRequest::default()
+            },
+        )
+        .expect("load timeline without scores");
+        assert_eq!(without_scores.matching_album_count, 1);
+        assert_eq!(without_scores.genres[0].id, "synthpop");
     }
 
     #[test]

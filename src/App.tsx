@@ -375,6 +375,11 @@ import {
   type TimelineMode,
 } from "./components/AlbumTimeRibbon";
 import {
+  ArtistsTimelinePlaceholder,
+  TimelinesWorkspace,
+  type TimelinesView,
+} from "./components/TimelinesWorkspace";
+import {
   ChartAdvancedControls,
   ChartFilterSourceGroup,
   ChartFiltersDisclosure,
@@ -427,7 +432,6 @@ import {
   createDiscoveryMissionRequest,
   createGenreAlbumsRequest,
   createGenreListRequest,
-  createGenreTimelineRequest,
   createGenreSuggestionRequest,
   createMusicToolIssueRequest,
   createRequest,
@@ -8105,14 +8109,6 @@ export default function App() {
   );
   const [genreError, setGenreError] = useState<string | null>(null);
   const [isGenreLoading, setIsGenreLoading] = useState(false);
-  const [genreTimelineResponse, setGenreTimelineResponse] =
-    useState<GenreListResponse | null>(null);
-  const [genreTimelineError, setGenreTimelineError] = useState<string | null>(
-    null,
-  );
-  const [isGenreTimelineLoading, setIsGenreTimelineLoading] = useState(false);
-  const [genreTimelineRefreshKey, setGenreTimelineRefreshKey] = useState(0);
-  const [genreTimelineResetSignal, setGenreTimelineResetSignal] = useState(0);
   const [selectedGenreId, setSelectedGenreId] = useState<string | null>(null);
   const [genreAlbumsResponse, setGenreAlbumsResponse] =
     useState<BrowseResponse | null>(null);
@@ -8175,6 +8171,8 @@ export default function App() {
   const [trackTimelineResponse, setTrackTimelineResponse] =
     useState<TrackDebutTimelineResponse | null>(null);
   const [timelineMode, setTimelineMode] = useState<TimelineMode>("albums");
+  const [timelinesView, setTimelinesView] =
+    useState<TimelinesView>("charts");
   const [timelineChartSource, setTimelineChartSource] =
     useState<TimelineChartSource>("billboard");
   const [albumTimelineYear, setAlbumTimelineYear] = useState<number | null>(null);
@@ -8636,9 +8634,7 @@ export default function App() {
   const shouldLoadArtistMusicBrainz =
     artistDetailTabNeedsMusicBrainz(artistDetailTab);
   const selectedGenre =
-    genreResponse?.rows.find((genre) => genre.id === selectedGenreId) ??
-    genreTimelineResponse?.rows.find((genre) => genre.id === selectedGenreId) ??
-    null;
+    genreResponse?.rows.find((genre) => genre.id === selectedGenreId) ?? null;
   const genreAlbumsRequest = useMemo(
     () => (selectedGenre ? createGenreAlbumsRequest(selectedGenre) : null),
     [selectedGenre],
@@ -9039,41 +9035,6 @@ export default function App() {
   }, [activeSection, genreRequest]);
 
   useEffect(() => {
-    if (activeSection !== "Genres") {
-      return;
-    }
-
-    let cancelled = false;
-    setIsGenreTimelineLoading(true);
-    setGenreTimelineError(null);
-    void listGenres(createGenreTimelineRequest())
-      .then((nextResponse) => {
-        if (!cancelled) {
-          setGenreTimelineResponse(nextResponse);
-        }
-      })
-      .catch((searchError) => {
-        if (!cancelled) {
-          setGenreTimelineError(
-            searchError instanceof Error
-              ? searchError.message
-              : String(searchError),
-          );
-          setGenreTimelineResponse(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsGenreTimelineLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeSection, genreTimelineRefreshKey]);
-
-  useEffect(() => {
     const visibleGenreNames =
       genreResponse?.rows.map((genre) => genre.name) ?? [];
     if (visibleGenreNames.length === 0) {
@@ -9091,15 +9052,12 @@ export default function App() {
     }
 
     const rows = genreResponse?.rows ?? [];
-    const timelineRows = genreTimelineResponse?.rows ?? [];
-
     setSelectedGenreId((previous) =>
-      previous &&
-      [...rows, ...timelineRows].some((genre) => genre.id === previous)
+      previous && rows.some((genre) => genre.id === previous)
         ? previous
-        : (rows[0]?.id ?? timelineRows[0]?.id ?? null),
+        : (rows[0]?.id ?? null),
     );
-  }, [activeSection, genreResponse, genreTimelineResponse]);
+  }, [activeSection, genreResponse]);
 
   useEffect(() => {
     if (activeSection !== "Genres" || !genreAlbumsRequest) {
@@ -9340,7 +9298,7 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (activeSection !== "Timeline") {
+    if (activeSection !== "Timelines" || timelinesView !== "charts") {
       return;
     }
 
@@ -9384,6 +9342,7 @@ export default function App() {
     };
   }, [
     activeSection,
+    timelinesView,
     albumTimelineYear,
     trackTimelineYear,
     timelineMode,
@@ -10527,7 +10486,6 @@ export default function App() {
       ...createGenreListRequest(),
       limit: previous.limit,
     }));
-    setGenreTimelineResetSignal((previous) => previous + 1);
     setGenreExportResult(null);
   }
 
@@ -12757,7 +12715,7 @@ export default function App() {
     hasUsefulDetailContent ? "has-detail-content" : "no-detail-content",
     isDetailsDrawerLayout ? "details-drawer-layout" : "",
     isDetailsDrawerOpen ? "details-drawer-open" : "",
-    activeSection === "Timeline" ? "albums-years-active" : "",
+    activeSection === "Timelines" ? "albums-years-active" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -13052,32 +13010,48 @@ export default function App() {
           </section>
         ) : null}
 
-        {activeSection === "Timeline" ? (
-          <AlbumTimeRibbon
-            data={
-              timelineMode === "tracks"
-                ? trackTimelineResponse
-                : albumTimelineResponse
-            }
-            mode={timelineMode}
-            chartSource={timelineChartSource}
-            error={albumTimelineError}
-            isLoading={isAlbumTimelineLoading}
-            onCreatePlaylist={openTimelinePlaylist}
-            onModeChange={setTimelineMode}
-            onChartSourceChange={setTimelineChartSource}
-            onOpenAlbum={openTimelineAlbum}
-            onOpenTrack={openTimelineTrack}
-            onOpenSearch={() => setActiveSection("Search")}
-            onRetry={() =>
-              setAlbumTimelineRefreshKey((previous) => previous + 1)
-            }
-            onSelectYear={
-              timelineMode === "tracks"
-                ? setTrackTimelineYear
-                : setAlbumTimelineYear
-            }
-          />
+        {activeSection === "Timelines" ? (
+          <TimelinesWorkspace
+            activeView={timelinesView}
+            onViewChange={setTimelinesView}
+          >
+            {timelinesView === "charts" ? (
+              <AlbumTimeRibbon
+                embedded
+                data={
+                  timelineMode === "tracks"
+                    ? trackTimelineResponse
+                    : albumTimelineResponse
+                }
+                mode={timelineMode}
+                chartSource={timelineChartSource}
+                error={albumTimelineError}
+                isLoading={isAlbumTimelineLoading}
+                onCreatePlaylist={openTimelinePlaylist}
+                onModeChange={setTimelineMode}
+                onChartSourceChange={setTimelineChartSource}
+                onOpenAlbum={openTimelineAlbum}
+                onOpenTrack={openTimelineTrack}
+                onOpenSearch={() => setActiveSection("Search")}
+                onRetry={() =>
+                  setAlbumTimelineRefreshKey((previous) => previous + 1)
+                }
+                onSelectYear={
+                  timelineMode === "tracks"
+                    ? setTrackTimelineYear
+                    : setAlbumTimelineYear
+                }
+              />
+            ) : timelinesView === "genres" ? (
+              <GenreTimeline
+                genreOptions={genreSuggestionOptions}
+                onRequestGenreOptions={requestGenreSuggestionRefresh}
+                onOpenAlbum={openTimelineAlbum}
+              />
+            ) : (
+              <ArtistsTimelinePlaceholder />
+            )}
+          </TimelinesWorkspace>
         ) : activeSection === "Updates" ? (
           <UpdatesWorkspace
             selectedUpdateId={selectedUpdate?.id ?? null}
@@ -15320,7 +15294,6 @@ export default function App() {
                   onClick={() => {
                     void loadData();
                     setGenreRequest((previous) => ({ ...previous }));
-                    setGenreTimelineRefreshKey((previous) => previous + 1);
                   }}
                 >
                   <Database size={18} />
@@ -15508,20 +15481,6 @@ export default function App() {
                 onSelect={selectGenre}
               />
             </section>
-
-            <GenreTimeline
-              genres={genreTimelineResponse?.rows ?? null}
-              totalGenres={
-                genreTimelineResponse?.total ??
-                statistics?.overview.genreCount ??
-                0
-              }
-              isLoading={isGenreTimelineLoading}
-              error={genreTimelineError}
-              selectedGenreId={selectedGenreId}
-              resetSignal={genreTimelineResetSignal}
-              onSelect={selectGenre}
-            />
 
             <section className="table-panel" aria-label="Selected genre albums">
               <div className="panel-heading compact">

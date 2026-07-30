@@ -1204,6 +1204,88 @@ pub struct GenreListResponse {
     pub offset: u32,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenreTimelineRequest {
+    #[serde(default)]
+    pub year_from: Option<i32>,
+    #[serde(default)]
+    pub year_to: Option<i32>,
+    #[serde(default)]
+    pub genres: Vec<String>,
+    #[serde(default)]
+    pub excluded_genres: Vec<String>,
+    #[serde(default = "default_genre_timeline_limit")]
+    pub genre_limit: u32,
+    #[serde(default = "default_genre_timeline_album_point_limit")]
+    pub album_point_limit: u32,
+}
+
+impl Default for GenreTimelineRequest {
+    fn default() -> Self {
+        Self {
+            year_from: None,
+            year_to: None,
+            genres: Vec::new(),
+            excluded_genres: Vec::new(),
+            genre_limit: default_genre_timeline_limit(),
+            album_point_limit: default_genre_timeline_album_point_limit(),
+        }
+    }
+}
+
+fn default_genre_timeline_limit() -> u32 {
+    7
+}
+
+fn default_genre_timeline_album_point_limit() -> u32 {
+    3600
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenreTimelineGenre {
+    pub id: String,
+    pub name: String,
+    pub album_count: i64,
+    pub first_year: i32,
+    pub last_year: i32,
+    pub peak_year: i32,
+    pub peak_album_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenreTimelineYearCount {
+    pub genre_id: String,
+    pub year: i32,
+    pub album_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenreTimelineAlbumPoint {
+    pub album_id: String,
+    pub album: Option<String>,
+    pub album_artist_display: Option<String>,
+    pub genre_id: String,
+    pub genre: String,
+    pub year: i32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenreTimelineResponse {
+    pub genres: Vec<GenreTimelineGenre>,
+    pub year_counts: Vec<GenreTimelineYearCount>,
+    pub albums: Vec<GenreTimelineAlbumPoint>,
+    pub matching_album_count: i64,
+    pub matching_genre_count: i64,
+    pub dated_album_count: i64,
+    pub available_year_from: Option<i32>,
+    pub available_year_to: Option<i32>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryResponse {

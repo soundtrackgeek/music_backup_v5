@@ -98,6 +98,7 @@ export type AlbumTimeRibbonPlaylist = {
 
 type AlbumTimeRibbonProps = {
   data: AlbumDebutTimelineResponse | TrackDebutTimelineResponse | null;
+  embedded?: boolean;
   mode?: TimelineMode;
   chartSource?: TimelineChartSource;
   error: string | null;
@@ -639,6 +640,7 @@ function ChartSourceToggle({
 
 export function AlbumTimeRibbon({
   data,
+  embedded = false,
   mode = "albums",
   chartSource = "billboard",
   error,
@@ -1057,7 +1059,7 @@ export function AlbumTimeRibbon({
   return (
     <section
       ref={rootRef}
-      className={`album-time-ribbon-page${isFullscreen ? " is-fullscreen" : ""}`}
+      className={`album-time-ribbon-page${embedded ? " is-embedded" : ""}${isFullscreen ? " is-fullscreen" : ""}`}
       aria-busy={isLoading}
       style={timelineStyle}
     >

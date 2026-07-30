@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.109.0] - 2026-07-30
+### Added
+- Added a luminous Genre constellation to the Timelines workspace with real album-dot clouds, density contours, Dots/Density modes, focused-genre highlighting, overview strip, per-genre summaries, include/exclude filters, the Scores umbrella, editable year bounds, and Top 7/12/20 views.
+- Added Charts, Genres, and Artists timeline tabs, with Artists clearly marked as a later follow-up.
+
+### Changed
+- Moved the genre timeline out of the Genres workspace and renamed the main Timeline navigation destination to Timelines.
+- Synchronized app metadata and provider user agents to `0.109.0`.
+
 ## [0.108.2] - 2026-07-30
 ### Changed
 - Synchronized app metadata and provider user agents to `0.108.2`.

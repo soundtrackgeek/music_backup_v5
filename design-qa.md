@@ -1,55 +1,59 @@
-# Library Completion Design QA
+# Genre Constellation Design QA
 
-## Comparison Target
+## Comparison target
 
-- Approved visual: `C:\Users\jtill\.codex\generated_images\019faaff-e573-71e1-9016-da52c971a50c\exec-90f4c683-1792-4a65-a30c-d493558dc9d7.png` at 1487×1058.
-- Final Workbench capture: `C:\_code\music_backup_v5\docs\design\library-completion-workbench.png` at 1487×1058.
-- Same-frame comparison: `C:\_code\music_backup_v5\docs\design\library-completion-qa-comparison.png`.
-- Coverage Atlas capture: `C:\_code\music_backup_v5\docs\design\library-completion-atlas.png`.
-- Responsive capture: `C:\_code\music_backup_v5\docs\design\library-completion-tablet.png`.
-- Browser-rendered URL: `http://127.0.0.1:1420/`.
+- Confirmed reference: `C:\_code\music_backup_v5\docs\design\genre-constellation-concept.jpg` at 1280×800.
+- Final focused implementation: `C:\_code\music_backup_v5\docs\design\genre-constellation-focused.png` at 1265×790.
+- Same-frame comparison: `C:\_code\music_backup_v5\docs\design\genre-constellation-qa-comparison.png`.
+- Default-state evidence: `C:\_code\music_backup_v5\docs\design\genre-constellation-implementation.png`.
+- Full-page evidence: `C:\_code\music_backup_v5\docs\design\genre-constellation-full.png`.
+- Responsive evidence: `C:\_code\music_backup_v5\docs\design\genre-constellation-compact.png` at 760×900.
+- Browser-rendered URL: `http://127.0.0.1:4178/`.
+- Desktop QA viewport: 1280×800 CSS pixels. Compact QA viewport: 760×900 CSS pixels. Browser screenshots were captured at device scale factor 1.
 
-## Required Fidelity Surfaces
+## State and coverage
 
-- Typography: Preserves the app's existing Inter hierarchy while matching the approved compact, evidence-led command-centre density. Headings, status labels, source metadata, and numeric Atlas values remain distinct and readable.
-- Spacing and layout: Reproduces the approved two-column candidate/dossier Workbench, compact command bar, evidence ledger, decision controls, provider handoff, and first-class Atlas view. The implementation uses the product's established full/icon navigation behavior instead of replacing the global shell.
-- Colors and surfaces: Maps the approved restrained teal, warm gray, amber review state, fine borders, and shallow elevation into the existing design tokens. No gradients or decorative placeholder art were introduced.
-- Image quality: Uses six existing real raster cover assets in the browser preview. Missing production artwork has an intentional icon fallback rather than a fake cover.
-- Copy and content: Separates first-charted year from release verification, states local absence precisely, labels MusicBrainz as on demand, and identifies Discogs as a next phase instead of implying requests are already running.
-- Icons and accessibility: Uses the existing Lucide family, semantic buttons/regions, explicit labels, keyboard focus, alt text, status text, disabled Deemix state before a wanted decision, and keyboard search focus via Ctrl+K.
+- Desktop comparison state: Timelines → Genres, Dots mode, Top 7, default 1900–2026 range, no include/exclude tokens, and Rock focused.
+- The full view includes the Timelines navigation, genre controls, year guides, seven genre constellations, focused-genre card, overview strip, and explanatory data note.
+- The compact view verifies the responsive tabs and toolbar plus intentional horizontal scrolling for the data-dense timeline.
+- The browser preview uses a deterministic realistic mock library spanning 1900–2026. The desktop backend renders the same design from real SQLite albums and exact per-year genre totals.
 
-## Findings and Fixes
+## Fidelity review
 
-### Pass 1
+- Typography: Matches the reference's restrained sans-serif hierarchy, compact chart labels, and colored focused-genre emphasis while staying within the existing application shell.
+- Layout: Reproduces the centered Charts / Genres / Artists switcher, slim chart toolbar, left-aligned genre rows, top year guide, floating detail card, and bottom overview strip.
+- Color and light: Preserves the near-black blue-green field, distinct teal/blue/amber/pink/red/olive genre palette, soft contour haze, bright album points, and focused-selection glow.
+- Data semantics: Every dot maps to an album. Contours are smoothed from exact per-year counts, and the overview is derived from those same genre densities. Large libraries use deterministic even sampling above 3,600 visible points without changing totals.
+- Interaction: Dots/Density mode, search, include/exclude genre tokens, the Scores umbrella, year bounds, Top 7/12/20 controls, genre focus/fade, and album opening are functional.
+- Accessibility: Uses semantic timeline tabs, labeled controls, keyboard-operable genre rows and album points, pressed states, live loading feedback, and readable empty/error states.
 
-- P2 behavior: The initially selected Official UK 1980s Atlas cell had no matching preview candidates, so its primary **Review candidates** action opened an empty campaign.
-- Fix: The Atlas now initially selects the data-backed Official UK 1990s cohort; the campaign opens three realistic candidates while any other cell remains selectable.
-- P2 content: The Windows preview displayed a macOS shortcut glyph, and the shared MusicBrainz mock produced an unrelated artist/year for Completion queries.
-- Fix: Changed the hint to Ctrl+K and made the preview MusicBrainz query/result carry the selected album, artist, and chart year coherently.
+## Findings and fixes
 
-### Pass 2
+### Direction correction
 
-- The initial light-theme comparison found no remaining actionable P0, P1, or P2 mismatch against the approved concept. A later real-library dark-theme review exposed the remediation items below.
-- Intentional product integrations: the current application shell keeps its established responsive sidebar; automated provider activity from the concept is represented honestly as on-demand MusicBrainz, next-phase Discogs, and idle/ready Deemix states in this first implementation.
-- Browser console errors: none.
-- Core interactions verified: Completion navigation, Workbench/Atlas switching, Atlas cohort handoff, persistent wanted state, Deemix lookup result, MusicBrainz candidate display, filters, and responsive reflow.
-- Viewport resilience: no horizontal overflow at 1487×1058, 1180×900, 1040×800, or 800×900.
+- P0 visual target: The first implementation followed the wrong generated River concept.
+- Fix: Removed the River-specific implementation and rebuilt the feature from the user-confirmed first image: the horizontal Genre constellation with album-dot clouds and density contours.
 
-### Feedback remediation — 0.96.1
+### Visual QA passes
 
-- P1 data integrity: Atlas campaigns previously filtered the globally capped 5,000-row Workbench response, so a cohort count such as 2,009 could open only the subset present in that global slice.
-- Fix: **Review candidates** now requests the complete selected source-and-decade cohort from SQLite without the global cap, applies the **Open unverified** status filter, and shows the loaded cohort count in the campaign chip. Browser QA confirmed the selected Atlas count, campaign count, and queue count reconcile.
-- P1 provider feedback: MusicBrainz could finish with no visible result, and the free-form `title by artist (year)` string produced weak release-group searches.
-- Fix: Completion now sends structured title, artist, and chart-year fields; the UI preserves found, empty, failure/retry, and verified states. Search results exclude release groups with Live, Compilation, or any other secondary type, and selection revalidation requires an Official release.
-- P1 content: Chart-confidence language implied studio-album verification before a catalog check.
-- Fix: New chart rows are labeled **Unverified**, the dossier says **Album type unverified**, and confidence badges describe the strength of the chart match rather than album type.
-- P2 contrast: several dark-theme ledger labels and supporting metadata inherited low-contrast light-theme colors.
-- Fix: Added explicit dark-theme primary, secondary, and tertiary text colors, stronger borders, and 12px/11px ledger typography. Computed browser styles confirmed `rgb(231, 240, 237)` primary labels and `rgb(181, 196, 191)` evidence text on the dark panel.
-- Browser console errors: none after the remediation pass.
+- P1 composition: Early constellation passes used generic ordering, sparse mock dates, and a chart height that pushed the overview below the desktop viewport.
+- Fix: Matched the reference's seven-genre ordering, added a realistic deterministic 1900–2026 mock distribution, forced true boundary coverage, and tuned the chart/overview proportions for the 1280×800 target.
+- P2 focus fidelity: The focused state initially over-enlarged album dots and displayed a stale mock peak value in an intermediate capture.
+- Fix: Reduced focused dot size, retained the soft halo, recalculated density peaks from the final mock series, and recaptured the focused state with Rock at 1950–2026 and a 1975 peak.
+- P2 responsive layout: The compact chart cannot legibly fit 126 years and seven album clouds in 760 px.
+- Fix: Preserved row height and dot readability inside an explicitly scrollable timeline instead of compressing the visualization into illegibility.
+
+### Final comparison
+
+- The reference and final focused implementation were reviewed together in `genre-constellation-qa-comparison.png` at matching desktop scale.
+- Remaining differences are intentional: the production app shell occupies the left edge, and the implementation uses real/deterministic data geometry rather than reproducing decorative AI noise pixel-for-pixel.
+- Browser console warnings/errors: none.
+- Verified interactions: Charts/Genres tabs, Dots/Density mode, search, focused Rock selection and clearing, include Scores, exclude Scores, year filtering, reset, responsive reflow, and album-dot navigation.
 
 ## Verification
 
-- Full 0.96.1 release gate: 39 frontend suites / 156 tests passed, 15 Python companion tests passed, security checks passed, production build passed, 189 Rust tests passed with 20 live-network tests ignored, and `cargo check` passed. Rust tests ran sequentially to avoid contention between the existing local HTTP gateway fixtures.
-- Dedicated Completion component/navigation tests: passed.
+- Dedicated frontend constellation, Timelines workspace, and chart timeline suites: passed.
+- Dedicated Rust genre-timeline query test: passed.
+- Full repository release gate: passed (`npm run check`) with 188 frontend tests, 15 Python tool tests, the security check, production TypeScript/Vite build, 311 Rust tests passed (20 live-network tests ignored), and `cargo check`.
 
 final result: passed

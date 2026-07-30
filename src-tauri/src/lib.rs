@@ -25,16 +25,16 @@ use models::{
     BillboardImportSummary, BillboardSinglesImportSummary, BrowseRequest, BrowseResponse,
     CoverImportRequest, CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary,
     DiscoveryResponse, ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest,
-    GenreListResponse, GenreProgressRequest, GenreProgressStats, LibraryUpdateRequest,
-    LibraryUpdateResponse, MusicBrainzArtistDiscographyRequest,
-    MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
-    MusicBrainzArtistInfoImportRequest, MusicBrainzArtistInfoImportSummary,
-    MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus, MusicBrainzArtistLinkRequest,
-    MusicBrainzArtistOriginCountryRequest, MusicBrainzArtistOriginCountryUpdate,
-    MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus,
-    MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
-    MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryStatus,
-    MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
+    GenreListResponse, GenreProgressRequest, GenreProgressStats, GenreTimelineRequest,
+    GenreTimelineResponse, LibraryUpdateRequest, LibraryUpdateResponse,
+    MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
+    MusicBrainzArtistExportRequest, MusicBrainzArtistInfoImportRequest,
+    MusicBrainzArtistInfoImportSummary, MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus,
+    MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginCountryRequest,
+    MusicBrainzArtistOriginCountryUpdate, MusicBrainzArtistRefreshRequest,
+    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzOriginCountryImportRequest,
+    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
+    MusicBrainzOriginCountryStatus, MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
     MusicBrainzReleaseDecisionRequest, MusicMapLocationDetails, MusicMapRefreshSummary,
     MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
@@ -1318,6 +1318,18 @@ async fn list_genres(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_genre_timeline(
+    app: AppHandle,
+    request: GenreTimelineRequest,
+) -> Result<GenreTimelineResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || db::genre_timeline_for_app(&app, request))
+        .await
+        .map_err(|error| format!("Genre timeline task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn list_genre_suggestions(app: AppHandle) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || db::genre_suggestion_names_for_app(&app))
         .await
@@ -1617,6 +1629,7 @@ pub fn run() {
             search_library,
             list_artists,
             list_genres,
+            get_genre_timeline,
             list_genre_suggestions,
             list_music_tools,
             list_music_tool_issues,

@@ -1,130 +1,137 @@
 import { describe, expect, it } from "vitest";
-import type { GenreSummary } from "../types";
+
+import type { GenreTimelineResponse } from "../types";
 import {
-  genreTimelineColor,
-  genreTimelineExtent,
+  buildGenreConstellationLayout,
+  createGenreTimelineRequest,
+  genreConstellationAlbumPosition,
   genreTimelineTicks,
-  observedGenreSpan,
-  selectGenreTimelineRows,
-  summarizeGenreTimeline,
-  type GenreTimelineOptions,
 } from "./genreTimeline";
 
-function genre(
-  name: string,
-  firstYear: number | null,
-  lastYear: number | null,
-  albumCount = 1,
-): GenreSummary {
-  return {
-    id: name.toLowerCase(),
-    name,
-    albumCount,
-    ratedAlbumCount: 0,
-    partialAlbumCount: 0,
-    unratedAlbumCount: albumCount,
-    trackCount: albumCount * 10,
-    totalSeconds: 0,
-    lovedTracks: 0,
-    tmoeSeconds: 0,
-    averageRatingCompleteness: 0,
-    averageAlbumRating: null,
-    averageAlbumScore: null,
-    firstYear,
-    lastYear,
-    topArtist: null,
-  };
-}
+const response: GenreTimelineResponse = {
+  genres: [
+    {
+      id: "rock",
+      name: "Rock",
+      albumCount: 8,
+      firstYear: 1970,
+      lastYear: 1973,
+      peakYear: 1972,
+      peakAlbumCount: 4,
+    },
+    {
+      id: "jazz",
+      name: "Jazz",
+      albumCount: 4,
+      firstYear: 1970,
+      lastYear: 1973,
+      peakYear: 1971,
+      peakAlbumCount: 2,
+    },
+  ],
+  yearCounts: [
+    { genreId: "rock", year: 1970, albumCount: 1 },
+    { genreId: "rock", year: 1971, albumCount: 2 },
+    { genreId: "rock", year: 1972, albumCount: 4 },
+    { genreId: "rock", year: 1973, albumCount: 1 },
+    { genreId: "jazz", year: 1970, albumCount: 1 },
+    { genreId: "jazz", year: 1971, albumCount: 2 },
+    { genreId: "jazz", year: 1972, albumCount: 1 },
+  ],
+  albums: [
+    {
+      albumId: "album-1",
+      album: "First",
+      albumArtistDisplay: "Artist",
+      genreId: "rock",
+      genre: "Rock",
+      year: 1972,
+    },
+  ],
+  matchingAlbumCount: 12,
+  matchingGenreCount: 2,
+  datedAlbumCount: 12,
+  availableYearFrom: 1970,
+  availableYearTo: 1973,
+};
 
-const rows = [
-  genre("Rock", 1970, 1999, 20),
-  genre("Ambient", 1985, 2024, 12),
-  genre("One Year", 1990, 1990, 2),
-  genre("Synthpop", 2001, 2005, 8),
-  genre("Unknown", null, null, 50),
-];
-
-function options(
-  values: Partial<GenreTimelineOptions> = {},
-): GenreTimelineOptions {
-  return {
-    searchText: "",
-    yearFrom: 1990,
-    yearTo: 2000,
-    rangeMode: "overlaps",
-    minimumAlbums: 0,
-    sort: "earliest",
-    limit: "all",
-    ...values,
-  };
-}
-
-describe("genre timeline selection", () => {
-  it("derives the observed extent and excludes genres without years", () => {
-    expect(genreTimelineExtent(rows)).toEqual({ minimum: 1970, maximum: 2024 });
-    expect(selectGenreTimelineRows(rows, options()).datedTotal).toBe(4);
-  });
-
-  it("supports overlap, start, end, and contained range matching", () => {
+describe("genre constellation helpers", () => {
+  it("creates a filtered timeline request with album points", () => {
     expect(
-      selectGenreTimelineRows(rows, options()).rows.map((row) => row.name),
-    ).toEqual(["Rock", "Ambient", "One Year"]);
-    expect(
-      selectGenreTimelineRows(rows, options({ rangeMode: "starts" })).rows.map(
-        (row) => row.name,
-      ),
-    ).toEqual(["One Year"]);
-    expect(
-      selectGenreTimelineRows(rows, options({ rangeMode: "ends" })).rows.map(
-        (row) => row.name,
-      ),
-    ).toEqual(["Rock", "One Year"]);
-    expect(
-      selectGenreTimelineRows(
-        rows,
-        options({ rangeMode: "contained" }),
-      ).rows.map((row) => row.name),
-    ).toEqual(["One Year"]);
-  });
-
-  it("combines album thresholds, longest-span sorting, and limits", () => {
-    const selection = selectGenreTimelineRows(
-      rows,
-      options({
-        yearFrom: 1970,
-        yearTo: 2030,
-        minimumAlbums: 10,
-        sort: "longest",
-        limit: 1,
+      createGenreTimelineRequest({
+        yearFrom: 1980,
+        yearTo: 2000,
+        includedGenres: ["Scores"],
+        excludedGenres: ["Horror"],
+        genreLimit: 12,
       }),
-    );
-
-    expect(selection.matchedRows.map((row) => row.name)).toEqual([
-      "Ambient",
-      "Rock",
-    ]);
-    expect(selection.rows.map((row) => row.name)).toEqual(["Ambient"]);
-  });
-
-  it("uses inclusive observed spans and summarizes the filtered rows", () => {
-    expect(observedGenreSpan(rows[2])).toBe(1);
-    expect(summarizeGenreTimeline(rows)).toEqual({
-      earliestStart: 1970,
-      latestRelease: 2024,
-      longestSpan: 40,
+    ).toEqual({
+      yearFrom: 1980,
+      yearTo: 2000,
+      genres: ["Scores"],
+      excludedGenres: ["Horror"],
+      genreLimit: 12,
+      albumPointLimit: 3600,
     });
   });
 
-  it("creates bounded axis guides and stable metric colors", () => {
+  it("builds smooth density clouds for each visible genre", () => {
+    const layout = buildGenreConstellationLayout(response, {
+      width: 800,
+      height: 400,
+    });
+
+    expect(layout.yearFrom).toBe(1970);
+    expect(layout.yearTo).toBe(1973);
+    expect(layout.bands).toHaveLength(2);
+    const rockBand = layout.bands.find((band) => band.genre.id === "rock");
+    expect(rockBand?.outerPath).toMatch(/^M /);
+    expect(rockBand?.outerPath).toContain(" C ");
+    expect(rockBand?.contourPaths).toHaveLength(4);
+    expect(rockBand?.amplitudeByYear).toHaveLength(4);
+    expect(rockBand?.amplitudeByYear[2]).toBeGreaterThan(1);
+  });
+
+  it("places an album deterministically inside its genre cloud", () => {
+    const layout = buildGenreConstellationLayout(response);
+    const band = layout.bands.find((item) => item.genre.id === "rock");
+    expect(band).toBeDefined();
+    const album = response.albums[0];
+    const first = genreConstellationAlbumPosition(album, band!, layout);
+    const second = genreConstellationAlbumPosition(album, band!, layout);
+
+    expect(first).toEqual(second);
+    expect(first.x).toBeGreaterThanOrEqual(layout.plotLeft);
+    expect(first.x).toBeLessThanOrEqual(layout.plotRight);
+    expect(first.y).toBeGreaterThan(
+      band!.centerY - band!.amplitudeByYear[2],
+    );
+    expect(first.y).toBeLessThan(
+      band!.centerY + band!.amplitudeByYear[2],
+    );
+  });
+
+  it("normalizes an inverted year range", () => {
+    expect(
+      createGenreTimelineRequest({
+        yearFrom: 2005,
+        yearTo: 1990,
+        includedGenres: [],
+        excludedGenres: [],
+        genreLimit: 12,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        yearFrom: 1990,
+        yearTo: 2005,
+      }),
+    );
+  });
+
+  it("chooses readable year ticks", () => {
     expect(genreTimelineTicks(1984, 2012)).toEqual([
-      1984, 1990, 2000, 2010,
+      1984, 1985, 1990, 1995, 2000, 2005, 2010, 2012,
     ]);
     expect(genreTimelineTicks(1986, 1987)).toEqual([1986, 1987]);
-    expect(genreTimelineColor(rows[0], rows, "none")).toBe(
-      "hsl(175 78% 25%)",
-    );
-    expect(genreTimelineColor(rows[0], rows, "albums")).toMatch(
-      /^hsl\(175 68% /,
-    );
   });
 });
