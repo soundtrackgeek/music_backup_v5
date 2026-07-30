@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.105.0] - 2026-07-30
+### Added
+- Added secure Usenet provider settings with a Prowlarr default of `http://127.0.0.1:9696`, Newsgroup Ninja defaults for encrypted port 563, configurable connection count and download folder, live connection tests, and Windows Credential Manager storage for both provider secrets.
+- Added Prowlarr Audio-category NZB search to album wishes with title-match ranking, age, indexer, size, grab count, and category details.
+- Added a native multi-connection NNTP downloader with TLS authentication, persistent transfer status, yEnc decoding and CRC validation, safe staging, collision-free album folders, installed-UnRAR discovery, automatic RAR verification/extraction, and readable failure reporting for unavailable or incomplete posts.
+
+### Changed
+- Expanded Settings → Providers and Wish List transfer feedback to treat Usenet as a first-class search and download source alongside Deemix and Soulseek.
+- Synchronized app metadata and provider user agents to `0.105.0`.
+
 ## [0.104.2] - 2026-07-29
 ### Changed
 - Synchronized app metadata and provider user agents to `0.104.2`.

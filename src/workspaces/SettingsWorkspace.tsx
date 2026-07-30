@@ -42,7 +42,7 @@ const settingsSections: SettingsSectionDefinition[] = [
   {
     id: "providers",
     label: "Providers",
-    description: "Discogs, Deemix, Soulseek, downloads, and sharing",
+    description: "Discogs, Deemix, Soulseek, Usenet, downloads, and sharing",
     icon: Plug,
   },
   {

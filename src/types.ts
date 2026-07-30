@@ -1652,6 +1652,105 @@ export type SoulseekUploadQueue = {
   sessionUploadedBytes: number;
 };
 
+export type UsenetProfile = {
+  prowlarrUrl: string;
+  newsHost: string;
+  newsPort: number;
+  useTls: boolean;
+  username: string;
+  downloadDirectory: string;
+  connections: number;
+};
+
+export type UsenetBootstrap = {
+  profile: UsenetProfile;
+  hasProwlarrApiKey: boolean;
+  hasNewsPassword: boolean;
+  extractorPath: string | null;
+};
+
+export type SaveUsenetProfileRequest = {
+  profile: UsenetProfile;
+  prowlarrApiKey: string | null;
+  newsPassword: string | null;
+};
+
+export type UsenetConnectionTest = {
+  prowlarrVersion: string;
+  newsServer: string;
+  extractorPath: string | null;
+  message: string;
+};
+
+export type UsenetSearchRequest = {
+  title: string;
+  artist: string;
+  year: number | null;
+  limit?: number;
+};
+
+export type UsenetSearchResult = {
+  guid: string;
+  title: string;
+  indexer: string;
+  sizeBytes: number;
+  ageDays: number;
+  grabs: number | null;
+  publishDate: string | null;
+  downloadUrl: string;
+  infoUrl: string | null;
+  categories: string[];
+  matchScore: number;
+};
+
+export type UsenetSearchResponse = {
+  query: string;
+  results: UsenetSearchResult[];
+  searchedAt: string;
+};
+
+export type UsenetDownloadRequest = {
+  guid: string;
+  title: string;
+  indexer: string;
+  downloadUrl: string;
+  sizeBytes: number;
+  expectedArtist: string;
+  expectedAlbum: string;
+  expectedYear: number | null;
+  releaseGroupId: string | null;
+};
+
+export type UsenetTransferStatus =
+  | "queued"
+  | "fetchingNzb"
+  | "downloading"
+  | "extracting"
+  | "completed"
+  | "failed";
+
+export type UsenetTransfer = {
+  id: string;
+  guid: string;
+  title: string;
+  indexer: string;
+  status: UsenetTransferStatus;
+  progressPercent: number;
+  downloadedBytes: number;
+  totalBytes: number;
+  message: string;
+  destinationPath: string | null;
+  error: string | null;
+  releaseGroupId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type UsenetTransferQueue = {
+  transfers: UsenetTransfer[];
+  activeCount: number;
+};
+
 export type AiConnectionTest = {
   model: string;
   message: string;

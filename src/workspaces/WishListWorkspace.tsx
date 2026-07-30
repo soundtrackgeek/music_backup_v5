@@ -12,6 +12,7 @@ import {
   Album,
   CheckCircle2,
   Clock3,
+  CloudDownload,
   Download,
   Eye,
   ExternalLink,
@@ -30,13 +31,17 @@ import {
 import {
   addWishListMusicBrainzCandidate,
   clearCompletedSoulseekTransfers,
+  clearCompletedUsenetTransfers,
   discoverWishListArtistAlbums,
   downloadDeemixAlbum,
   enqueueSoulseekRelease,
+  enqueueUsenetDownload,
   getSoulseekTransfers,
+  getUsenetTransfers,
   listWishList,
   listenToDeemixDownloadProgress,
   listenToSoulseekTransfers,
+  listenToUsenetTransfers,
   openExternalUrl,
   preflightDeemixAlbumDownload,
   refreshWishListArtistAlbumSummary,
@@ -44,6 +49,7 @@ import {
   searchWishListMusicBrainz,
   searchDeemixAlbums,
   searchSoulseekAlbum,
+  searchUsenet,
 } from "../backend";
 import type {
   DeemixAlbumDownloadProgress,
@@ -55,6 +61,10 @@ import type {
   SoulseekTransfer,
   SoulseekTransferQueue,
   SoulseekTransferStatus,
+  UsenetSearchResult,
+  UsenetSearchResponse,
+  UsenetTransfer,
+  UsenetTransferQueue,
   WishListArtistAlbumDiscoveryRow,
   WishListArtistAlbumDiscoveryResponse,
   WishListArtistAlbumSummary,
@@ -574,6 +584,90 @@ function SoulseekSourceList({
   );
 }
 
+function usenetTransferLabel(transfer: UsenetTransfer) {
+  switch (transfer.status) {
+    case "fetchingNzb":
+      return "Fetching NZB";
+    case "downloading":
+      return `Downloading ${transfer.progressPercent}%`;
+    case "extracting":
+      return "Verifying & unpacking";
+    case "completed":
+      return "Downloaded";
+    case "failed":
+      return "Download failed";
+    default:
+      return "Queued";
+  }
+}
+
+function UsenetSourceList({
+  results,
+  transferByGuid,
+  onDownload,
+}: {
+  results: UsenetSearchResult[];
+  transferByGuid: ReadonlyMap<string, UsenetTransfer>;
+  onDownload: (result: UsenetSearchResult) => void;
+}) {
+  return (
+    <div className="soulseek-source-list usenet-source-list">
+      {results.map((result) => {
+        const transfer = transferByGuid.get(result.guid);
+        const active =
+          transfer && !["completed", "failed"].includes(transfer.status);
+        return (
+          <article key={result.guid}>
+            <div className="soulseek-source-format usenet-source-format">
+              <strong>NZB</strong>
+              <span>{result.ageDays} days</span>
+            </div>
+            <div className="deemix-match-copy">
+              <strong>{result.title}</strong>
+              <span>
+                {result.indexer} · {formatSoulseekBytes(result.sizeBytes)}
+                {result.grabs != null ? ` · ${result.grabs} grabs` : ""}
+              </span>
+              <small>
+                {result.matchScore}% title match
+                {result.categories.length ? ` · ${result.categories.join(" / ")}` : ""}
+              </small>
+            </div>
+            <div className="deemix-match-actions">
+              <button
+                className={`primary-button deemix-download-button${
+                  transfer ? ` usenet-${transfer.status}` : ""
+                }`}
+                type="button"
+                disabled={Boolean(active)}
+                aria-label={`Download ${result.title} from Usenet`}
+                onClick={() => onDownload(result)}
+              >
+                {active ? (
+                  <RefreshCw size={15} className="spin" />
+                ) : transfer?.status === "completed" ? (
+                  <CheckCircle2 size={15} />
+                ) : transfer?.status === "failed" ? (
+                  <AlertTriangle size={15} />
+                ) : (
+                  <Download size={15} />
+                )}
+                <span>
+                  {transfer
+                    ? transfer.status === "completed" || transfer.status === "failed"
+                      ? `${usenetTransferLabel(transfer)} · retry`
+                      : usenetTransferLabel(transfer)
+                    : "Download NZB"}
+                </span>
+              </button>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 type DownloadContext = {
   wishListItemId: number | null;
   musicbrainzReleaseGroupId: string | null;
@@ -826,9 +920,11 @@ function WishListGroup({
   onRemove,
   onSearchAlbum,
   onSearchSoulseek,
+  onSearchUsenet,
   onDiscoverArtist,
   searchingId,
   soulseekSearchingId,
+  usenetSearchingId,
   checkingArtistIds,
   artistSummaryErrors,
 }: {
@@ -838,9 +934,11 @@ function WishListGroup({
   onRemove: (item: WishListItem) => void;
   onSearchAlbum: (item: WishListItem) => void;
   onSearchSoulseek: (item: WishListItem) => void;
+  onSearchUsenet: (item: WishListItem) => void;
   onDiscoverArtist: (item: WishListItem) => void;
   searchingId: number | null;
   soulseekSearchingId: number | null;
+  usenetSearchingId: number | null;
   checkingArtistIds: ReadonlySet<number>;
   artistSummaryErrors: Readonly<Record<number, string>>;
 }) {
@@ -950,6 +1048,21 @@ function WishListGroup({
                 </button>
                 {!isArtist ? (
                   <button
+                    className="icon-button usenet-search-button"
+                    type="button"
+                    title="Search with Usenet"
+                    aria-label={`Search ${item.title} with Usenet`}
+                    disabled={usenetSearchingId !== null}
+                    onClick={() => onSearchUsenet(item)}
+                  >
+                    <CloudDownload
+                      size={16}
+                      className={usenetSearchingId === item.id ? "spin" : ""}
+                    />
+                  </button>
+                ) : null}
+                {!isArtist ? (
+                  <button
                     className="icon-button soulseek-search-button"
                     type="button"
                     title="Search with Soulseek"
@@ -1027,6 +1140,17 @@ export function WishListWorkspace() {
   const [isClearingSoulseekTransfers, setIsClearingSoulseekTransfers] =
     useState(false);
   const [soulseekNotice, setSoulseekNotice] = useState<string | null>(null);
+  const [usenetSearchedItem, setUsenetSearchedItem] =
+    useState<WishListItem | null>(null);
+  const [usenetSearchingId, setUsenetSearchingId] =
+    useState<number | null>(null);
+  const [usenetResults, setUsenetResults] =
+    useState<UsenetSearchResponse | null>(null);
+  const [usenetTransfers, setUsenetTransfers] =
+    useState<UsenetTransferQueue | null>(null);
+  const [usenetNotice, setUsenetNotice] = useState<string | null>(null);
+  const [isClearingUsenetTransfers, setIsClearingUsenetTransfers] =
+    useState(false);
   const [artistDiscovery, setArtistDiscovery] =
     useState<WishListArtistAlbumDiscoveryResponse | null>(null);
   const [artistSoulseekSearches, setArtistSoulseekSearches] = useState<
@@ -1157,6 +1281,26 @@ export function WishListWorkspace() {
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | undefined;
+    void getUsenetTransfers()
+      .then((snapshot) => {
+        if (!disposed) setUsenetTransfers(snapshot);
+      })
+      .catch(() => undefined);
+    void listenToUsenetTransfers((snapshot) => {
+      if (!disposed) setUsenetTransfers(snapshot);
+    }).then((nextUnlisten) => {
+      if (disposed) nextUnlisten();
+      else unlisten = nextUnlisten;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
     void getSoulseekTransfers()
       .then((snapshot) => {
         if (!disposed) setSoulseekTransfers(snapshot);
@@ -1194,6 +1338,13 @@ export function WishListWorkspace() {
     () => clearableSoulseekTransferCount(soulseekTransfers),
     [soulseekTransfers],
   );
+  const usenetTransferByGuid = useMemo(() => {
+    const transfersByGuid = new Map<string, UsenetTransfer>();
+    for (const transfer of usenetTransfers?.transfers ?? []) {
+      transfersByGuid.set(transfer.guid, transfer);
+    }
+    return transfersByGuid;
+  }, [usenetTransfers]);
   const artistSoulseekCandidates = useMemo(() => {
     const candidates = new Map<string, SoulseekReleaseCandidate[]>();
     for (const [releaseGroupId, search] of Object.entries(
@@ -1473,6 +1624,11 @@ export function WishListWorkspace() {
         setSoulseekSearchedItem(null);
         setSoulseekResults(null);
       }
+      if (usenetSearchedItem?.id === item.id) {
+        setUsenetSearchedItem(null);
+        setUsenetResults(null);
+        setUsenetNotice(null);
+      }
       if (artistDiscovery?.wishListItemId === item.id) {
         artistSoulseekGeneration.current += 1;
         setArtistDiscovery(null);
@@ -1528,6 +1684,69 @@ export function WishListWorkspace() {
       );
     } finally {
       setSoulseekSearchingId(null);
+    }
+  }
+
+  async function searchItemWithUsenet(item: WishListItem) {
+    if (item.entity !== "album") return;
+    setUsenetSearchingId(item.id);
+    setUsenetSearchedItem(item);
+    setUsenetResults(null);
+    setUsenetNotice(null);
+    setError(null);
+    try {
+      const response = await searchUsenet({
+        title: item.title,
+        artist: item.artist,
+        year: item.year,
+        limit: 30,
+      });
+      setUsenetResults(response);
+    } catch (searchError) {
+      setError(
+        searchError instanceof Error ? searchError.message : String(searchError),
+      );
+    } finally {
+      setUsenetSearchingId(null);
+    }
+  }
+
+  async function downloadUsenetResult(result: UsenetSearchResult) {
+    if (!usenetSearchedItem) return;
+    setError(null);
+    setUsenetNotice(null);
+    try {
+      const snapshot = await enqueueUsenetDownload({
+        guid: result.guid,
+        title: result.title,
+        indexer: result.indexer,
+        downloadUrl: result.downloadUrl,
+        sizeBytes: result.sizeBytes,
+        expectedArtist: usenetSearchedItem.artist,
+        expectedAlbum: usenetSearchedItem.title,
+        expectedYear: usenetSearchedItem.year,
+        releaseGroupId: usenetSearchedItem.musicbrainzId,
+      });
+      setUsenetTransfers(snapshot);
+      setUsenetNotice(`${result.title} queued from ${result.indexer}.`);
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : String(downloadError),
+      );
+    }
+  }
+
+  async function clearCompletedUsenetDownloads() {
+    setIsClearingUsenetTransfers(true);
+    setError(null);
+    try {
+      setUsenetTransfers(await clearCompletedUsenetTransfers());
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : String(clearError));
+    } finally {
+      setIsClearingUsenetTransfers(false);
     }
   }
 
@@ -2099,9 +2318,11 @@ export function WishListWorkspace() {
           onRemove={(item) => void removeItem(item)}
           onSearchAlbum={(item) => void searchItemWithDeemix(item)}
           onSearchSoulseek={(item) => void searchItemWithSoulseek(item)}
+          onSearchUsenet={(item) => void searchItemWithUsenet(item)}
           onDiscoverArtist={(item) => void discoverArtist(item)}
           searchingId={searchingId}
           soulseekSearchingId={soulseekSearchingId}
+          usenetSearchingId={usenetSearchingId}
           checkingArtistIds={checkingArtistIds}
           artistSummaryErrors={artistSummaryErrors}
         />
@@ -2112,9 +2333,11 @@ export function WishListWorkspace() {
           onRemove={(item) => void removeItem(item)}
           onSearchAlbum={(item) => void searchItemWithDeemix(item)}
           onSearchSoulseek={(item) => void searchItemWithSoulseek(item)}
+          onSearchUsenet={(item) => void searchItemWithUsenet(item)}
           onDiscoverArtist={(item) => void discoverArtist(item)}
           searchingId={searchingId}
           soulseekSearchingId={soulseekSearchingId}
+          usenetSearchingId={usenetSearchingId}
           checkingArtistIds={checkingArtistIds}
           artistSummaryErrors={artistSummaryErrors}
         />
@@ -2287,6 +2510,63 @@ export function WishListWorkspace() {
               <RadioTower size={19} aria-hidden="true" />
               <strong>No public audio folders answered</strong>
               <span>Try again later, or broaden the artist or album spelling.</span>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {usenetSearchedItem ? (
+        <section className="deemix-search-results usenet-search-results" aria-live="polite">
+          <header>
+            <div>
+              <span className="deemix-search-icon usenet">
+                <CloudDownload size={18} aria-hidden="true" />
+              </span>
+              <div>
+                <h2>Usenet releases</h2>
+                <p>
+                  {usenetSearchedItem.artist} · {usenetSearchedItem.title}
+                  {usenetSearchedItem.year ? ` · ${usenetSearchedItem.year}` : ""}
+                  {usenetResults ? ` · ${usenetResults.results.length} NZBs` : ""}
+                </p>
+              </div>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              title="Close Usenet results"
+              aria-label="Close Usenet results"
+              onClick={() => {
+                setUsenetSearchedItem(null);
+                setUsenetResults(null);
+                setUsenetNotice(null);
+              }}
+            >
+              <X size={16} />
+            </button>
+          </header>
+
+          {usenetNotice ? (
+            <p className="artist-albums-queue-notice" role="status">
+              {usenetNotice}
+            </p>
+          ) : null}
+          {usenetSearchingId === usenetSearchedItem.id ? (
+            <div className="deemix-search-state">
+              <CloudDownload size={19} className="spin" aria-hidden="true" />
+              <span>Searching Prowlarr’s Usenet indexers in the Audio category…</span>
+            </div>
+          ) : usenetResults?.results.length ? (
+            <UsenetSourceList
+              results={usenetResults.results}
+              transferByGuid={usenetTransferByGuid}
+              onDownload={(result) => void downloadUsenetResult(result)}
+            />
+          ) : usenetResults ? (
+            <div className="deemix-search-state empty">
+              <CloudDownload size={19} aria-hidden="true" />
+              <strong>No Usenet releases found</strong>
+              <span>Check the Prowlarr indexer or try a shorter album title.</span>
             </div>
           ) : null}
         </section>
@@ -2610,6 +2890,67 @@ export function WishListWorkspace() {
                 </article>
               );
             })}
+          </div>
+        </section>
+      ) : null}
+
+      {usenetTransfers?.transfers.length ? (
+        <section className="deemix-download-queue usenet-transfer-queue" aria-label="Usenet download queue">
+          <header>
+            <div>
+              <CloudDownload size={18} aria-hidden="true" />
+              <div>
+                <h2>Usenet transfers</h2>
+                <p>
+                  {usenetTransfers.activeCount} active · {usenetTransfers.transfers.length} releases
+                </p>
+              </div>
+            </div>
+            {usenetTransfers.transfers.some((transfer) =>
+              transfer.status === "completed" || transfer.status === "failed",
+            ) ? (
+              <button
+                className="secondary-button soulseek-clear-completed"
+                type="button"
+                disabled={isClearingUsenetTransfers}
+                onClick={() => void clearCompletedUsenetDownloads()}
+              >
+                {isClearingUsenetTransfers ? (
+                  <RefreshCw size={14} className="spin" aria-hidden="true" />
+                ) : (
+                  <Trash2 size={14} aria-hidden="true" />
+                )}
+                {isClearingUsenetTransfers ? "Clearing…" : "Clear finished"}
+              </button>
+            ) : null}
+          </header>
+          <div className="deemix-download-queue-list">
+            {usenetTransfers.transfers.slice(-20).reverse().map((transfer) => (
+              <article key={transfer.id} className={transfer.status}>
+                {transfer.status === "downloading" ||
+                transfer.status === "fetchingNzb" ||
+                transfer.status === "extracting" ? (
+                  <RefreshCw size={16} className="spin" aria-hidden="true" />
+                ) : transfer.status === "completed" ? (
+                  <CheckCircle2 size={16} aria-hidden="true" />
+                ) : transfer.status === "failed" ? (
+                  <AlertTriangle size={16} aria-hidden="true" />
+                ) : (
+                  <Clock3 size={16} aria-hidden="true" />
+                )}
+                <div>
+                  <strong>{transfer.title}</strong>
+                  <span>
+                    {usenetTransferLabel(transfer)} · {transfer.indexer}
+                    {transfer.status === "downloading"
+                      ? ` · ${formatSoulseekBytes(transfer.downloadedBytes)} of ${formatSoulseekBytes(transfer.totalBytes)}`
+                      : ""}
+                    {transfer.error ? ` · ${transfer.error}` : ""}
+                    {transfer.destinationPath ? ` · ${transfer.destinationPath}` : ""}
+                  </span>
+                </div>
+              </article>
+            ))}
           </div>
         </section>
       ) : null}

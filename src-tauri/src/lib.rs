@@ -15,6 +15,7 @@ mod music_map;
 mod musicbrainz;
 mod musicbrainz_sync;
 mod soulseek;
+mod usenet;
 mod wishlist;
 
 #[cfg(not(test))]
@@ -1456,6 +1457,7 @@ pub fn run() {
         )
         .setup(|app| {
             app.manage(soulseek::initialize(app.handle())?);
+            app.manage(usenet::initialize(app.handle())?);
             library_completion::resume_verification_worker(app.handle().clone());
             artist_completion::resume_verification_worker(app.handle().clone());
             Ok(())
@@ -1508,6 +1510,14 @@ pub fn run() {
             soulseek::uploads_snapshot,
             soulseek::upload_cancel,
             soulseek::upload_clear_finished,
+            usenet::usenet_bootstrap,
+            usenet::usenet_save_profile,
+            usenet::usenet_reset,
+            usenet::usenet_test_connections,
+            usenet::usenet_search,
+            usenet::usenet_transfers_snapshot,
+            usenet::usenet_enqueue_download,
+            usenet::usenet_clear_completed,
             compile_natural_language_query,
             ask_current_view,
             research_music,

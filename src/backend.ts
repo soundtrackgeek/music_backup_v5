@@ -155,6 +155,13 @@ import type {
   SoulseekTransfer,
   SoulseekTransferQueue,
   SoulseekUploadQueue,
+  SaveUsenetProfileRequest,
+  UsenetBootstrap,
+  UsenetConnectionTest,
+  UsenetDownloadRequest,
+  UsenetSearchRequest,
+  UsenetSearchResponse,
+  UsenetTransferQueue,
   DiscogsConnectionTest,
   DiscogsCredentialStatus,
   SaveDiscogsCredentialsRequest,
@@ -1879,6 +1886,130 @@ export async function getSoulseekUploads() {
     } satisfies SoulseekUploadQueue;
   }
   return invoke<SoulseekUploadQueue>("uploads_snapshot");
+}
+
+const mockUsenetProfile = {
+  prowlarrUrl: "http://127.0.0.1:9696",
+  newsHost: "news.newsgroup.ninja",
+  newsPort: 563,
+  useTls: true,
+  username: "",
+  downloadDirectory: "C:\\Users\\Music\\Downloads\\Usenet",
+  connections: 8,
+};
+
+let mockUsenetQueue: UsenetTransferQueue = { transfers: [], activeCount: 0 };
+const mockUsenetTransferHandlers = new Set<
+  (queue: UsenetTransferQueue) => void
+>();
+
+export async function getUsenetBootstrap() {
+  if (!isTauriRuntime()) {
+    return {
+      profile: mockUsenetProfile,
+      hasProwlarrApiKey: false,
+      hasNewsPassword: false,
+      extractorPath: null,
+    } satisfies UsenetBootstrap;
+  }
+  return invoke<UsenetBootstrap>("usenet_bootstrap");
+}
+
+export async function saveUsenetProfile(input: SaveUsenetProfileRequest) {
+  if (!isTauriRuntime()) {
+    Object.assign(mockUsenetProfile, input.profile);
+    return {
+      profile: mockUsenetProfile,
+      hasProwlarrApiKey: Boolean(input.prowlarrApiKey),
+      hasNewsPassword: Boolean(input.newsPassword),
+      extractorPath: null,
+    } satisfies UsenetBootstrap;
+  }
+  return invoke<UsenetBootstrap>("usenet_save_profile", { request: input });
+}
+
+export async function resetUsenet() {
+  if (!isTauriRuntime()) {
+    return {
+      profile: mockUsenetProfile,
+      hasProwlarrApiKey: false,
+      hasNewsPassword: false,
+      extractorPath: null,
+    } satisfies UsenetBootstrap;
+  }
+  return invoke<UsenetBootstrap>("usenet_reset");
+}
+
+export async function testUsenetConnections() {
+  if (!isTauriRuntime()) {
+    return {
+      prowlarrVersion: "preview",
+      newsServer: `${mockUsenetProfile.newsHost}:${mockUsenetProfile.newsPort}`,
+      extractorPath: null,
+      message: "Desktop runtime required for a live connection test.",
+    } satisfies UsenetConnectionTest;
+  }
+  return invoke<UsenetConnectionTest>("usenet_test_connections");
+}
+
+export async function selectUsenetDownloadDirectory(defaultPath?: string) {
+  return selectDirectory(defaultPath, "Choose Usenet download folder");
+}
+
+export async function searchUsenet(input: UsenetSearchRequest) {
+  if (!isTauriRuntime()) {
+    return {
+      query: `${input.artist} ${input.title}`.trim(),
+      results: [],
+      searchedAt: new Date().toISOString(),
+    } satisfies UsenetSearchResponse;
+  }
+  return invoke<UsenetSearchResponse>("usenet_search", { request: input });
+}
+
+export async function getUsenetTransfers() {
+  if (!isTauriRuntime()) return mockUsenetQueue;
+  return invoke<UsenetTransferQueue>("usenet_transfers_snapshot");
+}
+
+export async function enqueueUsenetDownload(input: UsenetDownloadRequest) {
+  if (!isTauriRuntime()) {
+    const now = new Date().toISOString();
+    mockUsenetQueue = {
+      activeCount: 0,
+      transfers: [
+        ...mockUsenetQueue.transfers,
+        {
+          id: `preview-usenet-${Date.now()}`,
+          guid: input.guid,
+          title: input.title,
+          indexer: input.indexer,
+          status: "completed",
+          progressPercent: 100,
+          downloadedBytes: input.sizeBytes,
+          totalBytes: input.sizeBytes,
+          message: "Preview download completed",
+          destinationPath: `${mockUsenetProfile.downloadDirectory}\\${input.expectedArtist} - ${input.expectedAlbum}`,
+          error: null,
+          releaseGroupId: input.releaseGroupId,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    };
+    mockUsenetTransferHandlers.forEach((handler) => handler(mockUsenetQueue));
+    return mockUsenetQueue;
+  }
+  return invoke<UsenetTransferQueue>("usenet_enqueue_download", { request: input });
+}
+
+export async function clearCompletedUsenetTransfers() {
+  if (!isTauriRuntime()) {
+    mockUsenetQueue = { transfers: [], activeCount: 0 };
+    mockUsenetTransferHandlers.forEach((handler) => handler(mockUsenetQueue));
+    return mockUsenetQueue;
+  }
+  return invoke<UsenetTransferQueue>("usenet_clear_completed");
 }
 
 export async function compileNaturalLanguageQuery(input: AiCompileRequest) {
@@ -5461,6 +5592,18 @@ export async function listenToSoulseekUploads(
 ) {
   if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
   return listen<SoulseekUploadQueue>("music-library://soulseek-uploads", (event) => {
+    handler(event.payload);
+  });
+}
+
+export async function listenToUsenetTransfers(
+  handler: (queue: UsenetTransferQueue) => void,
+): Promise<UnlistenFn> {
+  if (!isTauriRuntime()) {
+    mockUsenetTransferHandlers.add(handler);
+    return () => mockUsenetTransferHandlers.delete(handler);
+  }
+  return listen<UsenetTransferQueue>("music-library://usenet-transfers", (event) => {
     handler(event.payload);
   });
 }

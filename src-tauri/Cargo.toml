@@ -1,6 +1,6 @@
 [package]
 name = "music-library"
-version = "0.104.2"
+version = "0.105.0"
 description = "Local-first MusicBee TSV library app"
 authors = ["jtill"]
 edition = "2021"
@@ -28,6 +28,9 @@ id3 = "1"
 keyring = { version = "4.1.5", default-features = false, features = ["v1", "windows-native-keyring-store"] }
 md-5 = "0.10"
 md5-legacy = { package = "md5", version = "0.8" }
+native-tls = "0.2"
+quick-xml = { version = "0.38", features = ["serialize"] }
+crc32fast = "1.4"
 metaflac = "0.2.8"
 rusqlite = { version = "0.32", features = ["bundled"] }
 rust_xlsxwriter = "0.95.0"

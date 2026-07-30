@@ -350,6 +350,7 @@ import {
 import { AiSettingsPanel } from "./components/AiSettingsPanel";
 import { DeemixSettingsPanel } from "./components/DeemixSettingsPanel";
 import { SoulseekSettingsPanel } from "./components/SoulseekSettingsPanel";
+import { UsenetSettingsPanel } from "./components/UsenetSettingsPanel";
 import { DiscogsSettingsPanel } from "./components/DiscogsSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
 import { ExportResultStatus } from "./components/ExportResultStatus";
@@ -16826,6 +16827,7 @@ export default function App() {
                   }
                 />
                 <SoulseekSettingsPanel />
+                <UsenetSettingsPanel />
               </SettingsSection>
 
               <SettingsSection id="updates">

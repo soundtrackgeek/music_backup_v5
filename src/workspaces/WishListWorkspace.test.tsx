@@ -1,44 +1,56 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { SoulseekTransferQueue } from "../types";
+import type { SoulseekTransferQueue, UsenetTransferQueue } from "../types";
 import { WishListWorkspace } from "./WishListWorkspace";
 
 const discoverWishListArtistAlbums = vi.fn();
 const addWishListMusicBrainzCandidate = vi.fn();
 const clearCompletedSoulseekTransfers = vi.fn();
+const clearCompletedUsenetTransfers = vi.fn();
 const downloadDeemixAlbum = vi.fn();
 const enqueueSoulseekRelease = vi.fn();
+const enqueueUsenetDownload = vi.fn();
 const getSoulseekTransfers = vi.fn();
+const getUsenetTransfers = vi.fn();
 const listWishList = vi.fn();
 const listenToDeemixDownloadProgress = vi.fn();
 const listenToSoulseekTransfers = vi.fn();
+const listenToUsenetTransfers = vi.fn();
 const openExternalUrl = vi.fn();
 const preflightDeemixAlbumDownload = vi.fn();
 const refreshWishListArtistAlbumSummary = vi.fn();
 const removeWishListItem = vi.fn();
 const searchDeemixAlbums = vi.fn();
 const searchSoulseekAlbum = vi.fn();
+const searchUsenet = vi.fn();
 const searchWishListMusicBrainz = vi.fn();
 let soulseekTransferListener:
   | ((snapshot: SoulseekTransferQueue) => void)
   | null = null;
+let usenetTransferListener: ((snapshot: UsenetTransferQueue) => void) | null = null;
 
 vi.mock("../backend", () => ({
   addWishListMusicBrainzCandidate: (...args: unknown[]) =>
     addWishListMusicBrainzCandidate(...args),
   clearCompletedSoulseekTransfers: (...args: unknown[]) =>
     clearCompletedSoulseekTransfers(...args),
+  clearCompletedUsenetTransfers: (...args: unknown[]) =>
+    clearCompletedUsenetTransfers(...args),
   discoverWishListArtistAlbums: (...args: unknown[]) =>
     discoverWishListArtistAlbums(...args),
   downloadDeemixAlbum: (...args: unknown[]) => downloadDeemixAlbum(...args),
   enqueueSoulseekRelease: (...args: unknown[]) => enqueueSoulseekRelease(...args),
+  enqueueUsenetDownload: (...args: unknown[]) => enqueueUsenetDownload(...args),
   getSoulseekTransfers: (...args: unknown[]) => getSoulseekTransfers(...args),
+  getUsenetTransfers: (...args: unknown[]) => getUsenetTransfers(...args),
   listWishList: (...args: unknown[]) => listWishList(...args),
   listenToDeemixDownloadProgress: (...args: unknown[]) =>
     listenToDeemixDownloadProgress(...args),
   listenToSoulseekTransfers: (...args: unknown[]) =>
     listenToSoulseekTransfers(...args),
+  listenToUsenetTransfers: (...args: unknown[]) =>
+    listenToUsenetTransfers(...args),
   openExternalUrl: (...args: unknown[]) => openExternalUrl(...args),
   preflightDeemixAlbumDownload: (...args: unknown[]) =>
     preflightDeemixAlbumDownload(...args),
@@ -47,6 +59,7 @@ vi.mock("../backend", () => ({
   removeWishListItem: (...args: unknown[]) => removeWishListItem(...args),
   searchDeemixAlbums: (...args: unknown[]) => searchDeemixAlbums(...args),
   searchSoulseekAlbum: (...args: unknown[]) => searchSoulseekAlbum(...args),
+  searchUsenet: (...args: unknown[]) => searchUsenet(...args),
   searchWishListMusicBrainz: (...args: unknown[]) =>
     searchWishListMusicBrainz(...args),
 }));
@@ -111,12 +124,19 @@ describe("WishListWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     soulseekTransferListener = null;
+    usenetTransferListener = null;
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
     listenToDeemixDownloadProgress.mockResolvedValue(() => undefined);
     listenToSoulseekTransfers.mockImplementation(
       async (handler: (snapshot: SoulseekTransferQueue) => void) => {
         soulseekTransferListener = handler;
+        return () => undefined;
+      },
+    );
+    listenToUsenetTransfers.mockImplementation(
+      async (handler: (snapshot: UsenetTransferQueue) => void) => {
+        usenetTransferListener = handler;
         return () => undefined;
       },
     );
@@ -135,6 +155,11 @@ describe("WishListWorkspace", () => {
       relaySuggestionMinutes: 10,
       soundcheckEnabled: true,
       safetyState: "running",
+    });
+    getUsenetTransfers.mockResolvedValue({ transfers: [], activeCount: 0 });
+    clearCompletedUsenetTransfers.mockResolvedValue({
+      transfers: [],
+      activeCount: 0,
     });
     listWishList.mockResolvedValue({
       autoRemovedCount: 1,
@@ -232,6 +257,46 @@ describe("WishListWorkspace", () => {
       async (input: { title: string; year: number | null }) =>
         soulseekResponse(input.title, input.year ?? 0),
     );
+    searchUsenet.mockResolvedValue({
+      query: "Pet Shop Boys Release",
+      searchedAt: "2026-07-30T12:00:00Z",
+      results: [
+        {
+          guid: "nzb-release-1",
+          title: "Pet.Shop.Boys-Release-2002-FLAC",
+          indexer: "NZBFinder",
+          sizeBytes: 500_000_000,
+          ageDays: 454,
+          grabs: 12,
+          publishDate: "2025-05-02T00:00:00Z",
+          downloadUrl: "http://127.0.0.1:9696/api/v1/search/nzb-release-1",
+          infoUrl: null,
+          categories: ["Audio/Lossless"],
+          matchScore: 100,
+        },
+      ],
+    });
+    enqueueUsenetDownload.mockImplementation(async (request) => ({
+      activeCount: 1,
+      transfers: [
+        {
+          id: "usenet-transfer-1",
+          guid: request.guid,
+          title: request.title,
+          indexer: request.indexer,
+          status: "queued",
+          progressPercent: 0,
+          downloadedBytes: 0,
+          totalBytes: request.sizeBytes,
+          message: "Queued for Usenet download",
+          destinationPath: null,
+          error: null,
+          releaseGroupId: request.releaseGroupId,
+          createdAt: "2026-07-30T12:00:00Z",
+          updatedAt: "2026-07-30T12:00:00Z",
+        },
+      ],
+    }));
     enqueueSoulseekRelease.mockImplementation(
       async (request: { files: Array<{ title: string; remoteFilename: string; sizeBytes: number }> }) => ({
         transfers: request.files.map((file, index) => ({
@@ -769,6 +834,47 @@ describe("WishListWorkspace", () => {
         name: "Release download progress",
       }),
     ).toHaveAttribute("value", "75");
+  });
+
+  it("searches Prowlarr and queues a native Usenet download", async () => {
+    render(<WishListWorkspace />);
+    await screen.findByText("Release");
+
+    fireEvent.click(screen.getByLabelText("Search Release with Usenet"));
+
+    expect(
+      await screen.findByRole("heading", { name: "Usenet releases" }),
+    ).toBeInTheDocument();
+    expect(searchUsenet).toHaveBeenCalledWith({
+      title: "Release",
+      artist: "Pet Shop Boys",
+      year: 2002,
+      limit: 30,
+    });
+    expect(screen.getByText("Pet.Shop.Boys-Release-2002-FLAC")).toBeInTheDocument();
+    expect(screen.getByText(/NZBFinder · 476.8 MB · 12 grabs/)).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Download Pet.Shop.Boys-Release-2002-FLAC from Usenet",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(enqueueUsenetDownload).toHaveBeenCalledWith({
+        guid: "nzb-release-1",
+        title: "Pet.Shop.Boys-Release-2002-FLAC",
+        indexer: "NZBFinder",
+        downloadUrl: "http://127.0.0.1:9696/api/v1/search/nzb-release-1",
+        sizeBytes: 500_000_000,
+        expectedArtist: "Pet Shop Boys",
+        expectedAlbum: "Release",
+        expectedYear: 2002,
+        releaseGroupId: albumMbid,
+      }),
+    );
+    expect(await screen.findByText(/queued from NZBFinder/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Usenet transfers" })).toBeInTheDocument();
   });
 
   it("shows searched albums before transfer history and clears completed Soulseek releases", async () => {
