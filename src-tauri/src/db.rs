@@ -508,7 +508,21 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_four_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_five_schema_exists(conn)? {
+        return Ok(());
+    }
+
+    if user_version == 44 && migrations::phase_forty_four_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 45 migration transaction")?;
+        ensure_library_updates_schema(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 45;")
+            .context("Could not mark the schema 45 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 45 migration")?;
         return Ok(());
     }
 
@@ -1275,6 +1289,37 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_rating_events_created_at
             ON rating_events(created_at);
 
+        CREATE TABLE IF NOT EXISTS library_updates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_run_id INTEGER REFERENCES import_runs(id) ON DELETE SET NULL,
+            created_at TEXT NOT NULL,
+            change_kind TEXT NOT NULL
+                CHECK (change_kind IN ('new', 'changed', 'removed')),
+            category TEXT NOT NULL,
+            album_id TEXT NOT NULL,
+            album_artist_display TEXT,
+            album TEXT,
+            year INTEGER,
+            field TEXT,
+            field_label TEXT,
+            previous_value TEXT,
+            current_value TEXT,
+            change_count INTEGER,
+            description TEXT NOT NULL,
+            source_kind TEXT NOT NULL,
+            source_label TEXT NOT NULL,
+            source_path TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_updates_created_at
+            ON library_updates(created_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_library_updates_kind_created_at
+            ON library_updates(change_kind, created_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_library_updates_album
+            ON library_updates(album_id, created_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_library_updates_import_run
+            ON library_updates(import_run_id, id);
+
         CREATE TABLE IF NOT EXISTS app_settings (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             backup_retention INTEGER NOT NULL DEFAULT 3,
@@ -1693,7 +1738,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 44;
+        PRAGMA user_version = 45;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -2095,6 +2140,45 @@ fn ensure_library_completion_artist_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create the Library Completion artist discovery schema")?;
+    Ok(())
+}
+
+fn ensure_library_updates_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS library_updates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_run_id INTEGER REFERENCES import_runs(id) ON DELETE SET NULL,
+            created_at TEXT NOT NULL,
+            change_kind TEXT NOT NULL
+                CHECK (change_kind IN ('new', 'changed', 'removed')),
+            category TEXT NOT NULL,
+            album_id TEXT NOT NULL,
+            album_artist_display TEXT,
+            album TEXT,
+            year INTEGER,
+            field TEXT,
+            field_label TEXT,
+            previous_value TEXT,
+            current_value TEXT,
+            change_count INTEGER,
+            description TEXT NOT NULL,
+            source_kind TEXT NOT NULL,
+            source_label TEXT NOT NULL,
+            source_path TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_updates_created_at
+            ON library_updates(created_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_library_updates_kind_created_at
+            ON library_updates(change_kind, created_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_library_updates_album
+            ON library_updates(album_id, created_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_library_updates_import_run
+            ON library_updates(import_run_id, id);
+        ",
+    )
+    .context("Could not create the durable library update history schema")?;
     Ok(())
 }
 
@@ -19429,6 +19513,8 @@ mod tests {
         assert!(migrations::phase_forty_schema_exists(&conn).expect("phase forty schema exists"));
         assert!(migrations::phase_forty_one_schema_exists(&conn)
             .expect("phase forty-one schema exists"));
+        assert!(migrations::phase_forty_five_schema_exists(&conn)
+            .expect("phase forty-five schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -19459,6 +19545,31 @@ mod tests {
         assert!(schema_table_exists(&conn, "wish_list_items").expect("wish list table exists"));
         assert!(schema_table_exists(&conn, "musicbrainz_map_locations")
             .expect("MusicBrainz map location cache exists"));
+        assert!(schema_table_exists(&conn, "library_updates")
+            .expect("durable library update history exists"));
+    }
+
+    #[test]
+    fn schema_forty_five_adds_durable_library_update_history() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            DROP TABLE library_updates;
+            PRAGMA user_version = 44;
+            ",
+        )
+        .expect("simulate schema forty-four database");
+
+        migrate(&conn).expect("migrate library update history schema");
+
+        assert!(migrations::phase_forty_five_schema_exists(&conn)
+            .expect("phase forty-five schema exists"));
+        let user_version = conn
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+            .expect("read migrated user version");
+        assert_eq!(user_version, LATEST_SCHEMA_VERSION);
     }
 
     #[test]

@@ -77,5 +77,10 @@ describe("workspace navigation", () => {
     expect(screen.getByLabelText("Active workspace")).toHaveTextContent(
       "Completion",
     );
+
+    fireEvent.keyDown(window, { key: "u" });
+    expect(screen.getByLabelText("Active workspace")).toHaveTextContent(
+      "Updates",
+    );
   });
 });

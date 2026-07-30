@@ -180,7 +180,10 @@ struct PreviousAlbum {
     album_id: String,
     album: Option<String>,
     album_artist_display: Option<String>,
+    canonical_genre: Option<String>,
+    publisher: Option<String>,
     year: Option<i32>,
+    release_year: Option<i32>,
     total_tracks: u32,
     rated_tracks: u32,
     rating_completeness: f64,
@@ -188,6 +191,7 @@ struct PreviousAlbum {
     loved_tracks: u32,
     tmoe_seconds: i64,
     ae_ratio: f64,
+    album_rating: Option<i32>,
     effective_album_rating: Option<i32>,
     album_score: Option<f64>,
 }
@@ -217,6 +221,22 @@ struct RatingEventRecord {
     current_rating_completeness: Option<f64>,
     previous_effective_album_rating: Option<i32>,
     current_effective_album_rating: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+struct LibraryUpdateRecord {
+    change_kind: &'static str,
+    category: &'static str,
+    album_id: String,
+    album_artist_display: Option<String>,
+    album: Option<String>,
+    year: Option<i32>,
+    field: Option<&'static str>,
+    field_label: Option<&'static str>,
+    previous_value: Option<String>,
+    current_value: Option<String>,
+    change_count: Option<i64>,
+    description: String,
 }
 
 #[derive(Debug, Clone)]
@@ -1194,6 +1214,7 @@ fn calculate_staged_changes(
     ensure_preparation_not_cancelled(cancel_requested)?;
 
     let mut previous_albums = load_previous_albums(conn)?;
+    let previous_album_match_index = build_previous_album_match_index(&previous_albums);
     let mut changes = ImportChanges {
         added_tracks,
         changed_tracks,
@@ -1202,7 +1223,8 @@ fn calculate_staged_changes(
     };
     for album in final_albums {
         ensure_preparation_not_cancelled(cancel_requested)?;
-        match previous_albums.remove(&album.album_id) {
+        match take_matching_previous_album(&mut previous_albums, &previous_album_match_index, album)
+        {
             Some(previous) if album_changed(&previous, album) => changes.changed_albums += 1,
             Some(_) => {}
             None => changes.added_albums += 1,
@@ -1218,11 +1240,14 @@ fn find_suspicious_albums(
     cancel_requested: &AtomicBool,
 ) -> Result<Vec<ImportSuspiciousAlbum>> {
     let mut previous_albums = load_previous_albums(conn)?;
+    let previous_album_match_index = build_previous_album_match_index(&previous_albums);
     let mut suspicious = Vec::new();
 
     for album in final_albums {
         ensure_preparation_not_cancelled(cancel_requested)?;
-        if let Some(previous) = previous_albums.remove(&album.album_id) {
+        if let Some(previous) =
+            take_matching_previous_album(&mut previous_albums, &previous_album_match_index, album)
+        {
             let missing_tracks = previous.total_tracks.saturating_sub(album.total_tracks);
             let material_drop = missing_tracks >= 3
                 || (previous.total_tracks >= 4
@@ -1420,15 +1445,20 @@ fn apply_staged_import(
 ) -> Result<(u64, u64, i64)> {
     let final_albums = load_stage_final_albums(conn, session.id)?;
     let mut previous_albums = load_previous_albums(conn)?;
+    let previous_album_match_index = build_previous_album_match_index(&previous_albums);
     let mut rating_events = Vec::new();
+    let mut library_updates = Vec::new();
     for album in &final_albums {
-        match previous_albums.remove(&album.album_id) {
+        match take_matching_previous_album(&mut previous_albums, &previous_album_match_index, album)
+        {
             Some(previous) => {
+                library_updates.extend(library_updates_for_changed_album(&previous, album));
                 if let Some(event) = rating_event_for_changed_album(&previous, album) {
                     rating_events.push(event);
                 }
             }
             None => {
+                library_updates.push(library_update_for_added_album(album));
                 if let Some(event) = rating_event_for_added_album(album) {
                     rating_events.push(event);
                 }
@@ -1436,6 +1466,7 @@ fn apply_staged_import(
         }
     }
     for previous in previous_albums.values() {
+        library_updates.push(library_update_for_removed_album(previous));
         if let Some(event) = rating_event_for_removed_album(previous) {
             rating_events.push(event);
         }
@@ -1541,6 +1572,7 @@ fn apply_staged_import(
     .context("Could not copy staged albums")?;
 
     insert_rating_events(&tx, import_run_id, &rating_events)?;
+    insert_library_updates(&tx, import_run_id, &session.source_path, &library_updates)?;
     insert_rating_snapshot(&tx, import_run_id, &final_albums)?;
     db::rebuild_search_indexes(&tx)?;
     let completed_at = Utc::now().to_rfc3339();
@@ -1752,6 +1784,7 @@ fn run_import(
 ) -> Result<(u64, u64, ImportChanges)> {
     let mut previous_tracks = load_previous_track_hashes(conn)?;
     let mut previous_albums = load_previous_albums(conn)?;
+    let previous_album_match_index = build_previous_album_match_index(&previous_albums);
     let mut changes = ImportChanges::default();
 
     let mut reader = musicbee_tsv_reader_builder()
@@ -1899,6 +1932,7 @@ fn run_import(
         .map(AlbumAggregate::finalize)
         .collect::<Vec<_>>();
     let mut rating_events = Vec::new();
+    let mut library_updates = Vec::new();
 
     {
         let mut update_inferred_track_album_artist = tx.prepare(
@@ -1936,11 +1970,19 @@ fn run_import(
         )?;
 
         for final_album in &final_albums {
-            match previous_albums.remove(&final_album.album_id) {
+            match take_matching_previous_album(
+                &mut previous_albums,
+                &previous_album_match_index,
+                final_album,
+            ) {
                 Some(previous_album) => {
                     if album_changed(&previous_album, final_album) {
                         changes.changed_albums += 1;
                     }
+                    library_updates.extend(library_updates_for_changed_album(
+                        &previous_album,
+                        final_album,
+                    ));
                     if let Some(event) =
                         rating_event_for_changed_album(&previous_album, final_album)
                     {
@@ -1949,6 +1991,7 @@ fn run_import(
                 }
                 None => {
                     changes.added_albums += 1;
+                    library_updates.push(library_update_for_added_album(final_album));
                     if let Some(event) = rating_event_for_added_album(final_album) {
                         rating_events.push(event);
                     }
@@ -1982,6 +2025,7 @@ fn run_import(
     }
 
     for previous_album in previous_albums.values() {
+        library_updates.push(library_update_for_removed_album(previous_album));
         if let Some(event) = rating_event_for_removed_album(previous_album) {
             rating_events.push(event);
         }
@@ -1989,6 +2033,12 @@ fn run_import(
     changes.removed_albums = previous_albums.len() as i64;
     changes.rating_events_count = rating_events.len() as i64;
     insert_rating_events(&tx, import_run_id, &rating_events)?;
+    insert_library_updates(
+        &tx,
+        import_run_id,
+        &source_path.display().to_string(),
+        &library_updates,
+    )?;
     insert_rating_snapshot(&tx, import_run_id, &final_albums)?;
 
     db::rebuild_search_indexes(&tx)?;
@@ -2023,7 +2073,10 @@ fn load_previous_albums(conn: &Connection) -> Result<HashMap<String, PreviousAlb
             id,
             album,
             album_artist_display,
+            canonical_genre,
+            publisher,
             year,
+            release_year,
             total_tracks,
             rated_tracks,
             rating_completeness,
@@ -2031,6 +2084,7 @@ fn load_previous_albums(conn: &Connection) -> Result<HashMap<String, PreviousAlb
             loved_tracks,
             tmoe_seconds,
             ae_ratio,
+            album_rating,
             effective_album_rating,
             album_score
         FROM albums
@@ -2045,16 +2099,20 @@ fn load_previous_albums(conn: &Connection) -> Result<HashMap<String, PreviousAlb
                     album_id,
                     album: row.get(1)?,
                     album_artist_display: row.get(2)?,
-                    year: row.get(3)?,
-                    total_tracks: row.get::<_, i64>(4)? as u32,
-                    rated_tracks: row.get::<_, i64>(5)? as u32,
-                    rating_completeness: row.get(6)?,
-                    total_seconds: row.get(7)?,
-                    loved_tracks: row.get::<_, i64>(8)? as u32,
-                    tmoe_seconds: row.get(9)?,
-                    ae_ratio: row.get(10)?,
-                    effective_album_rating: row.get(11)?,
-                    album_score: row.get(12)?,
+                    canonical_genre: row.get(3)?,
+                    publisher: row.get(4)?,
+                    year: row.get(5)?,
+                    release_year: row.get(6)?,
+                    total_tracks: row.get::<_, i64>(7)? as u32,
+                    rated_tracks: row.get::<_, i64>(8)? as u32,
+                    rating_completeness: row.get(9)?,
+                    total_seconds: row.get(10)?,
+                    loved_tracks: row.get::<_, i64>(11)? as u32,
+                    tmoe_seconds: row.get(12)?,
+                    ae_ratio: row.get(13)?,
+                    album_rating: row.get(14)?,
+                    effective_album_rating: row.get(15)?,
+                    album_score: row.get(16)?,
                 },
             ))
         })?
@@ -2068,10 +2126,62 @@ fn track_identity(file_path: &str, filename: &str) -> String {
     format!("{file_path}\u{1f}{filename}")
 }
 
+fn album_history_match_key(
+    album_artist_display: &Option<String>,
+    album: &Option<String>,
+    year: Option<i32>,
+) -> Option<String> {
+    let artist = normalize_artist_text(album_artist_display.as_deref().unwrap_or_default());
+    let title = normalize_text(album.as_deref().unwrap_or_default());
+    if artist.is_empty() || title.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "{artist}\u{1f}{title}\u{1f}{}",
+        year.map(|value| value.to_string()).unwrap_or_default()
+    ))
+}
+
+fn build_previous_album_match_index(
+    previous_albums: &HashMap<String, PreviousAlbum>,
+) -> HashMap<String, Option<String>> {
+    let mut index = HashMap::new();
+    for previous in previous_albums.values() {
+        let Some(key) = album_history_match_key(
+            &previous.album_artist_display,
+            &previous.album,
+            previous.year,
+        ) else {
+            continue;
+        };
+        index
+            .entry(key)
+            .and_modify(|album_id| *album_id = None)
+            .or_insert_with(|| Some(previous.album_id.clone()));
+    }
+    index
+}
+
+fn take_matching_previous_album(
+    previous_albums: &mut HashMap<String, PreviousAlbum>,
+    match_index: &HashMap<String, Option<String>>,
+    current: &FinalAlbum,
+) -> Option<PreviousAlbum> {
+    if let Some(previous) = previous_albums.remove(&current.album_id) {
+        return Some(previous);
+    }
+    let key = album_history_match_key(&current.album_artist_display, &current.album, current.year)?;
+    let previous_album_id = match_index.get(&key)?.as_ref()?.clone();
+    previous_albums.remove(&previous_album_id)
+}
+
 fn album_changed(previous: &PreviousAlbum, current: &FinalAlbum) -> bool {
     previous.album != current.album
         || previous.album_artist_display != current.album_artist_display
+        || previous.canonical_genre != current.canonical_genre
+        || previous.publisher != current.publisher
         || previous.year != current.year
+        || previous.release_year != current.release_year
         || previous.total_tracks != current.total_tracks
         || previous.rated_tracks != current.rated_tracks
         || float_changed(previous.rating_completeness, current.rating_completeness)
@@ -2079,8 +2189,253 @@ fn album_changed(previous: &PreviousAlbum, current: &FinalAlbum) -> bool {
         || previous.loved_tracks != current.loved_tracks
         || previous.tmoe_seconds != current.tmoe_seconds
         || float_changed(previous.ae_ratio, current.ae_ratio)
+        || previous.album_rating != current.album_rating
         || previous.effective_album_rating != current.effective_album_rating
         || optional_float_changed(previous.album_score, current.album_score)
+}
+
+fn update_value(value: Option<&str>) -> String {
+    value
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("blank")
+        .to_string()
+}
+
+fn metadata_update(
+    previous: &PreviousAlbum,
+    current: &FinalAlbum,
+    field: &'static str,
+    field_label: &'static str,
+    previous_value: Option<String>,
+    current_value: Option<String>,
+) -> Option<LibraryUpdateRecord> {
+    if previous_value == current_value {
+        return None;
+    }
+    let description = format!(
+        "{field_label} changed from {} to {}",
+        update_value(previous_value.as_deref()),
+        update_value(current_value.as_deref())
+    );
+    Some(LibraryUpdateRecord {
+        change_kind: "changed",
+        category: "metadata",
+        album_id: current.album_id.clone(),
+        album_artist_display: current.album_artist_display.clone(),
+        album: current.album.clone(),
+        year: current.year.or(previous.year),
+        field: Some(field),
+        field_label: Some(field_label),
+        previous_value,
+        current_value,
+        change_count: None,
+        description,
+    })
+}
+
+fn library_updates_for_changed_album(
+    previous: &PreviousAlbum,
+    current: &FinalAlbum,
+) -> Vec<LibraryUpdateRecord> {
+    let mut updates = Vec::new();
+    for update in [
+        metadata_update(
+            previous,
+            current,
+            "album",
+            "Album title",
+            previous.album.clone(),
+            current.album.clone(),
+        ),
+        metadata_update(
+            previous,
+            current,
+            "album_artist_display",
+            "Album artist",
+            previous.album_artist_display.clone(),
+            current.album_artist_display.clone(),
+        ),
+        metadata_update(
+            previous,
+            current,
+            "canonical_genre",
+            "Genre",
+            previous.canonical_genre.clone(),
+            current.canonical_genre.clone(),
+        ),
+        metadata_update(
+            previous,
+            current,
+            "publisher",
+            "Publisher",
+            previous.publisher.clone(),
+            current.publisher.clone(),
+        ),
+        metadata_update(
+            previous,
+            current,
+            "year",
+            "Year",
+            previous.year.map(|value| value.to_string()),
+            current.year.map(|value| value.to_string()),
+        ),
+        metadata_update(
+            previous,
+            current,
+            "release_year",
+            "Release year",
+            previous.release_year.map(|value| value.to_string()),
+            current.release_year.map(|value| value.to_string()),
+        ),
+        metadata_update(
+            previous,
+            current,
+            "album_rating",
+            "Album rating",
+            previous.album_rating.map(|value| value.to_string()),
+            current.album_rating.map(|value| value.to_string()),
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        updates.push(update);
+    }
+
+    if previous.total_tracks != current.total_tracks {
+        let added = current.total_tracks > previous.total_tracks;
+        let change_count = i64::from(previous.total_tracks.abs_diff(current.total_tracks));
+        updates.push(LibraryUpdateRecord {
+            change_kind: "changed",
+            category: "tracks",
+            album_id: current.album_id.clone(),
+            album_artist_display: current.album_artist_display.clone(),
+            album: current.album.clone(),
+            year: current.year.or(previous.year),
+            field: Some("total_tracks"),
+            field_label: Some("Tracks"),
+            previous_value: Some(previous.total_tracks.to_string()),
+            current_value: Some(current.total_tracks.to_string()),
+            change_count: Some(change_count),
+            description: format!(
+                "{} {} {}",
+                change_count,
+                if change_count == 1 { "track" } else { "tracks" },
+                if added { "added" } else { "removed" }
+            ),
+        });
+    }
+
+    if previous.rated_tracks != current.rated_tracks {
+        let added = current.rated_tracks > previous.rated_tracks;
+        let change_count = i64::from(previous.rated_tracks.abs_diff(current.rated_tracks));
+        updates.push(LibraryUpdateRecord {
+            change_kind: "changed",
+            category: "ratings",
+            album_id: current.album_id.clone(),
+            album_artist_display: current.album_artist_display.clone(),
+            album: current.album.clone(),
+            year: current.year.or(previous.year),
+            field: Some("rated_tracks"),
+            field_label: Some("Track ratings"),
+            previous_value: Some(previous.rated_tracks.to_string()),
+            current_value: Some(current.rated_tracks.to_string()),
+            change_count: Some(change_count),
+            description: format!(
+                "{} track {} {}",
+                change_count,
+                if change_count == 1 {
+                    "rating"
+                } else {
+                    "ratings"
+                },
+                if added { "added" } else { "removed" }
+            ),
+        });
+    }
+
+    updates
+}
+
+fn library_update_for_added_album(current: &FinalAlbum) -> LibraryUpdateRecord {
+    LibraryUpdateRecord {
+        change_kind: "new",
+        category: "album",
+        album_id: current.album_id.clone(),
+        album_artist_display: current.album_artist_display.clone(),
+        album: current.album.clone(),
+        year: current.year,
+        field: None,
+        field_label: None,
+        previous_value: None,
+        current_value: None,
+        change_count: None,
+        description: "New album".to_string(),
+    }
+}
+
+fn library_update_for_removed_album(previous: &PreviousAlbum) -> LibraryUpdateRecord {
+    LibraryUpdateRecord {
+        change_kind: "removed",
+        category: "album",
+        album_id: previous.album_id.clone(),
+        album_artist_display: previous.album_artist_display.clone(),
+        album: previous.album.clone(),
+        year: previous.year,
+        field: None,
+        field_label: None,
+        previous_value: None,
+        current_value: None,
+        change_count: None,
+        description: "Removed album".to_string(),
+    }
+}
+
+fn insert_library_updates(
+    tx: &Transaction<'_>,
+    import_run_id: i64,
+    source_path: &str,
+    updates: &[LibraryUpdateRecord],
+) -> Result<()> {
+    if updates.is_empty() {
+        return Ok(());
+    }
+    let created_at = Utc::now().to_rfc3339();
+    let source_label = format!("Library import #{import_run_id}");
+    let mut insert = tx.prepare(
+        "
+        INSERT INTO library_updates (
+            import_run_id, created_at, change_kind, category, album_id,
+            album_artist_display, album, year, field, field_label,
+            previous_value, current_value, change_count, description,
+            source_kind, source_label, source_path
+        ) VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
+            ?14, 'library_import', ?15, ?16
+        )
+        ",
+    )?;
+    for update in updates {
+        insert.execute(params![
+            import_run_id,
+            &created_at,
+            update.change_kind,
+            update.category,
+            &update.album_id,
+            &update.album_artist_display,
+            &update.album,
+            update.year,
+            update.field,
+            update.field_label,
+            &update.previous_value,
+            &update.current_value,
+            update.change_count,
+            &update.description,
+            &source_label,
+            source_path,
+        ])?;
+    }
+    Ok(())
 }
 
 fn rating_event_for_changed_album(
@@ -2917,6 +3272,105 @@ fn emit_progress(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sample_final_album() -> FinalAlbum {
+        FinalAlbum {
+            album_id: "mb:head-east".to_string(),
+            album_unique_id: Some("head-east".to_string()),
+            album: Some("Gettin' Lucky".to_string()),
+            album_artist_display: Some("Head East".to_string()),
+            canonical_genre: Some("AOR".to_string()),
+            genre_normalized: Some("aor".to_string()),
+            publisher: Some("A&M".to_string()),
+            year: Some(1977),
+            release_year: Some(1977),
+            total_tracks: 10,
+            rated_tracks: 8,
+            rating_completeness: 0.8,
+            total_seconds: 2_400,
+            loved_tracks: 1,
+            tmoe_seconds: 300,
+            ae_ratio: 0.125,
+            album_rating: Some(80),
+            calculated_album_rating: Some(78),
+            effective_album_rating: Some(80),
+            album_score: Some(96.0),
+            album_artist_display_inferred: false,
+        }
+    }
+
+    #[test]
+    fn creates_readable_durable_updates_for_album_metadata_and_ratings() {
+        let current = sample_final_album();
+        let previous = PreviousAlbum {
+            album_id: current.album_id.clone(),
+            album: current.album.clone(),
+            album_artist_display: current.album_artist_display.clone(),
+            canonical_genre: Some("Pop Rock".to_string()),
+            publisher: current.publisher.clone(),
+            year: Some(1976),
+            release_year: current.release_year,
+            total_tracks: current.total_tracks,
+            rated_tracks: 3,
+            rating_completeness: 0.3,
+            total_seconds: current.total_seconds,
+            loved_tracks: current.loved_tracks,
+            tmoe_seconds: current.tmoe_seconds,
+            ae_ratio: current.ae_ratio,
+            album_rating: current.album_rating,
+            effective_album_rating: Some(74),
+            album_score: Some(88.0),
+        };
+
+        let updates = library_updates_for_changed_album(&previous, &current);
+
+        assert!(updates.iter().any(|update| {
+            update.field == Some("canonical_genre")
+                && update.description == "Genre changed from Pop Rock to AOR"
+        }));
+        assert!(updates.iter().any(|update| {
+            update.field == Some("year") && update.description == "Year changed from 1976 to 1977"
+        }));
+        assert!(updates.iter().any(|update| {
+            update.category == "ratings"
+                && update.description == "5 track ratings added"
+                && update.change_count == Some(5)
+        }));
+    }
+
+    #[test]
+    fn matches_unique_album_id_churn_by_unambiguous_album_identity() {
+        let mut current = sample_final_album();
+        current.album_id = "mb:new-musicbee-id".to_string();
+        let previous = PreviousAlbum {
+            album_id: "mb:old-musicbee-id".to_string(),
+            album: current.album.clone(),
+            album_artist_display: current.album_artist_display.clone(),
+            canonical_genre: current.canonical_genre.clone(),
+            publisher: current.publisher.clone(),
+            year: current.year,
+            release_year: current.release_year,
+            total_tracks: current.total_tracks,
+            rated_tracks: current.rated_tracks,
+            rating_completeness: current.rating_completeness,
+            total_seconds: current.total_seconds,
+            loved_tracks: current.loved_tracks,
+            tmoe_seconds: current.tmoe_seconds,
+            ae_ratio: current.ae_ratio,
+            album_rating: current.album_rating,
+            effective_album_rating: current.effective_album_rating,
+            album_score: current.album_score,
+        };
+        let mut previous_albums = HashMap::from([(previous.album_id.clone(), previous.clone())]);
+        let index = build_previous_album_match_index(&previous_albums);
+
+        let matched = take_matching_previous_album(&mut previous_albums, &index, &current)
+            .expect("match regenerated MusicBee album id");
+
+        assert_eq!(matched.album_id, previous.album_id);
+        assert!(previous_albums.is_empty());
+        assert!(library_updates_for_changed_album(&matched, &current).is_empty());
+    }
 
     #[test]
     fn parses_musicbee_time_values() {

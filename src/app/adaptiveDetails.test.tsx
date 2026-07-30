@@ -77,6 +77,7 @@ describe("adaptive details", () => {
 
     expect(workspaceHasUsefulDetails("Search", emptyContext)).toBe(true);
     expect(workspaceHasUsefulDetails("Charts", emptyContext)).toBe(true);
+    expect(workspaceHasUsefulDetails("Updates", emptyContext)).toBe(true);
     expect(workspaceHasUsefulDetails("Albums", emptyContext)).toBe(false);
     expect(
       workspaceHasUsefulDetails("Albums", {

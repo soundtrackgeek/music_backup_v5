@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.107.0] - 2026-07-30
+### Added
+- Added a standalone Updates workspace with searchable, date-filtered, and status-filtered album change history, semantic new/changed/removed/rating icons and colors, old/new value details, and import provenance.
+- Added the append-only SQLite `library_updates` ledger in schema version 45 so meaningful album, metadata, track-count, and rating changes survive later library imports.
+
+### Changed
+- Reconciled regenerated MusicBee album IDs through an unambiguous normalized artist/title/year fallback, preventing full rescans from appearing as mass album removals and additions while leaving duplicate-edition matches safely unresolved.
+- Synchronized app metadata and provider user agents to `0.107.0`.
+
 ## [0.106.0] - 2026-07-30
 ### Added
 - Added manual per-release Usenet search actions and inline NZB results to artist Wish List discovery.

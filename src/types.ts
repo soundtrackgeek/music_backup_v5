@@ -19,6 +19,52 @@ export type ImportRun = {
   ratingEventsCount: number;
 };
 
+export type LibraryUpdateKind = "new" | "changed" | "removed";
+
+export type LibraryUpdateRequest = {
+  query: string;
+  changeKind: LibraryUpdateKind | null;
+  dateFrom: string | null;
+  limit: number;
+  offset: number;
+};
+
+export type LibraryUpdate = {
+  id: number;
+  importRunId: number | null;
+  createdAt: string;
+  changeKind: LibraryUpdateKind;
+  category: "album" | "metadata" | "tracks" | "ratings" | string;
+  albumId: string;
+  albumArtistDisplay: string | null;
+  album: string | null;
+  year: number | null;
+  field: string | null;
+  fieldLabel: string | null;
+  previousValue: string | null;
+  currentValue: string | null;
+  changeCount: number | null;
+  description: string;
+  sourceKind: string;
+  sourceLabel: string;
+  sourcePath: string | null;
+};
+
+export type LibraryUpdateSummary = {
+  all: number;
+  new: number;
+  changed: number;
+  removed: number;
+};
+
+export type LibraryUpdateResponse = {
+  rows: LibraryUpdate[];
+  total: number;
+  summary: LibraryUpdateSummary;
+  limit: number;
+  offset: number;
+};
+
 export type LibraryStatus = {
   dbPath: string;
   hasDatabase: boolean;

@@ -190,6 +190,7 @@ import type {
   MetadataCoverageMetric,
   OutlierStat,
   LibraryStatus,
+  LibraryUpdate,
   LeftSidebarMode,
   GenreProgressStats,
   RatingBucket,
@@ -397,6 +398,10 @@ import { WishListWorkspace } from "./workspaces/WishListWorkspace";
 import { LibraryCompletionWorkspace } from "./workspaces/LibraryCompletionWorkspace";
 import { MusicToolRepairPanel } from "./workspaces/MusicToolRepairPanel";
 import { MusicMapWorkspace } from "./workspaces/MusicMapWorkspace";
+import {
+  UpdateDetailPanel,
+  UpdatesWorkspace,
+} from "./workspaces/UpdatesWorkspace";
 import {
   checkForAppUpdate,
   installAppUpdate,
@@ -7896,6 +7901,9 @@ function RatingEventList({
 
 export default function App() {
   const [activeSection, setActiveSection] = useState("Search");
+  const [selectedUpdate, setSelectedUpdate] = useState<LibraryUpdate | null>(
+    null,
+  );
   const [isLunaOpen, setIsLunaOpen] = useState(false);
   const lunaLaunchIdRef = useRef(1);
   const [searchLunaLaunch, setSearchLunaLaunch] = useState<{
@@ -13064,6 +13072,11 @@ export default function App() {
                 ? setTrackTimelineYear
                 : setAlbumTimelineYear
             }
+          />
+        ) : activeSection === "Updates" ? (
+          <UpdatesWorkspace
+            selectedUpdateId={selectedUpdate?.id ?? null}
+            onSelectUpdate={setSelectedUpdate}
           />
         ) : activeSection === "Imports" ? (
           <section className="workspace">
@@ -19598,7 +19611,9 @@ export default function App() {
         tabIndex={isDetailsDrawerLayout ? -1 : undefined}
         onKeyDown={handleDetailDrawerKeyDown}
       >
-        {activeSection === "Imports" ? (
+        {activeSection === "Updates" ? (
+          <UpdateDetailPanel update={selectedUpdate} />
+        ) : activeSection === "Imports" ? (
           <aside className="detail-panel" aria-label="Selected import details">
             <div className="detail-header">
               <Sparkles size={20} />

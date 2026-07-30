@@ -31,6 +31,7 @@ export function workspaceHasUsefulDetails(
     case "Imports":
     case "Charts":
     case "Search":
+    case "Updates":
       return true;
     case "Playlists":
     case "Completion":

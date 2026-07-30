@@ -153,6 +153,65 @@ pub struct ImportSummary {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LibraryUpdateRequest {
+    #[serde(default)]
+    pub query: String,
+    pub change_kind: Option<String>,
+    pub date_from: Option<String>,
+    #[serde(default = "default_library_update_limit")]
+    pub limit: u32,
+    #[serde(default)]
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryUpdate {
+    pub id: i64,
+    pub import_run_id: Option<i64>,
+    pub created_at: String,
+    pub change_kind: String,
+    pub category: String,
+    pub album_id: String,
+    pub album_artist_display: Option<String>,
+    pub album: Option<String>,
+    pub year: Option<i32>,
+    pub field: Option<String>,
+    pub field_label: Option<String>,
+    pub previous_value: Option<String>,
+    pub current_value: Option<String>,
+    pub change_count: Option<i64>,
+    pub description: String,
+    pub source_kind: String,
+    pub source_label: String,
+    pub source_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryUpdateSummary {
+    pub all: i64,
+    pub new: i64,
+    pub changed: i64,
+    pub removed: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryUpdateResponse {
+    pub rows: Vec<LibraryUpdate>,
+    pub total: i64,
+    pub summary: LibraryUpdateSummary,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+fn default_library_update_limit() -> u32 {
+    50
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CoverImportRequest {
     pub source_path: String,
     #[serde(default)]

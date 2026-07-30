@@ -223,6 +223,9 @@ import type {
   ImportRun,
   ImportSummary,
   LibraryStatus,
+  LibraryUpdate,
+  LibraryUpdateRequest,
+  LibraryUpdateResponse,
   SavedChart,
   SavedSearch,
   ChartConfig,
@@ -846,6 +849,158 @@ export async function listImportRuns(limit: number) {
   }
 
   return invoke<ImportRun[]>("list_import_runs", { limit });
+}
+
+const mockLibraryUpdates: LibraryUpdate[] = [
+  {
+    id: 5,
+    importRunId: 124,
+    createdAt: "2026-07-30T10:42:00.000Z",
+    changeKind: "changed",
+    category: "metadata",
+    albumId: "mb:head-east",
+    albumArtistDisplay: "Head East",
+    album: "Gettin' Lucky",
+    year: 1977,
+    field: "canonical_genre",
+    fieldLabel: "Genre",
+    previousValue: "Pop Rock",
+    currentValue: "AOR",
+    changeCount: null,
+    description: "Genre changed from Pop Rock to AOR",
+    sourceKind: "library_import",
+    sourceLabel: "Library import #124",
+    sourcePath: "musicbee-library.tsv",
+  },
+  {
+    id: 4,
+    importRunId: 124,
+    createdAt: "2026-07-30T10:37:00.000Z",
+    changeKind: "new",
+    category: "album",
+    albumId: "mb:pepsi-shirlie",
+    albumArtistDisplay: "Pepsi & Shirlie",
+    album: "All Right Now",
+    year: 1987,
+    field: null,
+    fieldLabel: null,
+    previousValue: null,
+    currentValue: null,
+    changeCount: null,
+    description: "New album",
+    sourceKind: "library_import",
+    sourceLabel: "Library import #124",
+    sourcePath: "musicbee-library.tsv",
+  },
+  {
+    id: 3,
+    importRunId: 124,
+    createdAt: "2026-07-30T10:31:00.000Z",
+    changeKind: "changed",
+    category: "ratings",
+    albumId: "mb:michael-stanley-band",
+    albumArtistDisplay: "Michael Stanley Band",
+    album: "Ladies' Choice",
+    year: 1976,
+    field: "rated_tracks",
+    fieldLabel: "Track ratings",
+    previousValue: "3",
+    currentValue: "8",
+    changeCount: 5,
+    description: "5 track ratings added",
+    sourceKind: "library_import",
+    sourceLabel: "Library import #124",
+    sourcePath: "musicbee-library.tsv",
+  },
+  {
+    id: 2,
+    importRunId: 124,
+    createdAt: "2026-07-30T10:18:00.000Z",
+    changeKind: "removed",
+    category: "album",
+    albumId: "mb:django-reinhardt",
+    albumArtistDisplay: "Django Reinhardt",
+    album: "The Great Artistry Of Django Reinhardt",
+    year: 1954,
+    field: null,
+    fieldLabel: null,
+    previousValue: null,
+    currentValue: null,
+    changeCount: null,
+    description: "Removed album",
+    sourceKind: "library_import",
+    sourceLabel: "Library import #124",
+    sourcePath: "musicbee-library.tsv",
+  },
+  {
+    id: 1,
+    importRunId: 124,
+    createdAt: "2026-07-30T09:52:00.000Z",
+    changeKind: "changed",
+    category: "metadata",
+    albumId: "mb:charlie",
+    albumArtistDisplay: "Charlie",
+    album: "No Second Chance",
+    year: 1977,
+    field: "year",
+    fieldLabel: "Year",
+    previousValue: "1976",
+    currentValue: "1977",
+    changeCount: null,
+    description: "Year changed from 1976 to 1977",
+    sourceKind: "library_import",
+    sourceLabel: "Library import #124",
+    sourcePath: "musicbee-library.tsv",
+  },
+];
+
+export async function listLibraryUpdates(request: LibraryUpdateRequest) {
+  if (!isTauriRuntime()) {
+    const normalizedQuery = request.query.trim().toLocaleLowerCase();
+    const matchingContext = mockLibraryUpdates.filter((update) => {
+      const searchable = [
+        update.albumArtistDisplay,
+        update.album,
+        update.fieldLabel,
+        update.previousValue,
+        update.currentValue,
+        update.description,
+        update.sourceLabel,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase();
+      const matchesQuery =
+        normalizedQuery.length === 0 || searchable.includes(normalizedQuery);
+      const matchesDate =
+        request.dateFrom == null || update.createdAt >= request.dateFrom;
+      return matchesQuery && matchesDate;
+    });
+    const filtered = request.changeKind
+      ? matchingContext.filter(
+          (update) => update.changeKind === request.changeKind,
+        )
+      : matchingContext;
+    return {
+      rows: filtered.slice(request.offset, request.offset + request.limit),
+      total: filtered.length,
+      summary: {
+        all: matchingContext.length,
+        new: matchingContext.filter((update) => update.changeKind === "new")
+          .length,
+        changed: matchingContext.filter(
+          (update) => update.changeKind === "changed",
+        ).length,
+        removed: matchingContext.filter(
+          (update) => update.changeKind === "removed",
+        ).length,
+      },
+      limit: request.limit,
+      offset: request.offset,
+    } satisfies LibraryUpdateResponse;
+  }
+
+  return invoke<LibraryUpdateResponse>("list_library_updates", { request });
 }
 
 export async function listDatabaseBackups() {
