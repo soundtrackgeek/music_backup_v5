@@ -914,7 +914,7 @@ describe("WishListWorkspace", () => {
     await screen.findByText("Pet Shop Boys");
     fireEvent.click(
       screen.getByLabelText(
-        "Search Pet Shop Boys official albums with Deemix and Soulseek",
+        "Search Pet Shop Boys official albums with Deemix",
       ),
     );
     const albumsHeading = await screen.findByRole("heading", { name: "Albums found" });
@@ -1029,7 +1029,7 @@ describe("WishListWorkspace", () => {
     await screen.findByText("Pet Shop Boys");
     fireEvent.click(
       screen.getByLabelText(
-        "Search Pet Shop Boys official albums with Deemix and Soulseek",
+        "Search Pet Shop Boys official albums with Deemix",
       ),
     );
 
@@ -1058,15 +1058,27 @@ describe("WishListWorkspace", () => {
     );
   });
 
-  it("automatically searches Soulseek for every missing artist album and queues a selected source", async () => {
+  it("only searches Deemix during artist discovery and searches Soulseek on demand", async () => {
     render(<WishListWorkspace />);
     await screen.findByText("Pet Shop Boys");
     fireEvent.click(
       screen.getByLabelText(
-        "Search Pet Shop Boys official albums with Deemix and Soulseek",
+        "Search Pet Shop Boys official albums with Deemix",
       ),
     );
     await screen.findByRole("heading", { name: "Albums found" });
+
+    expect(searchSoulseekAlbum).not.toHaveBeenCalled();
+    expect(searchUsenet).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Search Please with Soulseek" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Search Please with Usenet" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Search Please with Soulseek" }),
+    );
 
     await waitFor(() =>
       expect(searchSoulseekAlbum).toHaveBeenCalledWith({
@@ -1075,11 +1087,7 @@ describe("WishListWorkspace", () => {
         year: 1986,
       }),
     );
-    expect(searchSoulseekAlbum).toHaveBeenCalledWith({
-      artist: "Pet Shop Boys",
-      title: "Actually",
-      year: 1987,
-    });
+    expect(searchSoulseekAlbum).toHaveBeenCalledTimes(1);
     expect(
       screen.getByRole("button", { name: "Download Please with Deemix" }),
     ).toBeInTheDocument();
@@ -1088,8 +1096,8 @@ describe("WishListWorkspace", () => {
       name: "Soulseek sources for Please",
     });
     expect(
-      screen.getByRole("region", { name: "Soulseek sources for Actually" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("region", { name: "Soulseek sources for Actually" }),
+    ).not.toBeInTheDocument();
     expect(within(sources).getByText("Please (1986)")).toBeInTheDocument();
     expect(within(sources).getByText("2 files")).toBeInTheDocument();
     fireEvent.click(
@@ -1114,12 +1122,61 @@ describe("WishListWorkspace", () => {
     ).toBeInTheDocument();
   });
 
+  it("searches Usenet for one artist release on demand and queues its NZB", async () => {
+    render(<WishListWorkspace />);
+    await screen.findByText("Pet Shop Boys");
+    fireEvent.click(
+      screen.getByLabelText(
+        "Search Pet Shop Boys official albums with Deemix",
+      ),
+    );
+    await screen.findByRole("heading", { name: "Albums found" });
+
+    expect(searchUsenet).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Search Please with Usenet" }),
+    );
+
+    await waitFor(() =>
+      expect(searchUsenet).toHaveBeenCalledWith({
+        artist: "Pet Shop Boys",
+        title: "Please",
+        year: 1986,
+        limit: 30,
+      }),
+    );
+    const releases = await screen.findByRole("region", {
+      name: "Usenet releases for Please",
+    });
+    fireEvent.click(
+      within(releases).getByRole("button", {
+        name: "Download Pet.Shop.Boys-Release-2002-FLAC from Usenet",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(enqueueUsenetDownload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          expectedArtist: "Pet Shop Boys",
+          expectedAlbum: "Please",
+          expectedYear: 1986,
+          releaseGroupId: "00000000-0000-4000-8000-000000000001",
+        }),
+      ),
+    );
+    expect(
+      await within(releases).findByText(
+        "Pet.Shop.Boys-Release-2002-FLAC queued from NZBFinder.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("queues every missing matched artist album with Download all", async () => {
     render(<WishListWorkspace />);
     await screen.findByText("Pet Shop Boys");
     fireEvent.click(
       screen.getByLabelText(
-        "Search Pet Shop Boys official albums with Deemix and Soulseek",
+        "Search Pet Shop Boys official albums with Deemix",
       ),
     );
     await screen.findByRole("heading", { name: "Albums found" });

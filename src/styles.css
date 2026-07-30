@@ -14965,6 +14965,12 @@ button {
   background: #f5f9fc;
 }
 
+.usenet-album-search-button {
+  color: #735d28;
+  border-color: #dfc16f;
+  background: #fff9e8;
+}
+
 .artist-album-soulseek {
   overflow: hidden;
   grid-column: 1 / -1;
@@ -15020,6 +15026,25 @@ button {
 }
 
 .artist-album-soulseek .soulseek-source-list article:first-child {
+  border-top: 0;
+}
+
+.artist-album-usenet {
+  border-color: #ead59b;
+  background: #fffdf7;
+}
+
+.artist-album-usenet > header {
+  border-color: #eadba9;
+  color: #735d28;
+  background: #fff8e5;
+}
+
+.artist-album-usenet > header span {
+  color: #887746;
+}
+
+.artist-album-usenet .usenet-source-list article:first-child {
   border-top: 0;
 }
 
@@ -15270,6 +15295,12 @@ button {
   background: #182733;
 }
 
+:root[data-theme="dark"] .usenet-album-search-button {
+  border-color: #6f613d;
+  color: #dec783;
+  background: #332c19;
+}
+
 :root[data-theme="dark"] .artist-album-soulseek {
   border-color: #334d60;
   background: #121c23;
@@ -15283,6 +15314,21 @@ button {
 
 :root[data-theme="dark"] .artist-album-soulseek > header span {
   color: #87a8be;
+}
+
+:root[data-theme="dark"] .artist-album-usenet {
+  border-color: #665a36;
+  background: #211d13;
+}
+
+:root[data-theme="dark"] .artist-album-usenet > header {
+  border-color: #665a36;
+  color: #dec783;
+  background: #332c19;
+}
+
+:root[data-theme="dark"] .artist-album-usenet > header span {
+  color: #c1ae72;
 }
 
 :root[data-theme="dark"] .deemix-account-card {

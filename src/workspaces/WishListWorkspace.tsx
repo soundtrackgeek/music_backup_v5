@@ -94,13 +94,25 @@ type SoulseekDownloadTarget = {
 };
 
 type ArtistSoulseekSearchEntry = {
-  status: "queued" | "searching" | "complete" | "error";
+  status: "searching" | "complete" | "error";
   response: SoulseekAlbumSearchResponse | null;
   error: string | null;
   notice: string | null;
 };
 
-const ARTIST_SOULSEEK_SEARCH_CONCURRENCY = 6;
+type ArtistUsenetSearchEntry = {
+  status: "searching" | "complete" | "error";
+  response: UsenetSearchResponse | null;
+  error: string | null;
+  notice: string | null;
+};
+
+type UsenetDownloadTarget = {
+  artist: string;
+  title: string;
+  year: number | null;
+  releaseGroupId: string | null;
+};
 
 const SOULSEEK_AUDIO_EXTENSIONS = new Set([
   "flac",
@@ -1031,12 +1043,12 @@ function WishListGroup({
                   type="button"
                   title={
                     isArtist
-                      ? "Find official albums with MusicBrainz, Deemix, and Soulseek"
+                      ? "Find official albums with MusicBrainz and Deemix"
                       : "Search with Deemix"
                   }
                   aria-label={
                     isArtist
-                      ? `Search ${item.title} official albums with Deemix and Soulseek`
+                      ? `Search ${item.title} official albums with Deemix`
                       : `Search ${item.title} with Deemix`
                   }
                   disabled={searchingId !== null || (isArtist && !item.musicbrainzId)}
@@ -1156,7 +1168,10 @@ export function WishListWorkspace() {
   const [artistSoulseekSearches, setArtistSoulseekSearches] = useState<
     Record<string, ArtistSoulseekSearchEntry>
   >({});
-  const artistSoulseekGeneration = useRef(0);
+  const [artistUsenetSearches, setArtistUsenetSearches] = useState<
+    Record<string, ArtistUsenetSearchEntry>
+  >({});
+  const artistProviderGeneration = useRef(0);
   const [checkingArtistIds, setCheckingArtistIds] = useState<Set<number>>(
     () => new Set(),
   );
@@ -1354,10 +1369,10 @@ export function WishListWorkspace() {
     }
     return candidates;
   }, [artistSoulseekSearches]);
-  const artistSoulseekBatchBusy = useMemo(
+  const artistSoulseekSearchBusy = useMemo(
     () =>
       Object.values(artistSoulseekSearches).some(
-        (search) => search.status === "queued" || search.status === "searching",
+        (search) => search.status === "searching",
       ),
     [artistSoulseekSearches],
   );
@@ -1630,9 +1645,10 @@ export function WishListWorkspace() {
         setUsenetNotice(null);
       }
       if (artistDiscovery?.wishListItemId === item.id) {
-        artistSoulseekGeneration.current += 1;
+        artistProviderGeneration.current += 1;
         setArtistDiscovery(null);
         setArtistSoulseekSearches({});
+        setArtistUsenetSearches({});
       }
     } catch (removeError) {
       setError(removeError instanceof Error ? removeError.message : String(removeError));
@@ -1644,9 +1660,10 @@ export function WishListWorkspace() {
     setSearchingId(item.id);
     setSearchedItem(item);
     setDeemixResults(null);
-    artistSoulseekGeneration.current += 1;
+    artistProviderGeneration.current += 1;
     setArtistDiscovery(null);
     setArtistSoulseekSearches({});
+    setArtistUsenetSearches({});
     setQueueNotice(null);
     setError(null);
     try {
@@ -1716,19 +1733,17 @@ export function WishListWorkspace() {
     setError(null);
     setUsenetNotice(null);
     try {
-      const snapshot = await enqueueUsenetDownload({
-        guid: result.guid,
-        title: result.title,
-        indexer: result.indexer,
-        downloadUrl: result.downloadUrl,
-        sizeBytes: result.sizeBytes,
-        expectedArtist: usenetSearchedItem.artist,
-        expectedAlbum: usenetSearchedItem.title,
-        expectedYear: usenetSearchedItem.year,
-        releaseGroupId: usenetSearchedItem.musicbrainzId,
-      });
-      setUsenetTransfers(snapshot);
-      setUsenetNotice(`${result.title} queued from ${result.indexer}.`);
+      setUsenetNotice(
+        await queueUsenetResult(
+          {
+            artist: usenetSearchedItem.artist,
+            title: usenetSearchedItem.title,
+            year: usenetSearchedItem.year,
+            releaseGroupId: usenetSearchedItem.musicbrainzId,
+          },
+          result,
+        ),
+      );
     } catch (downloadError) {
       setError(
         downloadError instanceof Error
@@ -1736,6 +1751,25 @@ export function WishListWorkspace() {
           : String(downloadError),
       );
     }
+  }
+
+  async function queueUsenetResult(
+    target: UsenetDownloadTarget,
+    result: UsenetSearchResult,
+  ) {
+    const snapshot = await enqueueUsenetDownload({
+      guid: result.guid,
+      title: result.title,
+      indexer: result.indexer,
+      downloadUrl: result.downloadUrl,
+      sizeBytes: result.sizeBytes,
+      expectedArtist: target.artist,
+      expectedAlbum: target.title,
+      expectedYear: target.year,
+      releaseGroupId: target.releaseGroupId,
+    });
+    setUsenetTransfers(snapshot);
+    return `${result.title} queued from ${result.indexer}.`;
   }
 
   async function clearCompletedUsenetDownloads() {
@@ -1814,7 +1848,7 @@ export function WishListWorkspace() {
     album: WishListArtistAlbumDiscoveryRow,
     generation: number,
   ) {
-    if (artistSoulseekGeneration.current !== generation) return;
+    if (artistProviderGeneration.current !== generation) return;
     setArtistSoulseekSearches((previous) => ({
       ...previous,
       [album.releaseGroupId]: {
@@ -1830,7 +1864,7 @@ export function WishListWorkspace() {
         artist,
         year: album.year,
       });
-      if (artistSoulseekGeneration.current !== generation) return;
+      if (artistProviderGeneration.current !== generation) return;
       setArtistSoulseekSearches((previous) => ({
         ...previous,
         [album.releaseGroupId]: {
@@ -1841,7 +1875,7 @@ export function WishListWorkspace() {
         },
       }));
     } catch (searchError) {
-      if (artistSoulseekGeneration.current !== generation) return;
+      if (artistProviderGeneration.current !== generation) return;
       setArtistSoulseekSearches((previous) => ({
         ...previous,
         [album.releaseGroupId]: {
@@ -1857,51 +1891,6 @@ export function WishListWorkspace() {
     }
   }
 
-  async function searchArtistAlbumsWithSoulseek(
-    discovery: WishListArtistAlbumDiscoveryResponse,
-    generation: number,
-  ) {
-    const missingAlbums = discovery.albums.filter(
-      (album) => !album.inLibrary && !album.downloadedAt,
-    );
-    if (artistSoulseekGeneration.current !== generation) return;
-    setArtistSoulseekSearches(
-      Object.fromEntries(
-        missingAlbums.map((album) => [
-          album.releaseGroupId,
-          {
-            status: "queued",
-            response: null,
-            error: null,
-            notice: null,
-          } satisfies ArtistSoulseekSearchEntry,
-        ]),
-      ),
-    );
-    let nextIndex = 0;
-    async function worker() {
-      while (
-        nextIndex < missingAlbums.length &&
-        artistSoulseekGeneration.current === generation
-      ) {
-        const album = missingAlbums[nextIndex];
-        nextIndex += 1;
-        await runArtistSoulseekSearch(discovery.artist, album, generation);
-      }
-    }
-    await Promise.all(
-      Array.from(
-        {
-          length: Math.min(
-            ARTIST_SOULSEEK_SEARCH_CONCURRENCY,
-            missingAlbums.length,
-          ),
-        },
-        () => worker(),
-      ),
-    );
-  }
-
   async function retryArtistSoulseekSearch(
     album: WishListArtistAlbumDiscoveryRow,
   ) {
@@ -1909,8 +1898,57 @@ export function WishListWorkspace() {
     await runArtistSoulseekSearch(
       artistDiscovery.artist,
       album,
-      artistSoulseekGeneration.current,
+      artistProviderGeneration.current,
     );
+  }
+
+  async function searchArtistAlbumWithUsenet(
+    album: WishListArtistAlbumDiscoveryRow,
+  ) {
+    if (!artistDiscovery) return;
+    const generation = artistProviderGeneration.current;
+    setArtistUsenetSearches((previous) => ({
+      ...previous,
+      [album.releaseGroupId]: {
+        status: "searching",
+        response: null,
+        error: null,
+        notice: null,
+      },
+    }));
+    setError(null);
+    try {
+      const response = await searchUsenet({
+        title: album.title,
+        artist: artistDiscovery.artist,
+        year: album.year,
+        limit: 30,
+      });
+      if (artistProviderGeneration.current !== generation) return;
+      setArtistUsenetSearches((previous) => ({
+        ...previous,
+        [album.releaseGroupId]: {
+          status: "complete",
+          response,
+          error: null,
+          notice: previous[album.releaseGroupId]?.notice ?? null,
+        },
+      }));
+    } catch (searchError) {
+      if (artistProviderGeneration.current !== generation) return;
+      setArtistUsenetSearches((previous) => ({
+        ...previous,
+        [album.releaseGroupId]: {
+          status: "error",
+          response: null,
+          error:
+            searchError instanceof Error
+              ? searchError.message
+              : String(searchError),
+          notice: null,
+        },
+      }));
+    }
   }
 
   async function downloadArtistSoulseekRelease(
@@ -1952,22 +1990,61 @@ export function WishListWorkspace() {
     }
   }
 
+  async function downloadArtistUsenetResult(
+    album: WishListArtistAlbumDiscoveryRow,
+    result: UsenetSearchResult,
+  ) {
+    if (!artistDiscovery) return;
+    setError(null);
+    setArtistUsenetSearches((previous) => ({
+      ...previous,
+      [album.releaseGroupId]: {
+        ...previous[album.releaseGroupId],
+        notice: null,
+      },
+    }));
+    try {
+      const notice = await queueUsenetResult(
+        {
+          artist: artistDiscovery.artist,
+          title: album.title,
+          year: album.year,
+          releaseGroupId: album.releaseGroupId,
+        },
+        result,
+      );
+      setArtistUsenetSearches((previous) => ({
+        ...previous,
+        [album.releaseGroupId]: {
+          ...previous[album.releaseGroupId],
+          notice,
+        },
+      }));
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : String(downloadError),
+      );
+    }
+  }
+
   async function discoverArtist(item: WishListItem) {
     if (item.entity !== "artist") return;
-    const generation = artistSoulseekGeneration.current + 1;
-    artistSoulseekGeneration.current = generation;
+    const generation = artistProviderGeneration.current + 1;
+    artistProviderGeneration.current = generation;
     setSearchingId(item.id);
     setSearchedItem(null);
     setDeemixResults(null);
     setArtistDiscovery(null);
     setArtistSoulseekSearches({});
+    setArtistUsenetSearches({});
     setQueueNotice(null);
     setError(null);
     try {
       const response = await discoverWishListArtistAlbums(item.id);
-      if (artistSoulseekGeneration.current !== generation) return;
+      if (artistProviderGeneration.current !== generation) return;
       setArtistDiscovery(response);
-      void searchArtistAlbumsWithSoulseek(response, generation);
       setItems((previous) =>
         previous.map((entry) =>
           entry.id === item.id
@@ -2609,9 +2686,10 @@ export function WishListWorkspace() {
                 title="Close Albums found"
                 aria-label="Close Albums found"
                 onClick={() => {
-                  artistSoulseekGeneration.current += 1;
+                  artistProviderGeneration.current += 1;
                   setArtistDiscovery(null);
                   setArtistSoulseekSearches({});
+                  setArtistUsenetSearches({});
                 }}
               >
                 <X size={16} />
@@ -2638,7 +2716,9 @@ export function WishListWorkspace() {
               const soulseekCandidatesForAlbum =
                 artistSoulseekCandidates.get(album.releaseGroupId) ?? [];
               const isSoulseekSearching = soulseekSearch?.status === "searching";
-              const isSoulseekQueued = soulseekSearch?.status === "queued";
+              const usenetSearch =
+                artistUsenetSearches[album.releaseGroupId] ?? null;
+              const isUsenetSearching = usenetSearch?.status === "searching";
               return (
                 <article key={album.releaseGroupId}>
                   <div className="artist-album-source">
@@ -2735,7 +2815,7 @@ export function WishListWorkspace() {
                       className="secondary-button soulseek-album-search-button"
                       type="button"
                       disabled={
-                        artistSoulseekBatchBusy ||
+                        artistSoulseekSearchBusy ||
                         soulseekSearchingId !== null
                       }
                       aria-label={`${soulseekSearch ? "Refresh" : "Search"} ${album.title} with Soulseek`}
@@ -2748,11 +2828,28 @@ export function WishListWorkspace() {
                       <span>
                         {isSoulseekSearching
                           ? "Searching Soulseek"
-                          : isSoulseekQueued
-                            ? "Soulseek queued"
-                            : soulseekSearch
-                              ? "Refresh Soulseek"
-                              : "Search Soulseek"}
+                          : soulseekSearch
+                            ? "Refresh Soulseek"
+                            : "Search Soulseek"}
+                      </span>
+                    </button>
+                    <button
+                      className="secondary-button usenet-album-search-button"
+                      type="button"
+                      disabled={isUsenetSearching || usenetSearchingId !== null}
+                      aria-label={`${usenetSearch ? "Refresh" : "Search"} ${album.title} with Usenet`}
+                      onClick={() => void searchArtistAlbumWithUsenet(album)}
+                    >
+                      <CloudDownload
+                        size={15}
+                        className={isUsenetSearching ? "spin" : ""}
+                      />
+                      <span>
+                        {isUsenetSearching
+                          ? "Searching Usenet"
+                          : usenetSearch
+                            ? "Refresh Usenet"
+                            : "Search Usenet"}
                       </span>
                     </button>
                   </div>
@@ -2773,21 +2870,14 @@ export function WishListWorkspace() {
                           </div>
                         </div>
                         <span className={`soulseek-search-status ${soulseekSearch.status}`}>
-                          {soulseekSearch.status === "queued"
-                            ? "Waiting"
-                            : soulseekSearch.status === "searching"
-                              ? "Searching"
-                              : soulseekSearch.status === "complete"
-                                ? `${soulseekCandidatesForAlbum.length} sources`
-                                : "Unavailable"}
+                          {soulseekSearch.status === "searching"
+                            ? "Searching"
+                            : soulseekSearch.status === "complete"
+                              ? `${soulseekCandidatesForAlbum.length} sources`
+                              : "Unavailable"}
                         </span>
                       </header>
-                      {isSoulseekQueued ? (
-                        <div className="deemix-search-state">
-                          <Clock3 size={18} aria-hidden="true" />
-                          <span>Waiting for an available Soulseek search slot…</span>
-                        </div>
-                      ) : isSoulseekSearching ? (
+                      {isSoulseekSearching ? (
                         <div className="deemix-search-state">
                           <RadioTower size={18} className="spin" aria-hidden="true" />
                           <span>Listening for Soulseek peers for up to 15 seconds…</span>
@@ -2823,6 +2913,65 @@ export function WishListWorkspace() {
                       ) : null}
                     </section>
                   ) : null}
+                  {usenetSearch ? (
+                    <section
+                      className="artist-album-soulseek artist-album-usenet"
+                      aria-label={`Usenet releases for ${album.title}`}
+                    >
+                      <header>
+                        <div>
+                          <CloudDownload size={16} aria-hidden="true" />
+                          <div>
+                            <strong>Usenet releases</strong>
+                            <span>
+                              {artistDiscovery.artist} · {album.title}
+                              {album.year ? ` · ${album.year}` : ""}
+                            </span>
+                          </div>
+                        </div>
+                        <span className={`soulseek-search-status ${usenetSearch.status}`}>
+                          {usenetSearch.status === "searching"
+                            ? "Searching"
+                            : usenetSearch.status === "complete"
+                              ? `${usenetSearch.response?.results.length ?? 0} NZBs`
+                              : "Unavailable"}
+                        </span>
+                      </header>
+                      {usenetSearch.notice ? (
+                        <p className="artist-albums-queue-notice" role="status">
+                          {usenetSearch.notice}
+                        </p>
+                      ) : null}
+                      {isUsenetSearching ? (
+                        <div className="deemix-search-state">
+                          <CloudDownload size={18} className="spin" aria-hidden="true" />
+                          <span>
+                            Searching Prowlarr’s Usenet indexers in the Audio category…
+                          </span>
+                        </div>
+                      ) : usenetSearch.response?.results.length ? (
+                        <UsenetSourceList
+                          results={usenetSearch.response.results}
+                          transferByGuid={usenetTransferByGuid}
+                          onDownload={(result) =>
+                            void downloadArtistUsenetResult(album, result)
+                          }
+                        />
+                      ) : usenetSearch.status === "error" ? (
+                        <div className="deemix-search-state empty">
+                          <AlertTriangle size={18} aria-hidden="true" />
+                          <strong>Usenet search failed</strong>
+                          <span>{usenetSearch.error}</span>
+                        </div>
+                      ) : usenetSearch.response ? (
+                        <div className="deemix-search-state empty">
+                          <CloudDownload size={18} aria-hidden="true" />
+                          <strong>No Usenet releases found</strong>
+                          <span>Check the Prowlarr indexer or try a shorter album title.</span>
+                        </div>
+                      ) : null}
+                    </section>
+                  ) : null}
                 </article>
               );
             })}
@@ -2833,8 +2982,7 @@ export function WishListWorkspace() {
           <div className="deemix-search-state">
             <RefreshCw size={19} className="spin" aria-hidden="true" />
             <span>
-              Checking official MusicBrainz albums with Deemix; Soulseek starts
-              automatically for every missing album…
+              Checking official MusicBrainz albums and matching them with Deemix…
             </span>
           </div>
         </section>

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.106.0] - 2026-07-30
+### Added
+- Added manual per-release Usenet search actions and inline NZB results to artist Wish List discovery.
+
+### Changed
+- Changed artist Wish List discovery to search only Deemix initially; Soulseek and Usenet searches now run only when their button is selected on a release.
+- Synchronized app metadata and provider user agents to `0.106.0`.
+
 ## [0.105.0] - 2026-07-30
 ### Added
 - Added secure Usenet provider settings with a Prowlarr default of `http://127.0.0.1:9696`, Newsgroup Ninja defaults for encrypted port 563, configurable connection count and download folder, live connection tests, and Windows Credential Manager storage for both provider secrets.
