@@ -32,14 +32,17 @@ import { aiMarkdownTitle, playlistMarkdown } from "../aiMarkdownExport";
 import { AiMarkdownExportButton } from "../components/AiMarkdownExportButton";
 import { ExportResultStatus } from "../components/ExportResultStatus";
 
+export type PlaylistBuilderLaunch = {
+  id: number;
+  cohortTitle: string;
+  prompt: string;
+  request: BrowseRequest;
+  draft?: AiPlaylist;
+};
+
 type PlaylistBuilderWorkspaceProps = {
   isAvailable: boolean;
-  launch?: {
-    id: number;
-    cohortTitle: string;
-    prompt: string;
-    request: BrowseRequest;
-  } | null;
+  launch?: PlaylistBuilderLaunch | null;
   onLaunchConsumed?: () => void;
   savedPlaylistToOpen?: SavedPlaylist | null;
 };
@@ -91,20 +94,22 @@ export function PlaylistBuilderWorkspace({
   const [savedError, setSavedError] = useState<string | null>(null);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [sourceCohortTitle, setSourceCohortTitle] = useState<string | null>(null);
+  const [directSearchTitle, setDirectSearchTitle] = useState<string | null>(null);
   const [sourceRequest, setSourceRequest] =
     useState<BrowseRequest | null>(null);
 
   useEffect(() => {
     if (!launch) return;
-    setPrompt(launch.prompt);
-    setPlaylist(null);
-    setName("");
+    setPrompt(launch.draft?.prompt ?? launch.prompt);
+    setPlaylist(launch.draft ?? null);
+    setName(launch.draft?.name ?? "");
     setActiveSavedId(null);
     setError(null);
     setSavedError(null);
     setExportResult(null);
-    setSourceCohortTitle(launch.cohortTitle);
-    setSourceRequest(launch.request);
+    setDirectSearchTitle(launch.draft ? launch.cohortTitle : null);
+    setSourceCohortTitle(launch.draft ? null : launch.cohortTitle);
+    setSourceRequest(launch.draft ? null : launch.request);
     onLaunchConsumed?.();
   }, [launch?.id]);
 
@@ -218,6 +223,9 @@ export function PlaylistBuilderWorkspace({
     setExportResult(null);
     setSourceRequest(null);
     setSourceCohortTitle(null);
+    setDirectSearchTitle(
+      saved.playlist.model === "Local Search" ? saved.name : null,
+    );
   }
 
   async function removeSaved(saved: SavedPlaylist) {
@@ -258,19 +266,42 @@ export function PlaylistBuilderWorkspace({
 
   const activeSavedPlaylist =
     savedPlaylists.find((saved) => saved.id === activeSavedId) ?? undefined;
+  const isLocalSearchPlaylist = playlist?.model === "Local Search";
 
   return (
     <section className="workspace playlist-workspace">
       <header className="topbar">
         <div>
           <h1>Playlist Builder</h1>
-          <p>Describe a moment. Luna plans it; your local library supplies it.</p>
+          <p>
+            {directSearchTitle
+              ? "Your Search results are ready to review, save, and export."
+              : "Describe a moment. Luna plans it; your local library supplies it."}
+          </p>
         </div>
         <span className="playlist-local-badge">
           <ShieldCheck size={15} /> Local track selection
         </span>
       </header>
 
+      {directSearchTitle && playlist ? (
+        <section
+          className="playlist-direct-source"
+          aria-label="Search playlist created locally"
+        >
+          <span className="playlist-builder-mark" aria-hidden="true">
+            <ListMusic size={20} />
+          </span>
+          <div>
+            <span>Created locally from Search</span>
+            <h2>{directSearchTitle}</h2>
+            <p>
+              {playlist.tracks.length.toLocaleString()} tracks loaded in Search
+              order. No Luna request was made.
+            </p>
+          </div>
+        </section>
+      ) : (
       <section className="playlist-builder-card" aria-label="Build a playlist">
         <div className="playlist-builder-heading">
           <span className="playlist-builder-mark" aria-hidden="true">
@@ -351,6 +382,7 @@ export function PlaylistBuilderWorkspace({
         ) : null}
         {error ? <p className="error-message playlist-note">{error}</p> : null}
       </section>
+      )}
 
       <div className="playlist-content-grid">
         <section className="playlist-result-panel" aria-label="Playlist review">
@@ -358,7 +390,11 @@ export function PlaylistBuilderWorkspace({
             <>
               <header className="playlist-result-heading">
                 <div>
-                  <span>{playlist.strategy} recipe</span>
+                  <span>
+                    {isLocalSearchPlaylist
+                      ? "Local Search order · no Luna"
+                      : `${playlist.strategy} recipe`}
+                  </span>
                   <input
                     aria-label="Playlist name"
                     value={name}
@@ -396,7 +432,10 @@ export function PlaylistBuilderWorkspace({
               </header>
 
               <AiMarkdownExportButton
-                title={aiMarkdownTitle("Luna playlist", name)}
+                title={aiMarkdownTitle(
+                  isLocalSearchPlaylist ? "Search playlist" : "Luna playlist",
+                  name,
+                )}
                 markdown={playlistMarkdown(
                   name,
                   { ...playlist, name: name.trim() || playlist.name },
@@ -418,8 +457,12 @@ export function PlaylistBuilderWorkspace({
                   <dd>{playlist.matchingTrackCount.toLocaleString()}</dd>
                 </div>
                 <div>
-                  <dt>Repeat cap</dt>
-                  <dd>{playlist.maxTracksPerArtist} / artist</dd>
+                  <dt>{isLocalSearchPlaylist ? "Order" : "Repeat cap"}</dt>
+                  <dd>
+                    {isLocalSearchPlaylist
+                      ? "Search results"
+                      : `${playlist.maxTracksPerArtist} / artist`}
+                  </dd>
                 </div>
               </dl>
 
@@ -509,7 +552,9 @@ export function PlaylistBuilderWorkspace({
 
               <footer className="playlist-result-footer">
                 <span>
-                  Luna inspected your request only · {playlist.candidateCount} local candidates reviewed
+                  {isLocalSearchPlaylist
+                    ? `${playlist.candidateCount.toLocaleString()} local Search tracks loaded directly · no Luna request`
+                    : `Luna inspected your request only · ${playlist.candidateCount} local candidates reviewed`}
                 </span>
                 <span>{playlist.model}</span>
               </footer>

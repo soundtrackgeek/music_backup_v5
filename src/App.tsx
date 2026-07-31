@@ -398,7 +398,10 @@ import {
   SettingsSection,
   SettingsWorkspace,
 } from "./workspaces/SettingsWorkspace";
-import { PlaylistBuilderWorkspace } from "./workspaces/PlaylistBuilderWorkspace";
+import {
+  PlaylistBuilderWorkspace,
+  type PlaylistBuilderLaunch,
+} from "./workspaces/PlaylistBuilderWorkspace";
 import { WishListWorkspace } from "./workspaces/WishListWorkspace";
 import { LibraryCompletionWorkspace } from "./workspaces/LibraryCompletionWorkspace";
 import { MusicToolRepairPanel } from "./workspaces/MusicToolRepairPanel";
@@ -471,6 +474,10 @@ import {
   yearCohort,
   type InsightCohort,
 } from "./app/insightCohorts";
+import {
+  createLocalSearchPlaylist,
+  searchPlaylistTrackLimit,
+} from "./app/searchPlaylist";
 
 type AppUpdateStatus =
   | "idle"
@@ -7934,12 +7941,8 @@ export default function App() {
     useState<InsightCohort | null>(null);
   const [discoveryCohort, setDiscoveryCohort] =
     useState<InsightCohort | null>(null);
-  const [playlistLaunch, setPlaylistLaunch] = useState<{
-    id: number;
-    cohortTitle: string;
-    prompt: string;
-    request: BrowseRequest;
-  } | null>(null);
+  const [playlistLaunch, setPlaylistLaunch] =
+    useState<PlaylistBuilderLaunch | null>(null);
   useWorkspaceNavigation(activeSection, setActiveSection);
   const [sourcePath, setSourcePath] = useState(() =>
     createDefaultImportSourcePath(),
@@ -8033,6 +8036,11 @@ export default function App() {
   const [saveName, setSaveName] = useState("");
   const [browseError, setBrowseError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [isCreatingSearchPlaylist, setIsCreatingSearchPlaylist] =
+    useState(false);
+  const [searchPlaylistError, setSearchPlaylistError] = useState<string | null>(
+    null,
+  );
   const [includeCalculated, setIncludeCalculated] = useState(false);
   const [searchTableColumns, setSearchTableColumns] = useState<string[]>([
     "billboard",
@@ -10932,6 +10940,32 @@ export default function App() {
       request: normalizeBrowseRequestForClient(cohort.request),
     });
     setActiveSection("Playlists");
+  }
+
+  async function createPlaylistFromCurrentSearch() {
+    if (isCreatingSearchPlaylist || total === 0) return;
+    const cohort = searchRequestCohort(request, total);
+    setIsCreatingSearchPlaylist(true);
+    setSearchPlaylistError(null);
+    try {
+      const draft = await createLocalSearchPlaylist(cohort.title, request);
+      setPlaylistLaunch({
+        id: Date.now(),
+        cohortTitle: cohort.title,
+        prompt: draft.prompt,
+        request: draft.request,
+        draft,
+      });
+      setActiveSection("Playlists");
+    } catch (playlistError) {
+      setSearchPlaylistError(
+        playlistError instanceof Error
+          ? playlistError.message
+          : String(playlistError),
+      );
+    } finally {
+      setIsCreatingSearchPlaylist(false);
+    }
   }
 
   function openTimelinePlaylist(selection: AlbumTimeRibbonPlaylist) {
@@ -20180,21 +20214,32 @@ export default function App() {
               <div>
                 <strong>Turn this search into music</strong>
                 <span>
-                  Use all {formatNumber(total)} matching {request.view} as a
-                  locked source in Playlist Builder.
+                  {request.view === "tracks"
+                    ? total > searchPlaylistTrackLimit
+                      ? `Create the first ${formatNumber(searchPlaylistTrackLimit)} of ${formatNumber(total)} matching tracks locally in Search order.`
+                      : `Create all ${formatNumber(total)} matching tracks locally in Search order.`
+                    : `Create a local draft from tracks on ${formatNumber(total)} matching albums, up to ${formatNumber(searchPlaylistTrackLimit)} tracks.`}{" "}
+                  No Luna request.
                 </span>
               </div>
               <button
                 className="primary-button"
                 type="button"
-                disabled={isSearching || total === 0}
-                onClick={() =>
-                  openInsightInPlaylist(searchRequestCohort(request, total))
+                disabled={
+                  isSearching || isCreatingSearchPlaylist || total === 0
                 }
+                onClick={() => void createPlaylistFromCurrentSearch()}
               >
                 <ListMusic size={17} />
-                <span>Make a Playlist</span>
+                <span>
+                  {isCreatingSearchPlaylist
+                    ? "Creating playlist"
+                    : "Make a Playlist"}
+                </span>
               </button>
+              {searchPlaylistError ? (
+                <p className="error-message">{searchPlaylistError}</p>
+              ) : null}
             </section>
 
             <section className="export-box">

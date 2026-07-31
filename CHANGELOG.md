@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.111.3] - 2026-07-31
+### Changed
+- Changed Search's **Make a Playlist** action to create a populated local draft immediately from the current filters and ordering without calling Luna, while keeping natural-language Playlist Builder and insight-cohort planning unchanged.
+- Raised the saved/exported playlist limit to 500 tracks for direct Search playlists while retaining Luna's 200-track planning cap.
+- Synchronized app metadata and provider user agents to `0.111.3`.
+
 ## [0.111.2] - 2026-07-31
 ### Added
 - Added a **Make a Playlist** action to the Search sidebar that carries the complete current album or track search into Playlist Builder as a locked local source instead of limiting the playlist to the visible page.

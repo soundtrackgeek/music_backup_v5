@@ -9992,6 +9992,8 @@ fn build_playlist(conn: &Connection, plan: AiPlaylistPlan) -> Result<AiPlaylist>
     })
 }
 
+const MAX_SAVED_PLAYLIST_TRACKS: usize = 500;
+
 fn normalize_playlist(mut playlist: AiPlaylist) -> Result<AiPlaylist> {
     if playlist.prompt.trim().is_empty() || playlist.prompt.chars().count() > 2_000 {
         bail!("A saved playlist requires its original prompt")
@@ -10007,12 +10009,12 @@ fn normalize_playlist(mut playlist: AiPlaylist) -> Result<AiPlaylist> {
             playlist.strategy.as_str(),
             "ranked" | "variety" | "discovery" | "random"
         )
-        || playlist.target_track_count > 200
+        || playlist.target_track_count > MAX_SAVED_PLAYLIST_TRACKS as u32
         || playlist.target_minutes > 1_440
         || (playlist.target_track_count == 0 && playlist.target_minutes == 0)
         || !(1..=10).contains(&playlist.max_tracks_per_artist)
         || !(1..=10).contains(&playlist.max_tracks_per_album)
-        || playlist.tracks.len() > 200
+        || playlist.tracks.len() > MAX_SAVED_PLAYLIST_TRACKS
     {
         bail!("The playlist recipe is outside the supported local limits")
     }
@@ -21114,6 +21116,36 @@ mod tests {
 
         delete_saved_playlist(&conn, saved.id).expect("delete playlist");
         assert!(list_saved_playlists(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn accepts_local_search_playlists_up_to_five_hundred_tracks() {
+        let mut playlist = build_playlist(&seeded_connection(), test_playlist_plan())
+            .expect("build playlist");
+        let template = playlist.tracks[0].clone();
+        playlist.model = "Local Search".to_string();
+        playlist.target_track_count = MAX_SAVED_PLAYLIST_TRACKS as u32;
+        playlist.tracks = (1..=MAX_SAVED_PLAYLIST_TRACKS)
+            .map(|track_id| AiPlaylistTrack {
+                track_id: track_id as i64,
+                ..template.clone()
+            })
+            .collect();
+
+        assert_eq!(
+            normalize_playlist(playlist.clone())
+                .expect("normalize five hundred tracks")
+                .tracks
+                .len(),
+            MAX_SAVED_PLAYLIST_TRACKS
+        );
+
+        playlist.tracks.push(AiPlaylistTrack {
+            track_id: (MAX_SAVED_PLAYLIST_TRACKS + 1) as i64,
+            ..template
+        });
+        playlist.target_track_count = (MAX_SAVED_PLAYLIST_TRACKS + 1) as u32;
+        assert!(normalize_playlist(playlist).is_err());
     }
 
     #[test]
