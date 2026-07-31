@@ -5,10 +5,36 @@ import {
   lovedDensityCohort,
   missingMetadataCohort,
   ratingBucketCohort,
+  searchRequestCohort,
   yearCohort,
 } from "./insightCohorts";
+import { createRequest } from "./requests";
 
 describe("insight cohort requests", () => {
+  it("turns the complete current Search scope into a playlist cohort", () => {
+    const request = createRequest("albums");
+    request.searchText = "Bowie";
+    request.filters.genres = ["Art Rock"];
+    request.offset = 100;
+
+    const cohort = searchRequestCohort(request, 143);
+
+    expect(cohort).toMatchObject({
+      title: "Search: Bowie",
+      description: "143 matching albums from Search.",
+      count: 143,
+      request: {
+        view: "albums",
+        searchText: "Bowie",
+        offset: 0,
+        filters: { genres: ["Art Rock"] },
+      },
+    });
+    expect(cohort.playlistPrompt).toContain(
+      "using only tracks from the Search: Bowie cohort",
+    );
+  });
+
   it("preserves the selected Statistics dimensions in Search", () => {
     const decade = decadeCohort({
       decade: 1980,

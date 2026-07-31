@@ -24,6 +24,7 @@ import {
   createDiscoveryHeatmapRequest,
   createDiscoveryMissionRequest,
   createRequest,
+  normalizeBrowseRequestForClient,
 } from "./requests";
 
 export type InsightCohort = {
@@ -84,6 +85,23 @@ function requestCohort(
     request: { ...request, offset: 0 },
     playlistPrompt: `Build a varied playlist using only tracks from the ${title} cohort. ${description}`,
   };
+}
+
+export function searchRequestCohort(request: BrowseRequest, count: number) {
+  const normalized = normalizeBrowseRequestForClient(request);
+  const itemLabel = normalized.view === "tracks" ? "tracks" : "albums";
+  const searchText = normalized.searchText.trim();
+  const title = searchText
+    ? `Search: ${searchText}`
+    : `Current ${normalized.view === "tracks" ? "track" : "album"} search`;
+
+  return requestCohort(
+    `search:${normalized.view}:${searchText || "all"}`,
+    title,
+    `${count.toLocaleString()} matching ${itemLabel} from Search.`,
+    normalized,
+    count,
+  );
 }
 
 export function discoveryMissionCohort(mission: DiscoveryMission) {

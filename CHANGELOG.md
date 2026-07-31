@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.111.2] - 2026-07-31
+### Added
+- Added a **Make a Playlist** action to the Search sidebar that carries the complete current album or track search into Playlist Builder as a locked local source instead of limiting the playlist to the visible page.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.111.2`.
+
 ## [0.111.1] - 2026-07-31
 ### Changed
 - Synchronized app metadata and provider user agents to `0.111.1`.

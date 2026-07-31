@@ -466,6 +466,7 @@ import {
   ratingBucketCohort,
   ratingEventCohort,
   ratingProgressCohort,
+  searchRequestCohort,
   trackCountBucketCohort,
   yearCohort,
   type InsightCohort,
@@ -20118,7 +20119,7 @@ export default function App() {
               <SlidersHorizontal size={20} />
               <div>
                 <h2>Views</h2>
-                <p>Saved searches and exports</p>
+                <p>Saved searches, playlists, and exports</p>
               </div>
             </div>
 
@@ -20170,6 +20171,30 @@ export default function App() {
                   </div>
                 ))
               )}
+            </section>
+
+            <section
+              className="search-playlist-box"
+              aria-label="Make a playlist from this search"
+            >
+              <div>
+                <strong>Turn this search into music</strong>
+                <span>
+                  Use all {formatNumber(total)} matching {request.view} as a
+                  locked source in Playlist Builder.
+                </span>
+              </div>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={isSearching || total === 0}
+                onClick={() =>
+                  openInsightInPlaylist(searchRequestCohort(request, total))
+                }
+              >
+                <ListMusic size={17} />
+                <span>Make a Playlist</span>
+              </button>
             </section>
 
             <section className="export-box">

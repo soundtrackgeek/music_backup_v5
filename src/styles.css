@@ -8872,10 +8872,39 @@ button {
 .calculation-list,
 .saved-list,
 .export-box,
+.search-playlist-box,
 .save-search-box {
   display: grid;
   gap: 10px;
   margin-top: 22px;
+}
+
+.search-playlist-box {
+  padding: 14px;
+  border: 1px solid #cfe2dc;
+  border-radius: 10px;
+  background: #f2f8f6;
+}
+
+.search-playlist-box > div {
+  display: grid;
+  gap: 3px;
+}
+
+.search-playlist-box strong {
+  color: #24322e;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.search-playlist-box > div span {
+  color: #697671;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.search-playlist-box .primary-button {
+  width: 100%;
 }
 
 .calculation-list div {
@@ -11196,11 +11225,20 @@ button {
 :root[data-theme="dark"] .musicbrainz-origin-report-row,
 :root[data-theme="dark"] .musicbrainz-artist-info-report-row,
 :root[data-theme="dark"] .saved-search > button:first-child,
+:root[data-theme="dark"] .search-playlist-box,
 :root[data-theme="dark"] .export-grid button,
 :root[data-theme="dark"] .export-strip button {
   border-color: #2f3d38;
   color: #dce7e3;
   background: #171f1c;
+}
+
+:root[data-theme="dark"] .search-playlist-box strong {
+  color: #edf5f2;
+}
+
+:root[data-theme="dark"] .search-playlist-box > div span {
+  color: #aebdb8;
 }
 
 :root[data-theme="dark"] .search-disclosure-heading strong {
