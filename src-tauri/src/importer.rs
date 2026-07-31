@@ -2369,7 +2369,7 @@ fn library_update_for_added_album(current: &FinalAlbum) -> LibraryUpdateRecord {
         field_label: None,
         previous_value: None,
         current_value: None,
-        change_count: None,
+        change_count: Some(i64::from(current.total_tracks)),
         description: "New album".to_string(),
     }
 }
@@ -2386,7 +2386,7 @@ fn library_update_for_removed_album(previous: &PreviousAlbum) -> LibraryUpdateRe
         field_label: None,
         previous_value: None,
         current_value: None,
-        change_count: None,
+        change_count: Some(i64::from(previous.total_tracks)),
         description: "Removed album".to_string(),
     }
 }
@@ -3336,6 +3336,11 @@ mod tests {
                 && update.description == "5 track ratings added"
                 && update.change_count == Some(5)
         }));
+
+        let added = library_update_for_added_album(&current);
+        let removed = library_update_for_removed_album(&previous);
+        assert_eq!(added.change_count, Some(10));
+        assert_eq!(removed.change_count, Some(10));
     }
 
     #[test]

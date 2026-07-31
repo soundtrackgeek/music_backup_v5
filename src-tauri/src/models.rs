@@ -206,6 +206,39 @@ pub struct LibraryUpdateResponse {
     pub offset: u32,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryUpdateArtistSummary {
+    pub artist_key: String,
+    pub artist_name: String,
+    pub total_changes: i64,
+    pub tracks_added: i64,
+    pub tracks_removed: i64,
+    pub other_changes: i64,
+    pub albums_added: i64,
+    pub albums_deleted: i64,
+    pub last_updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewLibraryArtist {
+    pub artist_key: String,
+    pub artist_name: String,
+    pub added_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryUpdateArtistResponse {
+    pub rows: Vec<LibraryUpdateArtistSummary>,
+    pub new_artists: Vec<NewLibraryArtist>,
+    pub total: i64,
+    pub summary: LibraryUpdateSummary,
+    pub limit: u32,
+    pub offset: u32,
+}
+
 fn default_library_update_limit() -> u32 {
     50
 }

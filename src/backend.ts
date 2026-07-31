@@ -232,6 +232,8 @@ import type {
   ImportSummary,
   LibraryStatus,
   LibraryUpdate,
+  LibraryUpdateArtistResponse,
+  LibraryUpdateArtistSummary,
   LibraryUpdateRequest,
   LibraryUpdateResponse,
   SavedChart,
@@ -863,6 +865,86 @@ export async function listImportRuns(limit: number) {
 
 const mockLibraryUpdates: LibraryUpdate[] = [
   {
+    id: 11,
+    importRunId: 125,
+    createdAt: "2026-07-31T10:03:00.000Z",
+    changeKind: "new",
+    category: "album",
+    albumId: "mb:thorleifs",
+    albumArtistDisplay: "Thorleifs",
+    album: "Thorleifs",
+    year: 2026,
+    field: null,
+    fieldLabel: null,
+    previousValue: null,
+    currentValue: null,
+    changeCount: 11,
+    description: "New album",
+    sourceKind: "library_import",
+    sourceLabel: "Library import #125",
+    sourcePath: "musicbee-library.tsv",
+  },
+  {
+    id: 10,
+    importRunId: 125,
+    createdAt: "2026-07-31T10:02:00.000Z",
+    changeKind: "changed",
+    category: "ratings",
+    albumId: "mb:def-leppard",
+    albumArtistDisplay: "Def Leppard",
+    album: "Hysteria",
+    year: 1987,
+    field: "rated_tracks",
+    fieldLabel: "Track ratings",
+    previousValue: "0",
+    currentValue: "27",
+    changeCount: 27,
+    description: "27 track ratings added",
+    sourceKind: "library_import",
+    sourceLabel: "Library import #125",
+    sourcePath: "musicbee-library.tsv",
+  },
+  {
+    id: 9,
+    importRunId: 125,
+    createdAt: "2026-07-31T10:01:00.000Z",
+    changeKind: "new",
+    category: "album",
+    albumId: "mb:bon-jovi",
+    albumArtistDisplay: "Bon Jovi",
+    album: "Forever",
+    year: 2024,
+    field: null,
+    fieldLabel: null,
+    previousValue: null,
+    currentValue: null,
+    changeCount: 12,
+    description: "New album",
+    sourceKind: "library_import",
+    sourceLabel: "Library import #125",
+    sourcePath: "musicbee-library.tsv",
+  },
+  ...[10, 12, 12].map((trackCount, index) => ({
+    id: 8 - index,
+    importRunId: 125,
+    createdAt: "2026-07-31T10:00:00.000Z",
+    changeKind: "removed" as const,
+    category: "album",
+    albumId: `mb:hans-zimmer-${index + 1}`,
+    albumArtistDisplay: "Hans Zimmer",
+    album: `Score ${index + 1}`,
+    year: 2001 + index,
+    field: null,
+    fieldLabel: null,
+    previousValue: null,
+    currentValue: null,
+    changeCount: trackCount,
+    description: "Removed album",
+    sourceKind: "library_import",
+    sourceLabel: "Library import #125",
+    sourcePath: "musicbee-library.tsv",
+  })),
+  {
     id: 5,
     importRunId: 124,
     createdAt: "2026-07-30T10:42:00.000Z",
@@ -1011,6 +1093,146 @@ export async function listLibraryUpdates(request: LibraryUpdateRequest) {
   }
 
   return invoke<LibraryUpdateResponse>("list_library_updates", { request });
+}
+
+const mockNewArtistKeys = new Set([normalizeArtistKey("Thorleifs")]);
+
+function mockArtistUpdateSummary(
+  updates: LibraryUpdate[],
+): LibraryUpdateArtistSummary[] {
+  const artists = new Map<string, LibraryUpdateArtistSummary>();
+  for (const update of updates) {
+    const artistName = update.albumArtistDisplay?.trim() || "Unknown artist";
+    const artistKey = normalizeArtistKey(artistName) || "unknown";
+    const current = artists.get(artistKey) ?? {
+      artistKey,
+      artistName,
+      totalChanges: 0,
+      tracksAdded: 0,
+      tracksRemoved: 0,
+      otherChanges: 0,
+      albumsAdded: 0,
+      albumsDeleted: 0,
+      lastUpdatedAt: update.createdAt,
+    };
+    const changeCount = Math.max(update.changeCount ?? 0, 0);
+    const previousCount = Number(update.previousValue ?? 0);
+    const currentCount = Number(update.currentValue ?? 0);
+    if (update.category === "album" && update.changeKind === "new") {
+      current.tracksAdded += changeCount;
+      current.albumsAdded += 1;
+    } else if (
+      update.category === "album" &&
+      update.changeKind === "removed"
+    ) {
+      current.tracksRemoved += changeCount;
+      current.albumsDeleted += 1;
+    } else if (
+      update.category === "tracks" &&
+      update.changeKind === "changed" &&
+      currentCount > previousCount
+    ) {
+      current.tracksAdded += changeCount;
+    } else if (
+      update.category === "tracks" &&
+      update.changeKind === "changed" &&
+      currentCount < previousCount
+    ) {
+      current.tracksRemoved += changeCount;
+    } else {
+      current.otherChanges +=
+        update.category === "ratings" ? Math.max(changeCount, 1) : 1;
+    }
+    current.totalChanges =
+      current.tracksAdded + current.tracksRemoved + current.otherChanges;
+    if (update.createdAt > current.lastUpdatedAt) {
+      current.lastUpdatedAt = update.createdAt;
+      current.artistName = artistName;
+    }
+    artists.set(artistKey, current);
+  }
+  return [...artists.values()].sort(
+    (left, right) =>
+      right.totalChanges - left.totalChanges ||
+      right.lastUpdatedAt.localeCompare(left.lastUpdatedAt) ||
+      left.artistName.localeCompare(right.artistName),
+  );
+}
+
+export async function listLibraryUpdateArtists(
+  request: LibraryUpdateRequest,
+) {
+  if (!isTauriRuntime()) {
+    const normalizedQuery = request.query.trim().toLocaleLowerCase();
+    const matchingContext = mockLibraryUpdates.filter((update) => {
+      const searchable = [
+        update.albumArtistDisplay,
+        update.album,
+        update.fieldLabel,
+        update.previousValue,
+        update.currentValue,
+        update.description,
+        update.sourceLabel,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase();
+      return (
+        (normalizedQuery.length === 0 || searchable.includes(normalizedQuery)) &&
+        (request.dateFrom == null || update.createdAt >= request.dateFrom)
+      );
+    });
+    const filtered = request.changeKind
+      ? matchingContext.filter(
+          (update) => update.changeKind === request.changeKind,
+        )
+      : matchingContext;
+    const artistRows = mockArtistUpdateSummary(filtered);
+    const newArtists =
+      request.changeKind != null && request.changeKind !== "new"
+        ? []
+        : mockLibraryUpdates
+            .filter(
+              (update) =>
+                update.category === "album" &&
+                update.changeKind === "new" &&
+                mockNewArtistKeys.has(
+                  normalizeArtistKey(update.albumArtistDisplay ?? ""),
+                ) &&
+                (normalizedQuery.length === 0 ||
+                  update.albumArtistDisplay
+                    ?.toLocaleLowerCase()
+                    .includes(normalizedQuery)) &&
+                (request.dateFrom == null || update.createdAt >= request.dateFrom),
+            )
+            .map((update) => ({
+              artistKey: normalizeArtistKey(update.albumArtistDisplay ?? ""),
+              artistName: update.albumArtistDisplay ?? "Unknown artist",
+              addedAt: update.createdAt,
+            }));
+    return {
+      rows: artistRows.slice(request.offset, request.offset + request.limit),
+      newArtists,
+      total: artistRows.length,
+      summary: {
+        all: matchingContext.length,
+        new: matchingContext.filter((update) => update.changeKind === "new")
+          .length,
+        changed: matchingContext.filter(
+          (update) => update.changeKind === "changed",
+        ).length,
+        removed: matchingContext.filter(
+          (update) => update.changeKind === "removed",
+        ).length,
+      },
+      limit: request.limit,
+      offset: request.offset,
+    } satisfies LibraryUpdateArtistResponse;
+  }
+
+  return invoke<LibraryUpdateArtistResponse>("list_library_update_artists", {
+    request,
+  });
 }
 
 export async function listDatabaseBackups() {

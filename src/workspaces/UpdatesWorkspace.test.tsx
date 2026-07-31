@@ -40,4 +40,41 @@ describe("UpdatesWorkspace", () => {
       expect(screen.queryByText("Pepsi & Shirlie")).not.toBeInTheDocument();
     });
   });
+
+  it("summarizes artist impact and lists newly added artists separately", async () => {
+    const user = userEvent.setup();
+    const onSelectUpdate = vi.fn();
+    const onOpenArtist = vi.fn();
+    render(
+      <UpdatesWorkspace
+        selectedUpdateId={null}
+        onSelectUpdate={onSelectUpdate}
+        onOpenArtist={onOpenArtist}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Artists" }));
+
+    expect(await screen.findByText("Hans Zimmer")).toBeInTheDocument();
+    expect(screen.getByText("34 tracks removed")).toBeInTheDocument();
+    expect(screen.getByText("3 albums removed")).toBeInTheDocument();
+    expect(screen.getByText("12 tracks added")).toBeInTheDocument();
+    expect(screen.getAllByText("1 album added").length).toBeGreaterThan(0);
+    expect(screen.getByText("27 changes")).toBeInTheDocument();
+    expect(screen.getAllByText("1 album removed")).toHaveLength(1);
+
+    expect(screen.getByRole("heading", { name: "New artists" })).toBeInTheDocument();
+    expect(screen.getAllByText("Thorleifs").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(
+        (_content, element) =>
+          element?.getAttribute("datetime") === "2026-07-31T10:03:00.000Z",
+      ).length,
+    ).toBeGreaterThan(0);
+
+    await user.click(
+      screen.getByRole("button", { name: "Open Hans Zimmer in Artists" }),
+    );
+    expect(onOpenArtist).toHaveBeenCalledWith("Hans Zimmer");
+  });
 });

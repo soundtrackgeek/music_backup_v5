@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.112.0] - 2026-07-31
+### Added
+- Added an **Artists** view to Updates with full-history artist rollups, separate track-added/removed and album-added/removed impact, filtering, pagination, and direct links to each Artists page.
+- Added a dedicated **New artists** section that records true first appearances and their added dates without treating a new album for an existing artist as a new artist.
+
+### Changed
+- Library import history now records the track count on new and removed album events so future artist rollups can report exact track impact; older events remain album-count-only when their track total was not recorded.
+- Synchronized app metadata and provider user agents to `0.112.0`.
+
 ## [0.111.3] - 2026-07-31
 ### Changed
 - Changed Search's **Make a Playlist** action to create a populated local draft immediately from the current filters and ordering without calling Luna, while keeping natural-language Playlist Builder and insight-cohort planning unchanged.

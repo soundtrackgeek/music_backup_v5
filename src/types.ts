@@ -65,6 +65,33 @@ export type LibraryUpdateResponse = {
   offset: number;
 };
 
+export type LibraryUpdateArtistSummary = {
+  artistKey: string;
+  artistName: string;
+  totalChanges: number;
+  tracksAdded: number;
+  tracksRemoved: number;
+  otherChanges: number;
+  albumsAdded: number;
+  albumsDeleted: number;
+  lastUpdatedAt: string;
+};
+
+export type NewLibraryArtist = {
+  artistKey: string;
+  artistName: string;
+  addedAt: string;
+};
+
+export type LibraryUpdateArtistResponse = {
+  rows: LibraryUpdateArtistSummary[];
+  newArtists: NewLibraryArtist[];
+  total: number;
+  summary: LibraryUpdateSummary;
+  limit: number;
+  offset: number;
+};
+
 export type LibraryStatus = {
   dbPath: string;
   hasDatabase: boolean;

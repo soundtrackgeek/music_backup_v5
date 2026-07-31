@@ -28,15 +28,15 @@ use models::{
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
     GenreProgressRequest, GenreProgressStats, GenreTimelineRequest, GenreTimelineResponse,
-    LibraryUpdateRequest, LibraryUpdateResponse, MusicBrainzArtistDiscographyRequest,
-    MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
-    MusicBrainzArtistInfoImportRequest, MusicBrainzArtistInfoImportSummary,
-    MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus, MusicBrainzArtistLinkRequest,
-    MusicBrainzArtistOriginCountryRequest, MusicBrainzArtistOriginCountryUpdate,
-    MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus,
-    MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
-    MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryStatus,
-    MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
+    LibraryUpdateArtistResponse, LibraryUpdateRequest, LibraryUpdateResponse,
+    MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
+    MusicBrainzArtistExportRequest, MusicBrainzArtistInfoImportRequest,
+    MusicBrainzArtistInfoImportSummary, MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus,
+    MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginCountryRequest,
+    MusicBrainzArtistOriginCountryUpdate, MusicBrainzArtistRefreshRequest,
+    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzOriginCountryImportRequest,
+    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
+    MusicBrainzOriginCountryStatus, MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
     MusicBrainzReleaseDecisionRequest, MusicMapLocationDetails, MusicMapRefreshSummary,
     MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
@@ -1036,6 +1036,18 @@ async fn list_library_updates(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn list_library_update_artists(
+    app: AppHandle,
+    request: LibraryUpdateRequest,
+) -> Result<LibraryUpdateArtistResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || updates::list_artists_for_app(&app, request))
+        .await
+        .map_err(|error| format!("Artist update history task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_album_debut_timeline(
     app: AppHandle,
     selected_year: Option<i32>,
@@ -1683,6 +1695,7 @@ pub fn run() {
             save_settings,
             get_statistics,
             list_library_updates,
+            list_library_update_artists,
             get_album_debut_timeline,
             get_track_debut_timeline,
             get_music_map,
