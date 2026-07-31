@@ -364,7 +364,14 @@ fn load_verifications(conn: &Connection) -> Result<HashMap<String, StoredVerific
 
 fn load_decisions(conn: &Connection) -> Result<HashMap<String, StoredDecision>> {
     let mut statement = conn.prepare(
-        "SELECT artist_key, status, wish_list_item_id FROM library_completion_artist_decisions",
+        "SELECT artist_key, status, wish_list_item_id
+         FROM library_completion_artist_decisions decision
+         WHERE decision.status <> 'wanted'
+            OR EXISTS (
+                SELECT 1
+                FROM wish_list_items wish
+                WHERE wish.id = decision.wish_list_item_id
+            )",
     )?;
     let rows = statement.query_map([], |row| {
         Ok((
@@ -1781,5 +1788,39 @@ mod tests {
             )
             .expect("load wish list item");
         assert_eq!(entity, "artist");
+    }
+
+    #[test]
+    fn deleted_wish_list_items_do_not_leave_stale_wanted_artists() {
+        let conn = connection();
+        insert_chart_artist(&conn, "Missing Artist", "missing artist");
+        conn.execute(
+            "INSERT INTO wish_list_items
+                (entity, title, artist, musicbrainz_id, musicbrainz_url, source, identity_key, created_at)
+             VALUES ('artist', 'Missing Artist', '',
+                     '11111111-1111-1111-1111-111111111111',
+                     'https://musicbrainz.org/artist/11111111-1111-1111-1111-111111111111',
+                     'test', 'artist:missing artist', 'now')",
+            [],
+        )
+        .expect("insert wish list artist");
+        let wish_list_item_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO library_completion_artist_decisions
+                (artist_key, status, artist, wish_list_item_id, updated_at)
+             VALUES ('missing artist', 'wanted', 'Missing Artist', ?1, 'now')",
+            params![wish_list_item_id],
+        )
+        .expect("insert wanted artist decision");
+        conn.execute(
+            "DELETE FROM wish_list_items WHERE id = ?1",
+            params![wish_list_item_id],
+        )
+        .expect("remove wish list artist");
+
+        let refreshed = get_for_connection(&conn, None, true).expect("refresh chart artists");
+
+        assert_eq!(refreshed.candidates[0].status, "candidate");
+        assert_eq!(refreshed.candidates[0].wish_list_item_id, None);
     }
 }

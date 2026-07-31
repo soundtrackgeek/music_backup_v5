@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.111.1] - 2026-07-31
+### Changed
+- Synchronized app metadata and provider user agents to `0.111.1`.
+
+### Fixed
+- Reconciled Completion's **Wanted** count and Artist Discovery's **In Wish List** labels with live Wish List rows, so deleting albums or artists immediately clears orphaned wanted state, including stale decisions saved by earlier versions.
+
 ## [0.111.0] - 2026-07-30
 ### Added
 - Added Ti i Skuddet and Norsktoppen singles evidence to Completion → Artist Discovery.

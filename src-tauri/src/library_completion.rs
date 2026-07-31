@@ -377,7 +377,13 @@ fn load_decisions(conn: &Connection) -> Result<HashMap<String, StoredDecision>> 
     let mut statement = conn.prepare(
         "
         SELECT candidate_key, status, wish_list_item_id, musicbrainz_id, musicbrainz_url
-        FROM library_completion_decisions
+        FROM library_completion_decisions decision
+        WHERE decision.status <> 'wanted'
+           OR EXISTS (
+                SELECT 1
+                FROM wish_list_items wish
+                WHERE wish.id = decision.wish_list_item_id
+           )
         ",
     )?;
     let rows = statement.query_map([], |row| {
@@ -1908,6 +1914,43 @@ mod tests {
         let refreshed = get_for_connection(&conn, None).expect("refresh completion data");
         assert_eq!(refreshed.candidates[0].status, "wanted");
         assert_eq!(refreshed.atlas[0].wanted, 1);
+    }
+
+    #[test]
+    fn deleted_wish_list_items_do_not_leave_stale_wanted_albums() {
+        let conn = connection();
+        insert_billboard_candidate(&conn);
+        let candidate = get_for_connection(&conn, None)
+            .expect("get completion data")
+            .candidates
+            .remove(0);
+        let decision = set_decision_for_connection(
+            &conn,
+            SetLibraryCompletionDecisionRequest {
+                candidate_id: candidate.id,
+                artist: candidate.artist,
+                title: candidate.title,
+                chart_year: candidate.chart_year,
+                source: candidate.evidence[0].label.clone(),
+                status: "wanted".to_string(),
+                wish_list_item_id: None,
+                musicbrainz_id: None,
+                musicbrainz_url: None,
+            },
+        )
+        .expect("save wanted decision");
+        conn.execute(
+            "DELETE FROM wish_list_items WHERE id = ?1",
+            params![decision.wish_list_item_id],
+        )
+        .expect("remove wish list item");
+
+        let refreshed = get_for_connection(&conn, None).expect("refresh completion data");
+
+        assert_eq!(refreshed.candidates[0].status, "candidate");
+        assert_eq!(refreshed.candidates[0].wish_list_item_id, None);
+        assert_eq!(refreshed.atlas[0].wanted, 0);
+        assert_eq!(refreshed.atlas[0].candidates, 1);
     }
 
     #[test]
