@@ -2586,6 +2586,7 @@ export type AiMarkdownExportRequest = {
 
 export type StatisticsResponse = {
   overview: LibraryOverviewStats;
+  countryCatalog: CountryCatalogStats[];
   healthScore: LibraryHealthScore;
   libraryShape: LibraryShapeStats;
   ratingProgress: RatingProgressStats;
@@ -2604,6 +2605,13 @@ export type StatisticsResponse = {
   ratingHistory: RatingHistoryPoint[];
   recentRatingEvents: RatingEvent[];
   lastUpdated: string | null;
+};
+
+export type CountryCatalogStats = {
+  countryCode: string;
+  countryName: string;
+  artistCount: number;
+  albumCount: number;
 };
 
 export type LibraryShapeStats = {

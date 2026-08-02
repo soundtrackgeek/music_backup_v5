@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.113.0] - 2026-08-02
+### Added
+- Added a responsive **Countries in your library** horizontal bar chart to Statistics, with Artists and Albums views, descending country rankings, direct counts, country names, and flags for every stored origin country.
+
+### Changed
+- Statistics now calculates current-library artist and album totals for all stored MusicBrainz origin countries in one local aggregate query, retaining zero-count countries at the end of the chart.
+- Synchronized app metadata and provider user agents to `0.113.0`.
+
 ## [0.112.5] - 2026-08-02
 ### Changed
 - Synchronized app metadata and provider user agents to `0.112.5`.

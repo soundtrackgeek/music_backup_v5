@@ -1977,6 +1977,7 @@ pub struct ExportResult {
 #[serde(rename_all = "camelCase")]
 pub struct StatisticsResponse {
     pub overview: LibraryOverviewStats,
+    pub country_catalog: Vec<CountryCatalogStats>,
     pub health_score: LibraryHealthScore,
     pub library_shape: LibraryShapeStats,
     pub rating_progress: RatingProgressStats,
@@ -1995,6 +1996,15 @@ pub struct StatisticsResponse {
     pub rating_history: Vec<RatingHistoryPoint>,
     pub recent_rating_events: Vec<RatingEvent>,
     pub last_updated: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CountryCatalogStats {
+    pub country_code: String,
+    pub country_name: String,
+    pub artist_count: i64,
+    pub album_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]

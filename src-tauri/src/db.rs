@@ -12,20 +12,20 @@ use crate::models::{
     ArtistListResponse, ArtistSummary, ArtistTimelineAlbum, ArtistTimelineArtist,
     ArtistTimelineRequest, ArtistTimelineResponse, BillboardImportSummary,
     BillboardSinglesImportSummary, BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow,
-    BrowseSort, CatalogConcentrationStats, ChartConfig, ConcentrationPoint, DecadeProgressStats,
-    DiscoveryAlbumPoint, DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell,
-    DiscoveryMission, DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats,
-    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
-    GenreProgressRequest, GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint,
-    GenreTimelineGenre, GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount,
-    ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus,
-    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption,
-    MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry, MusicToolFixRequest,
-    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
-    MusicToolProgress, MusicToolSummary, MusicToolUndoSummary, NorsktoppenImportSummary,
-    OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse,
-    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
-    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
+    BrowseSort, CatalogConcentrationStats, ChartConfig, ConcentrationPoint, CountryCatalogStats,
+    DecadeProgressStats, DiscoveryAlbumPoint, DiscoveryArtistPoint, DiscoveryGenrePoint,
+    DiscoveryHeatmapCell, DiscoveryMission, DiscoveryResponse, DurationAlbumStat,
+    DurationAnalyticsStats, ExportMusicToolRequest, ExportResult, ExportSearchRequest,
+    GenreListRequest, GenreListResponse, GenreProgressRequest, GenreProgressStats, GenreSummary,
+    GenreTimelineAlbumPoint, GenreTimelineGenre, GenreTimelineRequest, GenreTimelineResponse,
+    GenreTimelineYearCount, ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats,
+    LibraryStatus, LovedDensityStat, LovedTrackStats, MetadataCoverageMetric,
+    MusicBrainzOriginCountryOption, MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry,
+    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
+    MusicToolIssueRow, MusicToolProgress, MusicToolSummary, MusicToolUndoSummary,
+    NorsktoppenImportSummary, OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation,
+    PerformanceProbeResponse, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
+    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
     TiISkuddetImportSummary, TrackDebutTimelineResponse, TrackDebutTimelineTrack,
     TrackDebutTimelineYear, VgListaImportSummary, YearProgressRequest, YearProgressStats,
 };
@@ -6861,6 +6861,7 @@ pub fn list_import_runs(conn: &Connection, limit: u32) -> Result<Vec<ImportRun>>
 
 fn statistics(conn: &Connection) -> Result<StatisticsResponse> {
     let overview = library_overview_stats(conn)?;
+    let country_catalog = country_catalog_stats(conn)?;
     let rating_progress = rating_progress_stats(conn)?;
     let metadata_coverage = metadata_coverage_stats(conn)?;
     let health_score = library_health_score(conn, &overview, &rating_progress, &metadata_coverage)?;
@@ -6886,6 +6887,7 @@ fn statistics(conn: &Connection) -> Result<StatisticsResponse> {
 
     Ok(StatisticsResponse {
         overview,
+        country_catalog,
         health_score,
         library_shape,
         rating_progress,
@@ -6905,6 +6907,50 @@ fn statistics(conn: &Connection) -> Result<StatisticsResponse> {
         recent_rating_events,
         last_updated,
     })
+}
+
+fn country_catalog_stats(conn: &Connection) -> Result<Vec<CountryCatalogStats>> {
+    if !schema_table_exists(conn, "musicbrainz_origin_countries")?
+        || !schema_table_exists(conn, "musicbrainz_artist_origin_countries")?
+    {
+        return Ok(Vec::new());
+    }
+
+    let album_artist_key = artist_key_sql("album.album_artist_display");
+    let sql = format!(
+        "
+        SELECT
+            country.country_code,
+            country.country_name,
+            COUNT(DISTINCT CASE
+                WHEN album.id IS NOT NULL THEN origin.local_artist_key
+            END) AS artist_count,
+            COUNT(DISTINCT album.id) AS album_count
+        FROM musicbrainz_origin_countries country
+        LEFT JOIN musicbrainz_artist_origin_countries origin
+          ON origin.country_code = country.country_code
+        LEFT JOIN albums album
+          ON {album_artist_key} = origin.local_artist_key
+        GROUP BY country.country_code, country.country_name
+        ORDER BY LOWER(country.country_name), country.country_code
+        "
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .context("Could not prepare country catalog statistics")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(CountryCatalogStats {
+                country_code: row.get(0)?,
+                country_name: row.get(1)?,
+                artist_count: row.get(2)?,
+                album_count: row.get(3)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not read country catalog statistics")?;
+
+    Ok(rows)
 }
 
 fn library_profile(
@@ -22078,6 +22124,47 @@ mod tests {
         assert_eq!(stats.rating_progress.fully_rated_albums, 1);
         assert_eq!(stats.year_progress[0].year, 1987);
         assert_eq!(stats.track_rating_distribution[0].label, "5");
+    }
+
+    #[test]
+    fn country_catalog_statistics_count_current_library_artists_and_albums() {
+        let conn = seeded_connection();
+        insert_test_album(
+            &conn,
+            "mb:pet-shop-boys-second",
+            "Pet Shop Boys",
+            "Behaviour",
+            1990,
+            10,
+        );
+        conn.execute_batch(
+            "
+            INSERT INTO musicbrainz_origin_countries (
+                country_code, country_name, created_at, updated_at
+            ) VALUES
+                ('GB', 'United Kingdom', '2026-08-02T00:00:00Z', '2026-08-02T00:00:00Z'),
+                ('NO', 'Norway', '2026-08-02T00:00:00Z', '2026-08-02T00:00:00Z');
+
+            INSERT INTO musicbrainz_artist_origin_countries (
+                local_artist_key, display_artist, mbid, country_code, country_name,
+                created_at, updated_at
+            ) VALUES (
+                'pet shop boys', 'Pet Shop Boys', 'mbid-pet-shop-boys', 'GB',
+                'United Kingdom', '2026-08-02T00:00:00Z', '2026-08-02T00:00:00Z'
+            );
+            ",
+        )
+        .expect("insert country catalog fixtures");
+
+        let stats = statistics(&conn).expect("load country catalog statistics");
+
+        assert_eq!(stats.country_catalog.len(), 2);
+        assert_eq!(stats.country_catalog[0].country_code, "NO");
+        assert_eq!(stats.country_catalog[0].artist_count, 0);
+        assert_eq!(stats.country_catalog[0].album_count, 0);
+        assert_eq!(stats.country_catalog[1].country_code, "GB");
+        assert_eq!(stats.country_catalog[1].artist_count, 1);
+        assert_eq!(stats.country_catalog[1].album_count, 2);
     }
 
     #[test]

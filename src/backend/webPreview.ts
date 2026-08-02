@@ -1888,6 +1888,68 @@ const mockStatistics: StatisticsResponse = {
     totalSeconds: 226_176_400,
     averageAlbumScore: 104.72,
   },
+  countryCatalog: [
+    {
+      countryCode: "US",
+      countryName: "United States",
+      artistCount: 8042,
+      albumCount: 24180,
+    },
+    {
+      countryCode: "GB",
+      countryName: "United Kingdom",
+      artistCount: 4910,
+      albumCount: 15742,
+    },
+    {
+      countryCode: "DE",
+      countryName: "Germany",
+      artistCount: 1840,
+      albumCount: 5288,
+    },
+    {
+      countryCode: "CA",
+      countryName: "Canada",
+      artistCount: 1512,
+      albumCount: 4460,
+    },
+    {
+      countryCode: "SE",
+      countryName: "Sweden",
+      artistCount: 1018,
+      albumCount: 3374,
+    },
+    {
+      countryCode: "FR",
+      countryName: "France",
+      artistCount: 1126,
+      albumCount: 3182,
+    },
+    {
+      countryCode: "NO",
+      countryName: "Norway",
+      artistCount: 786,
+      albumCount: 2504,
+    },
+    {
+      countryCode: "AU",
+      countryName: "Australia",
+      artistCount: 802,
+      albumCount: 2210,
+    },
+    {
+      countryCode: "JP",
+      countryName: "Japan",
+      artistCount: 674,
+      albumCount: 2098,
+    },
+    {
+      countryCode: "NL",
+      countryName: "Netherlands",
+      artistCount: 590,
+      albumCount: 1756,
+    },
+  ],
   healthScore: {
     score: 57.4,
     ratingCoverage: 0.365,

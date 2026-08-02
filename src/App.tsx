@@ -371,6 +371,7 @@ import { ArtistTimeline } from "./components/ArtistTimeline";
 import { ArtistPortrait } from "./components/ArtistPortrait";
 import { ImportSafetyPanel } from "./components/ImportSafetyPanel";
 import { InsightActionDock } from "./components/InsightActionDock";
+import { CountryCatalogChart } from "./components/CountryCatalogChart";
 import { AlbumCover } from "./components/AlbumCover";
 import {
   AlbumTimeRibbon,
@@ -16415,6 +16416,17 @@ export default function App() {
                   rows={statistics?.genreProgress ?? []}
                   onSelect={setStatisticsCohort}
                 />
+              </section>
+
+              <section className="stats-panel wide country-catalog-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Countries in your library</h2>
+                    <p>Artists and albums ranked by origin country.</p>
+                  </div>
+                  <BarChart3 size={18} />
+                </div>
+                <CountryCatalogChart rows={statistics?.countryCatalog ?? []} />
               </section>
 
               <section className="stats-panel wide">
