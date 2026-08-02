@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.112.2] - 2026-08-02
+### Changed
+- The Completion Artists **Unverified** view now keeps its membership and ordering fixed while verification results update row statuses and actions in place; an explicit chart scan, source/year change, or view re-entry rebuilds the filtered snapshot.
+- Synchronized app metadata and provider user agents to `0.112.2`.
+
+### Fixed
+- Prevented completed artist verification from removing the active artist or moving the Artist Queue back to the top, including failed lookups that need another verification attempt.
+
 ## [0.112.1] - 2026-08-02
 ### Added
 - Added an **Unverified** Show filter to Completion's Artists queue so it can be limited to artists that have not entered verification or another review state.

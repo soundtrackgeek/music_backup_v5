@@ -125,6 +125,14 @@ function artistVerificationLabel(candidate: LibraryCompletionArtistCandidate) {
   }
 }
 
+function isUnverifiedArtist(candidate: LibraryCompletionArtistCandidate) {
+  return candidate.status === "candidate" && candidate.verificationStatus === "unverified";
+}
+
+function unverifiedArtistIds(candidates: LibraryCompletionArtistCandidate[]) {
+  return candidates.filter(isUnverifiedArtist).map((candidate) => candidate.id);
+}
+
 function ProviderBadge({
   status,
   activity,
@@ -172,6 +180,7 @@ export function ArtistCompletionWorkspace({
   const [discogsStatus, setDiscogsStatus] = useState<DiscogsCredentialStatus | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ArtistFilter>("all");
+  const [unverifiedSnapshotIds, setUnverifiedSnapshotIds] = useState<string[] | null>(null);
   const [chartFilter, setChartFilter] = useState<ArtistChartFilter>("all");
   const [yearFrom, setYearFrom] = useState<number | null>(null);
   const [yearTo, setYearTo] = useState<number | null>(null);
@@ -193,7 +202,10 @@ export function ArtistCompletionWorkspace({
   const candidateRowsRef = useRef(new Map<string, HTMLDivElement>());
   const candidateListScrollTopRef = useRef(0);
 
-  const load = useCallback(async (request: LibraryCompletionArtistRequest | null = null) => {
+  const load = useCallback(async (
+    request: LibraryCompletionArtistRequest | null = null,
+    preserveUnverifiedSnapshot = false,
+  ) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -203,6 +215,9 @@ export function ArtistCompletionWorkspace({
         getDiscogsCredentialStatus(),
       ]);
       setData(response);
+      if (!preserveUnverifiedSnapshot) {
+        setUnverifiedSnapshotIds(unverifiedArtistIds(response.candidates));
+      }
       setVerificationStatus(queue);
       setDiscogsStatus(provider);
       setSelectedForVerification((current) => {
@@ -239,16 +254,24 @@ export function ArtistCompletionWorkspace({
   useEffect(() => {
     if (!batch || batch.state !== "completed" || completedBatchReloadRef.current === batch.id) return;
     completedBatchReloadRef.current = batch.id;
-    void load(activeRequest);
+    void load(activeRequest, true);
   }, [activeRequest, batch, load]);
 
   const candidates = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    return (data?.candidates ?? []).filter((candidate) => {
+    const loadedCandidates = data?.candidates ?? [];
+    const candidatesById = new Map(loadedCandidates.map((candidate) => [candidate.id, candidate]));
+    const snapshotCandidates = filter === "unverified" && unverifiedSnapshotIds
+      ? unverifiedSnapshotIds
+          .map((id) => candidatesById.get(id))
+          .filter((candidate): candidate is LibraryCompletionArtistCandidate => candidate != null)
+      : loadedCandidates;
+    return snapshotCandidates.filter((candidate) => {
       if (filter === "verified" && candidate.verificationStatus !== "verified") return false;
       if (
         filter === "unverified" &&
-        (candidate.status !== "candidate" || candidate.verificationStatus !== "unverified")
+        unverifiedSnapshotIds == null &&
+        !isUnverifiedArtist(candidate)
       ) return false;
       if ((filter === "albums" || filter === "singles") && !candidate.evidence.some(
         (evidence) => evidence.chartKind === filter,
@@ -260,7 +283,14 @@ export function ArtistCompletionWorkspace({
       if (filter === "all" && candidate.status === "notForMe") return false;
       return !normalizedQuery || candidate.artist.toLocaleLowerCase().includes(normalizedQuery);
     });
-  }, [data, filter, query]);
+  }, [data, filter, query, unverifiedSnapshotIds]);
+
+  function changeFilter(nextFilter: ArtistFilter) {
+    if (nextFilter === "unverified") {
+      setUnverifiedSnapshotIds(unverifiedArtistIds(data?.candidates ?? []));
+    }
+    setFilter(nextFilter);
+  }
 
   useEffect(() => {
     if (!candidates.length) return;
@@ -489,7 +519,7 @@ export function ArtistCompletionWorkspace({
           <span>Show</span>
           <select
             value={filter}
-            onChange={(event) => setFilter(event.target.value as ArtistFilter)}
+            onChange={(event) => changeFilter(event.target.value as ArtistFilter)}
             aria-label="Filter missing chart artists"
           >
             <option value="all">All active artists</option>

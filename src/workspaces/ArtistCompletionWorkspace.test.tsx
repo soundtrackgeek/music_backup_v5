@@ -116,6 +116,25 @@ const runningStatus = {
   }],
 } as const;
 
+const completedFailureStatus = {
+  batch: {
+    ...runningStatus.batch,
+    state: "completed",
+    checkingCount: 0,
+    failedCount: 1,
+    completedCount: 1,
+    estimatedSecondsRemaining: 0,
+    updatedAt: "2026-07-29T10:02:00Z",
+    completedAt: "2026-07-29T10:02:00Z",
+  },
+  recentItems: [{
+    ...runningStatus.recentItems[0],
+    state: "failed",
+    message: "MusicBrainz lookup failed.",
+    updatedAt: "2026-07-29T10:02:00Z",
+  }],
+} as const;
+
 describe("ArtistCompletionWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -189,6 +208,50 @@ describe("ArtistCompletionWorkspace", () => {
     expect(screen.getAllByText("Talk Talk").length).toBeGreaterThan(0);
     expect(screen.queryByText("Verified Artist")).not.toBeInTheDocument();
     expect(screen.queryByText("Review Artist")).not.toBeInTheDocument();
+  });
+
+  it("keeps the active unverified queue static through verification and rebuilds it on refresh", async () => {
+    const failedResponse = {
+      ...response,
+      candidates: [{
+        ...candidate,
+        verificationStatus: "failed",
+        verificationMessage: "MusicBrainz lookup failed.",
+        musicbrainzVerificationStatus: "failed",
+        musicbrainzVerificationMessage: "MusicBrainz lookup failed.",
+      }],
+    } as const;
+    getLibraryCompletionArtists
+      .mockResolvedValueOnce(response)
+      .mockResolvedValue(failedResponse);
+    startLibraryCompletionArtistVerification.mockResolvedValue(completedFailureStatus);
+    const { rerender } = render(
+      <ArtistCompletionWorkspace refreshToken={0} onOpenWishList={vi.fn()} />,
+    );
+
+    await screen.findByRole("heading", { name: "Talk Talk" });
+    fireEvent.change(screen.getByRole("combobox", {
+      name: "Filter missing chart artists",
+    }), { target: { value: "unverified" } });
+    const queue = screen.getByLabelText("Artist discovery candidates");
+    queue.scrollTop = 320;
+    fireEvent.scroll(queue);
+    fireEvent.click(screen.getByRole("button", { name: "Verify artist" }));
+
+    await waitFor(() => expect(getLibraryCompletionArtists).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("1 shown")).toBeInTheDocument();
+    expect(screen.getByRole("button", {
+      name: /Talk Talk.*Failed/,
+    })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Verify artist" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Talk Talk" })).toBeInTheDocument();
+    expect(queue.scrollTop).toBe(320);
+
+    rerender(<ArtistCompletionWorkspace refreshToken={1} onOpenWishList={vi.fn()} />);
+
+    await waitFor(() => expect(getLibraryCompletionArtists).toHaveBeenCalledTimes(3));
+    expect(screen.getByText("0 shown")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Talk Talk" })).not.toBeInTheDocument();
   });
 
   it("starts a persistent verification run for selected artists", async () => {
