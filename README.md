@@ -338,6 +338,7 @@ npm run security:check
 
 - Tools includes Artists without MusicBrainz data, which compares distinct local album artists against the saved MusicBrainz cache path and app-owned verified/refreshed overlay rows.
 - The tool flags artists with no cache/verified MBID match or a matched MBID with no cached/refreshed release groups, with search, sort, and export support through the existing Music Tools issue lists. Its CSV, TSV, XLSX, JSON, and TXT exports include the artist-level **Top Genre** used by Artist index.
+- MusicBrainz collection preparation reports its current database stage, live elapsed time, animated activity, and scaled progress. Artist top genres are calculated in one grouped album pass so large libraries do not stall on repeated per-artist scans.
 - Web-only preview mode includes a mock missing MusicBrainz artist row for Tools layout work.
 
 ## Phase 18 MusicBrainz Overlay Sync Features

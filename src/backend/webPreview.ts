@@ -421,6 +421,16 @@ const mockOriginProgressHandlers = new Set<
   (progress: MusicBrainzOriginCountryImportProgress) => void
 >();
 
+const mockMusicToolProgressHandlers = new Set<
+  (progress: MusicToolProgress) => void
+>();
+
+function emitMockMusicToolProgress(progress: MusicToolProgress) {
+  for (const handler of mockMusicToolProgressHandlers) {
+    handler(progress);
+  }
+}
+
 function emitMockMusicBrainzOriginProgress(
   progress: MusicBrainzOriginCountryImportProgress,
 ) {
@@ -2850,6 +2860,7 @@ export {
   coverDataUrlCache,
   emitMockMusicBrainzArtistInfoProgress,
   emitMockMusicBrainzOriginProgress,
+  emitMockMusicToolProgress,
   mockArtistInfoForArtist,
   mockArtistInfoProgress,
   mockArtistInfoProgressHandlers,
@@ -2870,6 +2881,7 @@ export {
   mockMusicBrainzOverlaySyncLog,
   mockMusicToolIssues,
   mockMusicTools,
+  mockMusicToolProgressHandlers,
   mockOriginForArtist,
   mockOriginProgress,
   mockOriginProgressHandlers,

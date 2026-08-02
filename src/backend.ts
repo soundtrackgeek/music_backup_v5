@@ -46,6 +46,7 @@ import {
   coverDataUrlCache,
   emitMockMusicBrainzArtistInfoProgress,
   emitMockMusicBrainzOriginProgress,
+  emitMockMusicToolProgress,
   mockArtistInfoForArtist,
   mockArtistInfoProgress,
   mockArtistInfoProgressHandlers,
@@ -66,6 +67,7 @@ import {
   mockMusicBrainzOverlaySyncLog,
   mockMusicToolIssues,
   mockMusicTools,
+  mockMusicToolProgressHandlers,
   mockOriginForArtist,
   mockOriginProgress,
   mockOriginProgressHandlers,
@@ -5793,6 +5795,34 @@ export async function listMusicTools() {
 
 export async function listMusicToolIssues(request: MusicToolIssueRequest) {
   if (!isTauriRuntime()) {
+    const simulateSlowProgress =
+      request.toolId === "artists-without-musicbrainz-data" &&
+      new URLSearchParams(window.location.search).get("previewToolProgress") ===
+        "slow";
+    if (simulateSlowProgress) {
+      const previewStages: Array<Pick<MusicToolProgress, "percent" | "message">> = [
+        {
+          percent: 20,
+          message: "Scanning local artists and calculating top genres.",
+        },
+        { percent: 30, message: "Indexing local album identities." },
+        { percent: 35, message: "Reading the MusicBrainz artist cache." },
+        {
+          percent: 45,
+          message: "Loading cached MusicBrainz release groups.",
+        },
+      ];
+      for (const stage of previewStages) {
+        emitMockMusicToolProgress({
+          toolId: request.toolId,
+          requestId: request.requestId,
+          status: "loading",
+          ...stage,
+        });
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 550));
+      }
+    }
+
     const searchText = request.searchText.trim().toLowerCase();
     const tool =
       mockMusicTools.find((item) => item.id === request.toolId) ??
@@ -6408,7 +6438,10 @@ export async function listenToMusicToolProgress(
   handler: (progress: MusicToolProgress) => void,
 ) {
   if (!isTauriRuntime()) {
-    return (() => undefined) satisfies UnlistenFn;
+    mockMusicToolProgressHandlers.add(handler);
+    return (() => {
+      mockMusicToolProgressHandlers.delete(handler);
+    }) satisfies UnlistenFn;
   }
 
   return listen<MusicToolProgress>("music-tool-progress", (event) => {

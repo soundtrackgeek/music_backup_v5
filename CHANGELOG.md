@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.112.4] - 2026-08-02
+### Changed
+- MusicBrainz collection validators now show named preparation stages, animated activity, live elapsed time, and a continuously updated progress treatment while long scans run.
+- Synchronized app metadata and provider user agents to `0.112.4`.
+
+### Fixed
+- Replaced the **Artists without MusicBrainz data** Top Genre correlated album scan with a single grouped pass, avoiding prolonged 50% preparation stalls on large libraries.
+
 ## [0.112.3] - 2026-08-02
 ### Changed
 - Renamed the **Artists without MusicBrainz data** export's **Genre** column to **Top Genre** and populated it with the same artist-level album genre used by Artist index.

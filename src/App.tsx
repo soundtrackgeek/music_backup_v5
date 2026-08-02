@@ -4731,15 +4731,137 @@ function musicToolAffectedCount(tool: MusicToolSummary) {
   return tool.scope === "tracks" ? tool.trackCount : tool.albumCount;
 }
 
+function useMusicToolElapsedMs(startedAt: number | null, isActive: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!isActive || startedAt == null) {
+      return;
+    }
+
+    const updateNow = () => setNow(Date.now());
+    updateNow();
+    const timer = window.setInterval(updateNow, 1_000);
+    return () => window.clearInterval(timer);
+  }, [isActive, startedAt]);
+
+  return isActive && startedAt != null ? Math.max(0, now - startedAt) : 0;
+}
+
+function MusicToolCompactProgress({
+  progress,
+  startedAt,
+}: {
+  progress: MusicToolProgress;
+  startedAt: number | null;
+}) {
+  const elapsedMs = useMusicToolElapsedMs(startedAt, true);
+  const progressText = formatToolProgress(progress);
+  const elapsedText = formatDuration(elapsedMs);
+
+  return (
+    <span
+      className="tool-compact-progress"
+      aria-label={`${progress.message} ${progressText}. Active ${elapsedText}.`}
+      title={progress.message}
+    >
+      <span className="tool-activity-dot" aria-hidden="true" />
+      <strong>{progressText}</strong>
+      <small>{elapsedText}</small>
+    </span>
+  );
+}
+
+function MusicToolLoadingState({
+  progress,
+  startedAt,
+}: {
+  progress: MusicToolProgress;
+  startedAt: number | null;
+}) {
+  const elapsedMs = useMusicToolElapsedMs(startedAt, true);
+  const progressText = formatToolProgress(progress);
+
+  return (
+    <div className="tool-loading-state" role="status" aria-live="polite">
+      <div className="tool-loading-heading">
+        <span className="tool-activity-orbit" aria-hidden="true">
+          <span />
+        </span>
+        <div>
+          <strong>{progress.message}</strong>
+          <span>
+            {progressText} complete · Active {formatDuration(elapsedMs)}
+          </span>
+        </div>
+      </div>
+      <div className="progress-track" aria-hidden="true">
+        <div
+          className="progress-fill tool-progress-fill-active"
+          style={{
+            width: `${Math.min(100, Math.max(0, progress.percent))}%`,
+          }}
+        />
+      </div>
+      <p>
+        The comparison is still running. Large libraries and MusicBrainz caches
+        can take a few minutes.
+      </p>
+    </div>
+  );
+}
+
+function MusicToolProgressBlock({
+  progress,
+  startedAt,
+}: {
+  progress: MusicToolProgress;
+  startedAt: number | null;
+}) {
+  const isActive = isMusicToolProgressActive(progress);
+  const elapsedMs = useMusicToolElapsedMs(startedAt, isActive);
+  const progressText = formatToolProgress(progress);
+
+  return (
+    <section className="progress-block tool-progress-block" aria-live="polite">
+      <div className="progress-row">
+        <span className="tool-progress-message">
+          {isActive ? (
+            <span className="tool-activity-dot" aria-hidden="true" />
+          ) : null}
+          {progress.message}
+        </span>
+        <strong>{progressText}</strong>
+      </div>
+      <div className="progress-track">
+        <div
+          className={`progress-fill${isActive ? " tool-progress-fill-active" : ""}`}
+          style={{
+            width: `${Math.min(100, Math.max(0, progress.percent))}%`,
+          }}
+        />
+      </div>
+      <div className="progress-meta">
+        <span>
+          {isActive ? `Active ${formatDuration(elapsedMs)}` : progress.status}
+        </span>
+        <span>Stage: {progress.status}</span>
+      </div>
+    </section>
+  );
+}
+
 function MusicToolIndexTable({
   tools,
   selectedToolId,
   progress,
+  progressStartedAt,
   onSelect,
 }: {
   tools: MusicToolSummary[];
   selectedToolId: string | null;
   progress: MusicToolProgress | null;
+  progressStartedAt: number | null;
   onSelect: (toolId: string) => void;
 }) {
   if (tools.length === 0) {
@@ -4764,7 +4886,7 @@ function MusicToolIndexTable({
         const isSelected = tool.id === selectedToolId;
         const selectedProgress =
           isSelected && isMusicToolProgressActive(progress)
-            ? formatToolProgress(progress)
+            ? progress
             : null;
         return (
           <div
@@ -4793,7 +4915,14 @@ function MusicToolIndexTable({
               className={selectedProgress ? "tool-count-progress" : undefined}
               role="cell"
             >
-              {selectedProgress ?? formatToolCount(tool.issueCount)}
+              {selectedProgress ? (
+                <MusicToolCompactProgress
+                  progress={selectedProgress}
+                  startedAt={progressStartedAt}
+                />
+              ) : (
+                formatToolCount(tool.issueCount)
+              )}
             </span>
             <span role="cell">
               {formatToolCount(musicToolAffectedCount(tool))}
@@ -4808,21 +4937,20 @@ function MusicToolIndexTable({
 function MusicToolIssueTable({
   response,
   progress,
+  progressStartedAt,
 }: {
   response: MusicToolIssueResponse | null;
   progress: MusicToolProgress | null;
+  progressStartedAt: number | null;
 }) {
   if (!response) {
     if (isMusicToolProgressActive(progress)) {
-      return (
-        <div className="empty-state large">
-          <Wrench size={20} />
-          <span>
-            {progress?.message ?? "Counting selected tool."}{" "}
-            {formatToolProgress(progress)}
-          </span>
-        </div>
-      );
+      return progress ? (
+        <MusicToolLoadingState
+          progress={progress}
+          startedAt={progressStartedAt}
+        />
+      ) : null;
     }
 
     return (
@@ -4953,11 +5081,13 @@ function MusicToolExportControls({
 function MusicToolDetailPanel({
   tool,
   progress,
+  progressStartedAt,
   exportResult,
   onExport,
 }: {
   tool: MusicToolSummary | null;
   progress: MusicToolProgress | null;
+  progressStartedAt: number | null;
   exportResult: ExportResult | null;
   onExport: (format: string) => Promise<void>;
 }) {
@@ -5022,27 +5152,10 @@ function MusicToolDetailPanel({
       </dl>
 
       {progress ? (
-        <section
-          className="progress-block tool-progress-block"
-          aria-live="polite"
-        >
-          <div className="progress-row">
-            <span>{progress.message}</span>
-            <strong>{progressText}</strong>
-          </div>
-          <div className="progress-track">
-            <div
-              className="progress-fill"
-              style={{
-                width: `${Math.min(100, Math.max(0, progress.percent))}%`,
-              }}
-            />
-          </div>
-          <div className="progress-meta">
-            <span>{progress.status}</span>
-            <span>{tool.label}</span>
-          </div>
-        </section>
+        <MusicToolProgressBlock
+          progress={progress}
+          startedAt={progressStartedAt}
+        />
       ) : null}
 
       <section className="calculation-list tools-signals">
@@ -8148,6 +8261,9 @@ export default function App() {
   const [toolProgress, setToolProgress] = useState<MusicToolProgress | null>(
     null,
   );
+  const [toolProgressStartedAt, setToolProgressStartedAt] = useState<
+    number | null
+  >(null);
   const [toolExportResult, setToolExportResult] = useState<ExportResult | null>(
     null,
   );
@@ -9227,6 +9343,7 @@ export default function App() {
     }
 
     let cancelled = false;
+    setToolProgressStartedAt(Date.now());
     setToolProgress({
       toolId: toolIssueRequest.toolId,
       requestId: toolIssueRequest.requestId,
@@ -15741,6 +15858,7 @@ export default function App() {
                 tools={musicTools}
                 selectedToolId={selectedToolId}
                 progress={activeToolProgress}
+                progressStartedAt={toolProgressStartedAt}
                 onSelect={selectMusicTool}
               />
             </section>
@@ -15821,6 +15939,7 @@ export default function App() {
                   isToolProgressActive ? null : currentToolIssueResponse
                 }
                 progress={activeToolProgress}
+                progressStartedAt={toolProgressStartedAt}
               />
             </section>
           </section>
@@ -19931,6 +20050,7 @@ export default function App() {
           <MusicToolDetailPanel
             tool={selectedTool}
             progress={activeToolProgress}
+            progressStartedAt={toolProgressStartedAt}
             exportResult={toolExportResult}
             onExport={runToolExport}
           />

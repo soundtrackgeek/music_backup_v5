@@ -8783,6 +8783,11 @@ fn ensure_music_tool_data_for_request(
         "artists-without-musicbrainz-data"
         | "high-confidence-missing-musicbrainz-albums"
         | "albums-not-on-musicbrainz-official-list" => {
+            let preparation_cap = if request.tool_id == "albums-not-on-musicbrainz-official-list" {
+                88
+            } else {
+                50
+            };
             emit_music_tool_progress(
                 Some(app),
                 &request.tool_id,
@@ -8791,25 +8796,16 @@ fn ensure_music_tool_data_for_request(
                 15,
                 "Preparing MusicBrainz collection comparison.",
             );
-            let preparation_pulse = start_music_tool_progress_pulse(
+            let settings = settings_for_connection(conn)?;
+            prepare_missing_musicbrainz_artist_tool_with_progress(
+                conn,
+                &settings.musicbrainz_cache_path,
                 Some(app),
                 &request.tool_id,
                 &request.request_id,
-                "loading",
-                15,
-                if request.tool_id == "albums-not-on-musicbrainz-official-list" {
-                    88
-                } else {
-                    50
-                },
-                "Preparing MusicBrainz collection comparison.",
-            );
-            let settings = settings_for_connection(conn)?;
-            let preparation_result =
-                prepare_missing_musicbrainz_artist_tool(conn, &settings.musicbrainz_cache_path)
-                    .context("Could not prepare MusicBrainz collection coverage data");
-            drop(preparation_pulse);
-            preparation_result?;
+                preparation_cap,
+            )
+            .context("Could not prepare MusicBrainz collection coverage data")?;
         }
         _ => {}
     }
@@ -8855,7 +8851,48 @@ struct MissingMusicBrainzReleaseGroup {
     source: String,
 }
 
+#[cfg(test)]
 fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &str) -> Result<()> {
+    prepare_missing_musicbrainz_artist_tool_with_progress(conn, cache_path, None, "", "", 50)
+}
+
+const MUSICBRAINZ_PREPARATION_START: u8 = 15;
+const MUSICBRAINZ_PREPARATION_STAGE_COUNT: u8 = 7;
+
+fn musicbrainz_preparation_percent(cap: u8, stage: u8) -> u8 {
+    let cap = cap.clamp(MUSICBRAINZ_PREPARATION_START, 99);
+    let stage = stage.min(MUSICBRAINZ_PREPARATION_STAGE_COUNT);
+    let span = u16::from(cap - MUSICBRAINZ_PREPARATION_START);
+    MUSICBRAINZ_PREPARATION_START
+        + ((span * u16::from(stage)) / u16::from(MUSICBRAINZ_PREPARATION_STAGE_COUNT)) as u8
+}
+
+fn emit_musicbrainz_preparation_stage(
+    app: Option<ProgressApp<'_>>,
+    tool_id: &str,
+    request_id: &str,
+    cap: u8,
+    stage: u8,
+    message: &str,
+) {
+    emit_music_tool_progress(
+        app,
+        tool_id,
+        request_id,
+        "loading",
+        musicbrainz_preparation_percent(cap, stage),
+        message,
+    );
+}
+
+fn prepare_missing_musicbrainz_artist_tool_with_progress(
+    conn: &mut Connection,
+    cache_path: &str,
+    progress_app: Option<ProgressApp<'_>>,
+    tool_id: &str,
+    request_id: &str,
+    progress_cap: u8,
+) -> Result<()> {
     let transaction = conn
         .transaction()
         .context("Could not start MusicBrainz comparison preparation")?;
@@ -8938,6 +8975,14 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
         )
         .context("Could not create MusicBrainz artist tool temp tables")?;
 
+    emit_musicbrainz_preparation_stage(
+        progress_app,
+        tool_id,
+        request_id,
+        progress_cap,
+        1,
+        "Scanning local artists and calculating top genres.",
+    );
     let local_artists = musicbrainz_tool_local_artists(&transaction)?;
     {
         let mut stmt = transaction
@@ -8967,6 +9012,14 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
         }
     }
 
+    emit_musicbrainz_preparation_stage(
+        progress_app,
+        tool_id,
+        request_id,
+        progress_cap,
+        2,
+        "Indexing local album identities.",
+    );
     let local_albums = musicbrainz_tool_local_albums(&transaction)?;
     {
         let mut stmt = transaction
@@ -8991,6 +9044,14 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
         }
     }
 
+    emit_musicbrainz_preparation_stage(
+        progress_app,
+        tool_id,
+        request_id,
+        progress_cap,
+        3,
+        "Reading the MusicBrainz artist cache.",
+    );
     let cache_artists = musicbrainz_tool_cache_artists(cache_path)?;
     {
         let mut stmt = transaction
@@ -9019,9 +9080,33 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
         }
     }
 
+    emit_musicbrainz_preparation_stage(
+        progress_app,
+        tool_id,
+        request_id,
+        progress_cap,
+        4,
+        "Resolving cached MusicBrainz artist identities.",
+    );
     let matched_mbids = musicbrainz_tool_matched_mbids(&transaction)?;
+    emit_musicbrainz_preparation_stage(
+        progress_app,
+        tool_id,
+        request_id,
+        progress_cap,
+        5,
+        "Loading cached MusicBrainz release groups.",
+    );
     let release_groups = musicbrainz_tool_cache_release_groups(cache_path, &matched_mbids)?;
     insert_musicbrainz_tool_release_groups(&transaction, release_groups)?;
+    emit_musicbrainz_preparation_stage(
+        progress_app,
+        tool_id,
+        request_id,
+        progress_cap,
+        6,
+        "Merging refreshed MusicBrainz release groups.",
+    );
     let overlay_release_groups =
         musicbrainz_tool_overlay_release_groups(&transaction, &matched_mbids)?;
     insert_musicbrainz_tool_release_groups(&transaction, overlay_release_groups)?;
@@ -9030,12 +9115,20 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
         .commit()
         .context("Could not finish MusicBrainz comparison preparation")?;
 
+    emit_musicbrainz_preparation_stage(
+        progress_app,
+        tool_id,
+        request_id,
+        progress_cap,
+        7,
+        "MusicBrainz collection comparison prepared.",
+    );
+
     Ok(())
 }
 
 fn musicbrainz_tool_local_artists(conn: &Connection) -> Result<Vec<MissingMusicBrainzLocalArtist>> {
     let album_artist_key_sql = artist_key_sql("album_artist_display");
-    let artist_key_sql_a2 = artist_key_sql("a2.album_artist_display");
     let sql = format!(
         "
         WITH album_artists AS (
@@ -9045,7 +9138,9 @@ fn musicbrainz_tool_local_artists(conn: &Connection) -> Result<Vec<MissingMusicB
                 id,
                 NULLIF(TRIM(album), '') AS album,
                 year,
-                total_tracks
+                total_tracks,
+                canonical_genre,
+                genre_normalized
             FROM albums
             WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL
         ),
@@ -9060,6 +9155,26 @@ fn musicbrainz_tool_local_artists(conn: &Connection) -> Result<Vec<MissingMusicB
             FROM album_artists
             WHERE display_artist IS NOT NULL
             GROUP BY artist_key, display_artist
+        ),
+        genre_counts AS (
+            SELECT
+                artist_key,
+                COALESCE(MIN(NULLIF(TRIM(canonical_genre), '')), 'Unknown') AS genre,
+                COUNT(*) AS album_count
+            FROM album_artists
+            GROUP BY
+                artist_key,
+                COALESCE(NULLIF(TRIM(LOWER(genre_normalized)), ''), 'unknown')
+        ),
+        ranked_genres AS (
+            SELECT
+                artist_key,
+                genre,
+                ROW_NUMBER() OVER (
+                    PARTITION BY artist_key
+                    ORDER BY album_count DESC, LOWER(genre) ASC
+                ) AS genre_rank
+            FROM genre_counts
         )
         SELECT
             aa.artist_key,
@@ -9069,19 +9184,15 @@ fn musicbrainz_tool_local_artists(conn: &Connection) -> Result<Vec<MissingMusicB
             MIN(aa.year) AS first_year,
             MAX(aa.year) AS last_year,
             MIN(aa.album) AS sample_album,
-            (
-                SELECT COALESCE(NULLIF(TRIM(a2.canonical_genre), ''), 'Unknown')
-                FROM albums a2
-                WHERE {artist_key_sql_a2} = aa.artist_key
-                GROUP BY COALESCE(NULLIF(TRIM(LOWER(a2.genre_normalized)), ''), 'unknown')
-                ORDER BY COUNT(*) DESC, LOWER(COALESCE(a2.canonical_genre, '')) ASC
-                LIMIT 1
-            ) AS top_genre
+            rg.genre AS top_genre
         FROM album_artists aa
         JOIN ranked_names rn
           ON rn.artist_key = aa.artist_key
          AND rn.name_rank = 1
-        GROUP BY aa.artist_key, rn.display_artist
+        LEFT JOIN ranked_genres rg
+          ON rg.artist_key = aa.artist_key
+         AND rg.genre_rank = 1
+        GROUP BY aa.artist_key, rn.display_artist, rg.genre
         "
     );
     let mut stmt = conn
@@ -18437,6 +18548,42 @@ mod tests {
             billboard_first_appearance_iso_year(december_1957, 1),
             Some(1958)
         );
+    }
+
+    #[test]
+    fn musicbrainz_preparation_progress_uses_distinct_monotonic_stages() {
+        let standard = (1..=MUSICBRAINZ_PREPARATION_STAGE_COUNT)
+            .map(|stage| musicbrainz_preparation_percent(50, stage))
+            .collect::<Vec<_>>();
+        assert_eq!(standard, vec![20, 25, 30, 35, 40, 45, 50]);
+        assert!(standard.windows(2).all(|pair| pair[0] < pair[1]));
+        assert_eq!(musicbrainz_preparation_percent(88, 7), 88);
+    }
+
+    #[test]
+    fn musicbrainz_artist_tool_calculates_top_genres_in_one_grouped_pass() {
+        let conn = seeded_connection();
+        insert_test_album(&conn, "mb:genre-1", "Genre Artist", "First", 2001, 10);
+        insert_test_album(&conn, "mb:genre-2", "Genre Artist", "Second", 2002, 10);
+        insert_test_album(&conn, "mb:genre-3", "Genre Artist", "Third", 2003, 10);
+        conn.execute(
+            "
+            UPDATE albums
+            SET canonical_genre = 'Documentary', genre_normalized = 'documentary'
+            WHERE id IN ('mb:genre-2', 'mb:genre-3')
+            ",
+            [],
+        )
+        .expect("set majority genre");
+
+        let artists = musicbrainz_tool_local_artists(&conn).expect("group local artists");
+        let artist = artists
+            .iter()
+            .find(|artist| artist.display_artist == "Genre Artist")
+            .expect("genre artist");
+
+        assert_eq!(artist.album_count, 3);
+        assert_eq!(artist.top_genre.as_deref(), Some("Documentary"));
     }
 
     #[test]
