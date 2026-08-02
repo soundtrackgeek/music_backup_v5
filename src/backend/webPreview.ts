@@ -1677,7 +1677,7 @@ let mockMusicToolIssues: MusicToolIssueRow[] = [
     album: "Korn",
     albumArtistDisplay: "Korn",
     title: "Follow the Leader",
-    canonicalGenre: null,
+    canonicalGenre: "Nu Metal",
     year: 1998,
     detail: "No MusicBrainz artist cache match",
     value: "1 albums / 13 tracks",

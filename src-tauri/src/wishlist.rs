@@ -24,7 +24,7 @@ const MAX_MUSICBRAINZ_SEARCH_QUERY_LENGTH: usize = 200;
 #[cfg(not(test))]
 const MUSICBRAINZ_SEARCH_LIMIT: usize = 8;
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.112.2 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.112.3 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_REQUEST_INTERVAL: Duration = Duration::from_millis(1_100);
 #[cfg(not(test))]

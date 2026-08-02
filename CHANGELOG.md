@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.112.3] - 2026-08-02
+### Changed
+- Renamed the **Artists without MusicBrainz data** export's **Genre** column to **Top Genre** and populated it with the same artist-level album genre used by Artist index.
+- Synchronized app metadata and provider user agents to `0.112.3`.
+
 ## [0.112.2] - 2026-08-02
 ### Changed
 - The Completion Artists **Unverified** view now keeps its membership and ordering fixed while verification results update row statuses and actions in place; an explicit chart scan, source/year change, or view re-entry rebuilds the filtered snapshot.

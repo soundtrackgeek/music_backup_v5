@@ -337,7 +337,7 @@ npm run security:check
 ## Phase 28 MusicBrainz Artist Coverage Tool Features
 
 - Tools includes Artists without MusicBrainz data, which compares distinct local album artists against the saved MusicBrainz cache path and app-owned verified/refreshed overlay rows.
-- The tool flags artists with no cache/verified MBID match or a matched MBID with no cached/refreshed release groups, with search, sort, and export support through the existing Music Tools issue lists.
+- The tool flags artists with no cache/verified MBID match or a matched MBID with no cached/refreshed release groups, with search, sort, and export support through the existing Music Tools issue lists. Its CSV, TSV, XLSX, JSON, and TXT exports include the artist-level **Top Genre** used by Artist index.
 - Web-only preview mode includes a mock missing MusicBrainz artist row for Tools layout work.
 
 ## Phase 18 MusicBrainz Overlay Sync Features

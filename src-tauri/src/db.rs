@@ -8826,6 +8826,7 @@ struct MissingMusicBrainzLocalArtist {
     first_year: Option<i32>,
     last_year: Option<i32>,
     sample_album: Option<String>,
+    top_genre: Option<String>,
 }
 
 #[derive(Debug)]
@@ -8875,7 +8876,8 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
             track_count INTEGER NOT NULL,
             first_year INTEGER,
             last_year INTEGER,
-            sample_album TEXT
+            sample_album TEXT,
+            top_genre TEXT
         );
 
         CREATE TEMP TABLE musicbrainz_tool_local_albums (
@@ -8943,8 +8945,8 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
                 "
                 INSERT INTO musicbrainz_tool_local_artists (
                     artist_key, display_artist, musicbrainz_name_key, album_count,
-                    track_count, first_year, last_year, sample_album
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                    track_count, first_year, last_year, sample_album, top_genre
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                 ",
             )
             .context("Could not prepare local MusicBrainz artist temp insert")?;
@@ -8959,6 +8961,7 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
                 artist.first_year,
                 artist.last_year,
                 artist.sample_album,
+                artist.top_genre,
             ])
             .context("Could not insert local MusicBrainz artist temp row")?;
         }
@@ -9031,12 +9034,13 @@ fn prepare_missing_musicbrainz_artist_tool(conn: &mut Connection, cache_path: &s
 }
 
 fn musicbrainz_tool_local_artists(conn: &Connection) -> Result<Vec<MissingMusicBrainzLocalArtist>> {
-    let artist_key_sql = artist_key_sql("album_artist_display");
+    let album_artist_key_sql = artist_key_sql("album_artist_display");
+    let artist_key_sql_a2 = artist_key_sql("a2.album_artist_display");
     let sql = format!(
         "
         WITH album_artists AS (
             SELECT
-                {artist_key_sql} AS artist_key,
+                {album_artist_key_sql} AS artist_key,
                 NULLIF(TRIM(album_artist_display), '') AS display_artist,
                 id,
                 NULLIF(TRIM(album), '') AS album,
@@ -9064,7 +9068,15 @@ fn musicbrainz_tool_local_artists(conn: &Connection) -> Result<Vec<MissingMusicB
             SUM(COALESCE(aa.total_tracks, 0)) AS track_count,
             MIN(aa.year) AS first_year,
             MAX(aa.year) AS last_year,
-            MIN(aa.album) AS sample_album
+            MIN(aa.album) AS sample_album,
+            (
+                SELECT COALESCE(NULLIF(TRIM(a2.canonical_genre), ''), 'Unknown')
+                FROM albums a2
+                WHERE {artist_key_sql_a2} = aa.artist_key
+                GROUP BY COALESCE(NULLIF(TRIM(LOWER(a2.genre_normalized)), ''), 'unknown')
+                ORDER BY COUNT(*) DESC, LOWER(COALESCE(a2.canonical_genre, '')) ASC
+                LIMIT 1
+            ) AS top_genre
         FROM album_artists aa
         JOIN ranked_names rn
           ON rn.artist_key = aa.artist_key
@@ -9085,6 +9097,7 @@ fn musicbrainz_tool_local_artists(conn: &Connection) -> Result<Vec<MissingMusicB
                 first_year: row.get(4)?,
                 last_year: row.get(5)?,
                 sample_album: row.get(6)?,
+                top_genre: row.get(7)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()
@@ -10513,7 +10526,7 @@ pub fn export_music_tool_issues_for_app(
         format
     ));
 
-    write_issue_export_file(&path, &format, &response.rows)
+    write_issue_export_file(&path, &format, &response.tool.id, &response.rows)
         .with_context(|| format!("Could not write export {}", path.display()))?;
 
     let request_json =
@@ -14191,7 +14204,7 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                 r.display_artist AS album,
                 r.display_artist AS album_artist_display,
                 r.sample_album AS title,
-                NULL AS canonical_genre,
+                r.top_genre AS canonical_genre,
                 r.first_year AS year,
                 CASE
                     WHEN r.mbid IS NULL THEN 'No MusicBrainz artist cache match'
@@ -17158,8 +17171,13 @@ fn write_export_file(
     Ok(())
 }
 
-fn write_issue_export_file(path: &PathBuf, format: &str, rows: &[MusicToolIssueRow]) -> Result<()> {
-    let (headers, values) = issue_export_table(rows);
+fn write_issue_export_file(
+    path: &PathBuf,
+    format: &str,
+    tool_id: &str,
+    rows: &[MusicToolIssueRow],
+) -> Result<()> {
+    let (headers, values) = issue_export_table(tool_id, rows);
 
     if format == "xlsx" {
         write_xlsx_file(path, &headers, &values)?;
@@ -17472,7 +17490,15 @@ fn normalize_export_column(value: &str) -> String {
         .collect()
 }
 
-fn issue_export_table(rows: &[MusicToolIssueRow]) -> (Vec<&'static str>, Vec<Vec<String>>) {
+fn issue_export_table(
+    tool_id: &str,
+    rows: &[MusicToolIssueRow],
+) -> (Vec<&'static str>, Vec<Vec<String>>) {
+    let genre_header = if tool_id == "artists-without-musicbrainz-data" {
+        "Top Genre"
+    } else {
+        "Genre"
+    };
     let headers = vec![
         "Tool",
         "Severity",
@@ -17481,7 +17507,7 @@ fn issue_export_table(rows: &[MusicToolIssueRow]) -> (Vec<&'static str>, Vec<Vec
         "Album",
         "Year",
         "Track",
-        "Genre",
+        genre_header,
         "Issue",
         "Value",
         "Filename",
@@ -18443,6 +18469,11 @@ mod tests {
             response.rows[0].value.as_deref(),
             Some("1 albums / 13 tracks")
         );
+        assert_eq!(response.rows[0].canonical_genre.as_deref(), Some("Rock"));
+
+        let (headers, rows) = issue_export_table(&response.tool.id, &response.rows);
+        assert_eq!(headers[7], "Top Genre");
+        assert_eq!(rows[0][7], "Rock");
 
         fs::remove_dir_all(temp_dir).expect("remove MusicBrainz tool temp dir");
     }
@@ -19971,7 +20002,7 @@ mod tests {
         request.search_text = "flac".to_string();
         let response =
             list_music_tool_issues(&conn, request, 50, None).expect("list non-mp3 issues");
-        let (headers, rows) = issue_export_table(&response.rows);
+        let (headers, rows) = issue_export_table(&response.tool.id, &response.rows);
 
         assert_eq!(response.tool.issue_count, 1);
         assert_eq!(response.tool.album_count, 1);
@@ -19982,6 +20013,7 @@ mod tests {
             Some("02 What Have I Done.flac")
         );
         assert!(headers.contains(&"Issue"));
+        assert!(headers.contains(&"Genre"));
         assert_eq!(rows.len(), 1);
     }
 
@@ -21120,8 +21152,8 @@ mod tests {
 
     #[test]
     fn accepts_local_search_playlists_up_to_five_hundred_tracks() {
-        let mut playlist = build_playlist(&seeded_connection(), test_playlist_plan())
-            .expect("build playlist");
+        let mut playlist =
+            build_playlist(&seeded_connection(), test_playlist_plan()).expect("build playlist");
         let template = playlist.tracks[0].clone();
         playlist.model = "Local Search".to_string();
         playlist.target_track_count = MAX_SAVED_PLAYLIST_TRACKS as u32;
