@@ -415,6 +415,7 @@ mod tests {
     #[test]
     fn searches_and_filters_durable_library_updates() {
         let conn = Connection::open_in_memory().expect("open test database");
+        db::configure(&conn).expect("configure test database");
         db::migrate(&conn).expect("migrate test database");
         conn.execute_batch(
             "
@@ -462,6 +463,7 @@ mod tests {
     #[test]
     fn summarizes_track_impact_by_artist_and_finds_true_first_appearances() {
         let conn = Connection::open_in_memory().expect("open test database");
+        db::configure(&conn).expect("configure test database");
         db::migrate(&conn).expect("migrate test database");
         conn.execute_batch(
             "

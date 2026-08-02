@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.112.5] - 2026-08-02
+### Changed
+- Synchronized app metadata and provider user agents to `0.112.5`.
+
+### Fixed
+- Made canonical artist keys Unicode-aware so artists with uppercase non-ASCII letters, including **Östro 430**, load their local albums correctly from Artist details.
+
 ## [0.112.4] - 2026-08-02
 ### Changed
 - MusicBrainz collection validators now show named preparation stages, animated activity, live elapsed time, and a continuously updated progress treatment while long scans run.

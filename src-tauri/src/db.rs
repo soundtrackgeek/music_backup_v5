@@ -31,7 +31,10 @@ use crate::models::{
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, NaiveDate, Utc, Weekday};
-use rusqlite::{params, params_from_iter, types::Value, Connection, OpenFlags, OptionalExtension};
+use rusqlite::{
+    functions::FunctionFlags, params, params_from_iter, types::Value, Connection, OpenFlags,
+    OptionalExtension,
+};
 use rust_xlsxwriter::{Format, Workbook};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -490,6 +493,16 @@ pub fn open(app: &AppHandle) -> Result<(Connection, PathBuf)> {
 }
 
 pub fn configure(conn: &Connection) -> Result<()> {
+    conn.create_scalar_function(
+        "unicode_lower",
+        1,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        |context| {
+            let value = context.get::<String>(0)?;
+            Ok(value.to_lowercase())
+        },
+    )
+    .context("Could not register Unicode lowercase support")?;
     conn.execute_batch(
         "
         PRAGMA busy_timeout = 15000;
@@ -11168,7 +11181,7 @@ fn artist_search_where(search_text: &str) -> (String, Vec<Value>) {
     let artist_text_sql = normalized_artist_sql("album_artist_display");
     (
         format!(
-            "WHERE LOWER(COALESCE(NULLIF(TRIM({artist_text_sql}), ''), 'Unknown Artist')) LIKE ? ESCAPE '\\'"
+            "WHERE unicode_lower(COALESCE(NULLIF(TRIM({artist_text_sql}), ''), 'Unknown Artist')) LIKE ? ESCAPE '\\'"
         ),
         vec![Value::Text(format!("%{}%", escape_like(&normalized)))],
     )
@@ -17204,7 +17217,7 @@ fn normalize_artist_dashes(value: &str) -> String {
 
 pub(crate) fn artist_key_sql(field: &str) -> String {
     format!(
-        "COALESCE(NULLIF(TRIM(LOWER({})), ''), 'unknown')",
+        "COALESCE(NULLIF(TRIM(unicode_lower({})), ''), 'unknown')",
         normalized_artist_sql(field)
     )
 }
@@ -19801,6 +19814,47 @@ mod tests {
         let response = search_library(&conn, browse, 50).expect("search normalized artist albums");
 
         assert_eq!(response.total, 2);
+    }
+
+    #[test]
+    fn normalizes_unicode_case_in_artist_summaries_and_filters() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+            ) VALUES (
+                'mb:ostro-430', 1, 'ostro-430',
+                'Keine Krise kann mich schocken: Die kompletten Studioaufnahmen 1981–1983',
+                'Östro 430', 'New Wave', 'new wave', 'Tapete Records', 2020, 2020,
+                24, 0, 0.0, 4128, 0, 0, 0.0, NULL, NULL
+            )
+            ",
+            [],
+        )
+        .expect("insert Unicode artist album");
+
+        let mut request = ArtistListRequest::default();
+        request.search_text = "Östro 430".to_string();
+        let artists = list_artists(&conn, request, 50).expect("list Unicode artist");
+
+        assert_eq!(artists.total, 1);
+        assert_eq!(artists.rows[0].id, "östro 430");
+        assert_eq!(artists.rows[0].name, "Östro 430");
+        assert_eq!(artists.rows[0].album_count, 1);
+
+        let mut browse = BrowseRequest::default();
+        browse.filters.artist_keys = vec![artists.rows[0].id.clone()];
+        let response = search_library(&conn, browse, 50).expect("search Unicode artist albums");
+
+        assert_eq!(response.total, 1);
+        assert_eq!(
+            response.rows[0].album.as_deref(),
+            Some("Keine Krise kann mich schocken: Die kompletten Studioaufnahmen 1981–1983")
+        );
     }
 
     #[test]

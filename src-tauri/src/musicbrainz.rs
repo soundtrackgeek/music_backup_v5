@@ -6338,6 +6338,7 @@ mod tests {
 
     fn create_artist_app_db() -> Connection {
         let conn = Connection::open_in_memory().expect("open app db");
+        db::configure(&conn).expect("configure app db");
         conn.execute_batch(
             "
             CREATE TABLE albums (

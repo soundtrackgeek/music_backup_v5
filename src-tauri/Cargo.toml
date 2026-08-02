@@ -1,6 +1,6 @@
 [package]
 name = "music-library"
-version = "0.112.4"
+version = "0.112.5"
 description = "Local-first MusicBee TSV library app"
 authors = ["jtill"]
 edition = "2021"
@@ -32,7 +32,7 @@ native-tls = "0.2"
 quick-xml = { version = "0.38", features = ["serialize"] }
 crc32fast = "1.4"
 metaflac = "0.2.8"
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled", "functions"] }
 rust_xlsxwriter = "0.95.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
