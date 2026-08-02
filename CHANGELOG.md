@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.112.1] - 2026-08-02
+### Added
+- Added an **Unverified** Show filter to Completion's Artists queue so it can be limited to artists that have not entered verification or another review state.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.112.1`.
+
 ## [0.112.0] - 2026-07-31
 ### Added
 - Added an **Artists** view to Updates with full-history artist rollups, separate track-added/removed and album-added/removed impact, filtering, pagination, and direct links to each Artists page.

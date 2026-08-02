@@ -44,6 +44,7 @@ import type {
 type ArtistFilter =
   | "all"
   | "candidate"
+  | "unverified"
   | "albums"
   | "singles"
   | "verified"
@@ -245,11 +246,15 @@ export function ArtistCompletionWorkspace({
     const normalizedQuery = query.trim().toLocaleLowerCase();
     return (data?.candidates ?? []).filter((candidate) => {
       if (filter === "verified" && candidate.verificationStatus !== "verified") return false;
+      if (
+        filter === "unverified" &&
+        (candidate.status !== "candidate" || candidate.verificationStatus !== "unverified")
+      ) return false;
       if ((filter === "albums" || filter === "singles") && !candidate.evidence.some(
         (evidence) => evidence.chartKind === filter,
       )) return false;
       if (
-        !["all", "verified", "albums", "singles"].includes(filter) &&
+        !["all", "unverified", "verified", "albums", "singles"].includes(filter) &&
         candidate.status !== filter
       ) return false;
       if (filter === "all" && candidate.status === "notForMe") return false;
@@ -489,6 +494,7 @@ export function ArtistCompletionWorkspace({
           >
             <option value="all">All active artists</option>
             <option value="candidate">Open candidates</option>
+            <option value="unverified">Unverified</option>
             <option value="albums">Found on album charts</option>
             <option value="singles">Found on singles charts</option>
             <option value="verified">Official albums confirmed</option>

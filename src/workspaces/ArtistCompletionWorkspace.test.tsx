@@ -153,6 +153,44 @@ describe("ArtistCompletionWorkspace", () => {
     expect(screen.getByText(/track album artist, or track artist match/i)).toBeInTheDocument();
   });
 
+  it("filters the artist queue to rows whose visible status is unverified", async () => {
+    getLibraryCompletionArtists.mockResolvedValue({
+      ...response,
+      returnedCandidates: 3,
+      candidates: [
+        candidate,
+        {
+          ...candidate,
+          id: "verified artist",
+          artist: "Verified Artist",
+          verificationStatus: "verified",
+          officialAlbumCount: 2,
+        },
+        {
+          ...candidate,
+          id: "review artist",
+          artist: "Review Artist",
+          status: "needsReview",
+        },
+      ],
+    });
+    render(<ArtistCompletionWorkspace refreshToken={0} onOpenWishList={vi.fn()} />);
+
+    const artistFilter = screen.getByRole("combobox", {
+      name: "Filter missing chart artists",
+    });
+    expect(await screen.findByText("Verified Artist")).toBeInTheDocument();
+    expect(screen.getByText("Review Artist")).toBeInTheDocument();
+
+    fireEvent.change(artistFilter, { target: { value: "unverified" } });
+
+    expect(artistFilter).toHaveValue("unverified");
+    expect(screen.getByText("1 shown")).toBeInTheDocument();
+    expect(screen.getAllByText("Talk Talk").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Verified Artist")).not.toBeInTheDocument();
+    expect(screen.queryByText("Review Artist")).not.toBeInTheDocument();
+  });
+
   it("starts a persistent verification run for selected artists", async () => {
     render(<ArtistCompletionWorkspace refreshToken={0} onOpenWishList={vi.fn()} />);
 
