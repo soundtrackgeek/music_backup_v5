@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.113.2] - 2026-08-03
+### Changed
+- Synchronized app metadata and provider user agents to `0.113.2`.
+
+### Fixed
+- Statistics country rankings now replace code-only stored names with canonical English country names in row labels, sorting, flag titles, and accessible descriptions.
+
 ## [0.113.1] - 2026-08-03
 ### Changed
 - Synchronized app metadata and provider user agents to `0.113.1`.

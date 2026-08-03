@@ -64,6 +64,42 @@ describe("CountryCatalogChart", () => {
     );
   });
 
+  it("resolves code-only country names before labeling and sorting rows", () => {
+    const codeOnlyRows: CountryCatalogStats[] = [
+      {
+        countryCode: "RO",
+        countryName: "RO",
+        artistCount: 2,
+        albumCount: 2,
+      },
+      {
+        countryCode: "PR",
+        countryName: "PR",
+        artistCount: 2,
+        albumCount: 2,
+      },
+      {
+        countryCode: "CZ",
+        countryName: "Czechia",
+        artistCount: 1,
+        albumCount: 1,
+      },
+    ];
+
+    render(<CountryCatalogChart rows={codeOnlyRows} />);
+
+    expect(rankedCountries("Countries ranked by artists")).toEqual([
+      "1. Puerto Rico: 2 artists",
+      "2. Romania: 2 artists",
+      "3. Czechia: 1 artist",
+    ]);
+    expect(screen.queryByText("RO")).not.toBeInTheDocument();
+    expect(screen.queryByText("PR")).not.toBeInTheDocument();
+    expect(screen.getByText("Romania")).toBeInTheDocument();
+    expect(screen.getByText("Puerto Rico")).toBeInTheDocument();
+    expect(screen.getByText("Czechia")).toBeInTheDocument();
+  });
+
   it("shows a clear empty state when no origin countries are stored", () => {
     render(<CountryCatalogChart rows={[]} />);
 

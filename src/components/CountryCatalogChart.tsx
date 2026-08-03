@@ -1,5 +1,6 @@
 import { useMemo, useState, type CSSProperties } from "react";
 
+import { resolveCountryName } from "../app/countryNames";
 import type { CountryCatalogStats } from "../types";
 
 type CountryCatalogMetric = "artists" | "albums";
@@ -27,22 +28,27 @@ function countryFlagClass(countryCode: string) {
 export function CountryCatalogChart({ rows }: { rows: CountryCatalogStats[] }) {
   const [metric, setMetric] = useState<CountryCatalogMetric>("artists");
   const rankedRows = useMemo(() => {
-    return [...rows].sort((left, right) => {
-      const metricDifference =
-        metricValue(right, metric) - metricValue(left, metric);
-      if (metricDifference !== 0) return metricDifference;
+    return rows
+      .map((row) => ({
+        ...row,
+        displayName: resolveCountryName(row.countryCode, row.countryName),
+      }))
+      .sort((left, right) => {
+        const metricDifference =
+          metricValue(right, metric) - metricValue(left, metric);
+        if (metricDifference !== 0) return metricDifference;
 
-      const secondaryMetric = metric === "artists" ? "albums" : "artists";
-      const secondaryDifference =
-        metricValue(right, secondaryMetric) -
-        metricValue(left, secondaryMetric);
-      if (secondaryDifference !== 0) return secondaryDifference;
+        const secondaryMetric = metric === "artists" ? "albums" : "artists";
+        const secondaryDifference =
+          metricValue(right, secondaryMetric) -
+          metricValue(left, secondaryMetric);
+        if (secondaryDifference !== 0) return secondaryDifference;
 
-      return (
-        countryCollator.compare(left.countryName, right.countryName) ||
-        countryCollator.compare(left.countryCode, right.countryCode)
-      );
-    });
+        return (
+          countryCollator.compare(left.displayName, right.displayName) ||
+          countryCollator.compare(left.countryCode, right.countryCode)
+        );
+      });
   }, [metric, rows]);
   const maxValue = Math.max(
     1,
@@ -105,7 +111,7 @@ export function CountryCatalogChart({ rows }: { rows: CountryCatalogStats[] }) {
                 className="country-catalog-row"
                 style={rowStyle}
                 key={row.countryCode}
-                aria-label={`${index + 1}. ${row.countryName}: ${numberFormatter.format(value)} ${metricLabel(metric, value)}`}
+                aria-label={`${index + 1}. ${row.displayName}: ${numberFormatter.format(value)} ${metricLabel(metric, value)}`}
               >
                 <span className="country-catalog-rank" aria-hidden="true">
                   {index + 1}
@@ -117,13 +123,13 @@ export function CountryCatalogChart({ rows }: { rows: CountryCatalogStats[] }) {
                   {numberFormatter.format(value)}
                 </strong>
                 <span className="country-catalog-name" aria-hidden="true">
-                  {row.countryName}
+                  {row.displayName}
                 </span>
                 <span
                   className={`country-catalog-flag country-flag fi${countryFlagClass(
                     row.countryCode,
                   )}`}
-                  title={`${row.countryName} flag`}
+                  title={`${row.displayName} flag`}
                   aria-hidden="true"
                 />
               </li>

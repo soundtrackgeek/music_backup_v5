@@ -303,6 +303,7 @@ import {
   severityLabel,
   textFilterLabel,
 } from "./app/display";
+import { countryNameFromCode } from "./app/countryNames";
 import {
   currentGenreToken,
   formatList,
@@ -666,22 +667,6 @@ type OriginCountryValue = {
   originCountryName: string | null;
   originCountryRawArea?: string | null;
 };
-
-type RegionDisplayNames = {
-  of(code: string): string | undefined;
-};
-
-const regionDisplayNames =
-  "DisplayNames" in Intl
-    ? new (
-        Intl as typeof Intl & {
-          DisplayNames: new (
-            locales: string[],
-            options: { type: "region" },
-          ) => RegionDisplayNames;
-        }
-      ).DisplayNames(["en"], { type: "region" })
-    : null;
 
 function countryCodeForFlag(code: string | null | undefined) {
   const normalized = code?.trim().toLowerCase() ?? "";
@@ -1403,17 +1388,6 @@ function normalizeCountryCodes(values: string[]) {
 
 function countryOptionCode(country: MusicBrainzOriginCountryOption) {
   return country.code.trim().toUpperCase();
-}
-
-function countryNameFromCode(code: string) {
-  const normalizedCode = code.trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(normalizedCode)) {
-    return null;
-  }
-  const displayName = regionDisplayNames?.of(normalizedCode)?.trim();
-  return displayName && displayName.toUpperCase() !== normalizedCode
-    ? displayName
-    : null;
 }
 
 function countryOptionName(country: MusicBrainzOriginCountryOption) {
