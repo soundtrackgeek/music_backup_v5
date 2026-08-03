@@ -524,36 +524,52 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_six_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_seven_schema_exists(conn)? {
+        return Ok(());
+    }
+
+    if user_version == 46 && migrations::phase_forty_six_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 47 migration transaction")?;
+        ensure_album_artist_key_index(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 47;")
+            .context("Could not mark the schema 47 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 47 migration")?;
         return Ok(());
     }
 
     if user_version == 45 && migrations::phase_forty_five_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 46 migration transaction")?;
+            .context("Could not start the schema 46–47 migration transaction")?;
         ensure_artist_images_schema(&transaction)?;
+        ensure_album_artist_key_index(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 46;")
-            .context("Could not mark the schema 46 migration complete")?;
+            .execute_batch("PRAGMA user_version = 47;")
+            .context("Could not mark the schema 46–47 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 46 migration")?;
+            .context("Could not commit the schema 46–47 migration")?;
         return Ok(());
     }
 
     if user_version == 44 && migrations::phase_forty_four_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 45–46 migration transaction")?;
+            .context("Could not start the schema 45–47 migration transaction")?;
         ensure_library_updates_schema(&transaction)?;
         ensure_artist_images_schema(&transaction)?;
+        ensure_album_artist_key_index(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 46;")
-            .context("Could not mark the schema 45–46 migration complete")?;
+            .execute_batch("PRAGMA user_version = 47;")
+            .context("Could not mark the schema 45–47 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 45–46 migration")?;
+            .context("Could not commit the schema 45–47 migration")?;
         return Ok(());
     }
 
@@ -1765,12 +1781,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_library_completion_cover_columns(conn)?;
     ensure_library_completion_artist_schema(conn)?;
     ensure_artist_images_schema(conn)?;
+    ensure_album_artist_key_index(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
     migrations::migrate_billboard_album_source_default(conn)?;
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 46;
+        PRAGMA user_version = 47;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -2233,6 +2250,15 @@ fn ensure_artist_images_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create the artist portrait cache schema")?;
+    Ok(())
+}
+
+fn ensure_album_artist_key_index(conn: &Connection) -> Result<()> {
+    let artist_key = artist_key_sql("album_artist_display");
+    conn.execute_batch(&format!(
+        "CREATE INDEX IF NOT EXISTS idx_albums_artist_key ON albums({artist_key});"
+    ))
+    .context("Could not create the normalized album artist index")?;
     Ok(())
 }
 
@@ -6916,25 +6942,7 @@ fn country_catalog_stats(conn: &Connection) -> Result<Vec<CountryCatalogStats>> 
         return Ok(Vec::new());
     }
 
-    let album_artist_key = artist_key_sql("album.album_artist_display");
-    let sql = format!(
-        "
-        SELECT
-            country.country_code,
-            country.country_name,
-            COUNT(DISTINCT CASE
-                WHEN album.id IS NOT NULL THEN origin.local_artist_key
-            END) AS artist_count,
-            COUNT(DISTINCT album.id) AS album_count
-        FROM musicbrainz_origin_countries country
-        LEFT JOIN musicbrainz_artist_origin_countries origin
-          ON origin.country_code = country.country_code
-        LEFT JOIN albums album
-          ON {album_artist_key} = origin.local_artist_key
-        GROUP BY country.country_code, country.country_name
-        ORDER BY LOWER(country.country_name), country.country_code
-        "
-    );
+    let sql = country_catalog_stats_sql();
     let mut stmt = conn
         .prepare(&sql)
         .context("Could not prepare country catalog statistics")?;
@@ -6951,6 +6959,33 @@ fn country_catalog_stats(conn: &Connection) -> Result<Vec<CountryCatalogStats>> 
         .context("Could not read country catalog statistics")?;
 
     Ok(rows)
+}
+
+fn country_catalog_stats_sql() -> String {
+    let album_artist_key = artist_key_sql("album_artist_display");
+    format!(
+        "
+        WITH album_counts AS MATERIALIZED (
+            SELECT
+                {album_artist_key} AS local_artist_key,
+                COUNT(*) AS album_count
+            FROM albums INDEXED BY idx_albums_artist_key
+            GROUP BY {album_artist_key}
+        )
+        SELECT
+            country.country_code,
+            country.country_name,
+            COUNT(album_counts.local_artist_key) AS artist_count,
+            COALESCE(SUM(album_counts.album_count), 0) AS album_count
+        FROM musicbrainz_origin_countries country
+        LEFT JOIN musicbrainz_artist_origin_countries origin
+          ON origin.country_code = country.country_code
+        LEFT JOIN album_counts
+          ON album_counts.local_artist_key = origin.local_artist_key
+        GROUP BY country.country_code, country.country_name
+        ORDER BY LOWER(country.country_name), country.country_code
+        "
+    )
 }
 
 fn library_profile(
@@ -20592,6 +20627,8 @@ mod tests {
             .expect("phase forty-five schema exists"));
         assert!(migrations::phase_forty_six_schema_exists(&conn)
             .expect("phase forty-six schema exists"));
+        assert!(migrations::phase_forty_seven_schema_exists(&conn)
+            .expect("phase forty-seven schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -20666,6 +20703,29 @@ mod tests {
 
         assert!(migrations::phase_forty_six_schema_exists(&conn)
             .expect("phase forty-six schema exists"));
+        let user_version = conn
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+            .expect("read migrated user version");
+        assert_eq!(user_version, LATEST_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn schema_forty_seven_adds_the_normalized_album_artist_index() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            DROP INDEX idx_albums_artist_key;
+            PRAGMA user_version = 46;
+            ",
+        )
+        .expect("simulate schema forty-six database");
+
+        migrate(&conn).expect("migrate normalized album artist index");
+
+        assert!(migrations::phase_forty_seven_schema_exists(&conn)
+            .expect("phase forty-seven schema exists"));
         let user_version = conn
             .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
             .expect("read migrated user version");
@@ -22165,6 +22225,28 @@ mod tests {
         assert_eq!(stats.country_catalog[1].country_code, "GB");
         assert_eq!(stats.country_catalog[1].artist_count, 1);
         assert_eq!(stats.country_catalog[1].album_count, 2);
+
+        let explain_sql = format!("EXPLAIN QUERY PLAN {}", country_catalog_stats_sql());
+        let mut plan_statement = conn
+            .prepare(&explain_sql)
+            .expect("prepare country catalog query plan");
+        let plan = plan_statement
+            .query_map([], |row| row.get::<_, String>(3))
+            .expect("read country catalog query plan")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("collect country catalog query plan");
+        assert!(
+            plan.iter()
+                .any(|detail| { detail.contains("SCAN albums USING INDEX idx_albums_artist_key") }),
+            "unexpected country catalog query plan: {plan:#?}"
+        );
+        assert_eq!(
+            plan.iter()
+                .filter(|detail| detail.contains("SCAN albums"))
+                .count(),
+            1,
+            "country catalog should scan albums once: {plan:#?}"
+        );
     }
 
     #[test]

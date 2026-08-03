@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.113.1] - 2026-08-03
+### Changed
+- Synchronized app metadata and provider user agents to `0.113.1`.
+
+### Fixed
+- Search now displays library track and album totals as soon as library status loads, without waiting for Statistics or MusicBrainz startup requests.
+- Reworked country catalog statistics around a normalized album-artist index and a single pre-aggregated album scan, preventing large libraries from stalling startup with repeated full album scans.
+
 ## [0.113.0] - 2026-08-02
 ### Added
 - Added a responsive **Countries in your library** horizontal bar chart to Statistics, with Artists and Albums views, descending country rankings, direct counts, country names, and flags for every stored origin country.

@@ -8473,8 +8473,12 @@ export default function App() {
   }, []);
 
   const loadData = useCallback(async () => {
+    const statusPromise = getLibraryStatus().then((nextStatus) => {
+      setStatus(nextStatus);
+      return nextStatus;
+    });
     const [
-      nextStatus,
+      ,
       nextRuns,
       nextBackups,
       nextSavedSearches,
@@ -8486,7 +8490,7 @@ export default function App() {
       nextMusicBrainzArtistInfoStatus,
       nextMusicBrainzOverlaySyncLog,
     ] = await Promise.all([
-      getLibraryStatus(),
+      statusPromise,
       listImportRuns(8),
       listDatabaseBackups(),
       listSavedSearches(),
@@ -8498,7 +8502,6 @@ export default function App() {
       getMusicBrainzArtistInfoStatus(),
       listMusicBrainzOverlaySyncLog(12),
     ]);
-    setStatus(nextStatus);
     setRuns(nextRuns);
     setLatestAppliedImport(
       nextRuns.find(
