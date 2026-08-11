@@ -53,7 +53,7 @@ Core principles:
 | --- | --- | --- |
 | Search | Implemented | Primary album and track browsing, composable filters, Ask Luna natural-language filter creation and direct bounded answers, current-view questions, saved searches, and exports. |
 | Charts | Implemented | Built-in and saved ranked album views with Ask Luna natural-language chart creation and direct bounded answers, current-view questions, table, compact list, and cover grid modes. |
-| Discovery | Implemented | Verified outside-library artist/album/song discovery plus exploration dashboards for rating backlogs, loved outliers, genre clusters, artist constellations, and smart missions. |
+| Discovery | Implemented | Story-driven Daily Edition shelves for local anniversaries, artist life events, chart matches, deep cuts, collection gaps, and rating-anchored recommendations; verified outside-library discovery and the earlier analytical dashboards remain available as secondary tools. |
 | Playlists | Implemented | Luna-planned, SQLite-selected track playlists with year/rating/loved metadata, review/reorder/remove, exact local saved copies, and M3U8 export. |
 | Statistics | Implemented | Aggregate-only Luna Library analyst plus library health, rating progress, metadata coverage, import history, time shape, duration, concentration, and outlier dashboards. |
 | Albums | Implemented | Album index, album filters, detail drill-down, track lists, and album-level exports. |
@@ -464,6 +464,7 @@ Expected next backend modularization:
 
 ### Phase 10: Discovery
 
+- Editorial **Your Daily Edition** with explainable local-evidence shelves for 50-year album anniversaries, MusicBrainz birthdays/memorials, week-matched charts, unrated non-charting deep cuts from highly rated albums, official pure-album completion gaps, and recommendations anchored to recent rating activity plus loved tracks. No play-count source is required.
 - Discovery workspace separate from Statistics.
 - Completion heatmap for genre/year intersections.
 - Backlog and smart missions.

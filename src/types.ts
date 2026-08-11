@@ -2332,6 +2332,7 @@ export type LastFmAlbumPopularity = {
 };
 
 export type DiscoveryResponse = {
+  dailyEdition: DiscoveryDailyEdition;
   heatmap: DiscoveryHeatmapCell[];
   backlogMissions: DiscoveryMission[];
   smartMissions: DiscoveryMission[];
@@ -2339,6 +2340,112 @@ export type DiscoveryResponse = {
   genrePoints: DiscoveryGenrePoint[];
   artistPoints: DiscoveryArtistPoint[];
   generatedAt: string | null;
+};
+
+export type DiscoveryDailyEdition = {
+  date: string;
+  anniversaryYears: number;
+  anniversaries: DiscoveryAnniversaryStory[];
+  lifeEvents: DiscoveryLifeEventStory[];
+  chartToppers: DiscoveryChartStory[];
+  deepCuts: DiscoveryDeepCutStory[];
+  artistCompletions: DiscoveryArtistCompletionStory[];
+  ratingAnchor: DiscoveryRatingAnchor | null;
+  becauseYouPlayed: DiscoveryRecommendationStory[];
+  listeningEvidenceNote: string;
+};
+
+export type DiscoveryAnniversaryStory = {
+  albumId: string;
+  album: string;
+  artist: string;
+  releaseYear: number;
+  yearsAgo: number;
+  coverPath: string | null;
+  evidence: string;
+};
+
+export type DiscoveryLifeEventStory = {
+  artistId: string;
+  artist: string;
+  eventType: "birthday" | "memorial" | string;
+  eventDate: string;
+  years: number;
+  dayOffset: number;
+  albumCount: number;
+  lovedTracks: number;
+  portraitAvailable: boolean;
+  representativeAlbumId: string | null;
+  representativeAlbum: string | null;
+  representativeCoverPath: string | null;
+  evidence: string;
+};
+
+export type DiscoveryChartStory = {
+  entity: "album" | "track" | string;
+  albumId: string;
+  trackId: number | null;
+  title: string;
+  artist: string;
+  album: string | null;
+  chart: string;
+  rank: number;
+  chartDate: string;
+  chartYear: number;
+  loved: boolean;
+  coverPath: string | null;
+  evidence: string;
+};
+
+export type DiscoveryDeepCutStory = {
+  trackId: number;
+  title: string;
+  albumId: string;
+  album: string;
+  artist: string;
+  trackNumber: number | null;
+  timeSeconds: number | null;
+  albumRating: number;
+  coverPath: string | null;
+  evidence: string;
+};
+
+export type DiscoveryArtistCompletionStory = {
+  artistId: string;
+  artist: string;
+  musicbrainzMbid: string;
+  ownedAlbumCount: number;
+  officialAlbumCount: number;
+  missingAlbumCount: number;
+  completionPercent: number;
+  missingReleaseTitle: string;
+  missingReleaseYear: number | null;
+  portraitAvailable: boolean;
+  representativeAlbumId: string | null;
+  representativeAlbum: string | null;
+  representativeCoverPath: string | null;
+  evidence: string;
+};
+
+export type DiscoveryRatingAnchor = {
+  albumId: string;
+  album: string;
+  artist: string;
+  createdAt: string;
+  rating: number | null;
+  coverPath: string | null;
+  evidence: string;
+};
+
+export type DiscoveryRecommendationStory = {
+  albumId: string;
+  album: string;
+  artist: string;
+  lovedTracks: number;
+  albumScore: number | null;
+  coverPath: string | null;
+  reason: string;
+  evidence: string;
 };
 
 export type DiscoveryHeatmapCell = {

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.122.0] - 2026-08-12
+### Added
+- Added the editorial **Your Daily Edition** Discovery front page with owned-album 50-year anniversaries, exact MusicBrainz artist birthdays and memorials, locally matched weekly chart stories, deep cuts, artist collection gaps, and rating-anchored recommendations.
+- Added explicit per-story evidence, responsive editorial shelves, direct album/track/artist/Completion navigation, web-preview story fixtures, and focused frontend and SQLite coverage.
+
+### Changed
+- Discovery now treats recent rating activity and loved tracks as listening evidence without requiring play counts; the previous dashboard and outside-library workflow remain available under **More discovery tools**.
+- Removed the redundant Discovery details sidebar because the edition includes its own story index.
+- Synchronized app metadata and provider user agents to `0.122.0`.
+
 ## [0.121.0] - 2026-08-11
 ### Added
 - Added **Owned MusicBrainz special releases** to Tools for positively matched local `Album + Compilation`, `Album + Compilation + Live`, `Album + Interview`, `Album + Live`, `EP`, `EP + Compilation`, `EP + Compilation + Live`, and `EP + Live` release groups that are absent from the pure Album list.

@@ -1471,6 +1471,7 @@ pub struct ArtistTimelineResponse {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryResponse {
+    pub daily_edition: DiscoveryDailyEdition,
     pub heatmap: Vec<DiscoveryHeatmapCell>,
     pub backlog_missions: Vec<DiscoveryMission>,
     pub smart_missions: Vec<DiscoveryMission>,
@@ -1478,6 +1479,128 @@ pub struct DiscoveryResponse {
     pub genre_points: Vec<DiscoveryGenrePoint>,
     pub artist_points: Vec<DiscoveryArtistPoint>,
     pub generated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryDailyEdition {
+    pub date: String,
+    pub anniversary_years: i32,
+    pub anniversaries: Vec<DiscoveryAnniversaryStory>,
+    pub life_events: Vec<DiscoveryLifeEventStory>,
+    pub chart_toppers: Vec<DiscoveryChartStory>,
+    pub deep_cuts: Vec<DiscoveryDeepCutStory>,
+    pub artist_completions: Vec<DiscoveryArtistCompletionStory>,
+    pub rating_anchor: Option<DiscoveryRatingAnchor>,
+    pub because_you_played: Vec<DiscoveryRecommendationStory>,
+    pub listening_evidence_note: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryAnniversaryStory {
+    pub album_id: String,
+    pub album: String,
+    pub artist: String,
+    pub release_year: i32,
+    pub years_ago: i32,
+    pub cover_path: Option<String>,
+    pub evidence: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryLifeEventStory {
+    pub artist_id: String,
+    pub artist: String,
+    pub event_type: String,
+    pub event_date: String,
+    pub years: i32,
+    pub day_offset: i32,
+    pub album_count: i64,
+    pub loved_tracks: i64,
+    pub portrait_available: bool,
+    pub representative_album_id: Option<String>,
+    pub representative_album: Option<String>,
+    pub representative_cover_path: Option<String>,
+    pub evidence: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryChartStory {
+    pub entity: String,
+    pub album_id: String,
+    pub track_id: Option<i64>,
+    pub title: String,
+    pub artist: String,
+    pub album: Option<String>,
+    pub chart: String,
+    pub rank: i32,
+    pub chart_date: String,
+    pub chart_year: i32,
+    pub loved: bool,
+    pub cover_path: Option<String>,
+    pub evidence: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryDeepCutStory {
+    pub track_id: i64,
+    pub title: String,
+    pub album_id: String,
+    pub album: String,
+    pub artist: String,
+    pub track_number: Option<i32>,
+    pub time_seconds: Option<i64>,
+    pub album_rating: i32,
+    pub cover_path: Option<String>,
+    pub evidence: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryArtistCompletionStory {
+    pub artist_id: String,
+    pub artist: String,
+    pub musicbrainz_mbid: String,
+    pub owned_album_count: i64,
+    pub official_album_count: i64,
+    pub missing_album_count: i64,
+    pub completion_percent: f64,
+    pub missing_release_title: String,
+    pub missing_release_year: Option<i32>,
+    pub portrait_available: bool,
+    pub representative_album_id: Option<String>,
+    pub representative_album: Option<String>,
+    pub representative_cover_path: Option<String>,
+    pub evidence: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryRatingAnchor {
+    pub album_id: String,
+    pub album: String,
+    pub artist: String,
+    pub created_at: String,
+    pub rating: Option<i32>,
+    pub cover_path: Option<String>,
+    pub evidence: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryRecommendationStory {
+    pub album_id: String,
+    pub album: String,
+    pub artist: String,
+    pub loved_tracks: i64,
+    pub album_score: Option<f64>,
+    pub cover_path: Option<String>,
+    pub reason: String,
+    pub evidence: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

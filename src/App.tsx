@@ -380,6 +380,7 @@ import {
 import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPanel";
 import { MusicResearchPanel } from "./components/MusicResearchPanel";
 import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
+import { DiscoveryDailyEdition } from "./components/DiscoveryDailyEdition";
 import { GenreTimeline } from "./components/GenreTimeline";
 import { ArtistTimeline } from "./components/ArtistTimeline";
 import { ArtistPortrait } from "./components/ArtistPortrait";
@@ -13176,7 +13177,7 @@ export default function App() {
     (statistics?.ratingProgress.unratedTracks ?? 0);
   const isLeftSidebarHidden = leftSidebarMode === "hidden";
   const hasUsefulDetailContent = workspaceHasUsefulDetails(activeSection, {
-    hasDiscovery: discovery != null,
+    hasDiscovery: false,
     hasSelectedAlbum: selectedAlbum != null,
     hasSelectedArtist: selectedArtist != null,
     hasSelectedGenre: selectedGenre != null,
@@ -15395,10 +15396,7 @@ export default function App() {
             <header className="topbar">
               <div>
                 <h1>Discovery</h1>
-                <p>
-                  Find music outside your library, then explore rating
-                  backlogs, loved outliers, and catalog pockets.
-                </p>
+                <p>Your library has a new edition.</p>
               </div>
               <div className="topbar-actions">
                 <button
@@ -15420,7 +15418,18 @@ export default function App() {
               </div>
             </header>
 
-            <PageLunaCommandArea
+            <DiscoveryDailyEdition
+              edition={discovery?.dailyEdition ?? null}
+              isLoading={isDiscoveryLoading}
+              onOpenAlbum={openTimelineAlbum}
+              onOpenArtist={openArtistFromMusicMap}
+              onOpenCompletion={() => setActiveSection("Completion")}
+              onOpenTrack={openTimelineTrack}
+            />
+
+            <details className="discovery-archive-tools">
+              <summary>More discovery tools</summary>
+              <PageLunaCommandArea
               idPrefix="discovery"
               label="Discovery Luna commands"
               description="Find verified music outside your current library."
@@ -15633,7 +15642,8 @@ export default function App() {
                   visibleColumns={[]}
                 />
               </section>
-            </section>
+              </section>
+            </details>
           </section>
         ) : activeSection === "Music Map" ? (
           <MusicMapWorkspace onOpenArtist={openArtistFromMusicMap} />

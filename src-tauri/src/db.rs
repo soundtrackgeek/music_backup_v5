@@ -14,24 +14,26 @@ use crate::models::{
     ArtistTrackHighlights, BillboardImportSummary, BillboardSinglesImportSummary, BrowseFilters,
     BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, CatalogConcentrationStats, ChartConfig,
     ConcentrationPoint, CountryCatalogStats, DecadeProgressStats, DiscoveryAlbumPoint,
-    DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell, DiscoveryMission,
-    DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats, ExportMusicToolRequest,
-    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressRequest,
-    GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint, GenreTimelineGenre,
-    GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount, ImportRun,
-    LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus, LovedDensityStat,
-    LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption, MusicToolFieldDiff,
-    MusicToolFixDiff, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
-    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress,
-    MusicToolSummary, MusicToolUndoSummary, NorsktoppenImportSummary, OfficialUkImportSummary,
-    OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse, RatingBucket, RatingEvent,
-    RatingHistoryPoint, RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart,
-    SavedSearch, StatisticsResponse, TextFilter, TiISkuddetImportSummary,
-    TrackDebutTimelineResponse, TrackDebutTimelineTrack, TrackDebutTimelineYear,
-    VgListaImportSummary, YearProgressRequest, YearProgressStats,
+    DiscoveryAnniversaryStory, DiscoveryArtistCompletionStory, DiscoveryArtistPoint,
+    DiscoveryChartStory, DiscoveryDailyEdition, DiscoveryDeepCutStory, DiscoveryGenrePoint,
+    DiscoveryHeatmapCell, DiscoveryLifeEventStory, DiscoveryMission, DiscoveryRatingAnchor,
+    DiscoveryRecommendationStory, DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats,
+    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    GenreProgressRequest, GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint,
+    GenreTimelineGenre, GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount,
+    ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus,
+    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption,
+    MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry, MusicToolFixRequest,
+    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
+    MusicToolProgress, MusicToolSummary, MusicToolUndoSummary, NorsktoppenImportSummary,
+    OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse,
+    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
+    TiISkuddetImportSummary, TrackDebutTimelineResponse, TrackDebutTimelineTrack,
+    TrackDebutTimelineYear, VgListaImportSummary, YearProgressRequest, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::{Datelike, NaiveDate, Utc, Weekday};
+use chrono::{Datelike, Local, NaiveDate, Utc, Weekday};
 use rusqlite::{
     functions::FunctionFlags, params, params_from_iter, types::Value, Connection, OpenFlags,
     OptionalExtension,
@@ -13356,8 +13358,10 @@ fn discovery(conn: &Connection) -> Result<DiscoveryResponse> {
         .into_iter()
         .next()
         .map(|run| run.completed_at.unwrap_or(run.started_at));
+    let today = Local::now().date_naive();
 
     Ok(DiscoveryResponse {
+        daily_edition: discovery_daily_edition(conn, today)?,
         heatmap: discovery_heatmap(conn)?,
         backlog_missions: discovery_backlog_missions(conn)?,
         smart_missions: discovery_smart_missions(conn)?,
@@ -13366,6 +13370,713 @@ fn discovery(conn: &Connection) -> Result<DiscoveryResponse> {
         artist_points: discovery_artist_points(conn)?,
         generated_at,
     })
+}
+
+fn discovery_daily_edition(conn: &Connection, date: NaiveDate) -> Result<DiscoveryDailyEdition> {
+    let (rating_anchor, because_you_played) = discovery_because_you_played(conn)?;
+    Ok(DiscoveryDailyEdition {
+        date: date.format("%Y-%m-%d").to_string(),
+        anniversary_years: 50,
+        anniversaries: discovery_anniversaries(conn, date, 50)?,
+        life_events: discovery_life_events(conn, date)?,
+        chart_toppers: discovery_chart_toppers(conn, date)?,
+        deep_cuts: discovery_deep_cuts(conn)?,
+        artist_completions: discovery_artist_completions(conn)?,
+        rating_anchor,
+        because_you_played,
+        listening_evidence_note: "Listening stories use recent rating activity and loved tracks."
+            .to_string(),
+    })
+}
+
+fn discovery_anniversaries(
+    conn: &Connection,
+    date: NaiveDate,
+    anniversary_years: i32,
+) -> Result<Vec<DiscoveryAnniversaryStory>> {
+    let release_year = date.year() - anniversary_years;
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            a.id,
+            COALESCE(NULLIF(TRIM(a.album), ''), 'Unknown Album'),
+            COALESCE(NULLIF(TRIM(a.album_artist_display), ''), 'Unknown Artist'),
+            COALESCE(a.release_year, a.year),
+            c.cache_path
+        FROM albums a
+        LEFT JOIN album_covers c ON c.album_id = a.id
+        WHERE COALESCE(a.release_year, a.year) = ?1
+        ORDER BY
+            CASE WHEN c.cache_path IS NULL THEN 1 ELSE 0 END,
+            COALESCE(a.album_score, 0) DESC,
+            COALESCE(a.loved_tracks, 0) DESC,
+            LOWER(COALESCE(a.album_artist_display, '')),
+            LOWER(COALESCE(a.album, ''))
+        LIMIT 4
+        ",
+    )?;
+    let stories = stmt
+        .query_map(params![release_year], |row| {
+            let album: String = row.get(1)?;
+            let artist: String = row.get(2)?;
+            let year: i32 = row.get(3)?;
+            Ok(DiscoveryAnniversaryStory {
+                album_id: row.get(0)?,
+                album,
+                artist,
+                release_year: year,
+                years_ago: date.year() - year,
+                cover_path: row.get(4)?,
+                evidence: format!("Released in {year} · owned album"),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load discovery anniversary stories")?;
+    Ok(stories)
+}
+
+fn discovery_life_events(
+    conn: &Connection,
+    date: NaiveDate,
+) -> Result<Vec<DiscoveryLifeEventStory>> {
+    let album_artist_key = artist_key_sql("album_artist_display");
+    let month_day = date.format("%m-%d").to_string();
+    let sql = format!(
+        "
+        WITH artist_stats AS (
+            SELECT
+                {album_artist_key} AS artist_id,
+                COUNT(*) AS album_count,
+                COALESCE(SUM(loved_tracks), 0) AS loved_tracks,
+                MIN(NULLIF(TRIM(album_artist_display), '')) AS artist
+            FROM albums
+            WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL
+            GROUP BY artist_id
+        ),
+        events AS (
+            SELECT
+                info.local_artist_key AS artist_id,
+                COALESCE(NULLIF(TRIM(info.display_artist), ''), stats.artist) AS artist,
+                'birthday' AS event_type,
+                info.life_begin_date AS event_date,
+                COALESCE(
+                    info.life_begin_year,
+                    CAST(SUBSTR(info.life_begin_date, 1, 4) AS INTEGER)
+                ) AS event_year,
+                stats.album_count,
+                stats.loved_tracks
+            FROM musicbrainz_artist_infos info
+            JOIN artist_stats stats ON stats.artist_id = info.local_artist_key
+            WHERE LOWER(COALESCE(info.artist_type, '')) = 'person'
+              AND LENGTH(info.life_begin_date) = 10
+              AND SUBSTR(info.life_begin_date, 6, 5) = ?1
+
+            UNION ALL
+
+            SELECT
+                info.local_artist_key,
+                COALESCE(NULLIF(TRIM(info.display_artist), ''), stats.artist),
+                'memorial',
+                info.life_end_date,
+                COALESCE(
+                    info.life_end_year,
+                    CAST(SUBSTR(info.life_end_date, 1, 4) AS INTEGER)
+                ),
+                stats.album_count,
+                stats.loved_tracks
+            FROM musicbrainz_artist_infos info
+            JOIN artist_stats stats ON stats.artist_id = info.local_artist_key
+            WHERE LOWER(COALESCE(info.artist_type, '')) = 'person'
+              AND LENGTH(info.life_end_date) = 10
+              AND SUBSTR(info.life_end_date, 6, 5) = ?1
+        )
+        SELECT
+            events.artist_id,
+            events.artist,
+            events.event_type,
+            events.event_date,
+            events.event_year,
+            events.album_count,
+            events.loved_tracks,
+            EXISTS(
+                SELECT 1
+                FROM artist_images image
+                WHERE image.artist_key = events.artist_id
+                  AND image.state = 'available'
+                  AND image.cache_path IS NOT NULL
+            ) AS portrait_available,
+            (
+                SELECT a.id
+                FROM albums a
+                LEFT JOIN album_covers c ON c.album_id = a.id
+                WHERE {album_artist_key} = events.artist_id
+                ORDER BY c.cache_path IS NULL, COALESCE(a.album_score, 0) DESC
+                LIMIT 1
+            ) AS representative_album_id,
+            (
+                SELECT a.album
+                FROM albums a
+                LEFT JOIN album_covers c ON c.album_id = a.id
+                WHERE {album_artist_key} = events.artist_id
+                ORDER BY c.cache_path IS NULL, COALESCE(a.album_score, 0) DESC
+                LIMIT 1
+            ) AS representative_album,
+            (
+                SELECT c.cache_path
+                FROM albums a
+                JOIN album_covers c ON c.album_id = a.id
+                WHERE {album_artist_key} = events.artist_id
+                ORDER BY COALESCE(a.album_score, 0) DESC
+                LIMIT 1
+            ) AS representative_cover_path
+        FROM events
+        ORDER BY CASE events.event_type WHEN 'birthday' THEN 0 ELSE 1 END,
+                 events.album_count DESC,
+                 LOWER(events.artist)
+        LIMIT 7
+        "
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let stories = stmt
+        .query_map(params![month_day], |row| {
+            let event_type: String = row.get(2)?;
+            let event_year: i32 = row.get(4)?;
+            let album_count: i64 = row.get(5)?;
+            let loved_tracks: i64 = row.get(6)?;
+            let evidence = if event_type == "birthday" {
+                format!("Born today · {album_count} albums in your library")
+            } else {
+                format!("Remembered today · {loved_tracks} loved tracks")
+            };
+            Ok(DiscoveryLifeEventStory {
+                artist_id: row.get(0)?,
+                artist: row.get(1)?,
+                event_type,
+                event_date: row.get(3)?,
+                years: date.year() - event_year,
+                day_offset: 0,
+                album_count,
+                loved_tracks,
+                portrait_available: row.get::<_, i64>(7)? != 0,
+                representative_album_id: row.get(8)?,
+                representative_album: row.get(9)?,
+                representative_cover_path: row.get(10)?,
+                evidence,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load discovery artist life events")?;
+    Ok(stories)
+}
+
+fn discovery_chart_toppers(conn: &Connection, date: NaiveDate) -> Result<Vec<DiscoveryChartStory>> {
+    let week = date.format("%W").to_string();
+    let mut stmt = conn.prepare(
+        "
+        WITH stories AS (
+            SELECT 'album' AS entity, a.id AS album_id, NULL AS track_id,
+                   COALESCE(NULLIF(TRIM(a.album), ''), entry.album) AS title,
+                   COALESCE(NULLIF(TRIM(a.album_artist_display), ''), entry.artist) AS artist,
+                   a.album, 'Billboard albums' AS chart, entry.rank,
+                   entry.first_appearance AS chart_date, entry.year AS chart_year,
+                   CASE WHEN a.loved_tracks > 0 THEN 1 ELSE 0 END AS loved,
+                   cover.cache_path
+            FROM billboard_chart_entries entry
+            JOIN albums a ON a.id = entry.matched_album_id
+            LEFT JOIN album_covers cover ON cover.album_id = a.id
+            WHERE entry.first_appearance IS NOT NULL
+              AND strftime('%W', entry.first_appearance) = ?1
+
+            UNION ALL
+            SELECT 'track', t.album_id, t.id, COALESCE(NULLIF(TRIM(t.title), ''), entry.title),
+                   COALESCE(NULLIF(TRIM(t.display_artist), ''), entry.display_artist),
+                   t.album, 'Billboard singles', entry.rank, entry.date_entered, entry.year,
+                   CASE WHEN NULLIF(TRIM(COALESCE(t.love, '')), '') IS NOT NULL THEN 1 ELSE 0 END,
+                   cover.cache_path
+            FROM billboard_single_chart_entries entry
+            JOIN tracks t ON t.id = entry.matched_track_id
+            LEFT JOIN album_covers cover ON cover.album_id = t.album_id
+            WHERE entry.date_entered IS NOT NULL
+              AND strftime('%W', entry.date_entered) = ?1
+
+            UNION ALL
+            SELECT 'album', a.id, NULL, COALESCE(NULLIF(TRIM(a.album), ''), entry.title),
+                   COALESCE(NULLIF(TRIM(a.album_artist_display), ''), entry.artist),
+                   a.album, 'VG-lista albums', entry.rank, entry.week_date, entry.year,
+                   CASE WHEN a.loved_tracks > 0 THEN 1 ELSE 0 END, cover.cache_path
+            FROM vg_lista_album_chart_entries entry
+            JOIN albums a ON a.id = entry.matched_album_id
+            LEFT JOIN album_covers cover ON cover.album_id = a.id
+            WHERE strftime('%W', entry.week_date) = ?1
+
+            UNION ALL
+            SELECT 'track', t.album_id, t.id, COALESCE(NULLIF(TRIM(t.title), ''), entry.title),
+                   COALESCE(NULLIF(TRIM(t.display_artist), ''), entry.artist),
+                   t.album, 'VG-lista singles', entry.rank, entry.week_date, entry.year,
+                   CASE WHEN NULLIF(TRIM(COALESCE(t.love, '')), '') IS NOT NULL THEN 1 ELSE 0 END,
+                   cover.cache_path
+            FROM vg_lista_single_chart_entries entry
+            JOIN tracks t ON t.id = entry.matched_track_id
+            LEFT JOIN album_covers cover ON cover.album_id = t.album_id
+            WHERE strftime('%W', entry.week_date) = ?1
+
+            UNION ALL
+            SELECT 'album', a.id, NULL, COALESCE(NULLIF(TRIM(a.album), ''), entry.title),
+                   COALESCE(NULLIF(TRIM(a.album_artist_display), ''), entry.artist),
+                   a.album, 'Official UK albums', entry.rank, entry.chart_date, entry.year,
+                   CASE WHEN a.loved_tracks > 0 THEN 1 ELSE 0 END, cover.cache_path
+            FROM official_uk_album_chart_entries entry
+            JOIN albums a ON a.id = entry.matched_album_id
+            LEFT JOIN album_covers cover ON cover.album_id = a.id
+            WHERE strftime('%W', entry.chart_date) = ?1
+
+            UNION ALL
+            SELECT 'track', t.album_id, t.id, COALESCE(NULLIF(TRIM(t.title), ''), entry.title),
+                   COALESCE(NULLIF(TRIM(t.display_artist), ''), entry.artist),
+                   t.album, 'Official UK singles', entry.rank, entry.chart_date, entry.year,
+                   CASE WHEN NULLIF(TRIM(COALESCE(t.love, '')), '') IS NOT NULL THEN 1 ELSE 0 END,
+                   cover.cache_path
+            FROM official_uk_single_chart_entries entry
+            JOIN tracks t ON t.id = entry.matched_track_id
+            LEFT JOIN album_covers cover ON cover.album_id = t.album_id
+            WHERE strftime('%W', entry.chart_date) = ?1
+
+            UNION ALL
+            SELECT 'track', t.album_id, t.id, COALESCE(NULLIF(TRIM(t.title), ''), entry.title),
+                   COALESCE(NULLIF(TRIM(t.display_artist), ''), entry.artist),
+                   t.album, 'Ti i skuddet', entry.rank, entry.chart_date, entry.year,
+                   CASE WHEN NULLIF(TRIM(COALESCE(t.love, '')), '') IS NOT NULL THEN 1 ELSE 0 END,
+                   cover.cache_path
+            FROM ti_i_skuddet_chart_entries entry
+            JOIN tracks t ON t.id = entry.matched_track_id
+            LEFT JOIN album_covers cover ON cover.album_id = t.album_id
+            WHERE strftime('%W', entry.chart_date) = ?1
+
+            UNION ALL
+            SELECT 'track', t.album_id, t.id, COALESCE(NULLIF(TRIM(t.title), ''), entry.title),
+                   COALESCE(NULLIF(TRIM(t.display_artist), ''), entry.artist),
+                   t.album, 'Norsktoppen', entry.rank, entry.chart_date, entry.year,
+                   CASE WHEN NULLIF(TRIM(COALESCE(t.love, '')), '') IS NOT NULL THEN 1 ELSE 0 END,
+                   cover.cache_path
+            FROM norsktoppen_chart_entries entry
+            JOIN tracks t ON t.id = entry.matched_track_id
+            LEFT JOIN album_covers cover ON cover.album_id = t.album_id
+            WHERE strftime('%W', entry.chart_date) = ?1
+        ),
+        ranked AS (
+            SELECT stories.*,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY entity, COALESCE(CAST(track_id AS TEXT), album_id), chart
+                       ORDER BY rank ASC, chart_date ASC
+                   ) AS story_rank
+            FROM stories
+        )
+        SELECT entity, album_id, track_id, title, artist, album, chart, rank,
+               chart_date, chart_year, loved, cache_path
+        FROM ranked
+        WHERE story_rank = 1
+        ORDER BY rank ASC, chart_year DESC, LOWER(artist), LOWER(title)
+        LIMIT 12
+        ",
+    )?;
+    let stories = stmt
+        .query_map(params![week], |row| {
+            let entity: String = row.get(0)?;
+            let chart: String = row.get(6)?;
+            let rank: i32 = row.get(7)?;
+            Ok(DiscoveryChartStory {
+                entity: entity.clone(),
+                album_id: row.get(1)?,
+                track_id: row.get(2)?,
+                title: row.get(3)?,
+                artist: row.get(4)?,
+                album: row.get(5)?,
+                chart: chart.clone(),
+                rank,
+                chart_date: row.get(8)?,
+                chart_year: row.get(9)?,
+                loved: row.get::<_, i64>(10)? != 0,
+                cover_path: row.get(11)?,
+                evidence: format!("#{rank} on {chart} · owned {entity}"),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load discovery chart stories")?;
+    Ok(stories)
+}
+
+fn discovery_deep_cuts(conn: &Connection) -> Result<Vec<DiscoveryDeepCutStory>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            t.id,
+            COALESCE(NULLIF(TRIM(t.title), ''), 'Untitled'),
+            a.id,
+            COALESCE(NULLIF(TRIM(a.album), ''), 'Unknown Album'),
+            COALESCE(NULLIF(TRIM(a.album_artist_display), ''), 'Unknown Artist'),
+            t.track_number,
+            t.time_seconds,
+            a.effective_album_rating,
+            cover.cache_path
+        FROM tracks t
+        JOIN albums a ON a.id = t.album_id
+        LEFT JOIN album_covers cover ON cover.album_id = a.id
+        WHERE a.effective_album_rating >= 85
+          AND t.normalized_rating IS NULL
+          AND NULLIF(TRIM(COALESCE(t.love, '')), '') IS NULL
+          AND t.billboard_single_rank IS NULL
+          AND t.vg_lista_rank IS NULL
+          AND t.official_uk_rank IS NULL
+          AND t.ti_i_skuddet_rank IS NULL
+          AND t.norsktoppen_rank IS NULL
+          AND COALESCE(t.track_number, 2) > 1
+        ORDER BY
+            CASE WHEN cover.cache_path IS NULL THEN 1 ELSE 0 END,
+            a.effective_album_rating DESC,
+            COALESCE(a.album_score, 0) DESC,
+            LOWER(COALESCE(a.album_artist_display, '')),
+            LOWER(COALESCE(a.album, '')),
+            COALESCE(t.disc_number, 1),
+            COALESCE(t.track_number, 999)
+        LIMIT 16
+        ",
+    )?;
+    let stories = stmt
+        .query_map([], |row| {
+            let album_rating: i32 = row.get(7)?;
+            Ok(DiscoveryDeepCutStory {
+                track_id: row.get(0)?,
+                title: row.get(1)?,
+                album_id: row.get(2)?,
+                album: row.get(3)?,
+                artist: row.get(4)?,
+                track_number: row.get(5)?,
+                time_seconds: row.get(6)?,
+                album_rating,
+                cover_path: row.get(8)?,
+                evidence: format!(
+                    "Album rated {album_rating} · track unrated · no imported singles-chart match"
+                ),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load discovery deep cuts")?;
+    Ok(stories)
+}
+
+fn discovery_artist_completions(conn: &Connection) -> Result<Vec<DiscoveryArtistCompletionStory>> {
+    let album_artist_key = artist_key_sql("album_artist_display");
+    let sql = format!(
+        "
+        WITH artist_stats AS (
+            SELECT
+                {album_artist_key} AS artist_id,
+                COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist,
+                COUNT(*) AS album_count
+            FROM albums
+            WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL
+            GROUP BY artist_id
+            HAVING COUNT(*) >= 3
+        )
+        SELECT
+            stats.artist_id,
+            COALESCE(NULLIF(TRIM(info.display_artist), ''), stats.artist),
+            info.mbid,
+            stats.album_count,
+            EXISTS(
+                SELECT 1 FROM artist_images image
+                WHERE image.artist_key = stats.artist_id
+                  AND image.state = 'available'
+                  AND image.cache_path IS NOT NULL
+            ),
+            (
+                SELECT a.id FROM albums a
+                LEFT JOIN album_covers c ON c.album_id = a.id
+                WHERE {album_artist_key} = stats.artist_id
+                ORDER BY c.cache_path IS NULL, COALESCE(a.album_score, 0) DESC
+                LIMIT 1
+            ),
+            (
+                SELECT a.album FROM albums a
+                LEFT JOIN album_covers c ON c.album_id = a.id
+                WHERE {album_artist_key} = stats.artist_id
+                ORDER BY c.cache_path IS NULL, COALESCE(a.album_score, 0) DESC
+                LIMIT 1
+            ),
+            (
+                SELECT c.cache_path FROM albums a
+                JOIN album_covers c ON c.album_id = a.id
+                WHERE {album_artist_key} = stats.artist_id
+                ORDER BY COALESCE(a.album_score, 0) DESC
+                LIMIT 1
+            )
+        FROM artist_stats stats
+        JOIN musicbrainz_artist_infos info ON info.local_artist_key = stats.artist_id
+        WHERE NULLIF(TRIM(info.mbid), '') IS NOT NULL
+        ORDER BY stats.album_count DESC, LOWER(stats.artist)
+        LIMIT 36
+        "
+    );
+    let candidates = conn
+        .prepare(&sql)?
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)? != 0,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut stories = Vec::new();
+    for (
+        artist_id,
+        artist,
+        mbid,
+        local_album_count,
+        portrait_available,
+        representative_album_id,
+        representative_album,
+        representative_cover_path,
+    ) in candidates
+    {
+        let owned_titles = conn
+            .prepare(&format!(
+                "SELECT album FROM albums WHERE {album_artist_key} = ?1"
+            ))?
+            .query_map(params![&artist_id], |row| row.get::<_, Option<String>>(0))?
+            .filter_map(|row| row.ok().flatten())
+            .map(|title| normalize_text(&title))
+            .collect::<HashSet<_>>();
+
+        let decisions = conn
+            .prepare(
+                "SELECT release_mbid, decision FROM musicbrainz_release_decisions WHERE local_artist_key = ?1",
+            )?
+            .query_map(params![&artist_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<rusqlite::Result<HashMap<_, _>>>()?;
+
+        let releases = conn
+            .prepare(
+                "
+                SELECT release_mbid, title, year
+                FROM musicbrainz_artist_release_groups
+                WHERE LOWER(artist_mbid) = LOWER(?1)
+                  AND LOWER(COALESCE(type, '')) = 'album'
+                  AND TRIM(COALESCE(secondary_types, '')) = ''
+                  AND status = 'Official'
+                ORDER BY COALESCE(year, 9999), LOWER(title), release_mbid
+                ",
+            )?
+            .query_map(params![&mbid], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<i32>>(2)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        if releases.is_empty() {
+            continue;
+        }
+
+        let relevant = releases
+            .into_iter()
+            .filter(|(release_mbid, _, _)| {
+                !matches!(
+                    decisions.get(release_mbid).map(String::as_str),
+                    Some("not-in-scope" | "ignored")
+                )
+            })
+            .collect::<Vec<_>>();
+        let owned = relevant
+            .iter()
+            .filter(|(release_mbid, title, _)| {
+                owned_titles.contains(&normalize_text(title))
+                    || matches!(
+                        decisions.get(release_mbid).map(String::as_str),
+                        Some("owned")
+                    )
+            })
+            .count() as i64;
+        let missing = relevant
+            .iter()
+            .filter(|(release_mbid, title, _)| {
+                !owned_titles.contains(&normalize_text(title))
+                    && !matches!(
+                        decisions.get(release_mbid).map(String::as_str),
+                        Some("owned")
+                    )
+            })
+            .collect::<Vec<_>>();
+        if missing.is_empty() || owned < 2 {
+            continue;
+        }
+        let official = relevant.len() as i64;
+        let completion_percent = if official > 0 {
+            owned as f64 / official as f64
+        } else {
+            0.0
+        };
+        let (_, missing_release_title, missing_release_year) = missing[0];
+        stories.push(DiscoveryArtistCompletionStory {
+            artist_id,
+            artist,
+            musicbrainz_mbid: mbid,
+            owned_album_count: owned,
+            official_album_count: official,
+            missing_album_count: missing.len() as i64,
+            completion_percent,
+            missing_release_title: missing_release_title.clone(),
+            missing_release_year: *missing_release_year,
+            portrait_available,
+            representative_album_id,
+            representative_album,
+            representative_cover_path,
+            evidence: format!(
+                "{owned} of {official} official albums owned · {local_album_count} local albums"
+            ),
+        });
+    }
+    stories.sort_by(|left, right| {
+        right
+            .completion_percent
+            .partial_cmp(&left.completion_percent)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| right.owned_album_count.cmp(&left.owned_album_count))
+            .then_with(|| left.artist.to_lowercase().cmp(&right.artist.to_lowercase()))
+    });
+    stories.truncate(8);
+    Ok(stories)
+}
+
+fn discovery_because_you_played(
+    conn: &Connection,
+) -> Result<(
+    Option<DiscoveryRatingAnchor>,
+    Vec<DiscoveryRecommendationStory>,
+)> {
+    let anchor = conn
+        .query_row(
+            "
+            SELECT
+                event.album_id,
+                COALESCE(NULLIF(TRIM(event.album), ''), NULLIF(TRIM(album.album), ''), 'Unknown Album'),
+                COALESCE(NULLIF(TRIM(event.album_artist_display), ''), NULLIF(TRIM(album.album_artist_display), ''), 'Unknown Artist'),
+                event.created_at,
+                COALESCE(event.current_effective_album_rating, album.effective_album_rating),
+                cover.cache_path,
+                COALESCE(album.genre_normalized, ''),
+                COALESCE(album.album_artist_display, '')
+            FROM rating_events event
+            JOIN albums album ON album.id = event.album_id
+            LEFT JOIN album_covers cover ON cover.album_id = album.id
+            ORDER BY event.id DESC
+            LIMIT 1
+            ",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<i32>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
+                ))
+            },
+        )
+        .optional()
+        .context("Could not load the recent discovery rating anchor")?;
+    let Some((album_id, album, artist, created_at, rating, cover_path, genre, anchor_artist)) =
+        anchor
+    else {
+        return Ok((None, Vec::new()));
+    };
+
+    let artist_key = normalize_artist_key(&anchor_artist);
+    let album_artist_key = artist_key_sql("candidate.album_artist_display");
+    let sql = format!(
+        "
+        SELECT
+            candidate.id,
+            COALESCE(NULLIF(TRIM(candidate.album), ''), 'Unknown Album'),
+            COALESCE(NULLIF(TRIM(candidate.album_artist_display), ''), 'Unknown Artist'),
+            candidate.loved_tracks,
+            candidate.album_score,
+            cover.cache_path,
+            CASE WHEN {album_artist_key} = ?2 THEN 'artist' ELSE 'genre' END AS connection
+        FROM albums candidate
+        LEFT JOIN album_covers cover ON cover.album_id = candidate.id
+        WHERE candidate.id <> ?1
+          AND (
+                {album_artist_key} = ?2
+             OR (NULLIF(?3, '') IS NOT NULL AND candidate.genre_normalized = ?3)
+          )
+        ORDER BY
+            CASE WHEN {album_artist_key} = ?2 THEN 0 ELSE 1 END,
+            candidate.loved_tracks DESC,
+            COALESCE(candidate.album_score, 0) DESC,
+            candidate.rating_completeness DESC,
+            LOWER(COALESCE(candidate.album, ''))
+        LIMIT 8
+        "
+    );
+    let recommendations = conn
+        .prepare(&sql)?
+        .query_map(params![&album_id, artist_key, genre], |row| {
+            let loved_tracks: i64 = row.get(3)?;
+            let album_score: Option<f64> = row.get(4)?;
+            let connection: String = row.get(6)?;
+            let reason = if connection == "artist" {
+                "Same artist".to_string()
+            } else {
+                "Shared genre".to_string()
+            };
+            let signal = if loved_tracks > 0 {
+                format!("{loved_tracks} loved tracks")
+            } else if let Some(score) = album_score {
+                format!("album score {:.0}", score)
+            } else {
+                "connected library album".to_string()
+            };
+            Ok(DiscoveryRecommendationStory {
+                album_id: row.get(0)?,
+                album: row.get(1)?,
+                artist: row.get(2)?,
+                loved_tracks,
+                album_score,
+                cover_path: row.get(5)?,
+                reason: reason.clone(),
+                evidence: format!("{reason} · {signal}"),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let evidence = rating
+        .map(|value| format!("Rated {value} · recent library rating activity"))
+        .unwrap_or_else(|| "Recent library rating activity".to_string());
+    Ok((
+        Some(DiscoveryRatingAnchor {
+            album_id,
+            album,
+            artist,
+            created_at,
+            rating,
+            cover_path,
+            evidence,
+        }),
+        recommendations,
+    ))
 }
 
 fn discovery_heatmap(conn: &Connection) -> Result<Vec<DiscoveryHeatmapCell>> {
@@ -19856,6 +20567,132 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(rock_years, (1945..=1964).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn discovery_daily_edition_builds_stories_from_local_evidence() {
+        let conn = seeded_connection();
+        insert_test_album(
+            &conn,
+            "mb:anniversary",
+            "Anniversary Artist",
+            "Anniversary Album",
+            1976,
+            10,
+        );
+        insert_test_album(&conn, "mb:please", "Pet Shop Boys", "Please", 1986, 10);
+        insert_test_album(
+            &conn,
+            "mb:behaviour",
+            "Pet Shop Boys",
+            "Behaviour",
+            1990,
+            10,
+        );
+        insert_test_album(
+            &conn,
+            "mb:birthday",
+            "Birthday Artist",
+            "Birthday Album",
+            1992,
+            9,
+        );
+        insert_test_artist_info(
+            &conn,
+            "Pet Shop Boys",
+            "Group",
+            None,
+            Some(1981),
+            None,
+            false,
+        );
+        insert_test_artist_info(
+            &conn,
+            "Birthday Artist",
+            "Person",
+            None,
+            Some(1969),
+            None,
+            false,
+        );
+        conn.execute_batch(
+            "
+            UPDATE albums
+            SET effective_album_rating = 92, album_score = 140.0
+            WHERE id = 'mb:anniversary';
+
+            INSERT INTO tracks (
+                import_run_id, album_id, album_unique_id, display_artist,
+                album_artist_display, album, title, canonical_genre,
+                genre_normalized, normalized_rating, track_number, year,
+                release_year, time_seconds, row_hash
+            ) VALUES (
+                1, 'mb:anniversary', 'mb:anniversary', 'Anniversary Artist',
+                'Anniversary Artist', 'Anniversary Album', 'Hidden Finale',
+                'Rock', 'rock', NULL, 7, 1976, 1976, 241, 'deep-cut-hash'
+            );
+
+            UPDATE musicbrainz_artist_infos
+            SET life_begin_date = '1969-08-11'
+            WHERE local_artist_key = 'birthday artist';
+
+            INSERT INTO musicbrainz_artist_release_groups (
+                artist_mbid, release_mbid, title, year, type,
+                secondary_types, status, source, fetched_at
+            ) VALUES
+                ('mbid-pet shop boys', 'release-actually', 'Actually', 1987,
+                 'Album', '', 'Official', 'musicbrainz-live', '2026-08-11T00:00:00Z'),
+                ('mbid-pet shop boys', 'release-please', 'Please', 1986,
+                 'Album', '', 'Official', 'musicbrainz-live', '2026-08-11T00:00:00Z'),
+                ('mbid-pet shop boys', 'release-behaviour', 'Behaviour', 1990,
+                 'Album', '', 'Official', 'musicbrainz-live', '2026-08-11T00:00:00Z'),
+                ('mbid-pet shop boys', 'release-missing', 'Very', 1993,
+                 'Album', '', 'Official', 'musicbrainz-live', '2026-08-11T00:00:00Z');
+
+            INSERT INTO rating_events (
+                import_run_id, created_at, event_type, album_id, album,
+                album_artist_display, year, current_rated_tracks,
+                current_rating_completeness, current_effective_album_rating
+            ) VALUES (
+                1, '2026-08-11T08:00:00Z', 'ratingChanged', 'mb:test',
+                'Actually', 'Pet Shop Boys', 1987, 10, 1.0, 86
+            );
+
+            INSERT INTO official_uk_single_chart_entries (
+                source_file, year, week, chart_date, rank, artist, title,
+                artist_key, title_key, week_key, matched_track_id, imported_at
+            ) VALUES (
+                'charts.csv', 1987, 32, '1987-08-11', 1, 'Pet Shop Boys',
+                'What Have I Done to Deserve This?', 'pet shop boys',
+                'what have i done to deserve this', '1987-32', 1,
+                '2026-08-11T00:00:00Z'
+            );
+            ",
+        )
+        .expect("insert daily edition fixtures");
+
+        let edition = discovery_daily_edition(
+            &conn,
+            NaiveDate::from_ymd_opt(2026, 8, 11).expect("valid edition date"),
+        )
+        .expect("load daily edition");
+
+        assert_eq!(edition.anniversaries[0].album, "Anniversary Album");
+        assert_eq!(edition.life_events[0].artist, "Birthday Artist");
+        assert_eq!(edition.chart_toppers[0].rank, 1);
+        assert_eq!(edition.deep_cuts[0].title, "Hidden Finale");
+        assert_eq!(edition.artist_completions[0].missing_release_title, "Very");
+        assert_eq!(
+            edition
+                .rating_anchor
+                .as_ref()
+                .map(|story| story.album.as_str()),
+            Some("Actually")
+        );
+        assert!(!edition.because_you_played.is_empty());
+        assert!(edition
+            .listening_evidence_note
+            .contains("recent rating activity"));
     }
 
     #[test]
