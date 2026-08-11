@@ -2239,6 +2239,21 @@ export type LastFmArtistPopularity = {
   message: string;
 };
 
+export type ArtistBiography = {
+  artistId: string;
+  artistName: string;
+  musicbrainzMbid: string | null;
+  wikidataId: string | null;
+  wikipediaLanguage: string | null;
+  wikipediaTitle: string | null;
+  biography: string | null;
+  sourceUrl: string | null;
+  fetchedAt: string | null;
+  cached: boolean;
+  stale: boolean;
+  message: string;
+};
+
 export type LastFmAlbumTrackPopularity = {
   trackId: number;
   title: string;

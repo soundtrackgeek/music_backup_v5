@@ -26,8 +26,9 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 #[cfg(not(test))]
 use tauri::{AppHandle, Emitter, Manager};
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
@@ -43,12 +44,26 @@ const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.84.1 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.117.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 const MUSICBRAINZ_RATE_LIMIT_DELAY_MS: u64 = 1100;
+static MUSICBRAINZ_REQUEST_GATE: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 static ORIGIN_COUNTRY_IMPORT_CANCELLED: AtomicBool = AtomicBool::new(false);
 static ARTIST_INFO_IMPORT_CANCELLED: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn wait_for_musicbrainz_request_slot() {
+    let gate = MUSICBRAINZ_REQUEST_GATE.get_or_init(|| Mutex::new(None));
+    let mut previous = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(last_request) = *previous {
+        let minimum_interval = Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS);
+        let elapsed = last_request.elapsed();
+        if elapsed < minimum_interval {
+            thread::sleep(minimum_interval - elapsed);
+        }
+    }
+    *previous = Some(Instant::now());
+}
 
 #[cfg(not(test))]
 pub fn cache_status_for_app(
@@ -320,6 +335,7 @@ fn fetch_artist_release_groups(artist_mbid: &str) -> Result<Vec<RefreshedRelease
         let url = format!(
             "{MUSICBRAINZ_RELEASE_GROUPS_URL}?artist={artist_mbid}&type=album&fmt=json&limit={MUSICBRAINZ_PAGE_LIMIT}&offset={offset}"
         );
+        wait_for_musicbrainz_request_slot();
         let response = agent
             .get(&url)
             .set("User-Agent", MUSICBRAINZ_USER_AGENT)
@@ -1473,6 +1489,7 @@ fn fetch_artist_origin(mbid: &str) -> Result<MusicBrainzArtistLookupResponse> {
         .timeout(Duration::from_secs(30))
         .build();
     let url = format!("{MUSICBRAINZ_ARTIST_URL}/{mbid}?fmt=json");
+    wait_for_musicbrainz_request_slot();
     let response = agent
         .get(&url)
         .set("User-Agent", MUSICBRAINZ_USER_AGENT)
@@ -4393,6 +4410,7 @@ fn fetch_official_release_group_ids(artist_mbid: &str) -> Result<Option<HashSet<
         let url = format!(
             "{MUSICBRAINZ_RELEASES_URL}?artist={artist_mbid}&type=album&status=official&inc=release-groups&fmt=json&limit={MUSICBRAINZ_PAGE_LIMIT}&offset={offset}"
         );
+        wait_for_musicbrainz_request_slot();
         let response = agent
             .get(&url)
             .set("User-Agent", MUSICBRAINZ_USER_AGENT)

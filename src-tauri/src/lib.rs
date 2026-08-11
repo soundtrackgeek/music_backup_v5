@@ -1,6 +1,7 @@
 #![cfg_attr(test, allow(dead_code, unused_imports))]
 
 mod ai;
+mod artist_biography;
 mod artist_completion;
 mod covers;
 mod db;
@@ -273,6 +274,21 @@ async fn get_lastfm_artist_popularity(
     })
     .await
     .map_err(|error| format!("Last.fm artist popularity task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_artist_biography(
+    app: AppHandle,
+    artist_id: String,
+    force_refresh: Option<bool>,
+) -> Result<artist_biography::ArtistBiography, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        artist_biography::artist_biography(app, artist_id, force_refresh.unwrap_or(false))
+    })
+    .await
+    .map_err(|error| format!("Artist biography task failed: {error}"))?
     .map_err(|error| error.to_string())
 }
 
@@ -1649,6 +1665,7 @@ pub fn run() {
             delete_lastfm_api_key,
             test_lastfm_connection,
             get_lastfm_artist_popularity,
+            get_artist_biography,
             get_lastfm_album_popularity,
             refresh_lastfm_artist_images,
             get_artist_image_data_url,

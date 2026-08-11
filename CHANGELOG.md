@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.117.0] - 2026-08-11
+### Added
+- Added an Artist Overview biography panel resolved through verified MusicBrainz links, Wikidata sitelinks, and Wikipedia summaries, with explicit refresh, expand/collapse, source links, and CC BY-SA attribution.
+- Added schema version 50 with durable artist biography caching, separate positive and unavailable refresh windows, and stale-text fallback when a provider refresh fails.
+
+### Changed
+- Serialized MusicBrainz API calls behind the provider's application-wide one-request-per-second limit.
+- Synchronized app metadata and provider user agents to `0.117.0`.
+
 ## [0.116.0] - 2026-08-11
 ### Added
 - Added an Artist Overview with up to five locally owned tracks matched against Last.fm `artist.getTopTracks`, explicit refresh, cached/stale states, and visible provider attribution.

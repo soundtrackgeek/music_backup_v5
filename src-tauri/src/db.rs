@@ -555,21 +555,36 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_nine_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_fifty_schema_exists(conn)? {
+        return Ok(());
+    }
+
+    if user_version == 49 && migrations::phase_forty_nine_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 50 migration transaction")?;
+        ensure_artist_biography_schema(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 50;")
+            .context("Could not mark the schema 50 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 50 migration")?;
         return Ok(());
     }
 
     if user_version == 48 && migrations::phase_forty_eight_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 49 migration transaction")?;
+            .context("Could not start the schema 49–50 migration transaction")?;
         ensure_lastfm_popularity_schema(&transaction)?;
+        ensure_artist_biography_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 49;")
-            .context("Could not mark the schema 49 migration complete")?;
+            .execute_batch("PRAGMA user_version = 50;")
+            .context("Could not mark the schema 49–50 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 49 migration")?;
+            .context("Could not commit the schema 49–50 migration")?;
         return Ok(());
     }
 
@@ -579,12 +594,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             .context("Could not start the schema 48–49 migration transaction")?;
         ensure_music_doctor_schema(&transaction)?;
         ensure_lastfm_popularity_schema(&transaction)?;
+        ensure_artist_biography_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 49;")
-            .context("Could not mark the schema 48–49 migration complete")?;
+            .execute_batch("PRAGMA user_version = 50;")
+            .context("Could not mark the schema 48–50 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 48–49 migration")?;
+            .context("Could not commit the schema 48–50 migration")?;
         return Ok(());
     }
 
@@ -595,12 +611,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_album_artist_key_index(&transaction)?;
         ensure_music_doctor_schema(&transaction)?;
         ensure_lastfm_popularity_schema(&transaction)?;
+        ensure_artist_biography_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 49;")
-            .context("Could not mark the schema 47–49 migration complete")?;
+            .execute_batch("PRAGMA user_version = 50;")
+            .context("Could not mark the schema 47–50 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 47–49 migration")?;
+            .context("Could not commit the schema 47–50 migration")?;
         return Ok(());
     }
 
@@ -612,12 +629,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_album_artist_key_index(&transaction)?;
         ensure_music_doctor_schema(&transaction)?;
         ensure_lastfm_popularity_schema(&transaction)?;
+        ensure_artist_biography_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 49;")
-            .context("Could not mark the schema 46–49 migration complete")?;
+            .execute_batch("PRAGMA user_version = 50;")
+            .context("Could not mark the schema 46–50 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 46–49 migration")?;
+            .context("Could not commit the schema 46–50 migration")?;
         return Ok(());
     }
 
@@ -630,12 +648,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_album_artist_key_index(&transaction)?;
         ensure_music_doctor_schema(&transaction)?;
         ensure_lastfm_popularity_schema(&transaction)?;
+        ensure_artist_biography_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 49;")
-            .context("Could not mark the schema 45–49 migration complete")?;
+            .execute_batch("PRAGMA user_version = 50;")
+            .context("Could not mark the schema 45–50 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 45–49 migration")?;
+            .context("Could not commit the schema 45–50 migration")?;
         return Ok(());
     }
 
@@ -1848,6 +1867,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_library_completion_artist_schema(conn)?;
     ensure_artist_images_schema(conn)?;
     ensure_lastfm_popularity_schema(conn)?;
+    ensure_artist_biography_schema(conn)?;
     ensure_album_artist_key_index(conn)?;
     ensure_music_doctor_schema(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
@@ -1855,7 +1875,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 49;
+        PRAGMA user_version = 50;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -2359,6 +2379,32 @@ fn ensure_lastfm_popularity_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create the Last.fm popularity cache schema")?;
+    Ok(())
+}
+
+fn ensure_artist_biography_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS artist_biographies (
+            artist_key TEXT PRIMARY KEY,
+            artist_name TEXT NOT NULL,
+            musicbrainz_mbid TEXT,
+            wikidata_id TEXT,
+            wikipedia_language TEXT,
+            wikipedia_title TEXT,
+            biography_text TEXT,
+            source_url TEXT,
+            state TEXT NOT NULL CHECK(state IN ('available', 'unavailable')),
+            message TEXT NOT NULL DEFAULT '',
+            fetched_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_artist_biographies_expires
+            ON artist_biographies(expires_at);
+        ",
+    )
+    .context("Could not create the artist biography cache schema")?;
     Ok(())
 }
 
@@ -8902,6 +8948,29 @@ pub(crate) struct LastFmArtistIdentity {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct ArtistBiographyIdentity {
+    pub artist_key: String,
+    pub artist_name: String,
+    pub musicbrainz_mbid: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ArtistBiographyCacheRecord {
+    pub artist_key: String,
+    pub artist_name: String,
+    pub musicbrainz_mbid: Option<String>,
+    pub wikidata_id: Option<String>,
+    pub wikipedia_language: Option<String>,
+    pub wikipedia_title: Option<String>,
+    pub biography_text: Option<String>,
+    pub source_url: Option<String>,
+    pub state: String,
+    pub message: String,
+    pub fetched_at: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct LastFmLocalTrackCandidate {
     pub track_id: i64,
     pub artist_key: String,
@@ -8985,6 +9054,111 @@ pub(crate) fn lastfm_artist_identity_for_app(
 ) -> Result<Option<LastFmArtistIdentity>> {
     let (conn, _) = open(app)?;
     lastfm_artist_identity(&conn, artist_id)
+}
+
+pub(crate) fn artist_biography_identity_for_app(
+    app: &AppHandle,
+    artist_id: &str,
+) -> Result<Option<ArtistBiographyIdentity>> {
+    let (conn, _) = open(app)?;
+    Ok(
+        lastfm_artist_identity(&conn, artist_id)?.map(|identity| ArtistBiographyIdentity {
+            artist_key: identity.artist_key,
+            artist_name: identity.artist_name,
+            musicbrainz_mbid: identity.musicbrainz_mbid,
+        }),
+    )
+}
+
+fn artist_biography_cache(
+    conn: &Connection,
+    artist_key: &str,
+) -> Result<Option<ArtistBiographyCacheRecord>> {
+    conn.query_row(
+        "
+        SELECT
+            artist_key, artist_name, musicbrainz_mbid, wikidata_id,
+            wikipedia_language, wikipedia_title, biography_text, source_url,
+            state, message, fetched_at, expires_at
+        FROM artist_biographies
+        WHERE artist_key = ?1
+        ",
+        [artist_key],
+        |row| {
+            Ok(ArtistBiographyCacheRecord {
+                artist_key: row.get(0)?,
+                artist_name: row.get(1)?,
+                musicbrainz_mbid: row.get(2)?,
+                wikidata_id: row.get(3)?,
+                wikipedia_language: row.get(4)?,
+                wikipedia_title: row.get(5)?,
+                biography_text: row.get(6)?,
+                source_url: row.get(7)?,
+                state: row.get(8)?,
+                message: row.get(9)?,
+                fetched_at: row.get(10)?,
+                expires_at: row.get(11)?,
+            })
+        },
+    )
+    .optional()
+    .context("Could not read the artist biography cache")
+}
+
+pub(crate) fn artist_biography_cache_for_app(
+    app: &AppHandle,
+    artist_key: &str,
+) -> Result<Option<ArtistBiographyCacheRecord>> {
+    let (conn, _) = open(app)?;
+    artist_biography_cache(&conn, artist_key)
+}
+
+fn upsert_artist_biography(conn: &Connection, record: &ArtistBiographyCacheRecord) -> Result<()> {
+    conn.execute(
+        "
+        INSERT INTO artist_biographies (
+            artist_key, artist_name, musicbrainz_mbid, wikidata_id,
+            wikipedia_language, wikipedia_title, biography_text, source_url,
+            state, message, fetched_at, expires_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+        ON CONFLICT(artist_key) DO UPDATE SET
+            artist_name = excluded.artist_name,
+            musicbrainz_mbid = excluded.musicbrainz_mbid,
+            wikidata_id = excluded.wikidata_id,
+            wikipedia_language = excluded.wikipedia_language,
+            wikipedia_title = excluded.wikipedia_title,
+            biography_text = excluded.biography_text,
+            source_url = excluded.source_url,
+            state = excluded.state,
+            message = excluded.message,
+            fetched_at = excluded.fetched_at,
+            expires_at = excluded.expires_at
+        ",
+        params![
+            record.artist_key,
+            record.artist_name,
+            record.musicbrainz_mbid,
+            record.wikidata_id,
+            record.wikipedia_language,
+            record.wikipedia_title,
+            record.biography_text,
+            record.source_url,
+            record.state,
+            record.message,
+            record.fetched_at,
+            record.expires_at,
+        ],
+    )
+    .context("Could not cache the artist biography")?;
+    Ok(())
+}
+
+pub(crate) fn upsert_artist_biography_for_app(
+    app: &AppHandle,
+    record: &ArtistBiographyCacheRecord,
+) -> Result<()> {
+    let (conn, _) = open(app)?;
+    upsert_artist_biography(&conn, record)
 }
 
 fn lastfm_local_track_from_row(
@@ -21447,6 +21621,7 @@ mod tests {
             .expect("phase forty-seven schema exists"));
         assert!(migrations::phase_forty_nine_schema_exists(&conn)
             .expect("phase forty-nine schema exists"));
+        assert!(migrations::phase_fifty_schema_exists(&conn).expect("phase fifty schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -21504,10 +21679,40 @@ mod tests {
 
         assert!(migrations::phase_forty_nine_schema_exists(&conn)
             .expect("phase forty-nine schema exists"));
+        assert!(migrations::phase_fifty_schema_exists(&conn).expect("phase fifty schema exists"));
         assert_eq!(
             conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
                 .expect("read upgraded schema version"),
-            49,
+            LATEST_SCHEMA_VERSION,
+        );
+    }
+
+    #[test]
+    fn upgrades_schema_forty_nine_with_artist_biography_cache() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("create current schema");
+        conn.execute_batch(
+            "
+            DROP TABLE artist_biographies;
+            PRAGMA user_version = 49;
+            ",
+        )
+        .expect("restore schema forty-nine shape");
+
+        assert!(migrations::phase_forty_nine_schema_exists(&conn)
+            .expect("phase forty-nine schema exists"));
+        assert!(
+            !migrations::phase_fifty_schema_exists(&conn).expect("phase fifty schema is absent")
+        );
+
+        migrate(&conn).expect("upgrade schema forty-nine");
+
+        assert!(migrations::phase_fifty_schema_exists(&conn).expect("phase fifty schema exists"));
+        assert_eq!(
+            conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+                .expect("read upgraded schema version"),
+            LATEST_SCHEMA_VERSION,
         );
     }
 

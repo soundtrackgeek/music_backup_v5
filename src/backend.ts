@@ -172,6 +172,7 @@ import type {
   LastFmArtistImageRefreshSummary,
   LastFmAlbumPopularity,
   LastFmArtistPopularity,
+  ArtistBiography,
   LastFmConnectionTest,
   LastFmCredentialStatus,
   SaveLastFmApiKeyRequest,
@@ -2054,6 +2055,36 @@ export async function getLastFmArtistPopularity(
     } satisfies LastFmArtistPopularity;
   }
   return invoke<LastFmArtistPopularity>("get_lastfm_artist_popularity", {
+    artistId,
+    forceRefresh,
+  });
+}
+
+export async function getArtistBiography(
+  artistId: string,
+  forceRefresh = false,
+) {
+  if (!isTauriRuntime()) {
+    const artist = mockArtists.find((candidate) => candidate.id === artistId);
+    const artistName = artist?.name ?? artistId;
+    return {
+      artistId,
+      artistName,
+      musicbrainzMbid: "12345678-1234-1234-1234-123456789abc",
+      wikidataId: "Q12345",
+      wikipediaLanguage: "en",
+      wikipediaTitle: artistName,
+      biography: `${artistName} is shown here with a cached Wikipedia biography preview. In the desktop app, the artist's verified MusicBrainz identity resolves its Wikidata item and Wikipedia article, and the resulting text is stored locally for future visits.`,
+      sourceUrl:
+        "https://en.wikipedia.org/wiki/" +
+        encodeURIComponent(artistName.replace(/ /g, "_")),
+      fetchedAt: new Date().toISOString(),
+      cached: !forceRefresh,
+      stale: false,
+      message: "Biography loaded from Wikipedia.",
+    } satisfies ArtistBiography;
+  }
+  return invoke<ArtistBiography>("get_artist_biography", {
     artistId,
     forceRefresh,
   });

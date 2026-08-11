@@ -14,6 +14,12 @@ Official UK albums and singles import from weekly CSV rows in `CSV_ALBUMS_UK/` a
 
 Settings is split into **General**, **Providers**, **AI**, **Data & Backups**, **MusicBrainz**, **Updates**, and **Diagnostics**. A sticky section switcher keeps the active area close at hand, supports click and arrow-key navigation, and changes to a three-column layout at the supported 1040px minimum width. Only the selected section is shown, while every section remains mounted so unsaved drafts and live operation state survive switching between areas.
 
+## Artist biographies
+
+Opening an artist's **Overview** now resolves its saved MusicBrainz MBID to a Wikidata item and then an English Wikipedia article, with Norwegian Wikipedia as the fallback. The biography loads automatically, can be refreshed explicitly, expands in place when long, and always shows the Wikipedia article link plus CC BY-SA 4.0 attribution. Artists without a saved MusicBrainz identity receive a direct prompt to link one from **Artist info** instead of being matched by name alone.
+
+SQLite schema version 50 caches the biography text, MusicBrainz MBID, Wikidata ID, Wikipedia language/title, source URL, state, and refresh times by normalized local artist key. Available text is refreshed after 30 days, unavailable results after seven days, and a failed refresh keeps displaying the last usable cached biography. No provider credential is required; only public MusicBrainz, Wikidata, and Wikipedia requests leave the device.
+
 ## Last.fm popularity
 
 **Settings → Providers → Last.fm metadata** stores a read-only API key in Windows Credential Manager; the Last.fm shared secret is not used. Opening an artist's **Overview** loads `artist.getTopTracks`, matches the result against tracks that are actually in the local library, and shows up to five Popular Tracks with visible Last.fm attribution. **Refresh** explicitly requests a new artist snapshot.
@@ -76,7 +82,7 @@ Phase 2C adds an on-demand **Find cover** action after an album is verified. Mus
 - Rust toolchain compatible with Tauri 2
 - Python 3.10 or newer for the optional Music Library Trimmer companion CLI
 - A MusicBee TSV export with the columns listed in `SPEC.md`
-- Internet access is required to load Music Map tiles, enrich new MusicBrainz area/country coordinates, verify Library Completion candidates or Wish List additions through MusicBrainz or Discogs, enrich verified covers, search artist discographies, validate/search a configured Deemix connection, connect/search/download/share through Soulseek, or download articles from a Usenet provider; local Prowlarr access is also required for Usenet searches, while the Library Completion album and artist chart scans and Coverage Atlas remain local
+- Internet access is required to load Music Map tiles, enrich new MusicBrainz area/country coordinates, load or refresh artist biographies from Wikidata/Wikipedia, verify Library Completion candidates or Wish List additions through MusicBrainz or Discogs, enrich verified covers, search artist discographies, validate/search a configured Deemix connection, connect/search/download/share through Soulseek, or download articles from a Usenet provider; local Prowlarr access is also required for Usenet searches, while cached biographies, the Library Completion album and artist chart scans, and Coverage Atlas remain local
 - An OpenAI API key is optional and only required for Ask Luna search, chart, current-view and Music Map place questions, Library analyst reports, Playlist Builder recipes, outside-library Discovery recipes, and global Music Research
 - A Deezer ARL is optional and only required for the Deemix proof-of-concept connection and Wish List album searches; no Deemix GUI or separate service is required
 - A Soulseek username and password are optional and only required for Soulseek Wish List searches, downloads, and sharing; the client runs inside this app, so `soulseek_forever`, Nicotine+, or SoulseekQt does not need to be running

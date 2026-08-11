@@ -11,7 +11,7 @@ use zeroize::{Zeroize, Zeroizing};
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.discogs";
 const KEYRING_USER: &str = "consumer-credentials";
 const DISCOGS_API_BASE: &str = "https://api.discogs.com";
-const DISCOGS_USER_AGENT: &str = "music-backup-v5/0.116.0 (local desktop Discogs verifier)";
+const DISCOGS_USER_AGENT: &str = "music-backup-v5/0.117.0 (local desktop Discogs verifier)";
 const REQUEST_INTERVAL: Duration = Duration::from_millis(1_200);
 const MAX_CREDENTIAL_LENGTH: usize = 256;
 

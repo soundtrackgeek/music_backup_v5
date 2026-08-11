@@ -77,6 +77,7 @@ import {
   fixMusicToolIssues,
   cacheSettings,
   getDiscovery,
+  getArtistBiography,
   getLastFmAlbumPopularity,
   getLastFmArtistPopularity,
   getAlbumDebutTimeline,
@@ -194,6 +195,7 @@ import type {
   LovedDensityStat,
   LastFmAlbumPopularity,
   LastFmArtistPopularity,
+  ArtistBiography,
   MetadataCoverageMetric,
   OutlierStat,
   LibraryStatus,
@@ -377,6 +379,7 @@ import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
 import { GenreTimeline } from "./components/GenreTimeline";
 import { ArtistTimeline } from "./components/ArtistTimeline";
 import { ArtistPortrait } from "./components/ArtistPortrait";
+import { ArtistBiographyPanel } from "./components/ArtistBiographyPanel";
 import { ArtistPopularTracksPanel } from "./components/ArtistPopularTracksPanel";
 import {
   TrackPopularityAttribution,
@@ -8301,6 +8304,13 @@ export default function App() {
   >(null);
   const [isArtistPopularityLoading, setIsArtistPopularityLoading] =
     useState(false);
+  const [artistBiography, setArtistBiography] =
+    useState<ArtistBiography | null>(null);
+  const [artistBiographyError, setArtistBiographyError] = useState<
+    string | null
+  >(null);
+  const [isArtistBiographyLoading, setIsArtistBiographyLoading] =
+    useState(false);
   const [artistAlbumsResponse, setArtistAlbumsResponse] =
     useState<BrowseResponse | null>(null);
   const [artistAlbumsError, setArtistAlbumsError] = useState<string | null>(
@@ -9182,6 +9192,39 @@ export default function App() {
       })
       .finally(() => {
         if (!cancelled) setIsArtistPopularityLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, selectedArtist, shouldLoadArtistPopularity]);
+
+  useEffect(() => {
+    if (
+      activeSection !== "Artists" ||
+      !shouldLoadArtistPopularity ||
+      !selectedArtist
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsArtistBiographyLoading(true);
+    setArtistBiographyError(null);
+    void getArtistBiography(selectedArtist.id)
+      .then((result) => {
+        if (!cancelled) setArtistBiography(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setArtistBiographyError(
+            error instanceof Error ? error.message : String(error),
+          );
+          setArtistBiography(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsArtistBiographyLoading(false);
       });
 
     return () => {
@@ -10857,6 +10900,9 @@ export default function App() {
     setArtistPopularity(null);
     setArtistPopularityError(null);
     setIsArtistPopularityLoading(false);
+    setArtistBiography(null);
+    setArtistBiographyError(null);
+    setIsArtistBiographyLoading(false);
     setSelectedArtistAlbumId(null);
     setArtistAlbumTracksResponse(null);
     setArtistAlbumTracksError(null);
@@ -11486,6 +11532,32 @@ export default function App() {
       );
     } finally {
       setIsArtistPopularityLoading(false);
+    }
+  }
+
+  async function refreshArtistBiography() {
+    if (!selectedArtist) return;
+
+    setIsArtistBiographyLoading(true);
+    setArtistBiographyError(null);
+    try {
+      setArtistBiography(await getArtistBiography(selectedArtist.id, true));
+    } catch (error) {
+      setArtistBiographyError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setIsArtistBiographyLoading(false);
+    }
+  }
+
+  async function openArtistBiographySource(url: string) {
+    try {
+      await openExternalUrl(url);
+    } catch (error) {
+      setArtistBiographyError(
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
@@ -15683,6 +15755,15 @@ export default function App() {
                     error={artistPopularityError}
                     onRefresh={() => void refreshArtistPopularity()}
                     onOpenSource={(url) => void openLastFmSource(url)}
+                  />
+                  <ArtistBiographyPanel
+                    biography={artistBiography}
+                    isLoading={isArtistBiographyLoading}
+                    error={artistBiographyError}
+                    onRefresh={() => void refreshArtistBiography()}
+                    onOpenSource={(url) =>
+                      void openArtistBiographySource(url)
+                    }
                   />
                 </section>
               ) : null}

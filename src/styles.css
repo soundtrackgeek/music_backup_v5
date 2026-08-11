@@ -18255,7 +18255,8 @@ button {
 }
 
 .artist-overview-identity h2,
-.artist-popular-tracks h2 {
+.artist-popular-tracks h2,
+.artist-biography h2 {
   margin: 3px 0 0;
   color: #17211f;
   font-size: 1.25rem;
@@ -18368,6 +18369,76 @@ button {
   cursor: pointer;
 }
 
+.artist-biography {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border-top: 1px solid #d8e1dd;
+  padding-top: 20px;
+}
+
+.artist-biography-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.artist-biography-copy {
+  display: -webkit-box;
+  max-width: 92ch;
+  margin: 0;
+  overflow: hidden;
+  color: #34423e;
+  font-size: 0.83rem;
+  line-height: 1.72;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.artist-biography-copy.expanded {
+  display: block;
+  overflow: visible;
+}
+
+.artist-biography-expand {
+  margin-top: 8px;
+  padding: 3px 0;
+  color: #176e66;
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.artist-biography-source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  margin-top: 10px;
+  color: #7a8782;
+  font-size: 0.67rem;
+}
+
+.artist-biography-source-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.artist-biography-source button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  color: #176e66;
+  background: transparent;
+  font-weight: 720;
+  cursor: pointer;
+}
+
 .track-title-with-popularity {
   display: inline-flex !important;
   align-items: center;
@@ -18414,16 +18485,22 @@ button {
 
 :root[data-theme="dark"] .artist-overview-identity h2,
 :root[data-theme="dark"] .artist-popular-tracks h2,
+:root[data-theme="dark"] .artist-biography h2,
 :root[data-theme="dark"] .artist-popular-track-title strong {
   color: #e8f0ed;
 }
 
 :root[data-theme="dark"] .artist-popular-track-list li,
-:root[data-theme="dark"] .track-popularity-attribution {
+:root[data-theme="dark"] .track-popularity-attribution,
+:root[data-theme="dark"] .artist-biography {
   border-color: #2f3d38;
 }
 
 :root[data-theme="dark"] .artist-popular-track-list li {
+  color: #c6d2ce;
+}
+
+:root[data-theme="dark"] .artist-biography-copy {
   color: #c6d2ce;
 }
 
@@ -18446,6 +18523,17 @@ button {
 
   .artist-popular-track-listeners {
     display: none;
+  }
+
+  .artist-biography-source {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .artist-biography-source-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
   }
 }
 

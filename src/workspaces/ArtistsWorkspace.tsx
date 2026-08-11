@@ -119,8 +119,8 @@ export function ArtistsWorkspace({
         <div>
           <h1>Artists</h1>
           <p>
-            Album-artist index, popular tracks, local albums, and artist-level
-            metadata.
+            Album-artist index, biographies, popular tracks, local albums, and
+            artist-level metadata.
           </p>
         </div>
         <div className="topbar-actions">{actions}</div>
