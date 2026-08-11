@@ -79,6 +79,7 @@ import {
   getDiscovery,
   getAlbumReview,
   getArtistBiography,
+  getArtistTrackHighlights,
   getLastFmAlbumPopularity,
   getLastFmArtistPopularity,
   getAlbumDebutTimeline,
@@ -157,6 +158,7 @@ import type {
   AiSnapshot,
   ArtistListRequest,
   ArtistListResponse,
+  ArtistTrackHighlights,
   ArtistSummary,
   BillboardImportSummary,
   BillboardSinglesImportSummary,
@@ -385,6 +387,10 @@ import { ArtistBiographyPanel } from "./components/ArtistBiographyPanel";
 import { AlbumReviewPanel } from "./components/AlbumReviewPanel";
 import { ArtistPopularTracksPanel } from "./components/ArtistPopularTracksPanel";
 import {
+  ArtistChartBustersPanel,
+  ArtistLovedTracksPanel,
+} from "./components/ArtistTrackHighlightsPanels";
+import {
   TrackPopularityAttribution,
   TrackPopularityFire,
 } from "./components/TrackPopularityFire";
@@ -409,6 +415,7 @@ import {
 } from "./components/SearchProgressiveDisclosure";
 import {
   ArtistDetailTabs,
+  artistDetailTabNeedsHighlights,
   artistDetailTabNeedsMusicBrainz,
   artistDetailTabNeedsPopularity,
   artistDetailTabNeedsTracks,
@@ -8317,6 +8324,13 @@ export default function App() {
   >(null);
   const [isArtistBiographyLoading, setIsArtistBiographyLoading] =
     useState(false);
+  const [artistTrackHighlights, setArtistTrackHighlights] =
+    useState<ArtistTrackHighlights | null>(null);
+  const [artistTrackHighlightsError, setArtistTrackHighlightsError] = useState<
+    string | null
+  >(null);
+  const [isArtistTrackHighlightsLoading, setIsArtistTrackHighlightsLoading] =
+    useState(false);
   const [artistAlbumsResponse, setArtistAlbumsResponse] =
     useState<BrowseResponse | null>(null);
   const [artistAlbumsError, setArtistAlbumsError] = useState<string | null>(
@@ -8924,6 +8938,8 @@ export default function App() {
     artistDetailTabNeedsTracks(artistDetailTab);
   const shouldLoadArtistPopularity =
     artistDetailTabNeedsPopularity(artistDetailTab);
+  const shouldLoadArtistTrackHighlights =
+    artistDetailTabNeedsHighlights(artistDetailTab);
   const shouldLoadArtistMusicBrainz =
     artistDetailTabNeedsMusicBrainz(artistDetailTab);
   const selectedGenre =
@@ -9269,6 +9285,39 @@ export default function App() {
       cancelled = true;
     };
   }, [activeSection, selectedArtist, shouldLoadArtistPopularity]);
+
+  useEffect(() => {
+    if (
+      activeSection !== "Artists" ||
+      !shouldLoadArtistTrackHighlights ||
+      !selectedArtist
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsArtistTrackHighlightsLoading(true);
+    setArtistTrackHighlightsError(null);
+    void getArtistTrackHighlights(selectedArtist.id)
+      .then((result) => {
+        if (!cancelled) setArtistTrackHighlights(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setArtistTrackHighlightsError(
+            error instanceof Error ? error.message : String(error),
+          );
+          setArtistTrackHighlights(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsArtistTrackHighlightsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, selectedArtist, shouldLoadArtistTrackHighlights]);
 
   useEffect(() => {
     if (activeSection !== "Artists" || !artistAlbumsRequest) {
@@ -10943,6 +10992,9 @@ export default function App() {
     setArtistBiography(null);
     setArtistBiographyError(null);
     setIsArtistBiographyLoading(false);
+    setArtistTrackHighlights(null);
+    setArtistTrackHighlightsError(null);
+    setIsArtistTrackHighlightsLoading(false);
     setSelectedArtistAlbumId(null);
     setArtistAlbumTracksResponse(null);
     setArtistAlbumTracksError(null);
@@ -15832,6 +15884,22 @@ export default function App() {
                     }
                   />
                 </section>
+              ) : null}
+
+              {artistDetailTab === "loved-tracks" ? (
+                <ArtistLovedTracksPanel
+                  highlights={artistTrackHighlights}
+                  isLoading={isArtistTrackHighlightsLoading}
+                  error={artistTrackHighlightsError}
+                />
+              ) : null}
+
+              {artistDetailTab === "chart-busters" ? (
+                <ArtistChartBustersPanel
+                  highlights={artistTrackHighlights}
+                  isLoading={isArtistTrackHighlightsLoading}
+                  error={artistTrackHighlightsError}
+                />
               ) : null}
 
               {artistDetailTab === "local-albums" ? (

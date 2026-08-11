@@ -207,6 +207,8 @@ import type {
   SaveAiSnapshotRequest,
   ArtistListRequest,
   ArtistListResponse,
+  ArtistTrackHighlights,
+  ArtistTrackChartHistory,
   ArtistSummary,
   ArtistTimelineAlbum,
   ArtistTimelineArtist,
@@ -5705,6 +5707,87 @@ export async function listArtists(request: ArtistListRequest) {
   }
 
   return invoke<ArtistListResponse>("list_artists", { request });
+}
+
+export async function getArtistTrackHighlights(artistId: string) {
+  if (!isTauriRuntime()) {
+    const artist = mockArtists.find((candidate) => candidate.id === artistId);
+    const rows = mockRows.filter(
+      (row) =>
+        row.trackId != null &&
+        normalizeArtistKey(row.albumArtistDisplay ?? row.displayArtist ?? "") ===
+          artistId,
+    );
+    const chartTracks = rows.flatMap((row) => {
+      const histories: ArtistTrackChartHistory[] = [];
+      const addHistory = (
+        chart: ArtistTrackChartHistory["chart"],
+        peak: number | null,
+        entryDate: string | null,
+      ) => {
+        if (peak == null) return;
+        histories.push({
+          chart,
+          entryDate,
+          endDate: chart === "billboard" ? null : entryDate,
+          weeksOnChart: chart === "billboard" ? null : 1,
+          peak,
+        });
+      };
+      addHistory(
+        "billboard",
+        row.billboardSingleRank,
+        row.billboardSingleDebutDate,
+      );
+      addHistory("officialUk", row.officialUkRank, row.officialUkDebutWeekKey);
+      addHistory("vgLista", row.vgListaRank, row.vgListaDebutWeekKey);
+      addHistory(
+        "tiISkuddet",
+        row.tiISkuddetRank,
+        row.tiISkuddetDebutDate,
+      );
+      addHistory(
+        "norsktoppen",
+        row.norsktoppenRank,
+        row.norsktoppenDebutDate,
+      );
+      return histories.length === 0
+        ? []
+        : [
+            {
+              trackId: row.trackId!,
+              title: row.title ?? "Unknown track",
+              displayArtist:
+                row.displayArtist ?? row.albumArtistDisplay ?? artist?.name ?? artistId,
+              album: row.album,
+              year: row.releaseYear ?? row.year,
+              charts: histories,
+            },
+          ];
+    });
+
+    return {
+      artistId,
+      artistName: artist?.name ?? artistId,
+      lovedTracks: rows
+        .filter((row) => row.love?.trim().toUpperCase() === "L")
+        .map((row) => ({
+          trackId: row.trackId!,
+          title: row.title ?? "Unknown track",
+          displayArtist:
+            row.displayArtist ?? row.albumArtistDisplay ?? artist?.name ?? artistId,
+          album: row.album,
+          year: row.releaseYear ?? row.year,
+          seconds: row.trackSeconds,
+          rating: row.normalizedRating,
+        })),
+      chartTracks,
+    } satisfies ArtistTrackHighlights;
+  }
+
+  return invoke<ArtistTrackHighlights>("get_artist_track_highlights", {
+    artistId,
+  });
 }
 
 export async function listGenres(request: GenreListRequest) {

@@ -8,26 +8,27 @@ use crate::ai::{
 #[cfg(test)]
 use crate::models::AppSettings;
 use crate::models::{
-    AlbumDebutTimelineAlbum, AlbumDebutTimelineResponse, AlbumDebutTimelineYear, ArtistListRequest,
-    ArtistListResponse, ArtistSummary, ArtistTimelineAlbum, ArtistTimelineArtist,
-    ArtistTimelineRequest, ArtistTimelineResponse, BillboardImportSummary,
-    BillboardSinglesImportSummary, BrowseFilters, BrowseRequest, BrowseResponse, BrowseRow,
-    BrowseSort, CatalogConcentrationStats, ChartConfig, ConcentrationPoint, CountryCatalogStats,
-    DecadeProgressStats, DiscoveryAlbumPoint, DiscoveryArtistPoint, DiscoveryGenrePoint,
-    DiscoveryHeatmapCell, DiscoveryMission, DiscoveryResponse, DurationAlbumStat,
-    DurationAnalyticsStats, ExportMusicToolRequest, ExportResult, ExportSearchRequest,
-    GenreListRequest, GenreListResponse, GenreProgressRequest, GenreProgressStats, GenreSummary,
-    GenreTimelineAlbumPoint, GenreTimelineGenre, GenreTimelineRequest, GenreTimelineResponse,
-    GenreTimelineYearCount, ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats,
-    LibraryStatus, LovedDensityStat, LovedTrackStats, MetadataCoverageMetric,
-    MusicBrainzOriginCountryOption, MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry,
-    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
-    MusicToolIssueRow, MusicToolProgress, MusicToolSummary, MusicToolUndoSummary,
-    NorsktoppenImportSummary, OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation,
-    PerformanceProbeResponse, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
-    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
-    TiISkuddetImportSummary, TrackDebutTimelineResponse, TrackDebutTimelineTrack,
-    TrackDebutTimelineYear, VgListaImportSummary, YearProgressRequest, YearProgressStats,
+    AlbumDebutTimelineAlbum, AlbumDebutTimelineResponse, AlbumDebutTimelineYear, ArtistChartTrack,
+    ArtistListRequest, ArtistListResponse, ArtistLovedTrack, ArtistSummary, ArtistTimelineAlbum,
+    ArtistTimelineArtist, ArtistTimelineRequest, ArtistTimelineResponse, ArtistTrackChartHistory,
+    ArtistTrackHighlights, BillboardImportSummary, BillboardSinglesImportSummary, BrowseFilters,
+    BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, CatalogConcentrationStats, ChartConfig,
+    ConcentrationPoint, CountryCatalogStats, DecadeProgressStats, DiscoveryAlbumPoint,
+    DiscoveryArtistPoint, DiscoveryGenrePoint, DiscoveryHeatmapCell, DiscoveryMission,
+    DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats, ExportMusicToolRequest,
+    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressRequest,
+    GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint, GenreTimelineGenre,
+    GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount, ImportRun,
+    LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus, LovedDensityStat,
+    LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption, MusicToolFieldDiff,
+    MusicToolFixDiff, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
+    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress,
+    MusicToolSummary, MusicToolUndoSummary, NorsktoppenImportSummary, OfficialUkImportSummary,
+    OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse, RatingBucket, RatingEvent,
+    RatingHistoryPoint, RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart,
+    SavedSearch, StatisticsResponse, TextFilter, TiISkuddetImportSummary,
+    TrackDebutTimelineResponse, TrackDebutTimelineTrack, TrackDebutTimelineYear,
+    VgListaImportSummary, YearProgressRequest, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, NaiveDate, Utc, Weekday};
@@ -8969,6 +8970,15 @@ pub fn list_artists_for_app(
 }
 
 #[cfg(not(test))]
+pub fn artist_track_highlights_for_app(
+    app: &AppHandle,
+    artist_id: &str,
+) -> Result<ArtistTrackHighlights> {
+    let (conn, _) = open(app)?;
+    artist_track_highlights(&conn, artist_id)
+}
+
+#[cfg(not(test))]
 pub fn list_genres_for_app(
     app: &AppHandle,
     request: GenreListRequest,
@@ -12094,6 +12104,297 @@ fn performance_probe_sample_text(
     conn.query_row(&sql, [], |row| row.get::<_, String>(0))
         .optional()
         .with_context(|| format!("Could not select performance probe sample from {table}.{column}"))
+}
+
+fn chart_history_priority(chart: &str) -> usize {
+    match chart {
+        "billboard" => 0,
+        "officialUk" => 1,
+        "vgLista" => 2,
+        "tiISkuddet" => 3,
+        "norsktoppen" => 4,
+        _ => usize::MAX,
+    }
+}
+
+fn earlier_optional_date(left: Option<String>, right: Option<String>) -> Option<String> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.min(right)),
+        (Some(value), None) | (None, Some(value)) => Some(value),
+        (None, None) => None,
+    }
+}
+
+fn later_optional_date(left: Option<String>, right: Option<String>) -> Option<String> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (Some(value), None) | (None, Some(value)) => Some(value),
+        (None, None) => None,
+    }
+}
+
+fn merge_artist_chart_history(
+    histories: &mut Vec<ArtistTrackChartHistory>,
+    next: ArtistTrackChartHistory,
+) {
+    if let Some(existing) = histories
+        .iter_mut()
+        .find(|history| history.chart == next.chart)
+    {
+        existing.entry_date = earlier_optional_date(existing.entry_date.take(), next.entry_date);
+        existing.end_date = later_optional_date(existing.end_date.take(), next.end_date);
+        existing.weeks_on_chart = match (existing.weeks_on_chart, next.weeks_on_chart) {
+            (Some(left), Some(right)) => Some(left + right),
+            (Some(value), None) | (None, Some(value)) => Some(value),
+            (None, None) => None,
+        };
+        existing.peak = existing.peak.min(next.peak);
+        return;
+    }
+
+    histories.push(next);
+}
+
+fn artist_track_highlights(conn: &Connection, artist_id: &str) -> Result<ArtistTrackHighlights> {
+    let artist_id = normalize_artist_key(artist_id);
+    let album_artist_key = artist_key_sql("album_artist_display");
+    let track_artist_key =
+        artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
+    let artist_name_sql = format!(
+        "SELECT COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), ?1)
+         FROM albums
+         WHERE {album_artist_key} = ?1"
+    );
+    let artist_name = conn
+        .query_row(&artist_name_sql, [&artist_id], |row| {
+            row.get::<_, String>(0)
+        })
+        .context("Could not resolve artist name for track highlights")?;
+
+    let loved_sql = format!(
+        "
+        SELECT
+            t.id,
+            COALESCE(NULLIF(TRIM(t.title), ''), 'Unknown track'),
+            COALESCE(NULLIF(TRIM(t.display_artist), ''),
+                     NULLIF(TRIM(t.album_artist_display), ''),
+                     NULLIF(TRIM(a.album_artist_display), ''),
+                     'Unknown artist'),
+            COALESCE(t.album, a.album),
+            COALESCE(t.release_year, t.year, a.release_year, a.year),
+            t.time_seconds,
+            t.normalized_rating
+        FROM tracks t
+        LEFT JOIN albums a ON a.id = t.album_id
+        WHERE {track_artist_key} = ?1
+          AND UPPER(TRIM(COALESCE(t.love, ''))) = 'L'
+        ORDER BY COALESCE(t.release_year, t.year, a.release_year, a.year, 9999),
+                 LOWER(COALESCE(t.title, '')), t.id
+        "
+    );
+    let mut loved_stmt = conn
+        .prepare(&loved_sql)
+        .context("Could not prepare loved artist tracks")?;
+    let loved_tracks = loved_stmt
+        .query_map([&artist_id], |row| {
+            Ok(ArtistLovedTrack {
+                track_id: row.get(0)?,
+                title: row.get(1)?,
+                display_artist: row.get(2)?,
+                album: row.get(3)?,
+                year: row.get(4)?,
+                seconds: row.get(5)?,
+                rating: row.get(6)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load loved artist tracks")?;
+
+    let chart_sql = format!(
+        "
+        WITH artist_tracks AS (
+            SELECT
+                t.id AS track_id,
+                COALESCE(NULLIF(TRIM(t.title), ''), 'Unknown track') AS title,
+                COALESCE(NULLIF(TRIM(t.display_artist), ''),
+                         NULLIF(TRIM(t.album_artist_display), ''),
+                         NULLIF(TRIM(a.album_artist_display), ''),
+                         'Unknown artist') AS display_artist,
+                COALESCE(t.album, a.album) AS album,
+                COALESCE(t.release_year, t.year, a.release_year, a.year) AS release_year
+            FROM tracks t
+            LEFT JOIN albums a ON a.id = t.album_id
+            WHERE {track_artist_key} = ?1
+              AND NULLIF(TRIM(COALESCE(t.title, '')), '') IS NOT NULL
+        ),
+        chart_histories AS (
+            SELECT
+                'billboard' AS chart,
+                entries.matched_track_id AS track_id,
+                MIN(entries.date_entered) AS entry_date,
+                NULL AS end_date,
+                NULL AS weeks_on_chart,
+                MIN(entries.rank) AS peak
+            FROM billboard_single_chart_entries entries
+            JOIN artist_tracks tracks ON tracks.track_id = entries.matched_track_id
+            GROUP BY entries.matched_track_id
+
+            UNION ALL
+
+            SELECT
+                'officialUk' AS chart,
+                entries.matched_track_id AS track_id,
+                MIN(entries.chart_date) AS entry_date,
+                MAX(COALESCE(NULLIF(entries.chart_end_date, ''), entries.chart_date)) AS end_date,
+                COUNT(DISTINCT entries.week_key) AS weeks_on_chart,
+                MIN(entries.rank) AS peak
+            FROM official_uk_single_chart_entries entries
+            JOIN artist_tracks tracks ON tracks.track_id = entries.matched_track_id
+            GROUP BY entries.matched_track_id
+
+            UNION ALL
+
+            SELECT
+                'vgLista' AS chart,
+                entries.matched_track_id AS track_id,
+                MIN(entries.week_date) AS entry_date,
+                MAX(entries.week_date) AS end_date,
+                COUNT(DISTINCT entries.week_key) AS weeks_on_chart,
+                MIN(entries.rank) AS peak
+            FROM vg_lista_single_chart_entries entries
+            JOIN artist_tracks tracks ON tracks.track_id = entries.matched_track_id
+            GROUP BY entries.matched_track_id
+
+            UNION ALL
+
+            SELECT
+                'tiISkuddet' AS chart,
+                entries.matched_track_id AS track_id,
+                MIN(entries.chart_date) AS entry_date,
+                MAX(entries.chart_date) AS end_date,
+                COUNT(DISTINCT printf('%04d-W%02d', entries.year, entries.week)) AS weeks_on_chart,
+                MIN(entries.rank) AS peak
+            FROM ti_i_skuddet_chart_entries entries
+            JOIN artist_tracks tracks ON tracks.track_id = entries.matched_track_id
+            GROUP BY entries.matched_track_id
+
+            UNION ALL
+
+            SELECT
+                'norsktoppen' AS chart,
+                entries.matched_track_id AS track_id,
+                MIN(entries.chart_date) AS entry_date,
+                MAX(entries.chart_date) AS end_date,
+                COUNT(DISTINCT printf('%04d-W%02d', entries.year, entries.week)) AS weeks_on_chart,
+                MIN(entries.rank) AS peak
+            FROM norsktoppen_chart_entries entries
+            JOIN artist_tracks tracks ON tracks.track_id = entries.matched_track_id
+            GROUP BY entries.matched_track_id
+        )
+        SELECT
+            histories.chart,
+            tracks.track_id,
+            tracks.title,
+            tracks.display_artist,
+            tracks.album,
+            tracks.release_year,
+            histories.entry_date,
+            histories.end_date,
+            histories.weeks_on_chart,
+            histories.peak
+        FROM chart_histories histories
+        JOIN artist_tracks tracks ON tracks.track_id = histories.track_id
+        ORDER BY tracks.track_id,
+                 CASE histories.chart
+                     WHEN 'billboard' THEN 0
+                     WHEN 'officialUk' THEN 1
+                     WHEN 'vgLista' THEN 2
+                     WHEN 'tiISkuddet' THEN 3
+                     WHEN 'norsktoppen' THEN 4
+                     ELSE 5
+                 END
+        "
+    );
+    let mut chart_stmt = conn
+        .prepare(&chart_sql)
+        .context("Could not prepare artist chart histories")?;
+    let chart_rows = chart_stmt
+        .query_map([&artist_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<i32>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+                row.get::<_, Option<i64>>(8)?,
+                row.get::<_, i32>(9)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load artist chart histories")?;
+
+    let mut song_indexes = HashMap::<String, usize>::new();
+    let mut chart_tracks = Vec::<ArtistChartTrack>::new();
+    for (
+        chart,
+        track_id,
+        title,
+        display_artist,
+        album,
+        year,
+        entry_date,
+        end_date,
+        weeks_on_chart,
+        peak,
+    ) in chart_rows
+    {
+        let song_key = billboard_match_key(
+            &billboard_text_key(&display_artist),
+            &billboard_text_key(&title),
+        );
+        let track_index = match song_indexes.get(&song_key).copied() {
+            Some(index) => index,
+            None => {
+                let index = chart_tracks.len();
+                song_indexes.insert(song_key, index);
+                chart_tracks.push(ArtistChartTrack {
+                    track_id,
+                    title,
+                    display_artist,
+                    album,
+                    year,
+                    charts: Vec::new(),
+                });
+                index
+            }
+        };
+        merge_artist_chart_history(
+            &mut chart_tracks[track_index].charts,
+            ArtistTrackChartHistory {
+                chart,
+                entry_date,
+                end_date,
+                weeks_on_chart,
+                peak,
+            },
+        );
+    }
+
+    for track in &mut chart_tracks {
+        track
+            .charts
+            .sort_by_key(|history| chart_history_priority(&history.chart));
+    }
+
+    Ok(ArtistTrackHighlights {
+        artist_id,
+        artist_name,
+        loved_tracks,
+        chart_tracks,
+    })
 }
 
 fn list_artists(
@@ -21094,6 +21395,119 @@ mod tests {
         assert_eq!(
             response.rows[0].album_artist_display.as_deref(),
             Some("Pet Shop Boys")
+        );
+    }
+
+    #[test]
+    fn loads_loved_tracks_and_one_chart_row_with_prioritized_histories() {
+        let conn = seeded_connection();
+        let track_id = conn
+            .query_row("SELECT id FROM tracks LIMIT 1", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .expect("track id");
+        conn.execute(
+            "INSERT INTO billboard_single_chart_entries (
+                source_file, year, rank, artist, display_artist, title, artist_key,
+                title_key, date_entered, date_entered_quality, matched_track_id, imported_at
+             ) VALUES (
+                'billboard.csv', 1987, 10, 'Pet Shop Boys', 'Pet Shop Boys',
+                'What Have I Done to Deserve This?', 'pet shop boys',
+                'what have i done to deserve this', '1987-08-08', 'exact', ?1,
+                '2026-08-11T00:00:00Z'
+             )",
+            [track_id],
+        )
+        .expect("insert Billboard chart row");
+        for (week, chart_date, chart_end_date, rank) in [
+            (42, "1987-10-16", "1987-10-22", 9),
+            (43, "1987-10-23", "1987-10-29", 4),
+        ] {
+            conn.execute(
+                "INSERT INTO official_uk_single_chart_entries (
+                    source_file, year, week, chart_date, chart_end_date, rank,
+                    artist, title, artist_key, title_key, week_key, matched_track_id,
+                    imported_at
+                 ) VALUES (
+                    'uk.csv', 1987, ?1, ?2, ?3, ?4, 'Pet Shop Boys',
+                    'What Have I Done to Deserve This?', 'pet shop boys',
+                    'what have i done to deserve this', ?5, ?6,
+                    '2026-08-11T00:00:00Z'
+                 )",
+                params![
+                    week,
+                    chart_date,
+                    chart_end_date,
+                    rank,
+                    format!("1987-W{week:02}"),
+                    track_id
+                ],
+            )
+            .expect("insert UK chart row");
+        }
+        conn.execute(
+            "INSERT INTO vg_lista_single_chart_entries (
+                source_file, year, week, rank, artist, title, artist_key,
+                title_key, week_date, week_key, matched_track_id, imported_at
+             ) VALUES (
+                'vg.csv', 1987, 45, 2, 'Pet Shop Boys',
+                'What Have I Done to Deserve This?', 'pet shop boys',
+                'what have i done to deserve this', '1987-11-02', '1987-W45', ?1,
+                '2026-08-11T00:00:00Z'
+             )",
+            [track_id],
+        )
+        .expect("insert VG-lista chart row");
+        conn.execute(
+            "INSERT INTO ti_i_skuddet_chart_entries (
+                source_file, year, week, chart_date, rank, rank_raw, artist,
+                title, artist_key, title_key, matched_track_id, imported_at
+             ) VALUES (
+                'ti.csv', 1987, 46, '1987-11-09', 3, '3', 'Pet Shop Boys',
+                'What Have I Done to Deserve This?', 'pet shop boys',
+                'what have i done to deserve this', ?1, '2026-08-11T00:00:00Z'
+             )",
+            [track_id],
+        )
+        .expect("insert Ti i Skuddet chart row");
+        conn.execute(
+            "INSERT INTO norsktoppen_chart_entries (
+                source_file, year, week, chart_date, rank, rank_raw, artist,
+                title, artist_key, title_key, matched_track_id, imported_at
+             ) VALUES (
+                'norsk.csv', 1987, 47, '1987-11-16', 1, '1', 'Pet Shop Boys',
+                'What Have I Done to Deserve This?', 'pet shop boys',
+                'what have i done to deserve this', ?1, '2026-08-11T00:00:00Z'
+             )",
+            [track_id],
+        )
+        .expect("insert Norsktoppen chart row");
+
+        let highlights =
+            artist_track_highlights(&conn, "pet shop boys").expect("artist highlights");
+
+        assert_eq!(highlights.loved_tracks.len(), 1);
+        assert_eq!(highlights.chart_tracks.len(), 1);
+        assert_eq!(
+            highlights.chart_tracks[0]
+                .charts
+                .iter()
+                .map(|history| history.chart.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "billboard",
+                "officialUk",
+                "vgLista",
+                "tiISkuddet",
+                "norsktoppen"
+            ]
+        );
+        assert_eq!(highlights.chart_tracks[0].charts[0].weeks_on_chart, None);
+        assert_eq!(highlights.chart_tracks[0].charts[1].weeks_on_chart, Some(2));
+        assert_eq!(highlights.chart_tracks[0].charts[1].peak, 4);
+        assert_eq!(
+            highlights.chart_tracks[0].charts[1].end_date.as_deref(),
+            Some("1987-10-29")
         );
     }
 

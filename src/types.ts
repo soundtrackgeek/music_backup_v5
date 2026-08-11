@@ -2061,6 +2061,40 @@ export type ArtistListResponse = {
   offset: number;
 };
 
+export type ArtistLovedTrack = {
+  trackId: number;
+  title: string;
+  displayArtist: string;
+  album: string | null;
+  year: number | null;
+  seconds: number | null;
+  rating: number | null;
+};
+
+export type ArtistTrackChartHistory = {
+  chart: TimelineChartSource;
+  entryDate: string | null;
+  endDate: string | null;
+  weeksOnChart: number | null;
+  peak: number;
+};
+
+export type ArtistChartTrack = {
+  trackId: number;
+  title: string;
+  displayArtist: string;
+  album: string | null;
+  year: number | null;
+  charts: ArtistTrackChartHistory[];
+};
+
+export type ArtistTrackHighlights = {
+  artistId: string;
+  artistName: string;
+  lovedTracks: ArtistLovedTrack[];
+  chartTracks: ArtistChartTrack[];
+};
+
 export type GenreListRequest = {
   searchText: string;
   sort: BrowseSort;

@@ -34,6 +34,12 @@ Opening an album track list reuses that artist snapshot and requests `track.getI
 
 SQLite schema version 49 stores artist refresh state and normalized track popularity independently of transient imported track IDs. Successful responses honor provider cache headers with a seven-day fallback, unavailable tracks are retained for 30 days, and stale cached data remains usable when a refresh fails. Text is cached; Last.fm credentials are never stored in SQLite, logs, browser storage, or backups.
 
+## Artist Loved Tracks and Chart Busters
+
+Artist pages include two deferred local-data tabs alongside Overview. **Loved Tracks** lists every local track marked loved, with album, year, rating, duration, and oldest/newest, title, or rating sorting. **Chart Busters** lists each matched song once and combines its imported singles-chart histories from Billboard Hot 100, Official UK Singles, VG-lista, Ti i Skuddet, and Norsktoppen.
+
+Each Chart Busters row initially shows one source in this order: Billboard, Official UK, VG-lista, Ti i Skuddet, then Norsktoppen. Songs present on more than one chart expose the remaining sources through **Show more charts**. Weekly sources report entry date, final imported chart date, distinct weeks on chart, and peak; the Billboard year-end source reports its stored entry date and best imported rank but leaves end date and weeks blank because those values are not present in the imported Billboard files. Charted songs default to their earliest entry from oldest to newest and can instead sort newest-first, by best peak, longest weekly run, or title.
+
 ## Music Doctor quality integration
 
 **Settings → Data & Backups → Music Doctor** connects to `%APPDATA%\com.musicdoctor.desktop\music-doctor.db` by default. The source database is opened read-only and is never migrated or modified by Music Library. **Save and check** validates its schema, **Sync now** refreshes the app-owned cache immediately, and **Sync new Music Doctor scans automatically** checks at startup and every five minutes while the app is open. A sync runs only after Music Doctor reports a completed scan; changing the MusicBee import or Music Doctor scan makes the cache stale and eligible for refresh.

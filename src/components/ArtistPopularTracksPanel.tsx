@@ -80,7 +80,7 @@ export function ArtistPopularTracksPanel({
       {popularity && popularity.tracks.length > 0 ? (
         <ol className="artist-popular-track-list" id={trackListId}>
           {visibleTracks.map((track) => (
-            <li key={track.trackId}>
+            <li key={`${track.trackId}-${track.rank}`}>
               <span className="artist-popular-track-rank">{track.rank}</span>
               <span className="artist-popular-track-title">
                 <strong>{track.title}</strong>

@@ -1200,6 +1200,48 @@ pub struct ArtistListResponse {
     pub offset: u32,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistLovedTrack {
+    pub track_id: i64,
+    pub title: String,
+    pub display_artist: String,
+    pub album: Option<String>,
+    pub year: Option<i32>,
+    pub seconds: Option<i64>,
+    pub rating: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistTrackChartHistory {
+    pub chart: String,
+    pub entry_date: Option<String>,
+    pub end_date: Option<String>,
+    pub weeks_on_chart: Option<i64>,
+    pub peak: i32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistChartTrack {
+    pub track_id: i64,
+    pub title: String,
+    pub display_artist: String,
+    pub album: Option<String>,
+    pub year: Option<i32>,
+    pub charts: Vec<ArtistTrackChartHistory>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistTrackHighlights {
+    pub artist_id: String,
+    pub artist_name: String,
+    pub loved_tracks: Vec<ArtistLovedTrack>,
+    pub chart_tracks: Vec<ArtistChartTrack>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreListRequest {

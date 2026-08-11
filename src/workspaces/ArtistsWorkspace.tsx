@@ -1,13 +1,21 @@
 import type { KeyboardEvent, ReactNode } from "react";
 
 export type ArtistDetailTab =
-  "overview" | "local-albums" | "artist-info" | "discography" | "cover-view";
+  | "overview"
+  | "loved-tracks"
+  | "chart-busters"
+  | "local-albums"
+  | "artist-info"
+  | "discography"
+  | "cover-view";
 
 const artistDetailTabs: ReadonlyArray<{
   id: ArtistDetailTab;
   label: string;
 }> = [
   { id: "overview", label: "Overview" },
+  { id: "loved-tracks", label: "Loved Tracks" },
+  { id: "chart-busters", label: "Chart Busters" },
   { id: "local-albums", label: "Local albums" },
   { id: "artist-info", label: "Artist info" },
   { id: "discography", label: "MusicBrainz discography" },
@@ -24,6 +32,10 @@ export function artistDetailTabNeedsTracks(tab: ArtistDetailTab) {
 
 export function artistDetailTabNeedsPopularity(tab: ArtistDetailTab) {
   return tab === "overview";
+}
+
+export function artistDetailTabNeedsHighlights(tab: ArtistDetailTab) {
+  return tab === "loved-tracks" || tab === "chart-busters";
 }
 
 export function ArtistDetailTabs({

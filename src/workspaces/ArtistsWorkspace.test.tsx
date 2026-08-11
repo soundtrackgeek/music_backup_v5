@@ -3,6 +3,7 @@ import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import {
   ArtistDetailTabs,
+  artistDetailTabNeedsHighlights,
   artistDetailTabNeedsMusicBrainz,
   artistDetailTabNeedsPopularity,
   artistDetailTabNeedsTracks,
@@ -49,11 +50,11 @@ describe("artist detail tabs", () => {
     overviewTab.focus();
     fireEvent.keyDown(overviewTab, { key: "ArrowRight" });
 
-    const localAlbumsTab = screen.getByRole("tab", { name: "Local albums" });
-    expect(localAlbumsTab).toHaveFocus();
-    expect(localAlbumsTab).toHaveAttribute("aria-selected", "true");
+    const lovedTracksTab = screen.getByRole("tab", { name: "Loved Tracks" });
+    expect(lovedTracksTab).toHaveFocus();
+    expect(lovedTracksTab).toHaveAttribute("aria-selected", "true");
 
-    fireEvent.keyDown(localAlbumsTab, { key: "End" });
+    fireEvent.keyDown(lovedTracksTab, { key: "End" });
     const coverViewTab = screen.getByRole("tab", { name: "Cover view" });
     expect(coverViewTab).toHaveFocus();
     expect(coverViewTab).toHaveAttribute("aria-selected", "true");
@@ -79,5 +80,10 @@ describe("artist detail tabs", () => {
     expect(artistDetailTabNeedsPopularity("artist-info")).toBe(false);
     expect(artistDetailTabNeedsPopularity("discography")).toBe(false);
     expect(artistDetailTabNeedsPopularity("cover-view")).toBe(false);
+
+    expect(artistDetailTabNeedsHighlights("overview")).toBe(false);
+    expect(artistDetailTabNeedsHighlights("loved-tracks")).toBe(true);
+    expect(artistDetailTabNeedsHighlights("chart-busters")).toBe(true);
+    expect(artistDetailTabNeedsHighlights("cover-view")).toBe(false);
   });
 });

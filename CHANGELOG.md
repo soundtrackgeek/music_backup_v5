@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.120.0] - 2026-08-11
+### Added
+- Added **Loved Tracks** and **Chart Busters** tabs to Artist pages with deferred local loading and responsive oldest-first track lists.
+- Added one-row-per-song chart histories across Billboard Hot 100, Official UK Singles, VG-lista, Ti i Skuddet, and Norsktoppen, including source-priority summaries, expandable secondary charts, entry/end dates, weeks, peaks, and alternate sorting.
+
+### Changed
+- Scoped artist chart aggregation to the selected artist's indexed track cohort before reading weekly chart histories.
+- Synchronized app metadata and provider user agents to `0.120.0`.
+
+### Fixed
+- Popular Tracks preview rows now use stable rank-qualified React keys when one fallback track represents multiple mock positions.
+
 ## [0.119.0] - 2026-08-11
 ### Added
 - Added attributed Album Review panels to the Albums workspace using exact MusicBrainz release-group identity and openly licensed CritiqueBrainz community reviews.

@@ -26,7 +26,7 @@ mod wishlist;
 #[cfg(not(test))]
 use models::{
     AlbumDebutTimelineResponse, AppSettings, ArtistListRequest, ArtistListResponse,
-    ArtistTimelineRequest, ArtistTimelineResponse, BillboardImportSummary,
+    ArtistTimelineRequest, ArtistTimelineResponse, ArtistTrackHighlights, BillboardImportSummary,
     BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryResponse,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
@@ -1463,6 +1463,20 @@ async fn list_artists(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_artist_track_highlights(
+    app: AppHandle,
+    artist_id: String,
+) -> Result<ArtistTrackHighlights, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::artist_track_highlights_for_app(&app, &artist_id)
+    })
+    .await
+    .map_err(|error| format!("Artist track highlights task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn list_genres(
     app: AppHandle,
     request: GenreListRequest,
@@ -1810,6 +1824,7 @@ pub fn run() {
             get_library_completion_cover_data_url,
             search_library,
             list_artists,
+            get_artist_track_highlights,
             list_genres,
             get_genre_timeline,
             get_artist_timeline,
