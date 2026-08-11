@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.114.0] - 2026-08-11
+### Added
+- Added a read-only Music Doctor connector with a configurable database path, manual synchronization, five-minute background checks for completed scans, source/format/bitrate status, and an app-owned quality cache keyed by Unicode-normalized full file paths.
+- Added Music Doctor bitrate and mixed-quality fields to Album and Search results, bitrate range and mixed-quality filters, and quality sorting.
+- Added Music Tools reports for audio below 320 kbps, albums with mixed bitrate quality, Music Doctor audio not present in the imported library, and empty/missing/unreadable files.
+
+### Changed
+- Upgraded the app database to schema version 48 for Music Doctor sync history, matched track and album quality summaries, unmatched audio, file issues, and aggregate format/bitrate statistics.
+- Synchronized app metadata and provider user agents to `0.114.0`.
+
 ## [0.113.2] - 2026-08-03
 ### Changed
 - Synchronized app metadata and provider user agents to `0.113.2`.

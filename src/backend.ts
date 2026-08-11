@@ -23,6 +23,7 @@ import {
   defaultImportSourcePath,
   defaultMusicBrainzCachePath,
   defaultMusicBrainzOverlaySyncPath,
+  defaultMusicDoctorDatabasePath,
   defaultSettings,
   cacheSettings,
   loadCachedSettings,
@@ -106,6 +107,7 @@ export {
   defaultImportSourcePath,
   defaultMusicBrainzCachePath,
   defaultMusicBrainzOverlaySyncPath,
+  defaultMusicDoctorDatabasePath,
   cacheSettings,
   loadCachedSettings,
   normalizeSettings,
@@ -269,6 +271,8 @@ import type {
   MusicBrainzArtistInfoPreview,
   MusicBrainzArtistInfoPreviewRow,
   MusicBrainzArtistInfoStatus,
+  MusicDoctorStatus,
+  MusicDoctorSyncResult,
   MusicBrainzArtistOriginCountryUpdate,
   MusicBrainzArtistRefreshResult,
   MusicBrainzArtistReleaseRow,
@@ -1762,6 +1766,96 @@ export async function getSettings() {
   );
   cacheSettings(settings);
   return settings;
+}
+
+let mockMusicDoctorSyncedAt: string | null = null;
+
+export async function getMusicDoctorStatus(): Promise<MusicDoctorStatus> {
+  if (!isTauriRuntime()) {
+    return {
+      databasePath: mockSettings.musicDoctorDatabasePath,
+      resolvedPath:
+        "C:\\Users\\jtill\\AppData\\Roaming\\com.musicdoctor.desktop\\music-doctor.db",
+      exists: true,
+      valid: true,
+      state: mockMusicDoctorSyncedAt ? "available" : "stale",
+      message: mockMusicDoctorSyncedAt
+        ? "Music Doctor quality data is current."
+        : "Music Doctor has a completed scan ready to sync.",
+      schemaVersion: 1,
+      fileSizeBytes: 817_000_000,
+      latestScanId: 1,
+      latestScanStatus: "completed",
+      latestScanCompletedAt: "2026-08-10T22:15:00Z",
+      sourceCount: 3,
+      totalFiles: 1_258_055,
+      audioFiles: 1_109_052,
+      audioAlbums: 72_929,
+      matchedTracks: mockMusicDoctorSyncedAt ? 1_108_057 : 0,
+      unmatchedLibraryTracks: mockMusicDoctorSyncedAt ? 35 : 0,
+      unmatchedDoctorAudio: mockMusicDoctorSyncedAt ? 960 : 0,
+      fileIssueCount: mockMusicDoctorSyncedAt ? 35 : 0,
+      lastSyncedAt: mockMusicDoctorSyncedAt,
+      needsSync: !mockMusicDoctorSyncedAt,
+      syncInProgress: false,
+      sources: [
+        {
+          path: "D:\\MUSIC",
+          enabled: true,
+          lastScanAt: "2026-08-10T22:15:00Z",
+          fileCount: 1_155_400,
+          totalBytes: 13_400_000_000_000,
+        },
+        {
+          path: "G:\\_BACKUP\\SCORES",
+          enabled: true,
+          lastScanAt: "2026-08-10T22:15:00Z",
+          fileCount: 69_200,
+          totalBytes: 850_000_000_000,
+        },
+        {
+          path: "H:\\Synthwave",
+          enabled: true,
+          lastScanAt: "2026-08-10T22:15:00Z",
+          fileCount: 33_455,
+          totalBytes: 420_000_000_000,
+        },
+      ],
+      formatStats: [
+        { format: "MP3", fileCount: 1_109_052, totalBytes: 14_670_000_000_000 },
+      ],
+      bitrateStats: [
+        { band: "320+ kbps", sortOrder: 5, fileCount: 980_983, totalBytes: 0 },
+        { band: "192–319 kbps", sortOrder: 4, fileCount: 99_611, totalBytes: 0 },
+        { band: "Below 192 kbps", sortOrder: 3, fileCount: 28_458, totalBytes: 0 },
+      ],
+    };
+  }
+
+  return invoke<MusicDoctorStatus>("get_music_doctor_status");
+}
+
+export async function syncMusicDoctor(): Promise<MusicDoctorSyncResult> {
+  if (!isTauriRuntime()) {
+    mockMusicDoctorSyncedAt = new Date().toISOString();
+    return {
+      syncRunId: 1,
+      databasePath: mockSettings.musicDoctorDatabasePath,
+      scanId: 1,
+      scanCompletedAt: "2026-08-10T22:15:00Z",
+      totalFiles: 1_258_055,
+      audioFiles: 1_109_052,
+      audioAlbums: 72_929,
+      matchedTracks: 1_108_057,
+      unmatchedLibraryTracks: 35,
+      unmatchedDoctorAudio: 960,
+      fileIssueCount: 35,
+      durationMs: 5_200,
+      completedAt: mockMusicDoctorSyncedAt,
+    };
+  }
+
+  return invoke<MusicDoctorSyncResult>("sync_music_doctor");
 }
 
 export async function getAiKeyStatus() {
@@ -5258,6 +5352,8 @@ export async function searchLibrary(request: BrowseRequest) {
     const norsktoppenDebutWeekTo = request.filters.norsktoppenDebutWeekTo;
     const lovedTracksMin = request.filters.lovedTracksMin;
     const lovedTracksMax = request.filters.lovedTracksMax;
+    const bitrateKbpsMin = request.filters.bitrateKbpsMin;
+    const bitrateKbpsMax = request.filters.bitrateKbpsMax;
     const ratingCompletenessMin = normalizePercentFilter(
       request.filters.ratingCompletenessMin,
     );
@@ -5278,6 +5374,7 @@ export async function searchLibrary(request: BrowseRequest) {
           ? 1
           : 0
         : (row.lovedTracks ?? 0);
+      const bitrate = isTracks ? row.bitrateKbps : row.minBitrateKbps;
       return (
         matchesView &&
         (albumIds.size === 0 || albumIds.has(row.albumId)) &&
@@ -5392,6 +5489,8 @@ export async function searchLibrary(request: BrowseRequest) {
           )) &&
         (lovedTracksMin == null || lovedTracks >= lovedTracksMin) &&
         (lovedTracksMax == null || lovedTracks <= lovedTracksMax) &&
+        matchesNumberRange(bitrate, bitrateKbpsMin, bitrateKbpsMax) &&
+        (!request.filters.mixedAudioQuality || row.mixedAudioQuality === true) &&
         (ratingCompletenessMin == null ||
           ratingCompleteness >= ratingCompletenessMin) &&
         (ratingCompletenessMax == null ||
@@ -6754,6 +6853,8 @@ function browseSortValue(row: BrowseRow, field: string) {
       return row.norsktoppenDebutWeekKey;
     case "trackRating":
       return row.normalizedRating;
+    case "bitrate":
+      return row.trackId == null ? row.minBitrateKbps : row.bitrateKbps;
     case "time":
       return row.trackSeconds;
     case "trackNumber":

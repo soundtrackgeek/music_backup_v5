@@ -94,6 +94,8 @@ export function countAdvancedSearchFilters(
     ),
     filters.notFullyRated,
     hasRange(filters.lovedTracksMin, filters.lovedTracksMax),
+    hasRange(filters.bitrateKbpsMin, filters.bitrateKbpsMax),
+    filters.mixedAudioQuality,
     filters.originCountryCodes.length > 0,
     filters.excludedOriginCountryCodes.length > 0,
     filters.missingOriginCountry,

@@ -412,6 +412,16 @@ pub struct AppSettings {
         alias = "musicbrainzOverlayAutoSyncMinutes"
     )]
     pub musicbrainz_overlay_auto_sync_minutes: u32,
+    #[serde(
+        default = "default_music_doctor_database_path",
+        rename = "musicDoctorDatabasePath"
+    )]
+    pub music_doctor_database_path: String,
+    #[serde(
+        default = "default_music_doctor_auto_sync",
+        rename = "musicDoctorAutoSync"
+    )]
+    pub music_doctor_auto_sync: bool,
     #[serde(default)]
     pub update_auto_check_minutes: u32,
     #[serde(default)]
@@ -1056,6 +1066,12 @@ pub struct BrowseFilters {
     pub loved_tracks_min: Option<i64>,
     #[serde(default)]
     pub loved_tracks_max: Option<i64>,
+    #[serde(default)]
+    pub bitrate_kbps_min: Option<i32>,
+    #[serde(default)]
+    pub bitrate_kbps_max: Option<i32>,
+    #[serde(default)]
+    pub mixed_audio_quality: bool,
     #[serde(default)]
     pub origin_country_codes: Vec<String>,
     #[serde(default)]
@@ -1793,6 +1809,16 @@ pub struct BrowseRow {
     pub origin_country_name: Option<String>,
     pub origin_country_raw_area: Option<String>,
     pub origin_country_review_state: Option<String>,
+    pub file_format: Option<String>,
+    pub bitrate_kbps: Option<i32>,
+    pub quality_file_size_bytes: Option<i64>,
+    pub doctor_duration_ms: Option<i64>,
+    pub quality_track_count: Option<i64>,
+    pub min_bitrate_kbps: Option<i32>,
+    pub avg_bitrate_kbps: Option<f64>,
+    pub max_bitrate_kbps: Option<i32>,
+    pub below_320_tracks: Option<i64>,
+    pub mixed_audio_quality: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -2422,6 +2448,14 @@ fn default_musicbrainz_overlay_sync_path() -> String {
     String::new()
 }
 
+fn default_music_doctor_database_path() -> String {
+    r"%APPDATA%\com.musicdoctor.desktop\music-doctor.db".to_string()
+}
+
+fn default_music_doctor_auto_sync() -> bool {
+    true
+}
+
 fn default_music_tool_id() -> String {
     "duplicate-albums".to_string()
 }
@@ -2464,6 +2498,8 @@ mod tests {
             musicbrainz_cache_path: r"C:\Sync\musicbrainz_cache.db".to_string(),
             musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3".to_string(),
             musicbrainz_overlay_auto_sync_minutes: 15,
+            music_doctor_database_path: r"C:\Data\music-doctor.db".to_string(),
+            music_doctor_auto_sync: true,
             update_auto_check_minutes: 30,
             updated_at: None,
         };
@@ -2481,6 +2517,11 @@ mod tests {
             serialized.get("musicBrainzOverlayAutoSyncMinutes"),
             Some(&json!(15))
         );
+        assert_eq!(
+            serialized.get("musicDoctorDatabasePath"),
+            Some(&json!(r"C:\Data\music-doctor.db"))
+        );
+        assert_eq!(serialized.get("musicDoctorAutoSync"), Some(&json!(true)));
         assert_eq!(serialized.get("updateAutoCheckMinutes"), Some(&json!(30)));
         assert_eq!(
             serialized.get("countryFlagDisplay"),

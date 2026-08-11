@@ -91,6 +91,9 @@ const DEFAULT_DEEMIX_DOWNLOAD_FALLBACK: bool = true;
 const DEFAULT_DEEMIX_DOWNLOAD_ORGANIZATION: &str = "flat_artist_album_year";
 const DEFAULT_MUSICBRAINZ_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH: &str = "";
+pub(crate) const DEFAULT_MUSIC_DOCTOR_DATABASE_PATH: &str =
+    r"%APPDATA%\com.musicdoctor.desktop\music-doctor.db";
+const DEFAULT_MUSIC_DOCTOR_AUTO_SYNC: bool = true;
 const DEFAULT_COUNTRY_FLAG_DISPLAY: &str = "flagAndName";
 const MUSICBRAINZ_SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
 const MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES: u32 = 1440;
@@ -416,6 +419,34 @@ const MUSIC_TOOLS: &[MusicToolDefinition] = &[
         scope: "tracks",
     },
     MusicToolDefinition {
+        id: "audio-below-320-kbps",
+        label: "Audio below 320 kbps",
+        description: "Music Doctor audio matches with a measured bitrate below 320 kbps.",
+        severity: "medium",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "mixed-audio-quality",
+        label: "Albums with mixed audio quality",
+        description: "Albums whose Music Doctor matches contain more than one measured bitrate.",
+        severity: "low",
+        scope: "albums",
+    },
+    MusicToolDefinition {
+        id: "music-doctor-unimported-audio",
+        label: "Music Doctor audio not in library",
+        description: "Audio files scanned by Music Doctor that do not match the imported library.",
+        severity: "low",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
+        id: "music-doctor-file-problems",
+        label: "Music Doctor file problems",
+        description: "Empty, missing, or unreadable files reported by Music Doctor.",
+        severity: "high",
+        scope: "tracks",
+    },
+    MusicToolDefinition {
         id: "year-anomalies",
         label: "Year anomalies",
         description: "Tracks with missing or implausible canonical year values.",
@@ -524,52 +555,69 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_seven_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_eight_schema_exists(conn)? {
+        return Ok(());
+    }
+
+    if user_version == 47 && migrations::phase_forty_seven_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 48 migration transaction")?;
+        ensure_music_doctor_schema(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 48;")
+            .context("Could not mark the schema 48 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 48 migration")?;
         return Ok(());
     }
 
     if user_version == 46 && migrations::phase_forty_six_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 47 migration transaction")?;
+            .context("Could not start the schema 47–48 migration transaction")?;
         ensure_album_artist_key_index(&transaction)?;
+        ensure_music_doctor_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 47;")
-            .context("Could not mark the schema 47 migration complete")?;
+            .execute_batch("PRAGMA user_version = 48;")
+            .context("Could not mark the schema 47–48 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 47 migration")?;
+            .context("Could not commit the schema 47–48 migration")?;
         return Ok(());
     }
 
     if user_version == 45 && migrations::phase_forty_five_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 46–47 migration transaction")?;
+            .context("Could not start the schema 46–48 migration transaction")?;
         ensure_artist_images_schema(&transaction)?;
         ensure_album_artist_key_index(&transaction)?;
+        ensure_music_doctor_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 47;")
-            .context("Could not mark the schema 46–47 migration complete")?;
+            .execute_batch("PRAGMA user_version = 48;")
+            .context("Could not mark the schema 46–48 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 46–47 migration")?;
+            .context("Could not commit the schema 46–48 migration")?;
         return Ok(());
     }
 
     if user_version == 44 && migrations::phase_forty_four_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 45–47 migration transaction")?;
+            .context("Could not start the schema 45–48 migration transaction")?;
         ensure_library_updates_schema(&transaction)?;
         ensure_artist_images_schema(&transaction)?;
         ensure_album_artist_key_index(&transaction)?;
+        ensure_music_doctor_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 47;")
-            .context("Could not mark the schema 45–47 migration complete")?;
+            .execute_batch("PRAGMA user_version = 48;")
+            .context("Could not mark the schema 45–48 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 45–47 migration")?;
+            .context("Could not commit the schema 45–48 migration")?;
         return Ok(());
     }
 
@@ -1782,12 +1830,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_library_completion_artist_schema(conn)?;
     ensure_artist_images_schema(conn)?;
     ensure_album_artist_key_index(conn)?;
+    ensure_music_doctor_schema(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
     migrations::migrate_billboard_album_source_default(conn)?;
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 47;
+        PRAGMA user_version = 48;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -3129,6 +3178,156 @@ fn ensure_norsktoppen_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create Norsktoppen chart schema")?;
+
+    Ok(())
+}
+
+fn ensure_music_doctor_schema(conn: &Connection) -> Result<()> {
+    for (name, definition) in [
+        (
+            "music_doctor_database_path",
+            "TEXT NOT NULL DEFAULT '%APPDATA%\\com.musicdoctor.desktop\\music-doctor.db'",
+        ),
+        ("music_doctor_auto_sync", "INTEGER NOT NULL DEFAULT 1"),
+    ] {
+        if !schema_column_exists(conn, "app_settings", name)? {
+            conn.execute(
+                &format!("ALTER TABLE app_settings ADD COLUMN {name} {definition}"),
+                [],
+            )
+            .with_context(|| format!("Could not add app_settings.{name}"))?;
+        }
+    }
+
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS music_doctor_sync_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            database_path TEXT NOT NULL,
+            database_size_bytes INTEGER NOT NULL DEFAULT 0,
+            database_modified_ns INTEGER,
+            external_schema_version INTEGER NOT NULL,
+            external_scan_id INTEGER NOT NULL,
+            external_scan_completed_at TEXT,
+            local_import_run_id INTEGER,
+            source_count INTEGER NOT NULL DEFAULT 0,
+            total_files INTEGER NOT NULL DEFAULT 0,
+            audio_files INTEGER NOT NULL DEFAULT 0,
+            audio_albums INTEGER NOT NULL DEFAULT 0,
+            matched_tracks INTEGER NOT NULL DEFAULT 0,
+            unmatched_library_tracks INTEGER NOT NULL DEFAULT 0,
+            unmatched_doctor_audio INTEGER NOT NULL DEFAULT 0,
+            file_issue_count INTEGER NOT NULL DEFAULT 0,
+            started_at TEXT NOT NULL,
+            completed_at TEXT NOT NULL,
+            duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_music_doctor_sync_runs_completed
+            ON music_doctor_sync_runs(completed_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS music_doctor_track_quality (
+            file_key TEXT PRIMARY KEY,
+            file_path TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            album_id TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            relative_path TEXT NOT NULL,
+            extension TEXT NOT NULL,
+            format TEXT NOT NULL,
+            file_type TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            modified_ns INTEGER NOT NULL,
+            bitrate_kbps INTEGER,
+            duration_ms INTEGER,
+            properties_checked_ns INTEGER,
+            scan_error TEXT,
+            missing INTEGER NOT NULL DEFAULT 0,
+            doctor_updated_at TEXT NOT NULL,
+            sync_run_id INTEGER NOT NULL
+        ) WITHOUT ROWID;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_music_doctor_track_file
+            ON music_doctor_track_quality(file_path, filename);
+        CREATE INDEX IF NOT EXISTS idx_music_doctor_track_album
+            ON music_doctor_track_quality(album_id);
+        CREATE INDEX IF NOT EXISTS idx_music_doctor_track_bitrate
+            ON music_doctor_track_quality(bitrate_kbps);
+
+        CREATE TABLE IF NOT EXISTS music_doctor_album_quality (
+            album_id TEXT PRIMARY KEY,
+            matched_tracks INTEGER NOT NULL,
+            total_size_bytes INTEGER NOT NULL,
+            min_bitrate_kbps INTEGER,
+            avg_bitrate_kbps REAL,
+            max_bitrate_kbps INTEGER,
+            below_128_tracks INTEGER NOT NULL,
+            below_192_tracks INTEGER NOT NULL,
+            below_320_tracks INTEGER NOT NULL,
+            at_least_320_tracks INTEGER NOT NULL,
+            mixed_quality INTEGER NOT NULL,
+            formats TEXT NOT NULL,
+            sync_run_id INTEGER NOT NULL
+        ) WITHOUT ROWID;
+
+        CREATE INDEX IF NOT EXISTS idx_music_doctor_album_min_bitrate
+            ON music_doctor_album_quality(min_bitrate_kbps);
+        CREATE INDEX IF NOT EXISTS idx_music_doctor_album_mixed_quality
+            ON music_doctor_album_quality(mixed_quality);
+
+        CREATE TABLE IF NOT EXISTS music_doctor_unmatched_files (
+            file_key TEXT PRIMARY KEY,
+            source_path TEXT NOT NULL,
+            relative_path TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            album_folder TEXT NOT NULL,
+            artist TEXT,
+            album TEXT,
+            album_year INTEGER,
+            extension TEXT NOT NULL,
+            format TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            bitrate_kbps INTEGER,
+            duration_ms INTEGER,
+            doctor_updated_at TEXT NOT NULL,
+            sync_run_id INTEGER NOT NULL
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS music_doctor_file_issues (
+            file_key TEXT PRIMARY KEY,
+            source_path TEXT NOT NULL,
+            relative_path TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            album_folder TEXT NOT NULL,
+            artist TEXT,
+            album TEXT,
+            album_year INTEGER,
+            format TEXT NOT NULL,
+            file_type TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            scan_error TEXT,
+            missing INTEGER NOT NULL,
+            issue_kind TEXT NOT NULL,
+            sync_run_id INTEGER NOT NULL
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS music_doctor_format_stats (
+            format TEXT PRIMARY KEY,
+            file_count INTEGER NOT NULL,
+            total_bytes INTEGER NOT NULL,
+            sync_run_id INTEGER NOT NULL
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS music_doctor_bitrate_stats (
+            band TEXT PRIMARY KEY,
+            sort_order INTEGER NOT NULL,
+            file_count INTEGER NOT NULL,
+            total_bytes INTEGER NOT NULL,
+            sync_run_id INTEGER NOT NULL
+        ) WITHOUT ROWID;
+        ",
+    )
+    .context("Could not create Music Doctor cache schema")?;
 
     Ok(())
 }
@@ -14890,6 +15089,106 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             "t.filename",
             "NULLIF(TRIM(COALESCE(t.filename, '')), '') IS NOT NULL AND LOWER(t.filename) NOT LIKE '%.mp3'",
         )),
+        "audio-below-320-kbps" => Ok(
+            "
+            SELECT
+                'audio-below-320-kbps:' || t.id AS id,
+                'audio-below-320-kbps' AS tool_id,
+                'medium' AS severity,
+                'tracks' AS entity_type,
+                t.album_id,
+                t.id AS track_id,
+                t.album,
+                t.album_artist_display,
+                t.title,
+                t.canonical_genre,
+                t.year,
+                'Measured bitrate is below 320 kbps' AS detail,
+                printf('%d kbps / %s / %.1f MB', q.bitrate_kbps, q.format, q.size_bytes / 1048576.0) AS value,
+                t.filename,
+                t.file_path
+            FROM music_doctor_track_quality q
+            JOIN tracks t
+              ON t.file_path = q.file_path
+             AND t.filename = q.filename
+            WHERE q.file_type = 'Audio'
+              AND q.bitrate_kbps IS NOT NULL
+              AND q.bitrate_kbps < 320
+            "
+            .to_string(),
+        ),
+        "mixed-audio-quality" => Ok(
+            "
+            SELECT
+                'mixed-audio-quality:' || a.id AS id,
+                'mixed-audio-quality' AS tool_id,
+                'low' AS severity,
+                'albums' AS entity_type,
+                a.id AS album_id,
+                NULL AS track_id,
+                a.album,
+                a.album_artist_display,
+                NULL AS title,
+                a.canonical_genre,
+                a.year,
+                'Album contains mixed measured bitrates' AS detail,
+                printf('%d–%d kbps / %d below 320 / %s', q.min_bitrate_kbps, q.max_bitrate_kbps, q.below_320_tracks, q.formats) AS value,
+                NULL AS filename,
+                NULL AS file_path
+            FROM music_doctor_album_quality q
+            JOIN albums a ON a.id = q.album_id
+            WHERE q.mixed_quality = 1
+            "
+            .to_string(),
+        ),
+        "music-doctor-unimported-audio" => Ok(
+            "
+            SELECT
+                'music-doctor-unimported-audio:' || file_key AS id,
+                'music-doctor-unimported-audio' AS tool_id,
+                'low' AS severity,
+                'tracks' AS entity_type,
+                'music-doctor:' || LOWER(source_path || '\\' || album_folder) AS album_id,
+                NULL AS track_id,
+                COALESCE(NULLIF(album, ''), NULLIF(album_folder, ''), '[Unknown album]') AS album,
+                artist AS album_artist_display,
+                file_name AS title,
+                NULL AS canonical_genre,
+                album_year AS year,
+                'Music Doctor audio file is not in the imported library' AS detail,
+                printf('%s / %s kbps / %.1f MB', format, COALESCE(CAST(bitrate_kbps AS TEXT), '?'), size_bytes / 1048576.0) AS value,
+                file_name AS filename,
+                source_path || '\\' || relative_path AS file_path
+            FROM music_doctor_unmatched_files
+            "
+            .to_string(),
+        ),
+        "music-doctor-file-problems" => Ok(
+            "
+            SELECT
+                'music-doctor-file-problems:' || file_key AS id,
+                'music-doctor-file-problems' AS tool_id,
+                'high' AS severity,
+                'tracks' AS entity_type,
+                'music-doctor:' || LOWER(source_path || '\\' || album_folder) AS album_id,
+                NULL AS track_id,
+                COALESCE(NULLIF(album, ''), NULLIF(album_folder, ''), '[Unknown album]') AS album,
+                artist AS album_artist_display,
+                file_name AS title,
+                NULL AS canonical_genre,
+                album_year AS year,
+                CASE issue_kind
+                    WHEN 'empty-file' THEN 'Music Doctor reported an empty file'
+                    WHEN 'missing' THEN 'Music Doctor reported a missing file'
+                    ELSE 'Music Doctor could not inspect the file'
+                END AS detail,
+                COALESCE(NULLIF(scan_error, ''), printf('%s / %d bytes', issue_kind, size_bytes)) AS value,
+                file_name AS filename,
+                source_path || '\\' || relative_path AS file_path
+            FROM music_doctor_file_issues
+            "
+            .to_string(),
+        ),
         "year-anomalies" => {
             let max_year = Utc::now().year() + 1;
             Ok(track_issue_sql(
@@ -15825,7 +16124,17 @@ fn search_library(
             origin.country_code,
             origin.country_name,
             origin.raw_area_name,
-            origin.review_state
+            origin.review_state,
+            q.format,
+            q.bitrate_kbps,
+            q.size_bytes,
+            q.duration_ms,
+            aq.matched_tracks,
+            aq.min_bitrate_kbps,
+            aq.avg_bitrate_kbps,
+            aq.max_bitrate_kbps,
+            aq.below_320_tracks,
+            aq.mixed_quality
         "
     } else {
         "
@@ -15909,19 +16218,29 @@ fn search_library(
             origin.country_code,
             origin.country_name,
             origin.raw_area_name,
-            origin.review_state
+            origin.review_state,
+            aq.formats,
+            NULL,
+            aq.total_size_bytes,
+            NULL,
+            aq.matched_tracks,
+            aq.min_bitrate_kbps,
+            aq.avg_bitrate_kbps,
+            aq.max_bitrate_kbps,
+            aq.below_320_tracks,
+            aq.mixed_quality
         "
     };
 
     let from_sql = if is_tracks {
         let origin_key_sql = artist_key_sql("a.album_artist_display");
         format!(
-            "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id LEFT JOIN album_covers c ON c.album_id = t.album_id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql}"
+            "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id LEFT JOIN album_covers c ON c.album_id = t.album_id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql} LEFT JOIN music_doctor_track_quality q ON q.file_path = t.file_path AND q.filename = t.filename LEFT JOIN music_doctor_album_quality aq ON aq.album_id = a.id"
         )
     } else {
         let origin_key_sql = artist_key_sql("a.album_artist_display");
         format!(
-            "FROM albums a LEFT JOIN album_covers c ON c.album_id = a.id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql}"
+            "FROM albums a LEFT JOIN album_covers c ON c.album_id = a.id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql} LEFT JOIN music_doctor_album_quality aq ON aq.album_id = a.id"
         )
     };
 
@@ -16028,6 +16347,16 @@ fn browse_row_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BrowseRow> {
         origin_country_name: row.get(69)?,
         origin_country_raw_area: row.get(70)?,
         origin_country_review_state: row.get(71)?,
+        file_format: row.get(72)?,
+        bitrate_kbps: row.get(73)?,
+        quality_file_size_bytes: row.get(74)?,
+        doctor_duration_ms: row.get(75)?,
+        quality_track_count: row.get(76)?,
+        min_bitrate_kbps: row.get(77)?,
+        avg_bitrate_kbps: row.get(78)?,
+        max_bitrate_kbps: row.get(79)?,
+        below_320_tracks: row.get(80)?,
+        mixed_audio_quality: row.get::<_, Option<i64>>(81)?.map(|value| value != 0),
     })
 }
 
@@ -16407,6 +16736,21 @@ fn build_where_clause(
         filters.loved_tracks_min,
         filters.loved_tracks_max,
     );
+
+    add_i32_range(
+        &mut conditions,
+        &mut values,
+        if is_tracks {
+            "q.bitrate_kbps"
+        } else {
+            "aq.min_bitrate_kbps"
+        },
+        filters.bitrate_kbps_min,
+        filters.bitrate_kbps_max,
+    );
+    if filters.mixed_audio_quality {
+        conditions.push("aq.mixed_quality = 1".to_string());
+    }
 
     add_origin_country_conditions(
         &mut conditions,
@@ -17049,6 +17393,7 @@ fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "ratingCompleteness" => "a.rating_completeness",
             "lovedTracks" => "(CASE WHEN t.love = 'L' THEN 1 ELSE 0 END)",
             "albumScore" => "a.album_score",
+            "bitrate" => "q.bitrate_kbps",
             "trackNumber" => "t.disc_number",
             _ => "LOWER(COALESCE(t.album, ''))",
         }
@@ -17072,6 +17417,7 @@ fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "ae" => "a.ae_ratio",
             "tmoe" => "a.tmoe_seconds",
             "albumScore" => "a.album_score",
+            "bitrate" => "aq.min_bitrate_kbps",
             _ => "LOWER(COALESCE(a.album, ''))",
         }
     };
@@ -18071,6 +18417,66 @@ mod tests {
 
         assert_eq!(response.total, 1);
         assert_eq!(response.rows[0].album.as_deref(), Some("Actually"));
+    }
+
+    #[test]
+    fn filters_and_reports_music_doctor_quality() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "
+            INSERT INTO music_doctor_track_quality (
+                file_key, file_path, filename, album_id, source_path,
+                relative_path, extension, format, file_type, size_bytes,
+                modified_ns, bitrate_kbps, duration_ms, doctor_updated_at,
+                sync_run_id
+            ) VALUES (
+                'd:/music/pet shop boys/actually/02 what have i done.mp3',
+                'D:\\Music\\Pet Shop Boys\\Actually',
+                '02 What Have I Done.mp3', 'mb:test', 'D:\\Music',
+                'Pet Shop Boys\\Actually\\02 What Have I Done.mp3',
+                'mp3', 'MP3', 'Audio', 9000000, 1, 256, 260000,
+                '2026-08-10T00:00:00Z', 1
+            );
+            INSERT INTO music_doctor_album_quality (
+                album_id, matched_tracks, total_size_bytes, min_bitrate_kbps,
+                avg_bitrate_kbps, max_bitrate_kbps, below_128_tracks,
+                below_192_tracks, below_320_tracks, at_least_320_tracks,
+                mixed_quality, formats, sync_run_id
+            ) VALUES (
+                'mb:test', 10, 90000000, 256, 307.2, 320, 0, 0, 2, 8,
+                1, 'MP3', 1
+            );
+            ",
+        )
+        .expect("seed Music Doctor quality");
+
+        let mut album_request = BrowseRequest::default();
+        album_request.filters.bitrate_kbps_max = Some(300);
+        album_request.filters.mixed_audio_quality = true;
+        let albums = search_library(&conn, album_request, 50).expect("filter quality albums");
+        assert_eq!(albums.total, 1);
+        assert_eq!(albums.rows[0].min_bitrate_kbps, Some(256));
+        assert_eq!(albums.rows[0].max_bitrate_kbps, Some(320));
+        assert_eq!(albums.rows[0].mixed_audio_quality, Some(true));
+
+        let mut track_request = BrowseRequest::default();
+        track_request.view = "tracks".to_string();
+        track_request.filters.bitrate_kbps_max = Some(319);
+        let tracks = search_library(&conn, track_request, 50).expect("filter quality tracks");
+        assert_eq!(tracks.total, 1);
+        assert_eq!(tracks.rows[0].bitrate_kbps, Some(256));
+        assert_eq!(tracks.rows[0].file_format.as_deref(), Some("MP3"));
+
+        let mut tool_request = MusicToolIssueRequest::default();
+        tool_request.tool_id = "audio-below-320-kbps".to_string();
+        let tool = list_music_tool_issues(&conn, tool_request, 50, None)
+            .expect("list Music Doctor quality issues");
+        assert_eq!(tool.total, 1);
+        assert_eq!(tool.rows[0].track_id, Some(1));
+        assert!(tool.rows[0]
+            .value
+            .as_deref()
+            .is_some_and(|value| value.contains("256 kbps")));
     }
 
     #[test]
@@ -21962,6 +22368,8 @@ mod tests {
                 musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
                     .to_string(),
                 musicbrainz_overlay_auto_sync_minutes: 2_000,
+                music_doctor_database_path: r"D:\Apps\Music Doctor\music-doctor.db".to_string(),
+                music_doctor_auto_sync: false,
                 update_auto_check_minutes: 2_000,
                 updated_at: None,
             },

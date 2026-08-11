@@ -1,7 +1,18 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 47;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 48;
+
+pub(super) fn phase_forty_eight_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_forty_seven_schema_exists(conn)?
+        && super::schema_column_exists(conn, "app_settings", "music_doctor_database_path")?
+        && super::schema_column_exists(conn, "app_settings", "music_doctor_auto_sync")?
+        && super::schema_table_exists(conn, "music_doctor_sync_runs")?
+        && super::schema_table_exists(conn, "music_doctor_track_quality")?
+        && super::schema_table_exists(conn, "music_doctor_album_quality")?
+        && super::schema_table_exists(conn, "music_doctor_unmatched_files")?
+        && super::schema_table_exists(conn, "music_doctor_file_issues")?)
+}
 
 pub(super) fn phase_forty_seven_schema_exists(conn: &Connection) -> Result<bool> {
     Ok(phase_forty_six_schema_exists(conn)?

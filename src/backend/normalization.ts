@@ -21,6 +21,8 @@ export const defaultNorsktoppenSourcePath = "CSV_NORSKTOPPEN_NO";
 export const defaultMusicBrainzCachePath =
   "MusicBrainz/musicbrainz_cache.db";
 export const defaultMusicBrainzOverlaySyncPath = "";
+export const defaultMusicDoctorDatabasePath =
+  "%APPDATA%\\com.musicdoctor.desktop\\music-doctor.db";
 export const defaultDeemixDownloadPath = "";
 export const defaultDeemixDownloadQuality: DeemixDownloadQuality = "mp3_320";
 export const defaultDeemixDownloadOrganization: DeemixDownloadOrganization =
@@ -118,6 +120,14 @@ export function normalizeSettings(
       1440,
       Math.max(0, Number.isFinite(autoSyncMinutes) ? autoSyncMinutes : 0),
     ),
+    musicDoctorDatabasePath: normalizeImportPath(
+      settings.musicDoctorDatabasePath,
+      defaultMusicDoctorDatabasePath,
+    ),
+    musicDoctorAutoSync:
+      settings.musicDoctorAutoSync === undefined
+        ? true
+        : Boolean(settings.musicDoctorAutoSync),
     updateAutoCheckMinutes: Math.min(
       1440,
       Math.max(

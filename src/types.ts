@@ -327,8 +327,75 @@ export type AppSettings = {
   musicBrainzCachePath: string;
   musicBrainzOverlaySyncPath: string;
   musicBrainzOverlayAutoSyncMinutes: number;
+  musicDoctorDatabasePath: string;
+  musicDoctorAutoSync: boolean;
   updateAutoCheckMinutes: number;
   updatedAt: string | null;
+};
+
+export type MusicDoctorSource = {
+  path: string;
+  enabled: boolean;
+  lastScanAt: string | null;
+  fileCount: number;
+  totalBytes: number;
+};
+
+export type MusicDoctorFormatStat = {
+  format: string;
+  fileCount: number;
+  totalBytes: number;
+};
+
+export type MusicDoctorBitrateStat = {
+  band: string;
+  sortOrder: number;
+  fileCount: number;
+  totalBytes: number;
+};
+
+export type MusicDoctorStatus = {
+  databasePath: string;
+  resolvedPath: string;
+  exists: boolean;
+  valid: boolean;
+  state: string;
+  message: string;
+  schemaVersion: number | null;
+  fileSizeBytes: number;
+  latestScanId: number | null;
+  latestScanStatus: string | null;
+  latestScanCompletedAt: string | null;
+  sourceCount: number;
+  totalFiles: number;
+  audioFiles: number;
+  audioAlbums: number;
+  matchedTracks: number;
+  unmatchedLibraryTracks: number;
+  unmatchedDoctorAudio: number;
+  fileIssueCount: number;
+  lastSyncedAt: string | null;
+  needsSync: boolean;
+  syncInProgress: boolean;
+  sources: MusicDoctorSource[];
+  formatStats: MusicDoctorFormatStat[];
+  bitrateStats: MusicDoctorBitrateStat[];
+};
+
+export type MusicDoctorSyncResult = {
+  syncRunId: number;
+  databasePath: string;
+  scanId: number;
+  scanCompletedAt: string | null;
+  totalFiles: number;
+  audioFiles: number;
+  audioAlbums: number;
+  matchedTracks: number;
+  unmatchedLibraryTracks: number;
+  unmatchedDoctorAudio: number;
+  fileIssueCount: number;
+  durationMs: number;
+  completedAt: string;
 };
 
 export type MusicBrainzOverlaySyncResult = {
@@ -1905,6 +1972,9 @@ export type BrowseFilters = {
   notFullyRated: boolean;
   lovedTracksMin: number | null;
   lovedTracksMax: number | null;
+  bitrateKbpsMin: number | null;
+  bitrateKbpsMax: number | null;
+  mixedAudioQuality: boolean;
   originCountryCodes: string[];
   excludedOriginCountryCodes: string[];
   missingOriginCountry: boolean;
@@ -2442,6 +2512,16 @@ export type BrowseRow = {
   originCountryName: string | null;
   originCountryRawArea: string | null;
   originCountryReviewState: string | null;
+  fileFormat?: string | null;
+  bitrateKbps?: number | null;
+  qualityFileSizeBytes?: number | null;
+  doctorDurationMs?: number | null;
+  qualityTrackCount?: number | null;
+  minBitrateKbps?: number | null;
+  avgBitrateKbps?: number | null;
+  maxBitrateKbps?: number | null;
+  below320Tracks?: number | null;
+  mixedAudioQuality?: boolean | null;
 };
 
 export type BrowseResponse = {

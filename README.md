@@ -14,6 +14,14 @@ Official UK albums and singles import from weekly CSV rows in `CSV_ALBUMS_UK/` a
 
 Settings is split into **General**, **Providers**, **AI**, **Data & Backups**, **MusicBrainz**, **Updates**, and **Diagnostics**. A sticky section switcher keeps the active area close at hand, supports click and arrow-key navigation, and changes to a three-column layout at the supported 1040px minimum width. Only the selected section is shown, while every section remains mounted so unsaved drafts and live operation state survive switching between areas.
 
+## Music Doctor quality integration
+
+**Settings → Data & Backups → Music Doctor** connects to `%APPDATA%\com.musicdoctor.desktop\music-doctor.db` by default. The source database is opened read-only and is never migrated or modified by Music Library. **Save and check** validates its schema, **Sync now** refreshes the app-owned cache immediately, and **Sync new Music Doctor scans automatically** checks at startup and every five minutes while the app is open. A sync runs only after Music Doctor reports a completed scan; changing the MusicBee import or Music Doctor scan makes the cache stale and eligible for refresh.
+
+The sync matches MusicBee rows to Music Doctor audio by a Unicode-lowercased, normalized full Windows path rather than by transient track IDs. This keeps quality data attached when an import rebuilds the track table and also handles non-ASCII path casing. The app stores only a materialized cache of matched quality, album summaries, unmatched Music Doctor audio, file problems, and aggregate format/bitrate statistics in its own SQLite database (schema version 48).
+
+Albums and Search expose measured format and bitrate, support min/max bitrate filters, mixed-quality-only filtering, and bitrate sorting. Music Tools adds **Audio below 320 kbps**, **Albums with mixed audio quality**, **Music Doctor audio not in library**, and **Music Doctor file problems**. Re-run Music Doctor after adding or upgrading albums; the next background or manual sync replaces the cache with the newest completed scan.
+
 ## Updates
 
 The standalone **Updates** workspace is a permanent, searchable audit trail of meaningful library changes detected when an import is applied. Its **Activity** view keeps the chronological event ledger, while **Artists** rolls the complete filtered history up by normalized artist rather than only summarizing the current 50-row event page. Artist rows separate track impact from album impact—for example, `34 tracks removed · 3 albums removed` or `12 tracks added · 1 album added`—and mixed metadata/rating activity is reported as an overall change count. A dedicated **New artists** section shows true first appearances and the date each artist was added; adding another album to an artist that already existed does not classify that artist as new.

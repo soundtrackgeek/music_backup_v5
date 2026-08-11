@@ -5,7 +5,8 @@ use super::{
     DEFAULT_COUNTRY_FLAG_DISPLAY, DEFAULT_COVER_SOURCE_PATH, DEFAULT_DEEMIX_DOWNLOAD_FALLBACK,
     DEFAULT_DEEMIX_DOWNLOAD_ORGANIZATION, DEFAULT_DEEMIX_DOWNLOAD_PATH,
     DEFAULT_DEEMIX_DOWNLOAD_QUALITY, DEFAULT_IMPORT_SOURCE_PATH, DEFAULT_MUSICBRAINZ_CACHE_PATH,
-    DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH, DEFAULT_NORSKTOPPEN_SOURCE_PATH,
+    DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH, DEFAULT_MUSIC_DOCTOR_AUTO_SYNC,
+    DEFAULT_MUSIC_DOCTOR_DATABASE_PATH, DEFAULT_NORSKTOPPEN_SOURCE_PATH,
     DEFAULT_OFFICIAL_UK_ALBUM_SOURCE_PATH, DEFAULT_OFFICIAL_UK_SINGLES_SOURCE_PATH,
     DEFAULT_TI_I_SKUDDET_SOURCE_PATH, DEFAULT_VG_LISTA_ALBUM_SOURCE_PATH,
     DEFAULT_VG_LISTA_SINGLES_SOURCE_PATH, MAX_BACKUP_RETENTION,
@@ -45,6 +46,7 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
                    deemix_download_quality, deemix_download_fallback,
                    deemix_download_organization, musicbrainz_cache_path,
                    musicbrainz_overlay_sync_path, musicbrainz_overlay_auto_sync_minutes,
+                   music_doctor_database_path, music_doctor_auto_sync,
                    update_auto_check_minutes, updated_at
             FROM app_settings
             WHERE id = 1
@@ -83,6 +85,8 @@ pub fn settings_for_connection(conn: &Connection) -> Result<AppSettings> {
                 musicbrainz_cache_path: DEFAULT_MUSICBRAINZ_CACHE_PATH.to_string(),
                 musicbrainz_overlay_sync_path: DEFAULT_MUSICBRAINZ_OVERLAY_SYNC_PATH.to_string(),
                 musicbrainz_overlay_auto_sync_minutes: 0,
+                music_doctor_database_path: DEFAULT_MUSIC_DOCTOR_DATABASE_PATH.to_string(),
+                music_doctor_auto_sync: DEFAULT_MUSIC_DOCTOR_AUTO_SYNC,
                 update_auto_check_minutes: 0,
                 updated_at: None,
             },
@@ -109,9 +113,11 @@ pub(super) fn save_settings_for_connection(
             deemix_download_quality, deemix_download_fallback,
             deemix_download_organization, musicbrainz_cache_path,
             musicbrainz_overlay_sync_path,
-            musicbrainz_overlay_auto_sync_minutes, update_auto_check_minutes, updated_at
+            musicbrainz_overlay_auto_sync_minutes,
+            music_doctor_database_path, music_doctor_auto_sync,
+            update_auto_check_minutes, updated_at
         )
-        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
+        VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)
         ON CONFLICT(id) DO UPDATE SET
             backup_retention = excluded.backup_retention,
             dark_mode = excluded.dark_mode,
@@ -135,6 +141,8 @@ pub(super) fn save_settings_for_connection(
             musicbrainz_cache_path = excluded.musicbrainz_cache_path,
             musicbrainz_overlay_sync_path = excluded.musicbrainz_overlay_sync_path,
             musicbrainz_overlay_auto_sync_minutes = excluded.musicbrainz_overlay_auto_sync_minutes,
+            music_doctor_database_path = excluded.music_doctor_database_path,
+            music_doctor_auto_sync = excluded.music_doctor_auto_sync,
             update_auto_check_minutes = excluded.update_auto_check_minutes,
             updated_at = excluded.updated_at
         ",
@@ -161,6 +169,8 @@ pub(super) fn save_settings_for_connection(
             settings.musicbrainz_cache_path,
             settings.musicbrainz_overlay_sync_path,
             i64::from(settings.musicbrainz_overlay_auto_sync_minutes),
+            settings.music_doctor_database_path,
+            if settings.music_doctor_auto_sync { 1 } else { 0 },
             i64::from(settings.update_auto_check_minutes),
             now
         ],
@@ -196,8 +206,10 @@ fn settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AppSettings> {
         musicbrainz_cache_path: row.get(19)?,
         musicbrainz_overlay_sync_path: row.get(20)?,
         musicbrainz_overlay_auto_sync_minutes: row.get::<_, i64>(21)?.max(0) as u32,
-        update_auto_check_minutes: row.get::<_, i64>(22)?.max(0) as u32,
-        updated_at: row.get(23)?,
+        music_doctor_database_path: row.get(22)?,
+        music_doctor_auto_sync: row.get::<_, i64>(23)? != 0,
+        update_auto_check_minutes: row.get::<_, i64>(24)?.max(0) as u32,
+        updated_at: row.get(25)?,
     })
 }
 
@@ -263,6 +275,10 @@ fn normalize_settings(mut settings: AppSettings) -> AppSettings {
     settings.musicbrainz_overlay_auto_sync_minutes = settings
         .musicbrainz_overlay_auto_sync_minutes
         .min(MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES);
+    settings.music_doctor_database_path = normalize_import_path(
+        &settings.music_doctor_database_path,
+        DEFAULT_MUSIC_DOCTOR_DATABASE_PATH,
+    );
     settings.update_auto_check_minutes = settings
         .update_auto_check_minutes
         .min(MAX_UPDATE_AUTO_CHECK_MINUTES);

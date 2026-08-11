@@ -84,6 +84,7 @@ import {
   getMusicBrainzArtistInfoStatus,
   getMusicBrainzCacheStatus,
   getMusicBrainzOriginCountryStatus,
+  getMusicDoctorStatus,
   getSettings,
   getStatistics,
   getYearProgress,
@@ -133,6 +134,7 @@ import {
   setMusicBrainzArtistOriginCountry,
   setMusicBrainzReleaseDecision,
   syncMusicBrainzOverlay,
+  syncMusicDoctor,
   cancelMusicBrainzArtistInfoImport,
   cancelMusicBrainzOriginCountryImport,
   searchLibrary,
@@ -356,6 +358,7 @@ import { SoulseekSettingsPanel } from "./components/SoulseekSettingsPanel";
 import { UsenetSettingsPanel } from "./components/UsenetSettingsPanel";
 import { DiscogsSettingsPanel } from "./components/DiscogsSettingsPanel";
 import { LastFmSettingsPanel } from "./components/LastFmSettingsPanel";
+import { MusicDoctorSettingsPanel } from "./components/MusicDoctorSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
 import { ExportResultStatus } from "./components/ExportResultStatus";
 import { LibraryAnalystPanel } from "./components/LibraryAnalystPanel";
@@ -2109,6 +2112,7 @@ function ResultTable({
   }
 
   const visibleColumnSet = new Set(visibleColumns);
+  const showQualityColumn = visibleColumnSet.has("audioQuality");
   const showBillboardColumn = visibleColumnSet.has("billboard");
   const showDebutColumn = visibleColumnSet.has("billboardDebut");
   const showBillboardSingleColumn =
@@ -2138,6 +2142,7 @@ function ResultTable({
     ...(showVgListaDebutColumn ? ["minmax(132px, 1fr)"] : []),
     ...(showOfficialUkColumn ? ["88px"] : []),
     ...(showOfficialUkDebutColumn ? ["minmax(132px, 1fr)"] : []),
+    ...(showQualityColumn ? ["minmax(126px, 1fr)"] : []),
     "64px",
     "84px",
     "72px",
@@ -2160,6 +2165,7 @@ function ResultTable({
     ...(showTiISkuddetDebutColumn ? ["minmax(144px, 1fr)"] : []),
     ...(showNorsktoppenColumn ? ["104px"] : []),
     ...(showNorsktoppenDebutColumn ? ["minmax(144px, 1fr)"] : []),
+    ...(showQualityColumn ? ["minmax(118px, 0.9fr)"] : []),
     "64px",
     "minmax(140px, 1.1fr)",
   ].join(" ");
@@ -2175,7 +2181,8 @@ function ResultTable({
     (showTiISkuddetColumn ? 104 : 0) +
     (showTiISkuddetDebutColumn ? 144 : 0) +
     (showNorsktoppenColumn ? 104 : 0) +
-    (showNorsktoppenDebutColumn ? 144 : 0);
+    (showNorsktoppenDebutColumn ? 144 : 0) +
+    (showQualityColumn ? 126 : 0);
 
   return response.view === "tracks" ? (
     <div
@@ -2315,6 +2322,14 @@ function ResultTable({
             onSort={onSort}
           />
         ) : null}
+        {showQualityColumn ? (
+          <SortableColumnHeader
+            label="Quality"
+            field="bitrate"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
         <SortableColumnHeader
           label="Rating"
           field="trackRating"
@@ -2392,6 +2407,9 @@ function ResultTable({
             ) : null}
             {showNorsktoppenDebutColumn ? (
               <span role="cell">{formatNorsktoppenDebut(row)}</span>
+            ) : null}
+            {showQualityColumn ? (
+              <span role="cell">{formatAudioQuality(row)}</span>
             ) : null}
             <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
             <span role="cell" title={row.filePath ?? ""}>
@@ -2491,6 +2509,14 @@ function ResultTable({
             onSort={onSort}
           />
         ) : null}
+        {showQualityColumn ? (
+          <SortableColumnHeader
+            label="Quality"
+            field="bitrate"
+            sort={sort}
+            onSort={onSort}
+          />
+        ) : null}
         <SortableColumnHeader
           label="Tracks"
           field="trackCount"
@@ -2542,6 +2568,9 @@ function ResultTable({
           {showOfficialUkDebutColumn ? (
             <span role="cell">{formatOfficialUkDebutWeek(row)}</span>
           ) : null}
+          {showQualityColumn ? (
+            <span role="cell">{formatAudioQuality(row, true)}</span>
+          ) : null}
           <span role="cell">{row.totalTracks ?? ""}</span>
           <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
           <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
@@ -2582,6 +2611,19 @@ function formatTrackPosition(row: BrowseRow) {
   const track = row.trackNumber?.toString() ?? "";
   if (disc && track) return `${disc}.${track}`;
   return disc || track;
+}
+
+function formatAudioQuality(row: BrowseRow, album = false) {
+  if (album) {
+    if (row.minBitrateKbps == null) return "Not synced";
+    const bitrate =
+      row.maxBitrateKbps != null && row.maxBitrateKbps !== row.minBitrateKbps
+        ? `${row.minBitrateKbps}–${row.maxBitrateKbps} kbps`
+        : `${row.minBitrateKbps} kbps`;
+    return `${bitrate}${row.fileFormat ? ` · ${row.fileFormat}` : ""}`;
+  }
+  if (row.bitrateKbps == null) return "Not synced";
+  return `${row.bitrateKbps} kbps${row.fileFormat ? ` · ${row.fileFormat}` : ""}`;
 }
 
 function AlbumIndexTable({
@@ -2657,6 +2699,12 @@ function AlbumIndexTable({
           onSort={onSort}
         />
         <SortableColumnHeader
+          label="Quality"
+          field="bitrate"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortableColumnHeader
           label="Complete"
           field="ratingCompleteness"
           sort={sort}
@@ -2696,6 +2744,9 @@ function AlbumIndexTable({
             <span role="cell">{row.year ?? ""}</span>
             <span role="cell">{row.canonicalGenre ?? ""}</span>
             <span role="cell">{row.totalTracks ?? ""}</span>
+            <span role="cell" title={formatAudioQuality(row, true)}>
+              {formatAudioQuality(row, true)}
+            </span>
             <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
             <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
           </div>
@@ -2738,6 +2789,7 @@ function AlbumTrackTable({
         <span role="columnheader">Artist</span>
         <span role="columnheader">Time</span>
         <span role="columnheader">Rating</span>
+        <span role="columnheader">Quality</span>
         <span role="columnheader">File</span>
       </div>
       {response.rows.map((row) => (
@@ -2754,6 +2806,7 @@ function AlbumTrackTable({
           </span>
           <span role="cell">{formatMinutes(row.trackSeconds)}</span>
           <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
+          <span role="cell">{formatAudioQuality(row)}</span>
           <span role="cell" title={row.filePath ?? ""}>
             {row.filename ?? ""}
           </span>
@@ -8131,6 +8184,7 @@ export default function App() {
   );
   const [includeCalculated, setIncludeCalculated] = useState(false);
   const [searchTableColumns, setSearchTableColumns] = useState<string[]>([
+    "audioQuality",
     "billboard",
     "billboardDebut",
     "billboardSingle",
@@ -8583,6 +8637,34 @@ export default function App() {
       setIsDiscoveryLoading(false);
     });
   }, [loadData, loadDiscoveryData]);
+
+  useEffect(() => {
+    if (!settings.musicDoctorAutoSync) return;
+
+    let disposed = false;
+    let checking = false;
+    const checkForMusicDoctorScan = async () => {
+      if (checking || disposed) return;
+      checking = true;
+      try {
+        const doctorStatus = await getMusicDoctorStatus();
+        if (!disposed && doctorStatus.valid && doctorStatus.needsSync) {
+          await syncMusicDoctor();
+        }
+      } catch {
+        // The Settings panel reports connection errors; background checks stay quiet.
+      } finally {
+        checking = false;
+      }
+    };
+
+    void checkForMusicDoctorScan();
+    const intervalId = window.setInterval(checkForMusicDoctorScan, 5 * 60_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [settings.musicDoctorAutoSync, settings.musicDoctorDatabasePath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -10227,6 +10309,22 @@ export default function App() {
         () => updateFilters({ lovedTracksMin: null, lovedTracksMax: null }),
       );
     }
+    addRangeChip(
+      nextChips,
+      "bitrate",
+      "Bitrate",
+      currentFilters.bitrateKbpsMin,
+      currentFilters.bitrateKbpsMax,
+      () => updateFilters({ bitrateKbpsMin: null, bitrateKbpsMax: null }),
+      " kbps",
+    );
+    if (currentFilters.mixedAudioQuality) {
+      nextChips.push({
+        key: "mixedAudioQuality",
+        label: "Mixed audio quality",
+        remove: () => updateFilter("mixedAudioQuality", false),
+      });
+    }
     if (currentFilters.missingFields.length) {
       nextChips.push({
         key: "missingFields",
@@ -10380,6 +10478,23 @@ export default function App() {
         () =>
           updateAlbumFilters({ lovedTracksMin: null, lovedTracksMax: null }),
       );
+    }
+    addRangeChip(
+      nextChips,
+      "bitrate",
+      "Lowest bitrate",
+      albumFilters.bitrateKbpsMin,
+      albumFilters.bitrateKbpsMax,
+      () =>
+        updateAlbumFilters({ bitrateKbpsMin: null, bitrateKbpsMax: null }),
+      " kbps",
+    );
+    if (albumFilters.mixedAudioQuality) {
+      nextChips.push({
+        key: "mixedAudioQuality",
+        label: "Mixed audio quality",
+        remove: () => updateAlbumFilter("mixedAudioQuality", false),
+      });
     }
 
     return nextChips;
@@ -16013,6 +16128,7 @@ export default function App() {
                     { value: "genre", label: "Genre" },
                     { value: "totalMinutes", label: "Minutes" },
                     { value: "trackCount", label: "Tracks" },
+                    { value: "bitrate", label: "Lowest bitrate" },
                     { value: "albumRating", label: "Rating" },
                     { value: "ratingCompleteness", label: "Completeness" },
                     { value: "lovedTracks", label: "Loved" },
@@ -16098,6 +16214,38 @@ export default function App() {
                     updateAlbumFilter("totalMinutesMax", value)
                   }
                 />
+                <NumberField
+                  label="Bitrate min"
+                  value={albumFilters.bitrateKbpsMin}
+                  min={0}
+                  onChange={(value) =>
+                    updateAlbumFilter("bitrateKbpsMin", value)
+                  }
+                />
+                <NumberField
+                  label="Bitrate max"
+                  value={albumFilters.bitrateKbpsMax}
+                  min={0}
+                  onChange={(value) =>
+                    updateAlbumFilter("bitrateKbpsMax", value)
+                  }
+                />
+                <label className="criterion audio-quality-toggle">
+                  <span>Audio quality</span>
+                  <span className="criterion-checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={albumFilters.mixedAudioQuality}
+                      onChange={(event) =>
+                        updateAlbumFilter(
+                          "mixedAudioQuality",
+                          event.target.checked,
+                        )
+                      }
+                    />
+                    Mixed bitrates only
+                  </span>
+                </label>
                 <NumberField
                   label="Tracks min"
                   value={albumFilters.trackCountMin}
@@ -17070,6 +17218,12 @@ export default function App() {
               </SettingsSection>
 
               <SettingsSection id="data">
+                <MusicDoctorSettingsPanel
+                  databasePath={settings.musicDoctorDatabasePath}
+                  autoSync={settings.musicDoctorAutoSync}
+                  isSavingSettings={isSavingSettings}
+                  onSaveSettings={saveAppSettings}
+                />
                 <section className="settings-panel backup-settings-panel">
                   <div className="panel-heading compact">
                     <div>
@@ -19280,6 +19434,18 @@ export default function App() {
                   onChange={(value) => updateFilter("totalMinutesMax", value)}
                 />
                 <NumberField
+                  label="Bitrate min"
+                  value={currentFilters.bitrateKbpsMin}
+                  min={0}
+                  onChange={(value) => updateFilter("bitrateKbpsMin", value)}
+                />
+                <NumberField
+                  label="Bitrate max"
+                  value={currentFilters.bitrateKbpsMax}
+                  min={0}
+                  onChange={(value) => updateFilter("bitrateKbpsMax", value)}
+                />
+                <NumberField
                   label="Tracks min"
                   value={currentFilters.trackCountMin}
                   onChange={(value) => updateFilter("trackCountMin", value)}
@@ -19477,6 +19643,26 @@ export default function App() {
 
                 <div
                   className="missing-flags"
+                  aria-label="Audio quality filters"
+                >
+                  <span className="missing-flags-title">Audio quality</span>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={currentFilters.mixedAudioQuality}
+                      onChange={(event) =>
+                        updateFilter(
+                          "mixedAudioQuality",
+                          event.target.checked,
+                        )
+                      }
+                    />
+                    <span>Mixed bitrates</span>
+                  </label>
+                </div>
+
+                <div
+                  className="missing-flags"
                   aria-label="Visible Search columns"
                 >
                   <span className="missing-flags-title">Table columns</span>
@@ -19577,6 +19763,7 @@ export default function App() {
                               label: "Norsktoppen debut week",
                             },
                             { value: "trackRating", label: "Track rating" },
+                            { value: "bitrate", label: "Bitrate" },
                             { value: "trackNumber", label: "Track number" },
                           ]
                         : [
@@ -19602,6 +19789,7 @@ export default function App() {
                             { value: "genre", label: "Genre" },
                             { value: "totalMinutes", label: "Minutes" },
                             { value: "trackCount", label: "Tracks" },
+                            { value: "bitrate", label: "Lowest bitrate" },
                             { value: "albumRating", label: "Rating" },
                             {
                               value: "ratingCompleteness",

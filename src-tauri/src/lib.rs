@@ -12,6 +12,7 @@ mod importer;
 mod lastfm;
 mod library_completion;
 mod models;
+mod music_doctor;
 mod music_map;
 mod musicbrainz;
 mod musicbrainz_sync;
@@ -1001,6 +1002,26 @@ async fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSetti
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_music_doctor_status(
+    app: AppHandle,
+) -> Result<music_doctor::MusicDoctorStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || music_doctor::status_for_app(&app))
+        .await
+        .map_err(|error| format!("Music Doctor status task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn sync_music_doctor(app: AppHandle) -> Result<music_doctor::MusicDoctorSyncResult, String> {
+    tauri::async_runtime::spawn_blocking(move || music_doctor::sync_for_app(&app))
+        .await
+        .map_err(|error| format!("Music Doctor sync task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn export_musicbrainz_artist_releases(
     app: AppHandle,
     input: MusicBrainzArtistExportRequest,
@@ -1693,6 +1714,8 @@ pub fn run() {
             list_musicbrainz_overlay_sync_log,
             export_musicbrainz_artist_releases,
             save_settings,
+            get_music_doctor_status,
+            sync_music_doctor,
             get_statistics,
             list_library_updates,
             list_library_update_artists,

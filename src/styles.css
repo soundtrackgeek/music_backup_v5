@@ -7426,8 +7426,8 @@ button {
 .album-index-results .result-table-row {
   grid-template-columns:
     minmax(240px, 2.2fr) minmax(150px, 1.3fr) minmax(96px, 0.85fr) 64px
-    minmax(104px, 1fr) 64px 84px 72px;
-  min-width: 960px;
+    minmax(104px, 1fr) 64px minmax(126px, 1fr) 84px 72px;
+  min-width: 1090px;
 }
 
 .artist-index-results .result-table-head,
@@ -8560,8 +8560,8 @@ button {
 .album-track-results .result-table-row {
   grid-template-columns:
     58px minmax(220px, 2fr) minmax(150px, 1.25fr)
-    72px 72px minmax(170px, 1.2fr);
-  min-width: 850px;
+    72px 72px minmax(118px, 0.9fr) minmax(170px, 1.2fr);
+  min-width: 970px;
 }
 
 .result-table-row.selectable {
@@ -9991,6 +9991,135 @@ button {
 
 .backup-settings-panel {
   grid-column: span 2;
+}
+
+.music-doctor-settings-panel {
+  grid-column: span 2;
+}
+
+.music-doctor-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.music-doctor-database-path {
+  min-width: 0;
+}
+
+.music-doctor-auto-sync {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background: #f8fbfa;
+  padding: 11px 12px;
+  cursor: pointer;
+}
+
+.music-doctor-auto-sync input {
+  margin-top: 2px;
+  accent-color: #1d6b55;
+}
+
+.music-doctor-auto-sync > span {
+  display: grid;
+  gap: 2px;
+}
+
+.music-doctor-auto-sync strong {
+  color: #263630;
+  font-size: 13px;
+  line-height: 17px;
+}
+
+.music-doctor-auto-sync small {
+  color: #697671;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.music-doctor-status-strip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 14px;
+  border: 1px solid #d4e4df;
+  border-radius: 8px;
+  background: #f4faf8;
+  color: #285e4d;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.music-doctor-status-strip.state-stale,
+.music-doctor-status-strip.state-scanning,
+.music-doctor-status-strip.state-unavailable,
+.music-doctor-status-strip.state-invalid {
+  border-color: #e7d099;
+  background: #fff9e8;
+  color: #775a13;
+}
+
+.performance-summary.music-doctor-summary {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.music-doctor-bitrate-list,
+.music-doctor-source-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.music-doctor-bitrate-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.music-doctor-bitrate-list > div,
+.music-doctor-source-list > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid #dce4e1;
+  border-radius: 7px;
+  background: #fbfcfc;
+  padding: 8px 10px;
+  color: #53635e;
+  font-size: 12px;
+}
+
+.music-doctor-source-list span {
+  overflow-wrap: anywhere;
+}
+
+.music-doctor-source-list small {
+  flex: 0 0 auto;
+}
+
+.criterion .criterion-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  border: 1px solid #cad5d1;
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 0 10px;
+  color: #34423e;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.criterion .criterion-checkbox-row input {
+  width: auto;
+  accent-color: #1d6b55;
 }
 
 .performance-settings-panel {
@@ -11833,9 +11962,35 @@ button {
 
 :root[data-theme="dark"] .performance-summary div,
 :root[data-theme="dark"] .musicbrainz-quality-grid div,
-:root[data-theme="dark"] .musicbrainz-origin-live-stats div {
+:root[data-theme="dark"] .musicbrainz-origin-live-stats div,
+:root[data-theme="dark"] .music-doctor-auto-sync,
+:root[data-theme="dark"] .music-doctor-bitrate-list > div,
+:root[data-theme="dark"] .music-doctor-source-list > div {
   border-color: #35433e;
   background: #111815;
+}
+
+:root[data-theme="dark"] .music-doctor-auto-sync strong,
+:root[data-theme="dark"] .music-doctor-bitrate-list strong {
+  color: #eef7f4;
+}
+
+:root[data-theme="dark"] .music-doctor-auto-sync small,
+:root[data-theme="dark"] .music-doctor-bitrate-list span,
+:root[data-theme="dark"] .music-doctor-source-list {
+  color: #a9b7b2;
+}
+
+:root[data-theme="dark"] .music-doctor-status-strip {
+  border-color: #315b4d;
+  background: #14241f;
+  color: #9bd2bf;
+}
+
+:root[data-theme="dark"] .criterion .criterion-checkbox-row {
+  border-color: #35433e;
+  background: #111815;
+  color: #dce7e3;
 }
 
 :root[data-theme="dark"] .brand span,
@@ -12841,6 +12996,7 @@ button {
 
   .performance-summary,
   .performance-summary.musicbrainz-summary,
+  .performance-summary.music-doctor-summary,
   .performance-summary.musicbrainz-artist-summary,
   .performance-summary.musicbrainz-artist-info-summary,
   .performance-probe-row,
@@ -12859,6 +13015,16 @@ button {
 
   .musicbrainz-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .music-doctor-toolbar,
+  .music-doctor-bitrate-list {
+    grid-template-columns: 1fr;
+  }
+
+  .music-doctor-toolbar .primary-button,
+  .music-doctor-toolbar .secondary-button {
+    justify-self: start;
   }
 
   .musicbrainz-sync-toolbar {

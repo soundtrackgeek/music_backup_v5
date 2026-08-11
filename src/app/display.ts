@@ -394,6 +394,8 @@ export function browseRowSortValue(row: BrowseRow, field: string) {
       return row.norsktoppenDebutWeekKey ?? "";
     case "trackRating":
       return row.normalizedRating;
+    case "bitrate":
+      return row.trackId == null ? row.minBitrateKbps : row.bitrateKbps;
     case "time":
       return row.trackSeconds;
     case "trackNumber":
