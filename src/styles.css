@@ -18346,6 +18346,21 @@ button {
   text-align: right;
 }
 
+.artist-popular-tracks-expand {
+  width: 100%;
+  min-height: 38px;
+  border-top: 1px solid #e1e8e5;
+  color: #176e66;
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.artist-popular-tracks-expand:hover {
+  background: rgba(23, 110, 102, 0.06);
+}
+
 .artist-popular-tracks-source,
 .track-popularity-attribution {
   display: flex;
@@ -18491,6 +18506,7 @@ button {
 }
 
 :root[data-theme="dark"] .artist-popular-track-list li,
+:root[data-theme="dark"] .artist-popular-tracks-expand,
 :root[data-theme="dark"] .track-popularity-attribution,
 :root[data-theme="dark"] .artist-biography {
   border-color: #2f3d38;

@@ -2021,14 +2021,17 @@ export async function getLastFmArtistPopularity(
 ) {
   if (!isTauriRuntime()) {
     const artist = mockArtists.find((candidate) => candidate.id === artistId);
-    const rows = mockRows
-      .filter(
-        (row) =>
-          row.trackId != null &&
-          normalizeArtistKey(row.albumArtistDisplay ?? row.displayArtist ?? "") ===
-            artistId,
-      )
-      .slice(0, 5);
+    const rows = mockRows.filter(
+      (row) =>
+        row.trackId != null &&
+        normalizeArtistKey(row.albumArtistDisplay ?? row.displayArtist ?? "") ===
+          artistId,
+    );
+    const previewTrackCount = Math.min(artist?.trackCount ?? rows.length, 10);
+    const artistOffset = Math.max(
+      mockArtists.findIndex((candidate) => candidate.id === artistId),
+      0,
+    );
     return {
       artistId,
       artistName: artist?.name ?? artistId,
@@ -2036,20 +2039,27 @@ export async function getLastFmArtistPopularity(
       fetchedAt: new Date().toISOString(),
       cached: !forceRefresh,
       stale: false,
-      tracks: rows.map((row, index) => ({
-        rank: index + 1,
-        trackId: row.trackId ?? 0,
-        albumId: row.albumId ?? "",
-        album: row.album,
-        year: row.year,
-        title: row.title ?? "Untitled",
-        artist: row.displayArtist ?? row.albumArtistDisplay ?? artistId,
-        listeners: 180_000 - index * 21_000,
-        playCount: 640_000 - index * 73_000,
-        seconds: row.trackSeconds,
-        sourceUrl: null,
-      })),
-      message: rows.length
+      tracks: Array.from({ length: previewTrackCount }, (_, index) => {
+        const row = rows[index] ?? rows[0];
+        return {
+          rank: index + 1,
+          trackId: row?.trackId ?? 100_000 + artistOffset * 100 + index,
+          albumId: row?.albumId ?? `preview:${artistId}`,
+          album: row?.album ?? "Local library",
+          year: row?.year ?? null,
+          title: row?.title ?? `Popular track ${index + 1}`,
+          artist:
+            row?.displayArtist ??
+            row?.albumArtistDisplay ??
+            artist?.name ??
+            artistId,
+          listeners: 180_000 - index * 12_000,
+          playCount: 640_000 - index * 38_000,
+          seconds: row?.trackSeconds ?? 180 + index * 7,
+          sourceUrl: null,
+        };
+      }),
+      message: previewTrackCount
         ? "Popular local tracks matched from Last.fm."
         : "No Last.fm popular tracks matched this local library preview.",
     } satisfies LastFmArtistPopularity;

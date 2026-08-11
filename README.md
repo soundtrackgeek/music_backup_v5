@@ -16,13 +16,13 @@ Settings is split into **General**, **Providers**, **AI**, **Data & Backups**, *
 
 ## Artist biographies
 
-Opening an artist's **Overview** now resolves its saved MusicBrainz MBID to a Wikidata item and then an English Wikipedia article, with Norwegian Wikipedia as the fallback. The biography loads automatically, can be refreshed explicitly, expands in place when long, and always shows the Wikipedia article link plus CC BY-SA 4.0 attribution. Artists without a saved MusicBrainz identity receive a direct prompt to link one from **Artist info** instead of being matched by name alone.
+Opening an artist's **Overview** resolves its saved MusicBrainz MBID to a Wikidata item and then an English Wikipedia article, with Norwegian Wikipedia as the fallback. If the saved identity is missing or produces no usable biography, the app searches MusicBrainz by the library artist name and accepts only one exact, case-insensitive, score-100 match before following the same verified Wikidata/Wikipedia path. This covers display variants such as `KISS` and `Kiss` without guessing from a loose Wikipedia title; ambiguous names remain unavailable until linked from **Artist info**. The biography loads automatically, can be refreshed explicitly, expands in place when long, and always shows the Wikipedia article link plus CC BY-SA 4.0 attribution.
 
 SQLite schema version 50 caches the biography text, MusicBrainz MBID, Wikidata ID, Wikipedia language/title, source URL, state, and refresh times by normalized local artist key. Available text is refreshed after 30 days, unavailable results after seven days, and a failed refresh keeps displaying the last usable cached biography. No provider credential is required; only public MusicBrainz, Wikidata, and Wikipedia requests leave the device.
 
 ## Last.fm popularity
 
-**Settings → Providers → Last.fm metadata** stores a read-only API key in Windows Credential Manager; the Last.fm shared secret is not used. Opening an artist's **Overview** loads `artist.getTopTracks`, matches the result against tracks that are actually in the local library, and shows up to five Popular Tracks with visible Last.fm attribution. **Refresh** explicitly requests a new artist snapshot.
+**Settings → Providers → Last.fm metadata** stores a read-only API key in Windows Credential Manager; the Last.fm shared secret is not used. Opening an artist's **Overview** loads `artist.getTopTracks`, matches the result against tracks that are actually in the local library, and shows the first five Popular Tracks with visible Last.fm attribution. **Show more** expands the list to as many as ten owned matches, while **Refresh** explicitly requests a new artist snapshot. Artist lookups prefer a saved MusicBrainz ID and fall back to the library artist name with Last.fm autocorrection when the ID result fails, is empty, or does not match an owned track; Last.fm's canonical spelling is retained in the cached provider rows.
 
 Opening an album track list reuses that artist snapshot and requests `track.getInfo` only for album tracks whose popularity is missing or stale. Tracks with positive listener evidence are ranked by listeners, then play count and track order; the leading three receive a 🔥 marker in both Albums and the Artist Cover view. A track without usable listening evidence is not given a flame.
 
@@ -507,7 +507,7 @@ npm run security:check
 ## Phase 6 Artists Features
 
 - Artists workspace with a searchable, sortable, paginated album-artist index.
-- Artist Overview with up to five locally owned Last.fm Popular Tracks, cached provider attribution, and explicit refresh.
+- Artist Overview with five initially visible Last.fm Popular Tracks, Show more/Show less expansion to as many as ten locally owned matches, cached provider attribution, and explicit refresh.
 - Artist-level summary stats for album counts, rating progress, year span, top genre, track totals, loved tracks, TMOE, average completeness, average album rating, and average Album Score.
 - Selected artist album lists backed by normalized artist-key filtering so casing differences do not split album lists.
 - Selected-artist details are grouped into Overview, Local albums, Artist info, MusicBrainz discography, and Cover view tabs; Overview opens automatically, while MusicBrainz and cover/track data wait until their relevant tab is selected.

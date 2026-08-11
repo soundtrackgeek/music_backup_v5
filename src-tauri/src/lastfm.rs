@@ -24,12 +24,16 @@ use zeroize::Zeroizing;
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.lastfm";
 const KEYRING_USER: &str = "api-key";
 const LASTFM_API_BASE: &str = "https://ws.audioscrobbler.com/2.0/";
-const LASTFM_USER_AGENT: &str = "music-backup-v5/0.117.0 (local music metadata enrichment)";
+const LASTFM_USER_AGENT: &str = "music-backup-v5/0.118.0 (local music metadata enrichment)";
 const REQUEST_INTERVAL: Duration = Duration::from_millis(350);
 const POPULARITY_CACHE_DAYS: i64 = 7;
 const UNAVAILABLE_CACHE_DAYS: i64 = 30;
 const ARTIST_TOP_TRACK_LIMIT: usize = 50;
-const POPULAR_TRACK_DISPLAY_LIMIT: usize = 5;
+const POPULAR_TRACK_RESPONSE_LIMIT: usize = 10;
+const ARTIST_TOP_TRACKS_MUSICBRAINZ_METHOD: &str = "artist-top-tracks-musicbrainz";
+const ARTIST_TOP_TRACKS_NAME_METHOD: &str = "artist-top-tracks-name";
+const ARTIST_NAME_EMPTY_MESSAGE: &str =
+    "Last.fm returned no popular tracks after checking the artist name.";
 const MAX_IMAGE_BYTES: u64 = 8 * 1024 * 1024;
 const LASTFM_PLACEHOLDER_HASH: &str = "2a96cbd8b46e442fc41c2b86b821562f";
 
@@ -187,11 +191,27 @@ struct LastFmJsonResponse<T> {
     cacheable: bool,
 }
 
+#[derive(Clone)]
 struct ArtistPopularitySnapshot {
     status: LastFmArtistPopularityCacheRecord,
     tracks: Vec<LastFmTrackPopularityCacheRecord>,
     cached: bool,
     stale: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ArtistTopTracksLookup {
+    MusicBrainz(String),
+    ArtistName(String),
+}
+
+impl ArtistTopTracksLookup {
+    fn fetch_method(&self) -> &'static str {
+        match self {
+            Self::MusicBrainz(_) => ARTIST_TOP_TRACKS_MUSICBRAINZ_METHOD,
+            Self::ArtistName(_) => ARTIST_TOP_TRACKS_NAME_METHOD,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -495,14 +515,18 @@ pub fn test_connection() -> Result<LastFmConnectionTest> {
     connection_test_with(api_key.as_str())
 }
 
-fn fetch_artist_top_tracks(
-    api_key: &str,
-    identity: &LastFmArtistIdentity,
-) -> Result<(
-    LastFmArtistPopularityCacheRecord,
-    Vec<LastFmTrackPopularityCacheRecord>,
-    bool,
-)> {
+fn artist_top_tracks_lookups(identity: &LastFmArtistIdentity) -> Vec<ArtistTopTracksLookup> {
+    let mut lookups = Vec::with_capacity(2);
+    if let Some(mbid) = identity.musicbrainz_mbid.as_deref().and_then(nonempty) {
+        lookups.push(ArtistTopTracksLookup::MusicBrainz(mbid));
+    }
+    lookups.push(ArtistTopTracksLookup::ArtistName(
+        identity.artist_name.clone(),
+    ));
+    lookups
+}
+
+fn artist_top_tracks_url(api_key: &str, lookup: &ArtistTopTracksLookup) -> Result<Url> {
     let mut url = Url::parse(LASTFM_API_BASE).context("Could not create the Last.fm API URL")?;
     {
         let mut query = url.query_pairs_mut();
@@ -512,17 +536,28 @@ fn fetch_artist_top_tracks(
             .append_pair("autocorrect", "1")
             .append_pair("limit", &ARTIST_TOP_TRACK_LIMIT.to_string())
             .append_pair("format", "json");
-        if let Some(mbid) = identity
-            .musicbrainz_mbid
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-        {
-            query.append_pair("mbid", mbid);
-        } else {
-            query.append_pair("artist", &identity.artist_name);
+        match lookup {
+            ArtistTopTracksLookup::MusicBrainz(mbid) => {
+                query.append_pair("mbid", mbid);
+            }
+            ArtistTopTracksLookup::ArtistName(artist_name) => {
+                query.append_pair("artist", artist_name);
+            }
         }
     }
+    Ok(url)
+}
 
+fn fetch_artist_top_tracks_once(
+    api_key: &str,
+    identity: &LastFmArtistIdentity,
+    lookup: &ArtistTopTracksLookup,
+) -> Result<(
+    LastFmArtistPopularityCacheRecord,
+    Vec<LastFmTrackPopularityCacheRecord>,
+    bool,
+)> {
+    let url = artist_top_tracks_url(api_key, lookup)?;
     let response =
         decode_lastfm_json::<LastFmTopTracksPayload>(lastfm_json(&url, POPULARITY_CACHE_DAYS)?)?;
     let response_artist = nonempty(&response.payload.toptracks.attr.artist)
@@ -559,7 +594,7 @@ fn fetch_artist_top_tracks(
                         .max(1),
                 ),
                 source_url: nonempty(&track.url),
-                fetch_method: "artist-top-tracks".to_string(),
+                fetch_method: lookup.fetch_method().to_string(),
                 state: "available".to_string(),
                 fetched_at: response.fetched_at.clone(),
                 expires_at: response.expires_at.clone(),
@@ -572,7 +607,12 @@ fn fetch_artist_top_tracks(
         "available"
     };
     let message = if tracks.is_empty() {
-        "Last.fm returned no popular tracks for this artist.".to_string()
+        match lookup {
+            ArtistTopTracksLookup::ArtistName(_) => ARTIST_NAME_EMPTY_MESSAGE.to_string(),
+            ArtistTopTracksLookup::MusicBrainz(_) => {
+                "Last.fm returned no popular tracks for this MusicBrainz artist ID.".to_string()
+            }
+        }
     } else {
         format!("Last.fm returned {} popular tracks.", tracks.len())
     };
@@ -587,6 +627,29 @@ fn fetch_artist_top_tracks(
         expires_at: response.expires_at,
     };
     Ok((status, tracks, response.cacheable))
+}
+
+fn fetch_artist_top_tracks(
+    api_key: &str,
+    identity: &LastFmArtistIdentity,
+) -> Result<(
+    LastFmArtistPopularityCacheRecord,
+    Vec<LastFmTrackPopularityCacheRecord>,
+    bool,
+)> {
+    let mut empty_result = None;
+    let mut last_error = None;
+    for lookup in artist_top_tracks_lookups(identity) {
+        match fetch_artist_top_tracks_once(api_key, identity, &lookup) {
+            Ok(result) if !result.1.is_empty() => return Ok(result),
+            Ok(result) => empty_result = Some(result),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    if let Some(result) = empty_result {
+        return Ok(result);
+    }
+    Err(last_error.unwrap_or_else(|| anyhow!("Last.fm artist lookup did not run.")))
 }
 
 fn artist_popularity_snapshot(
@@ -633,6 +696,32 @@ fn artist_popularity_snapshot(
             })
         }
     }
+}
+
+fn popularity_snapshot_used_name_lookup(snapshot: &ArtistPopularitySnapshot) -> bool {
+    snapshot.status.message == ARTIST_NAME_EMPTY_MESSAGE
+        || snapshot.tracks.iter().any(|track| {
+            track.artist_rank.is_some() && track.fetch_method == ARTIST_TOP_TRACKS_NAME_METHOD
+        })
+}
+
+fn artist_name_popularity_snapshot(
+    app: &AppHandle,
+    identity: &LastFmArtistIdentity,
+) -> Result<ArtistPopularitySnapshot> {
+    let api_key = require_api_key()?;
+    let lookup = ArtistTopTracksLookup::ArtistName(identity.artist_name.clone());
+    let (status, tracks, cacheable) =
+        fetch_artist_top_tracks_once(api_key.as_str(), identity, &lookup)?;
+    if cacheable {
+        db::replace_lastfm_artist_top_tracks_for_app(app, &status, &tracks)?;
+    }
+    Ok(ArtistPopularitySnapshot {
+        status,
+        tracks,
+        cached: false,
+        stale: false,
+    })
 }
 
 fn matching_record<'a>(
@@ -704,7 +793,7 @@ fn artist_popularity_response(
             seconds: local.seconds,
             source_url: record.source_url.clone(),
         });
-        if tracks.len() == POPULAR_TRACK_DISPLAY_LIMIT {
+        if tracks.len() == POPULAR_TRACK_RESPONSE_LIMIT {
             break;
         }
     }
@@ -736,11 +825,23 @@ pub fn artist_popularity(
         .with_context(|| format!("Could not find artist {artist_id} in the local library"))?;
     let snapshot = artist_popularity_snapshot(&app, &identity, force_refresh)?;
     let local_tracks = db::lastfm_local_tracks_for_artist_for_app(&app, &identity.artist_key)?;
-    Ok(artist_popularity_response(
-        &identity,
-        &local_tracks,
-        snapshot,
-    ))
+    let response = artist_popularity_response(&identity, &local_tracks, snapshot.clone());
+    if response.tracks.is_empty()
+        && identity
+            .musicbrainz_mbid
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+        && !popularity_snapshot_used_name_lookup(&snapshot)
+    {
+        if let Ok(name_snapshot) = artist_name_popularity_snapshot(&app, &identity) {
+            return Ok(artist_popularity_response(
+                &identity,
+                &local_tracks,
+                name_snapshot,
+            ));
+        }
+    }
+    Ok(response)
 }
 
 fn fetch_track_info(
@@ -1225,5 +1326,98 @@ mod tests {
         assert_eq!(parse_lastfm_count("1,000"), 0);
         assert_eq!(parse_lastfm_count("-3"), 0);
         assert_eq!(parse_lastfm_count(" 42 "), 42);
+    }
+
+    #[test]
+    fn retries_musicbrainz_artist_lookups_with_the_library_name() {
+        let identity = LastFmArtistIdentity {
+            artist_key: "kiss".to_string(),
+            artist_name: "KISS".to_string(),
+            musicbrainz_mbid: Some("e1f1e33e-2e4c-4d43-b91b-7064068d3283".to_string()),
+        };
+        let lookups = artist_top_tracks_lookups(&identity);
+        assert_eq!(
+            lookups,
+            vec![
+                ArtistTopTracksLookup::MusicBrainz(
+                    "e1f1e33e-2e4c-4d43-b91b-7064068d3283".to_string()
+                ),
+                ArtistTopTracksLookup::ArtistName("KISS".to_string()),
+            ]
+        );
+
+        let url = artist_top_tracks_url("test-key", &lookups[1]).unwrap();
+        let query = url.query_pairs().collect::<HashMap<_, _>>();
+        assert_eq!(
+            query.get("artist").map(|value| value.as_ref()),
+            Some("KISS")
+        );
+        assert_eq!(
+            query.get("autocorrect").map(|value| value.as_ref()),
+            Some("1")
+        );
+        assert!(!query.contains_key("mbid"));
+    }
+
+    #[test]
+    fn artist_popularity_response_returns_up_to_ten_owned_tracks() {
+        let identity = LastFmArtistIdentity {
+            artist_key: "kiss".to_string(),
+            artist_name: "KISS".to_string(),
+            musicbrainz_mbid: None,
+        };
+        let local_tracks = (1..=12)
+            .map(|rank| LastFmLocalTrackCandidate {
+                track_id: rank,
+                artist_key: identity.artist_key.clone(),
+                album_id: "destroyer".to_string(),
+                album: Some("Destroyer".to_string()),
+                album_artist: Some("KISS".to_string()),
+                display_artist: None,
+                title: format!("Popular track {rank}"),
+                year: Some(1976),
+                seconds: Some(180 + rank),
+                disc_number: Some(1),
+                track_number: Some(rank as i32),
+            })
+            .collect::<Vec<_>>();
+        let provider_tracks = local_tracks
+            .iter()
+            .map(|track| LastFmTrackPopularityCacheRecord {
+                artist_key: identity.artist_key.clone(),
+                track_key: normalize_track_key(&track.title),
+                artist_name: "Kiss".to_string(),
+                track_name: track.title.clone(),
+                musicbrainz_recording_mbid: None,
+                listeners: Some(100_000 - track.track_id),
+                play_count: Some(200_000 - track.track_id),
+                artist_rank: Some(track.track_id),
+                source_url: None,
+                fetch_method: ARTIST_TOP_TRACKS_NAME_METHOD.to_string(),
+                state: "available".to_string(),
+                fetched_at: "2026-08-11T12:00:00Z".to_string(),
+                expires_at: "2026-08-18T12:00:00Z".to_string(),
+            })
+            .collect();
+        let snapshot = ArtistPopularitySnapshot {
+            status: LastFmArtistPopularityCacheRecord {
+                artist_key: identity.artist_key.clone(),
+                artist_name: identity.artist_name.clone(),
+                musicbrainz_mbid: None,
+                source_url: lastfm_artist_tracks_url("Kiss"),
+                state: "available".to_string(),
+                message: "Last.fm returned 12 popular tracks.".to_string(),
+                fetched_at: "2026-08-11T12:00:00Z".to_string(),
+                expires_at: "2026-08-18T12:00:00Z".to_string(),
+            },
+            tracks: provider_tracks,
+            cached: false,
+            stale: false,
+        };
+
+        let response = artist_popularity_response(&identity, &local_tracks, snapshot);
+        assert_eq!(response.tracks.len(), POPULAR_TRACK_RESPONSE_LIMIT);
+        assert_eq!(response.tracks.first().map(|track| track.rank), Some(1));
+        assert_eq!(response.tracks.last().map(|track| track.rank), Some(10));
     }
 }

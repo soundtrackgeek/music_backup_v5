@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.118.0] - 2026-08-11
+### Added
+- Added Show more/Show less controls to Artist Overview Popular Tracks, keeping the initial five-row summary while allowing up to ten locally owned Last.fm matches.
+
+### Changed
+- Increased the Artist Overview popularity response from five to ten locally matched tracks.
+- Synchronized app metadata and provider user agents to `0.118.0`.
+
+### Fixed
+- Last.fm artist popularity now retries a MusicBrainz-ID lookup with the library artist name and provider autocorrection when the ID lookup fails, returns no tracks, or produces no owned-track matches, covering display-name differences such as `KISS` and `Kiss`.
+- Artist biographies now fall back from a missing or unusable saved MusicBrainz identity to one exact, case-insensitive, score-100 MusicBrainz artist-name match before resolving Wikidata and Wikipedia, while rejecting ambiguous matches.
+
 ## [0.117.0] - 2026-08-11
 ### Added
 - Added an Artist Overview biography panel resolved through verified MusicBrainz links, Wikidata sitelinks, and Wikipedia summaries, with explicit refresh, expand/collapse, source links, and CC BY-SA attribution.

@@ -12,7 +12,7 @@ const popularity: LastFmArtistPopularity = {
   cached: true,
   stale: false,
   message: "Popular local tracks matched from Last.fm.",
-  tracks: Array.from({ length: 6 }, (_, index) => ({
+  tracks: Array.from({ length: 10 }, (_, index) => ({
     rank: index + 1,
     trackId: index + 1,
     albumId: `album-${index}`,
@@ -28,7 +28,7 @@ const popularity: LastFmArtistPopularity = {
 };
 
 describe("ArtistPopularTracksPanel", () => {
-  it("shows at most five local matches with Last.fm attribution", () => {
+  it("shows five tracks initially and expands to ten on demand", () => {
     render(
       <ArtistPopularTracksPanel
         popularity={popularity}
@@ -45,6 +45,34 @@ describe("ArtistPopularTracksPanel", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(5);
     expect(screen.getByText("Cached from Last.fm")).toBeInTheDocument();
     expect(screen.queryByText("Popular track 6")).not.toBeInTheDocument();
+
+    const showMore = screen.getByRole("button", { name: "Show more" });
+    expect(showMore).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(showMore);
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(10);
+    expect(screen.getByText("Popular track 10")).toBeInTheDocument();
+    const showLess = screen.getByRole("button", { name: "Show less" });
+    expect(showLess).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(showLess);
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
+  });
+
+  it("does not show an expansion control when five tracks are available", () => {
+    render(
+      <ArtistPopularTracksPanel
+        popularity={{ ...popularity, tracks: popularity.tracks.slice(0, 5) }}
+        isLoading={false}
+        error={null}
+        onRefresh={() => undefined}
+        onOpenSource={() => undefined}
+      />,
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
+    expect(
+      screen.queryByRole("button", { name: "Show more" }),
+    ).not.toBeInTheDocument();
   });
 
   it("exposes refresh and the provider source", () => {

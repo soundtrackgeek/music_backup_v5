@@ -6,14 +6,17 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::AppHandle;
+use unicode_normalization::UnicodeNormalization;
 use url::Url;
 
 const MUSICBRAINZ_ARTIST_API: &str = "https://musicbrainz.org/ws/2/artist/";
 const WIKIDATA_ENTITY_API: &str = "https://www.wikidata.org/wiki/Special:EntityData/";
 const PROVIDER_USER_AGENT: &str =
-    "music-backup-v5/0.117.0 (artist biography; https://github.com/soundtrackgeek/music_backup_v5)";
+    "music-backup-v5/0.118.0 (artist biography; https://github.com/soundtrackgeek/music_backup_v5)";
 const BIOGRAPHY_CACHE_DAYS: i64 = 30;
 const UNAVAILABLE_CACHE_DAYS: i64 = 7;
+const NAME_LOOKUP_UNAVAILABLE_MESSAGE: &str =
+    "No English or Norwegian Wikipedia biography could be resolved through MusicBrainz or an exact artist-name match.";
 
 static BIOGRAPHY_REFRESH_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -50,6 +53,20 @@ struct MusicBrainzUrlRelation {
 #[derive(Debug, Deserialize)]
 struct MusicBrainzRelationUrl {
     resource: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct MusicBrainzArtistSearchResponse {
+    #[serde(default)]
+    artists: Vec<MusicBrainzArtistSearchResult>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MusicBrainzArtistSearchResult {
+    id: String,
+    name: String,
+    #[serde(default)]
+    score: u8,
 }
 
 #[derive(Debug, Deserialize)]
@@ -101,6 +118,12 @@ struct ResolvedBiography {
     target: WikipediaTarget,
     biography: String,
     source_url: String,
+}
+
+#[derive(Debug)]
+struct BiographyResolution {
+    biography: ResolvedBiography,
+    used_name_fallback: bool,
 }
 
 fn agent() -> ureq::Agent {
@@ -181,6 +204,57 @@ fn relation_targets(
         }
     }
     (wikidata_id, wikipedia_target)
+}
+
+fn normalize_artist_name(value: &str) -> String {
+    value
+        .nfkc()
+        .flat_map(char::to_lowercase)
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn musicbrainz_artist_name_query(artist_name: &str) -> String {
+    let escaped = artist_name
+        .trim()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"");
+    format!("artist:\"{escaped}\"")
+}
+
+fn exact_musicbrainz_artist_mbid(
+    response: &MusicBrainzArtistSearchResponse,
+    artist_name: &str,
+) -> Option<String> {
+    let artist_key = normalize_artist_name(artist_name);
+    let mut matches = response.artists.iter().filter(|artist| {
+        artist.score == 100
+            && valid_mbid(&artist.id)
+            && normalize_artist_name(&artist.name) == artist_key
+    });
+    let first = matches.next()?;
+    matches.next().is_none().then(|| first.id.clone())
+}
+
+fn fetch_musicbrainz_artist_mbid_by_name(artist_name: &str) -> Result<Option<String>> {
+    let mut url = Url::parse(MUSICBRAINZ_ARTIST_API)?;
+    url.query_pairs_mut()
+        .append_pair("query", &musicbrainz_artist_name_query(artist_name))
+        .append_pair("limit", "10")
+        .append_pair("fmt", "json");
+
+    crate::musicbrainz::wait_for_musicbrainz_request_slot();
+    let response = agent()
+        .get(url.as_str())
+        .set("User-Agent", PROVIDER_USER_AGENT)
+        .call()
+        .context("Could not search MusicBrainz for the artist name")?;
+    let payload = response
+        .into_json::<MusicBrainzArtistSearchResponse>()
+        .context("Could not parse the MusicBrainz artist-name search")?;
+    Ok(exact_musicbrainz_artist_mbid(&payload, artist_name))
 }
 
 fn fetch_musicbrainz_targets(
@@ -331,8 +405,63 @@ fn fetch_biography(artist_mbid: &str) -> Result<Option<ResolvedBiography>> {
     }))
 }
 
+fn fetch_biography_for_identity(
+    identity: &ArtistBiographyIdentity,
+) -> Result<Option<BiographyResolution>> {
+    let linked_mbid = identity
+        .musicbrainz_mbid
+        .as_deref()
+        .filter(|value| !value.trim().is_empty());
+    let mut linked_error = None;
+    if let Some(mbid) = linked_mbid {
+        match fetch_biography(mbid) {
+            Ok(Some(biography)) => {
+                return Ok(Some(BiographyResolution {
+                    biography,
+                    used_name_fallback: false,
+                }));
+            }
+            Ok(None) => {}
+            Err(error) => linked_error = Some(error),
+        }
+    }
+
+    let name_mbid = match fetch_musicbrainz_artist_mbid_by_name(&identity.artist_name) {
+        Ok(mbid) => mbid,
+        Err(error) => {
+            return match linked_error {
+                Some(linked) => {
+                    Err(error.context(format!("The linked artist lookup also failed: {linked}")))
+                }
+                None => Err(error),
+            };
+        }
+    };
+    let Some(name_mbid) = name_mbid else {
+        return linked_error.map(Err).unwrap_or(Ok(None));
+    };
+    if linked_mbid == Some(name_mbid.as_str()) {
+        return linked_error.map(Err).unwrap_or(Ok(None));
+    }
+
+    match fetch_biography(&name_mbid) {
+        Ok(Some(biography)) => Ok(Some(BiographyResolution {
+            biography,
+            used_name_fallback: true,
+        })),
+        Ok(None) => linked_error.map(Err).unwrap_or(Ok(None)),
+        Err(error) => match linked_error {
+            Some(linked) => {
+                Err(error.context(format!("The linked artist lookup also failed: {linked}")))
+            }
+            None => Err(error),
+        },
+    }
+}
+
 fn cache_is_fresh(record: &ArtistBiographyCacheRecord, identity: &ArtistBiographyIdentity) -> bool {
     record.musicbrainz_mbid == identity.musicbrainz_mbid
+        && (record.state != "unavailable" || record.message == NAME_LOOKUP_UNAVAILABLE_MESSAGE)
         && DateTime::parse_from_rfc3339(&record.expires_at)
             .map(|value| value.with_timezone(&Utc) > Utc::now())
             .unwrap_or(false)
@@ -416,17 +545,9 @@ pub fn artist_biography(
     }
     let fallback_cache = latest_cached.as_ref().or(cached.as_ref());
 
-    let Some(artist_mbid) = identity.musicbrainz_mbid.as_deref() else {
-        let record = unavailable_record(
-            &identity,
-            "Link this artist to MusicBrainz to find a biography.".to_string(),
-        );
-        db::upsert_artist_biography_for_app(&app, &record)?;
-        return Ok(response_from_cache(&identity, &record, false, false, None));
-    };
-
-    match fetch_biography(artist_mbid) {
-        Ok(Some(resolved)) => {
+    match fetch_biography_for_identity(&identity) {
+        Ok(Some(resolution)) => {
+            let resolved = resolution.biography;
             let fetched_at = Utc::now();
             let record = ArtistBiographyCacheRecord {
                 artist_key: identity.artist_key.clone(),
@@ -438,7 +559,12 @@ pub fn artist_biography(
                 biography_text: Some(resolved.biography),
                 source_url: Some(resolved.source_url),
                 state: "available".to_string(),
-                message: "Biography loaded from Wikipedia.".to_string(),
+                message: if resolution.used_name_fallback {
+                    "Biography loaded from Wikipedia after an exact MusicBrainz artist-name match."
+                        .to_string()
+                } else {
+                    "Biography loaded from Wikipedia.".to_string()
+                },
                 fetched_at: fetched_at.to_rfc3339_opts(SecondsFormat::Secs, true),
                 expires_at: (fetched_at + ChronoDuration::days(BIOGRAPHY_CACHE_DAYS))
                     .to_rfc3339_opts(SecondsFormat::Secs, true),
@@ -447,11 +573,7 @@ pub fn artist_biography(
             Ok(response_from_cache(&identity, &record, false, false, None))
         }
         Ok(None) => {
-            let record = unavailable_record(
-                &identity,
-                "No English or Norwegian Wikipedia biography is linked to this MusicBrainz artist."
-                    .to_string(),
-            );
+            let record = unavailable_record(&identity, NAME_LOOKUP_UNAVAILABLE_MESSAGE.to_string());
             db::upsert_artist_biography_for_app(&app, &record)?;
             Ok(response_from_cache(&identity, &record, false, false, None))
         }
@@ -536,5 +658,69 @@ mod tests {
             url.as_str(),
             "https://en.wikipedia.org/api/rest_v1/page/summary/AC%2FDC"
         );
+    }
+
+    #[test]
+    fn selects_one_exact_case_insensitive_musicbrainz_artist_match() {
+        let response = MusicBrainzArtistSearchResponse {
+            artists: vec![
+                MusicBrainzArtistSearchResult {
+                    id: "e1f1e33e-2e4c-4d43-b91b-7064068d3283".to_string(),
+                    name: "KISS".to_string(),
+                    score: 100,
+                },
+                MusicBrainzArtistSearchResult {
+                    id: "98b67ebc-5606-4cdb-9787-47b12cceb101".to_string(),
+                    name: "KISS".to_string(),
+                    score: 62,
+                },
+            ],
+        };
+
+        assert_eq!(
+            exact_musicbrainz_artist_mbid(&response, "Kiss").as_deref(),
+            Some("e1f1e33e-2e4c-4d43-b91b-7064068d3283")
+        );
+    }
+
+    #[test]
+    fn rejects_ambiguous_exact_musicbrainz_artist_matches() {
+        let response = MusicBrainzArtistSearchResponse {
+            artists: vec![
+                MusicBrainzArtistSearchResult {
+                    id: "e1f1e33e-2e4c-4d43-b91b-7064068d3283".to_string(),
+                    name: "KISS".to_string(),
+                    score: 100,
+                },
+                MusicBrainzArtistSearchResult {
+                    id: "98b67ebc-5606-4cdb-9787-47b12cceb101".to_string(),
+                    name: "Kiss".to_string(),
+                    score: 100,
+                },
+            ],
+        };
+
+        assert_eq!(exact_musicbrainz_artist_mbid(&response, "KISS"), None);
+        assert_eq!(
+            musicbrainz_artist_name_query("KISS \"Alive\""),
+            "artist:\"KISS \\\"Alive\\\"\""
+        );
+    }
+
+    #[test]
+    fn refreshes_legacy_unavailable_biography_cache_once_for_name_lookup() {
+        let identity = ArtistBiographyIdentity {
+            artist_key: "kiss".to_string(),
+            artist_name: "KISS".to_string(),
+            musicbrainz_mbid: None,
+        };
+        let mut record = unavailable_record(
+            &identity,
+            "Link this artist to MusicBrainz to find a biography.".to_string(),
+        );
+        assert!(!cache_is_fresh(&record, &identity));
+
+        record.message = NAME_LOOKUP_UNAVAILABLE_MESSAGE.to_string();
+        assert!(cache_is_fresh(&record, &identity));
     }
 }
