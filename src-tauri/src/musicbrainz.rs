@@ -44,7 +44,7 @@ const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.120.0 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.121.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 const MUSICBRAINZ_RATE_LIMIT_DELAY_MS: u64 = 1100;
@@ -329,47 +329,50 @@ fn fetch_artist_release_groups(artist_mbid: &str) -> Result<Vec<RefreshedRelease
         .timeout(Duration::from_secs(30))
         .build();
     let mut rows = Vec::new();
-    let mut offset = 0usize;
+    for (type_filter, fallback_type) in [("album", "Album"), ("ep", "EP")] {
+        let mut offset = 0usize;
+        loop {
+            let url = format!(
+                "{MUSICBRAINZ_RELEASE_GROUPS_URL}?artist={artist_mbid}&type={type_filter}&fmt=json&limit={MUSICBRAINZ_PAGE_LIMIT}&offset={offset}"
+            );
+            wait_for_musicbrainz_request_slot();
+            let response = agent
+                .get(&url)
+                .set("User-Agent", MUSICBRAINZ_USER_AGENT)
+                .call()
+                .with_context(|| {
+                    format!(
+                        "Could not fetch MusicBrainz {fallback_type} release groups for {artist_mbid}"
+                    )
+                })?;
+            let payload = response
+                .into_json::<MusicBrainzReleaseGroupBrowseResponse>()
+                .context("Could not parse MusicBrainz release-group response")?;
+            let total = payload
+                .release_group_count
+                .unwrap_or(payload.release_groups.len());
 
-    loop {
-        let url = format!(
-            "{MUSICBRAINZ_RELEASE_GROUPS_URL}?artist={artist_mbid}&type=album&fmt=json&limit={MUSICBRAINZ_PAGE_LIMIT}&offset={offset}"
-        );
-        wait_for_musicbrainz_request_slot();
-        let response = agent
-            .get(&url)
-            .set("User-Agent", MUSICBRAINZ_USER_AGENT)
-            .call()
-            .with_context(|| {
-                format!("Could not fetch MusicBrainz release groups for {artist_mbid}")
-            })?;
-        let payload = response
-            .into_json::<MusicBrainzReleaseGroupBrowseResponse>()
-            .context("Could not parse MusicBrainz release-group response")?;
-        let total = payload
-            .release_group_count
-            .unwrap_or(payload.release_groups.len());
+            for release_group in payload.release_groups {
+                rows.push(RefreshedReleaseGroup {
+                    release_mbid: release_group.id,
+                    title: release_group.title,
+                    year: release_year_from_date(release_group.first_release_date.as_deref()),
+                    primary_type: release_group
+                        .primary_type
+                        .filter(|value| !value.trim().is_empty())
+                        .unwrap_or_else(|| fallback_type.to_string()),
+                    secondary_types: release_group.secondary_types.join(" + "),
+                    track_count: None,
+                    status: "Official".to_string(),
+                });
+            }
 
-        for release_group in payload.release_groups {
-            rows.push(RefreshedReleaseGroup {
-                release_mbid: release_group.id,
-                title: release_group.title,
-                year: release_year_from_date(release_group.first_release_date.as_deref()),
-                primary_type: release_group
-                    .primary_type
-                    .filter(|value| !value.trim().is_empty())
-                    .unwrap_or_else(|| "Album".to_string()),
-                secondary_types: release_group.secondary_types.join(" + "),
-                track_count: None,
-                status: "Official".to_string(),
-            });
+            offset += MUSICBRAINZ_PAGE_LIMIT;
+            if offset >= total {
+                break;
+            }
+            thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
         }
-
-        offset += MUSICBRAINZ_PAGE_LIMIT;
-        if offset >= total {
-            break;
-        }
-        thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
     }
 
     Ok(rows)

@@ -385,6 +385,14 @@ const MUSIC_TOOLS: &[MusicToolDefinition] = &[
         scope: "albums",
     },
     MusicToolDefinition {
+        id: "owned-musicbrainz-special-releases",
+        label: "Owned MusicBrainz special releases",
+        description:
+            "Local albums positively matched to selected MusicBrainz compilation, live, interview, or EP release-group types and absent from the pure album list.",
+        severity: "low",
+        scope: "albums",
+    },
+    MusicToolDefinition {
         id: "duplicates-within-album",
         label: "Duplicates within album",
         description: "Tracks that repeat a title or disc/track position inside one album.",
@@ -9922,8 +9930,12 @@ fn ensure_music_tool_data_for_request(
         }
         "artists-without-musicbrainz-data"
         | "high-confidence-missing-musicbrainz-albums"
-        | "albums-not-on-musicbrainz-official-list" => {
-            let preparation_cap = if request.tool_id == "albums-not-on-musicbrainz-official-list" {
+        | "albums-not-on-musicbrainz-official-list"
+        | "owned-musicbrainz-special-releases" => {
+            let preparation_cap = if matches!(
+                request.tool_id.as_str(),
+                "albums-not-on-musicbrainz-official-list" | "owned-musicbrainz-special-releases"
+            ) {
                 88
             } else {
                 50
@@ -9987,6 +9999,8 @@ struct MissingMusicBrainzReleaseGroup {
     release_mbid: String,
     title: String,
     year: Option<i32>,
+    primary_type: String,
+    secondary_types: String,
     track_count: Option<i64>,
     source: String,
 }
@@ -10080,6 +10094,9 @@ fn prepare_missing_musicbrainz_artist_tool_with_progress(
             title TEXT NOT NULL,
             title_key TEXT NOT NULL,
             year INTEGER,
+            primary_type TEXT NOT NULL,
+            secondary_types_key TEXT NOT NULL,
+            release_type TEXT NOT NULL,
             track_count INTEGER,
             source TEXT NOT NULL
         );
@@ -10111,6 +10128,8 @@ fn prepare_missing_musicbrainz_artist_tool_with_progress(
             ON musicbrainz_tool_release_groups(artist_mbid);
         CREATE INDEX temp.idx_musicbrainz_tool_release_groups_title
             ON musicbrainz_tool_release_groups(artist_mbid, title_key);
+        CREATE INDEX temp.idx_musicbrainz_tool_release_groups_type
+            ON musicbrainz_tool_release_groups(artist_mbid, primary_type, secondary_types_key);
         ",
         )
         .context("Could not create MusicBrainz artist tool temp tables")?;
@@ -10547,12 +10566,24 @@ fn musicbrainz_tool_cache_release_groups(
             .join(", ");
         let sql = format!(
             "
-            SELECT artist_mbid, release_mbid, title, year, track_count
+            SELECT
+                artist_mbid, release_mbid, title, year, type,
+                COALESCE(secondary_types, ''), track_count
             FROM release_groups
             WHERE LOWER(artist_mbid) IN ({placeholders})
               AND status = 'Official'
-              AND type = 'Album'
-              AND COALESCE(secondary_types, '') = ''
+              AND (
+                    (
+                        LOWER(TRIM(type)) = 'album'
+                        AND LOWER(REPLACE(REPLACE(COALESCE(secondary_types, ''), '+', ','), ' ', ''))
+                            IN ('', 'compilation', 'compilation,live', 'live,compilation', 'interview', 'live')
+                    )
+                 OR (
+                        LOWER(TRIM(type)) = 'ep'
+                        AND LOWER(REPLACE(REPLACE(COALESCE(secondary_types, ''), '+', ','), ' ', ''))
+                            IN ('', 'compilation', 'compilation,live', 'live,compilation', 'live')
+                    )
+              )
               AND NULLIF(TRIM(release_mbid), '') IS NOT NULL
               AND NULLIF(TRIM(title), '') IS NOT NULL
             "
@@ -10571,7 +10602,9 @@ fn musicbrainz_tool_cache_release_groups(
                     release_mbid: row.get(1)?,
                     title: row.get(2)?,
                     year: row.get(3)?,
-                    track_count: row.get(4)?,
+                    primary_type: row.get(4)?,
+                    secondary_types: row.get(5)?,
+                    track_count: row.get(6)?,
                     source: "cache".to_string(),
                 })
             })?
@@ -10598,11 +10631,23 @@ fn musicbrainz_tool_overlay_release_groups(
     let mut stmt = conn
         .prepare(
             "
-            SELECT artist_mbid, release_mbid, title, year, track_count
+            SELECT
+                artist_mbid, release_mbid, title, year, type,
+                COALESCE(secondary_types, ''), track_count
             FROM musicbrainz_artist_release_groups
             WHERE status = 'Official'
-              AND type = 'Album'
-              AND COALESCE(secondary_types, '') = ''
+              AND (
+                    (
+                        LOWER(TRIM(type)) = 'album'
+                        AND LOWER(REPLACE(REPLACE(COALESCE(secondary_types, ''), '+', ','), ' ', ''))
+                            IN ('', 'compilation', 'compilation,live', 'live,compilation', 'interview', 'live')
+                    )
+                 OR (
+                        LOWER(TRIM(type)) = 'ep'
+                        AND LOWER(REPLACE(REPLACE(COALESCE(secondary_types, ''), '+', ','), ' ', ''))
+                            IN ('', 'compilation', 'compilation,live', 'live,compilation', 'live')
+                    )
+              )
               AND NULLIF(TRIM(release_mbid), '') IS NOT NULL
               AND NULLIF(TRIM(title), '') IS NOT NULL
             ",
@@ -10615,7 +10660,9 @@ fn musicbrainz_tool_overlay_release_groups(
                 release_mbid: row.get(1)?,
                 title: row.get(2)?,
                 year: row.get(3)?,
-                track_count: row.get(4)?,
+                primary_type: row.get(4)?,
+                secondary_types: row.get(5)?,
+                track_count: row.get(6)?,
                 source: "refreshed".to_string(),
             })
         })?
@@ -10626,6 +10673,38 @@ fn musicbrainz_tool_overlay_release_groups(
         .into_iter()
         .filter(|row| matched_mbids.contains(&row.artist_mbid.to_lowercase()))
         .collect())
+}
+
+fn musicbrainz_tool_release_classification(
+    primary_type: &str,
+    secondary_types: &str,
+) -> Option<(&'static str, &'static str, &'static str)> {
+    let mut secondary_types = secondary_types
+        .split([',', '+'])
+        .map(|value| value.trim().to_lowercase())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    secondary_types.sort();
+    secondary_types.dedup();
+    let secondary_types_key = secondary_types.join("|");
+
+    match (
+        primary_type.trim().to_lowercase().as_str(),
+        secondary_types_key.as_str(),
+    ) {
+        ("album", "") => Some(("Album", "", "Album")),
+        ("album", "compilation") => Some(("Album", "compilation", "Album + Compilation")),
+        ("album", "compilation|live") => {
+            Some(("Album", "compilation|live", "Album + Compilation + Live"))
+        }
+        ("album", "interview") => Some(("Album", "interview", "Album + Interview")),
+        ("album", "live") => Some(("Album", "live", "Album + Live")),
+        ("ep", "") => Some(("EP", "", "EP")),
+        ("ep", "compilation") => Some(("EP", "compilation", "EP + Compilation")),
+        ("ep", "compilation|live") => Some(("EP", "compilation|live", "EP + Compilation + Live")),
+        ("ep", "live") => Some(("EP", "live", "EP + Live")),
+        _ => None,
+    }
 }
 
 fn insert_musicbrainz_tool_release_groups(
@@ -10640,12 +10719,21 @@ fn insert_musicbrainz_tool_release_groups(
         .prepare(
             "
             INSERT INTO musicbrainz_tool_release_groups (
-                artist_mbid, release_mbid, title, title_key, year, track_count, source
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                artist_mbid, release_mbid, title, title_key, year, primary_type,
+                secondary_types_key, release_type, track_count, source
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
             ",
         )
         .context("Could not prepare MusicBrainz release-group temp insert")?;
     for release_group in release_groups {
+        let Some((primary_type, secondary_types_key, release_type)) =
+            musicbrainz_tool_release_classification(
+                &release_group.primary_type,
+                &release_group.secondary_types,
+            )
+        else {
+            continue;
+        };
         let title_key = musicbrainz_text_key(&release_group.title);
         let normalized_artist_mbid = release_group.artist_mbid.to_lowercase();
         stmt.execute(params![
@@ -10654,6 +10742,9 @@ fn insert_musicbrainz_tool_release_groups(
             release_group.title,
             title_key,
             release_group.year,
+            primary_type,
+            secondary_types_key,
+            release_type,
             release_group.track_count,
             release_group.source,
         ])
@@ -15127,9 +15218,12 @@ fn list_music_tool_issues(
 ) -> Result<MusicToolIssueResponse> {
     let definition = music_tool_definition(&request.tool_id)?;
     let has_musicbrainz_preparation = music_tool_has_musicbrainz_preparation(definition.id);
-    let is_official_list_tool = definition.id == "albums-not-on-musicbrainz-official-list";
+    let is_collection_comparison_tool = matches!(
+        definition.id,
+        "albums-not-on-musicbrainz-official-list" | "owned-musicbrainz-special-releases"
+    );
     let (summary_start, summary_cap, filter_start, filter_cap, rows_start, rows_cap) =
-        if is_official_list_tool {
+        if is_collection_comparison_tool {
             (90, 96, 97, 98, 99, 99)
         } else if has_musicbrainz_preparation {
             (52, 72, 76, 86, 90, 98)
@@ -15151,7 +15245,7 @@ fn list_music_tool_issues(
         "counting",
         summary_start,
         summary_cap,
-        if is_official_list_tool {
+        if is_collection_comparison_tool {
             "Comparing local albums with MusicBrainz."
         } else {
             "Counting selected validator issues."
@@ -15290,6 +15384,7 @@ fn music_tool_has_musicbrainz_preparation(tool_id: &str) -> bool {
         "artists-without-musicbrainz-data"
             | "high-confidence-missing-musicbrainz-albums"
             | "albums-not-on-musicbrainz-official-list"
+            | "owned-musicbrainz-special-releases"
     )
 }
 
@@ -15298,27 +15393,27 @@ fn materialize_music_tool_issue_rows(
     tool_id: &str,
     base_sql: String,
 ) -> Result<String> {
-    if tool_id != "albums-not-on-musicbrainz-official-list" {
-        return Ok(base_sql);
-    }
+    let table_name = match tool_id {
+        "albums-not-on-musicbrainz-official-list" => "musicbrainz_tool_official_list_issues",
+        "owned-musicbrainz-special-releases" => "musicbrainz_tool_special_release_issues",
+        _ => return Ok(base_sql),
+    };
 
-    conn.execute_batch("DROP TABLE IF EXISTS temp.musicbrainz_tool_official_list_issues;")
-        .context("Could not clear the previous MusicBrainz official-list comparison")?;
+    conn.execute_batch(&format!("DROP TABLE IF EXISTS temp.{table_name};"))
+        .context("Could not clear the previous MusicBrainz collection comparison")?;
+    conn.execute_batch(&format!("CREATE TEMP TABLE {table_name} AS {base_sql};"))
+        .context("Could not materialize the MusicBrainz collection comparison")?;
     conn.execute_batch(&format!(
-        "CREATE TEMP TABLE musicbrainz_tool_official_list_issues AS {base_sql};"
-    ))
-    .context("Could not materialize the MusicBrainz official-list comparison")?;
-    conn.execute_batch(
         "
-        CREATE INDEX temp.idx_musicbrainz_tool_official_list_album
-            ON musicbrainz_tool_official_list_issues(album_artist_display, album);
-        CREATE INDEX temp.idx_musicbrainz_tool_official_list_year
-            ON musicbrainz_tool_official_list_issues(year);
-        ",
-    )
-    .context("Could not index the MusicBrainz official-list comparison")?;
+        CREATE INDEX temp.idx_{table_name}_album
+            ON {table_name}(album_artist_display, album);
+        CREATE INDEX temp.idx_{table_name}_year
+            ON {table_name}(year);
+        "
+    ))
+    .context("Could not index the MusicBrainz collection comparison")?;
 
-    Ok("SELECT * FROM temp.musicbrainz_tool_official_list_issues".to_string())
+    Ok(format!("SELECT * FROM temp.{table_name}"))
 }
 
 fn music_tool_catalog_summary(definition: MusicToolDefinition) -> MusicToolSummary {
@@ -15860,6 +15955,8 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                 SELECT artist_mbid AS mbid, COUNT(*) AS release_group_count
                 FROM temp.musicbrainz_tool_release_groups
                 WHERE source = 'refreshed'
+                  AND primary_type = 'Album'
+                  AND secondary_types_key = ''
                 GROUP BY artist_mbid
             ),
             artist_releases AS (
@@ -15883,6 +15980,8 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                 WHERE artist.high_confidence = 1
                   AND artist.mbid IS NOT NULL
                   AND releases.title_key <> ''
+                  AND releases.primary_type = 'Album'
+                  AND releases.secondary_types_key = ''
                   AND (
                         releases.source = 'refreshed'
                      OR COALESCE(overlay.release_group_count, 0) = 0
@@ -16019,6 +16118,8 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                 SELECT artist_mbid AS mbid, COUNT(*) AS release_group_count
                 FROM temp.musicbrainz_tool_release_groups
                 WHERE source = 'refreshed'
+                  AND primary_type = 'Album'
+                  AND secondary_types_key = ''
                 GROUP BY artist_mbid
             ),
             available_releases AS (
@@ -16045,6 +16146,8 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                 WHERE artist.high_confidence = 1
                   AND artist.mbid IS NOT NULL
                   AND releases.title_key <> ''
+                  AND releases.primary_type = 'Album'
+                  AND releases.secondary_types_key = ''
                   AND (
                         releases.source = 'refreshed'
                      OR COALESCE(overlay.release_group_count, 0) = 0
@@ -16111,6 +16214,186 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             LEFT JOIN representative_paths paths
               ON paths.album_id = local.album_id
             WHERE official.title_key IS NULL
+            ",
+            threshold = MUSICBRAINZ_SUSPICIOUS_RELEASE_GROUP_THRESHOLD,
+        )),
+        "owned-musicbrainz-special-releases" => Ok(format!(
+            "
+            WITH cache_matches AS (
+                SELECT
+                    l.artist_key,
+                    c.name,
+                    c.mbid,
+                    c.cached_name_count,
+                    c.release_group_count,
+                    CASE
+                        WHEN c.local_name_key = l.artist_key THEN 'cache-name'
+                        ELSE 'normalized-cache-name'
+                    END AS match_method,
+                    COUNT(*) OVER (PARTITION BY l.artist_key) AS candidate_count,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY l.artist_key
+                        ORDER BY
+                            CASE WHEN c.local_name_key = l.artist_key THEN 0 ELSE 1 END,
+                            c.cached_name_count ASC,
+                            c.release_group_count DESC,
+                            LOWER(c.name) ASC
+                    ) AS match_rank
+                FROM temp.musicbrainz_tool_local_artists l
+                JOIN temp.musicbrainz_tool_artist_cache c
+                  ON c.local_name_key = l.artist_key
+                  OR (
+                        l.musicbrainz_name_key <> ''
+                    AND c.musicbrainz_name_key = l.musicbrainz_name_key
+                  )
+            ),
+            best_cache_matches AS (
+                SELECT
+                    artist_key, name, mbid, cached_name_count, release_group_count,
+                    match_method, candidate_count
+                FROM cache_matches
+                WHERE match_rank = 1
+            ),
+            verified_links AS (
+                SELECT
+                    link.local_artist_key AS artist_key,
+                    LOWER(link.mbid) AS mbid,
+                    COALESCE(NULLIF(TRIM(link.canonical_name), ''), MIN(cache.name)) AS matched_name
+                FROM musicbrainz_artist_links link
+                LEFT JOIN temp.musicbrainz_tool_artist_cache cache
+                  ON cache.mbid = LOWER(link.mbid)
+                WHERE link.verification_state = 'verified'
+                  AND link.ignored = 0
+                  AND link.mbid IS NOT NULL
+                  AND TRIM(link.mbid) <> ''
+                GROUP BY link.local_artist_key, link.mbid, link.canonical_name
+            ),
+            ignored_links AS (
+                SELECT local_artist_key AS artist_key
+                FROM musicbrainz_artist_links
+                WHERE ignored <> 0
+            ),
+            trusted_artists AS (
+                SELECT
+                    l.artist_key,
+                    l.display_artist,
+                    COALESCE(verified.mbid, cache.mbid) AS mbid,
+                    CASE
+                        WHEN verified.mbid IS NOT NULL THEN 1
+                        WHEN cache.mbid IS NOT NULL
+                         AND cache.candidate_count = 1
+                         AND cache.cached_name_count <= 1
+                         AND cache.release_group_count < {threshold}
+                            THEN 1
+                        ELSE 0
+                    END AS high_confidence
+                FROM temp.musicbrainz_tool_local_artists l
+                LEFT JOIN verified_links verified
+                  ON verified.artist_key = l.artist_key
+                LEFT JOIN best_cache_matches cache
+                  ON cache.artist_key = l.artist_key
+                 AND verified.mbid IS NULL
+                LEFT JOIN ignored_links ignored
+                  ON ignored.artist_key = l.artist_key
+                WHERE ignored.artist_key IS NULL
+            ),
+            refreshed_type_counts AS (
+                SELECT artist_mbid AS mbid, primary_type, COUNT(*) AS release_group_count
+                FROM temp.musicbrainz_tool_release_groups
+                WHERE source = 'refreshed'
+                GROUP BY artist_mbid, primary_type
+            ),
+            available_releases AS (
+                SELECT
+                    artist.artist_key,
+                    releases.title_key,
+                    releases.primary_type,
+                    releases.secondary_types_key,
+                    releases.release_type
+                FROM trusted_artists artist
+                JOIN temp.musicbrainz_tool_release_groups releases
+                  ON releases.artist_mbid = artist.mbid
+                LEFT JOIN refreshed_type_counts refreshed
+                  ON refreshed.mbid = artist.mbid
+                 AND refreshed.primary_type = releases.primary_type
+                LEFT JOIN musicbrainz_release_decisions decisions
+                  ON decisions.local_artist_key = artist.artist_key
+                 AND decisions.release_mbid = releases.release_mbid
+                LEFT JOIN temp.musicbrainz_tool_release_statuses status
+                  ON status.artist_mbid = artist.mbid
+                 AND status.release_mbid = releases.release_mbid
+                WHERE artist.high_confidence = 1
+                  AND artist.mbid IS NOT NULL
+                  AND releases.title_key <> ''
+                  AND (
+                        releases.source = 'refreshed'
+                     OR COALESCE(refreshed.release_group_count, 0) = 0
+                  )
+                  AND COALESCE(decisions.decision, '') NOT IN ('not-in-scope', 'ignored')
+                  AND (
+                        COALESCE(decisions.decision, '') = 'include'
+                     OR COALESCE(status.has_official_release, 1) <> 0
+                  )
+            ),
+            pure_titles AS (
+                SELECT DISTINCT artist_key, title_key
+                FROM available_releases
+                WHERE primary_type = 'Album'
+                  AND secondary_types_key = ''
+            ),
+            ordered_special_types AS (
+                SELECT DISTINCT artist_key, title_key, release_type
+                FROM available_releases
+                WHERE NOT (primary_type = 'Album' AND secondary_types_key = '')
+                ORDER BY artist_key, title_key, release_type
+            ),
+            special_titles AS (
+                SELECT
+                    artist_key,
+                    title_key,
+                    GROUP_CONCAT(release_type, ' / ') AS release_types
+                FROM ordered_special_types
+                GROUP BY artist_key, title_key
+            ),
+            representative_paths AS (
+                SELECT
+                    album_id,
+                    MIN(NULLIF(TRIM(filename), '')) AS filename,
+                    MIN(NULLIF(TRIM(file_path), '')) AS file_path
+                FROM tracks
+                GROUP BY album_id
+            )
+            SELECT
+                'owned-musicbrainz-special-releases:' || local.album_id AS id,
+                'owned-musicbrainz-special-releases' AS tool_id,
+                'low' AS severity,
+                'albums' AS entity_type,
+                local.album_id,
+                NULL AS track_id,
+                local.title AS album,
+                artist.display_artist AS album_artist_display,
+                NULL AS title,
+                albums.canonical_genre,
+                local.year,
+                'Owned MusicBrainz special release' AS detail,
+                special.release_types AS value,
+                paths.filename,
+                paths.file_path
+            FROM temp.musicbrainz_tool_local_albums local
+            JOIN trusted_artists artist
+              ON artist.artist_key = local.artist_key
+             AND artist.high_confidence = 1
+            JOIN special_titles special
+              ON special.artist_key = local.artist_key
+             AND special.title_key = local.title_key
+            JOIN albums
+              ON albums.id = local.album_id
+            LEFT JOIN pure_titles pure
+              ON pure.artist_key = local.artist_key
+             AND pure.title_key = local.title_key
+            LEFT JOIN representative_paths paths
+              ON paths.album_id = local.album_id
+            WHERE pure.title_key IS NULL
             ",
             threshold = MUSICBRAINZ_SUSPICIOUS_RELEASE_GROUP_THRESHOLD,
         )),
@@ -19188,6 +19471,11 @@ fn issue_export_table(
     } else {
         "Genre"
     };
+    let value_header = if tool_id == "owned-musicbrainz-special-releases" {
+        "MusicBrainz Type"
+    } else {
+        "Value"
+    };
     let headers = vec![
         "Tool",
         "Severity",
@@ -19198,7 +19486,7 @@ fn issue_export_table(
         "Track",
         genre_header,
         "Issue",
-        "Value",
+        value_header,
         "Filename",
         "File Path",
     ];
@@ -19340,6 +19628,26 @@ mod tests {
         title: &str,
         year: i32,
     ) {
+        insert_musicbrainz_tool_cache_typed_release(
+            path,
+            mbid,
+            release_mbid,
+            title,
+            year,
+            "Album",
+            "",
+        );
+    }
+
+    fn insert_musicbrainz_tool_cache_typed_release(
+        path: &Path,
+        mbid: &str,
+        release_mbid: &str,
+        title: &str,
+        year: i32,
+        primary_type: &str,
+        secondary_types: &str,
+    ) {
         let conn = Connection::open(path).expect("open test MusicBrainz cache");
         conn.execute(
             "
@@ -19347,10 +19655,17 @@ mod tests {
                 artist_mbid, release_mbid, title, year, type, secondary_types,
                 track_count, status, cached_at
             ) VALUES (
-                ?1, ?2, ?3, ?4, 'Album', '', 10, 'Official', '2026-02-01 12:03:00'
+                ?1, ?2, ?3, ?4, ?5, ?6, 10, 'Official', '2026-02-01 12:03:00'
             )
             ",
-            params![mbid, release_mbid, title, year],
+            params![
+                mbid,
+                release_mbid,
+                title,
+                year,
+                primary_type,
+                secondary_types
+            ],
         )
         .expect("insert MusicBrainz tool cache release");
     }
@@ -20466,6 +20781,148 @@ mod tests {
             response.rows[0].value.as_deref(),
             Some("MBID mbid-psb / cache-name / cache / matched Pet Shop Boys")
         );
+
+        fs::remove_dir_all(temp_dir).expect("remove MusicBrainz tool temp dir");
+    }
+
+    #[test]
+    fn normalizes_supported_musicbrainz_special_release_types() {
+        assert_eq!(
+            musicbrainz_tool_release_classification("Album", "Live + Compilation"),
+            Some(("Album", "compilation|live", "Album + Compilation + Live"))
+        );
+        assert_eq!(
+            musicbrainz_tool_release_classification("EP", "Compilation,Live"),
+            Some(("EP", "compilation|live", "EP + Compilation + Live"))
+        );
+        assert_eq!(
+            musicbrainz_tool_release_classification("Album", "Remix"),
+            None
+        );
+    }
+
+    #[test]
+    fn lists_owned_musicbrainz_special_releases_and_excludes_pure_album_titles() {
+        let mut conn = seeded_connection();
+        insert_test_album(&conn, "mb:live", "Def Leppard", "Live Only", 1993, 12);
+        insert_test_album(&conn, "mb:ep", "Def Leppard", "Rare EP", 1995, 5);
+        insert_test_album(&conn, "mb:hybrid", "Def Leppard", "Hybrid", 1996, 8);
+        insert_test_album(&conn, "mb:dual", "Def Leppard", "Dual", 1997, 10);
+        insert_test_album(&conn, "mb:remix", "Def Leppard", "Remix Only", 1998, 9);
+
+        let temp_dir = temp_test_dir("musicbrainz-tool-owned-special-releases");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_musicbrainz_tool_cache(&cache_path, &[("Def Leppard", "mbid-def", 0)]);
+        insert_musicbrainz_tool_cache_typed_release(
+            &cache_path,
+            "mbid-def",
+            "release-live",
+            "Live Only",
+            1993,
+            "Album",
+            "Live",
+        );
+        insert_musicbrainz_tool_cache_typed_release(
+            &cache_path,
+            "mbid-def",
+            "release-ep",
+            "Rare EP",
+            1995,
+            "EP",
+            "Compilation,Live",
+        );
+        insert_musicbrainz_tool_cache_typed_release(
+            &cache_path,
+            "mbid-def",
+            "release-hybrid-live",
+            "Hybrid",
+            1996,
+            "Album",
+            "Live",
+        );
+        insert_musicbrainz_tool_cache_typed_release(
+            &cache_path,
+            "mbid-def",
+            "release-hybrid-ep",
+            "Hybrid",
+            1996,
+            "EP",
+            "Compilation",
+        );
+        insert_musicbrainz_tool_cache_typed_release(
+            &cache_path,
+            "mbid-def",
+            "release-dual-live",
+            "Dual",
+            1997,
+            "Album",
+            "Live",
+        );
+        insert_musicbrainz_tool_cache_release(
+            &cache_path,
+            "mbid-def",
+            "release-dual-pure",
+            "Dual",
+            1997,
+        );
+        insert_musicbrainz_tool_cache_typed_release(
+            &cache_path,
+            "mbid-def",
+            "release-remix",
+            "Remix Only",
+            1998,
+            "Album",
+            "Remix",
+        );
+        conn.execute_batch(
+            "
+            INSERT INTO musicbrainz_artist_release_groups (
+                artist_mbid, release_mbid, title, year, type, secondary_types,
+                track_count, status, source, fetched_at
+            ) VALUES
+                ('mbid-def', 'refreshed-live', 'Live Only', 1993, 'Album', 'Live', 12, 'Official', 'musicbrainz-live', '2026-08-11T00:00:00Z'),
+                ('mbid-def', 'refreshed-hybrid', 'Hybrid', 1996, 'Album', 'Live', 8, 'Official', 'musicbrainz-live', '2026-08-11T00:00:00Z'),
+                ('mbid-def', 'refreshed-dual-live', 'Dual', 1997, 'Album', 'Live', 10, 'Official', 'musicbrainz-live', '2026-08-11T00:00:00Z'),
+                ('mbid-def', 'refreshed-dual-pure', 'Dual', 1997, 'Album', '', 10, 'Official', 'musicbrainz-live', '2026-08-11T00:00:00Z'),
+                ('mbid-def', 'refreshed-remix', 'Remix Only', 1998, 'Album', 'Remix', 9, 'Official', 'musicbrainz-live', '2026-08-11T00:00:00Z');
+            ",
+        )
+        .expect("insert refreshed MusicBrainz special release groups");
+
+        prepare_missing_musicbrainz_artist_tool(&mut conn, &cache_path.display().to_string())
+            .expect("prepare owned MusicBrainz special releases");
+        let mut request = MusicToolIssueRequest::default();
+        request.tool_id = "owned-musicbrainz-special-releases".to_string();
+        let response = list_music_tool_issues(&conn, request, 50, None)
+            .expect("list owned MusicBrainz special releases");
+
+        assert_eq!(response.tool.issue_count, 3);
+        assert_eq!(response.tool.album_count, 3);
+        assert_eq!(response.total, 3);
+        assert_eq!(
+            response
+                .rows
+                .iter()
+                .map(|row| (row.album.as_deref(), row.value.as_deref()))
+                .collect::<Vec<_>>(),
+            vec![
+                (Some("Hybrid"), Some("Album + Live / EP + Compilation")),
+                (Some("Live Only"), Some("Album + Live")),
+                (Some("Rare EP"), Some("EP + Compilation + Live")),
+            ]
+        );
+        assert!(response
+            .rows
+            .iter()
+            .all(|row| row.album.as_deref() != Some("Dual")));
+        assert!(response
+            .rows
+            .iter()
+            .all(|row| row.album.as_deref() != Some("Remix Only")));
+
+        let (headers, _) = issue_export_table(&response.tool.id, &response.rows);
+        assert!(headers.contains(&"MusicBrainz Type"));
+        assert!(!headers.contains(&"Value"));
 
         fs::remove_dir_all(temp_dir).expect("remove MusicBrainz tool temp dir");
     }

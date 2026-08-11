@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.121.0] - 2026-08-11
+### Added
+- Added **Owned MusicBrainz special releases** to Tools for positively matched local `Album + Compilation`, `Album + Compilation + Live`, `Album + Interview`, `Album + Live`, `EP`, `EP + Compilation`, `EP + Compilation + Live`, and `EP + Live` release groups that are absent from the pure Album list.
+- Added a contextual **MusicBrainz type** result/export column with combined type labels when one local title matches multiple selected release-group categories.
+
+### Changed
+- MusicBrainz collection preparation now retains selected primary and secondary release-group types, keeps pure-album comparisons isolated, and prefers refreshed data independently for Album and EP so cached EPs remain available for older overlays.
+- Selected-artist MusicBrainz refreshes now fetch both Album and EP release groups.
+- Synchronized app metadata and provider user agents to `0.121.0`.
+
 ## [0.120.0] - 2026-08-11
 ### Added
 - Added **Loved Tracks** and **Chart Busters** tabs to Artist pages with deferred local loading and responsive oldest-first track lists.

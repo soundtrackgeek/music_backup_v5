@@ -5090,6 +5090,12 @@ function MusicToolIssueTable({
     ) {
       emptyMessage =
         "Every comparable local album appears on its artist's pure official MusicBrainz album list.";
+    } else if (
+      response.tool.id === "owned-musicbrainz-special-releases" &&
+      response.tool.issueCount === 0
+    ) {
+      emptyMessage =
+        "No owned albums matched the selected MusicBrainz compilation, live, interview, or EP types outside the pure album list.";
     }
 
     return (
@@ -5103,6 +5109,10 @@ function MusicToolIssueTable({
   const primaryHeader = response.tool.scope === "artists" ? "Artist" : "Album";
   const secondaryHeader =
     response.tool.scope === "artists" ? "Sample album" : "Track";
+  const valueHeader =
+    response.tool.id === "owned-musicbrainz-special-releases"
+      ? "MusicBrainz type"
+      : "Value";
 
   return (
     <div className="result-table tool-issue-results" role="table">
@@ -5110,7 +5120,7 @@ function MusicToolIssueTable({
         <span role="columnheader">Issue</span>
         <span role="columnheader">{primaryHeader}</span>
         <span role="columnheader">{secondaryHeader}</span>
-        <span role="columnheader">Value</span>
+        <span role="columnheader">{valueHeader}</span>
         <span role="columnheader">File</span>
       </div>
       {response.rows.map((issue) => (
