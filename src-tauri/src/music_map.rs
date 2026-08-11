@@ -287,6 +287,10 @@ pub fn music_map_location_details_for_connection(
         .map(|artist| artist.album_count)
         .sum::<i64>()
         .max(1);
+    let artist_keys = matching
+        .iter()
+        .map(|artist| artist.artist_key.clone())
+        .collect::<Vec<_>>();
     let mut genres = genre_counts
         .into_iter()
         .map(|(genre, (album_count, artist_keys))| MusicMapGenreStat {
@@ -334,6 +338,7 @@ pub fn music_map_location_details_for_connection(
         point,
         genres,
         artists: artist_rows,
+        artist_keys,
     })
 }
 
@@ -933,6 +938,7 @@ mod tests {
         let details = music_map_location_details_for_connection(&conn, "area:oslo-mbid").unwrap();
         assert_eq!(details.genres[0].genre, "Synthpop");
         assert_eq!(details.artists[0].name, "A-ha");
+        assert_eq!(details.artist_keys, vec!["a-ha"]);
         assert_eq!(
             details.artists[0].representative_album_id.as_deref(),
             Some("a1")
@@ -979,6 +985,7 @@ mod tests {
         let details = music_map_location_details_for_connection(&conn, "area:london-mbid").unwrap();
         assert_eq!(details.point.artist_count, 30);
         assert_eq!(details.artists.len(), 24);
+        assert_eq!(details.artist_keys.len(), 30);
         assert_eq!(details.artists[0].name, "London Artist 29");
         assert_eq!(details.artists[23].name, "London Artist 06");
     }

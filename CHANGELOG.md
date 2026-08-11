@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.115.0] - 2026-08-11
+### Added
+- Added selected-place Luna questions to Music Map, using exact local country or MusicBrainz area cohorts with bounded current-view inspection and an explicit place label.
+
+### Changed
+- Discovery, Playlist Builder, Statistics, and Music Map now keep their large Luna controls in the same collapsed **Luna commands** area used by Search and Charts, while launched commands still open automatically.
+- Synchronized app metadata and provider user agents to `0.115.0`.
+
 ## [0.114.0] - 2026-08-11
 ### Added
 - Added a read-only Music Doctor connector with a configurable database path, manual synchronization, five-minute background checks for completed scans, source/format/bitrate status, and an app-owned quality cache keyed by Unicode-normalized full file paths.

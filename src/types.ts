@@ -835,6 +835,7 @@ export type AiCompileRequest = {
 export type AiCurrentViewQuestion = {
   question: string;
   request: BrowseRequest;
+  scopeLabel?: string;
 };
 
 export type AiCurrentViewAnswer = {
@@ -2942,6 +2943,7 @@ export type MusicMapLocationDetails = {
   point: MusicMapPoint;
   genres: MusicMapGenreStat[];
   artists: MusicMapArtist[];
+  artistKeys: string[];
 };
 
 export type MusicMapRefreshSummary = {

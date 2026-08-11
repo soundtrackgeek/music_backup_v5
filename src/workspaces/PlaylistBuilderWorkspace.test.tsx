@@ -89,6 +89,7 @@ describe("playlist builder workspace", () => {
   it("builds a reviewable draft and explicitly stores its exact track order", async () => {
     const { container } = render(<PlaylistBuilderWorkspace isAvailable />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
     fireEvent.change(screen.getByLabelText("Playlist request"), {
       target: { value: "A varied loved synthpop playlist" },
     });

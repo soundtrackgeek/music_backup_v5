@@ -234,6 +234,8 @@ pub struct AiConnectionTest {
 pub struct AiCurrentViewQuestion {
     pub question: String,
     pub request: BrowseRequest,
+    #[serde(default)]
+    pub scope_label: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1219,17 +1221,29 @@ where
         )
     }
 
+    let scope_label = input
+        .scope_label
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if scope_label.is_some_and(|value| value.chars().count() > 200) {
+        bail!("Current-view scope labels are limited to 200 characters.")
+    }
+
     let view = match input.request.view.as_str() {
         "tracks" => "tracks",
         _ => "albums",
     };
     let (api_key, _) = active_api_key()?;
     let tool = current_view_tool();
+    let scope_line = scope_label
+        .map(|value| format!("\nActive scope: {}", safe_prompt_data(value)))
+        .unwrap_or_default();
     let initial_input = vec![
         json!({ "role": "system", "content": CURRENT_VIEW_INSTRUCTIONS }),
         json!({
             "role": "user",
-            "content": format!("Active view: {view}\nQuestion: {question}")
+            "content": format!("Active view: {view}{scope_line}\nQuestion: {question}")
         }),
     ];
     let first_body = json!({
@@ -4826,6 +4840,7 @@ mod tests {
                 question: "How many albums are here, and which artist appears most often?"
                     .to_string(),
                 request: BrowseRequest::default(),
+                scope_label: None,
             },
             |_request, inspection| {
                 assert!(!inspection.requests.is_empty());
@@ -4861,6 +4876,7 @@ mod tests {
             AiCurrentViewQuestion {
                 question: "How many Billboard nr. 1 albums have I rated with 100% completedness? and how many do I have left to rate?".to_string(),
                 request: BrowseRequest::default(),
+                scope_label: None,
             },
             |_request, inspection| {
                 assert!(inspection.requests.iter().any(|item| {
@@ -4910,6 +4926,7 @@ mod tests {
                 question: "Can you list all 21 Billboard No. 1 albums I haven't rated 100% yet?"
                     .to_string(),
                 request: BrowseRequest::default(),
+                scope_label: None,
             },
             move |_request, inspection| {
                 let list = inspection

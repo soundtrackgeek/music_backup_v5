@@ -26,6 +26,12 @@ type CurrentViewQuestionPanelProps = {
   request: BrowseRequest;
   showSnapshotHistory?: boolean;
   snapshotToOpen?: AiSnapshot | null;
+  heading?: string;
+  description?: string;
+  placeholder?: string;
+  questionAriaLabel?: string;
+  scopeLabel?: string;
+  saveSnapshots?: boolean;
 };
 
 function usageLabel(usage: AiUsage) {
@@ -59,6 +65,12 @@ export function CurrentViewQuestionPanel({
   request,
   showSnapshotHistory = true,
   snapshotToOpen = null,
+  heading = "Ask about this view",
+  description,
+  placeholder,
+  questionAriaLabel = "Question about the current view",
+  scopeLabel,
+  saveSnapshots = true,
 }: CurrentViewQuestionPanelProps) {
   const [question, setQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -72,6 +84,7 @@ export function CurrentViewQuestionPanel({
   const snapshotKind = context === "chart" ? "chartAnswer" : "searchAnswer";
 
   useEffect(() => {
+    if (!saveSnapshots) return;
     let disposed = false;
     void listAiSnapshots(snapshotKind)
       .then((saved) => {
@@ -89,7 +102,7 @@ export function CurrentViewQuestionPanel({
     return () => {
       disposed = true;
     };
-  }, [snapshotKind]);
+  }, [saveSnapshots, snapshotKind]);
 
   useEffect(() => {
     if (
@@ -116,11 +129,13 @@ export function CurrentViewQuestionPanel({
       const answer = await askCurrentView({
         question: question.trim(),
         request,
+        ...(scopeLabel ? { scopeLabel } : {}),
       });
       setResult(answer);
       setResultQuestion(question.trim());
       setResultSource("live");
       setActiveSnapshotId(null);
+      if (!saveSnapshots) return;
       try {
         const saved = await saveAiSnapshot({
           title: answerSnapshotTitle(question),
@@ -208,18 +223,22 @@ export function CurrentViewQuestionPanel({
   return (
     <section
       className="natural-query-panel current-view-question-panel"
-      aria-label="Ask about this view"
+      aria-label={heading}
     >
       <div className="natural-query-heading">
         <div className="natural-query-icon" aria-hidden="true">
           <MessageCircleQuestion size={18} />
         </div>
         <div>
-          <h2>Ask about this view</h2>
+          <h2>{heading}</h2>
           <p>
-            Luna can request exact local summaries, groups, or up to 50 names
-            from these filtered {noun}. Only that compact context is sent;
-            paths and the rest of your library stay local.
+            {description ?? (
+              <>
+                Luna can request exact local summaries, groups, or up to 50
+                names from these filtered {noun}. Only that compact context is
+                sent; paths and the rest of your library stay local.
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -234,11 +253,12 @@ export function CurrentViewQuestionPanel({
           disabled={isLoading}
           onChange={(event) => setQuestion(event.target.value)}
           placeholder={
-            request.view === "tracks"
+            placeholder ??
+            (request.view === "tracks"
               ? "Which artists appear most often in these tracks?"
-              : "What stands out about these albums?"
+              : "What stands out about these albums?")
           }
-          aria-label="Question about the current view"
+          aria-label={questionAriaLabel}
         />
         <button
           className="primary-button"
@@ -283,7 +303,7 @@ export function CurrentViewQuestionPanel({
       {snapshotError ? (
         <p className="error-message natural-query-message">{snapshotError}</p>
       ) : null}
-      {showSnapshotHistory ? (
+      {saveSnapshots && showSnapshotHistory ? (
         <AiSnapshotHistory
           snapshots={snapshots}
           activeSnapshotId={activeSnapshotId}

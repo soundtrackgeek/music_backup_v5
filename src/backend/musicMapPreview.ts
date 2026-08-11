@@ -204,6 +204,7 @@ export function mockMusicMapDetails(locationKey: string): MusicMapLocationDetail
         percentage: 16,
       },
     ],
+    artistKeys: artists.map((artist) => artist.artistKey),
     artists,
   };
 }

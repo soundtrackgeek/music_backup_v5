@@ -2808,6 +2808,10 @@ button {
   display: none;
 }
 
+.page-luna-command-panel {
+  min-width: 0;
+}
+
 .search-luna-mode-control {
   width: min(100%, 360px);
 }
@@ -6423,6 +6427,13 @@ button {
   color: #89938f;
   font-size: 10px;
   line-height: 13px;
+}
+
+.music-map-luna-empty {
+  margin: 0;
+  color: #6f7d78;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .music-map-toolbar {

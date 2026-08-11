@@ -6,6 +6,7 @@ import {
   ChartFilterSourceGroup,
   ChartFiltersDisclosure,
   ChartLunaCommandArea,
+  PageLunaCommandArea,
   SearchAdvancedFilters,
   SearchLunaCommandArea,
 } from "./SearchProgressiveDisclosure";
@@ -85,6 +86,37 @@ describe("Search progressive disclosure", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Ask this chart" }));
     expect(screen.getByText("Chart command")).not.toBeVisible();
     expect(screen.getByText("Chart results command")).toBeVisible();
+  });
+
+  it("keeps a page Luna command collapsed and opens it for a launched item", () => {
+    const { rerender } = render(
+      <PageLunaCommandArea
+        idPrefix="discovery"
+        label="Discovery Luna commands"
+        description="Find music outside the library."
+      >
+        <p>Discovery command</p>
+      </PageLunaCommandArea>,
+    );
+
+    expect(screen.getByText("Discovery command")).not.toBeVisible();
+
+    rerender(
+      <PageLunaCommandArea
+        idPrefix="discovery"
+        label="Discovery Luna commands"
+        description="Find music outside the library."
+        openRequestId={42}
+      >
+        <p>Discovery command</p>
+      </PageLunaCommandArea>,
+    );
+
+    expect(screen.getByText("Discovery command")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Close" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
   });
 
   it("keeps advanced chart controls collapsed and summarizes active groups", () => {

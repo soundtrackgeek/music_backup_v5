@@ -388,6 +388,7 @@ import {
   ChartFilterSourceGroup,
   ChartFiltersDisclosure,
   ChartLunaCommandArea,
+  PageLunaCommandArea,
   SearchAdvancedFilters,
   SearchLunaCommandArea,
 } from "./components/SearchProgressiveDisclosure";
@@ -14973,10 +14974,17 @@ export default function App() {
               </div>
             </header>
 
-            <OutsideLibraryDiscovery
-              isAvailable={Boolean(status?.hasDatabase && status.trackCount > 0)}
-              savedDiscoveryToOpen={savedDiscoveryToOpen}
-            />
+            <PageLunaCommandArea
+              idPrefix="discovery"
+              label="Discovery Luna commands"
+              description="Find verified music outside your current library."
+              openRequestId={savedDiscoveryToOpen?.id}
+            >
+              <OutsideLibraryDiscovery
+                isAvailable={Boolean(status?.hasDatabase && status.trackCount > 0)}
+                savedDiscoveryToOpen={savedDiscoveryToOpen}
+              />
+            </PageLunaCommandArea>
 
             <section className="metric-grid" aria-label="Discovery summary">
               <Metric
@@ -16465,11 +16473,18 @@ export default function App() {
 
             {statsError ? <p className="error-message">{statsError}</p> : null}
 
-            <LibraryAnalystPanel
-              isAvailable={Boolean(statistics && statistics.overview.albumCount > 0)}
-              showSnapshotHistory={false}
-              snapshotToOpen={analystSnapshotToOpen}
-            />
+            <PageLunaCommandArea
+              idPrefix="statistics"
+              label="Statistics Luna commands"
+              description="Analyze collection-wide patterns from bounded local aggregates."
+              openRequestId={analystSnapshotToOpen?.id}
+            >
+              <LibraryAnalystPanel
+                isAvailable={Boolean(statistics && statistics.overview.albumCount > 0)}
+                showSnapshotHistory={false}
+                snapshotToOpen={analystSnapshotToOpen}
+              />
+            </PageLunaCommandArea>
 
             <section
               className="stats-dashboard-grid"

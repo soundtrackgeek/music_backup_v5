@@ -7,38 +7,26 @@ export type LunaCommandLaunch = {
   mode: LunaCommandMode;
 };
 
-function LunaCommandArea({
+function LunaDisclosure({
   idPrefix,
   label,
   description,
-  buildLabel,
-  resultsLabel,
-  buildCommand,
-  resultsCommand,
-  launch,
+  openRequestId,
+  children,
 }: {
   idPrefix: string;
   label: string;
   description: string;
-  buildLabel: string;
-  resultsLabel: string;
-  buildCommand: ReactNode;
-  resultsCommand: ReactNode;
-  launch?: LunaCommandLaunch | null;
+  openRequestId?: number | null;
+  children: ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [mode, setMode] = useState<LunaCommandMode>("build");
   const contentId = `${idPrefix}-luna-command-content`;
-  const buildTabId = `${idPrefix}-luna-build-tab`;
-  const buildPanelId = `${idPrefix}-luna-build-panel`;
-  const resultsTabId = `${idPrefix}-luna-results-tab`;
-  const resultsPanelId = `${idPrefix}-luna-results-panel`;
 
   useEffect(() => {
-    if (!launch) return;
-    setMode(launch.mode);
+    if (openRequestId == null) return;
     setIsOpen(true);
-  }, [launch?.id]);
+  }, [openRequestId]);
 
   return (
     <section className="search-luna-command-area" aria-label={label}>
@@ -69,6 +57,49 @@ function LunaCommandArea({
         className="search-luna-command-content"
         hidden={!isOpen}
       >
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function LunaCommandArea({
+  idPrefix,
+  label,
+  description,
+  buildLabel,
+  resultsLabel,
+  buildCommand,
+  resultsCommand,
+  launch,
+}: {
+  idPrefix: string;
+  label: string;
+  description: string;
+  buildLabel: string;
+  resultsLabel: string;
+  buildCommand: ReactNode;
+  resultsCommand: ReactNode;
+  launch?: LunaCommandLaunch | null;
+}) {
+  const [mode, setMode] = useState<LunaCommandMode>("build");
+  const buildTabId = `${idPrefix}-luna-build-tab`;
+  const buildPanelId = `${idPrefix}-luna-build-panel`;
+  const resultsTabId = `${idPrefix}-luna-results-tab`;
+  const resultsPanelId = `${idPrefix}-luna-results-panel`;
+
+  useEffect(() => {
+    if (!launch) return;
+    setMode(launch.mode);
+  }, [launch?.id]);
+
+  return (
+    <LunaDisclosure
+      idPrefix={idPrefix}
+      label={label}
+      description={description}
+      openRequestId={launch?.id}
+    >
         <div
           className="segmented-control search-luna-mode-control"
           role="tablist"
@@ -116,8 +147,32 @@ function LunaCommandArea({
         >
           {resultsCommand}
         </div>
-      </div>
-    </section>
+    </LunaDisclosure>
+  );
+}
+
+export function PageLunaCommandArea({
+  idPrefix,
+  label,
+  description,
+  openRequestId,
+  children,
+}: {
+  idPrefix: string;
+  label: string;
+  description: string;
+  openRequestId?: number | null;
+  children: ReactNode;
+}) {
+  return (
+    <LunaDisclosure
+      idPrefix={idPrefix}
+      label={label}
+      description={description}
+      openRequestId={openRequestId}
+    >
+      <div className="page-luna-command-panel">{children}</div>
+    </LunaDisclosure>
   );
 }
 

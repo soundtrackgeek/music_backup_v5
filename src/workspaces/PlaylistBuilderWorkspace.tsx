@@ -31,6 +31,7 @@ import type {
 import { aiMarkdownTitle, playlistMarkdown } from "../aiMarkdownExport";
 import { AiMarkdownExportButton } from "../components/AiMarkdownExportButton";
 import { ExportResultStatus } from "../components/ExportResultStatus";
+import { PageLunaCommandArea } from "../components/SearchProgressiveDisclosure";
 
 export type PlaylistBuilderLaunch = {
   id: number;
@@ -302,86 +303,93 @@ export function PlaylistBuilderWorkspace({
           </div>
         </section>
       ) : (
-      <section className="playlist-builder-card" aria-label="Build a playlist">
-        <div className="playlist-builder-heading">
-          <span className="playlist-builder-mark" aria-hidden="true">
-            <Sparkles size={20} />
-          </span>
-          <div>
-            <span>Luna · Playlist planner</span>
-            <h2>What should this playlist feel like?</h2>
-            <p>
-              Luna receives your words and returns filters, targets, and repeat
-              limits. SQLite finds and sequences the tracks; names and paths
-              never leave this device. A launched insight cohort remains locked
-              as the local source.
-            </p>
-          </div>
-        </div>
-
-        {sourceCohortTitle ? (
-          <div className="playlist-cohort-source" aria-label="Playlist source cohort">
-            <ListMusic size={16} />
-            <div>
-              <span>Source cohort</span>
-              <strong>{sourceCohortTitle}</strong>
+        <PageLunaCommandArea
+          idPrefix="playlist"
+          label="Playlist Luna commands"
+          description="Describe a mix for Luna to plan from your local tracks."
+          openRequestId={launch?.id}
+        >
+          <section className="playlist-builder-card" aria-label="Build a playlist">
+            <div className="playlist-builder-heading">
+              <span className="playlist-builder-mark" aria-hidden="true">
+                <Sparkles size={20} />
+              </span>
+              <div>
+                <span>Luna · Playlist planner</span>
+                <h2>What should this playlist feel like?</h2>
+                <p>
+                  Luna receives your words and returns filters, targets, and repeat
+                  limits. SQLite finds and sequences the tracks; names and paths
+                  never leave this device. A launched insight cohort remains locked
+                  as the local source.
+                </p>
+              </div>
             </div>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="Clear cohort source"
-              title="Clear cohort source"
-              onClick={() => {
-                setSourceCohortTitle(null);
-                setSourceRequest(null);
-              }}
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ) : null}
 
-        <form className="playlist-prompt-form" onSubmit={createPlaylist}>
-          <label>
-            <span>Playlist request</span>
-            <textarea
-              value={prompt}
-              maxLength={2000}
-              rows={3}
-              disabled={isBuilding || !isAvailable}
-              onChange={(event) => setPrompt(event.target.value)}
-              placeholder="e.g. A 60-minute Sunday morning mix: warm soul, mellow AOR, no artist twice"
-            />
-          </label>
-          <button
-            className="primary-button"
-            type="submit"
-            disabled={
-              isBuilding || !isAvailable || prompt.trim().length === 0
-            }
-          >
-            <Sparkles size={16} />
-            <span>{isBuilding ? "Building" : "Build playlist"}</span>
-          </button>
-        </form>
+            {sourceCohortTitle ? (
+              <div className="playlist-cohort-source" aria-label="Playlist source cohort">
+                <ListMusic size={16} />
+                <div>
+                  <span>Source cohort</span>
+                  <strong>{sourceCohortTitle}</strong>
+                </div>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Clear cohort source"
+                  title="Clear cohort source"
+                  onClick={() => {
+                    setSourceCohortTitle(null);
+                    setSourceRequest(null);
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : null}
 
-        <div className="playlist-examples" aria-label="Playlist examples">
-          {examplePrompts.map((example) => (
-            <button
-              key={example}
-              type="button"
-              disabled={isBuilding}
-              onClick={() => setPrompt(example)}
-            >
-              {example}
-            </button>
-          ))}
-        </div>
-        {!isAvailable ? (
-          <p className="playlist-note">Import a library before building a playlist.</p>
-        ) : null}
-        {error ? <p className="error-message playlist-note">{error}</p> : null}
-      </section>
+            <form className="playlist-prompt-form" onSubmit={createPlaylist}>
+              <label>
+                <span>Playlist request</span>
+                <textarea
+                  value={prompt}
+                  maxLength={2000}
+                  rows={3}
+                  disabled={isBuilding || !isAvailable}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  placeholder="e.g. A 60-minute Sunday morning mix: warm soul, mellow AOR, no artist twice"
+                />
+              </label>
+              <button
+                className="primary-button"
+                type="submit"
+                disabled={
+                  isBuilding || !isAvailable || prompt.trim().length === 0
+                }
+              >
+                <Sparkles size={16} />
+                <span>{isBuilding ? "Building" : "Build playlist"}</span>
+              </button>
+            </form>
+
+            <div className="playlist-examples" aria-label="Playlist examples">
+              {examplePrompts.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  disabled={isBuilding}
+                  onClick={() => setPrompt(example)}
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+            {!isAvailable ? (
+              <p className="playlist-note">Import a library before building a playlist.</p>
+            ) : null}
+            {error ? <p className="error-message playlist-note">{error}</p> : null}
+          </section>
+        </PageLunaCommandArea>
       )}
 
       <div className="playlist-content-grid">

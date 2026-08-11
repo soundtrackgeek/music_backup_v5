@@ -110,6 +110,47 @@ describe("CurrentViewQuestionPanel", () => {
     expect(backend.saveAiSnapshot).not.toHaveBeenCalled();
   });
 
+  it("sends a named map scope without storing it as Search history", async () => {
+    const user = userEvent.setup();
+    const request = createRequest("albums");
+    request.filters.artistKeys = ["a-ha", "royksopp"];
+    backend.askCurrentView.mockResolvedValueOnce({
+      answer: "Electronic music is the strongest local signal.",
+      view: "albums",
+      matchingRows: 18,
+      analysisCount: 2,
+      namedRowsShared: 0,
+      model: "gpt-5.6-luna",
+      usage: { inputTokens: 500, cachedInputTokens: 0, outputTokens: 50 },
+    } satisfies AiCurrentViewAnswer);
+
+    render(
+      <CurrentViewQuestionPanel
+        context="search"
+        request={request}
+        heading="Ask about Oslo"
+        questionAriaLabel="Question about Oslo, Norway"
+        scopeLabel="Music Map location: Oslo, Norway"
+        saveSnapshots={false}
+      />,
+    );
+    const question = "Which genres stand out here?";
+    await user.type(
+      screen.getByRole("textbox", { name: "Question about Oslo, Norway" }),
+      question,
+    );
+    await user.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(backend.askCurrentView).toHaveBeenCalledWith({
+      question,
+      request,
+      scopeLabel: "Music Map location: Oslo, Norway",
+    });
+    expect(screen.getByText(/strongest local signal/)).toBeInTheDocument();
+    expect(backend.listAiSnapshots).not.toHaveBeenCalled();
+    expect(backend.saveAiSnapshot).not.toHaveBeenCalled();
+  });
+
   it("reopens a saved current-view answer without another Luna request", async () => {
     const user = userEvent.setup();
     const request = createRequest("albums");

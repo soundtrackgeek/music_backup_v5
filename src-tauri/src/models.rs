@@ -2363,6 +2363,7 @@ pub struct MusicMapLocationDetails {
     pub point: MusicMapPoint,
     pub genres: Vec<MusicMapGenreStat>,
     pub artists: Vec<MusicMapArtist>,
+    pub artist_keys: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

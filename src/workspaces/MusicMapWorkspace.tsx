@@ -41,6 +41,10 @@ import {
 } from "../backend";
 import { formatNumber } from "../app/display";
 import {
+  createMusicMapQuestionRequest,
+  musicMapScopeLabel,
+} from "../app/musicMapLuna";
+import {
   geographyVisibility,
   genreColor,
   mapMetricValue,
@@ -54,6 +58,8 @@ import type {
   MusicMapPoint,
   MusicMapResponse,
 } from "../types";
+import { CurrentViewQuestionPanel } from "../components/CurrentViewQuestionPanel";
+import { PageLunaCommandArea } from "../components/SearchProgressiveDisclosure";
 
 const COUNTRY_SOURCE_ID = "music-map-countries";
 const AREA_SOURCE_ID = "music-map-areas";
@@ -575,6 +581,11 @@ export function MusicMapWorkspace({ onOpenArtist }: MusicMapWorkspaceProps) {
       ),
     [data, geography, zoom],
   );
+  const lunaRequest = useMemo(
+    () => (details ? createMusicMapQuestionRequest(details) : null),
+    [details],
+  );
+  const lunaScope = details ? musicMapScopeLabel(details) : null;
 
   function focusPoint(point: MusicMapPoint) {
     setSearchText("");
@@ -656,6 +667,34 @@ export function MusicMapWorkspace({ onOpenArtist }: MusicMapWorkspaceProps) {
           note="Appear as you zoom"
         />
       </section>
+
+      <PageLunaCommandArea
+        idPrefix="music-map"
+        label="Music Map Luna commands"
+        description={
+          lunaScope
+            ? `Ask about albums and artists mapped to ${lunaScope}.`
+            : "Select a country or area, then ask about its music."
+        }
+      >
+        {details && lunaRequest && lunaScope ? (
+          <CurrentViewQuestionPanel
+            context="search"
+            request={lunaRequest}
+            heading={`Ask about ${details.point.name}`}
+            description={`Luna can request exact local summaries, groups, or up to 50 names from albums by artists mapped to ${lunaScope}. The place label and only that compact context may be shared; paths and the rest of your library stay local.`}
+            placeholder={`Which genres stand out in ${details.point.name}?`}
+            questionAriaLabel={`Question about ${lunaScope}`}
+            scopeLabel={`Music Map location: ${lunaScope}`}
+            showSnapshotHistory={false}
+            saveSnapshots={false}
+          />
+        ) : (
+          <p className="music-map-luna-empty">
+            Select a country or area on the map to attach its local albums.
+          </p>
+        )}
+      </PageLunaCommandArea>
 
       <section className="music-map-toolbar" aria-label="Map controls">
         <div className="music-map-search-shell">

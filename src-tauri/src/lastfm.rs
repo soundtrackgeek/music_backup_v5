@@ -17,7 +17,7 @@ use zeroize::Zeroizing;
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.lastfm";
 const KEYRING_USER: &str = "api-key";
 const LASTFM_API_BASE: &str = "https://ws.audioscrobbler.com/2.0/";
-const LASTFM_USER_AGENT: &str = "music-backup-v5/0.114.0 (local artist portrait enrichment)";
+const LASTFM_USER_AGENT: &str = "music-backup-v5/0.115.0 (local artist portrait enrichment)";
 const REQUEST_INTERVAL: Duration = Duration::from_millis(350);
 const MAX_IMAGE_BYTES: u64 = 8 * 1024 * 1024;
 const LASTFM_PLACEHOLDER_HASH: &str = "2a96cbd8b46e442fc41c2b86b821562f";
