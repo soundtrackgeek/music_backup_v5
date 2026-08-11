@@ -18454,6 +18454,116 @@ button {
   cursor: pointer;
 }
 
+.album-review {
+  min-width: 0;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(206, 123, 46, 0.08), transparent 34%),
+    #ffffff;
+  padding: 20px;
+}
+
+.album-review-heading,
+.album-review-byline,
+.album-review-source,
+.album-review-source-actions,
+.album-review-rating {
+  display: flex;
+  align-items: center;
+}
+
+.album-review-heading,
+.album-review-source {
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.album-review-heading {
+  margin-bottom: 13px;
+}
+
+.album-review h2 {
+  margin: 3px 0 0;
+  color: #17211f;
+  font-size: 1.25rem;
+  letter-spacing: -0.025em;
+}
+
+.album-review .eyebrow {
+  color: #7b8984;
+  font-size: 0.64rem;
+  font-weight: 760;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.album-review-byline {
+  justify-content: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: #687771;
+  font-size: 0.72rem;
+  font-weight: 680;
+}
+
+.album-review-rating {
+  gap: 2px;
+  color: #d78522;
+}
+
+.album-review-copy {
+  display: -webkit-box;
+  max-width: 104ch;
+  margin: 0;
+  overflow: hidden;
+  color: #34423e;
+  font-size: 0.86rem;
+  line-height: 1.76;
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+.album-review-copy.expanded {
+  display: block;
+  overflow: visible;
+}
+
+.album-review-expand {
+  margin-top: 8px;
+  padding: 3px 0;
+  color: #176e66;
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.album-review-source {
+  min-height: 32px;
+  margin-top: 12px;
+  border-top: 1px solid #e1e8e5;
+  padding-top: 10px;
+  color: #7a8782;
+  font-size: 0.67rem;
+}
+
+.album-review-source-actions {
+  gap: 14px;
+}
+
+.album-review-source button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  color: #176e66;
+  background: transparent;
+  font-weight: 720;
+  cursor: pointer;
+}
+
 .track-title-with-popularity {
   display: inline-flex !important;
   align-items: center;
@@ -18520,6 +18630,26 @@ button {
   color: #c6d2ce;
 }
 
+:root[data-theme="dark"] .album-review {
+  border-color: #2f3d38;
+  color: #dce7e3;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(206, 123, 46, 0.12), transparent 34%),
+    #171f1c;
+}
+
+:root[data-theme="dark"] .album-review h2 {
+  color: #e8f0ed;
+}
+
+:root[data-theme="dark"] .album-review-copy {
+  color: #c6d2ce;
+}
+
+:root[data-theme="dark"] .album-review-source {
+  border-color: #2f3d38;
+}
+
 @media (max-width: 900px) {
   .artist-overview {
     grid-template-columns: 1fr;
@@ -18547,6 +18677,18 @@ button {
   }
 
   .artist-biography-source-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .album-review-heading,
+  .album-review-source {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .album-review-source-actions {
     align-items: flex-start;
     flex-direction: column;
     gap: 2px;

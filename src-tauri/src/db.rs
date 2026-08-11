@@ -555,18 +555,33 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_fifty_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_fifty_one_schema_exists(conn)? {
+        return Ok(());
+    }
+
+    if user_version == 50 && migrations::phase_fifty_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 51 migration transaction")?;
+        ensure_album_review_schema(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 51;")
+            .context("Could not mark the schema 51 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 51 migration")?;
         return Ok(());
     }
 
     if user_version == 49 && migrations::phase_forty_nine_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 50 migration transaction")?;
+            .context("Could not start the schema 50–51 migration transaction")?;
         ensure_artist_biography_schema(&transaction)?;
+        ensure_album_review_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 50;")
-            .context("Could not mark the schema 50 migration complete")?;
+            .execute_batch("PRAGMA user_version = 51;")
+            .context("Could not mark the schema 50–51 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 50 migration")?;
@@ -579,9 +594,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             .context("Could not start the schema 49–50 migration transaction")?;
         ensure_lastfm_popularity_schema(&transaction)?;
         ensure_artist_biography_schema(&transaction)?;
+        ensure_album_review_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 50;")
-            .context("Could not mark the schema 49–50 migration complete")?;
+            .execute_batch("PRAGMA user_version = 51;")
+            .context("Could not mark the schema 49–51 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 49–50 migration")?;
@@ -595,9 +611,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_music_doctor_schema(&transaction)?;
         ensure_lastfm_popularity_schema(&transaction)?;
         ensure_artist_biography_schema(&transaction)?;
+        ensure_album_review_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 50;")
-            .context("Could not mark the schema 48–50 migration complete")?;
+            .execute_batch("PRAGMA user_version = 51;")
+            .context("Could not mark the schema 48–51 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 48–50 migration")?;
@@ -612,9 +629,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_music_doctor_schema(&transaction)?;
         ensure_lastfm_popularity_schema(&transaction)?;
         ensure_artist_biography_schema(&transaction)?;
+        ensure_album_review_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 50;")
-            .context("Could not mark the schema 47–50 migration complete")?;
+            .execute_batch("PRAGMA user_version = 51;")
+            .context("Could not mark the schema 47–51 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 47–50 migration")?;
@@ -630,9 +648,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_music_doctor_schema(&transaction)?;
         ensure_lastfm_popularity_schema(&transaction)?;
         ensure_artist_biography_schema(&transaction)?;
+        ensure_album_review_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 50;")
-            .context("Could not mark the schema 46–50 migration complete")?;
+            .execute_batch("PRAGMA user_version = 51;")
+            .context("Could not mark the schema 46–51 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 46–50 migration")?;
@@ -649,9 +668,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_music_doctor_schema(&transaction)?;
         ensure_lastfm_popularity_schema(&transaction)?;
         ensure_artist_biography_schema(&transaction)?;
+        ensure_album_review_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 50;")
-            .context("Could not mark the schema 45–50 migration complete")?;
+            .execute_batch("PRAGMA user_version = 51;")
+            .context("Could not mark the schema 45–51 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 45–50 migration")?;
@@ -1868,6 +1888,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_artist_images_schema(conn)?;
     ensure_lastfm_popularity_schema(conn)?;
     ensure_artist_biography_schema(conn)?;
+    ensure_album_review_schema(conn)?;
     ensure_album_artist_key_index(conn)?;
     ensure_music_doctor_schema(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
@@ -1875,7 +1896,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 50;
+        PRAGMA user_version = 51;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -2405,6 +2426,40 @@ fn ensure_artist_biography_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create the artist biography cache schema")?;
+    Ok(())
+}
+
+fn ensure_album_review_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS album_reviews (
+            album_id TEXT PRIMARY KEY,
+            album_artist TEXT NOT NULL,
+            album_title TEXT NOT NULL,
+            album_year INTEGER,
+            artist_mbid TEXT,
+            release_group_mbid TEXT,
+            review_id TEXT,
+            review_text TEXT,
+            reviewer_name TEXT,
+            rating INTEGER,
+            language TEXT,
+            review_source TEXT,
+            source_url TEXT,
+            license_id TEXT,
+            license_name TEXT,
+            license_url TEXT,
+            state TEXT NOT NULL CHECK(state IN ('available', 'unavailable')),
+            message TEXT NOT NULL DEFAULT '',
+            fetched_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_album_reviews_expires
+            ON album_reviews(expires_at);
+        ",
+    )
+    .context("Could not create the album review cache schema")?;
     Ok(())
 }
 
@@ -8971,6 +9026,40 @@ pub(crate) struct ArtistBiographyCacheRecord {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct AlbumReviewIdentity {
+    pub album_id: String,
+    pub album_artist: String,
+    pub album_title: String,
+    pub album_year: Option<i32>,
+    pub artist_mbid: Option<String>,
+    pub release_group_mbid: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct AlbumReviewCacheRecord {
+    pub album_id: String,
+    pub album_artist: String,
+    pub album_title: String,
+    pub album_year: Option<i32>,
+    pub artist_mbid: Option<String>,
+    pub release_group_mbid: Option<String>,
+    pub review_id: Option<String>,
+    pub review_text: Option<String>,
+    pub reviewer_name: Option<String>,
+    pub rating: Option<i32>,
+    pub language: Option<String>,
+    pub review_source: Option<String>,
+    pub source_url: Option<String>,
+    pub license_id: Option<String>,
+    pub license_name: Option<String>,
+    pub license_url: Option<String>,
+    pub state: String,
+    pub message: String,
+    pub fetched_at: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct LastFmLocalTrackCandidate {
     pub track_id: i64,
     pub artist_key: String,
@@ -9159,6 +9248,170 @@ pub(crate) fn upsert_artist_biography_for_app(
 ) -> Result<()> {
     let (conn, _) = open(app)?;
     upsert_artist_biography(&conn, record)
+}
+
+fn album_review_identity(conn: &Connection, album_id: &str) -> Result<Option<AlbumReviewIdentity>> {
+    let artist_key = artist_key_sql("a.album_artist_display");
+    let sql = format!(
+        "
+        SELECT
+            a.id,
+            COALESCE(NULLIF(TRIM(a.album_artist_display), ''), 'Unknown Artist'),
+            COALESCE(NULLIF(TRIM(a.album), ''), 'Untitled album'),
+            a.year,
+            link.mbid,
+            (
+                SELECT decision.release_mbid
+                FROM musicbrainz_release_decisions decision
+                WHERE decision.local_album_id = a.id
+                  AND decision.decision = 'include'
+                ORDER BY decision.updated_at DESC, decision.release_mbid
+                LIMIT 1
+            )
+        FROM albums a
+        LEFT JOIN musicbrainz_artist_links link
+          ON link.local_artist_key = {artist_key}
+         AND link.ignored = 0
+        WHERE a.id = ?1
+        "
+    );
+    conn.query_row(&sql, [album_id], |row| {
+        Ok(AlbumReviewIdentity {
+            album_id: row.get(0)?,
+            album_artist: row.get(1)?,
+            album_title: row.get(2)?,
+            album_year: row.get(3)?,
+            artist_mbid: row.get(4)?,
+            release_group_mbid: row.get(5)?,
+        })
+    })
+    .optional()
+    .context("Could not resolve the local album for its review")
+}
+
+pub(crate) fn album_review_identity_for_app(
+    app: &AppHandle,
+    album_id: &str,
+) -> Result<Option<AlbumReviewIdentity>> {
+    let (conn, _) = open(app)?;
+    album_review_identity(&conn, album_id)
+}
+
+fn album_review_cache(conn: &Connection, album_id: &str) -> Result<Option<AlbumReviewCacheRecord>> {
+    conn.query_row(
+        "
+        SELECT
+            album_id, album_artist, album_title, album_year, artist_mbid,
+            release_group_mbid, review_id, review_text, reviewer_name, rating,
+            language, review_source, source_url, license_id, license_name,
+            license_url, state, message, fetched_at, expires_at
+        FROM album_reviews
+        WHERE album_id = ?1
+        ",
+        [album_id],
+        |row| {
+            Ok(AlbumReviewCacheRecord {
+                album_id: row.get(0)?,
+                album_artist: row.get(1)?,
+                album_title: row.get(2)?,
+                album_year: row.get(3)?,
+                artist_mbid: row.get(4)?,
+                release_group_mbid: row.get(5)?,
+                review_id: row.get(6)?,
+                review_text: row.get(7)?,
+                reviewer_name: row.get(8)?,
+                rating: row.get(9)?,
+                language: row.get(10)?,
+                review_source: row.get(11)?,
+                source_url: row.get(12)?,
+                license_id: row.get(13)?,
+                license_name: row.get(14)?,
+                license_url: row.get(15)?,
+                state: row.get(16)?,
+                message: row.get(17)?,
+                fetched_at: row.get(18)?,
+                expires_at: row.get(19)?,
+            })
+        },
+    )
+    .optional()
+    .context("Could not read the album review cache")
+}
+
+pub(crate) fn album_review_cache_for_app(
+    app: &AppHandle,
+    album_id: &str,
+) -> Result<Option<AlbumReviewCacheRecord>> {
+    let (conn, _) = open(app)?;
+    album_review_cache(&conn, album_id)
+}
+
+fn upsert_album_review(conn: &Connection, record: &AlbumReviewCacheRecord) -> Result<()> {
+    conn.execute(
+        "
+        INSERT INTO album_reviews (
+            album_id, album_artist, album_title, album_year, artist_mbid,
+            release_group_mbid, review_id, review_text, reviewer_name, rating,
+            language, review_source, source_url, license_id, license_name,
+            license_url, state, message, fetched_at, expires_at
+        ) VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
+            ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20
+        )
+        ON CONFLICT(album_id) DO UPDATE SET
+            album_artist = excluded.album_artist,
+            album_title = excluded.album_title,
+            album_year = excluded.album_year,
+            artist_mbid = excluded.artist_mbid,
+            release_group_mbid = excluded.release_group_mbid,
+            review_id = excluded.review_id,
+            review_text = excluded.review_text,
+            reviewer_name = excluded.reviewer_name,
+            rating = excluded.rating,
+            language = excluded.language,
+            review_source = excluded.review_source,
+            source_url = excluded.source_url,
+            license_id = excluded.license_id,
+            license_name = excluded.license_name,
+            license_url = excluded.license_url,
+            state = excluded.state,
+            message = excluded.message,
+            fetched_at = excluded.fetched_at,
+            expires_at = excluded.expires_at
+        ",
+        params![
+            record.album_id,
+            record.album_artist,
+            record.album_title,
+            record.album_year,
+            record.artist_mbid,
+            record.release_group_mbid,
+            record.review_id,
+            record.review_text,
+            record.reviewer_name,
+            record.rating,
+            record.language,
+            record.review_source,
+            record.source_url,
+            record.license_id,
+            record.license_name,
+            record.license_url,
+            record.state,
+            record.message,
+            record.fetched_at,
+            record.expires_at,
+        ],
+    )
+    .context("Could not cache the album review")?;
+    Ok(())
+}
+
+pub(crate) fn upsert_album_review_for_app(
+    app: &AppHandle,
+    record: &AlbumReviewCacheRecord,
+) -> Result<()> {
+    let (conn, _) = open(app)?;
+    upsert_album_review(&conn, record)
 }
 
 fn lastfm_local_track_from_row(
@@ -21622,6 +21875,8 @@ mod tests {
         assert!(migrations::phase_forty_nine_schema_exists(&conn)
             .expect("phase forty-nine schema exists"));
         assert!(migrations::phase_fifty_schema_exists(&conn).expect("phase fifty schema exists"));
+        assert!(migrations::phase_fifty_one_schema_exists(&conn)
+            .expect("phase fifty-one schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -21680,6 +21935,8 @@ mod tests {
         assert!(migrations::phase_forty_nine_schema_exists(&conn)
             .expect("phase forty-nine schema exists"));
         assert!(migrations::phase_fifty_schema_exists(&conn).expect("phase fifty schema exists"));
+        assert!(migrations::phase_fifty_one_schema_exists(&conn)
+            .expect("phase fifty-one schema exists"));
         assert_eq!(
             conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
                 .expect("read upgraded schema version"),
@@ -21709,11 +21966,119 @@ mod tests {
         migrate(&conn).expect("upgrade schema forty-nine");
 
         assert!(migrations::phase_fifty_schema_exists(&conn).expect("phase fifty schema exists"));
+        assert!(migrations::phase_fifty_one_schema_exists(&conn)
+            .expect("phase fifty-one schema exists"));
         assert_eq!(
             conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
                 .expect("read upgraded schema version"),
             LATEST_SCHEMA_VERSION,
         );
+    }
+
+    #[test]
+    fn upgrades_schema_fifty_with_album_review_cache() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("create current schema");
+        conn.execute_batch(
+            "
+            DROP TABLE album_reviews;
+            PRAGMA user_version = 50;
+            ",
+        )
+        .expect("restore schema fifty shape");
+
+        assert!(migrations::phase_fifty_schema_exists(&conn).expect("phase fifty schema exists"));
+        assert!(!migrations::phase_fifty_one_schema_exists(&conn)
+            .expect("phase fifty-one schema is absent"));
+
+        migrate(&conn).expect("upgrade schema fifty");
+
+        assert!(migrations::phase_fifty_one_schema_exists(&conn)
+            .expect("phase fifty-one schema exists"));
+        assert_eq!(
+            conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+                .expect("read upgraded schema version"),
+            LATEST_SCHEMA_VERSION,
+        );
+    }
+
+    #[test]
+    fn resolves_and_caches_album_review_identity() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_artist_links (
+                local_artist_key, display_artist, mbid, canonical_name,
+                match_method, confidence, verification_state, ignored,
+                created_at, updated_at
+            ) VALUES (
+                'pet shop boys', 'Pet Shop Boys',
+                'd42c5dcb-ca99-420f-8aa1-79d1e8b8b907', 'Pet Shop Boys',
+                'manual', 1.0, 'verified', 0, datetime('now'), datetime('now')
+            )
+            ",
+            [],
+        )
+        .expect("insert artist link");
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_release_decisions (
+                local_artist_key, release_mbid, decision, local_album_id,
+                created_at, updated_at
+            ) VALUES (
+                'pet shop boys', '11111111-1111-1111-1111-111111111111',
+                'include', 'mb:test', datetime('now'), datetime('now')
+            )
+            ",
+            [],
+        )
+        .expect("insert release decision");
+
+        let identity = album_review_identity(&conn, "mb:test")
+            .expect("resolve album identity")
+            .expect("album identity");
+        assert_eq!(identity.album_artist, "Pet Shop Boys");
+        assert_eq!(identity.album_title, "Actually");
+        assert_eq!(
+            identity.release_group_mbid.as_deref(),
+            Some("11111111-1111-1111-1111-111111111111")
+        );
+
+        let record = AlbumReviewCacheRecord {
+            album_id: identity.album_id.clone(),
+            album_artist: identity.album_artist.clone(),
+            album_title: identity.album_title.clone(),
+            album_year: identity.album_year,
+            artist_mbid: identity.artist_mbid.clone(),
+            release_group_mbid: identity.release_group_mbid.clone(),
+            review_id: Some("22222222-2222-2222-2222-222222222222".to_string()),
+            review_text: Some("A precise, durable album review.".to_string()),
+            reviewer_name: Some("Reviewer".to_string()),
+            rating: Some(4),
+            language: Some("en".to_string()),
+            review_source: None,
+            source_url: Some(
+                "https://critiquebrainz.org/review/22222222-2222-2222-2222-222222222222"
+                    .to_string(),
+            ),
+            license_id: Some("CC BY-SA 3.0".to_string()),
+            license_name: Some("Creative Commons Attribution-ShareAlike".to_string()),
+            license_url: Some("https://creativecommons.org/licenses/by-sa/3.0/".to_string()),
+            state: "available".to_string(),
+            message: "Album review loaded from CritiqueBrainz.".to_string(),
+            fetched_at: "2026-08-11T12:00:00Z".to_string(),
+            expires_at: "2026-09-10T12:00:00Z".to_string(),
+        };
+        upsert_album_review(&conn, &record).expect("cache album review");
+        let cached = album_review_cache(&conn, "mb:test")
+            .expect("read album review cache")
+            .expect("cached album review");
+
+        assert_eq!(cached.review_text, record.review_text);
+        assert_eq!(cached.reviewer_name.as_deref(), Some("Reviewer"));
+        assert_eq!(cached.rating, Some(4));
+        assert_eq!(cached.license_id.as_deref(), Some("CC BY-SA 3.0"));
     }
 
     #[test]

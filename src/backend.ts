@@ -173,6 +173,7 @@ import type {
   LastFmAlbumPopularity,
   LastFmArtistPopularity,
   ArtistBiography,
+  AlbumReview,
   LastFmConnectionTest,
   LastFmCredentialStatus,
   SaveLastFmApiKeyRequest,
@@ -2096,6 +2097,40 @@ export async function getArtistBiography(
   }
   return invoke<ArtistBiography>("get_artist_biography", {
     artistId,
+    forceRefresh,
+  });
+}
+
+export async function getAlbumReview(albumId: string, forceRefresh = false) {
+  if (!isTauriRuntime()) {
+    const album = mockRows.find((row) => row.albumId === albumId);
+    const albumTitle = album?.album ?? "Untitled album";
+    const albumArtist =
+      album?.albumArtistDisplay ?? album?.displayArtist ?? "Unknown Artist";
+    return {
+      albumId,
+      albumArtist,
+      albumTitle,
+      releaseGroupMbid: "57f5e7c8-2a6e-34a0-b4cd-0e77695bc36f",
+      reviewId: "58496ed0-35c4-46b0-b87a-986ce03ce19d",
+      review: `${albumTitle} balances immediate hooks with details that reward repeat listening. Its strongest moments feel effortless, but the sequencing and production reveal a record built with more care than its surface suggests. This CritiqueBrainz preview demonstrates the full album-review layout while the desktop app resolves the exact MusicBrainz release group and caches the selected community review locally.`,
+      reviewerName: "CritiqueBrainz reviewer",
+      rating: 4,
+      language: "en",
+      reviewSource: null,
+      sourceUrl:
+        "https://critiquebrainz.org/review/58496ed0-35c4-46b0-b87a-986ce03ce19d",
+      licenseId: "CC BY-SA 3.0",
+      licenseName: "Creative Commons Attribution-ShareAlike 3.0 Unported",
+      licenseUrl: "https://creativecommons.org/licenses/by-sa/3.0/",
+      fetchedAt: new Date().toISOString(),
+      cached: !forceRefresh,
+      stale: false,
+      message: "Album review loaded from CritiqueBrainz.",
+    } satisfies AlbumReview;
+  }
+  return invoke<AlbumReview>("get_album_review", {
+    albumId,
     forceRefresh,
   });
 }

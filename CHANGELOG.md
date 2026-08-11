@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.119.0] - 2026-08-11
+### Added
+- Added attributed Album Review panels to the Albums workspace using exact MusicBrainz release-group identity and openly licensed CritiqueBrainz community reviews.
+- Added contributor, rating, language, per-review Creative Commons license, source links, explicit refresh, long-text expansion, unavailable states, and stale-cache fallback.
+- Added schema version 51 with 30-day available-review caching and seven-day unavailable-result caching.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.119.0`.
+
 ## [0.118.0] - 2026-08-11
 ### Added
 - Added Show more/Show less controls to Artist Overview Popular Tracks, keeping the initial five-row summary while allowing up to ten locally owned Last.fm matches.

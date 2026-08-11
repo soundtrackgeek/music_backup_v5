@@ -77,6 +77,7 @@ import {
   fixMusicToolIssues,
   cacheSettings,
   getDiscovery,
+  getAlbumReview,
   getArtistBiography,
   getLastFmAlbumPopularity,
   getLastFmArtistPopularity,
@@ -195,6 +196,7 @@ import type {
   LovedDensityStat,
   LastFmAlbumPopularity,
   LastFmArtistPopularity,
+  AlbumReview,
   ArtistBiography,
   MetadataCoverageMetric,
   OutlierStat,
@@ -380,6 +382,7 @@ import { GenreTimeline } from "./components/GenreTimeline";
 import { ArtistTimeline } from "./components/ArtistTimeline";
 import { ArtistPortrait } from "./components/ArtistPortrait";
 import { ArtistBiographyPanel } from "./components/ArtistBiographyPanel";
+import { AlbumReviewPanel } from "./components/AlbumReviewPanel";
 import { ArtistPopularTracksPanel } from "./components/ArtistPopularTracksPanel";
 import {
   TrackPopularityAttribution,
@@ -8284,6 +8287,9 @@ export default function App() {
   >(null);
   const [isAlbumPopularityLoading, setIsAlbumPopularityLoading] =
     useState(false);
+  const [albumReview, setAlbumReview] = useState<AlbumReview | null>(null);
+  const [albumReviewError, setAlbumReviewError] = useState<string | null>(null);
+  const [isAlbumReviewLoading, setIsAlbumReviewLoading] = useState(false);
   const [albumIncludeCalculated, setAlbumIncludeCalculated] = useState(false);
   const [albumExportResult, setAlbumExportResult] =
     useState<ExportResult | null>(null);
@@ -9108,6 +9114,38 @@ export default function App() {
       cancelled = true;
     };
   }, [activeSection, albumResponse, selectedAlbumId]);
+
+  useEffect(() => {
+    if (activeSection !== "Albums" || !selectedAlbumId) {
+      setAlbumReview(null);
+      setAlbumReviewError(null);
+      setIsAlbumReviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsAlbumReviewLoading(true);
+    setAlbumReviewError(null);
+    void getAlbumReview(selectedAlbumId)
+      .then((result) => {
+        if (!cancelled) setAlbumReview(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setAlbumReviewError(
+            error instanceof Error ? error.message : String(error),
+          );
+          setAlbumReview(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsAlbumReviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, selectedAlbumId]);
 
   useEffect(() => {
     if (activeSection !== "Artists") {
@@ -10892,6 +10930,8 @@ export default function App() {
     setSelectedAlbumId(albumId);
     setAlbumPopularity(null);
     setAlbumPopularityError(null);
+    setAlbumReview(null);
+    setAlbumReviewError(null);
     setAlbumExportResult(null);
   }
 
@@ -11548,6 +11588,32 @@ export default function App() {
       );
     } finally {
       setIsArtistBiographyLoading(false);
+    }
+  }
+
+  async function refreshAlbumReview() {
+    if (!selectedAlbumId) return;
+
+    setIsAlbumReviewLoading(true);
+    setAlbumReviewError(null);
+    try {
+      setAlbumReview(await getAlbumReview(selectedAlbumId, true));
+    } catch (error) {
+      setAlbumReviewError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setIsAlbumReviewLoading(false);
+    }
+  }
+
+  async function openAlbumReviewSource(url: string) {
+    try {
+      await openExternalUrl(url);
+    } catch (error) {
+      setAlbumReviewError(
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
@@ -16414,8 +16480,8 @@ export default function App() {
               <div>
                 <h1>Albums</h1>
                 <p>
-                  Dedicated album index, drill-down calculations, ordered
-                  tracks, and album export.
+                  Dedicated album index, attributed reviews, drill-down
+                  calculations, ordered tracks, and album export.
                 </p>
               </div>
               <div className="topbar-actions">
@@ -16759,6 +16825,14 @@ export default function App() {
                 countryFlagDisplay={settings.countryFlagDisplay}
               />
             </section>
+
+            <AlbumReviewPanel
+              review={albumReview}
+              isLoading={isAlbumReviewLoading}
+              error={albumReviewError}
+              onRefresh={() => void refreshAlbumReview()}
+              onOpenSource={(url) => void openAlbumReviewSource(url)}
+            />
 
             <section className="table-panel" aria-label="Selected album tracks">
               <div className="panel-heading compact">

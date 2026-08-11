@@ -14,6 +14,12 @@ Official UK albums and singles import from weekly CSV rows in `CSV_ALBUMS_UK/` a
 
 Settings is split into **General**, **Providers**, **AI**, **Data & Backups**, **MusicBrainz**, **Updates**, and **Diagnostics**. A sticky section switcher keeps the active area close at hand, supports click and arrow-key navigation, and changes to a three-column layout at the supported 1040px minimum width. Only the selected section is shown, while every section remains mounted so unsaved drafts and live operation state survive switching between areas.
 
+## Album reviews
+
+Selecting an album in **Albums** resolves its CritiqueBrainz release group from an app-owned MusicBrainz decision when one exists, otherwise by an exact MusicBrainz album-title and artist match. The review panel loads the strongest available community review, preferring English and then Norwegian text, and shows the contributor, optional one-to-five rating, language, exact Creative Commons license, and a direct CritiqueBrainz link. Long reviews expand in place and **Refresh** bypasses the local cache.
+
+SQLite schema version 51 caches available reviews for 30 days and unavailable results for seven days; a failed refresh keeps the last usable text visible. Review text and its attribution are stored together so cached display retains the original author and license. No provider key is required. These are openly licensed CritiqueBrainz community reviews, not Plex's commercially licensed AllMusic/TiVo editorial copy.
+
 ## Artist biographies
 
 Opening an artist's **Overview** resolves its saved MusicBrainz MBID to a Wikidata item and then an English Wikipedia article, with Norwegian Wikipedia as the fallback. If the saved identity is missing or produces no usable biography, the app searches MusicBrainz by the library artist name and accepts only one exact, case-insensitive, score-100 match before following the same verified Wikidata/Wikipedia path. This covers display variants such as `KISS` and `Kiss` without guessing from a loose Wikipedia title; ambiguous names remain unavailable until linked from **Artist info**. The biography loads automatically, can be refreshed explicitly, expands in place when long, and always shows the Wikipedia article link plus CC BY-SA 4.0 attribution.
@@ -82,7 +88,7 @@ Phase 2C adds an on-demand **Find cover** action after an album is verified. Mus
 - Rust toolchain compatible with Tauri 2
 - Python 3.10 or newer for the optional Music Library Trimmer companion CLI
 - A MusicBee TSV export with the columns listed in `SPEC.md`
-- Internet access is required to load Music Map tiles, enrich new MusicBrainz area/country coordinates, load or refresh artist biographies from Wikidata/Wikipedia, verify Library Completion candidates or Wish List additions through MusicBrainz or Discogs, enrich verified covers, search artist discographies, validate/search a configured Deemix connection, connect/search/download/share through Soulseek, or download articles from a Usenet provider; local Prowlarr access is also required for Usenet searches, while cached biographies, the Library Completion album and artist chart scans, and Coverage Atlas remain local
+- Internet access is required to load Music Map tiles, enrich new MusicBrainz area/country coordinates, load or refresh album reviews from MusicBrainz/CritiqueBrainz or artist biographies from Wikidata/Wikipedia, verify Library Completion candidates or Wish List additions through MusicBrainz or Discogs, enrich verified covers, search artist discographies, validate/search a configured Deemix connection, connect/search/download/share through Soulseek, or download articles from a Usenet provider; local Prowlarr access is also required for Usenet searches, while cached reviews and biographies, the Library Completion album and artist chart scans, and Coverage Atlas remain local
 - An OpenAI API key is optional and only required for Ask Luna search, chart, current-view and Music Map place questions, Library analyst reports, Playlist Builder recipes, outside-library Discovery recipes, and global Music Research
 - A Deezer ARL is optional and only required for the Deemix proof-of-concept connection and Wish List album searches; no Deemix GUI or separate service is required
 - A Soulseek username and password are optional and only required for Soulseek Wish List searches, downloads, and sharing; the client runs inside this app, so `soulseek_forever`, Nicotine+, or SoulseekQt does not need to be running
@@ -518,6 +524,7 @@ npm run security:check
 ## Phase 5 Albums Features
 
 - Albums workspace with a dedicated filterable, sortable, paginated album index and min/max rating-completeness range filtering.
+- Selected albums load an attributed, refreshable CritiqueBrainz community review through exact MusicBrainz release-group identity, with durable positive/unavailable caching and stale-text fallback.
 - Album include/exclude genre filters use the same five-result in-place genre suggestions as Search and Charts.
 - Album detail drill-down with cover placeholders, album metadata, rating completeness, TMOE, AE, loved tracks, and Album Score.
 - Ordered album track lists with disc/track positions, track durations, ratings, love markers, filenames, and paths.

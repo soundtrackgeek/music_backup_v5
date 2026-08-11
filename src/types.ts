@@ -2254,6 +2254,27 @@ export type ArtistBiography = {
   message: string;
 };
 
+export type AlbumReview = {
+  albumId: string;
+  albumArtist: string;
+  albumTitle: string;
+  releaseGroupMbid: string | null;
+  reviewId: string | null;
+  review: string | null;
+  reviewerName: string | null;
+  rating: number | null;
+  language: string | null;
+  reviewSource: string | null;
+  sourceUrl: string | null;
+  licenseId: string | null;
+  licenseName: string | null;
+  licenseUrl: string | null;
+  fetchedAt: string | null;
+  cached: boolean;
+  stale: boolean;
+  message: string;
+};
+
 export type LastFmAlbumTrackPopularity = {
   trackId: number;
   title: string;

@@ -1,7 +1,13 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 50;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 51;
+
+pub(super) fn phase_fifty_one_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_fifty_schema_exists(conn)?
+        && super::schema_table_exists(conn, "album_reviews")?
+        && super::schema_index_exists(conn, "idx_album_reviews_expires")?)
+}
 
 pub(super) fn phase_fifty_schema_exists(conn: &Connection) -> Result<bool> {
     Ok(phase_forty_nine_schema_exists(conn)?
