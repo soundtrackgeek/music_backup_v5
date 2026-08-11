@@ -24,7 +24,7 @@ describe("LastFmSettingsPanel", () => {
     getLastFmCredentialStatus.mockResolvedValue({ configured: false, source: "none" });
     saveLastFmApiKey.mockResolvedValue({
       authenticated: true,
-      message: "Last.fm connected. Artist portrait enrichment is ready.",
+      message: "Last.fm connected. Popularity and artist enrichment are ready.",
     });
   });
 
@@ -58,7 +58,7 @@ describe("LastFmSettingsPanel", () => {
     });
     render(<LastFmSettingsPanel />);
 
-    const syncButton = await screen.findByRole("button", { name: "Sync next 50" });
+    const syncButton = await screen.findByRole("button", { name: "Sync 50 portraits" });
     fireEvent.click(syncButton);
 
     expect(await screen.findByText("42 portraits downloaded")).toBeInTheDocument();

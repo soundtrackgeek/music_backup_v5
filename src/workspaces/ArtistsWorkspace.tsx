@@ -1,15 +1,13 @@
 import type { KeyboardEvent, ReactNode } from "react";
 
 export type ArtistDetailTab =
-  | "local-albums"
-  | "artist-info"
-  | "discography"
-  | "cover-view";
+  "overview" | "local-albums" | "artist-info" | "discography" | "cover-view";
 
 const artistDetailTabs: ReadonlyArray<{
   id: ArtistDetailTab;
   label: string;
 }> = [
+  { id: "overview", label: "Overview" },
   { id: "local-albums", label: "Local albums" },
   { id: "artist-info", label: "Artist info" },
   { id: "discography", label: "MusicBrainz discography" },
@@ -22,6 +20,10 @@ export function artistDetailTabNeedsMusicBrainz(tab: ArtistDetailTab) {
 
 export function artistDetailTabNeedsTracks(tab: ArtistDetailTab) {
   return tab === "cover-view";
+}
+
+export function artistDetailTabNeedsPopularity(tab: ArtistDetailTab) {
+  return tab === "overview";
 }
 
 export function ArtistDetailTabs({
@@ -117,8 +119,8 @@ export function ArtistsWorkspace({
         <div>
           <h1>Artists</h1>
           <p>
-            Album-artist index, selected artist album lists, and artist-level
-            summary stats.
+            Album-artist index, popular tracks, local albums, and artist-level
+            metadata.
           </p>
         </div>
         <div className="topbar-actions">{actions}</div>

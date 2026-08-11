@@ -263,6 +263,34 @@ async fn test_lastfm_connection() -> Result<lastfm::LastFmConnectionTest, String
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_lastfm_artist_popularity(
+    app: AppHandle,
+    artist_id: String,
+    force_refresh: Option<bool>,
+) -> Result<lastfm::LastFmArtistPopularity, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        lastfm::artist_popularity(app, artist_id, force_refresh.unwrap_or(false))
+    })
+    .await
+    .map_err(|error| format!("Last.fm artist popularity task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_lastfm_album_popularity(
+    app: AppHandle,
+    artist_id: String,
+    album_id: String,
+) -> Result<lastfm::LastFmAlbumPopularity, String> {
+    tauri::async_runtime::spawn_blocking(move || lastfm::album_popularity(app, artist_id, album_id))
+        .await
+        .map_err(|error| format!("Last.fm album popularity task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn refresh_lastfm_artist_images(
     app: AppHandle,
     limit: u32,
@@ -1620,6 +1648,8 @@ pub fn run() {
             save_lastfm_api_key,
             delete_lastfm_api_key,
             test_lastfm_connection,
+            get_lastfm_artist_popularity,
+            get_lastfm_album_popularity,
             refresh_lastfm_artist_images,
             get_artist_image_data_url,
             search_deemix_albums,

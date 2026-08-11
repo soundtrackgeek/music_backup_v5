@@ -14,6 +14,14 @@ Official UK albums and singles import from weekly CSV rows in `CSV_ALBUMS_UK/` a
 
 Settings is split into **General**, **Providers**, **AI**, **Data & Backups**, **MusicBrainz**, **Updates**, and **Diagnostics**. A sticky section switcher keeps the active area close at hand, supports click and arrow-key navigation, and changes to a three-column layout at the supported 1040px minimum width. Only the selected section is shown, while every section remains mounted so unsaved drafts and live operation state survive switching between areas.
 
+## Last.fm popularity
+
+**Settings → Providers → Last.fm metadata** stores a read-only API key in Windows Credential Manager; the Last.fm shared secret is not used. Opening an artist's **Overview** loads `artist.getTopTracks`, matches the result against tracks that are actually in the local library, and shows up to five Popular Tracks with visible Last.fm attribution. **Refresh** explicitly requests a new artist snapshot.
+
+Opening an album track list reuses that artist snapshot and requests `track.getInfo` only for album tracks whose popularity is missing or stale. Tracks with positive listener evidence are ranked by listeners, then play count and track order; the leading three receive a 🔥 marker in both Albums and the Artist Cover view. A track without usable listening evidence is not given a flame.
+
+SQLite schema version 49 stores artist refresh state and normalized track popularity independently of transient imported track IDs. Successful responses honor provider cache headers with a seven-day fallback, unavailable tracks are retained for 30 days, and stale cached data remains usable when a refresh fails. Text is cached; Last.fm credentials are never stored in SQLite, logs, browser storage, or backups.
+
 ## Music Doctor quality integration
 
 **Settings → Data & Backups → Music Doctor** connects to `%APPDATA%\com.musicdoctor.desktop\music-doctor.db` by default. The source database is opened read-only and is never migrated or modified by Music Library. **Save and check** validates its schema, **Sync now** refreshes the app-owned cache immediately, and **Sync new Music Doctor scans automatically** checks at startup and every five minutes while the app is open. A sync runs only after Music Doctor reports a completed scan; changing the MusicBee import or Music Doctor scan makes the cache stale and eligible for refresh.
@@ -38,7 +46,7 @@ The **Timelines** workspace now groups Charts, Genres, and Artists. The Artists 
 
 **Charts** mode gives Billboard and Official UK the greatest and equal influence at 42% each, with VG Lista supplying the remaining 16%. **My Scores** mode normalizes saved Album Scores within the visible cohort. Both modes support artists that can be added or removed, canonical genre include/exclude filters including the `scores` umbrella, exact From/To years, and Top 7/12/20 display sizes.
 
-Optional artist portraits are configured under **Settings → Providers → Last.fm artist images**. Only a Last.fm API key is required; the API secret is not used by the read-only artist lookup. **Sync next 50** deliberately enriches one bounded batch, caches the downloaded images locally and records them in SQLite, and can be repeated until coverage is complete. Career Peaks, Artist Index, and Artist detail reuse the same cache. If enrichment is unavailable, the UI falls back to a representative album cover and then the artist's initial. SQLite schema version 46 stores this shared portrait cache.
+Optional artist portraits are configured under **Settings → Providers → Last.fm metadata**. Only a Last.fm API key is required; the API secret is not used by the read-only artist lookup. **Sync 50 portraits** deliberately enriches one bounded batch, caches the downloaded images locally and records them in SQLite, and can be repeated until coverage is complete. Career Peaks, Artist Index, and Artist detail reuse the same cache. If enrichment is unavailable, the UI falls back to a representative album cover and then the artist's initial. SQLite schema version 46 stores this shared portrait cache.
 
 ## Music Map
 
@@ -493,10 +501,11 @@ npm run security:check
 ## Phase 6 Artists Features
 
 - Artists workspace with a searchable, sortable, paginated album-artist index.
+- Artist Overview with up to five locally owned Last.fm Popular Tracks, cached provider attribution, and explicit refresh.
 - Artist-level summary stats for album counts, rating progress, year span, top genre, track totals, loved tracks, TMOE, average completeness, average album rating, and average Album Score.
 - Selected artist album lists backed by normalized artist-key filtering so casing differences do not split album lists.
-- Selected-artist details are grouped into Local albums, Artist info, MusicBrainz discography, and Cover view tabs; Local albums opens automatically, while MusicBrainz and cover/track data wait until their relevant tab is selected.
-- The Cover view tab provides a clickable artist album cover board with inline track detail showing ratings, loved status, and clock time.
+- Selected-artist details are grouped into Overview, Local albums, Artist info, MusicBrainz discography, and Cover view tabs; Overview opens automatically, while MusicBrainz and cover/track data wait until their relevant tab is selected.
+- The Cover view tab provides a clickable artist album cover board with inline track detail showing ratings, loved status, clock time, and Last.fm-backed 🔥 markers for the album's three most-listened tracks when evidence is available.
 - Artist album-list export to CSV, TSV, XLSX, JSON, and TXT with optional calculated columns.
 - Web-only preview mock data covers Artists alongside Search, Charts, Statistics, Albums, and Imports.
 

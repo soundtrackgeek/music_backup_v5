@@ -2214,6 +2214,53 @@ export type LastFmArtistImageRefreshSummary = {
   message: string;
 };
 
+export type LastFmPopularTrack = {
+  rank: number;
+  trackId: number;
+  albumId: string;
+  album: string | null;
+  year: number | null;
+  title: string;
+  artist: string;
+  listeners: number;
+  playCount: number;
+  seconds: number | null;
+  sourceUrl: string | null;
+};
+
+export type LastFmArtistPopularity = {
+  artistId: string;
+  artistName: string;
+  sourceUrl: string | null;
+  fetchedAt: string | null;
+  cached: boolean;
+  stale: boolean;
+  tracks: LastFmPopularTrack[];
+  message: string;
+};
+
+export type LastFmAlbumTrackPopularity = {
+  trackId: number;
+  title: string;
+  listeners: number;
+  playCount: number;
+  albumRank: number | null;
+  sourceUrl: string | null;
+};
+
+export type LastFmAlbumPopularity = {
+  artistId: string;
+  albumId: string;
+  sourceUrl: string | null;
+  fetchedAt: string | null;
+  totalTracks: number;
+  resolvedTracks: number;
+  availableTracks: number;
+  stale: boolean;
+  tracks: LastFmAlbumTrackPopularity[];
+  message: string;
+};
+
 export type DiscoveryResponse = {
   heatmap: DiscoveryHeatmapCell[];
   backlogMissions: DiscoveryMission[];

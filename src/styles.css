@@ -18234,6 +18234,221 @@ button {
   height: 44px;
 }
 
+.artist-overview {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.34fr) minmax(0, 1fr);
+  gap: 22px;
+}
+
+.artist-overview-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  border-right: 1px solid #d8e1dd;
+  padding-right: 22px;
+}
+
+.artist-overview-identity > .artist-portrait {
+  width: 82px;
+  height: 82px;
+}
+
+.artist-overview-identity h2,
+.artist-popular-tracks h2 {
+  margin: 3px 0 0;
+  color: #17211f;
+  font-size: 1.25rem;
+  letter-spacing: -0.025em;
+}
+
+.artist-overview-identity p {
+  margin: 6px 0 0;
+  color: #66746f;
+  font-size: 0.76rem;
+}
+
+.artist-overview .eyebrow,
+.artist-popular-tracks .eyebrow {
+  color: #7b8984;
+  font-size: 0.64rem;
+  font-weight: 760;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.artist-popular-tracks {
+  min-width: 0;
+}
+
+.artist-popular-tracks-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.compact-button {
+  min-height: 34px;
+  padding: 0 11px;
+  font-size: 0.74rem;
+}
+
+.artist-popular-track-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.artist-popular-track-list li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(108px, auto) 42px;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  border-top: 1px solid #e1e8e5;
+  color: #34423e;
+  font-size: 0.76rem;
+}
+
+.artist-popular-track-rank {
+  color: #8b9793;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.artist-popular-track-title {
+  display: grid;
+  min-width: 0;
+}
+
+.artist-popular-track-title strong {
+  overflow: hidden;
+  color: #17211f;
+  font-size: 0.82rem;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artist-popular-track-title small,
+.artist-popular-track-listeners,
+.artist-popular-track-list time {
+  color: #7a8782;
+  font-size: 0.69rem;
+}
+
+.artist-popular-track-list time {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.artist-popular-tracks-source,
+.track-popularity-attribution {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  color: #7a8782;
+  font-size: 0.67rem;
+}
+
+.artist-popular-tracks-source button,
+.track-popularity-attribution button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #176e66;
+  background: transparent;
+  padding: 4px 0;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.track-title-with-popularity {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.track-title-with-popularity > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-popularity-fire {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #dc6c18;
+}
+
+.artist-album-expanded .track-popularity-fire {
+  color: #ffad42;
+}
+
+.track-popularity-attribution {
+  border-top: 1px solid #e1e8e5;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.artist-album-expanded .track-popularity-attribution {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 250, 245, 0.72);
+}
+
+.artist-album-expanded .track-popularity-attribution button {
+  color: #ffd08d;
+}
+
+:root[data-theme="dark"] .artist-overview-identity {
+  border-color: #2f3d38;
+}
+
+:root[data-theme="dark"] .artist-overview-identity h2,
+:root[data-theme="dark"] .artist-popular-tracks h2,
+:root[data-theme="dark"] .artist-popular-track-title strong {
+  color: #e8f0ed;
+}
+
+:root[data-theme="dark"] .artist-popular-track-list li,
+:root[data-theme="dark"] .track-popularity-attribution {
+  border-color: #2f3d38;
+}
+
+:root[data-theme="dark"] .artist-popular-track-list li {
+  color: #c6d2ce;
+}
+
+@media (max-width: 900px) {
+  .artist-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .artist-overview-identity {
+    border-right: 0;
+    border-bottom: 1px solid #d8e1dd;
+    padding: 0 0 18px;
+  }
+}
+
+@media (max-width: 600px) {
+  .artist-popular-track-list li {
+    grid-template-columns: 24px minmax(0, 1fr) 38px;
+  }
+
+  .artist-popular-track-listeners {
+    display: none;
+  }
+}
+
 .artist-career-peaks-page {
   --text: #17211f;
   --muted: #66746f;

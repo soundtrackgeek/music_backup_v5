@@ -555,21 +555,36 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_eight_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_forty_nine_schema_exists(conn)? {
+        return Ok(());
+    }
+
+    if user_version == 48 && migrations::phase_forty_eight_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 49 migration transaction")?;
+        ensure_lastfm_popularity_schema(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 49;")
+            .context("Could not mark the schema 49 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 49 migration")?;
         return Ok(());
     }
 
     if user_version == 47 && migrations::phase_forty_seven_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 48 migration transaction")?;
+            .context("Could not start the schema 48–49 migration transaction")?;
         ensure_music_doctor_schema(&transaction)?;
+        ensure_lastfm_popularity_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 48;")
-            .context("Could not mark the schema 48 migration complete")?;
+            .execute_batch("PRAGMA user_version = 49;")
+            .context("Could not mark the schema 48–49 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 48 migration")?;
+            .context("Could not commit the schema 48–49 migration")?;
         return Ok(());
     }
 
@@ -579,12 +594,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             .context("Could not start the schema 47–48 migration transaction")?;
         ensure_album_artist_key_index(&transaction)?;
         ensure_music_doctor_schema(&transaction)?;
+        ensure_lastfm_popularity_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 48;")
-            .context("Could not mark the schema 47–48 migration complete")?;
+            .execute_batch("PRAGMA user_version = 49;")
+            .context("Could not mark the schema 47–49 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 47–48 migration")?;
+            .context("Could not commit the schema 47–49 migration")?;
         return Ok(());
     }
 
@@ -595,12 +611,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_artist_images_schema(&transaction)?;
         ensure_album_artist_key_index(&transaction)?;
         ensure_music_doctor_schema(&transaction)?;
+        ensure_lastfm_popularity_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 48;")
-            .context("Could not mark the schema 46–48 migration complete")?;
+            .execute_batch("PRAGMA user_version = 49;")
+            .context("Could not mark the schema 46–49 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 46–48 migration")?;
+            .context("Could not commit the schema 46–49 migration")?;
         return Ok(());
     }
 
@@ -612,12 +629,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_artist_images_schema(&transaction)?;
         ensure_album_artist_key_index(&transaction)?;
         ensure_music_doctor_schema(&transaction)?;
+        ensure_lastfm_popularity_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 48;")
-            .context("Could not mark the schema 45–48 migration complete")?;
+            .execute_batch("PRAGMA user_version = 49;")
+            .context("Could not mark the schema 45–49 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 45–48 migration")?;
+            .context("Could not commit the schema 45–49 migration")?;
         return Ok(());
     }
 
@@ -1829,6 +1847,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_library_completion_cover_columns(conn)?;
     ensure_library_completion_artist_schema(conn)?;
     ensure_artist_images_schema(conn)?;
+    ensure_lastfm_popularity_schema(conn)?;
     ensure_album_artist_key_index(conn)?;
     ensure_music_doctor_schema(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
@@ -1836,7 +1855,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 48;
+        PRAGMA user_version = 49;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -2299,6 +2318,47 @@ fn ensure_artist_images_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create the artist portrait cache schema")?;
+    Ok(())
+}
+
+fn ensure_lastfm_popularity_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS lastfm_artist_popularity (
+            artist_key TEXT PRIMARY KEY,
+            artist_name TEXT NOT NULL,
+            musicbrainz_mbid TEXT,
+            source_url TEXT,
+            state TEXT NOT NULL CHECK(state IN ('available', 'unavailable')),
+            message TEXT NOT NULL DEFAULT '',
+            fetched_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS lastfm_track_popularity (
+            artist_key TEXT NOT NULL,
+            track_key TEXT NOT NULL,
+            artist_name TEXT NOT NULL,
+            track_name TEXT NOT NULL,
+            musicbrainz_recording_mbid TEXT,
+            listeners INTEGER,
+            play_count INTEGER,
+            artist_rank INTEGER,
+            source_url TEXT,
+            fetch_method TEXT NOT NULL,
+            state TEXT NOT NULL CHECK(state IN ('available', 'unavailable')),
+            fetched_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            PRIMARY KEY (artist_key, track_key)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_lastfm_track_popularity_artist_rank
+            ON lastfm_track_popularity(artist_key, artist_rank);
+        CREATE INDEX IF NOT EXISTS idx_lastfm_track_popularity_expires
+            ON lastfm_track_popularity(expires_at);
+        ",
+    )
+    .context("Could not create the Last.fm popularity cache schema")?;
     Ok(())
 }
 
@@ -8832,6 +8892,356 @@ pub fn artist_timeline_for_app(
 ) -> Result<ArtistTimelineResponse> {
     let (conn, _) = open(app)?;
     artist_timeline(&conn, request)
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct LastFmArtistIdentity {
+    pub artist_key: String,
+    pub artist_name: String,
+    pub musicbrainz_mbid: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct LastFmLocalTrackCandidate {
+    pub track_id: i64,
+    pub artist_key: String,
+    pub album_id: String,
+    pub album: Option<String>,
+    pub album_artist: Option<String>,
+    pub display_artist: Option<String>,
+    pub title: String,
+    pub year: Option<i32>,
+    pub seconds: Option<i64>,
+    pub disc_number: Option<i32>,
+    pub track_number: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct LastFmArtistPopularityCacheRecord {
+    pub artist_key: String,
+    pub artist_name: String,
+    pub musicbrainz_mbid: Option<String>,
+    pub source_url: Option<String>,
+    pub state: String,
+    pub message: String,
+    pub fetched_at: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct LastFmTrackPopularityCacheRecord {
+    pub artist_key: String,
+    pub track_key: String,
+    pub artist_name: String,
+    pub track_name: String,
+    pub musicbrainz_recording_mbid: Option<String>,
+    pub listeners: Option<i64>,
+    pub play_count: Option<i64>,
+    pub artist_rank: Option<i64>,
+    pub source_url: Option<String>,
+    pub fetch_method: String,
+    pub state: String,
+    pub fetched_at: String,
+    pub expires_at: String,
+}
+
+fn lastfm_artist_identity(
+    conn: &Connection,
+    artist_id: &str,
+) -> Result<Option<LastFmArtistIdentity>> {
+    let artist_key = artist_key_sql("album_artist_display");
+    let sql = format!(
+        "
+        WITH grouped AS (
+            SELECT
+                {artist_key} AS artist_key,
+                COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist_name
+            FROM albums
+            GROUP BY {artist_key}
+        )
+        SELECT grouped.artist_key, grouped.artist_name, COALESCE(link.mbid, info.mbid)
+        FROM grouped
+        LEFT JOIN musicbrainz_artist_links link
+          ON link.local_artist_key = grouped.artist_key
+        LEFT JOIN musicbrainz_artist_infos info
+          ON info.local_artist_key = grouped.artist_key
+        WHERE grouped.artist_key = ?1
+        "
+    );
+    conn.query_row(&sql, [artist_id], |row| {
+        Ok(LastFmArtistIdentity {
+            artist_key: row.get(0)?,
+            artist_name: row.get(1)?,
+            musicbrainz_mbid: row.get(2)?,
+        })
+    })
+    .optional()
+    .context("Could not resolve the local artist for Last.fm popularity")
+}
+
+pub(crate) fn lastfm_artist_identity_for_app(
+    app: &AppHandle,
+    artist_id: &str,
+) -> Result<Option<LastFmArtistIdentity>> {
+    let (conn, _) = open(app)?;
+    lastfm_artist_identity(&conn, artist_id)
+}
+
+fn lastfm_local_track_from_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<LastFmLocalTrackCandidate> {
+    Ok(LastFmLocalTrackCandidate {
+        track_id: row.get(0)?,
+        artist_key: row.get(1)?,
+        album_id: row.get(2)?,
+        album: row.get(3)?,
+        album_artist: row.get(4)?,
+        display_artist: row.get(5)?,
+        title: row.get(6)?,
+        year: row.get(7)?,
+        seconds: row.get(8)?,
+        disc_number: row.get(9)?,
+        track_number: row.get(10)?,
+    })
+}
+
+pub(crate) fn lastfm_local_tracks_for_artist_for_app(
+    app: &AppHandle,
+    artist_id: &str,
+) -> Result<Vec<LastFmLocalTrackCandidate>> {
+    let (conn, _) = open(app)?;
+    let artist_key = artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
+    let sql = format!(
+        "
+        SELECT
+            t.id,
+            {artist_key} AS artist_key,
+            t.album_id,
+            COALESCE(t.album, a.album),
+            COALESCE(t.album_artist_display, a.album_artist_display),
+            t.display_artist,
+            t.title,
+            COALESCE(a.year, t.year),
+            t.time_seconds,
+            t.disc_number,
+            t.track_number
+        FROM tracks t
+        LEFT JOIN albums a ON a.id = t.album_id
+        WHERE {artist_key} = ?1
+          AND NULLIF(TRIM(COALESCE(t.title, '')), '') IS NOT NULL
+        ORDER BY COALESCE(a.year, t.year, 9999), LOWER(COALESCE(t.album, a.album, '')),
+                 COALESCE(t.disc_number, 1), COALESCE(t.track_number, 9999), t.id
+        "
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let tracks = stmt
+        .query_map([artist_id], lastfm_local_track_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load local tracks for Last.fm artist popularity")?;
+    Ok(tracks)
+}
+
+pub(crate) fn lastfm_local_tracks_for_album_for_app(
+    app: &AppHandle,
+    album_id: &str,
+) -> Result<Vec<LastFmLocalTrackCandidate>> {
+    let (conn, _) = open(app)?;
+    let artist_key = artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
+    let sql = format!(
+        "
+        SELECT
+            t.id,
+            {artist_key} AS artist_key,
+            t.album_id,
+            COALESCE(t.album, a.album),
+            COALESCE(t.album_artist_display, a.album_artist_display),
+            t.display_artist,
+            t.title,
+            COALESCE(a.year, t.year),
+            t.time_seconds,
+            t.disc_number,
+            t.track_number
+        FROM tracks t
+        LEFT JOIN albums a ON a.id = t.album_id
+        WHERE t.album_id = ?1
+          AND NULLIF(TRIM(COALESCE(t.title, '')), '') IS NOT NULL
+        ORDER BY COALESCE(t.disc_number, 1), COALESCE(t.track_number, 9999), t.id
+        "
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let tracks = stmt
+        .query_map([album_id], lastfm_local_track_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load local album tracks for Last.fm popularity")?;
+    Ok(tracks)
+}
+
+pub(crate) fn lastfm_artist_popularity_cache_for_app(
+    app: &AppHandle,
+    artist_key: &str,
+) -> Result<Option<LastFmArtistPopularityCacheRecord>> {
+    let (conn, _) = open(app)?;
+    conn.query_row(
+        "
+        SELECT artist_key, artist_name, musicbrainz_mbid, source_url, state,
+               message, fetched_at, expires_at
+        FROM lastfm_artist_popularity
+        WHERE artist_key = ?1
+        ",
+        [artist_key],
+        |row| {
+            Ok(LastFmArtistPopularityCacheRecord {
+                artist_key: row.get(0)?,
+                artist_name: row.get(1)?,
+                musicbrainz_mbid: row.get(2)?,
+                source_url: row.get(3)?,
+                state: row.get(4)?,
+                message: row.get(5)?,
+                fetched_at: row.get(6)?,
+                expires_at: row.get(7)?,
+            })
+        },
+    )
+    .optional()
+    .context("Could not load the Last.fm artist popularity cache")
+}
+
+pub(crate) fn lastfm_track_popularity_cache_for_app(
+    app: &AppHandle,
+    artist_key: &str,
+) -> Result<Vec<LastFmTrackPopularityCacheRecord>> {
+    let (conn, _) = open(app)?;
+    let mut stmt = conn.prepare(
+        "
+        SELECT artist_key, track_key, artist_name, track_name,
+               musicbrainz_recording_mbid, listeners, play_count, artist_rank,
+               source_url, fetch_method, state, fetched_at, expires_at
+        FROM lastfm_track_popularity
+        WHERE artist_key = ?1
+        ORDER BY artist_rank IS NULL, artist_rank, listeners DESC, play_count DESC, track_key
+        ",
+    )?;
+    let tracks = stmt
+        .query_map([artist_key], |row| {
+            Ok(LastFmTrackPopularityCacheRecord {
+                artist_key: row.get(0)?,
+                track_key: row.get(1)?,
+                artist_name: row.get(2)?,
+                track_name: row.get(3)?,
+                musicbrainz_recording_mbid: row.get(4)?,
+                listeners: row.get(5)?,
+                play_count: row.get(6)?,
+                artist_rank: row.get(7)?,
+                source_url: row.get(8)?,
+                fetch_method: row.get(9)?,
+                state: row.get(10)?,
+                fetched_at: row.get(11)?,
+                expires_at: row.get(12)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load cached Last.fm track popularity")?;
+    Ok(tracks)
+}
+
+fn upsert_lastfm_track_popularity(
+    conn: &Connection,
+    record: &LastFmTrackPopularityCacheRecord,
+) -> Result<()> {
+    conn.execute(
+        "
+        INSERT INTO lastfm_track_popularity (
+            artist_key, track_key, artist_name, track_name,
+            musicbrainz_recording_mbid, listeners, play_count, artist_rank,
+            source_url, fetch_method, state, fetched_at, expires_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+        ON CONFLICT(artist_key, track_key) DO UPDATE SET
+            artist_name = excluded.artist_name,
+            track_name = excluded.track_name,
+            musicbrainz_recording_mbid = excluded.musicbrainz_recording_mbid,
+            listeners = excluded.listeners,
+            play_count = excluded.play_count,
+            artist_rank = COALESCE(excluded.artist_rank, lastfm_track_popularity.artist_rank),
+            source_url = excluded.source_url,
+            fetch_method = excluded.fetch_method,
+            state = excluded.state,
+            fetched_at = excluded.fetched_at,
+            expires_at = excluded.expires_at
+        ",
+        params![
+            record.artist_key,
+            record.track_key,
+            record.artist_name,
+            record.track_name,
+            record.musicbrainz_recording_mbid,
+            record.listeners,
+            record.play_count,
+            record.artist_rank,
+            record.source_url,
+            record.fetch_method,
+            record.state,
+            record.fetched_at,
+            record.expires_at,
+        ],
+    )
+    .context("Could not cache Last.fm track popularity")?;
+    Ok(())
+}
+
+pub(crate) fn replace_lastfm_artist_top_tracks_for_app(
+    app: &AppHandle,
+    artist: &LastFmArtistPopularityCacheRecord,
+    tracks: &[LastFmTrackPopularityCacheRecord],
+) -> Result<()> {
+    let (mut conn, _) = open(app)?;
+    let tx = conn
+        .transaction()
+        .context("Could not start the Last.fm artist popularity cache transaction")?;
+    tx.execute(
+        "UPDATE lastfm_track_popularity SET artist_rank = NULL WHERE artist_key = ?1",
+        [artist.artist_key.as_str()],
+    )?;
+    for track in tracks {
+        upsert_lastfm_track_popularity(&tx, track)?;
+    }
+    tx.execute(
+        "
+        INSERT INTO lastfm_artist_popularity (
+            artist_key, artist_name, musicbrainz_mbid, source_url, state,
+            message, fetched_at, expires_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        ON CONFLICT(artist_key) DO UPDATE SET
+            artist_name = excluded.artist_name,
+            musicbrainz_mbid = excluded.musicbrainz_mbid,
+            source_url = excluded.source_url,
+            state = excluded.state,
+            message = excluded.message,
+            fetched_at = excluded.fetched_at,
+            expires_at = excluded.expires_at
+        ",
+        params![
+            artist.artist_key,
+            artist.artist_name,
+            artist.musicbrainz_mbid,
+            artist.source_url,
+            artist.state,
+            artist.message,
+            artist.fetched_at,
+            artist.expires_at,
+        ],
+    )
+    .context("Could not cache the Last.fm artist popularity refresh")?;
+    tx.commit()
+        .context("Could not commit the Last.fm artist popularity cache")?;
+    Ok(())
+}
+
+pub(crate) fn upsert_lastfm_track_popularity_for_app(
+    app: &AppHandle,
+    record: &LastFmTrackPopularityCacheRecord,
+) -> Result<()> {
+    let (conn, _) = open(app)?;
+    upsert_lastfm_track_popularity(&conn, record)
 }
 
 #[derive(Debug, Clone)]
@@ -21035,6 +21445,8 @@ mod tests {
             .expect("phase forty-six schema exists"));
         assert!(migrations::phase_forty_seven_schema_exists(&conn)
             .expect("phase forty-seven schema exists"));
+        assert!(migrations::phase_forty_nine_schema_exists(&conn)
+            .expect("phase forty-nine schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -21067,6 +21479,36 @@ mod tests {
             .expect("MusicBrainz map location cache exists"));
         assert!(schema_table_exists(&conn, "library_updates")
             .expect("durable library update history exists"));
+    }
+
+    #[test]
+    fn upgrades_schema_forty_eight_with_lastfm_popularity_cache() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("create current schema");
+        conn.execute_batch(
+            "
+            DROP TABLE lastfm_track_popularity;
+            DROP TABLE lastfm_artist_popularity;
+            PRAGMA user_version = 48;
+            ",
+        )
+        .expect("restore schema forty-eight shape");
+
+        assert!(migrations::phase_forty_eight_schema_exists(&conn)
+            .expect("phase forty-eight schema exists"));
+        assert!(!migrations::phase_forty_nine_schema_exists(&conn)
+            .expect("phase forty-nine schema is absent"));
+
+        migrate(&conn).expect("upgrade schema forty-eight");
+
+        assert!(migrations::phase_forty_nine_schema_exists(&conn)
+            .expect("phase forty-nine schema exists"));
+        assert_eq!(
+            conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+                .expect("read upgraded schema version"),
+            49,
+        );
     }
 
     #[test]

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.116.0] - 2026-08-11
+### Added
+- Added an Artist Overview with up to five locally owned tracks matched against Last.fm `artist.getTopTracks`, explicit refresh, cached/stale states, and visible provider attribution.
+- Added Last.fm-backed 🔥 markers for the three album tracks with the strongest positive listener evidence in Albums and Artist Cover View.
+- Added schema version 49 with durable artist and normalized track popularity caches that survive MusicBee track-table rebuilds.
+
+### Changed
+- Expanded the Last.fm provider settings from portrait-only enrichment to popularity metadata and portrait caching.
+- Synchronized app metadata and provider user agents to `0.116.0`.
+
 ## [0.115.0] - 2026-08-11
 ### Added
 - Added selected-place Luna questions to Music Map, using exact local country or MusicBrainz area cohorts with bounded current-view inspection and an explicit place label.

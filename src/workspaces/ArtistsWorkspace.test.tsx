@@ -4,13 +4,13 @@ import { describe, expect, it } from "vitest";
 import {
   ArtistDetailTabs,
   artistDetailTabNeedsMusicBrainz,
+  artistDetailTabNeedsPopularity,
   artistDetailTabNeedsTracks,
   type ArtistDetailTab,
 } from "./ArtistsWorkspace";
 
 function ArtistDetailTabsHarness() {
-  const [activeTab, setActiveTab] =
-    useState<ArtistDetailTab>("local-albums");
+  const [activeTab, setActiveTab] = useState<ArtistDetailTab>("overview");
 
   return (
     <ArtistDetailTabs activeTab={activeTab} onChange={setActiveTab}>
@@ -20,15 +20,15 @@ function ArtistDetailTabsHarness() {
 }
 
 describe("artist detail tabs", () => {
-  it("opens local albums first and changes only the active panel", () => {
+  it("opens the overview first and changes only the active panel", () => {
     render(<ArtistDetailTabsHarness />);
 
-    expect(screen.getByRole("tab", { name: "Local albums" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     expect(screen.getByRole("tabpanel")).toHaveTextContent(
-      "Active panel: local-albums",
+      "Active panel: overview",
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "Artist info" }));
@@ -45,22 +45,22 @@ describe("artist detail tabs", () => {
   it("supports arrow, Home, and End keyboard navigation", () => {
     render(<ArtistDetailTabsHarness />);
 
+    const overviewTab = screen.getByRole("tab", { name: "Overview" });
+    overviewTab.focus();
+    fireEvent.keyDown(overviewTab, { key: "ArrowRight" });
+
     const localAlbumsTab = screen.getByRole("tab", { name: "Local albums" });
-    localAlbumsTab.focus();
-    fireEvent.keyDown(localAlbumsTab, { key: "ArrowRight" });
+    expect(localAlbumsTab).toHaveFocus();
+    expect(localAlbumsTab).toHaveAttribute("aria-selected", "true");
 
-    const artistInfoTab = screen.getByRole("tab", { name: "Artist info" });
-    expect(artistInfoTab).toHaveFocus();
-    expect(artistInfoTab).toHaveAttribute("aria-selected", "true");
-
-    fireEvent.keyDown(artistInfoTab, { key: "End" });
+    fireEvent.keyDown(localAlbumsTab, { key: "End" });
     const coverViewTab = screen.getByRole("tab", { name: "Cover view" });
     expect(coverViewTab).toHaveFocus();
     expect(coverViewTab).toHaveAttribute("aria-selected", "true");
 
     fireEvent.keyDown(coverViewTab, { key: "Home" });
-    expect(localAlbumsTab).toHaveFocus();
-    expect(localAlbumsTab).toHaveAttribute("aria-selected", "true");
+    expect(overviewTab).toHaveFocus();
+    expect(overviewTab).toHaveAttribute("aria-selected", "true");
   });
 
   it("identifies the views that may start deferred data requests", () => {
@@ -73,5 +73,11 @@ describe("artist detail tabs", () => {
     expect(artistDetailTabNeedsTracks("artist-info")).toBe(false);
     expect(artistDetailTabNeedsTracks("discography")).toBe(false);
     expect(artistDetailTabNeedsTracks("cover-view")).toBe(true);
+
+    expect(artistDetailTabNeedsPopularity("overview")).toBe(true);
+    expect(artistDetailTabNeedsPopularity("local-albums")).toBe(false);
+    expect(artistDetailTabNeedsPopularity("artist-info")).toBe(false);
+    expect(artistDetailTabNeedsPopularity("discography")).toBe(false);
+    expect(artistDetailTabNeedsPopularity("cover-view")).toBe(false);
   });
 });

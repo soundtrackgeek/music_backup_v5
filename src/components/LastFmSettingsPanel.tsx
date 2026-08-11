@@ -84,11 +84,11 @@ export function LastFmSettingsPanel() {
     <section className="settings-panel lastfm-settings-panel">
       <div className="panel-heading compact">
         <div>
-          <h2>Last.fm artist portraits</h2>
+          <h2>Last.fm metadata</h2>
           <p>
             {status?.configured
               ? "API key stored securely in Windows Credential Manager"
-              : "Connect Last.fm to enrich artists with reusable portraits"}
+              : "Connect Last.fm for popular tracks, album heat, and artist portraits"}
           </p>
         </div>
         <Images size={18} />
@@ -122,7 +122,7 @@ export function LastFmSettingsPanel() {
           </button>
           <button className="secondary-button" type="button" disabled={!desktopRuntime || isBusy || !status?.configured} onClick={() => void run("sync")}>
             <Images size={16} />
-            <span>{busyAction === "sync" ? "Syncing" : "Sync next 50"}</span>
+            <span>{busyAction === "sync" ? "Syncing" : "Sync 50 portraits"}</span>
           </button>
           <button className="secondary-button" type="button" disabled={!desktopRuntime || isBusy || !status?.configured} onClick={() => void run("remove")}>
             <Trash2 size={16} />
@@ -132,17 +132,18 @@ export function LastFmSettingsPanel() {
       </div>
 
       <div className="ai-settings-notes">
-        <span>The read-only artist-image endpoint needs the API key; the Last.fm secret is not required.</span>
-        <span>Portraits are downloaded in explicit batches, cached locally, and reused in Timelines, Artists, and Artist Index.</span>
+        <span>Read-only metadata needs the API key; the Last.fm secret is not required.</span>
+        <span>Popular Tracks and album fire rankings load on demand, then reuse a local SQLite cache.</span>
+        <span>Portraits are downloaded in explicit batches and reused in Timelines, Artists, and Artist Index.</span>
         <span>The API key is never written to SQLite, browser storage, logs, or backups.</span>
       </div>
 
-      {!desktopRuntime ? <p className="error-message">Secure Last.fm credential storage and portrait sync are available in the Tauri desktop app.</p> : null}
+      {!desktopRuntime ? <p className="error-message">Secure Last.fm credentials and metadata enrichment are available in the Tauri desktop app.</p> : null}
       {error ? <p className="error-message" role="alert">{error}</p> : null}
       {connection ? (
         <div className="deemix-account-card" aria-label="Connected Last.fm application">
           <CircleCheck size={18} />
-          <div><strong>Last.fm connected</strong><span>Artist portrait enrichment is ready</span></div>
+          <div><strong>Last.fm connected</strong><span>Popularity and artist enrichment are ready</span></div>
         </div>
       ) : null}
       {sync ? (

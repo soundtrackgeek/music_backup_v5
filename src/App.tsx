@@ -77,6 +77,8 @@ import {
   fixMusicToolIssues,
   cacheSettings,
   getDiscovery,
+  getLastFmAlbumPopularity,
+  getLastFmArtistPopularity,
   getAlbumDebutTimeline,
   getTrackDebutTimeline,
   getGenreProgress,
@@ -190,6 +192,8 @@ import type {
   ImportRun,
   ImportSummary,
   LovedDensityStat,
+  LastFmAlbumPopularity,
+  LastFmArtistPopularity,
   MetadataCoverageMetric,
   OutlierStat,
   LibraryStatus,
@@ -373,6 +377,11 @@ import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
 import { GenreTimeline } from "./components/GenreTimeline";
 import { ArtistTimeline } from "./components/ArtistTimeline";
 import { ArtistPortrait } from "./components/ArtistPortrait";
+import { ArtistPopularTracksPanel } from "./components/ArtistPopularTracksPanel";
+import {
+  TrackPopularityAttribution,
+  TrackPopularityFire,
+} from "./components/TrackPopularityFire";
 import { ImportSafetyPanel } from "./components/ImportSafetyPanel";
 import { InsightActionDock } from "./components/InsightActionDock";
 import { CountryCatalogChart } from "./components/CountryCatalogChart";
@@ -395,6 +404,7 @@ import {
 import {
   ArtistDetailTabs,
   artistDetailTabNeedsMusicBrainz,
+  artistDetailTabNeedsPopularity,
   artistDetailTabNeedsTracks,
   ArtistsWorkspace,
   type ArtistDetailTab,
@@ -2760,10 +2770,17 @@ function AlbumIndexTable({
 function AlbumTrackTable({
   response,
   isLoading,
+  popularity,
 }: {
   response: BrowseResponse | null;
   isLoading: boolean;
+  popularity: LastFmAlbumPopularity | null;
 }) {
+  const popularityByTrackId = useMemo(
+    () => new Map(popularity?.tracks.map((track) => [track.trackId, track]) ?? []),
+    [popularity],
+  );
+
   if (!response) {
     return (
       <div className="empty-state large">
@@ -2793,26 +2810,34 @@ function AlbumTrackTable({
         <span role="columnheader">Quality</span>
         <span role="columnheader">File</span>
       </div>
-      {response.rows.map((row) => (
-        <div className="result-table-row" role="row" key={row.id}>
-          <span role="cell">{formatTrackPosition(row)}</span>
-          <span role="cell">
-            <strong>{row.title ?? "Untitled"}</strong>
-            <small>
-              {row.love === "L" ? "Loved" : (row.canonicalGenre ?? "")}
-            </small>
-          </span>
-          <span role="cell">
-            {row.displayArtist ?? row.albumArtistDisplay ?? ""}
-          </span>
-          <span role="cell">{formatMinutes(row.trackSeconds)}</span>
-          <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
-          <span role="cell">{formatAudioQuality(row)}</span>
-          <span role="cell" title={row.filePath ?? ""}>
-            {row.filename ?? ""}
-          </span>
-        </div>
-      ))}
+      {response.rows.map((row) => {
+        const trackPopularity = row.trackId == null
+          ? null
+          : popularityByTrackId.get(row.trackId);
+        return (
+          <div className="result-table-row" role="row" key={row.id}>
+            <span role="cell">{formatTrackPosition(row)}</span>
+            <span role="cell">
+              <strong className="track-title-with-popularity">
+                <TrackPopularityFire rank={trackPopularity?.albumRank ?? null} />
+                <span>{row.title ?? "Untitled"}</span>
+              </strong>
+              <small>
+                {row.love === "L" ? "Loved" : (row.canonicalGenre ?? "")}
+              </small>
+            </span>
+            <span role="cell">
+              {row.displayArtist ?? row.albumArtistDisplay ?? ""}
+            </span>
+            <span role="cell">{formatMinutes(row.trackSeconds)}</span>
+            <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
+            <span role="cell">{formatAudioQuality(row)}</span>
+            <span role="cell" title={row.filePath ?? ""}>
+              {row.filename ?? ""}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -4139,10 +4164,17 @@ function ArtistAlbumCoverCard({
 function ArtistAlbumTrackList({
   response,
   isLoading,
+  popularity,
 }: {
   response: BrowseResponse | null;
   isLoading: boolean;
+  popularity: LastFmAlbumPopularity | null;
 }) {
+  const popularityByTrackId = useMemo(
+    () => new Map(popularity?.tracks.map((track) => [track.trackId, track]) ?? []),
+    [popularity],
+  );
+
   if (!response) {
     return (
       <div className="artist-album-tracks-empty">
@@ -4169,13 +4201,17 @@ function ArtistAlbumTrackList({
     >
       {response.rows.map((row) => {
         const isLoved = row.love === "L";
+        const trackPopularity = row.trackId == null
+          ? null
+          : popularityByTrackId.get(row.trackId);
         return (
           <div className="artist-album-track-row" role="row" key={row.id}>
             <span className="artist-track-position" role="cell">
               {formatTrackPosition(row)}
             </span>
-            <strong role="cell" title={row.title ?? "Untitled"}>
-              {row.title ?? "Untitled"}
+            <strong className="track-title-with-popularity" role="cell" title={row.title ?? "Untitled"}>
+              <TrackPopularityFire rank={trackPopularity?.albumRank ?? null} />
+              <span>{row.title ?? "Untitled"}</span>
             </strong>
             <RatingStars value={row.normalizedRating} label="Track rating" />
             <span
@@ -4199,11 +4235,19 @@ function ArtistAlbumExpandedPanel({
   album,
   tracks,
   isLoading,
+  popularity,
+  popularityError,
+  isPopularityLoading,
+  onOpenSource,
   onClose,
 }: {
   album: BrowseRow;
   tracks: BrowseResponse | null;
   isLoading: boolean;
+  popularity: LastFmAlbumPopularity | null;
+  popularityError: string | null;
+  isPopularityLoading: boolean;
+  onOpenSource: (url: string) => void;
   onClose: () => void;
 }) {
   const billboardLabel = formatBillboardRank(album);
@@ -4255,7 +4299,17 @@ function ArtistAlbumExpandedPanel({
           </button>
         </div>
 
-        <ArtistAlbumTrackList response={tracks} isLoading={isLoading} />
+        <ArtistAlbumTrackList
+          response={tracks}
+          isLoading={isLoading}
+          popularity={popularity}
+        />
+        <TrackPopularityAttribution
+          popularity={popularity}
+          isLoading={isPopularityLoading}
+          error={popularityError}
+          onOpenSource={onOpenSource}
+        />
       </div>
     </section>
   );
@@ -4267,6 +4321,10 @@ function ArtistAlbumCoverBoard({
   selectedAlbum,
   tracks,
   isLoading,
+  popularity,
+  popularityError,
+  isPopularityLoading,
+  onOpenSource,
   onSelect,
   onClose,
 }: {
@@ -4275,6 +4333,10 @@ function ArtistAlbumCoverBoard({
   selectedAlbum: BrowseRow | null;
   tracks: BrowseResponse | null;
   isLoading: boolean;
+  popularity: LastFmAlbumPopularity | null;
+  popularityError: string | null;
+  isPopularityLoading: boolean;
+  onOpenSource: (url: string) => void;
   onSelect: (albumId: string) => void;
   onClose: () => void;
 }) {
@@ -4322,6 +4384,10 @@ function ArtistAlbumCoverBoard({
                 album={selectedAlbum}
                 tracks={tracks}
                 isLoading={isLoading}
+                popularity={popularity}
+                popularityError={popularityError}
+                isPopularityLoading={isPopularityLoading}
+                onOpenSource={onOpenSource}
                 onClose={onClose}
               />
             ) : null}
@@ -8208,6 +8274,13 @@ export default function App() {
     useState<BrowseResponse | null>(null);
   const [albumTracksError, setAlbumTracksError] = useState<string | null>(null);
   const [isAlbumTracksLoading, setIsAlbumTracksLoading] = useState(false);
+  const [albumPopularity, setAlbumPopularity] =
+    useState<LastFmAlbumPopularity | null>(null);
+  const [albumPopularityError, setAlbumPopularityError] = useState<
+    string | null
+  >(null);
+  const [isAlbumPopularityLoading, setIsAlbumPopularityLoading] =
+    useState(false);
   const [albumIncludeCalculated, setAlbumIncludeCalculated] = useState(false);
   const [albumExportResult, setAlbumExportResult] =
     useState<ExportResult | null>(null);
@@ -8220,7 +8293,14 @@ export default function App() {
   const [isArtistLoading, setIsArtistLoading] = useState(false);
   const [selectedArtistId, setSelectedArtistId] = useState<string | null>(null);
   const [artistDetailTab, setArtistDetailTab] =
-    useState<ArtistDetailTab>("local-albums");
+    useState<ArtistDetailTab>("overview");
+  const [artistPopularity, setArtistPopularity] =
+    useState<LastFmArtistPopularity | null>(null);
+  const [artistPopularityError, setArtistPopularityError] = useState<
+    string | null
+  >(null);
+  const [isArtistPopularityLoading, setIsArtistPopularityLoading] =
+    useState(false);
   const [artistAlbumsResponse, setArtistAlbumsResponse] =
     useState<BrowseResponse | null>(null);
   const [artistAlbumsError, setArtistAlbumsError] = useState<string | null>(
@@ -8236,6 +8316,13 @@ export default function App() {
     string | null
   >(null);
   const [isArtistAlbumTracksLoading, setIsArtistAlbumTracksLoading] =
+    useState(false);
+  const [artistAlbumPopularity, setArtistAlbumPopularity] =
+    useState<LastFmAlbumPopularity | null>(null);
+  const [artistAlbumPopularityError, setArtistAlbumPopularityError] = useState<
+    string | null
+  >(null);
+  const [isArtistAlbumPopularityLoading, setIsArtistAlbumPopularityLoading] =
     useState(false);
   const [musicBrainzArtistDiscography, setMusicBrainzArtistDiscography] =
     useState<MusicBrainzArtistDiscographyResponse | null>(null);
@@ -8819,6 +8906,8 @@ export default function App() {
   );
   const shouldLoadArtistAlbumTracks =
     artistDetailTabNeedsTracks(artistDetailTab);
+  const shouldLoadArtistPopularity =
+    artistDetailTabNeedsPopularity(artistDetailTab);
   const shouldLoadArtistMusicBrainz =
     artistDetailTabNeedsMusicBrainz(artistDetailTab);
   const selectedGenre =
@@ -8973,6 +9062,44 @@ export default function App() {
   }, [activeSection, albumTracksRequest]);
 
   useEffect(() => {
+    const album = albumResponse?.rows.find(
+      (row) => row.albumId === selectedAlbumId,
+    );
+    const artistId = normalizeArtistKey(
+      album?.albumArtistDisplay ?? album?.displayArtist ?? "",
+    );
+    if (activeSection !== "Albums" || !album?.albumId || !artistId) {
+      setAlbumPopularity(null);
+      setAlbumPopularityError(null);
+      setIsAlbumPopularityLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsAlbumPopularityLoading(true);
+    setAlbumPopularityError(null);
+    void getLastFmAlbumPopularity(artistId, album.albumId)
+      .then((result) => {
+        if (!cancelled) setAlbumPopularity(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setAlbumPopularityError(
+            error instanceof Error ? error.message : String(error),
+          );
+          setAlbumPopularity(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsAlbumPopularityLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, albumResponse, selectedAlbumId]);
+
+  useEffect(() => {
     if (activeSection !== "Artists") {
       return;
     }
@@ -9028,6 +9155,39 @@ export default function App() {
     resetDeferredArtistDetails();
     setSelectedArtistId(nextArtistId);
   }, [activeSection, artistResponse, selectedArtistId]);
+
+  useEffect(() => {
+    if (
+      activeSection !== "Artists" ||
+      !shouldLoadArtistPopularity ||
+      !selectedArtist
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsArtistPopularityLoading(true);
+    setArtistPopularityError(null);
+    void getLastFmArtistPopularity(selectedArtist.id)
+      .then((result) => {
+        if (!cancelled) setArtistPopularity(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setArtistPopularityError(
+            error instanceof Error ? error.message : String(error),
+          );
+          setArtistPopularity(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsArtistPopularityLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, selectedArtist, shouldLoadArtistPopularity]);
 
   useEffect(() => {
     if (activeSection !== "Artists" || !artistAlbumsRequest) {
@@ -9121,6 +9281,51 @@ export default function App() {
       cancelled = true;
     };
   }, [activeSection, artistAlbumTracksRequest, shouldLoadArtistAlbumTracks]);
+
+  useEffect(() => {
+    if (
+      activeSection !== "Artists" ||
+      !shouldLoadArtistAlbumTracks ||
+      !selectedArtist ||
+      !selectedArtistAlbum?.albumId
+    ) {
+      setArtistAlbumPopularity(null);
+      setArtistAlbumPopularityError(null);
+      setIsArtistAlbumPopularityLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsArtistAlbumPopularityLoading(true);
+    setArtistAlbumPopularityError(null);
+    void getLastFmAlbumPopularity(
+      selectedArtist.id,
+      selectedArtistAlbum.albumId,
+    )
+      .then((result) => {
+        if (!cancelled) setArtistAlbumPopularity(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setArtistAlbumPopularityError(
+            error instanceof Error ? error.message : String(error),
+          );
+          setArtistAlbumPopularity(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsArtistAlbumPopularityLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeSection,
+    selectedArtist,
+    selectedArtistAlbum,
+    shouldLoadArtistAlbumTracks,
+  ]);
 
   useEffect(() => {
     if (activeSection !== "Artists") {
@@ -10642,15 +10847,23 @@ export default function App() {
 
   function selectAlbum(albumId: string) {
     setSelectedAlbumId(albumId);
+    setAlbumPopularity(null);
+    setAlbumPopularityError(null);
     setAlbumExportResult(null);
   }
 
   function resetDeferredArtistDetails() {
-    setArtistDetailTab("local-albums");
+    setArtistDetailTab("overview");
+    setArtistPopularity(null);
+    setArtistPopularityError(null);
+    setIsArtistPopularityLoading(false);
     setSelectedArtistAlbumId(null);
     setArtistAlbumTracksResponse(null);
     setArtistAlbumTracksError(null);
     setIsArtistAlbumTracksLoading(false);
+    setArtistAlbumPopularity(null);
+    setArtistAlbumPopularityError(null);
+    setIsArtistAlbumPopularityLoading(false);
     setMusicBrainzArtistDiscography(null);
     setMusicBrainzArtistError(null);
     setIsMusicBrainzArtistLoading(false);
@@ -10695,12 +10908,16 @@ export default function App() {
     setSelectedArtistAlbumId(albumId);
     setArtistAlbumTracksResponse(null);
     setArtistAlbumTracksError(null);
+    setArtistAlbumPopularity(null);
+    setArtistAlbumPopularityError(null);
   }
 
   function clearSelectedArtistAlbum() {
     setSelectedArtistAlbumId(null);
     setArtistAlbumTracksResponse(null);
     setArtistAlbumTracksError(null);
+    setArtistAlbumPopularity(null);
+    setArtistAlbumPopularityError(null);
   }
 
   function clearGenreQuery() {
@@ -11252,6 +11469,35 @@ export default function App() {
       artistIncludeCalculated,
     );
     setArtistExportResult(result);
+  }
+
+  async function refreshArtistPopularity() {
+    if (!selectedArtist) return;
+
+    setIsArtistPopularityLoading(true);
+    setArtistPopularityError(null);
+    try {
+      setArtistPopularity(
+        await getLastFmArtistPopularity(selectedArtist.id, true),
+      );
+    } catch (error) {
+      setArtistPopularityError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setIsArtistPopularityLoading(false);
+    }
+  }
+
+  async function openLastFmSource(url: string) {
+    try {
+      await openExternalUrl(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setArtistPopularityError(message);
+      setAlbumPopularityError(message);
+      setArtistAlbumPopularityError(message);
+    }
   }
 
   async function refreshArtistMusicBrainz() {
@@ -15408,6 +15654,39 @@ export default function App() {
               activeTab={artistDetailTab}
               onChange={setArtistDetailTab}
             >
+              {artistDetailTab === "overview" ? (
+                <section className="artist-overview" aria-label="Artist overview">
+                  <div className="artist-overview-identity">
+                    {selectedArtist ? (
+                      <ArtistPortrait
+                        artistId={selectedArtist.id}
+                        artistName={selectedArtist.name}
+                        portraitAvailable={selectedArtist.portraitAvailable}
+                        representativeAlbumId={selectedArtist.representativeAlbumId}
+                        representativeAlbum={selectedArtist.representativeAlbum}
+                        representativeCoverPath={selectedArtist.representativeCoverPath}
+                      />
+                    ) : null}
+                    <div>
+                      <span className="eyebrow">Artist overview</span>
+                      <h2>{selectedArtist?.name ?? "Select an artist"}</h2>
+                      <p>
+                        {[selectedArtist?.topGenre, selectedArtist?.firstYear]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                  </div>
+                  <ArtistPopularTracksPanel
+                    popularity={artistPopularity}
+                    isLoading={isArtistPopularityLoading}
+                    error={artistPopularityError}
+                    onRefresh={() => void refreshArtistPopularity()}
+                    onOpenSource={(url) => void openLastFmSource(url)}
+                  />
+                </section>
+              ) : null}
+
               {artistDetailTab === "local-albums" ? (
                 <section
                   className="table-panel"
@@ -15533,6 +15812,10 @@ export default function App() {
                     selectedAlbum={selectedArtistAlbum}
                     tracks={artistAlbumTracksResponse}
                     isLoading={isArtistAlbumTracksLoading}
+                    popularity={artistAlbumPopularity}
+                    popularityError={artistAlbumPopularityError}
+                    isPopularityLoading={isArtistAlbumPopularityLoading}
+                    onOpenSource={(url) => void openLastFmSource(url)}
                     onSelect={selectArtistAlbum}
                     onClose={clearSelectedArtistAlbum}
                   />
@@ -16417,6 +16700,13 @@ export default function App() {
               <AlbumTrackTable
                 response={albumTracksResponse}
                 isLoading={isAlbumTracksLoading}
+                popularity={albumPopularity}
+              />
+              <TrackPopularityAttribution
+                popularity={albumPopularity}
+                isLoading={isAlbumPopularityLoading}
+                error={albumPopularityError}
+                onOpenSource={(url) => void openLastFmSource(url)}
               />
             </section>
           </section>

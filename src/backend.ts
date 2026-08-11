@@ -170,6 +170,8 @@ import type {
   DiscogsCredentialStatus,
   SaveDiscogsCredentialsRequest,
   LastFmArtistImageRefreshSummary,
+  LastFmAlbumPopularity,
+  LastFmArtistPopularity,
   LastFmConnectionTest,
   LastFmCredentialStatus,
   SaveLastFmApiKeyRequest,
@@ -2009,6 +2011,87 @@ export async function refreshLastFmArtistImages(limit = 50) {
   }
   return invoke<LastFmArtistImageRefreshSummary>("refresh_lastfm_artist_images", {
     limit,
+  });
+}
+
+export async function getLastFmArtistPopularity(
+  artistId: string,
+  forceRefresh = false,
+) {
+  if (!isTauriRuntime()) {
+    const artist = mockArtists.find((candidate) => candidate.id === artistId);
+    const rows = mockRows
+      .filter(
+        (row) =>
+          row.trackId != null &&
+          normalizeArtistKey(row.albumArtistDisplay ?? row.displayArtist ?? "") ===
+            artistId,
+      )
+      .slice(0, 5);
+    return {
+      artistId,
+      artistName: artist?.name ?? artistId,
+      sourceUrl: "https://www.last.fm/music/" + encodeURIComponent(artist?.name ?? artistId),
+      fetchedAt: new Date().toISOString(),
+      cached: !forceRefresh,
+      stale: false,
+      tracks: rows.map((row, index) => ({
+        rank: index + 1,
+        trackId: row.trackId ?? 0,
+        albumId: row.albumId ?? "",
+        album: row.album,
+        year: row.year,
+        title: row.title ?? "Untitled",
+        artist: row.displayArtist ?? row.albumArtistDisplay ?? artistId,
+        listeners: 180_000 - index * 21_000,
+        playCount: 640_000 - index * 73_000,
+        seconds: row.trackSeconds,
+        sourceUrl: null,
+      })),
+      message: rows.length
+        ? "Popular local tracks matched from Last.fm."
+        : "No Last.fm popular tracks matched this local library preview.",
+    } satisfies LastFmArtistPopularity;
+  }
+  return invoke<LastFmArtistPopularity>("get_lastfm_artist_popularity", {
+    artistId,
+    forceRefresh,
+  });
+}
+
+export async function getLastFmAlbumPopularity(
+  artistId: string,
+  albumId: string,
+) {
+  if (!isTauriRuntime()) {
+    const rows = mockRows.filter(
+      (row) => row.trackId != null && row.albumId === albumId,
+    );
+    return {
+      artistId,
+      albumId,
+      sourceUrl: null,
+      fetchedAt: new Date().toISOString(),
+      totalTracks: rows.length,
+      resolvedTracks: rows.length,
+      availableTracks: rows.length,
+      stale: false,
+      tracks: rows.map((row, index) => ({
+        trackId: row.trackId ?? 0,
+        title: row.title ?? "Untitled",
+        listeners: Math.max(1, 90_000 - index * 8_000),
+        playCount: Math.max(1, 300_000 - index * 24_000),
+        albumRank: index < 3 ? index + 1 : null,
+        sourceUrl: null,
+      })),
+      message: rows.length
+        ? "Album popularity loaded from Last.fm."
+        : "No local album tracks were available to match.",
+    } satisfies LastFmAlbumPopularity;
+  }
+  return invoke<LastFmAlbumPopularity>("get_lastfm_album_popularity", {
+    artistId,
+    albumId,
   });
 }
 
