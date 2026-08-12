@@ -49,6 +49,21 @@ const edition: DiscoveryDailyEditionData = {
       representativeCoverPath: null,
       evidence: "Born today · 2 albums in your library",
     },
+    {
+      artistId: "artist-memorial",
+      artist: "Memorial Artist",
+      eventType: "memorial",
+      eventDate: "2001-08-11",
+      years: 25,
+      dayOffset: 0,
+      albumCount: 3,
+      lovedTracks: 2,
+      portraitAvailable: false,
+      representativeAlbumId: null,
+      representativeAlbum: null,
+      representativeCoverPath: null,
+      evidence: "Remembered today · 2 loved tracks",
+    },
   ],
   chartToppers: [
     {
@@ -230,5 +245,60 @@ describe("DiscoveryDailyEdition", () => {
     );
     expect(onAnniversaryYearsChange).toHaveBeenCalledWith(70);
     vi.useRealTimers();
+  });
+
+  it("switches between birthdays and memorials without a dead view-all link", () => {
+    render(
+      <DiscoveryDailyEdition
+        edition={edition}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenCompletion={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Test Artist")).toBeInTheDocument();
+    expect(screen.queryByText("Memorial Artist")).not.toBeInTheDocument();
+    expect(screen.queryByText(/view all birthdays/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Memorials" }));
+    expect(screen.getByText("Memorial Artist")).toBeInTheDocument();
+    expect(screen.getByText(/died 11 aug 2001 · 25 years ago/i)).toBeInTheDocument();
+    expect(screen.queryByText("Test Artist")).not.toBeInTheDocument();
+  });
+
+  it("uses the contents rail to focus and flash a selected story", () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    render(
+      <DiscoveryDailyEdition
+        edition={edition}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenCompletion={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Because You Played$/ }),
+    );
+    const target = document.getElementById("discovery-because");
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+    });
+    expect(target).toHaveFocus();
+    expect(target).toHaveClass("daily-edition-story-flash");
   });
 });

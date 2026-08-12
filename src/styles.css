@@ -22769,6 +22769,48 @@ button {
   min-width: 0;
   padding: 20px 17px 18px;
   border-left: 0;
+  scroll-margin-top: 16px;
+}
+
+.daily-edition-life-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.daily-edition-life-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--edition-rule);
+}
+
+.daily-edition-life-tabs button {
+  position: relative;
+  min-height: 27px;
+  padding: 0 7px;
+  border: 0;
+  color: var(--edition-muted);
+  background: transparent;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.daily-edition-life-tabs button[aria-selected="true"] {
+  color: var(--edition-teal);
+}
+
+.daily-edition-life-tabs button[aria-selected="true"]::after {
+  position: absolute;
+  right: 7px;
+  bottom: -4px;
+  left: 7px;
+  height: 2px;
+  background: var(--edition-teal);
+  content: "";
 }
 
 @keyframes daily-edition-anniversary-in {
@@ -22820,6 +22862,17 @@ button {
 
 .daily-edition-life-list {
   margin-top: 9px;
+}
+
+.daily-edition-life-row {
+  grid-template-columns: 42px minmax(0, 1fr) 14px;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.daily-edition-life-row .artist-portrait {
+  width: 42px;
+  height: 42px;
 }
 
 .daily-edition-life-row,
@@ -22885,23 +22938,6 @@ button {
   color: var(--edition-muted);
   font-size: 9.5px;
   line-height: 1.25;
-}
-
-.daily-edition-text-link {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  width: fit-content;
-  margin-top: 9px;
-  color: #3e4744;
-  font-family: "Cormorant Garamond", Georgia, serif;
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.daily-edition-text-link svg {
-  width: 12px;
 }
 
 .daily-edition-shelves {
@@ -23108,22 +23144,26 @@ button {
   border-left: 1px solid var(--edition-rule);
 }
 
-.daily-edition-index a {
+.daily-edition-index button {
   position: relative;
+  width: 100%;
   padding: 9px 4px 9px 10px;
+  border: 0;
   color: #65706c;
+  background: transparent;
   font-size: 10px;
   line-height: 1.25;
-  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
 }
 
-.daily-edition-index a:hover,
-.daily-edition-index a:focus-visible,
-.daily-edition-index a.active {
+.daily-edition-index button:hover,
+.daily-edition-index button:focus-visible,
+.daily-edition-index button.active {
   color: #0c6d6a;
 }
 
-.daily-edition-index a.active::before {
+.daily-edition-index button.active::before {
   position: absolute;
   top: 7px;
   bottom: 7px;
@@ -23131,6 +23171,23 @@ button {
   width: 2px;
   background: var(--edition-teal);
   content: "";
+}
+
+.daily-edition [tabindex="-1"]:focus {
+  outline: none;
+}
+
+.daily-edition-story-flash {
+  animation: daily-edition-story-flash 1.1s ease-out;
+}
+
+@keyframes daily-edition-story-flash {
+  0%, 28% {
+    box-shadow: inset 0 0 0 3px var(--edition-teal);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 transparent;
+  }
 }
 
 .daily-edition-method-note {
@@ -23294,11 +23351,12 @@ button {
     border-bottom: 1px solid var(--edition-rule);
   }
 
-  .daily-edition-index a {
+  .daily-edition-index button {
     flex: 0 0 auto;
+    width: auto;
   }
 
-  .daily-edition-index a.active::before {
+  .daily-edition-index button.active::before {
     top: auto;
     right: 7px;
     bottom: -7px;
@@ -23334,7 +23392,7 @@ button {
 
   .daily-edition-life-list {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
 
@@ -23403,6 +23461,10 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .daily-edition-life-heading {
+    flex-direction: column;
+  }
+
   .daily-edition-life-row + .daily-edition-life-row {
     border-top: 1px solid var(--edition-rule);
   }
@@ -23417,7 +23479,8 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .daily-edition-anniversary-slide,
-  .daily-edition-carousel-progress {
+  .daily-edition-carousel-progress,
+  .daily-edition-story-flash {
     animation: none !important;
   }
 }

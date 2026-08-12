@@ -60,7 +60,7 @@ function formatEventDate(value: string, eventType: string, years: number) {
   const parsed = localDate(value);
   if (!parsed) return value;
   if (eventType === "memorial") {
-    return `Memorial ${shortDateFormatter.format(parsed)}`;
+    return `Died ${shortDateFormatter.format(parsed)} · ${years} years ago`;
   }
   return `Born ${shortDateFormatter.format(parsed)} · ${years}`;
 }
@@ -85,6 +85,114 @@ function openChartStory(
 
 function EditionEmpty({ children }: { children: string }) {
   return <p className="daily-edition-empty">{children}</p>;
+}
+
+type LifeEventsPanelProps = {
+  edition: DiscoveryDailyEdition;
+  onOpenArtist: (artistId: string, artistName: string) => void;
+};
+
+function LifeEventsPanel({ edition, onOpenArtist }: LifeEventsPanelProps) {
+  const [activeEventType, setActiveEventType] = useState<"birthday" | "memorial">(
+    "birthday",
+  );
+  const events = edition.lifeEvents
+    .filter((story) => story.eventType === activeEventType)
+    .slice(0, 5);
+
+  useEffect(() => {
+    setActiveEventType("birthday");
+  }, [edition.date]);
+
+  return (
+    <div
+      className="daily-edition-life"
+      id="discovery-life-events"
+      aria-labelledby="life-events-heading"
+      tabIndex={-1}
+    >
+      <div className="daily-edition-life-heading">
+        <div className="daily-edition-section-heading">
+          <CalendarDays aria-hidden="true" />
+          <div>
+            <h3 id="life-events-heading">Today</h3>
+            <p>
+              {activeEventType === "birthday"
+                ? "Artists born on this date"
+                : "Artists who died on this date"}
+            </p>
+          </div>
+        </div>
+        <div className="daily-edition-life-tabs" role="tablist" aria-label="Life events">
+          <button
+            id="daily-edition-birthdays-tab"
+            type="button"
+            role="tab"
+            aria-selected={activeEventType === "birthday"}
+            aria-controls="daily-edition-life-panel"
+            onClick={() => setActiveEventType("birthday")}
+          >
+            Birthdays
+          </button>
+          <button
+            id="daily-edition-memorials-tab"
+            type="button"
+            role="tab"
+            aria-selected={activeEventType === "memorial"}
+            aria-controls="daily-edition-life-panel"
+            onClick={() => setActiveEventType("memorial")}
+          >
+            Memorials
+          </button>
+        </div>
+      </div>
+
+      <div
+        className="daily-edition-life-list"
+        id="daily-edition-life-panel"
+        role="tabpanel"
+        aria-labelledby={
+          activeEventType === "birthday"
+            ? "daily-edition-birthdays-tab"
+            : "daily-edition-memorials-tab"
+        }
+      >
+        {events.length ? (
+          events.map((story) => (
+            <button
+              className="daily-edition-life-row"
+              key={`${story.artistId}:${story.eventType}:${story.eventDate}`}
+              type="button"
+              onClick={() => onOpenArtist(story.artistId, story.artist)}
+            >
+              <ArtistPortrait
+                artistId={story.artistId}
+                artistName={story.artist}
+                portraitAvailable={story.portraitAvailable}
+                representativeAlbumId={story.representativeAlbumId}
+                representativeAlbum={story.representativeAlbum}
+                representativeCoverPath={story.representativeCoverPath}
+              />
+              <span className="daily-edition-row-copy">
+                <strong>{story.artist}</strong>
+                <small>
+                  {formatEventDate(story.eventDate, story.eventType, story.years)}
+                </small>
+                <small>{story.evidence.split(" · ").slice(-1)[0]}</small>
+              </span>
+              <ChevronRight aria-hidden="true" />
+            </button>
+          ))
+        ) : (
+          <EditionEmpty>
+            {activeEventType === "birthday"
+              ? "No library artists were born on this date."
+              : "No library artist memorials fall on this date."}
+          </EditionEmpty>
+        )}
+      </div>
+    </div>
+  );
 }
 
 type AnniversaryCarouselProps = {
@@ -291,6 +399,8 @@ export function DiscoveryDailyEdition({
   onOpenCompletion,
   onOpenTrack,
 }: DiscoveryDailyEditionProps) {
+  const [activeStoryId, setActiveStoryId] = useState("discovery-anniversary");
+
   if (isLoading && !edition) {
     return (
       <section className="daily-edition daily-edition-loading" aria-busy="true">
@@ -319,6 +429,26 @@ export function DiscoveryDailyEdition({
   const chartYear = edition.chartToppers[0]?.chartYear ?? null;
   const anchor = edition.ratingAnchor;
 
+  function navigateToStory(storyId: string) {
+    const target = document.getElementById(storyId);
+    if (!target) return;
+
+    setActiveStoryId(storyId);
+    target.scrollIntoView?.({
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+      block: "start",
+    });
+    target.focus({ preventScroll: true });
+    target.classList.remove("daily-edition-story-flash");
+    void target.getBoundingClientRect();
+    target.classList.add("daily-edition-story-flash");
+    window.setTimeout(() => {
+      target.classList.remove("daily-edition-story-flash");
+    }, 1_100);
+  }
+
   return (
     <section className="daily-edition" aria-label="Your Daily Edition">
       <header className="daily-edition-masthead">
@@ -337,6 +467,7 @@ export function DiscoveryDailyEdition({
             className="daily-edition-lead"
             id="discovery-anniversary"
             aria-labelledby="anniversary-heading"
+            tabIndex={-1}
           >
             <AnniversaryCarousel
               edition={edition}
@@ -345,64 +476,7 @@ export function DiscoveryDailyEdition({
               onOpenAlbum={onOpenAlbum}
             />
 
-            <div
-              className="daily-edition-life"
-              id="discovery-life-events"
-              aria-labelledby="life-events-heading"
-            >
-              <div className="daily-edition-section-heading">
-                <CalendarDays aria-hidden="true" />
-                <div>
-                  <h3 id="life-events-heading">Today</h3>
-                  <p>Artist birthdays &amp; memorials</p>
-                </div>
-              </div>
-              {edition.lifeEvents.length ? (
-                <div className="daily-edition-life-list">
-                  {edition.lifeEvents.slice(0, 3).map((story) => (
-                    <button
-                      className="daily-edition-life-row"
-                      key={`${story.artistId}:${story.eventType}:${story.eventDate}`}
-                      type="button"
-                      onClick={() => onOpenArtist(story.artistId, story.artist)}
-                    >
-                      <ArtistPortrait
-                        artistId={story.artistId}
-                        artistName={story.artist}
-                        portraitAvailable={story.portraitAvailable}
-                        representativeAlbumId={story.representativeAlbumId}
-                        representativeAlbum={story.representativeAlbum}
-                        representativeCoverPath={story.representativeCoverPath}
-                      />
-                      <span className="daily-edition-row-copy">
-                        <strong>{story.artist}</strong>
-                        <small>
-                          {formatEventDate(
-                            story.eventDate,
-                            story.eventType,
-                            story.years,
-                          )}
-                        </small>
-                        <small>
-                          {story.evidence.split(" · ").slice(-1)[0]}
-                        </small>
-                      </span>
-                      <ChevronRight aria-hidden="true" />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <EditionEmpty>
-                  No exact artist birthday or memorial matches today.
-                </EditionEmpty>
-              )}
-              {edition.lifeEvents.length > 3 ? (
-                <a className="daily-edition-text-link" href="#discovery-life-events">
-                  View all birthdays &amp; memorials ({edition.lifeEvents.length})
-                  <ChevronRight aria-hidden="true" />
-                </a>
-              ) : null}
-            </div>
+            <LifeEventsPanel edition={edition} onOpenArtist={onOpenArtist} />
           </section>
 
           <div className="daily-edition-shelves">
@@ -410,6 +484,7 @@ export function DiscoveryDailyEdition({
               className="daily-edition-shelf daily-edition-chart"
               id="discovery-charts"
               aria-labelledby="chart-heading"
+              tabIndex={-1}
             >
               <div className="daily-edition-section-heading">
                 <ChartLine aria-hidden="true" />
@@ -464,6 +539,7 @@ export function DiscoveryDailyEdition({
               className="daily-edition-shelf daily-edition-deep-cuts"
               id="discovery-deep-cuts"
               aria-labelledby="deep-cuts-heading"
+              tabIndex={-1}
             >
               <div className="daily-edition-section-heading">
                 <Heart aria-hidden="true" />
@@ -521,6 +597,7 @@ export function DiscoveryDailyEdition({
               className="daily-edition-shelf daily-edition-completion"
               id="discovery-completion"
               aria-labelledby="completion-heading"
+              tabIndex={-1}
             >
               <div className="daily-edition-section-heading">
                 <CircleDot aria-hidden="true" />
@@ -592,6 +669,7 @@ export function DiscoveryDailyEdition({
               className="daily-edition-shelf daily-edition-because"
               id="discovery-because"
               aria-labelledby="because-heading"
+              tabIndex={-1}
             >
               <div className="daily-edition-section-heading">
                 <Sparkles aria-hidden="true" />
@@ -643,14 +721,29 @@ export function DiscoveryDailyEdition({
         </div>
 
         <nav className="daily-edition-index" aria-label="Edition stories">
-          <a className="active" href="#discovery-anniversary">
+          <button
+            className={activeStoryId === "discovery-anniversary" ? "active" : ""}
+            type="button"
+            onClick={() => navigateToStory("discovery-anniversary")}
+          >
             {edition.anniversaryYears} Years Ago
-          </a>
-          <a href="#discovery-life-events">Birthdays &amp; Memorials</a>
-          <a href="#discovery-charts">Chart Toppers</a>
-          <a href="#discovery-deep-cuts">Deep Cuts</a>
-          <a href="#discovery-completion">Complete the Artist</a>
-          <a href="#discovery-because">Because You Played</a>
+          </button>
+          {[
+            ["discovery-life-events", "Birthdays & Memorials"],
+            ["discovery-charts", "Chart Toppers"],
+            ["discovery-deep-cuts", "Deep Cuts"],
+            ["discovery-completion", "Complete the Artist"],
+            ["discovery-because", "Because You Played"],
+          ].map(([storyId, label]) => (
+            <button
+              className={activeStoryId === storyId ? "active" : ""}
+              key={storyId}
+              type="button"
+              onClick={() => navigateToStory(storyId)}
+            >
+              {label}
+            </button>
+          ))}
         </nav>
       </div>
 

@@ -13552,6 +13552,15 @@ fn discovery_life_events(
             WHERE LOWER(COALESCE(info.artist_type, '')) = 'person'
               AND LENGTH(info.life_end_date) = 10
               AND SUBSTR(info.life_end_date, 6, 5) = ?1
+        ),
+        ranked_events AS (
+            SELECT
+                events.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY events.event_type
+                    ORDER BY events.album_count DESC, LOWER(events.artist)
+                ) AS event_rank
+            FROM events
         )
         SELECT
             events.artist_id,
@@ -13592,11 +13601,11 @@ fn discovery_life_events(
                 ORDER BY COALESCE(a.album_score, 0) DESC
                 LIMIT 1
             ) AS representative_cover_path
-        FROM events
+        FROM ranked_events events
+        WHERE events.event_rank <= 5
         ORDER BY CASE events.event_type WHEN 'birthday' THEN 0 ELSE 1 END,
                  events.album_count DESC,
                  LOWER(events.artist)
-        LIMIT 7
         "
     );
     let mut stmt = conn.prepare(&sql)?;
@@ -20668,6 +20677,14 @@ mod tests {
             1992,
             9,
         );
+        insert_test_album(
+            &conn,
+            "mb:memorial",
+            "Memorial Artist",
+            "Memorial Album",
+            1988,
+            8,
+        );
         insert_test_artist_info(
             &conn,
             "Pet Shop Boys",
@@ -20684,6 +20701,15 @@ mod tests {
             None,
             Some(1969),
             None,
+            false,
+        );
+        insert_test_artist_info(
+            &conn,
+            "Memorial Artist",
+            "Person",
+            None,
+            Some(1950),
+            Some(2001),
             false,
         );
         conn.execute_batch(
@@ -20711,6 +20737,10 @@ mod tests {
             UPDATE musicbrainz_artist_infos
             SET life_begin_date = '1969-08-11'
             WHERE local_artist_key = 'birthday artist';
+
+            UPDATE musicbrainz_artist_infos
+            SET life_end_date = '2001-08-11'
+            WHERE local_artist_key = 'memorial artist';
 
             INSERT INTO musicbrainz_artist_release_groups (
                 artist_mbid, release_mbid, title, year, type,
@@ -20763,6 +20793,10 @@ mod tests {
             .contains("best imported album-chart position is #5"));
         assert_eq!(edition.anniversaries[1].album, "High Score Fallback");
         assert_eq!(edition.life_events[0].artist, "Birthday Artist");
+        assert!(edition
+            .life_events
+            .iter()
+            .any(|story| story.artist == "Memorial Artist" && story.event_type == "memorial"));
         assert_eq!(edition.chart_toppers[0].rank, 1);
         assert_eq!(edition.deep_cuts[0].title, "Hidden Finale");
         assert_eq!(edition.artist_completions[0].missing_release_title, "Very");

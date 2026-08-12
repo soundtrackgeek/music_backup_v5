@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.124.0] - 2026-08-12
+### Added
+- Added separate **Birthdays** and **Memorials** tabs to the Daily Edition Today panel, each showing up to five locally represented artists whose MusicBrainz birth or death date matches today.
+- Added functional contents-rail navigation that smoothly scrolls, moves keyboard focus, updates the active marker, and briefly flashes the selected story shelf.
+
+### Changed
+- Removed the inert **View all birthdays & memorials** link and compacted the life-event rows to fit five artists without hiding the surrounding edition.
+- Synchronized app metadata and provider user agents to `0.124.0`.
+
 ## [0.123.0] - 2026-08-12
 ### Added
 - Added an anniversary carousel with up to five owned albums, automatic ten-second rotation, direct artwork thumbnails, hover/focus pause behavior, and reduced-motion support.
