@@ -569,113 +569,133 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_fifty_two_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_fifty_three_schema_exists(conn)? {
+        return Ok(());
+    }
+
+    if user_version == 52 && migrations::phase_fifty_two_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 53 migration transaction")?;
+        ensure_lastfm_related_albums_schema(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 53;")
+            .context("Could not mark the schema 53 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 53 migration")?;
         return Ok(());
     }
 
     if user_version == 51 && migrations::phase_fifty_one_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 52 migration transaction")?;
+            .context("Could not start the schema 52–53 migration transaction")?;
         ensure_lastfm_similarity_schema(&transaction)?;
+        ensure_lastfm_related_albums_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 52;")
-            .context("Could not mark the schema 52 migration complete")?;
+            .execute_batch("PRAGMA user_version = 53;")
+            .context("Could not mark the schema 52–53 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 52 migration")?;
+            .context("Could not commit the schema 52–53 migration")?;
         return Ok(());
     }
 
     if user_version == 50 && migrations::phase_fifty_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 51–52 migration transaction")?;
+            .context("Could not start the schema 51–53 migration transaction")?;
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
+        ensure_lastfm_related_albums_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 52;")
-            .context("Could not mark the schema 51–52 migration complete")?;
+            .execute_batch("PRAGMA user_version = 53;")
+            .context("Could not mark the schema 51–53 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 51 migration")?;
+            .context("Could not commit the schema 51–53 migration")?;
         return Ok(());
     }
 
     if user_version == 49 && migrations::phase_forty_nine_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 50–51 migration transaction")?;
+            .context("Could not start the schema 50–53 migration transaction")?;
         ensure_artist_biography_schema(&transaction)?;
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
+        ensure_lastfm_related_albums_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 52;")
-            .context("Could not mark the schema 50–52 migration complete")?;
+            .execute_batch("PRAGMA user_version = 53;")
+            .context("Could not mark the schema 50–53 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 50 migration")?;
+            .context("Could not commit the schema 50–53 migration")?;
         return Ok(());
     }
 
     if user_version == 48 && migrations::phase_forty_eight_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 49–50 migration transaction")?;
+            .context("Could not start the schema 49–53 migration transaction")?;
         ensure_lastfm_popularity_schema(&transaction)?;
         ensure_artist_biography_schema(&transaction)?;
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
+        ensure_lastfm_related_albums_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 52;")
-            .context("Could not mark the schema 49–52 migration complete")?;
+            .execute_batch("PRAGMA user_version = 53;")
+            .context("Could not mark the schema 49–53 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 49–50 migration")?;
+            .context("Could not commit the schema 49–53 migration")?;
         return Ok(());
     }
 
     if user_version == 47 && migrations::phase_forty_seven_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 48–49 migration transaction")?;
+            .context("Could not start the schema 48–53 migration transaction")?;
         ensure_music_doctor_schema(&transaction)?;
         ensure_lastfm_popularity_schema(&transaction)?;
         ensure_artist_biography_schema(&transaction)?;
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
+        ensure_lastfm_related_albums_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 52;")
-            .context("Could not mark the schema 48–52 migration complete")?;
+            .execute_batch("PRAGMA user_version = 53;")
+            .context("Could not mark the schema 48–53 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 48–50 migration")?;
+            .context("Could not commit the schema 48–53 migration")?;
         return Ok(());
     }
 
     if user_version == 46 && migrations::phase_forty_six_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 47–48 migration transaction")?;
+            .context("Could not start the schema 47–53 migration transaction")?;
         ensure_album_artist_key_index(&transaction)?;
         ensure_music_doctor_schema(&transaction)?;
         ensure_lastfm_popularity_schema(&transaction)?;
         ensure_artist_biography_schema(&transaction)?;
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
+        ensure_lastfm_related_albums_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 52;")
-            .context("Could not mark the schema 47–52 migration complete")?;
+            .execute_batch("PRAGMA user_version = 53;")
+            .context("Could not mark the schema 47–53 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 47–50 migration")?;
+            .context("Could not commit the schema 47–53 migration")?;
         return Ok(());
     }
 
     if user_version == 45 && migrations::phase_forty_five_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 46–48 migration transaction")?;
+            .context("Could not start the schema 46–53 migration transaction")?;
         ensure_artist_images_schema(&transaction)?;
         ensure_album_artist_key_index(&transaction)?;
         ensure_music_doctor_schema(&transaction)?;
@@ -683,19 +703,20 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_artist_biography_schema(&transaction)?;
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
+        ensure_lastfm_related_albums_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 52;")
-            .context("Could not mark the schema 46–52 migration complete")?;
+            .execute_batch("PRAGMA user_version = 53;")
+            .context("Could not mark the schema 46–53 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 46–50 migration")?;
+            .context("Could not commit the schema 46–53 migration")?;
         return Ok(());
     }
 
     if user_version == 44 && migrations::phase_forty_four_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
-            .context("Could not start the schema 45–48 migration transaction")?;
+            .context("Could not start the schema 45–53 migration transaction")?;
         ensure_library_updates_schema(&transaction)?;
         ensure_artist_images_schema(&transaction)?;
         ensure_album_artist_key_index(&transaction)?;
@@ -704,12 +725,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_artist_biography_schema(&transaction)?;
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
+        ensure_lastfm_related_albums_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 52;")
-            .context("Could not mark the schema 45–52 migration complete")?;
+            .execute_batch("PRAGMA user_version = 53;")
+            .context("Could not mark the schema 45–53 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 45–50 migration")?;
+            .context("Could not commit the schema 45–53 migration")?;
         return Ok(());
     }
 
@@ -1923,6 +1945,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_artist_images_schema(conn)?;
     ensure_lastfm_popularity_schema(conn)?;
     ensure_lastfm_similarity_schema(conn)?;
+    ensure_lastfm_related_albums_schema(conn)?;
     ensure_artist_biography_schema(conn)?;
     ensure_album_review_schema(conn)?;
     ensure_album_artist_key_index(conn)?;
@@ -1932,7 +1955,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 52;
+        PRAGMA user_version = 53;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -2476,6 +2499,51 @@ fn ensure_lastfm_similarity_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create the Last.fm similar-artist cache schema")?;
+    Ok(())
+}
+
+fn ensure_lastfm_related_albums_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS lastfm_album_relationships (
+            album_id TEXT PRIMARY KEY,
+            album_artist TEXT NOT NULL,
+            album_title TEXT NOT NULL,
+            source_url TEXT,
+            source_tags_json TEXT NOT NULL DEFAULT '[]',
+            state TEXT NOT NULL CHECK(state IN ('available', 'unavailable')),
+            message TEXT NOT NULL DEFAULT '',
+            fetched_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS lastfm_related_albums (
+            album_id TEXT NOT NULL,
+            rank INTEGER NOT NULL,
+            candidate_artist_name TEXT NOT NULL,
+            candidate_artist_mbid TEXT,
+            candidate_album_title TEXT NOT NULL,
+            candidate_album_mbid TEXT,
+            source_url TEXT,
+            relationship_score REAL NOT NULL,
+            shared_tags_json TEXT NOT NULL DEFAULT '[]',
+            artist_similarity REAL,
+            fetched_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            PRIMARY KEY (album_id, rank),
+            FOREIGN KEY (album_id) REFERENCES lastfm_album_relationships(album_id)
+                ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_lastfm_related_albums_album_rank
+            ON lastfm_related_albums(album_id, rank);
+        CREATE INDEX IF NOT EXISTS idx_lastfm_related_albums_candidate_mbid
+            ON lastfm_related_albums(candidate_album_mbid);
+        CREATE INDEX IF NOT EXISTS idx_lastfm_related_albums_expires
+            ON lastfm_related_albums(expires_at);
+        ",
+    )
+    .context("Could not create the Last.fm related-album cache schema")?;
     Ok(())
 }
 
@@ -9223,6 +9291,45 @@ pub(crate) struct LastFmSimilarLocalArtist {
     pub representative_cover_path: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct LastFmAlbumRelationshipsCacheRecord {
+    pub album_id: String,
+    pub album_artist: String,
+    pub album_title: String,
+    pub source_url: Option<String>,
+    pub source_tags_json: String,
+    pub state: String,
+    pub message: String,
+    pub fetched_at: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct LastFmRelatedAlbumCacheRecord {
+    pub album_id: String,
+    pub rank: i64,
+    pub candidate_artist_name: String,
+    pub candidate_artist_mbid: Option<String>,
+    pub candidate_album_title: String,
+    pub candidate_album_mbid: Option<String>,
+    pub source_url: Option<String>,
+    pub relationship_score: f64,
+    pub shared_tags_json: String,
+    pub artist_similarity: Option<f64>,
+    pub fetched_at: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct LastFmRelatedLocalAlbum {
+    pub album_id: String,
+    pub album_artist: String,
+    pub album_title: String,
+    pub year: Option<i32>,
+    pub cover_path: Option<String>,
+    pub cover_mime_type: Option<String>,
+}
+
 fn lastfm_artist_identity(
     conn: &Connection,
     artist_id: &str,
@@ -9808,6 +9915,148 @@ pub(crate) fn lastfm_similar_local_artists_for_app(
     lastfm_similar_local_artists(&conn, candidates)
 }
 
+pub(crate) fn lastfm_album_relationships_cache_for_app(
+    app: &AppHandle,
+    album_id: &str,
+) -> Result<Option<LastFmAlbumRelationshipsCacheRecord>> {
+    let (conn, _) = open(app)?;
+    conn.query_row(
+        "
+        SELECT album_id, album_artist, album_title, source_url,
+               source_tags_json, state, message, fetched_at, expires_at
+        FROM lastfm_album_relationships
+        WHERE album_id = ?1
+        ",
+        [album_id],
+        |row| {
+            Ok(LastFmAlbumRelationshipsCacheRecord {
+                album_id: row.get(0)?,
+                album_artist: row.get(1)?,
+                album_title: row.get(2)?,
+                source_url: row.get(3)?,
+                source_tags_json: row.get(4)?,
+                state: row.get(5)?,
+                message: row.get(6)?,
+                fetched_at: row.get(7)?,
+                expires_at: row.get(8)?,
+            })
+        },
+    )
+    .optional()
+    .context("Could not load the Last.fm related-album cache")
+}
+
+pub(crate) fn lastfm_related_album_cache_for_app(
+    app: &AppHandle,
+    album_id: &str,
+) -> Result<Vec<LastFmRelatedAlbumCacheRecord>> {
+    let (conn, _) = open(app)?;
+    let mut stmt = conn.prepare(
+        "
+        SELECT album_id, rank, candidate_artist_name, candidate_artist_mbid,
+               candidate_album_title, candidate_album_mbid, source_url,
+               relationship_score, shared_tags_json, artist_similarity,
+               fetched_at, expires_at
+        FROM lastfm_related_albums
+        WHERE album_id = ?1
+        ORDER BY rank
+        ",
+    )?;
+    let albums = stmt
+        .query_map([album_id], |row| {
+            Ok(LastFmRelatedAlbumCacheRecord {
+                album_id: row.get(0)?,
+                rank: row.get(1)?,
+                candidate_artist_name: row.get(2)?,
+                candidate_artist_mbid: row.get(3)?,
+                candidate_album_title: row.get(4)?,
+                candidate_album_mbid: row.get(5)?,
+                source_url: row.get(6)?,
+                relationship_score: row.get(7)?,
+                shared_tags_json: row.get(8)?,
+                artist_similarity: row.get(9)?,
+                fetched_at: row.get(10)?,
+                expires_at: row.get(11)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load cached Last.fm related albums")?;
+    Ok(albums)
+}
+
+fn lastfm_related_local_albums(
+    conn: &Connection,
+    candidates: &[(Option<String>, String, String)],
+) -> Result<Vec<Option<LastFmRelatedLocalAlbum>>> {
+    let album_artist_key = artist_key_sql("a.album_artist_display");
+    let sql = format!(
+        "
+        SELECT
+            a.id,
+            COALESCE(NULLIF(TRIM(a.album_artist_display), ''), 'Unknown Artist'),
+            COALESCE(NULLIF(TRIM(a.album), ''), 'Untitled album'),
+            a.year,
+            cover.cache_path,
+            cover.mime_type,
+            EXISTS(
+                SELECT 1
+                FROM musicbrainz_release_decisions decision
+                WHERE decision.local_album_id = a.id
+                  AND decision.decision = 'include'
+                  AND NULLIF(TRIM(COALESCE(?1, '')), '') IS NOT NULL
+                  AND LOWER(decision.release_mbid) = LOWER(?1)
+            ) AS mbid_match
+        FROM albums a
+        LEFT JOIN album_covers cover ON cover.album_id = a.id
+        WHERE {album_artist_key} = ?2
+           OR EXISTS(
+                SELECT 1
+                FROM musicbrainz_release_decisions decision
+                WHERE decision.local_album_id = a.id
+                  AND decision.decision = 'include'
+                  AND NULLIF(TRIM(COALESCE(?1, '')), '') IS NOT NULL
+                  AND LOWER(decision.release_mbid) = LOWER(?1)
+           )
+        ORDER BY mbid_match DESC, a.year ASC, a.id ASC
+        "
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    candidates
+        .iter()
+        .map(|(mbid, artist, album)| {
+            let artist_key = normalize_artist_key(artist);
+            let album_key = normalize_text(album);
+            let rows = stmt
+                .query_map(params![mbid, artist_key], |row| {
+                    Ok((
+                        LastFmRelatedLocalAlbum {
+                            album_id: row.get(0)?,
+                            album_artist: row.get(1)?,
+                            album_title: row.get(2)?,
+                            year: row.get(3)?,
+                            cover_path: row.get(4)?,
+                            cover_mime_type: row.get(5)?,
+                        },
+                        row.get::<_, bool>(6)?,
+                    ))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok(rows.into_iter().find_map(|(local, mbid_match)| {
+                (mbid_match || normalize_text(&local.album_title) == album_key).then_some(local)
+            }))
+        })
+        .collect::<Result<Vec<_>>>()
+        .context("Could not match Last.fm related albums to the local library")
+}
+
+pub(crate) fn lastfm_related_local_albums_for_app(
+    app: &AppHandle,
+    candidates: &[(Option<String>, String, String)],
+) -> Result<Vec<Option<LastFmRelatedLocalAlbum>>> {
+    let (conn, _) = open(app)?;
+    lastfm_related_local_albums(&conn, candidates)
+}
+
 pub(crate) fn lastfm_track_popularity_cache_for_app(
     app: &AppHandle,
     artist_key: &str,
@@ -10001,6 +10250,80 @@ pub(crate) fn replace_lastfm_artist_similarity_for_app(
     }
     tx.commit()
         .context("Could not commit the Last.fm artist similarity cache")?;
+    Ok(())
+}
+
+pub(crate) fn replace_lastfm_album_relationships_for_app(
+    app: &AppHandle,
+    album: &LastFmAlbumRelationshipsCacheRecord,
+    related_albums: &[LastFmRelatedAlbumCacheRecord],
+) -> Result<()> {
+    let (mut conn, _) = open(app)?;
+    let tx = conn
+        .transaction()
+        .context("Could not start the Last.fm related-album cache transaction")?;
+    tx.execute(
+        "
+        INSERT INTO lastfm_album_relationships (
+            album_id, album_artist, album_title, source_url, source_tags_json,
+            state, message, fetched_at, expires_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        ON CONFLICT(album_id) DO UPDATE SET
+            album_artist = excluded.album_artist,
+            album_title = excluded.album_title,
+            source_url = excluded.source_url,
+            source_tags_json = excluded.source_tags_json,
+            state = excluded.state,
+            message = excluded.message,
+            fetched_at = excluded.fetched_at,
+            expires_at = excluded.expires_at
+        ",
+        params![
+            album.album_id,
+            album.album_artist,
+            album.album_title,
+            album.source_url,
+            album.source_tags_json,
+            album.state,
+            album.message,
+            album.fetched_at,
+            album.expires_at,
+        ],
+    )
+    .context("Could not cache the Last.fm related-album refresh")?;
+    tx.execute(
+        "DELETE FROM lastfm_related_albums WHERE album_id = ?1",
+        [album.album_id.as_str()],
+    )?;
+    for related in related_albums {
+        tx.execute(
+            "
+            INSERT INTO lastfm_related_albums (
+                album_id, rank, candidate_artist_name, candidate_artist_mbid,
+                candidate_album_title, candidate_album_mbid, source_url,
+                relationship_score, shared_tags_json, artist_similarity,
+                fetched_at, expires_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+            ",
+            params![
+                related.album_id,
+                related.rank,
+                related.candidate_artist_name,
+                related.candidate_artist_mbid,
+                related.candidate_album_title,
+                related.candidate_album_mbid,
+                related.source_url,
+                related.relationship_score,
+                related.shared_tags_json,
+                related.artist_similarity,
+                related.fetched_at,
+                related.expires_at,
+            ],
+        )
+        .context("Could not cache a Last.fm related album")?;
+    }
+    tx.commit()
+        .context("Could not commit the Last.fm related-album cache")?;
     Ok(())
 }
 
@@ -24823,6 +25146,8 @@ mod tests {
             .expect("phase fifty-one schema exists"));
         assert!(migrations::phase_fifty_two_schema_exists(&conn)
             .expect("phase fifty-two schema exists"));
+        assert!(migrations::phase_fifty_three_schema_exists(&conn)
+            .expect("phase fifty-three schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -24982,6 +25307,36 @@ mod tests {
     }
 
     #[test]
+    fn upgrades_schema_fifty_two_with_lastfm_related_album_cache() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("create current schema");
+        conn.execute_batch(
+            "
+            DROP TABLE lastfm_related_albums;
+            DROP TABLE lastfm_album_relationships;
+            PRAGMA user_version = 52;
+            ",
+        )
+        .expect("restore schema fifty-two shape");
+
+        assert!(migrations::phase_fifty_two_schema_exists(&conn)
+            .expect("phase fifty-two schema exists"));
+        assert!(!migrations::phase_fifty_three_schema_exists(&conn)
+            .expect("phase fifty-three schema is absent"));
+
+        migrate(&conn).expect("upgrade schema fifty-two");
+
+        assert!(migrations::phase_fifty_three_schema_exists(&conn)
+            .expect("phase fifty-three schema exists"));
+        assert_eq!(
+            conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+                .expect("read upgraded schema version"),
+            LATEST_SCHEMA_VERSION,
+        );
+    }
+
+    #[test]
     fn matches_similar_artists_by_mbid_then_normalized_library_name() {
         let conn = seeded_connection();
         conn.execute(
@@ -25020,6 +25375,70 @@ mod tests {
             matches[1].as_ref().map(|artist| artist.album_count),
             Some(1)
         );
+        assert_eq!(matches[2], None);
+    }
+
+    #[test]
+    fn matches_related_albums_by_mbid_then_normalized_artist_and_title() {
+        let conn = seeded_connection();
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_artist_links (
+                local_artist_key, display_artist, mbid, canonical_name,
+                match_method, confidence, verification_state, ignored,
+                created_at, updated_at
+            ) VALUES (
+                'pet shop boys', 'Pet Shop Boys',
+                'be540c02-7898-4e2a-a7bd-9f85319f4597', 'Pet Shop Boys',
+                'manual', 1.0, 'verified', 0,
+                '2026-08-12T12:00:00Z', '2026-08-12T12:00:00Z'
+            )
+            ",
+            [],
+        )
+        .expect("insert MusicBrainz artist link");
+        conn.execute(
+            "
+            INSERT INTO musicbrainz_release_decisions (
+                local_artist_key, release_mbid, decision, local_album_id,
+                created_at, updated_at
+            ) VALUES (
+                'pet shop boys', '57f5e7c8-2a6e-34a0-b4cd-0e77695bc36f',
+                'include', 'mb:test',
+                '2026-08-12T12:00:00Z', '2026-08-12T12:00:00Z'
+            )
+            ",
+            [],
+        )
+        .expect("insert MusicBrainz release decision");
+
+        let matches = lastfm_related_local_albums(
+            &conn,
+            &[
+                (
+                    Some("57f5e7c8-2a6e-34a0-b4cd-0e77695bc36f".to_string()),
+                    "Provider Alias".to_string(),
+                    "Different Title".to_string(),
+                ),
+                (
+                    None,
+                    "  PET SHOP BOYS  ".to_string(),
+                    "  ACTUALLY  ".to_string(),
+                ),
+                (
+                    None,
+                    "Missing Artist".to_string(),
+                    "Missing Album".to_string(),
+                ),
+            ],
+        )
+        .expect("match related albums");
+
+        assert_eq!(
+            matches[0].as_ref().map(|album| album.album_id.as_str()),
+            Some("mb:test")
+        );
+        assert_eq!(matches[1].as_ref().and_then(|album| album.year), Some(1987));
         assert_eq!(matches[2], None);
     }
 

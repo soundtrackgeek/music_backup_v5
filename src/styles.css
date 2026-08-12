@@ -18822,6 +18822,164 @@ button {
   cursor: pointer;
 }
 
+.album-related {
+  min-width: 0;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 20px;
+}
+
+.album-related-heading,
+.album-related-source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.album-related-heading {
+  margin-bottom: 12px;
+}
+
+.album-related h2 {
+  margin: 3px 0 0;
+  color: #17211f;
+  font-size: 1.25rem;
+  letter-spacing: -0.025em;
+}
+
+.album-related .eyebrow {
+  color: #7b8984;
+  font-size: 0.64rem;
+  font-weight: 760;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.album-related-basis {
+  margin: 0 0 12px;
+  color: #687771;
+  font-size: 0.72rem;
+}
+
+.album-related-group + .album-related-group {
+  margin-top: 18px;
+}
+
+.album-related-group h3 {
+  margin: 0 0 8px;
+  color: #65736e;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.album-related-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.album-related-card {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 14px;
+  align-items: center;
+  width: 100%;
+  min-height: 76px;
+  gap: 11px;
+  border: 1px solid #e1e8e5;
+  border-radius: 10px;
+  background: #f8faf9;
+  padding: 8px 10px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.album-related-card.is-owned {
+  grid-template-columns: 58px minmax(0, 1fr);
+}
+
+.album-related-card:hover:not(:disabled) {
+  border-color: #b7cbc4;
+  background: #f2f7f5;
+}
+
+.album-related-card:disabled {
+  cursor: default;
+  opacity: 0.66;
+}
+
+.album-related-cover,
+.album-related-fallback {
+  width: 58px;
+  height: 58px;
+  border-radius: 7px;
+}
+
+.album-related-fallback {
+  display: grid;
+  place-items: center;
+  background: #e4ece8;
+  color: #46625a;
+  font-family: "Cormorant Garamond", serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.album-related-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.album-related-copy strong {
+  overflow: hidden;
+  color: #17211f;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-related-copy small {
+  overflow: hidden;
+  color: #76847f;
+  font-size: 0.66rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-related-evidence {
+  color: #55736a !important;
+}
+
+.album-related-source {
+  min-height: 32px;
+  margin-top: 12px;
+  border-top: 1px solid #e1e8e5;
+  padding-top: 10px;
+  color: #7a8782;
+  font-size: 0.67rem;
+}
+
+.album-related-source button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  color: #176e66;
+  font: inherit;
+  font-weight: 720;
+  cursor: pointer;
+}
+
 .album-review {
   min-width: 0;
   border: 1px solid #d8e1dd;
@@ -19049,6 +19207,42 @@ button {
   color: #83d2c4;
 }
 
+:root[data-theme="dark"] .album-related {
+  border-color: #2f3d38;
+  color: #dce7e3;
+  background: #171f1c;
+}
+
+:root[data-theme="dark"] .album-related h2,
+:root[data-theme="dark"] .album-related-copy strong {
+  color: #e8f0ed;
+}
+
+:root[data-theme="dark"] .album-related-card {
+  border-color: #30413b;
+  color: #dce7e3;
+  background: #151d1a;
+}
+
+:root[data-theme="dark"] .album-related-card:hover:not(:disabled) {
+  border-color: #4d6b61;
+  background: #1a2521;
+}
+
+:root[data-theme="dark"] .album-related-fallback {
+  color: #b8d8ce;
+  background: #293934;
+}
+
+:root[data-theme="dark"] .album-related-evidence,
+:root[data-theme="dark"] .album-related-source button {
+  color: #83d2c4 !important;
+}
+
+:root[data-theme="dark"] .album-related-source {
+  border-color: #2f3d38;
+}
+
 :root[data-theme="dark"] .album-review {
   border-color: #2f3d38;
   color: #dce7e3;
@@ -19081,6 +19275,10 @@ button {
   }
 
   .artist-similar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .album-related-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -19164,6 +19362,16 @@ button {
   }
 
   .artist-similar-source {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .album-related-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .album-related-heading,
+  .album-related-source {
     align-items: flex-start;
     flex-direction: column;
   }

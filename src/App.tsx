@@ -85,6 +85,7 @@ import {
   getArtistBiography,
   getArtistTrackHighlights,
   getLastFmAlbumPopularity,
+  getLastFmRelatedAlbums,
   getLastFmArtistPopularity,
   getLastFmArtistSimilarity,
   getAlbumDebutTimeline,
@@ -205,6 +206,7 @@ import type {
   ImportSummary,
   LovedDensityStat,
   LastFmAlbumPopularity,
+  LastFmRelatedAlbums,
   LastFmArtistPopularity,
   LastFmArtistSimilarity,
   AlbumReview,
@@ -395,6 +397,7 @@ import { ArtistTimeline } from "./components/ArtistTimeline";
 import { ArtistPortrait } from "./components/ArtistPortrait";
 import { ArtistBiographyPanel } from "./components/ArtistBiographyPanel";
 import { AlbumReviewPanel } from "./components/AlbumReviewPanel";
+import { AlbumRelatedAlbumsPanel } from "./components/AlbumRelatedAlbumsPanel";
 import { ArtistPopularTracksPanel } from "./components/ArtistPopularTracksPanel";
 import { ArtistSimilarArtistsPanel } from "./components/ArtistSimilarArtistsPanel";
 import {
@@ -8318,6 +8321,12 @@ export default function App() {
   const [albumReview, setAlbumReview] = useState<AlbumReview | null>(null);
   const [albumReviewError, setAlbumReviewError] = useState<string | null>(null);
   const [isAlbumReviewLoading, setIsAlbumReviewLoading] = useState(false);
+  const [relatedAlbums, setRelatedAlbums] =
+    useState<LastFmRelatedAlbums | null>(null);
+  const [relatedAlbumsError, setRelatedAlbumsError] = useState<string | null>(
+    null,
+  );
+  const [isRelatedAlbumsLoading, setIsRelatedAlbumsLoading] = useState(false);
   const [albumIncludeCalculated, setAlbumIncludeCalculated] = useState(false);
   const [albumExportResult, setAlbumExportResult] =
     useState<ExportResult | null>(null);
@@ -9206,6 +9215,39 @@ export default function App() {
       })
       .finally(() => {
         if (!cancelled) setIsAlbumReviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, selectedAlbumId]);
+
+  useEffect(() => {
+    if (activeSection !== "Albums" || !selectedAlbumId) {
+      setRelatedAlbums(null);
+      setRelatedAlbumsError(null);
+      setIsRelatedAlbumsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsRelatedAlbumsLoading(true);
+    setRelatedAlbumsError(null);
+    setRelatedAlbums(null);
+    void getLastFmRelatedAlbums(selectedAlbumId)
+      .then((result) => {
+        if (!cancelled) setRelatedAlbums(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setRelatedAlbumsError(
+            error instanceof Error ? error.message : String(error),
+          );
+          setRelatedAlbums(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsRelatedAlbumsLoading(false);
       });
 
     return () => {
@@ -11064,6 +11106,8 @@ export default function App() {
     setAlbumPopularityError(null);
     setAlbumReview(null);
     setAlbumReviewError(null);
+    setRelatedAlbums(null);
+    setRelatedAlbumsError(null);
     setAlbumExportResult(null);
   }
 
@@ -11763,6 +11807,22 @@ export default function App() {
     }
   }
 
+  async function refreshRelatedAlbums() {
+    if (!selectedAlbumId) return;
+
+    setIsRelatedAlbumsLoading(true);
+    setRelatedAlbumsError(null);
+    try {
+      setRelatedAlbums(await getLastFmRelatedAlbums(selectedAlbumId, true));
+    } catch (error) {
+      setRelatedAlbumsError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setIsRelatedAlbumsLoading(false);
+    }
+  }
+
   async function openAlbumReviewSource(url: string) {
     try {
       await openExternalUrl(url);
@@ -11791,6 +11851,7 @@ export default function App() {
       setArtistPopularityError(message);
       setArtistSimilarityError(message);
       setAlbumPopularityError(message);
+      setRelatedAlbumsError(message);
       setArtistAlbumPopularityError(message);
     }
   }
@@ -17146,6 +17207,15 @@ export default function App() {
               error={albumReviewError}
               onRefresh={() => void refreshAlbumReview()}
               onOpenSource={(url) => void openAlbumReviewSource(url)}
+            />
+
+            <AlbumRelatedAlbumsPanel
+              related={relatedAlbums}
+              isLoading={isRelatedAlbumsLoading}
+              error={relatedAlbumsError}
+              onRefresh={() => void refreshRelatedAlbums()}
+              onOpenAlbum={openTimelineAlbum}
+              onOpenSource={(url) => void openLastFmSource(url)}
             />
 
             <section className="table-panel" aria-label="Selected album tracks">

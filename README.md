@@ -28,15 +28,17 @@ Opening an artist's **Overview** resolves its saved MusicBrainz MBID to a Wikida
 
 SQLite schema version 50 caches the biography text, MusicBrainz MBID, Wikidata ID, Wikipedia language/title, source URL, state, and refresh times by normalized local artist key. Available text is refreshed after 30 days, unavailable results after seven days, and a failed refresh keeps displaying the last usable cached biography. No provider credential is required; only public MusicBrainz, Wikidata, and Wikipedia requests leave the device.
 
-## Last.fm popularity and similar artists
+## Last.fm popularity, similar artists, and related albums
 
 **Settings → Providers → Last.fm metadata** stores a read-only API key in Windows Credential Manager; the Last.fm shared secret is not used. Opening an artist's **Overview** loads `artist.getTopTracks`, matches the result against tracks that are actually in the local library, and shows the first five Popular Tracks with visible Last.fm attribution. **Show more** expands the list to as many as ten owned matches, while **Refresh** explicitly requests a new artist snapshot. Artist lookups prefer a saved MusicBrainz ID and fall back to the library artist name with Last.fm autocorrection when the ID result fails, is empty, or does not match an owned track; Last.fm's canonical spelling is retained in the cached provider rows.
 
 The same Overview also loads `artist.getSimilar` and presents up to 12 listener-related artists in **In your library** and **Explore** groups. Local matches prefer MusicBrainz MBIDs and fall back to normalized artist names; owned cards reuse local portraits or representative album covers and open the local Artist page, while missing artists and the complete result link open Last.fm. Match percentages are Last.fm relationship scores, not local play counts.
 
+Album pages derive up to 12 **Related Albums** from documented Last.fm API data: `album.getTopTags`, `tag.getTopAlbums`, and the existing `artist.getSimilar` relationship signal. Results are ranked by shared album tags with a similar-artist boost, then split into **In your library** and **Explore**. Each card shows the tags and artist relationship that support it; owned albums open locally and missing albums open on Last.fm. This is an API-derived recommendation, not a copy of Last.fm's private website ranking.
+
 Opening an album track list reuses that artist snapshot and requests `track.getInfo` only for album tracks whose popularity is missing or stale. Tracks with positive listener evidence are ranked by listeners, then play count and track order; the leading three receive a 🔥 marker in both Albums and the Artist Cover view. A track without usable listening evidence is not given a flame.
 
-SQLite schema version 49 stores artist refresh state and normalized track popularity independently of transient imported track IDs. Schema version 52 stores directed similar-artist snapshots and their ranked relationship scores. Successful responses honor provider cache headers with a seven-day fallback, unavailable tracks are retained for 30 days, and stale cached data remains usable when a refresh fails. Text is cached; Last.fm credentials are never stored in SQLite, logs, browser storage, or backups.
+SQLite schema version 49 stores artist refresh state and normalized track popularity independently of transient imported track IDs. Schema version 52 stores directed similar-artist snapshots and their ranked relationship scores. Schema version 53 stores API-derived related-album snapshots and local album matches. Successful responses honor provider cache headers with a seven-day fallback, unavailable tracks are retained for 30 days, and stale cached data remains usable when a refresh fails. Text is cached; Last.fm credentials are never stored in SQLite, logs, browser storage, or backups.
 
 ## Artist Loved Tracks and Chart Busters
 
@@ -539,6 +541,7 @@ npm run security:check
 
 - Albums workspace with a dedicated filterable, sortable, paginated album index and min/max rating-completeness range filtering.
 - Selected albums load an attributed, refreshable CritiqueBrainz community review through exact MusicBrainz release-group identity, with durable positive/unavailable caching and stale-text fallback.
+- Album pages show refreshable Last.fm Related Albums, split into locally owned albums and missing releases to explore, with visible tag and artist-relationship evidence.
 - Album include/exclude genre filters use the same five-result in-place genre suggestions as Search and Charts.
 - Album detail drill-down with cover placeholders, album metadata, rating completeness, TMOE, AE, loved tracks, and Album Score.
 - Ordered album track lists with disc/track positions, track durations, ratings, love markers, filenames, and paths.

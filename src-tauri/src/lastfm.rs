@@ -1,7 +1,8 @@
 use crate::db::{
-    self, ArtistImageCacheRecord, LastFmArtistIdentity, LastFmArtistPopularityCacheRecord,
-    LastFmArtistSimilarityCacheRecord, LastFmLocalTrackCandidate, LastFmSimilarArtistCacheRecord,
-    LastFmSimilarLocalArtist, LastFmTrackPopularityCacheRecord,
+    self, AlbumReviewIdentity, ArtistImageCacheRecord, LastFmAlbumRelationshipsCacheRecord,
+    LastFmArtistIdentity, LastFmArtistPopularityCacheRecord, LastFmArtistSimilarityCacheRecord,
+    LastFmLocalTrackCandidate, LastFmRelatedAlbumCacheRecord, LastFmRelatedLocalAlbum,
+    LastFmSimilarArtistCacheRecord, LastFmSimilarLocalArtist, LastFmTrackPopularityCacheRecord,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use base64::{engine::general_purpose, Engine as _};
@@ -25,7 +26,7 @@ use zeroize::Zeroizing;
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.lastfm";
 const KEYRING_USER: &str = "api-key";
 const LASTFM_API_BASE: &str = "https://ws.audioscrobbler.com/2.0/";
-const LASTFM_USER_AGENT: &str = "music-backup-v5/0.128.0 (local music metadata enrichment)";
+const LASTFM_USER_AGENT: &str = "music-backup-v5/0.129.0 (local music metadata enrichment)";
 const REQUEST_INTERVAL: Duration = Duration::from_millis(350);
 const POPULARITY_CACHE_DAYS: i64 = 7;
 const UNAVAILABLE_CACHE_DAYS: i64 = 30;
@@ -33,6 +34,10 @@ const ARTIST_TOP_TRACK_LIMIT: usize = 50;
 const POPULAR_TRACK_RESPONSE_LIMIT: usize = 10;
 const SIMILAR_ARTIST_FETCH_LIMIT: usize = 24;
 const SIMILAR_ARTIST_RESPONSE_LIMIT: usize = 12;
+const RELATED_ALBUM_TAG_LIMIT: usize = 3;
+const RELATED_ALBUM_CANDIDATES_PER_TAG: usize = 30;
+const RELATED_ALBUM_FETCH_LIMIT: usize = 24;
+const RELATED_ALBUM_RESPONSE_LIMIT: usize = 12;
 const ARTIST_TOP_TRACKS_MUSICBRAINZ_METHOD: &str = "artist-top-tracks-musicbrainz";
 const ARTIST_TOP_TRACKS_NAME_METHOD: &str = "artist-top-tracks-name";
 const ARTIST_NAME_EMPTY_MESSAGE: &str =
@@ -43,6 +48,7 @@ const LASTFM_PLACEHOLDER_HASH: &str = "2a96cbd8b46e442fc41c2b86b821562f";
 static REQUEST_GATE: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 static POPULARITY_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 static SIMILARITY_GATE: OnceLock<Mutex<()>> = OnceLock::new();
+static RELATED_ALBUMS_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -160,6 +166,40 @@ pub struct LastFmAlbumPopularity {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LastFmRelatedAlbum {
+    pub rank: i64,
+    pub artist_name: String,
+    pub artist_mbid: Option<String>,
+    pub album_title: String,
+    pub album_mbid: Option<String>,
+    pub source_url: Option<String>,
+    pub shared_tags: Vec<String>,
+    pub artist_similarity: Option<f64>,
+    pub local_album_id: Option<String>,
+    pub local_album_artist: Option<String>,
+    pub local_album_title: Option<String>,
+    pub local_year: Option<i32>,
+    pub local_cover_path: Option<String>,
+    pub local_cover_mime_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LastFmRelatedAlbums {
+    pub album_id: String,
+    pub album_artist: String,
+    pub album_title: String,
+    pub source_url: Option<String>,
+    pub source_tags: Vec<String>,
+    pub fetched_at: Option<String>,
+    pub cached: bool,
+    pub stale: bool,
+    pub albums: Vec<LastFmRelatedAlbum>,
+    pub message: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct LastFmTopTracksPayload {
     toptracks: LastFmTopTracks,
@@ -248,6 +288,52 @@ struct LastFmSimilarArtistPayload {
     url: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct LastFmAlbumTopTagsPayload {
+    toptags: LastFmAlbumTopTagsBody,
+}
+
+#[derive(Debug, Deserialize)]
+struct LastFmAlbumTopTagsBody {
+    #[serde(default)]
+    tag: Vec<LastFmAlbumTagPayload>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LastFmAlbumTagPayload {
+    name: String,
+    #[serde(default)]
+    count: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct LastFmTagTopAlbumsPayload {
+    albums: LastFmTagTopAlbumsBody,
+}
+
+#[derive(Debug, Deserialize)]
+struct LastFmTagTopAlbumsBody {
+    #[serde(default)]
+    album: Vec<LastFmTagAlbumPayload>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LastFmTagAlbumPayload {
+    name: String,
+    #[serde(default)]
+    mbid: String,
+    #[serde(default)]
+    url: String,
+    artist: LastFmTagAlbumArtistPayload,
+}
+
+#[derive(Debug, Deserialize)]
+struct LastFmTagAlbumArtistPayload {
+    name: String,
+    #[serde(default)]
+    mbid: String,
+}
+
 struct LastFmJsonResponse<T> {
     payload: T,
     fetched_at: String,
@@ -269,6 +355,32 @@ struct ArtistSimilaritySnapshot {
     artists: Vec<LastFmSimilarArtistCacheRecord>,
     cached: bool,
     stale: bool,
+}
+
+#[derive(Clone)]
+struct RelatedAlbumsSnapshot {
+    status: LastFmAlbumRelationshipsCacheRecord,
+    albums: Vec<LastFmRelatedAlbumCacheRecord>,
+    cached: bool,
+    stale: bool,
+}
+
+#[derive(Debug, Clone)]
+struct RelatedAlbumSourceTag {
+    name: String,
+    weight: f64,
+}
+
+#[derive(Debug, Clone)]
+struct RelatedAlbumCandidate {
+    artist_name: String,
+    artist_mbid: Option<String>,
+    album_title: String,
+    album_mbid: Option<String>,
+    source_url: Option<String>,
+    relationship_score: f64,
+    shared_tags: Vec<String>,
+    artist_similarity: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -505,6 +617,13 @@ fn similarity_cache_is_fresh(record: &LastFmArtistSimilarityCacheRecord) -> bool
         .is_ok_and(|expires_at| expires_at > Utc::now())
 }
 
+fn related_albums_cache_is_fresh(record: &LastFmAlbumRelationshipsCacheRecord) -> bool {
+    record
+        .expires_at
+        .parse::<DateTime<Utc>>()
+        .is_ok_and(|expires_at| expires_at > Utc::now())
+}
+
 fn lastfm_artist_tracks_url(artist_name: &str) -> Option<String> {
     let mut url = Url::parse("https://www.last.fm/music/").ok()?;
     url.path_segments_mut()
@@ -520,6 +639,15 @@ fn lastfm_artist_similar_url(artist_name: &str) -> Option<String> {
         .ok()?
         .push(artist_name.trim())
         .push("+similar");
+    Some(url.into())
+}
+
+fn lastfm_album_url(artist_name: &str, album_title: &str) -> Option<String> {
+    let mut url = Url::parse("https://www.last.fm/music/").ok()?;
+    url.path_segments_mut()
+        .ok()?
+        .push(artist_name.trim())
+        .push(album_title.trim());
     Some(url.into())
 }
 
@@ -539,6 +667,42 @@ fn normalize_artist_name_key(value: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn normalize_album_name_key(value: &str) -> String {
+    normalize_track_key(value)
+}
+
+fn parse_json_number(value: &serde_json::Value) -> f64 {
+    value
+        .as_f64()
+        .or_else(|| value.as_str().and_then(|value| value.trim().parse().ok()))
+        .unwrap_or(0.0)
+}
+
+fn meaningful_album_tag(value: &str) -> bool {
+    let key = normalize_album_name_key(value);
+    !key.is_empty()
+        && ![
+            "album i own",
+            "albums i own",
+            "albums",
+            "cd",
+            "collection",
+            "favorite album",
+            "favorite albums",
+            "favourite album",
+            "favourite albums",
+            "heard",
+            "listened",
+            "owned",
+            "reviewed",
+            "seen live",
+            "to buy",
+            "vinyl",
+            "wishlist",
+        ]
+        .contains(&key.as_str())
 }
 
 fn artist_info(api_key: &str, artist: &str) -> Result<LastFmArtist> {
@@ -786,6 +950,281 @@ fn fetch_artist_similarity(
         return Ok(result);
     }
     Err(last_error.unwrap_or_else(|| anyhow!("Last.fm similar-artist lookup did not run.")))
+}
+
+fn album_top_tags_url(api_key: &str, identity: &AlbumReviewIdentity) -> Result<Url> {
+    let mut url = Url::parse(LASTFM_API_BASE).context("Could not create the Last.fm API URL")?;
+    url.query_pairs_mut()
+        .append_pair("method", "album.getTopTags")
+        .append_pair("artist", &identity.album_artist)
+        .append_pair("album", &identity.album_title)
+        .append_pair("api_key", api_key)
+        .append_pair("autocorrect", "1")
+        .append_pair("format", "json");
+    Ok(url)
+}
+
+fn tag_top_albums_url(api_key: &str, tag: &str) -> Result<Url> {
+    let mut url = Url::parse(LASTFM_API_BASE).context("Could not create the Last.fm API URL")?;
+    url.query_pairs_mut()
+        .append_pair("method", "tag.getTopAlbums")
+        .append_pair("tag", tag)
+        .append_pair("limit", &RELATED_ALBUM_CANDIDATES_PER_TAG.to_string())
+        .append_pair("api_key", api_key)
+        .append_pair("format", "json");
+    Ok(url)
+}
+
+fn related_artist_similarity_records(
+    app: &AppHandle,
+    api_key: &str,
+    identity: &AlbumReviewIdentity,
+    force_refresh: bool,
+) -> Result<Vec<LastFmSimilarArtistCacheRecord>> {
+    let artist_identity = LastFmArtistIdentity {
+        artist_key: normalize_artist_name_key(&identity.album_artist),
+        artist_name: identity.album_artist.clone(),
+        musicbrainz_mbid: identity.artist_mbid.clone(),
+    };
+    let cached_status =
+        db::lastfm_artist_similarity_cache_for_app(app, &artist_identity.artist_key)?;
+    let cached_artists = db::lastfm_similar_artist_cache_for_app(app, &artist_identity.artist_key)?;
+    if !force_refresh
+        && cached_status
+            .as_ref()
+            .is_some_and(similarity_cache_is_fresh)
+    {
+        return Ok(cached_artists);
+    }
+
+    match fetch_artist_similarity(api_key, &artist_identity) {
+        Ok((status, artists, cacheable)) => {
+            if cacheable {
+                db::replace_lastfm_artist_similarity_for_app(app, &status, &artists)?;
+            }
+            Ok(artists)
+        }
+        Err(_) => Ok(cached_artists),
+    }
+}
+
+fn fetch_related_albums(
+    app: &AppHandle,
+    api_key: &str,
+    identity: &AlbumReviewIdentity,
+    force_refresh: bool,
+) -> Result<(
+    LastFmAlbumRelationshipsCacheRecord,
+    Vec<LastFmRelatedAlbumCacheRecord>,
+    bool,
+)> {
+    let top_tags_url = album_top_tags_url(api_key, identity)?;
+    let top_tags_response = decode_lastfm_json::<LastFmAlbumTopTagsPayload>(lastfm_json(
+        &top_tags_url,
+        POPULARITY_CACHE_DAYS,
+    )?)?;
+    let mut seen_tags = HashSet::new();
+    let source_tags = top_tags_response
+        .payload
+        .toptags
+        .tag
+        .into_iter()
+        .filter_map(|tag| {
+            let name = nonempty(&tag.name)?;
+            let key = normalize_album_name_key(&name);
+            if !meaningful_album_tag(&name) || !seen_tags.insert(key) {
+                return None;
+            }
+            Some(RelatedAlbumSourceTag {
+                name,
+                weight: (parse_json_number(&tag.count) / 100.0).clamp(0.01, 1.0),
+            })
+        })
+        .take(RELATED_ALBUM_TAG_LIMIT)
+        .collect::<Vec<_>>();
+    let source_url = lastfm_album_url(&identity.album_artist, &identity.album_title);
+    let source_tags_json = serde_json::to_string(
+        &source_tags
+            .iter()
+            .map(|tag| tag.name.clone())
+            .collect::<Vec<_>>(),
+    )?;
+
+    if source_tags.is_empty() {
+        return Ok((
+            LastFmAlbumRelationshipsCacheRecord {
+                album_id: identity.album_id.clone(),
+                album_artist: identity.album_artist.clone(),
+                album_title: identity.album_title.clone(),
+                source_url,
+                source_tags_json,
+                state: "unavailable".to_string(),
+                message: "Last.fm returned no usable tags for this album.".to_string(),
+                fetched_at: top_tags_response.fetched_at,
+                expires_at: top_tags_response.expires_at,
+            },
+            Vec::new(),
+            top_tags_response.cacheable,
+        ));
+    }
+
+    let artist_similarities =
+        related_artist_similarity_records(app, api_key, identity, force_refresh)?;
+    let similarity_by_mbid = artist_similarities
+        .iter()
+        .filter_map(|artist| {
+            artist
+                .similar_artist_mbid
+                .as_ref()
+                .map(|mbid| (mbid.to_lowercase(), artist.match_score))
+        })
+        .collect::<HashMap<_, _>>();
+    let similarity_by_name = artist_similarities
+        .iter()
+        .map(|artist| {
+            (
+                normalize_artist_name_key(&artist.similar_artist_name),
+                artist.match_score,
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+    let source_artist_key = normalize_artist_name_key(&identity.album_artist);
+    let source_album_key = normalize_album_name_key(&identity.album_title);
+    let mut candidates = HashMap::<String, RelatedAlbumCandidate>::new();
+    let mut expires_at = top_tags_response.expires_at.clone();
+    let mut cacheable = top_tags_response.cacheable;
+    for source_tag in &source_tags {
+        let tag_url = tag_top_albums_url(api_key, &source_tag.name)?;
+        let response = decode_lastfm_json::<LastFmTagTopAlbumsPayload>(lastfm_json(
+            &tag_url,
+            POPULARITY_CACHE_DAYS,
+        )?)?;
+        cacheable &= response.cacheable;
+        if response.expires_at < expires_at {
+            expires_at = response.expires_at.clone();
+        }
+        for (index, album) in response.payload.albums.album.into_iter().enumerate() {
+            let Some(album_title) = nonempty(&album.name) else {
+                continue;
+            };
+            let Some(artist_name) = nonempty(&album.artist.name) else {
+                continue;
+            };
+            let artist_key = normalize_artist_name_key(&artist_name);
+            let album_key = normalize_album_name_key(&album_title);
+            if artist_key.is_empty()
+                || album_key.is_empty()
+                || (artist_key == source_artist_key && album_key == source_album_key)
+            {
+                continue;
+            }
+            let candidate_key = format!("{artist_key}\u{1f}{album_key}");
+            let album_mbid = nonempty(&album.mbid);
+            let artist_mbid = nonempty(&album.artist.mbid);
+            let source_url =
+                nonempty(&album.url).or_else(|| lastfm_album_url(&artist_name, &album_title));
+            let candidate =
+                candidates
+                    .entry(candidate_key)
+                    .or_insert_with(|| RelatedAlbumCandidate {
+                        artist_name,
+                        artist_mbid: artist_mbid.clone(),
+                        album_title,
+                        album_mbid: album_mbid.clone(),
+                        source_url,
+                        relationship_score: 0.0,
+                        shared_tags: Vec::new(),
+                        artist_similarity: None,
+                    });
+            if candidate.artist_mbid.is_none() {
+                candidate.artist_mbid = artist_mbid;
+            }
+            if candidate.album_mbid.is_none() {
+                candidate.album_mbid = album_mbid;
+            }
+            candidate.relationship_score += source_tag.weight / ((index + 1) as f64).sqrt();
+            if !candidate
+                .shared_tags
+                .iter()
+                .any(|tag| tag.eq_ignore_ascii_case(&source_tag.name))
+            {
+                candidate.shared_tags.push(source_tag.name.clone());
+            }
+        }
+    }
+
+    let mut ranked = candidates.into_values().collect::<Vec<_>>();
+    for candidate in &mut ranked {
+        let similarity = candidate
+            .artist_mbid
+            .as_ref()
+            .and_then(|mbid| similarity_by_mbid.get(&mbid.to_lowercase()).copied())
+            .or_else(|| {
+                similarity_by_name
+                    .get(&normalize_artist_name_key(&candidate.artist_name))
+                    .copied()
+            });
+        candidate.artist_similarity = similarity;
+        if let Some(similarity) = similarity {
+            candidate.relationship_score += similarity * 0.5;
+        }
+    }
+    ranked.sort_by(|left, right| {
+        right
+            .relationship_score
+            .total_cmp(&left.relationship_score)
+            .then_with(|| left.artist_name.cmp(&right.artist_name))
+            .then_with(|| left.album_title.cmp(&right.album_title))
+    });
+    ranked.truncate(RELATED_ALBUM_FETCH_LIMIT);
+
+    let albums = ranked
+        .into_iter()
+        .enumerate()
+        .map(|(index, album)| {
+            Ok(LastFmRelatedAlbumCacheRecord {
+                album_id: identity.album_id.clone(),
+                rank: index as i64 + 1,
+                candidate_artist_name: album.artist_name,
+                candidate_artist_mbid: album.artist_mbid,
+                candidate_album_title: album.album_title,
+                candidate_album_mbid: album.album_mbid,
+                source_url: album.source_url,
+                relationship_score: album.relationship_score,
+                shared_tags_json: serde_json::to_string(&album.shared_tags)?,
+                artist_similarity: album.artist_similarity,
+                fetched_at: top_tags_response.fetched_at.clone(),
+                expires_at: expires_at.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let state = if albums.is_empty() {
+        "unavailable"
+    } else {
+        "available"
+    };
+    let message = if albums.is_empty() {
+        "Last.fm returned no related albums for the album's usable tags.".to_string()
+    } else {
+        format!(
+            "Built {} related albums from {} Last.fm tags.",
+            albums.len(),
+            source_tags.len()
+        )
+    };
+    let status = LastFmAlbumRelationshipsCacheRecord {
+        album_id: identity.album_id.clone(),
+        album_artist: identity.album_artist.clone(),
+        album_title: identity.album_title.clone(),
+        source_url,
+        source_tags_json,
+        state: state.to_string(),
+        message,
+        fetched_at: top_tags_response.fetched_at,
+        expires_at,
+    };
+    Ok((status, albums, cacheable))
 }
 
 fn fetch_artist_top_tracks_once(
@@ -1086,6 +1525,161 @@ fn artist_similarity_response(
     })
 }
 
+fn related_albums_snapshot(
+    app: &AppHandle,
+    identity: &AlbumReviewIdentity,
+    force_refresh: bool,
+) -> Result<RelatedAlbumsSnapshot> {
+    let cached_status = db::lastfm_album_relationships_cache_for_app(app, &identity.album_id)?
+        .filter(|status| {
+            normalize_artist_name_key(&status.album_artist)
+                == normalize_artist_name_key(&identity.album_artist)
+                && normalize_album_name_key(&status.album_title)
+                    == normalize_album_name_key(&identity.album_title)
+        });
+    let cached_albums = db::lastfm_related_album_cache_for_app(app, &identity.album_id)?;
+    if !force_refresh
+        && cached_status
+            .as_ref()
+            .is_some_and(related_albums_cache_is_fresh)
+    {
+        return Ok(RelatedAlbumsSnapshot {
+            status: cached_status.expect("fresh Last.fm related-album cache status"),
+            albums: cached_albums,
+            cached: true,
+            stale: false,
+        });
+    }
+
+    let refresh = stored_api_key()?
+        .context("Last.fm metadata is not configured. Add the API key in Settings > Providers.")
+        .and_then(|api_key| fetch_related_albums(app, api_key.as_str(), identity, force_refresh));
+    match refresh {
+        Ok((status, albums, cacheable)) => {
+            if cacheable {
+                db::replace_lastfm_album_relationships_for_app(app, &status, &albums)?;
+            }
+            Ok(RelatedAlbumsSnapshot {
+                status,
+                albums,
+                cached: false,
+                stale: false,
+            })
+        }
+        Err(error) => {
+            let Some(mut status) = cached_status else {
+                return Err(error);
+            };
+            status.message = format!("Using cached related albums because refresh failed: {error}");
+            Ok(RelatedAlbumsSnapshot {
+                status,
+                albums: cached_albums,
+                cached: true,
+                stale: true,
+            })
+        }
+    }
+}
+
+fn local_related_album_fields(
+    local: Option<LastFmRelatedLocalAlbum>,
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<i32>,
+    Option<String>,
+    Option<String>,
+) {
+    match local {
+        Some(local) => (
+            Some(local.album_id),
+            Some(local.album_artist),
+            Some(local.album_title),
+            local.year,
+            local.cover_path,
+            local.cover_mime_type,
+        ),
+        None => (None, None, None, None, None, None),
+    }
+}
+
+fn related_albums_response(
+    app: &AppHandle,
+    identity: &AlbumReviewIdentity,
+    mut snapshot: RelatedAlbumsSnapshot,
+) -> Result<LastFmRelatedAlbums> {
+    snapshot.albums.sort_by_key(|album| album.rank);
+    snapshot.albums.truncate(RELATED_ALBUM_RESPONSE_LIMIT);
+    let candidates = snapshot
+        .albums
+        .iter()
+        .map(|album| {
+            (
+                album.candidate_album_mbid.clone(),
+                album.candidate_artist_name.clone(),
+                album.candidate_album_title.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let local_matches = db::lastfm_related_local_albums_for_app(app, &candidates)?;
+    let albums = snapshot
+        .albums
+        .into_iter()
+        .zip(local_matches)
+        .map(|(album, local)| {
+            let (
+                local_album_id,
+                local_album_artist,
+                local_album_title,
+                local_year,
+                local_cover_path,
+                local_cover_mime_type,
+            ) = local_related_album_fields(local);
+            LastFmRelatedAlbum {
+                rank: album.rank,
+                artist_name: album.candidate_artist_name,
+                artist_mbid: album.candidate_artist_mbid,
+                album_title: album.candidate_album_title,
+                album_mbid: album.candidate_album_mbid,
+                source_url: album.source_url,
+                shared_tags: serde_json::from_str(&album.shared_tags_json).unwrap_or_default(),
+                artist_similarity: album.artist_similarity,
+                local_album_id,
+                local_album_artist,
+                local_album_title,
+                local_year,
+                local_cover_path,
+                local_cover_mime_type,
+            }
+        })
+        .collect::<Vec<_>>();
+    let local_count = albums
+        .iter()
+        .filter(|album| album.local_album_id.is_some())
+        .count();
+    let message = if albums.is_empty() {
+        snapshot.status.message.clone()
+    } else {
+        format!(
+            "Showing {} related albums; {local_count} are in this library.",
+            albums.len()
+        )
+    };
+    Ok(LastFmRelatedAlbums {
+        album_id: identity.album_id.clone(),
+        album_artist: identity.album_artist.clone(),
+        album_title: identity.album_title.clone(),
+        source_url: snapshot.status.source_url,
+        source_tags: serde_json::from_str(&snapshot.status.source_tags_json).unwrap_or_default(),
+        fetched_at: Some(snapshot.status.fetched_at),
+        cached: snapshot.cached,
+        stale: snapshot.stale,
+        albums,
+        message,
+    })
+}
+
 fn popularity_snapshot_used_name_lookup(snapshot: &ArtistPopularitySnapshot) -> bool {
     snapshot.status.message == ARTIST_NAME_EMPTY_MESSAGE
         || snapshot.tracks.iter().any(|track| {
@@ -1243,6 +1837,19 @@ pub fn artist_similarity(
         .with_context(|| format!("Could not find artist {artist_id} in the local library"))?;
     let snapshot = artist_similarity_snapshot(&app, &identity, force_refresh)?;
     artist_similarity_response(&app, &identity, snapshot)
+}
+
+pub fn related_albums(
+    app: AppHandle,
+    album_id: String,
+    force_refresh: bool,
+) -> Result<LastFmRelatedAlbums> {
+    let gate = RELATED_ALBUMS_GATE.get_or_init(|| Mutex::new(()));
+    let _guard = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let identity = db::album_review_identity_for_app(&app, album_id.trim())?
+        .with_context(|| format!("Could not find album {album_id} in the local library"))?;
+    let snapshot = related_albums_snapshot(&app, &identity, force_refresh)?;
+    related_albums_response(&app, &identity, snapshot)
 }
 
 fn fetch_track_info(
@@ -1780,6 +2387,90 @@ mod tests {
             Some(SIMILAR_ARTIST_FETCH_LIMIT.to_string().as_str())
         );
         assert!(!query.contains_key("artist"));
+    }
+
+    #[test]
+    fn builds_documented_related_album_requests() {
+        let identity = AlbumReviewIdentity {
+            album_id: "hysteria".to_string(),
+            album_artist: "Def Leppard".to_string(),
+            album_title: "Hysteria".to_string(),
+            album_year: Some(1987),
+            artist_mbid: None,
+            release_group_mbid: None,
+        };
+        let tags_url = album_top_tags_url("test-key", &identity).unwrap();
+        let tags_query = tags_url.query_pairs().collect::<HashMap<_, _>>();
+        assert_eq!(
+            tags_query.get("method").map(|value| value.as_ref()),
+            Some("album.getTopTags")
+        );
+        assert_eq!(
+            tags_query.get("artist").map(|value| value.as_ref()),
+            Some("Def Leppard")
+        );
+        assert_eq!(
+            tags_query.get("album").map(|value| value.as_ref()),
+            Some("Hysteria")
+        );
+
+        let albums_url = tag_top_albums_url("test-key", "hard rock").unwrap();
+        let albums_query = albums_url.query_pairs().collect::<HashMap<_, _>>();
+        assert_eq!(
+            albums_query.get("method").map(|value| value.as_ref()),
+            Some("tag.getTopAlbums")
+        );
+        assert_eq!(
+            albums_query.get("tag").map(|value| value.as_ref()),
+            Some("hard rock")
+        );
+        assert_eq!(
+            albums_query.get("limit").map(|value| value.as_ref()),
+            Some(RELATED_ALBUM_CANDIDATES_PER_TAG.to_string().as_str())
+        );
+    }
+
+    #[test]
+    fn parses_related_album_api_payloads() {
+        let tags: LastFmAlbumTopTagsPayload = serde_json::from_value(serde_json::json!({
+            "toptags": {
+                "tag": [
+                    { "name": "hard rock", "count": 100 },
+                    { "name": "80s", "count": "75" }
+                ]
+            }
+        }))
+        .unwrap();
+        assert_eq!(tags.toptags.tag.len(), 2);
+        assert_eq!(tags.toptags.tag[0].name, "hard rock");
+
+        let albums: LastFmTagTopAlbumsPayload = serde_json::from_value(serde_json::json!({
+            "albums": {
+                "album": [{
+                    "name": "Pyromania",
+                    "mbid": "release-group-mbid",
+                    "url": "https://www.last.fm/music/Def+Leppard/Pyromania",
+                    "artist": {
+                        "name": "Def Leppard",
+                        "mbid": "artist-mbid"
+                    }
+                }],
+                "@attr": { "tag": "hard rock", "page": "1" }
+            }
+        }))
+        .unwrap();
+        assert_eq!(albums.albums.album.len(), 1);
+        assert_eq!(albums.albums.album[0].name, "Pyromania");
+        assert_eq!(albums.albums.album[0].artist.name, "Def Leppard");
+    }
+
+    #[test]
+    fn keeps_music_tags_and_rejects_collection_housekeeping_tags() {
+        assert!(meaningful_album_tag("hard rock"));
+        assert!(meaningful_album_tag("80s"));
+        assert!(!meaningful_album_tag("albums I own"));
+        assert!(!meaningful_album_tag("Vinyl"));
+        assert!(!meaningful_album_tag("wishlist"));
     }
 
     #[test]

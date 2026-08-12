@@ -2357,6 +2357,36 @@ export type LastFmAlbumPopularity = {
   message: string;
 };
 
+export type LastFmRelatedAlbum = {
+  rank: number;
+  artistName: string;
+  artistMbid: string | null;
+  albumTitle: string;
+  albumMbid: string | null;
+  sourceUrl: string | null;
+  sharedTags: string[];
+  artistSimilarity: number | null;
+  localAlbumId: string | null;
+  localAlbumArtist: string | null;
+  localAlbumTitle: string | null;
+  localYear: number | null;
+  localCoverPath: string | null;
+  localCoverMimeType: string | null;
+};
+
+export type LastFmRelatedAlbums = {
+  albumId: string;
+  albumArtist: string;
+  albumTitle: string;
+  sourceUrl: string | null;
+  sourceTags: string[];
+  fetchedAt: string | null;
+  cached: boolean;
+  stale: boolean;
+  albums: LastFmRelatedAlbum[];
+  message: string;
+};
+
 export type DiscoveryResponse = {
   dailyEdition: DiscoveryDailyEdition;
   heatmap: DiscoveryHeatmapCell[];

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.129.0] - 2026-08-12
+### Added
+- Added API-derived Last.fm Related Albums to Album pages using shared album tags plus similar-artist evidence, with separate **In your library** and **Explore** groups, local navigation, provider links, explicit refresh, and responsive layouts.
+- Added SQLite schema version 53 for cached related-album snapshots and MusicBrainz-MBID-first local matching with normalized artist-and-title fallback and stale-result recovery.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.129.0`.
+
 ## [0.128.0] - 2026-08-12
 ### Added
 - Added a Last.fm Similar Artists shelf to Artist Overview with relationship scores, separate **In your library** and **Explore** groups, local Artist navigation, provider links, and responsive light/dark layouts.

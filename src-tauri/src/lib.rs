@@ -341,6 +341,21 @@ async fn get_lastfm_album_popularity(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_lastfm_related_albums(
+    app: AppHandle,
+    album_id: String,
+    force_refresh: Option<bool>,
+) -> Result<lastfm::LastFmRelatedAlbums, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        lastfm::related_albums(app, album_id, force_refresh.unwrap_or(false))
+    })
+    .await
+    .map_err(|error| format!("Last.fm related-album task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn refresh_lastfm_artist_images(
     app: AppHandle,
     limit: u32,
@@ -1773,6 +1788,7 @@ pub fn run() {
             get_artist_biography,
             get_album_review,
             get_lastfm_album_popularity,
+            get_lastfm_related_albums,
             refresh_lastfm_artist_images,
             get_artist_image_data_url,
             search_deemix_albums,

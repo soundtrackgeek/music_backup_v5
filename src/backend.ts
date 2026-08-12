@@ -171,6 +171,7 @@ import type {
   SaveDiscogsCredentialsRequest,
   LastFmArtistImageRefreshSummary,
   LastFmAlbumPopularity,
+  LastFmRelatedAlbums,
   LastFmArtistPopularity,
   LastFmArtistSimilarity,
   ArtistBiography,
@@ -2409,6 +2410,96 @@ export async function getLastFmAlbumPopularity(
   return invoke<LastFmAlbumPopularity>("get_lastfm_album_popularity", {
     artistId,
     albumId,
+  });
+}
+
+export async function getLastFmRelatedAlbums(
+  albumId: string,
+  forceRefresh = false,
+) {
+  if (!isTauriRuntime()) {
+    const source = mockRows.find((row) => row.albumId === albumId);
+    const localAlbums = Array.from(
+      new Map(
+        mockRows
+          .filter((row) => row.albumId !== albumId && row.album)
+          .map((row) => [row.albumId, row]),
+      ).values(),
+    ).slice(0, 8);
+    const sourceGenre = source?.canonicalGenre?.trim() || "alternative";
+    const missingAlbums = [
+      { artistName: "Tears for Fears", albumTitle: "Songs from the Big Chair" },
+      { artistName: "Simple Minds", albumTitle: "Once Upon a Time" },
+    ];
+    const albums = [
+      ...localAlbums.map((album, index) => ({
+        rank: index + 1,
+        artistName:
+          album.albumArtistDisplay ?? album.displayArtist ?? "Unknown Artist",
+        artistMbid: null,
+        albumTitle: album.album ?? "Untitled album",
+        albumMbid: null,
+        sourceUrl:
+          "https://www.last.fm/music/" +
+          encodeURIComponent(
+            album.albumArtistDisplay ?? album.displayArtist ?? "Unknown Artist",
+          ) +
+          "/" +
+          encodeURIComponent(album.album ?? "Untitled album"),
+        sharedTags: [sourceGenre, index % 2 === 0 ? "1980s" : "pop rock"],
+        artistSimilarity: index % 2 === 0 ? 0.74 - index * 0.03 : null,
+        localAlbumId: album.albumId,
+        localAlbumArtist:
+          album.albumArtistDisplay ?? album.displayArtist ?? "Unknown Artist",
+        localAlbumTitle: album.album ?? "Untitled album",
+        localYear: album.year,
+        localCoverPath: album.coverPath,
+        localCoverMimeType: album.coverMimeType,
+      })),
+      ...missingAlbums.map((album, index) => ({
+        rank: localAlbums.length + index + 1,
+        artistName: album.artistName,
+        artistMbid: null,
+        albumTitle: album.albumTitle,
+        albumMbid: null,
+        sourceUrl:
+          "https://www.last.fm/music/" +
+          encodeURIComponent(album.artistName) +
+          "/" +
+          encodeURIComponent(album.albumTitle),
+        sharedTags: [sourceGenre, "1980s"],
+        artistSimilarity: 0.66 - index * 0.05,
+        localAlbumId: null,
+        localAlbumArtist: null,
+        localAlbumTitle: null,
+        localYear: null,
+        localCoverPath: null,
+        localCoverMimeType: null,
+      })),
+    ];
+    const albumArtist =
+      source?.albumArtistDisplay ?? source?.displayArtist ?? "Unknown Artist";
+    const albumTitle = source?.album ?? "Untitled album";
+    return {
+      albumId,
+      albumArtist,
+      albumTitle,
+      sourceUrl:
+        "https://www.last.fm/music/" +
+        encodeURIComponent(albumArtist) +
+        "/" +
+        encodeURIComponent(albumTitle),
+      sourceTags: [sourceGenre, "1980s", "pop rock"],
+      fetchedAt: new Date().toISOString(),
+      cached: !forceRefresh,
+      stale: false,
+      albums,
+      message: `Showing ${albums.length} related albums; ${localAlbums.length} are in this library.`,
+    } satisfies LastFmRelatedAlbums;
+  }
+  return invoke<LastFmRelatedAlbums>("get_lastfm_related_albums", {
+    albumId,
+    forceRefresh,
   });
 }
 
