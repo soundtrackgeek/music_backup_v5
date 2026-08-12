@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.125.1] - 2026-08-12
+### Fixed
+- Made the Discovery memorial-date regression test follow the runner's active locale instead of assuming day-first formatting, restoring Windows release builds.
+- Gave the full two-turn natural-language interaction test enough time under parallel release-suite load, preventing an unrelated intermittent timeout.
+
 ## [0.125.0] - 2026-08-12
 ### Added
 - Added interactive source, year, and week selectors to **Chart Toppers From…**, plus a Random action that chooses a populated snapshot from the owned catalog.

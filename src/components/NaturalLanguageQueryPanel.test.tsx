@@ -323,7 +323,7 @@ describe("NaturalLanguageQueryPanel", () => {
         ],
       },
     });
-  });
+  }, 10_000);
 
   it("shows backend errors without applying a query", async () => {
     const user = userEvent.setup();

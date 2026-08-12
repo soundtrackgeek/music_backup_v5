@@ -384,7 +384,14 @@ describe("DiscoveryDailyEdition", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Memorials" }));
     expect(screen.getByText("Memorial Artist")).toBeInTheDocument();
-    expect(screen.getByText(/died 11 aug 2001 · 25 years ago/i)).toBeInTheDocument();
+    const memorialDate = new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date("2001-08-11T12:00:00"));
+    expect(
+      screen.getByText(`Died ${memorialDate} · 25 years ago`),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Test Artist")).not.toBeInTheDocument();
   });
 
