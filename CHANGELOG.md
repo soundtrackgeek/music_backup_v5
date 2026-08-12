@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.127.0] - 2026-08-12
+### Added
+- Added Artists and Albums modes to **Complete the Collection**, with five randomized suggestions, Refresh, and exact year, decade, and genre filters.
+- Added album-completion suggestions for owned albums that still contain unrated tracks, including progress, tracks remaining, and direct album navigation.
+
+### Fixed
+- Fixed the artist-completion shelf incorrectly appearing empty after a successful MusicBrainz sync by removing the premature 36-artist limit and checking every well-represented artist across all app-owned MBID sources and cached official album groups.
+
+### Changed
+- Artist completion filters now apply the selected period to missing official album release years and the genre to the artist's owned catalog footprint.
+- Renamed the shelf and contents-rail entry from **Complete the Artist** to **Complete the Collection**.
+- Synchronized app metadata and provider user agents to `0.127.0`.
+
 ## [0.126.0] - 2026-08-12
 ### Added
 - Added Deep Cuts period and genre filters with exact year, decade, and canonical genre choices, plus a Refresh action that preserves the active filters.

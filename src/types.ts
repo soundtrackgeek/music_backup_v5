@@ -2349,10 +2349,31 @@ export type DiscoveryDailyEdition = {
   lifeEvents: DiscoveryLifeEventStory[];
   chartSnapshot: DiscoveryChartSnapshot;
   deepCutSnapshot: DiscoveryDeepCutSnapshot;
-  artistCompletions: DiscoveryArtistCompletionStory[];
+  completionSnapshot: DiscoveryCompletionSnapshot;
   ratingAnchor: DiscoveryRatingAnchor | null;
   becauseYouPlayed: DiscoveryRecommendationStory[];
   listeningEvidenceNote: string;
+};
+
+export type DiscoveryCompletionMode = "artist" | "album";
+
+export type DiscoveryCompletionSnapshotRequest = {
+  mode?: DiscoveryCompletionMode;
+  year?: number;
+  decade?: number;
+  genre?: string;
+};
+
+export type DiscoveryCompletionSnapshot = {
+  mode: DiscoveryCompletionMode;
+  year: number | null;
+  decade: number | null;
+  genre: string | null;
+  availableYears: number[];
+  availableGenres: DiscoveryDeepCutGenre[];
+  matchingCount: number;
+  artistStories: DiscoveryArtistCompletionStory[];
+  albumStories: DiscoveryAlbumCompletionStory[];
 };
 
 export type DiscoveryDeepCutSnapshotRequest = {
@@ -2464,10 +2485,25 @@ export type DiscoveryArtistCompletionStory = {
   completionPercent: number;
   missingReleaseTitle: string;
   missingReleaseYear: number | null;
+  genre: string;
   portraitAvailable: boolean;
   representativeAlbumId: string | null;
   representativeAlbum: string | null;
   representativeCoverPath: string | null;
+  evidence: string;
+};
+
+export type DiscoveryAlbumCompletionStory = {
+  albumId: string;
+  album: string;
+  artist: string;
+  releaseYear: number | null;
+  genre: string;
+  totalTracks: number;
+  ratedTracks: number;
+  unratedTracks: number;
+  completionPercent: number;
+  coverPath: string | null;
   evidence: string;
 };
 

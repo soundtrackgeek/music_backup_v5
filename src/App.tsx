@@ -79,6 +79,7 @@ import {
   getDiscovery,
   getDiscoveryAnniversaries,
   getDiscoveryChartSnapshot,
+  getDiscoveryCompletionSnapshot,
   getDiscoveryDeepCutSnapshot,
   getAlbumReview,
   getArtistBiography,
@@ -188,6 +189,7 @@ import type {
   DiscoveryHeatmapCell,
   DiscoveryMission,
   DiscoveryChartSnapshotRequest,
+  DiscoveryCompletionSnapshotRequest,
   DiscoveryDeepCutSnapshotRequest,
   DiscoveryResponse,
   SavedExternalDiscovery,
@@ -8480,9 +8482,12 @@ export default function App() {
     useState(false);
   const [isDiscoveryChartLoading, setIsDiscoveryChartLoading] = useState(false);
   const [isDiscoveryDeepCutLoading, setIsDiscoveryDeepCutLoading] = useState(false);
+  const [isDiscoveryCompletionLoading, setIsDiscoveryCompletionLoading] =
+    useState(false);
   const discoveryAnniversaryYearsRef = useRef(50);
   const discoveryChartRequestRef = useRef(0);
   const discoveryDeepCutRequestRef = useRef(0);
+  const discoveryCompletionRequestRef = useRef(0);
   const [discoveryAlbumRequest, setDiscoveryAlbumRequest] =
     useState<BrowseRequest>(() =>
       createDiscoveryAlbumRequest(
@@ -12292,6 +12297,36 @@ export default function App() {
     }
   }
 
+  async function changeDiscoveryCompletionSnapshot(
+    request: DiscoveryCompletionSnapshotRequest,
+  ) {
+    const requestId = discoveryCompletionRequestRef.current + 1;
+    discoveryCompletionRequestRef.current = requestId;
+    setIsDiscoveryCompletionLoading(true);
+    setDiscoveryError(null);
+    try {
+      const completionSnapshot = await getDiscoveryCompletionSnapshot(request);
+      if (discoveryCompletionRequestRef.current !== requestId) return;
+      setDiscovery((current) =>
+        current
+          ? {
+              ...current,
+              dailyEdition: {
+                ...current.dailyEdition,
+                completionSnapshot,
+              },
+            }
+          : current,
+      );
+    } catch (error) {
+      setDiscoveryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (discoveryCompletionRequestRef.current === requestId) {
+        setIsDiscoveryCompletionLoading(false);
+      }
+    }
+  }
+
   function openDiscoveryAlbums(
     selection: DiscoverySelection,
     nextRequest: BrowseRequest,
@@ -15534,9 +15569,11 @@ export default function App() {
               isAnniversaryLoading={isDiscoveryAnniversaryLoading}
               isChartLoading={isDiscoveryChartLoading}
               isDeepCutLoading={isDiscoveryDeepCutLoading}
+              isCompletionLoading={isDiscoveryCompletionLoading}
               onAnniversaryYearsChange={changeDiscoveryAnniversaryYears}
               onChartSnapshotChange={changeDiscoveryChartSnapshot}
               onDeepCutSnapshotChange={changeDiscoveryDeepCutSnapshot}
+              onCompletionSnapshotChange={changeDiscoveryCompletionSnapshot}
               onOpenAlbum={openTimelineAlbum}
               onOpenArtist={openArtistFromMusicMap}
               onOpenCompletion={() => setActiveSection("Completion")}

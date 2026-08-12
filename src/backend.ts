@@ -237,6 +237,8 @@ import type {
   DiscoveryAnniversaryStory,
   DiscoveryChartSnapshot,
   DiscoveryChartSnapshotRequest,
+  DiscoveryCompletionSnapshot,
+  DiscoveryCompletionSnapshotRequest,
   DiscoveryDeepCutSnapshot,
   DiscoveryDeepCutSnapshotRequest,
   DiscoveryResponse,
@@ -1771,6 +1773,12 @@ export async function getDiscovery() {
             () => Math.random() - 0.5,
           ),
         },
+        completionSnapshot: {
+          ...mockDiscovery.dailyEdition.completionSnapshot,
+          artistStories: [
+            ...mockDiscovery.dailyEdition.completionSnapshot.artistStories,
+          ].sort(() => Math.random() - 0.5),
+        },
       },
     } satisfies DiscoveryResponse;
   }
@@ -1878,6 +1886,54 @@ export async function getDiscoveryDeepCutSnapshot(
   }
 
   return invoke<DiscoveryDeepCutSnapshot>("get_discovery_deep_cut_snapshot", {
+    request,
+  });
+}
+
+export async function getDiscoveryCompletionSnapshot(
+  request: DiscoveryCompletionSnapshotRequest,
+) {
+  if (!isTauriRuntime()) {
+    const base = mockDiscovery.dailyEdition.completionSnapshot;
+    const mode = request.mode ?? "artist";
+    const periodMatches = (releaseYear: number | null) => {
+      if (request.year != null) return releaseYear === request.year;
+      if (request.decade == null) return true;
+      return releaseYear != null &&
+        releaseYear >= request.decade && releaseYear < request.decade + 10;
+    };
+    const genreMatches = (genre: string) =>
+      !request.genre || genre.toLowerCase() === request.genre.toLowerCase();
+    const artistStories = mode === "artist"
+      ? base.artistStories
+          .filter(
+            (story) =>
+              periodMatches(story.missingReleaseYear) &&
+              genreMatches(story.genre),
+          )
+          .sort(() => Math.random() - 0.5)
+      : [];
+    const albumStories = mode === "album"
+      ? base.albumStories
+          .filter(
+            (story) =>
+              periodMatches(story.releaseYear) && genreMatches(story.genre),
+          )
+          .sort(() => Math.random() - 0.5)
+      : [];
+    return {
+      ...base,
+      mode,
+      year: request.year ?? null,
+      decade: request.year == null ? request.decade ?? null : null,
+      genre: request.genre ?? null,
+      matchingCount: mode === "artist" ? artistStories.length : albumStories.length,
+      artistStories: artistStories.slice(0, 5),
+      albumStories: albumStories.slice(0, 5),
+    } satisfies DiscoveryCompletionSnapshot;
+  }
+
+  return invoke<DiscoveryCompletionSnapshot>("get_discovery_completion_snapshot", {
     request,
   });
 }

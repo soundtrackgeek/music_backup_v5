@@ -23216,6 +23216,109 @@ button {
   height: 48px;
 }
 
+.daily-edition-completion-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.daily-edition-completion-refresh {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 25px;
+  padding: 0 7px;
+  border: 1px solid var(--edition-rule);
+  border-radius: 4px;
+  color: var(--edition-muted);
+  background: transparent;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.daily-edition-completion-refresh svg {
+  width: 12px;
+  height: 12px;
+}
+
+.daily-edition-completion-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  margin-top: 10px;
+  padding: 3px;
+  border: 1px solid var(--edition-rule);
+  border-radius: 5px;
+}
+
+.daily-edition-completion-tabs button {
+  min-height: 24px;
+  border: 0;
+  border-radius: 3px;
+  color: var(--edition-muted);
+  background: transparent;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.daily-edition-completion-tabs button[aria-selected="true"] {
+  color: var(--edition-paper);
+  background: var(--edition-teal);
+}
+
+.daily-edition-completion-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.daily-edition-completion-controls label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--edition-muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.daily-edition-completion-controls select {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 5px;
+  border: 1px solid var(--edition-rule);
+  border-radius: 4px;
+  color: var(--edition-ink);
+  background: var(--edition-paper);
+  font: inherit;
+  font-size: 10px;
+}
+
+.daily-edition-completion-refresh:hover,
+.daily-edition-completion-refresh:focus-visible,
+.daily-edition-completion-controls select:focus-visible {
+  border-color: var(--edition-teal);
+}
+
+.daily-edition-completion-refresh:disabled,
+.daily-edition-completion-tabs button:disabled,
+.daily-edition-completion-controls select:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.daily-edition-album-completion-row .cover-placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 2px;
+}
+
 .daily-edition-completion-copy {
   min-width: 0;
 }

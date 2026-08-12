@@ -1490,10 +1490,33 @@ pub struct DiscoveryDailyEdition {
     pub life_events: Vec<DiscoveryLifeEventStory>,
     pub chart_snapshot: DiscoveryChartSnapshot,
     pub deep_cut_snapshot: DiscoveryDeepCutSnapshot,
-    pub artist_completions: Vec<DiscoveryArtistCompletionStory>,
+    pub completion_snapshot: DiscoveryCompletionSnapshot,
     pub rating_anchor: Option<DiscoveryRatingAnchor>,
     pub because_you_played: Vec<DiscoveryRecommendationStory>,
     pub listening_evidence_note: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryCompletionSnapshotRequest {
+    pub mode: Option<String>,
+    pub year: Option<i32>,
+    pub decade: Option<i32>,
+    pub genre: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryCompletionSnapshot {
+    pub mode: String,
+    pub year: Option<i32>,
+    pub decade: Option<i32>,
+    pub genre: Option<String>,
+    pub available_years: Vec<i32>,
+    pub available_genres: Vec<DiscoveryDeepCutGenre>,
+    pub matching_count: i64,
+    pub artist_stories: Vec<DiscoveryArtistCompletionStory>,
+    pub album_stories: Vec<DiscoveryAlbumCompletionStory>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1624,10 +1647,27 @@ pub struct DiscoveryArtistCompletionStory {
     pub completion_percent: f64,
     pub missing_release_title: String,
     pub missing_release_year: Option<i32>,
+    pub genre: String,
     pub portrait_available: bool,
     pub representative_album_id: Option<String>,
     pub representative_album: Option<String>,
     pub representative_cover_path: Option<String>,
+    pub evidence: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryAlbumCompletionStory {
+    pub album_id: String,
+    pub album: String,
+    pub artist: String,
+    pub release_year: Option<i32>,
+    pub genre: String,
+    pub total_tracks: i64,
+    pub rated_tracks: i64,
+    pub unrated_tracks: i64,
+    pub completion_percent: f64,
+    pub cover_path: Option<String>,
     pub evidence: String,
 }
 

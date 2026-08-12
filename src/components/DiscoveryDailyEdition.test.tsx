@@ -110,24 +110,49 @@ const edition: DiscoveryDailyEditionData = {
       evidence: "Album rated 92 · track unrated · no imported singles-chart match",
     }],
   },
-  artistCompletions: [
-    {
-      artistId: "artist-gap",
-      artist: "Gap Artist",
-      musicbrainzMbid: "gap-mbid",
-      ownedAlbumCount: 4,
-      officialAlbumCount: 5,
-      missingAlbumCount: 1,
-      completionPercent: 0.8,
-      missingReleaseTitle: "The Missing Album",
-      missingReleaseYear: 1999,
-      portraitAvailable: false,
-      representativeAlbumId: null,
-      representativeAlbum: null,
-      representativeCoverPath: null,
-      evidence: "4 of 5 official albums owned · 4 local albums",
-    },
-  ],
+  completionSnapshot: {
+    mode: "artist",
+    year: null,
+    decade: null,
+    genre: null,
+    availableYears: [2001, 1999],
+    availableGenres: [{ id: "rock", label: "Rock" }],
+    matchingCount: 1,
+    artistStories: [
+      {
+        artistId: "artist-gap",
+        artist: "Gap Artist",
+        musicbrainzMbid: "gap-mbid",
+        ownedAlbumCount: 4,
+        officialAlbumCount: 5,
+        missingAlbumCount: 1,
+        completionPercent: 0.8,
+        missingReleaseTitle: "The Missing Album",
+        missingReleaseYear: 1999,
+        genre: "Rock",
+        portraitAvailable: false,
+        representativeAlbumId: null,
+        representativeAlbum: null,
+        representativeCoverPath: null,
+        evidence: "4 of 5 official albums owned · 4 local albums",
+      },
+    ],
+    albumStories: [
+      {
+        albumId: "album-gap",
+        album: "Incomplete Album",
+        artist: "Gap Artist",
+        releaseYear: 2001,
+        genre: "Rock",
+        totalTracks: 10,
+        ratedTracks: 7,
+        unratedTracks: 3,
+        completionPercent: 0.7,
+        coverPath: null,
+        evidence: "7 of 10 tracks rated",
+      },
+    ],
+  },
   ratingAnchor: {
     albumId: "album-anchor",
     album: "Anchor Album",
@@ -162,9 +187,11 @@ describe("DiscoveryDailyEdition", () => {
         isAnniversaryLoading={false}
         isChartLoading={false}
         isDeepCutLoading={false}
+        isCompletionLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -177,7 +204,7 @@ describe("DiscoveryDailyEdition", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Chart Toppers From…" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Deep Cuts" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Complete the Artist" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Complete the Collection" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Because You Played…" })).toBeInTheDocument();
     expect(
       screen.getAllByText(
@@ -203,9 +230,11 @@ describe("DiscoveryDailyEdition", () => {
         isAnniversaryLoading={false}
         isChartLoading={false}
         isDeepCutLoading={false}
+        isCompletionLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
         onOpenAlbum={onOpenAlbum}
         onOpenArtist={onOpenArtist}
         onOpenCompletion={onOpenCompletion}
@@ -237,9 +266,11 @@ describe("DiscoveryDailyEdition", () => {
         isAnniversaryLoading={false}
         isChartLoading={false}
         isDeepCutLoading={false}
+        isCompletionLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={onChartSnapshotChange}
         onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -290,9 +321,11 @@ describe("DiscoveryDailyEdition", () => {
         isAnniversaryLoading={false}
         isChartLoading={false}
         isDeepCutLoading={false}
+        isCompletionLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={onDeepCutSnapshotChange}
+        onCompletionSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -327,6 +360,101 @@ describe("DiscoveryDailyEdition", () => {
     });
   });
 
+  it("switches, filters, and refreshes completion suggestions", () => {
+    const onCompletionSnapshotChange = vi.fn();
+    const filteredEdition = {
+      ...edition,
+      completionSnapshot: {
+        ...edition.completionSnapshot,
+        decade: 1990,
+        genre: "rock",
+      },
+    };
+    render(
+      <DiscoveryDailyEdition
+        edition={filteredEdition}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        isChartLoading={false}
+        isDeepCutLoading={false}
+        isCompletionLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={onCompletionSnapshotChange}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenCompletion={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Albums" }));
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Filter completion by period" }),
+      { target: { value: "year:1999" } },
+    );
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Filter completion by genre" }),
+      { target: { value: "" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Refresh completion suggestions" }),
+    );
+
+    expect(onCompletionSnapshotChange).toHaveBeenNthCalledWith(1, { mode: "album" });
+    expect(onCompletionSnapshotChange).toHaveBeenNthCalledWith(2, {
+      mode: "artist",
+      year: 1999,
+      decade: undefined,
+      genre: "rock",
+    });
+    expect(onCompletionSnapshotChange).toHaveBeenNthCalledWith(3, {
+      mode: "artist",
+      year: undefined,
+      decade: 1990,
+      genre: undefined,
+    });
+    expect(onCompletionSnapshotChange).toHaveBeenNthCalledWith(4, {
+      mode: "artist",
+      year: undefined,
+      decade: 1990,
+      genre: "rock",
+    });
+  });
+
+  it("opens an album completion suggestion", () => {
+    const onOpenAlbum = vi.fn();
+    render(
+      <DiscoveryDailyEdition
+        edition={{
+          ...edition,
+          completionSnapshot: {
+            ...edition.completionSnapshot,
+            mode: "album",
+            artistStories: [],
+          },
+        }}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        isChartLoading={false}
+        isDeepCutLoading={false}
+        isCompletionLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
+        onOpenAlbum={onOpenAlbum}
+        onOpenArtist={vi.fn()}
+        onOpenCompletion={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Incomplete Album").closest("button")!);
+    expect(onOpenAlbum).toHaveBeenCalledWith("album-gap");
+  });
+
   it("supports manual selection, 10-second rotation, and anniversary changes", () => {
     vi.useFakeTimers();
     const onAnniversaryYearsChange = vi.fn();
@@ -337,9 +465,11 @@ describe("DiscoveryDailyEdition", () => {
         isAnniversaryLoading={false}
         isChartLoading={false}
         isDeepCutLoading={false}
+        isCompletionLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -383,9 +513,11 @@ describe("DiscoveryDailyEdition", () => {
         isAnniversaryLoading
         isChartLoading={false}
         isDeepCutLoading={false}
+        isCompletionLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -413,9 +545,11 @@ describe("DiscoveryDailyEdition", () => {
         isAnniversaryLoading={false}
         isChartLoading={false}
         isDeepCutLoading={false}
+        isCompletionLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -444,9 +578,11 @@ describe("DiscoveryDailyEdition", () => {
         isAnniversaryLoading={false}
         isChartLoading={false}
         isDeepCutLoading={false}
+        isCompletionLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -484,9 +620,11 @@ describe("DiscoveryDailyEdition", () => {
         isAnniversaryLoading={false}
         isChartLoading={false}
         isDeepCutLoading={false}
+        isCompletionLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}

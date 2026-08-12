@@ -15,6 +15,7 @@ import {
 import type {
   DiscoveryChartSnapshotRequest,
   DiscoveryChartStory,
+  DiscoveryCompletionSnapshotRequest,
   DiscoveryDailyEdition,
   DiscoveryDeepCutSnapshotRequest,
 } from "../types";
@@ -27,9 +28,11 @@ type DiscoveryDailyEditionProps = {
   isAnniversaryLoading: boolean;
   isChartLoading: boolean;
   isDeepCutLoading: boolean;
+  isCompletionLoading: boolean;
   onAnniversaryYearsChange: (years: number) => void;
   onChartSnapshotChange: (request: DiscoveryChartSnapshotRequest) => void;
   onDeepCutSnapshotChange: (request: DiscoveryDeepCutSnapshotRequest) => void;
+  onCompletionSnapshotChange: (request: DiscoveryCompletionSnapshotRequest) => void;
   onOpenAlbum: (albumId: string) => void;
   onOpenArtist: (artistId: string, artistName: string) => void;
   onOpenCompletion: () => void;
@@ -408,9 +411,11 @@ export function DiscoveryDailyEdition({
   isAnniversaryLoading,
   isChartLoading,
   isDeepCutLoading,
+  isCompletionLoading,
   onAnniversaryYearsChange,
   onChartSnapshotChange,
   onDeepCutSnapshotChange,
+  onCompletionSnapshotChange,
   onOpenAlbum,
   onOpenArtist,
   onOpenCompletion,
@@ -447,6 +452,10 @@ export function DiscoveryDailyEdition({
   const deepCutSnapshot = edition.deepCutSnapshot;
   const deepCutDecades = Array.from(
     new Set(deepCutSnapshot.availableYears.map((year) => Math.floor(year / 10) * 10)),
+  ).sort((left, right) => right - left);
+  const completionSnapshot = edition.completionSnapshot;
+  const completionDecades = Array.from(
+    new Set(completionSnapshot.availableYears.map((year) => Math.floor(year / 10) * 10)),
   ).sort((left, right) => right - left);
   const anchor = edition.ratingAnchor;
 
@@ -764,16 +773,116 @@ export function DiscoveryDailyEdition({
               aria-labelledby="completion-heading"
               tabIndex={-1}
             >
-              <div className="daily-edition-section-heading">
-                <CircleDot aria-hidden="true" />
-                <div>
-                  <h3 id="completion-heading">Complete the Artist</h3>
-                  <p>Official MusicBrainz album gaps</p>
+              <div className="daily-edition-completion-header">
+                <div className="daily-edition-section-heading">
+                  <CircleDot aria-hidden="true" />
+                  <div>
+                    <h3 id="completion-heading">Complete the Collection</h3>
+                    <p>
+                      {completionSnapshot.mode === "artist"
+                        ? "Official MusicBrainz album gaps"
+                        : "Owned albums with unrated tracks"}
+                    </p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  className="daily-edition-completion-refresh"
+                  aria-label="Refresh completion suggestions"
+                  disabled={isCompletionLoading}
+                  onClick={() => onCompletionSnapshotChange({
+                    mode: completionSnapshot.mode,
+                    year: completionSnapshot.year ?? undefined,
+                    decade: completionSnapshot.decade ?? undefined,
+                    genre: completionSnapshot.genre ?? undefined,
+                  })}
+                >
+                  <RefreshCw aria-hidden="true" />
+                  Refresh
+                </button>
               </div>
-              {edition.artistCompletions.length ? (
+              <div className="daily-edition-completion-tabs" role="tablist" aria-label="Completion type">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={completionSnapshot.mode === "artist"}
+                  disabled={isCompletionLoading}
+                  onClick={() => onCompletionSnapshotChange({ mode: "artist" })}
+                >
+                  Artists
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={completionSnapshot.mode === "album"}
+                  disabled={isCompletionLoading}
+                  onClick={() => onCompletionSnapshotChange({ mode: "album" })}
+                >
+                  Albums
+                </button>
+              </div>
+              <div className="daily-edition-completion-controls" aria-label="Completion filters">
+                <label>
+                  <span>Period</span>
+                  <select
+                    aria-label="Filter completion by period"
+                    disabled={isCompletionLoading}
+                    value={
+                      completionSnapshot.year != null
+                        ? `year:${completionSnapshot.year}`
+                        : completionSnapshot.decade != null
+                          ? `decade:${completionSnapshot.decade}`
+                          : "all"
+                    }
+                    onChange={(event) => {
+                      const [kind, rawValue] = event.target.value.split(":");
+                      const value = Number(rawValue);
+                      onCompletionSnapshotChange({
+                        mode: completionSnapshot.mode,
+                        year: kind === "year" ? value : undefined,
+                        decade: kind === "decade" ? value : undefined,
+                        genre: completionSnapshot.genre ?? undefined,
+                      });
+                    }}
+                  >
+                    <option value="all">All years</option>
+                    <optgroup label="Decades">
+                      {completionDecades.map((decade) => (
+                        <option key={decade} value={`decade:${decade}`}>
+                          {decade}s
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Years">
+                      {completionSnapshot.availableYears.map((year) => (
+                        <option key={year} value={`year:${year}`}>{year}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </label>
+                <label>
+                  <span>Genre</span>
+                  <select
+                    aria-label="Filter completion by genre"
+                    disabled={isCompletionLoading}
+                    value={completionSnapshot.genre ?? ""}
+                    onChange={(event) => onCompletionSnapshotChange({
+                      mode: completionSnapshot.mode,
+                      year: completionSnapshot.year ?? undefined,
+                      decade: completionSnapshot.decade ?? undefined,
+                      genre: event.target.value || undefined,
+                    })}
+                  >
+                    <option value="">All genres</option>
+                    {completionSnapshot.availableGenres.map((genre) => (
+                      <option key={genre.id} value={genre.id}>{genre.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {completionSnapshot.mode === "artist" && completionSnapshot.artistStories.length ? (
                 <div className="daily-edition-stack-list">
-                  {edition.artistCompletions.slice(0, 3).map((story) => (
+                  {completionSnapshot.artistStories.slice(0, 5).map((story) => (
                     <button
                       className="daily-edition-completion-row"
                       key={story.artistId}
@@ -806,6 +915,44 @@ export function DiscoveryDailyEdition({
                         </span>
                         <small className="daily-edition-next-gap">
                           Next gap: {story.missingReleaseTitle}
+                          {story.missingReleaseYear ? ` · ${story.missingReleaseYear}` : ""}
+                          {` · ${story.genre}`}
+                        </small>
+                      </span>
+                      <span className="daily-edition-percent">
+                        {Math.round(story.completionPercent * 100)}%
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              ) : completionSnapshot.mode === "album" && completionSnapshot.albumStories.length ? (
+                <div className="daily-edition-stack-list">
+                  {completionSnapshot.albumStories.slice(0, 5).map((story) => (
+                    <button
+                      className="daily-edition-completion-row daily-edition-album-completion-row"
+                      key={story.albumId}
+                      type="button"
+                      onClick={() => onOpenAlbum(story.albumId)}
+                      title={story.evidence}
+                    >
+                      <AlbumCover
+                        row={{
+                          albumId: story.albumId,
+                          album: story.album,
+                          coverPath: story.coverPath,
+                        }}
+                      />
+                      <span className="daily-edition-completion-copy">
+                        <span className="daily-edition-row-copy">
+                          <strong>{story.album}</strong>
+                          <small>{story.artist} · {story.releaseYear ?? "Year unknown"} · {story.genre}</small>
+                        </span>
+                        <span className="daily-edition-progress-line">
+                          <span style={{ width: `${Math.round(story.completionPercent * 100)}%` }} />
+                        </span>
+                        <small className="daily-edition-next-gap">
+                          {story.unratedTracks} {story.unratedTracks === 1 ? "track" : "tracks"} left to rate
                         </small>
                       </span>
                       <span className="daily-edition-percent">
@@ -817,17 +964,25 @@ export function DiscoveryDailyEdition({
                 </div>
               ) : (
                 <EditionEmpty>
-                  Sync MusicBrainz artist data to compare your deep collections.
+                  {completionSnapshot.mode === "artist"
+                    ? "No incomplete MusicBrainz artist collections match these filters."
+                    : "No albums with unrated tracks match these filters."}
                 </EditionEmpty>
               )}
-              <button
-                className="daily-edition-shelf-footer daily-edition-footer-button"
-                type="button"
-                onClick={onOpenCompletion}
-              >
-                View all artist gaps
-                <ChevronRight aria-hidden="true" />
-              </button>
+              {completionSnapshot.mode === "artist" ? (
+                <button
+                  className="daily-edition-shelf-footer daily-edition-footer-button"
+                  type="button"
+                  onClick={onOpenCompletion}
+                >
+                  View all artist gaps
+                  <ChevronRight aria-hidden="true" />
+                </button>
+              ) : (
+                <p className="daily-edition-shelf-footer">
+                  Showing {completionSnapshot.albumStories.length} randomized albums from {completionSnapshot.matchingCount} matching albums
+                </p>
+              )}
             </section>
 
             <section
@@ -897,7 +1052,7 @@ export function DiscoveryDailyEdition({
             ["discovery-life-events", "Birthdays & Memorials"],
             ["discovery-charts", "Chart Toppers"],
             ["discovery-deep-cuts", "Deep Cuts"],
-            ["discovery-completion", "Complete the Artist"],
+            ["discovery-completion", "Complete the Collection"],
             ["discovery-because", "Because You Played"],
           ].map(([storyId, label]) => (
             <button

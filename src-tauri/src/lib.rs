@@ -29,11 +29,12 @@ use models::{
     ArtistTimelineRequest, ArtistTimelineResponse, ArtistTrackHighlights, BillboardImportSummary,
     BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryAnniversaryStory,
-    DiscoveryChartSnapshot, DiscoveryChartSnapshotRequest, DiscoveryDeepCutSnapshot,
-    DiscoveryDeepCutSnapshotRequest, DiscoveryResponse, ExportMusicToolRequest, ExportResult,
-    ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressRequest,
-    GenreProgressStats, GenreTimelineRequest, GenreTimelineResponse, LibraryUpdateArtistResponse,
-    LibraryUpdateRequest, LibraryUpdateResponse, MusicBrainzArtistDiscographyRequest,
+    DiscoveryChartSnapshot, DiscoveryChartSnapshotRequest, DiscoveryCompletionSnapshot,
+    DiscoveryCompletionSnapshotRequest, DiscoveryDeepCutSnapshot, DiscoveryDeepCutSnapshotRequest,
+    DiscoveryResponse, ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest,
+    GenreListResponse, GenreProgressRequest, GenreProgressStats, GenreTimelineRequest,
+    GenreTimelineResponse, LibraryUpdateArtistResponse, LibraryUpdateRequest,
+    LibraryUpdateResponse, MusicBrainzArtistDiscographyRequest,
     MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
     MusicBrainzArtistInfoImportRequest, MusicBrainzArtistInfoImportSummary,
     MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus, MusicBrainzArtistLinkRequest,
@@ -1270,6 +1271,20 @@ async fn get_discovery_deep_cut_snapshot(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_discovery_completion_snapshot(
+    app: AppHandle,
+    request: DiscoveryCompletionSnapshotRequest,
+) -> Result<DiscoveryCompletionSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::discovery_completion_snapshot_for_app(&app, request)
+    })
+    .await
+    .map_err(|error| format!("Discovery completion task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_import_preview(
     app: AppHandle,
     source_path: String,
@@ -1852,6 +1867,7 @@ pub fn run() {
             get_discovery_anniversaries,
             get_discovery_chart_snapshot,
             get_discovery_deep_cut_snapshot,
+            get_discovery_completion_snapshot,
             get_import_preview,
             prepare_import_preview,
             cancel_import_preview,

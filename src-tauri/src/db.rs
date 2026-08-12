@@ -13,9 +13,10 @@ use crate::models::{
     ArtistTimelineArtist, ArtistTimelineRequest, ArtistTimelineResponse, ArtistTrackChartHistory,
     ArtistTrackHighlights, BillboardImportSummary, BillboardSinglesImportSummary, BrowseFilters,
     BrowseRequest, BrowseResponse, BrowseRow, BrowseSort, CatalogConcentrationStats, ChartConfig,
-    ConcentrationPoint, CountryCatalogStats, DecadeProgressStats, DiscoveryAlbumPoint,
-    DiscoveryAnniversaryStory, DiscoveryArtistCompletionStory, DiscoveryArtistPoint,
-    DiscoveryChartSnapshot, DiscoveryChartSnapshotRequest, DiscoveryChartStory,
+    ConcentrationPoint, CountryCatalogStats, DecadeProgressStats, DiscoveryAlbumCompletionStory,
+    DiscoveryAlbumPoint, DiscoveryAnniversaryStory, DiscoveryArtistCompletionStory,
+    DiscoveryArtistPoint, DiscoveryChartSnapshot, DiscoveryChartSnapshotRequest,
+    DiscoveryChartStory, DiscoveryCompletionSnapshot, DiscoveryCompletionSnapshotRequest,
     DiscoveryDailyEdition, DiscoveryDeepCutGenre, DiscoveryDeepCutSnapshot,
     DiscoveryDeepCutSnapshotRequest, DiscoveryDeepCutStory, DiscoveryGenrePoint,
     DiscoveryHeatmapCell, DiscoveryLifeEventStory, DiscoveryMission, DiscoveryRatingAnchor,
@@ -9864,6 +9865,15 @@ pub fn discovery_deep_cut_snapshot_for_app(
 }
 
 #[cfg(not(test))]
+pub fn discovery_completion_snapshot_for_app(
+    app: &AppHandle,
+    request: DiscoveryCompletionSnapshotRequest,
+) -> Result<DiscoveryCompletionSnapshot> {
+    let (conn, _) = open(app)?;
+    discovery_completion_snapshot(&conn, &request)
+}
+
+#[cfg(not(test))]
 pub fn list_music_tools_for_app(app: &AppHandle) -> Result<Vec<MusicToolSummary>> {
     let (conn, _) = open(app)?;
     list_music_tools(&conn)
@@ -13425,7 +13435,10 @@ fn discovery_daily_edition(conn: &Connection, date: NaiveDate) -> Result<Discove
             conn,
             &DiscoveryDeepCutSnapshotRequest::default(),
         )?,
-        artist_completions: discovery_artist_completions(conn)?,
+        completion_snapshot: discovery_completion_snapshot(
+            conn,
+            &DiscoveryCompletionSnapshotRequest::default(),
+        )?,
         rating_anchor,
         because_you_played,
         listening_evidence_note: "Listening stories use recent rating activity and loved tracks."
@@ -13749,6 +13762,14 @@ fn discovery_random_index(conn: &Connection, length: usize) -> Result<usize> {
     Ok((value.unsigned_abs() as usize) % length)
 }
 
+fn discovery_random_sort_key(seed: u64, value: &str) -> u64 {
+    value
+        .bytes()
+        .fold(1_469_598_103_934_665_603_u64 ^ seed, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(1_099_511_628_211)
+        })
+}
+
 fn discovery_chart_years(conn: &Connection, source: &str) -> Result<Vec<i32>> {
     let table = match source {
         "official-uk" => "official_uk_album_chart_entries",
@@ -14027,197 +14048,469 @@ fn discovery_deep_cut_snapshot(
     })
 }
 
-fn discovery_artist_completions(conn: &Connection) -> Result<Vec<DiscoveryArtistCompletionStory>> {
+fn discovery_completion_snapshot(
+    conn: &Connection,
+    request: &DiscoveryCompletionSnapshotRequest,
+) -> Result<DiscoveryCompletionSnapshot> {
+    if request.mode.as_deref() == Some("album") {
+        return discovery_album_completion_snapshot(conn, request);
+    }
+    discovery_artist_completion_snapshot(conn, request)
+}
+
+fn discovery_artist_completion_snapshot(
+    conn: &Connection,
+    request: &DiscoveryCompletionSnapshotRequest,
+) -> Result<DiscoveryCompletionSnapshot> {
+    #[derive(Default)]
+    struct LocalArtistData {
+        titles: HashSet<String>,
+        genres: HashMap<String, (String, i64)>,
+        representative: Option<(bool, f64, String, String, Option<String>)>,
+    }
+
+    struct ArtistCandidate {
+        artist_id: String,
+        artist: String,
+        local_album_count: i64,
+        mbids: Vec<String>,
+    }
+
+    struct GapCandidate {
+        artist_id: String,
+        artist: String,
+        mbid: String,
+        local_album_count: i64,
+        owned: i64,
+        official: i64,
+        missing: Vec<(String, Option<i32>)>,
+        genres: HashMap<String, (String, i64)>,
+        portrait_available: bool,
+        representative_album_id: Option<String>,
+        representative_album: Option<String>,
+        representative_cover_path: Option<String>,
+    }
+
     let album_artist_key = artist_key_sql("album_artist_display");
-    let sql = format!(
-        "
-        WITH artist_stats AS (
-            SELECT
-                {album_artist_key} AS artist_id,
-                COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist,
-                COUNT(*) AS album_count
+    let candidates_sql = format!(
+        "WITH artist_stats AS (
+            SELECT {album_artist_key} AS artist_id,
+                   COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist,
+                   COUNT(*) AS album_count
             FROM albums
             WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL
             GROUP BY artist_id
             HAVING COUNT(*) >= 3
         )
-        SELECT
-            stats.artist_id,
-            COALESCE(NULLIF(TRIM(info.display_artist), ''), stats.artist),
-            info.mbid,
-            stats.album_count,
-            EXISTS(
-                SELECT 1 FROM artist_images image
-                WHERE image.artist_key = stats.artist_id
-                  AND image.state = 'available'
-                  AND image.cache_path IS NOT NULL
-            ),
-            (
-                SELECT a.id FROM albums a
-                LEFT JOIN album_covers c ON c.album_id = a.id
-                WHERE {album_artist_key} = stats.artist_id
-                ORDER BY c.cache_path IS NULL, COALESCE(a.album_score, 0) DESC
-                LIMIT 1
-            ),
-            (
-                SELECT a.album FROM albums a
-                LEFT JOIN album_covers c ON c.album_id = a.id
-                WHERE {album_artist_key} = stats.artist_id
-                ORDER BY c.cache_path IS NULL, COALESCE(a.album_score, 0) DESC
-                LIMIT 1
-            ),
-            (
-                SELECT c.cache_path FROM albums a
-                JOIN album_covers c ON c.album_id = a.id
-                WHERE {album_artist_key} = stats.artist_id
-                ORDER BY COALESCE(a.album_score, 0) DESC
-                LIMIT 1
-            )
+        SELECT stats.artist_id,
+               COALESCE(NULLIF(TRIM(info.display_artist), ''), stats.artist),
+               stats.album_count,
+               info.mbid,
+               CASE WHEN links.ignored = 0 THEN links.mbid END,
+               origin.mbid
         FROM artist_stats stats
-        JOIN musicbrainz_artist_infos info ON info.local_artist_key = stats.artist_id
-        WHERE NULLIF(TRIM(info.mbid), '') IS NOT NULL
-        ORDER BY stats.album_count DESC, LOWER(stats.artist)
-        LIMIT 36
-        "
+        LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = stats.artist_id
+        LEFT JOIN musicbrainz_artist_links links ON links.local_artist_key = stats.artist_id
+        LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = stats.artist_id"
     );
     let candidates = conn
-        .prepare(&sql)?
+        .prepare(&candidates_sql)?
+        .query_map([], |row| {
+            let mut mbids = Vec::new();
+            for index in 3..=5 {
+                if let Some(mbid) = row.get::<_, Option<String>>(index)? {
+                    if !mbid.trim().is_empty() && !mbids.iter().any(|item| item == &mbid) {
+                        mbids.push(mbid);
+                    }
+                }
+            }
+            Ok(ArtistCandidate {
+                artist_id: row.get(0)?,
+                artist: row.get(1)?,
+                local_album_count: row.get(2)?,
+                mbids,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let albums_sql = format!(
+        "SELECT {album_artist_key}, a.id,
+                COALESCE(NULLIF(TRIM(a.album), ''), 'Unknown Album'),
+                NULLIF(TRIM(a.genre_normalized), ''),
+                NULLIF(TRIM(a.canonical_genre), ''),
+                COALESCE(a.album_score, 0), cover.cache_path
+         FROM albums a
+         LEFT JOIN album_covers cover ON cover.album_id = a.id"
+    );
+    let mut local_by_artist: HashMap<String, LocalArtistData> = HashMap::new();
+    for row in conn.prepare(&albums_sql)?.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, Option<String>>(4)?,
+            row.get::<_, f64>(5)?,
+            row.get::<_, Option<String>>(6)?,
+        ))
+    })? {
+        let (artist_id, album_id, album, genre_id, genre_label, score, cover_path) = row?;
+        let local = local_by_artist.entry(artist_id).or_default();
+        local.titles.insert(normalize_text(&album));
+        if let Some(genre_id) = genre_id {
+            let genre = local
+                .genres
+                .entry(genre_id.clone())
+                .or_insert((genre_label.unwrap_or(genre_id), 0));
+            genre.1 += 1;
+        }
+        let has_cover = cover_path.is_some();
+        let replace = local
+            .representative
+            .as_ref()
+            .is_none_or(|current| (has_cover, score) > (current.0, current.1));
+        if replace {
+            local.representative = Some((has_cover, score, album_id, album, cover_path));
+        }
+    }
+
+    let mut releases_by_artist: HashMap<String, Vec<(String, String, Option<i32>)>> =
+        HashMap::new();
+    for row in conn
+        .prepare(
+            "SELECT artist_mbid, release_mbid, title, year
+             FROM musicbrainz_artist_release_groups
+             WHERE LOWER(COALESCE(type, '')) = 'album'
+               AND TRIM(COALESCE(secondary_types, '')) = ''
+               AND status = 'Official'",
+        )?
         .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
-                row.get::<_, i64>(3)?,
-                row.get::<_, i64>(4)? != 0,
-                row.get::<_, Option<String>>(5)?,
-                row.get::<_, Option<String>>(6)?,
-                row.get::<_, Option<String>>(7)?,
+                row.get::<_, Option<i32>>(3)?,
             ))
         })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-
-    let mut stories = Vec::new();
-    for (
-        artist_id,
-        artist,
-        mbid,
-        local_album_count,
-        portrait_available,
-        representative_album_id,
-        representative_album,
-        representative_cover_path,
-    ) in candidates
     {
-        let owned_titles = conn
-            .prepare(&format!(
-                "SELECT album FROM albums WHERE {album_artist_key} = ?1"
-            ))?
-            .query_map(params![&artist_id], |row| row.get::<_, Option<String>>(0))?
-            .filter_map(|row| row.ok().flatten())
-            .map(|title| normalize_text(&title))
-            .collect::<HashSet<_>>();
+        let (artist_mbid, release_mbid, title, year) = row?;
+        releases_by_artist
+            .entry(artist_mbid.to_lowercase())
+            .or_default()
+            .push((release_mbid, title, year));
+    }
 
-        let decisions = conn
-            .prepare(
-                "SELECT release_mbid, decision FROM musicbrainz_release_decisions WHERE local_artist_key = ?1",
-            )?
-            .query_map(params![&artist_id], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })?
-            .collect::<rusqlite::Result<HashMap<_, _>>>()?;
+    let mut decisions = HashMap::new();
+    for row in conn
+        .prepare(
+            "SELECT local_artist_key, release_mbid, decision
+             FROM musicbrainz_release_decisions",
+        )?
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?
+    {
+        let (artist_id, release_mbid, decision) = row?;
+        decisions.insert((artist_id, release_mbid), decision);
+    }
 
-        let releases = conn
-            .prepare(
-                "
-                SELECT release_mbid, title, year
-                FROM musicbrainz_artist_release_groups
-                WHERE LOWER(artist_mbid) = LOWER(?1)
-                  AND LOWER(COALESCE(type, '')) = 'album'
-                  AND TRIM(COALESCE(secondary_types, '')) = ''
-                  AND status = 'Official'
-                ORDER BY COALESCE(year, 9999), LOWER(title), release_mbid
-                ",
-            )?
-            .query_map(params![&mbid], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, Option<i32>>(2)?,
-                ))
-            })?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        if releases.is_empty() {
+    let portraits = conn
+        .prepare(
+            "SELECT artist_key FROM artist_images
+             WHERE state = 'available' AND cache_path IS NOT NULL",
+        )?
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<HashSet<_>>>()?;
+
+    let mut gaps = Vec::new();
+    for candidate in candidates {
+        let Some(local) = local_by_artist.get(&candidate.artist_id) else {
             continue;
-        }
-
+        };
+        let Some(mbid) = candidate.mbids.iter().find(|mbid| {
+            releases_by_artist
+                .get(&mbid.to_lowercase())
+                .is_some_and(|releases| !releases.is_empty())
+        }) else {
+            continue;
+        };
+        let releases = &releases_by_artist[&mbid.to_lowercase()];
         let relevant = releases
-            .into_iter()
+            .iter()
             .filter(|(release_mbid, _, _)| {
                 !matches!(
-                    decisions.get(release_mbid).map(String::as_str),
+                    decisions
+                        .get(&(candidate.artist_id.clone(), release_mbid.clone()))
+                        .map(String::as_str),
                     Some("not-in-scope" | "ignored")
                 )
             })
             .collect::<Vec<_>>();
-        let owned = relevant
-            .iter()
-            .filter(|(release_mbid, title, _)| {
-                owned_titles.contains(&normalize_text(title))
-                    || matches!(
-                        decisions.get(release_mbid).map(String::as_str),
-                        Some("owned")
-                    )
-            })
-            .count() as i64;
         let missing = relevant
             .iter()
             .filter(|(release_mbid, title, _)| {
-                !owned_titles.contains(&normalize_text(title))
+                !local.titles.contains(&normalize_text(title))
                     && !matches!(
-                        decisions.get(release_mbid).map(String::as_str),
+                        decisions
+                            .get(&(candidate.artist_id.clone(), release_mbid.clone()))
+                            .map(String::as_str),
                         Some("owned")
                     )
             })
+            .map(|(_, title, year)| (title.clone(), *year))
             .collect::<Vec<_>>();
-        if missing.is_empty() || owned < 2 {
+        let official = relevant.len() as i64;
+        let owned = official - missing.len() as i64;
+        if owned < 2 || missing.is_empty() {
             continue;
         }
-        let official = relevant.len() as i64;
-        let completion_percent = if official > 0 {
-            owned as f64 / official as f64
-        } else {
-            0.0
-        };
-        let (_, missing_release_title, missing_release_year) = missing[0];
-        stories.push(DiscoveryArtistCompletionStory {
-            artist_id,
-            artist,
-            musicbrainz_mbid: mbid,
-            owned_album_count: owned,
-            official_album_count: official,
-            missing_album_count: missing.len() as i64,
-            completion_percent,
-            missing_release_title: missing_release_title.clone(),
-            missing_release_year: *missing_release_year,
-            portrait_available,
+        let (representative_album_id, representative_album, representative_cover_path) = local
+            .representative
+            .as_ref()
+            .map(|(_, _, album_id, album, cover)| {
+                (Some(album_id.clone()), Some(album.clone()), cover.clone())
+            })
+            .unwrap_or((None, None, None));
+        gaps.push(GapCandidate {
+            artist_id: candidate.artist_id.clone(),
+            artist: candidate.artist,
+            mbid: mbid.clone(),
+            local_album_count: candidate.local_album_count,
+            owned,
+            official,
+            missing,
+            genres: local.genres.clone(),
+            portrait_available: portraits.contains(&candidate.artist_id),
             representative_album_id,
             representative_album,
             representative_cover_path,
+        });
+    }
+
+    let mut available_years = gaps
+        .iter()
+        .flat_map(|candidate| candidate.missing.iter().filter_map(|(_, year)| *year))
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    available_years.sort_unstable_by(|left, right| right.cmp(left));
+    let mut genre_labels = HashMap::new();
+    for candidate in &gaps {
+        for (genre_id, (label, _)) in &candidate.genres {
+            genre_labels
+                .entry(genre_id.clone())
+                .or_insert_with(|| label.clone());
+        }
+    }
+    let mut available_genres = genre_labels
+        .iter()
+        .map(|(id, label)| DiscoveryDeepCutGenre {
+            id: id.clone(),
+            label: label.clone(),
+        })
+        .collect::<Vec<_>>();
+    available_genres
+        .sort_by(|left, right| left.label.to_lowercase().cmp(&right.label.to_lowercase()));
+
+    let year = request.year.filter(|year| available_years.contains(year));
+    let decade = if year.is_none() {
+        request.decade.map(|decade| decade.div_euclid(10) * 10)
+    } else {
+        None
+    };
+    let genre = request.genre.as_ref().and_then(|genre| {
+        available_genres
+            .iter()
+            .find(|option| option.id.eq_ignore_ascii_case(genre))
+            .map(|option| option.id.clone())
+    });
+    let seed = conn.query_row("SELECT random()", [], |row| row.get::<_, i64>(0))? as u64;
+    let mut stories = Vec::new();
+    for candidate in gaps {
+        if genre
+            .as_ref()
+            .is_some_and(|genre| !candidate.genres.contains_key(genre))
+        {
+            continue;
+        }
+        let mut matching_missing = candidate
+            .missing
+            .iter()
+            .filter(|(_, missing_year)| match (year, decade, missing_year) {
+                (Some(year), _, Some(missing_year)) => *missing_year == year,
+                (None, Some(decade), Some(missing_year)) => {
+                    (decade..decade + 10).contains(missing_year)
+                }
+                (None, None, _) => true,
+                _ => false,
+            })
+            .collect::<Vec<_>>();
+        if matching_missing.is_empty() {
+            continue;
+        }
+        matching_missing.sort_by_key(|(title, _)| discovery_random_sort_key(seed, title));
+        let (missing_release_title, missing_release_year) = matching_missing[0];
+        let display_genre = genre
+            .as_ref()
+            .and_then(|genre| candidate.genres.get(genre).map(|(label, _)| label.clone()))
+            .or_else(|| {
+                candidate
+                    .genres
+                    .values()
+                    .max_by_key(|(_, count)| *count)
+                    .map(|(label, _)| label.clone())
+            })
+            .unwrap_or_else(|| "Genre unknown".to_string());
+        stories.push(DiscoveryArtistCompletionStory {
+            artist_id: candidate.artist_id,
+            artist: candidate.artist,
+            musicbrainz_mbid: candidate.mbid,
+            owned_album_count: candidate.owned,
+            official_album_count: candidate.official,
+            missing_album_count: candidate.missing.len() as i64,
+            completion_percent: candidate.owned as f64 / candidate.official as f64,
+            missing_release_title: missing_release_title.clone(),
+            missing_release_year: *missing_release_year,
+            genre: display_genre,
+            portrait_available: candidate.portrait_available,
+            representative_album_id: candidate.representative_album_id,
+            representative_album: candidate.representative_album,
+            representative_cover_path: candidate.representative_cover_path,
             evidence: format!(
-                "{owned} of {official} official albums owned · {local_album_count} local albums"
+                "{} of {} official albums owned · {} local albums",
+                candidate.owned, candidate.official, candidate.local_album_count
             ),
         });
     }
-    stories.sort_by(|left, right| {
-        right
-            .completion_percent
-            .partial_cmp(&left.completion_percent)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| right.owned_album_count.cmp(&left.owned_album_count))
-            .then_with(|| left.artist.to_lowercase().cmp(&right.artist.to_lowercase()))
+    let matching_count = stories.len() as i64;
+    stories.sort_by_key(|story| discovery_random_sort_key(seed, &story.artist_id));
+    stories.truncate(5);
+
+    Ok(DiscoveryCompletionSnapshot {
+        mode: "artist".to_string(),
+        year,
+        decade,
+        genre,
+        available_years,
+        available_genres,
+        matching_count,
+        artist_stories: stories,
+        album_stories: Vec::new(),
+    })
+}
+
+fn discovery_album_completion_snapshot(
+    conn: &Connection,
+    request: &DiscoveryCompletionSnapshotRequest,
+) -> Result<DiscoveryCompletionSnapshot> {
+    const RELEASE_YEAR: &str = "COALESCE(a.release_year, a.year)";
+    const GENRE_ID: &str = "NULLIF(TRIM(a.genre_normalized), '')";
+    const ELIGIBLE: &str = "a.total_tracks > 0 AND a.rated_tracks < a.total_tracks";
+    let years_sql = format!(
+        "SELECT DISTINCT {RELEASE_YEAR} FROM albums a
+         WHERE {ELIGIBLE} AND {RELEASE_YEAR} IS NOT NULL
+         ORDER BY {RELEASE_YEAR} DESC"
+    );
+    let available_years = conn
+        .prepare(&years_sql)?
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let genres_sql = format!(
+        "SELECT {GENRE_ID}, COALESCE(MIN(NULLIF(TRIM(a.canonical_genre), '')), {GENRE_ID})
+         FROM albums a WHERE {ELIGIBLE} AND {GENRE_ID} IS NOT NULL
+         GROUP BY {GENRE_ID} ORDER BY LOWER(COALESCE(MIN(NULLIF(TRIM(a.canonical_genre), '')), {GENRE_ID}))"
+    );
+    let available_genres = conn
+        .prepare(&genres_sql)?
+        .query_map([], |row| {
+            Ok(DiscoveryDeepCutGenre {
+                id: row.get(0)?,
+                label: row.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let year = request.year.filter(|year| available_years.contains(year));
+    let decade = if year.is_none() {
+        request.decade.map(|decade| decade.div_euclid(10) * 10)
+    } else {
+        None
+    };
+    let genre = request.genre.as_ref().and_then(|genre| {
+        available_genres
+            .iter()
+            .find(|option| option.id.eq_ignore_ascii_case(genre))
+            .map(|option| option.id.clone())
     });
-    stories.truncate(8);
-    Ok(stories)
+    let mut conditions = vec![ELIGIBLE.to_string()];
+    let mut values = Vec::new();
+    if let Some(year) = year {
+        conditions.push(format!("{RELEASE_YEAR} = ?"));
+        values.push(Value::Integer(i64::from(year)));
+    } else if let Some(decade) = decade {
+        conditions.push(format!("{RELEASE_YEAR} >= ? AND {RELEASE_YEAR} < ?"));
+        values.push(Value::Integer(i64::from(decade)));
+        values.push(Value::Integer(i64::from(decade + 10)));
+    }
+    if let Some(genre) = genre.as_ref() {
+        conditions.push(format!("LOWER({GENRE_ID}) = LOWER(?)"));
+        values.push(Value::Text(genre.clone()));
+    }
+    let where_clause = conditions.join(" AND ");
+    let matching_count = conn.query_row(
+        &format!("SELECT COUNT(*) FROM albums a WHERE {where_clause}"),
+        params_from_iter(values.iter()),
+        |row| row.get(0),
+    )?;
+    let stories_sql = format!(
+        "SELECT a.id,
+                COALESCE(NULLIF(TRIM(a.album), ''), 'Unknown Album'),
+                COALESCE(NULLIF(TRIM(a.album_artist_display), ''), 'Unknown Artist'),
+                {RELEASE_YEAR},
+                COALESCE(NULLIF(TRIM(a.canonical_genre), ''), 'Genre unknown'),
+                a.total_tracks, a.rated_tracks,
+                cover.cache_path
+         FROM albums a
+         LEFT JOIN album_covers cover ON cover.album_id = a.id
+         WHERE {where_clause}
+         ORDER BY random() LIMIT 5"
+    );
+    let album_stories = conn
+        .prepare(&stories_sql)?
+        .query_map(params_from_iter(values.iter()), |row| {
+            let total_tracks: i64 = row.get(5)?;
+            let rated_tracks: i64 = row.get(6)?;
+            let unrated_tracks = total_tracks - rated_tracks;
+            Ok(DiscoveryAlbumCompletionStory {
+                album_id: row.get(0)?,
+                album: row.get(1)?,
+                artist: row.get(2)?,
+                release_year: row.get(3)?,
+                genre: row.get(4)?,
+                total_tracks,
+                rated_tracks,
+                unrated_tracks,
+                completion_percent: rated_tracks as f64 / total_tracks as f64,
+                cover_path: row.get(7)?,
+                evidence: format!("{rated_tracks} of {total_tracks} tracks rated"),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(DiscoveryCompletionSnapshot {
+        mode: "album".to_string(),
+        year,
+        decade,
+        genre,
+        available_years,
+        available_genres,
+        matching_count,
+        artist_stories: Vec::new(),
+        album_stories,
+    })
 }
 
 fn discovery_because_you_played(
@@ -20993,7 +21286,10 @@ mod tests {
         assert_eq!(edition.chart_snapshot.week, Some(32));
         assert_eq!(edition.chart_snapshot.stories[0].rank, 1);
         assert_eq!(edition.deep_cut_snapshot.stories[0].title, "Hidden Finale");
-        assert_eq!(edition.artist_completions[0].missing_release_title, "Very");
+        assert_eq!(
+            edition.completion_snapshot.artist_stories[0].missing_release_title,
+            "Very"
+        );
         assert_eq!(
             edition
                 .rating_anchor
@@ -21125,6 +21421,99 @@ mod tests {
         assert_eq!(exact_year.decade, None);
         assert_eq!(exact_year.matching_album_count, 1);
         assert_eq!(exact_year.stories[0].album_id, "deep-2001");
+    }
+
+    #[test]
+    fn discovery_completion_finds_cached_artists_beyond_the_largest_collections() {
+        let conn = seeded_connection();
+        for index in 0..40 {
+            let artist = format!("Large Artist {index:02}");
+            insert_test_artist_info(&conn, &artist, "Group", None, Some(1980), None, false);
+            for album_index in 0..4 {
+                insert_test_album(
+                    &conn,
+                    &format!("large-{index}-{album_index}"),
+                    &artist,
+                    &format!("Large Album {album_index}"),
+                    1980 + album_index,
+                    10,
+                );
+            }
+        }
+
+        let target = "Target Artist";
+        insert_test_artist_info(&conn, target, "Group", None, Some(1984), None, false);
+        for (album_id, album, year) in [
+            ("target-one", "Target One", 1984),
+            ("target-two", "Target Two", 1986),
+            ("target-three", "Target Three", 1988),
+        ] {
+            insert_test_album(&conn, album_id, target, album, year, 10);
+        }
+        conn.execute_batch(
+            "INSERT INTO musicbrainz_artist_release_groups (
+                artist_mbid, release_mbid, title, year, type, secondary_types,
+                status, source, fetched_at
+             ) VALUES
+                ('mbid-target artist', 'target-rg-1', 'Target One', 1984, 'Album', '', 'Official', 'test', '2026-08-12'),
+                ('mbid-target artist', 'target-rg-2', 'Target Two', 1986, 'Album', '', 'Official', 'test', '2026-08-12'),
+                ('mbid-target artist', 'target-rg-3', 'Target Three', 1988, 'Album', '', 'Official', 'test', '2026-08-12'),
+                ('mbid-target artist', 'target-rg-4', 'Missing Target', 1989, 'Album', '', 'Official', 'test', '2026-08-12');"
+        )
+        .expect("insert target release groups");
+
+        let snapshot = discovery_completion_snapshot(
+            &conn,
+            &DiscoveryCompletionSnapshotRequest {
+                mode: Some("artist".to_string()),
+                year: None,
+                decade: Some(1980),
+                genre: Some("rock".to_string()),
+            },
+        )
+        .expect("load artist completion snapshot");
+
+        assert_eq!(snapshot.matching_count, 1);
+        assert_eq!(snapshot.artist_stories[0].artist, target);
+        assert_eq!(
+            snapshot.artist_stories[0].missing_release_title,
+            "Missing Target"
+        );
+        assert_eq!(snapshot.artist_stories[0].missing_release_year, Some(1989));
+    }
+
+    #[test]
+    fn discovery_album_completion_filters_unrated_albums_exactly() {
+        let conn = seeded_connection();
+        insert_test_album(&conn, "gap-rock", "Gap Artist", "Rock Gap", 1985, 10);
+        insert_test_album(&conn, "gap-pop", "Gap Artist", "Pop Gap", 2001, 12);
+        conn.execute(
+            "UPDATE albums SET rated_tracks = 7, rating_completeness = 0.7 WHERE id = 'gap-rock'",
+            [],
+        )
+        .expect("make rock album incomplete");
+        conn.execute(
+            "UPDATE albums SET rated_tracks = 6, rating_completeness = 0.5,
+                    canonical_genre = 'Pop', genre_normalized = 'pop'
+             WHERE id = 'gap-pop'",
+            [],
+        )
+        .expect("make pop album incomplete");
+
+        let snapshot = discovery_completion_snapshot(
+            &conn,
+            &DiscoveryCompletionSnapshotRequest {
+                mode: Some("album".to_string()),
+                year: None,
+                decade: Some(1980),
+                genre: Some("rock".to_string()),
+            },
+        )
+        .expect("load album completion snapshot");
+
+        assert_eq!(snapshot.matching_count, 1);
+        assert_eq!(snapshot.album_stories[0].album_id, "gap-rock");
+        assert_eq!(snapshot.album_stories[0].unrated_tracks, 3);
     }
 
     #[test]
