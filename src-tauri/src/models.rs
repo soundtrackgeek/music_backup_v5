@@ -1488,12 +1488,34 @@ pub struct DiscoveryDailyEdition {
     pub anniversary_years: i32,
     pub anniversaries: Vec<DiscoveryAnniversaryStory>,
     pub life_events: Vec<DiscoveryLifeEventStory>,
-    pub chart_toppers: Vec<DiscoveryChartStory>,
+    pub chart_snapshot: DiscoveryChartSnapshot,
     pub deep_cuts: Vec<DiscoveryDeepCutStory>,
     pub artist_completions: Vec<DiscoveryArtistCompletionStory>,
     pub rating_anchor: Option<DiscoveryRatingAnchor>,
     pub because_you_played: Vec<DiscoveryRecommendationStory>,
     pub listening_evidence_note: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryChartSnapshotRequest {
+    pub source: Option<String>,
+    pub year: Option<i32>,
+    pub week: Option<i32>,
+    #[serde(default)]
+    pub random: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryChartSnapshot {
+    pub source: String,
+    pub source_label: String,
+    pub year: Option<i32>,
+    pub week: Option<i32>,
+    pub available_years: Vec<i32>,
+    pub available_weeks: Vec<i32>,
+    pub stories: Vec<DiscoveryChartStory>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1539,7 +1561,7 @@ pub struct DiscoveryChartStory {
     pub album: Option<String>,
     pub chart: String,
     pub rank: i32,
-    pub chart_date: String,
+    pub chart_date: Option<String>,
     pub chart_year: i32,
     pub loved: bool,
     pub cover_path: Option<String>,

@@ -22968,6 +22968,68 @@ button {
   list-style: none;
 }
 
+.daily-edition-chart-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.daily-edition-chart-controls label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--edition-muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.daily-edition-chart-controls select,
+.daily-edition-chart-random {
+  min-width: 0;
+  height: 28px;
+  border: 1px solid var(--edition-rule);
+  border-radius: 4px;
+  background: var(--edition-paper);
+  color: var(--edition-ink);
+  font: inherit;
+  font-size: 10px;
+}
+
+.daily-edition-chart-controls select {
+  width: 100%;
+  padding: 0 5px;
+}
+
+.daily-edition-chart-random {
+  display: inline-flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.daily-edition-chart-random svg {
+  width: 13px;
+  height: 13px;
+}
+
+.daily-edition-chart-controls select:focus-visible,
+.daily-edition-chart-random:focus-visible,
+.daily-edition-chart-random:hover {
+  border-color: var(--edition-teal);
+  outline: none;
+}
+
+.daily-edition-chart-controls select:disabled,
+.daily-edition-chart-random:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .daily-edition-chart-list li {
   border-top: 1px solid var(--edition-rule);
 }

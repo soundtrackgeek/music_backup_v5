@@ -2347,12 +2347,31 @@ export type DiscoveryDailyEdition = {
   anniversaryYears: number;
   anniversaries: DiscoveryAnniversaryStory[];
   lifeEvents: DiscoveryLifeEventStory[];
-  chartToppers: DiscoveryChartStory[];
+  chartSnapshot: DiscoveryChartSnapshot;
   deepCuts: DiscoveryDeepCutStory[];
   artistCompletions: DiscoveryArtistCompletionStory[];
   ratingAnchor: DiscoveryRatingAnchor | null;
   becauseYouPlayed: DiscoveryRecommendationStory[];
   listeningEvidenceNote: string;
+};
+
+export type DiscoveryChartSource = "billboard" | "official-uk" | "vg-lista";
+
+export type DiscoveryChartSnapshotRequest = {
+  source?: DiscoveryChartSource;
+  year?: number;
+  week?: number;
+  random?: boolean;
+};
+
+export type DiscoveryChartSnapshot = {
+  source: DiscoveryChartSource;
+  sourceLabel: string;
+  year: number | null;
+  week: number | null;
+  availableYears: number[];
+  availableWeeks: number[];
+  stories: DiscoveryChartStory[];
 };
 
 export type DiscoveryAnniversaryStory = {
@@ -2392,7 +2411,7 @@ export type DiscoveryChartStory = {
   album: string | null;
   chart: string;
   rank: number;
-  chartDate: string;
+  chartDate: string | null;
   chartYear: number;
   loved: boolean;
   coverPath: string | null;

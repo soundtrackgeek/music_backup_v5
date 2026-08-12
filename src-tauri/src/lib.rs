@@ -29,18 +29,18 @@ use models::{
     ArtistTimelineRequest, ArtistTimelineResponse, ArtistTrackHighlights, BillboardImportSummary,
     BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryAnniversaryStory,
-    DiscoveryResponse, ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest,
-    GenreListResponse, GenreProgressRequest, GenreProgressStats, GenreTimelineRequest,
-    GenreTimelineResponse, LibraryUpdateArtistResponse, LibraryUpdateRequest,
-    LibraryUpdateResponse, MusicBrainzArtistDiscographyRequest,
-    MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
-    MusicBrainzArtistInfoImportRequest, MusicBrainzArtistInfoImportSummary,
-    MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus, MusicBrainzArtistLinkRequest,
-    MusicBrainzArtistOriginCountryRequest, MusicBrainzArtistOriginCountryUpdate,
-    MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus,
-    MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
-    MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryStatus,
-    MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
+    DiscoveryChartSnapshot, DiscoveryChartSnapshotRequest, DiscoveryResponse,
+    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    GenreProgressRequest, GenreProgressStats, GenreTimelineRequest, GenreTimelineResponse,
+    LibraryUpdateArtistResponse, LibraryUpdateRequest, LibraryUpdateResponse,
+    MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
+    MusicBrainzArtistExportRequest, MusicBrainzArtistInfoImportRequest,
+    MusicBrainzArtistInfoImportSummary, MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus,
+    MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginCountryRequest,
+    MusicBrainzArtistOriginCountryUpdate, MusicBrainzArtistRefreshRequest,
+    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzOriginCountryImportRequest,
+    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
+    MusicBrainzOriginCountryStatus, MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
     MusicBrainzReleaseDecisionRequest, MusicMapLocationDetails, MusicMapRefreshSummary,
     MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
@@ -1241,6 +1241,20 @@ async fn get_discovery_anniversaries(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_discovery_chart_snapshot(
+    app: AppHandle,
+    request: DiscoveryChartSnapshotRequest,
+) -> Result<DiscoveryChartSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::discovery_chart_snapshot_for_app(&app, request)
+    })
+    .await
+    .map_err(|error| format!("Discovery chart task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_import_preview(
     app: AppHandle,
     source_path: String,
@@ -1821,6 +1835,7 @@ pub fn run() {
             get_genre_progress,
             get_discovery,
             get_discovery_anniversaries,
+            get_discovery_chart_snapshot,
             get_import_preview,
             prepare_import_preview,
             cancel_import_preview,

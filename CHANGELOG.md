@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.125.0] - 2026-08-12
+### Added
+- Added interactive source, year, and week selectors to **Chart Toppers From…**, plus a Random action that chooses a populated snapshot from the owned catalog.
+- Added exact album-chart snapshot queries for Billboard year-end, Official UK weekly, and VG-lista weekly imports, including source-specific available years and weeks.
+
+### Fixed
+- Removed singles from the album chart shelf and stopped matching one week number across unrelated years, so every displayed rank now belongs to the visible source and period.
+- Labeled Billboard accurately as a year-end chart without a fabricated weekly selector.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.125.0`.
+
 ## [0.124.1] - 2026-08-12
 ### Fixed
 - Fixed anniversary autoplay remaining paused after a thumbnail click or milestone selection; each interaction now starts a fresh ten-second cycle and keeps the cover, story copy, active thumbnail, and progress indicator synchronized.

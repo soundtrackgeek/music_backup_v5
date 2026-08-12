@@ -235,6 +235,8 @@ import type {
   DatabaseBackup,
   DatabaseRestoreSummary,
   DiscoveryAnniversaryStory,
+  DiscoveryChartSnapshot,
+  DiscoveryChartSnapshotRequest,
   DiscoveryResponse,
   ExportResult,
   ImportProgress,
@@ -1783,6 +1785,57 @@ export async function getDiscoveryAnniversaries(anniversaryYears: number) {
   return invoke<DiscoveryAnniversaryStory[]>("get_discovery_anniversaries", {
     anniversaryYears,
   });
+}
+
+export async function getDiscoveryChartSnapshot(
+  request: DiscoveryChartSnapshotRequest,
+) {
+  if (!isTauriRuntime()) {
+    const sourceOptions = ["billboard", "official-uk", "vg-lista"] as const;
+    const source = request.random
+      ? sourceOptions[Math.floor(Math.random() * sourceOptions.length)]
+      : request.source ?? mockDiscovery.dailyEdition.chartSnapshot.source;
+    const sourceLabel =
+      source === "billboard"
+        ? "Billboard Year-End Albums"
+        : source === "official-uk"
+          ? "Official UK Albums"
+          : "VG-lista Albums";
+    const availableYears =
+      source === "billboard" ? [2005, 1986, 1982] : [2005, 1986, 1982];
+    const year = request.random
+      ? availableYears[Math.floor(Math.random() * availableYears.length)]
+      : request.year && availableYears.includes(request.year)
+        ? request.year
+        : availableYears[0];
+    const availableWeeks = source === "billboard" ? [] : [12, 34, 50];
+    const week = source === "billboard"
+      ? null
+      : request.random
+        ? availableWeeks[Math.floor(Math.random() * availableWeeks.length)]
+        : request.week && availableWeeks.includes(request.week)
+          ? request.week
+          : availableWeeks[0];
+    return {
+      source,
+      sourceLabel,
+      year,
+      week,
+      availableYears,
+      availableWeeks,
+      stories: mockDiscovery.dailyEdition.chartSnapshot.stories.map((story, index) => ({
+        ...story,
+        albumId: `${story.albumId}:${source}:${year}:${week ?? "year-end"}`,
+        chart: sourceLabel,
+        rank: index + 1,
+        chartDate: source === "billboard" ? null : `${year}-08-20`,
+        chartYear: year,
+        evidence: `#${index + 1} on ${sourceLabel} · owned album`,
+      })),
+    } satisfies DiscoveryChartSnapshot;
+  }
+
+  return invoke<DiscoveryChartSnapshot>("get_discovery_chart_snapshot", { request });
 }
 
 export async function getSettings() {

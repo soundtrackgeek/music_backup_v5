@@ -78,6 +78,7 @@ import {
   cacheSettings,
   getDiscovery,
   getDiscoveryAnniversaries,
+  getDiscoveryChartSnapshot,
   getAlbumReview,
   getArtistBiography,
   getArtistTrackHighlights,
@@ -185,6 +186,7 @@ import type {
   DiscoveryGenrePoint,
   DiscoveryHeatmapCell,
   DiscoveryMission,
+  DiscoveryChartSnapshotRequest,
   DiscoveryResponse,
   SavedExternalDiscovery,
   SavedPlaylist,
@@ -8474,7 +8476,9 @@ export default function App() {
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(true);
   const [isDiscoveryAnniversaryLoading, setIsDiscoveryAnniversaryLoading] =
     useState(false);
+  const [isDiscoveryChartLoading, setIsDiscoveryChartLoading] = useState(false);
   const discoveryAnniversaryYearsRef = useRef(50);
+  const discoveryChartRequestRef = useRef(0);
   const [discoveryAlbumRequest, setDiscoveryAlbumRequest] =
     useState<BrowseRequest>(() =>
       createDiscoveryAlbumRequest(
@@ -12226,6 +12230,34 @@ export default function App() {
     }
   }
 
+  async function changeDiscoveryChartSnapshot(request: DiscoveryChartSnapshotRequest) {
+    const requestId = discoveryChartRequestRef.current + 1;
+    discoveryChartRequestRef.current = requestId;
+    setIsDiscoveryChartLoading(true);
+    setDiscoveryError(null);
+    try {
+      const chartSnapshot = await getDiscoveryChartSnapshot(request);
+      if (discoveryChartRequestRef.current !== requestId) return;
+      setDiscovery((current) =>
+        current
+          ? {
+              ...current,
+              dailyEdition: {
+                ...current.dailyEdition,
+                chartSnapshot,
+              },
+            }
+          : current,
+      );
+    } catch (error) {
+      setDiscoveryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (discoveryChartRequestRef.current === requestId) {
+        setIsDiscoveryChartLoading(false);
+      }
+    }
+  }
+
   function openDiscoveryAlbums(
     selection: DiscoverySelection,
     nextRequest: BrowseRequest,
@@ -15466,7 +15498,9 @@ export default function App() {
               edition={discovery?.dailyEdition ?? null}
               isLoading={isDiscoveryLoading}
               isAnniversaryLoading={isDiscoveryAnniversaryLoading}
+              isChartLoading={isDiscoveryChartLoading}
               onAnniversaryYearsChange={changeDiscoveryAnniversaryYears}
+              onChartSnapshotChange={changeDiscoveryChartSnapshot}
               onOpenAlbum={openTimelineAlbum}
               onOpenArtist={openArtistFromMusicMap}
               onOpenCompletion={() => setActiveSection("Completion")}

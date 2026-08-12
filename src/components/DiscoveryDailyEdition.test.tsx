@@ -65,23 +65,29 @@ const edition: DiscoveryDailyEditionData = {
       evidence: "Remembered today · 2 loved tracks",
     },
   ],
-  chartToppers: [
-    {
-      entity: "track",
+  chartSnapshot: {
+    source: "official-uk",
+    sourceLabel: "Official UK Albums",
+    year: 1986,
+    week: 34,
+    availableYears: [1986, 1982],
+    availableWeeks: [32, 34, 50],
+    stories: [{
+      entity: "album",
       albumId: "album-chart",
-      trackId: 42,
-      title: "Chart Song",
+      trackId: null,
+      title: "Chart Album",
       artist: "Chart Artist",
       album: "Chart Album",
-      chart: "Official UK singles",
+      chart: "Official UK Albums",
       rank: 1,
       chartDate: "1986-08-09",
       chartYear: 1986,
       loved: false,
       coverPath: null,
-      evidence: "#1 on Official UK singles · owned track",
-    },
-  ],
+      evidence: "#1 on Official UK Albums · owned album",
+    }],
+  },
   deepCuts: [
     {
       trackId: 43,
@@ -146,7 +152,9 @@ describe("DiscoveryDailyEdition", () => {
         edition={edition}
         isLoading={false}
         isAnniversaryLoading={false}
+        isChartLoading={false}
         onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -183,7 +191,9 @@ describe("DiscoveryDailyEdition", () => {
         edition={edition}
         isLoading={false}
         isAnniversaryLoading={false}
+        isChartLoading={false}
         onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
         onOpenAlbum={onOpenAlbum}
         onOpenArtist={onOpenArtist}
         onOpenCompletion={onOpenCompletion}
@@ -194,16 +204,59 @@ describe("DiscoveryDailyEdition", () => {
     fireEvent.click(screen.getByRole("button", { name: "Read the story" }));
     expect(onOpenAlbum).toHaveBeenCalledWith("album-anniversary");
 
-    fireEvent.click(screen.getByText("Chart Song").closest("button")!);
+    fireEvent.click(screen.getByText("Chart Album").closest("button")!);
     fireEvent.click(screen.getByText("Deep Track").closest("button")!);
-    expect(onOpenTrack).toHaveBeenNthCalledWith(1, 42);
-    expect(onOpenTrack).toHaveBeenNthCalledWith(2, 43);
+    expect(onOpenAlbum).toHaveBeenCalledWith("album-chart");
+    expect(onOpenTrack).toHaveBeenCalledWith(43);
 
     fireEvent.click(screen.getByText("Gap Artist").closest("button")!);
     expect(onOpenArtist).toHaveBeenCalledWith("artist-gap", "Gap Artist");
 
     fireEvent.click(screen.getByRole("button", { name: /view all artist gaps/i }));
     expect(onOpenCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  it("chooses chart source, year, week, and a random owned-album snapshot", () => {
+    const onChartSnapshotChange = vi.fn();
+    render(
+      <DiscoveryDailyEdition
+        edition={edition}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        isChartLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={onChartSnapshotChange}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenCompletion={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Official UK Albums · Week 34, 1986")).toBeInTheDocument();
+    expect(screen.getByText("Official UK Albums")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Choose album chart" }), {
+      target: { value: "vg-lista" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Choose chart year" }), {
+      target: { value: "1982" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Choose chart week" }), {
+      target: { value: "50" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Random" }));
+
+    expect(onChartSnapshotChange).toHaveBeenNthCalledWith(1, { source: "vg-lista" });
+    expect(onChartSnapshotChange).toHaveBeenNthCalledWith(2, {
+      source: "official-uk",
+      year: 1982,
+    });
+    expect(onChartSnapshotChange).toHaveBeenNthCalledWith(3, {
+      source: "official-uk",
+      year: 1986,
+      week: 50,
+    });
+    expect(onChartSnapshotChange).toHaveBeenNthCalledWith(4, { random: true });
   });
 
   it("supports manual selection, 10-second rotation, and anniversary changes", () => {
@@ -214,7 +267,9 @@ describe("DiscoveryDailyEdition", () => {
         edition={edition}
         isLoading={false}
         isAnniversaryLoading={false}
+        isChartLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
+        onChartSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -256,7 +311,9 @@ describe("DiscoveryDailyEdition", () => {
         edition={edition}
         isLoading={false}
         isAnniversaryLoading
+        isChartLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
+        onChartSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -282,7 +339,9 @@ describe("DiscoveryDailyEdition", () => {
         }}
         isLoading={false}
         isAnniversaryLoading={false}
+        isChartLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
+        onChartSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -309,7 +368,9 @@ describe("DiscoveryDailyEdition", () => {
         edition={edition}
         isLoading={false}
         isAnniversaryLoading={false}
+        isChartLoading={false}
         onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -338,7 +399,9 @@ describe("DiscoveryDailyEdition", () => {
         edition={edition}
         isLoading={false}
         isAnniversaryLoading={false}
+        isChartLoading={false}
         onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}

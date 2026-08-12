@@ -7,10 +7,12 @@ import {
   Heart,
   Info,
   Play,
+  Shuffle,
   Sparkles,
 } from "lucide-react";
 
 import type {
+  DiscoveryChartSnapshotRequest,
   DiscoveryChartStory,
   DiscoveryDailyEdition,
 } from "../types";
@@ -21,7 +23,9 @@ type DiscoveryDailyEditionProps = {
   edition: DiscoveryDailyEdition | null;
   isLoading: boolean;
   isAnniversaryLoading: boolean;
+  isChartLoading: boolean;
   onAnniversaryYearsChange: (years: number) => void;
+  onChartSnapshotChange: (request: DiscoveryChartSnapshotRequest) => void;
   onOpenAlbum: (albumId: string) => void;
   onOpenArtist: (artistId: string, artistName: string) => void;
   onOpenCompletion: () => void;
@@ -398,7 +402,9 @@ export function DiscoveryDailyEdition({
   edition,
   isLoading,
   isAnniversaryLoading,
+  isChartLoading,
   onAnniversaryYearsChange,
+  onChartSnapshotChange,
   onOpenAlbum,
   onOpenArtist,
   onOpenCompletion,
@@ -431,7 +437,7 @@ export function DiscoveryDailyEdition({
     );
   }
 
-  const chartYear = edition.chartToppers[0]?.chartYear ?? null;
+  const chartSnapshot = edition.chartSnapshot;
   const anchor = edition.ratingAnchor;
 
   function navigateToStory(storyId: string) {
@@ -498,12 +504,81 @@ export function DiscoveryDailyEdition({
                   <p>Imported charts matched to your library</p>
                 </div>
               </div>
-              {chartYear ? (
-                <p className="daily-edition-shelf-period">This week in {chartYear}</p>
+              <div className="daily-edition-chart-controls" aria-label="Chart snapshot controls">
+                <label>
+                  <span>Chart</span>
+                  <select
+                    aria-label="Choose album chart"
+                    value={chartSnapshot.source}
+                    disabled={isChartLoading}
+                    onChange={(event) =>
+                      onChartSnapshotChange({
+                        source: event.target.value as DiscoveryChartSnapshotRequest["source"],
+                      })
+                    }
+                  >
+                    <option value="billboard">Billboard</option>
+                    <option value="official-uk">Official UK</option>
+                    <option value="vg-lista">VG-lista</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Year</span>
+                  <select
+                    aria-label="Choose chart year"
+                    value={chartSnapshot.year ?? ""}
+                    disabled={isChartLoading || !chartSnapshot.availableYears.length}
+                    onChange={(event) =>
+                      onChartSnapshotChange({
+                        source: chartSnapshot.source,
+                        year: Number(event.target.value),
+                      })
+                    }
+                  >
+                    {chartSnapshot.availableYears.map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </label>
+                {chartSnapshot.source !== "billboard" ? (
+                  <label>
+                    <span>Week</span>
+                    <select
+                      aria-label="Choose chart week"
+                      value={chartSnapshot.week ?? ""}
+                      disabled={isChartLoading || !chartSnapshot.availableWeeks.length}
+                      onChange={(event) =>
+                        onChartSnapshotChange({
+                          source: chartSnapshot.source,
+                          year: chartSnapshot.year ?? undefined,
+                          week: Number(event.target.value),
+                        })
+                      }
+                    >
+                      {chartSnapshot.availableWeeks.map((week) => (
+                        <option key={week} value={week}>Week {week}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <button
+                  type="button"
+                  className="daily-edition-chart-random"
+                  disabled={isChartLoading}
+                  onClick={() => onChartSnapshotChange({ random: true })}
+                >
+                  <Shuffle aria-hidden="true" />
+                  Random
+                </button>
+              </div>
+              {chartSnapshot.year ? (
+                <p className="daily-edition-shelf-period">
+                  {chartSnapshot.sourceLabel} · {chartSnapshot.week ? `Week ${chartSnapshot.week}, ` : ""}{chartSnapshot.year}
+                </p>
               ) : null}
-              {edition.chartToppers.length ? (
+              {chartSnapshot.stories.length ? (
                 <ol className="daily-edition-chart-list">
-                  {edition.chartToppers.slice(0, 5).map((story) => (
+                  {chartSnapshot.stories.slice(0, 5).map((story) => (
                     <li key={`${story.entity}:${story.trackId ?? story.albumId}:${story.chart}`}>
                       <button
                         type="button"
@@ -522,7 +597,7 @@ export function DiscoveryDailyEdition({
                         <span className="daily-edition-row-copy">
                           <strong>{story.title}</strong>
                           <small>{story.artist}</small>
-                          <small>{story.album}</small>
+                          <small>{story.chart}</small>
                         </span>
                       </button>
                     </li>
@@ -530,12 +605,12 @@ export function DiscoveryDailyEdition({
                 </ol>
               ) : (
                 <EditionEmpty>
-                  No owned releases match an imported chart for this week.
+                  No owned albums match this imported chart period.
                 </EditionEmpty>
               )}
               <p className="daily-edition-shelf-footer">
-                {edition.chartToppers.length
-                  ? `${edition.chartToppers.length} matched chart entries`
+                {chartSnapshot.stories.length
+                  ? `${chartSnapshot.stories.length} matched chart entries`
                   : "Import charts to unlock this story"}
               </p>
             </section>
