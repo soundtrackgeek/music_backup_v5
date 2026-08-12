@@ -234,6 +234,7 @@ import type {
   CoverImportSummary,
   DatabaseBackup,
   DatabaseRestoreSummary,
+  DiscoveryAnniversaryStory,
   DiscoveryResponse,
   ExportResult,
   ImportProgress,
@@ -1760,6 +1761,28 @@ export async function getDiscovery() {
   }
 
   return invoke<DiscoveryResponse>("get_discovery");
+}
+
+export async function getDiscoveryAnniversaries(anniversaryYears: number) {
+  if (!isTauriRuntime()) {
+    const releaseYear = new Date().getFullYear() - anniversaryYears;
+    return mockDiscovery.dailyEdition.anniversaries.map((story, index) => ({
+      ...story,
+      albumId: `${story.albumId}:${anniversaryYears}:${index}`,
+      releaseYear,
+      yearsAgo: anniversaryYears,
+      evidence: story.chartEvidence.length
+        ? `${story.chartEvidence.join(" · ")} · owned album`
+        : `Released in ${releaseYear} · owned album · local-rating fallback`,
+      selectionReason: story.chartEvidence.length
+        ? `Selected from your owned ${releaseYear} releases because its imported album-chart evidence is strongest: ${story.chartEvidence.join(", ")}. Local Album Score and loved tracks only break chart ties.`
+        : `Included because fewer than five owned ${releaseYear} releases matched Billboard, Official UK, or VG-lista. Local Album Score ranks it among the strongest remaining albums.`,
+    }));
+  }
+
+  return invoke<DiscoveryAnniversaryStory[]>("get_discovery_anniversaries", {
+    anniversaryYears,
+  });
 }
 
 export async function getSettings() {

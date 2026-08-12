@@ -2363,6 +2363,8 @@ export type DiscoveryAnniversaryStory = {
   yearsAgo: number;
   coverPath: string | null;
   evidence: string;
+  chartEvidence: string[];
+  selectionReason: string;
 };
 
 export type DiscoveryLifeEventStory = {

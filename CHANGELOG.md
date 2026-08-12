@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.123.0] - 2026-08-12
+### Added
+- Added an anniversary carousel with up to five owned albums, automatic ten-second rotation, direct artwork thumbnails, hover/focus pause behavior, and reduced-motion support.
+- Added a 10-to-100-year anniversary selector backed by a focused local query, so changing the milestone replaces only the anniversary stories.
+- Added explainable anniversary selection evidence from imported Billboard, Official UK, and VG-lista album matches.
+
+### Changed
+- Anniversary albums now rank by best imported album-chart position, then number of matched chart sources; local Album Score and loved tracks break ties and fill any remaining carousel slots.
+- Removed the inert additional-anniversary count and synchronized app metadata and provider user agents to `0.123.0`.
+
 ## [0.122.0] - 2026-08-12
 ### Added
 - Added the editorial **Your Daily Edition** Discovery front page with owned-album 50-year anniversaries, exact MusicBrainz artist birthdays and memorials, locally matched weekly chart stories, deep cuts, artist collection gaps, and rating-anchored recommendations.

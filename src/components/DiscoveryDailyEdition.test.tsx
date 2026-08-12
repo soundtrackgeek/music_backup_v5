@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DiscoveryDailyEdition as DiscoveryDailyEditionData } from "../types";
@@ -15,7 +15,22 @@ const edition: DiscoveryDailyEditionData = {
       releaseYear: 1976,
       yearsAgo: 50,
       coverPath: null,
-      evidence: "Released in 1976 · owned album",
+      evidence: "Billboard #13 · Official UK #11 · owned album",
+      chartEvidence: ["Billboard #13", "Official UK #11"],
+      selectionReason:
+        "Selected because its best imported album-chart position is #11. Local Album Score and loved tracks only break chart ties.",
+    },
+    {
+      albumId: "album-anniversary-2",
+      album: "Destroyer",
+      artist: "KISS",
+      releaseYear: 1976,
+      yearsAgo: 50,
+      coverPath: null,
+      evidence: "Billboard #11 · VG-lista #7 · owned album",
+      chartEvidence: ["Billboard #11", "VG-lista #7"],
+      selectionReason:
+        "Selected because its best imported album-chart position is #7. Local Album Score and loved tracks only break chart ties.",
     },
   ],
   lifeEvents: [
@@ -115,6 +130,8 @@ describe("DiscoveryDailyEdition", () => {
       <DiscoveryDailyEdition
         edition={edition}
         isLoading={false}
+        isAnniversaryLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -137,7 +154,7 @@ describe("DiscoveryDailyEdition", () => {
 
     fireEvent.click(screen.getByText("Why this?"));
     expect(
-      screen.getByText(/release dates come from your local album metadata/i),
+      screen.getByText(/best imported album-chart position is #11/i),
     ).toBeInTheDocument();
   });
 
@@ -150,6 +167,8 @@ describe("DiscoveryDailyEdition", () => {
       <DiscoveryDailyEdition
         edition={edition}
         isLoading={false}
+        isAnniversaryLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
         onOpenAlbum={onOpenAlbum}
         onOpenArtist={onOpenArtist}
         onOpenCompletion={onOpenCompletion}
@@ -170,5 +189,46 @@ describe("DiscoveryDailyEdition", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /view all artist gaps/i }));
     expect(onOpenCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  it("supports manual selection, 10-second rotation, and anniversary changes", () => {
+    vi.useFakeTimers();
+    const onAnniversaryYearsChange = vi.fn();
+    render(
+      <DiscoveryDailyEdition
+        edition={edition}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        onAnniversaryYearsChange={onAnniversaryYearsChange}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenCompletion={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show Destroyer by KISS" }),
+    );
+    expect(
+      screen.getByRole("group", { name: "2 of 2: Destroyer by KISS" }),
+    ).toBeInTheDocument();
+
+    const firstThumbnail = screen.getByRole("button", {
+      name: "Show Hejira by Joni Mitchell",
+    });
+    fireEvent.click(firstThumbnail);
+    fireEvent.blur(firstThumbnail);
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(
+      screen.getByRole("group", { name: "2 of 2: Destroyer by KISS" }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Choose anniversary milestone" }),
+      { target: { value: "70" } },
+    );
+    expect(onAnniversaryYearsChange).toHaveBeenCalledWith(70);
+    vi.useRealTimers();
   });
 });

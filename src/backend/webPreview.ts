@@ -2608,7 +2608,10 @@ const mockDiscovery: DiscoveryResponse = {
         releaseYear: 1976,
         yearsAgo: 50,
         coverPath: mockTimelineCoverUrls[0],
-        evidence: "Released in 1976 · owned album",
+        evidence: "Billboard #3 · Official UK #5 · VG-lista #6 · owned album",
+        chartEvidence: ["Billboard #3", "Official UK #5", "VG-lista #6"],
+        selectionReason:
+          "Selected from your owned 1976 releases because its best imported album-chart position is #3. Matches: Billboard #3, Official UK #5, VG-lista #6. Local Album Score and loved tracks only break chart ties.",
       },
       {
         albumId: "mb:mock-anniversary-2",
@@ -2617,7 +2620,46 @@ const mockDiscovery: DiscoveryResponse = {
         releaseYear: 1976,
         yearsAgo: 50,
         coverPath: mockTimelineCoverUrls[1],
-        evidence: "Released in 1976 · owned album",
+        evidence: "Billboard #13 · Official UK #11 · owned album",
+        chartEvidence: ["Billboard #13", "Official UK #11"],
+        selectionReason:
+          "Selected from your owned 1976 releases because its best imported album-chart position is #11. Matches: Billboard #13, Official UK #11. Local Album Score and loved tracks only break chart ties.",
+      },
+      {
+        albumId: "mb:mock-anniversary-3",
+        album: "Destroyer",
+        artist: "KISS",
+        releaseYear: 1976,
+        yearsAgo: 50,
+        coverPath: mockTimelineCoverUrls[2],
+        evidence: "Billboard #11 · Official UK #22 · VG-lista #7 · owned album",
+        chartEvidence: ["Billboard #11", "Official UK #22", "VG-lista #7"],
+        selectionReason:
+          "Selected from your owned 1976 releases because its best imported album-chart position is #7. Matches: Billboard #11, Official UK #22, VG-lista #7. Local Album Score and loved tracks only break chart ties.",
+      },
+      {
+        albumId: "mb:mock-anniversary-4",
+        album: "Songs in the Key of Life",
+        artist: "Stevie Wonder",
+        releaseYear: 1976,
+        yearsAgo: 50,
+        coverPath: mockTimelineCoverUrls[3],
+        evidence: "Billboard #1 · Official UK #2 · VG-lista #4 · owned album",
+        chartEvidence: ["Billboard #1", "Official UK #2", "VG-lista #4"],
+        selectionReason:
+          "Selected from your owned 1976 releases because its best imported album-chart position is #1. Matches: Billboard #1, Official UK #2, VG-lista #4. Local Album Score and loved tracks only break chart ties.",
+      },
+      {
+        albumId: "mb:mock-anniversary-5",
+        album: "The Royal Scam",
+        artist: "Steely Dan",
+        releaseYear: 1976,
+        yearsAgo: 50,
+        coverPath: mockTimelineCoverUrls[4],
+        evidence: "Billboard #15 · Official UK #11 · owned album",
+        chartEvidence: ["Billboard #15", "Official UK #11"],
+        selectionReason:
+          "Selected from your owned 1976 releases because its best imported album-chart position is #11. Matches: Billboard #15, Official UK #11. Local Album Score and loved tracks only break chart ties.",
       },
     ],
     lifeEvents: [

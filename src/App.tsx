@@ -77,6 +77,7 @@ import {
   fixMusicToolIssues,
   cacheSettings,
   getDiscovery,
+  getDiscoveryAnniversaries,
   getAlbumReview,
   getArtistBiography,
   getArtistTrackHighlights,
@@ -8471,6 +8472,9 @@ export default function App() {
   const [discovery, setDiscovery] = useState<DiscoveryResponse | null>(null);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(true);
+  const [isDiscoveryAnniversaryLoading, setIsDiscoveryAnniversaryLoading] =
+    useState(false);
+  const discoveryAnniversaryYearsRef = useRef(50);
   const [discoveryAlbumRequest, setDiscoveryAlbumRequest] =
     useState<BrowseRequest>(() =>
       createDiscoveryAlbumRequest(
@@ -8747,7 +8751,19 @@ export default function App() {
 
   const loadDiscoveryData = useCallback(async () => {
     setIsDiscoveryLoading(true);
-    const nextDiscovery = await getDiscovery();
+    let nextDiscovery = await getDiscovery();
+    const anniversaryYears = discoveryAnniversaryYearsRef.current;
+    if (anniversaryYears !== nextDiscovery.dailyEdition.anniversaryYears) {
+      const anniversaries = await getDiscoveryAnniversaries(anniversaryYears);
+      nextDiscovery = {
+        ...nextDiscovery,
+        dailyEdition: {
+          ...nextDiscovery.dailyEdition,
+          anniversaryYears,
+          anniversaries,
+        },
+      };
+    }
     setDiscovery(nextDiscovery);
     setDiscoveryError(null);
     setIsDiscoveryLoading(false);
@@ -12182,6 +12198,34 @@ export default function App() {
     }
   }
 
+  async function changeDiscoveryAnniversaryYears(anniversaryYears: number) {
+    discoveryAnniversaryYearsRef.current = anniversaryYears;
+    setIsDiscoveryAnniversaryLoading(true);
+    setDiscoveryError(null);
+    try {
+      const anniversaries = await getDiscoveryAnniversaries(anniversaryYears);
+      if (discoveryAnniversaryYearsRef.current !== anniversaryYears) return;
+      setDiscovery((current) =>
+        current
+          ? {
+              ...current,
+              dailyEdition: {
+                ...current.dailyEdition,
+                anniversaryYears,
+                anniversaries,
+              },
+            }
+          : current,
+      );
+    } catch (error) {
+      setDiscoveryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (discoveryAnniversaryYearsRef.current === anniversaryYears) {
+        setIsDiscoveryAnniversaryLoading(false);
+      }
+    }
+  }
+
   function openDiscoveryAlbums(
     selection: DiscoverySelection,
     nextRequest: BrowseRequest,
@@ -15421,6 +15465,8 @@ export default function App() {
             <DiscoveryDailyEdition
               edition={discovery?.dailyEdition ?? null}
               isLoading={isDiscoveryLoading}
+              isAnniversaryLoading={isDiscoveryAnniversaryLoading}
+              onAnniversaryYearsChange={changeDiscoveryAnniversaryYears}
               onOpenAlbum={openTimelineAlbum}
               onOpenArtist={openArtistFromMusicMap}
               onOpenCompletion={() => setActiveSection("Completion")}

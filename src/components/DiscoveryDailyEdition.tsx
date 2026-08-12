@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   ChartLine,
@@ -19,11 +20,18 @@ import { ArtistPortrait } from "./ArtistPortrait";
 type DiscoveryDailyEditionProps = {
   edition: DiscoveryDailyEdition | null;
   isLoading: boolean;
+  isAnniversaryLoading: boolean;
+  onAnniversaryYearsChange: (years: number) => void;
   onOpenAlbum: (albumId: string) => void;
   onOpenArtist: (artistId: string, artistName: string) => void;
   onOpenCompletion: () => void;
   onOpenTrack: (trackId: number) => void;
 };
+
+const anniversaryYearOptions = Array.from(
+  { length: 19 },
+  (_, index) => (index + 2) * 5,
+);
 
 const longDateFormatter = new Intl.DateTimeFormat(undefined, {
   weekday: "long",
@@ -79,9 +87,205 @@ function EditionEmpty({ children }: { children: string }) {
   return <p className="daily-edition-empty">{children}</p>;
 }
 
+type AnniversaryCarouselProps = {
+  edition: DiscoveryDailyEdition;
+  isLoading: boolean;
+  onAnniversaryYearsChange: (years: number) => void;
+  onOpenAlbum: (albumId: string) => void;
+};
+
+function AnniversaryCarousel({
+  edition,
+  isLoading,
+  onAnniversaryYearsChange,
+  onOpenAlbum,
+}: AnniversaryCarouselProps) {
+  const anniversaries = edition.anniversaries.slice(0, 5);
+  const anniversaryKey = useMemo(
+    () => anniversaries.map((story) => story.albumId).join("|"),
+    [anniversaries],
+  );
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isPointerPaused, setIsPointerPaused] = useState(false);
+  const [isFocusPaused, setIsFocusPaused] = useState(false);
+  const anniversary = anniversaries[activeIndex] ?? anniversaries[0] ?? null;
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [anniversaryKey, edition.anniversaryYears]);
+
+  useEffect(() => {
+    if (
+      anniversaries.length < 2 ||
+      isPointerPaused ||
+      isFocusPaused ||
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setActiveIndex((current) => (current + 1) % anniversaries.length);
+    }, 10_000);
+    return () => window.clearTimeout(timer);
+  }, [activeIndex, anniversaries.length, isFocusPaused, isPointerPaused]);
+
+  return (
+    <div
+      className={`daily-edition-anniversary-stage${isLoading ? " is-loading" : ""}`}
+      role="region"
+      aria-roledescription="carousel"
+      aria-label={`${edition.anniversaryYears}-year album anniversaries`}
+      aria-busy={isLoading}
+      onPointerEnter={() => setIsPointerPaused(true)}
+      onPointerLeave={() => setIsPointerPaused(false)}
+      onFocusCapture={() => setIsFocusPaused(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setIsFocusPaused(false);
+        }
+      }}
+    >
+      {anniversary ? (
+        <div
+          className="daily-edition-anniversary-slide"
+          key={anniversary.albumId}
+          role="group"
+          aria-roledescription="slide"
+          aria-label={`${activeIndex + 1} of ${anniversaries.length}: ${anniversary.album} by ${anniversary.artist}`}
+        >
+          <button
+            className="daily-edition-lead-cover"
+            type="button"
+            onClick={() => onOpenAlbum(anniversary.albumId)}
+            aria-label={`Open ${anniversary.album} by ${anniversary.artist}`}
+          >
+            <AlbumCover
+              row={{
+                albumId: anniversary.albumId,
+                album: anniversary.album,
+                coverPath: anniversary.coverPath,
+              }}
+              decorative={false}
+            />
+          </button>
+          <div className="daily-edition-lead-copy">
+            <div className="daily-edition-anniversary-toolbar">
+              <p className="daily-edition-kicker">
+                {edition.anniversaryYears} years ago
+              </p>
+              <label className="daily-edition-anniversary-picker">
+                <span>Anniversary</span>
+                <select
+                  aria-label="Choose anniversary milestone"
+                  value={edition.anniversaryYears}
+                  disabled={isLoading}
+                  onChange={(event) =>
+                    onAnniversaryYearsChange(Number(event.target.value))
+                  }
+                >
+                  {anniversaryYearOptions.map((years) => (
+                    <option key={years} value={years}>
+                      {years} years
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <h3 id="anniversary-heading">
+              <span>{anniversary.artist}</span>
+              <em>{anniversary.album}</em>
+            </h3>
+            <p className="daily-edition-release">
+              Released in {anniversary.releaseYear}
+            </p>
+            <p className="daily-edition-evidence">
+              <span className="daily-edition-evidence-marker" aria-hidden="true" />
+              <strong>Evidence</strong>
+              <span className="daily-edition-evidence-copy">
+                {anniversary.evidence}
+              </span>
+            </p>
+            <details className="daily-edition-why">
+              <summary>Why this?</summary>
+              <p>{anniversary.selectionReason}</p>
+            </details>
+            <button
+              className="daily-edition-primary-action"
+              type="button"
+              onClick={() => onOpenAlbum(anniversary.albumId)}
+            >
+              Read the story
+              <ChevronRight aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="daily-edition-lead-empty">
+          <div className="daily-edition-anniversary-toolbar">
+            <p className="daily-edition-kicker">
+              {edition.anniversaryYears} years ago
+            </p>
+            <label className="daily-edition-anniversary-picker">
+              <span>Anniversary</span>
+              <select
+                aria-label="Choose anniversary milestone"
+                value={edition.anniversaryYears}
+                disabled={isLoading}
+                onChange={(event) =>
+                  onAnniversaryYearsChange(Number(event.target.value))
+                }
+              >
+                {anniversaryYearOptions.map((years) => (
+                  <option key={years} value={years}>
+                    {years} years
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <h3 id="anniversary-heading">No anniversary match today</h3>
+          <p>
+            No owned album from {Number(edition.date.slice(0, 4)) - edition.anniversaryYears}
+            matched this milestone. Choose another anniversary to keep looking.
+          </p>
+        </div>
+      )}
+
+      {anniversaries.length > 1 ? (
+        <div className="daily-edition-carousel-rail" aria-label="Anniversary albums">
+          {anniversaries.map((story, index) => (
+            <button
+              className={index === activeIndex ? "active" : ""}
+              key={story.albumId}
+              type="button"
+              aria-label={`Show ${story.album} by ${story.artist}`}
+              aria-current={index === activeIndex ? "true" : undefined}
+              onClick={() => setActiveIndex(index)}
+              title={`${story.artist} — ${story.album}`}
+            >
+              <AlbumCover
+                row={{
+                  albumId: story.albumId,
+                  album: story.album,
+                  coverPath: story.coverPath,
+                }}
+                decorative
+              />
+              <span className="daily-edition-carousel-progress" aria-hidden="true" />
+            </button>
+          ))}
+          <span className="daily-edition-carousel-timing">Changes every 10 seconds</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function DiscoveryDailyEdition({
   edition,
   isLoading,
+  isAnniversaryLoading,
+  onAnniversaryYearsChange,
   onOpenAlbum,
   onOpenArtist,
   onOpenCompletion,
@@ -112,7 +316,6 @@ export function DiscoveryDailyEdition({
     );
   }
 
-  const anniversary = edition.anniversaries[0] ?? null;
   const chartYear = edition.chartToppers[0]?.chartYear ?? null;
   const anchor = edition.ratingAnchor;
 
@@ -135,73 +338,12 @@ export function DiscoveryDailyEdition({
             id="discovery-anniversary"
             aria-labelledby="anniversary-heading"
           >
-            {anniversary ? (
-              <>
-                <button
-                  className="daily-edition-lead-cover"
-                  type="button"
-                  onClick={() => onOpenAlbum(anniversary.albumId)}
-                  aria-label={`Open ${anniversary.album} by ${anniversary.artist}`}
-                >
-                  <AlbumCover
-                    row={{
-                      albumId: anniversary.albumId,
-                      album: anniversary.album,
-                      coverPath: anniversary.coverPath,
-                    }}
-                    decorative={false}
-                  />
-                </button>
-                <div className="daily-edition-lead-copy">
-                  <p className="daily-edition-kicker">
-                    {edition.anniversaryYears} years ago
-                  </p>
-                  <h3 id="anniversary-heading">
-                    <span>{anniversary.artist}</span>
-                    <em>{anniversary.album}</em>
-                  </h3>
-                  <p className="daily-edition-release">
-                    Released in {anniversary.releaseYear}
-                  </p>
-                  <p className="daily-edition-evidence">
-                    <span aria-hidden="true" />
-                    <strong>Evidence</strong> {anniversary.evidence}
-                  </p>
-                  <details className="daily-edition-why">
-                    <summary>Why this?</summary>
-                    <p>
-                      This owned release lands exactly {anniversary.yearsAgo} years
-                      before today. Release dates come from your local album metadata.
-                    </p>
-                  </details>
-                  <button
-                    className="daily-edition-primary-action"
-                    type="button"
-                    onClick={() => onOpenAlbum(anniversary.albumId)}
-                  >
-                    Read the story
-                    <ChevronRight aria-hidden="true" />
-                  </button>
-                  {edition.anniversaries.length > 1 ? (
-                    <p className="daily-edition-more-count">
-                      +{edition.anniversaries.length - 1} more anniversary
-                      {edition.anniversaries.length === 2 ? "" : " stories"}
-                    </p>
-                  ) : null}
-                </div>
-              </>
-            ) : (
-              <div className="daily-edition-lead-empty">
-                <p className="daily-edition-kicker">
-                  {edition.anniversaryYears} years ago
-                </p>
-                <h3 id="anniversary-heading">No anniversary match today</h3>
-                <p>
-                  The edition will feature an owned album when its release year
-                  reaches this milestone.
-                </p>
-              </div>
-            )}
+            <AnniversaryCarousel
+              edition={edition}
+              isLoading={isAnniversaryLoading}
+              onAnniversaryYearsChange={onAnniversaryYearsChange}
+              onOpenAlbum={onOpenAlbum}
+            />
 
             <div
               className="daily-edition-life"

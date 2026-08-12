@@ -1506,6 +1506,8 @@ pub struct DiscoveryAnniversaryStory {
     pub years_ago: i32,
     pub cover_path: Option<String>,
     pub evidence: String,
+    pub chart_evidence: Vec<String>,
+    pub selection_reason: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -9831,6 +9831,19 @@ pub fn discovery_for_app(app: &AppHandle) -> Result<DiscoveryResponse> {
 }
 
 #[cfg(not(test))]
+pub fn discovery_anniversaries_for_app(
+    app: &AppHandle,
+    anniversary_years: i32,
+) -> Result<Vec<DiscoveryAnniversaryStory>> {
+    let (conn, _) = open(app)?;
+    discovery_anniversaries(
+        &conn,
+        Local::now().date_naive(),
+        anniversary_years.clamp(1, 100),
+    )
+}
+
+#[cfg(not(test))]
 pub fn list_music_tools_for_app(app: &AppHandle) -> Result<Vec<MusicToolSummary>> {
     let (conn, _) = open(app)?;
     list_music_tools(&conn)
@@ -13402,17 +13415,37 @@ fn discovery_anniversaries(
             COALESCE(NULLIF(TRIM(a.album), ''), 'Unknown Album'),
             COALESCE(NULLIF(TRIM(a.album_artist_display), ''), 'Unknown Artist'),
             COALESCE(a.release_year, a.year),
-            c.cache_path
+            c.cache_path,
+            a.billboard_rank,
+            a.official_uk_rank,
+            a.vg_lista_rank,
+            NULLIF(MIN(
+                COALESCE(a.billboard_rank, 100000),
+                COALESCE(a.official_uk_rank, 100000),
+                COALESCE(a.vg_lista_rank, 100000)
+            ), 100000),
+            COALESCE(a.album_score, 0)
         FROM albums a
         LEFT JOIN album_covers c ON c.album_id = a.id
         WHERE COALESCE(a.release_year, a.year) = ?1
         ORDER BY
+            CASE WHEN a.billboard_rank IS NOT NULL
+                OR a.official_uk_rank IS NOT NULL
+                OR a.vg_lista_rank IS NOT NULL THEN 0 ELSE 1 END,
+            NULLIF(MIN(
+                COALESCE(a.billboard_rank, 100000),
+                COALESCE(a.official_uk_rank, 100000),
+                COALESCE(a.vg_lista_rank, 100000)
+            ), 100000),
+            ((a.billboard_rank IS NOT NULL)
+                + (a.official_uk_rank IS NOT NULL)
+                + (a.vg_lista_rank IS NOT NULL)) DESC,
             CASE WHEN c.cache_path IS NULL THEN 1 ELSE 0 END,
             COALESCE(a.album_score, 0) DESC,
             COALESCE(a.loved_tracks, 0) DESC,
             LOWER(COALESCE(a.album_artist_display, '')),
             LOWER(COALESCE(a.album, ''))
-        LIMIT 4
+        LIMIT 5
         ",
     )?;
     let stories = stmt
@@ -13420,6 +13453,34 @@ fn discovery_anniversaries(
             let album: String = row.get(1)?;
             let artist: String = row.get(2)?;
             let year: i32 = row.get(3)?;
+            let billboard_rank: Option<i32> = row.get(5)?;
+            let official_uk_rank: Option<i32> = row.get(6)?;
+            let vg_lista_rank: Option<i32> = row.get(7)?;
+            let best_chart_rank: Option<i32> = row.get(8)?;
+            let album_score: f64 = row.get(9)?;
+            let chart_evidence = [
+                billboard_rank.map(|rank| format!("Billboard #{rank}")),
+                official_uk_rank.map(|rank| format!("Official UK #{rank}")),
+                vg_lista_rank.map(|rank| format!("VG-lista #{rank}")),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+            let evidence = if chart_evidence.is_empty() {
+                format!("Released in {year} · owned album · local-rating fallback")
+            } else {
+                format!("{} · owned album", chart_evidence.join(" · "))
+            };
+            let selection_reason = if let Some(best_chart_rank) = best_chart_rank {
+                format!(
+                    "Selected from your owned {year} releases because its best imported album-chart position is #{best_chart_rank}. Matches: {}. Local Album Score and loved tracks only break chart ties.",
+                    chart_evidence.join(", ")
+                )
+            } else {
+                format!(
+                    "Included because fewer than five owned {year} releases matched Billboard, Official UK, or VG-lista. Its local Album Score ({album_score:.0}) ranks it among the strongest remaining albums."
+                )
+            };
             Ok(DiscoveryAnniversaryStory {
                 album_id: row.get(0)?,
                 album,
@@ -13427,7 +13488,9 @@ fn discovery_anniversaries(
                 release_year: year,
                 years_ago: date.year() - year,
                 cover_path: row.get(4)?,
-                evidence: format!("Released in {year} · owned album"),
+                evidence,
+                chart_evidence,
+                selection_reason,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()
@@ -20580,6 +20643,14 @@ mod tests {
             1976,
             10,
         );
+        insert_test_album(
+            &conn,
+            "mb:anniversary-uncharted",
+            "Uncharted Artist",
+            "High Score Fallback",
+            1976,
+            10,
+        );
         insert_test_album(&conn, "mb:please", "Pet Shop Boys", "Please", 1986, 10);
         insert_test_album(
             &conn,
@@ -20618,8 +20689,13 @@ mod tests {
         conn.execute_batch(
             "
             UPDATE albums
-            SET effective_album_rating = 92, album_score = 140.0
+            SET effective_album_rating = 92, album_score = 140.0,
+                billboard_rank = 12, official_uk_rank = 8, vg_lista_rank = 5
             WHERE id = 'mb:anniversary';
+
+            UPDATE albums
+            SET effective_album_rating = 100, album_score = 999.0
+            WHERE id = 'mb:anniversary-uncharted';
 
             INSERT INTO tracks (
                 import_run_id, album_id, album_unique_id, display_artist,
@@ -20678,6 +20754,14 @@ mod tests {
         .expect("load daily edition");
 
         assert_eq!(edition.anniversaries[0].album, "Anniversary Album");
+        assert_eq!(
+            edition.anniversaries[0].chart_evidence,
+            vec!["Billboard #12", "Official UK #8", "VG-lista #5"]
+        );
+        assert!(edition.anniversaries[0]
+            .selection_reason
+            .contains("best imported album-chart position is #5"));
+        assert_eq!(edition.anniversaries[1].album, "High Score Fallback");
         assert_eq!(edition.life_events[0].artist, "Birthday Artist");
         assert_eq!(edition.chart_toppers[0].rank, 1);
         assert_eq!(edition.deep_cuts[0].title, "Hidden Finale");

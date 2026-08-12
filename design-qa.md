@@ -5,6 +5,8 @@
 - Selected reference: `C:\Users\jtill\.codex\visualizations\2026\08\11\019ff2b1-a28c-7791-86a7-29f84e08f7fb\discovery-daily-edition-reference.png`.
 - Final desktop browser render: `C:\Users\jtill\.codex\visualizations\2026\08\11\019ff2b1-a28c-7791-86a7-29f84e08f7fb\discovery-daily-edition-implemented-desktop.png` at a 1440×1024 CSS viewport.
 - Final mobile browser render: `C:\Users\jtill\.codex\visualizations\2026\08\11\019ff2b1-a28c-7791-86a7-29f84e08f7fb\discovery-daily-edition-implemented-mobile.png` at a 390×844 CSS viewport.
+- Anniversary-carousel reference: `C:\Users\jtill\AppData\Local\Temp\codex-clipboard-5b53c463-a927-4ea8-b74b-6333537e5188.png`.
+- Final anniversary-carousel render: `C:\Users\jtill\.codex\visualizations\2026\08\11\019ff2b1-a28c-7791-86a7-29f84e08f7fb\discovery-anniversary-carousel-implemented.png`.
 - Browser-rendered URL: `http://127.0.0.1:5198/`.
 - The selected reference and final desktop render were reviewed together in the same comparison input.
 
@@ -13,6 +15,7 @@
 - QA state: light theme, icon-only navigation, Discovery selected, web-preview evidence fixtures loaded.
 - The comparison covers the Discovery masthead, Daily Edition title/date, 50-year lead story, Today life-event list, story index, all four lower shelves, evidence note, and collapsed access to the previous discovery tools.
 - Responsive verification covers the compact header, horizontally scrollable story index, full-width cover art, and single-column story sequence.
+- Carousel verification covers five direct artwork thumbnails, manual switching, ten-second rotation, focus/hover pause, the 10-to-100-year selector, and replacement of only the anniversary story set.
 
 ## Fidelity review
 
@@ -20,6 +23,7 @@
 - Typography: Cormorant Garamond carries editorial headings while Manrope carries controls, metadata, and evidence.
 - Color and density: the warm near-white canvas, fine gray rules, restrained teal accents, and dark Deep Cuts shelf match the selected direction without adding card chrome.
 - Interaction: anniversary, chart, deep-cut, artist, recommendation, and Completion actions route to their existing app workflows. The native **Why this?** disclosure explains the local evidence.
+- Selection logic: imported Billboard, Official UK, and VG-lista album positions determine the anniversary order. Local Album Score and loved tracks only break chart ties and fill unused carousel slots.
 - Responsive behavior: the lead story and shelves collapse cleanly at narrow widths, while the story index becomes a horizontal navigation strip.
 
 ## Intentional data-driven differences
@@ -38,6 +42,10 @@
   - Fix: restored **Because You Played…** and kept the rating-based listening model in the evidence text.
 - P2 unexplained recommendation mechanics: the initial concept implied listening behavior without exposing its source.
   - Fix: added a page-level note and per-anchor evidence stating that recent ratings and loved tracks drive the shelf.
+- P2 inert anniversary affordance: the original `+3 more anniversary stories` label looked actionable but had no behavior.
+  - Fix: replaced it with five clickable cover thumbnails and a visible ten-second rotation cue.
+- P2 unclear anniversary selection: the original lead did not explain why one owned album was chosen over others from the same year.
+  - Fix: chart-source positions are now visible in the Evidence line and the expanded **Why this?** text names the ordering and local fallback rules.
 
 ## Verification
 
@@ -45,5 +53,6 @@
 - Frontend component tests: all shelves, evidence copy, and album/track/artist/Completion routing covered.
 - Seeded SQLite test: anniversary, birthday, chart, deep cut, completion gap, rating anchor, and connected recommendations covered without network access.
 - Desktop and mobile visual reviews completed after the final label and sidebar fixes.
+- In-app Browser carousel review: clicked directly to KISS, opened the chart-based explanation, changed the milestone from 50 to 70 years, and verified that the carousel reset with the new release year while the other shelves stayed intact.
 
 final result: passed
