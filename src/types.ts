@@ -2273,6 +2273,32 @@ export type LastFmArtistPopularity = {
   message: string;
 };
 
+export type LastFmSimilarArtist = {
+  rank: number;
+  name: string;
+  musicbrainzMbid: string | null;
+  matchScore: number;
+  sourceUrl: string | null;
+  localArtistId: string | null;
+  localArtistName: string | null;
+  localAlbumCount: number;
+  portraitAvailable: boolean;
+  representativeAlbumId: string | null;
+  representativeAlbum: string | null;
+  representativeCoverPath: string | null;
+};
+
+export type LastFmArtistSimilarity = {
+  artistId: string;
+  artistName: string;
+  sourceUrl: string | null;
+  fetchedAt: string | null;
+  cached: boolean;
+  stale: boolean;
+  artists: LastFmSimilarArtist[];
+  message: string;
+};
+
 export type ArtistBiography = {
   artistId: string;
   artistName: string;

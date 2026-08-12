@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.128.0] - 2026-08-12
+### Added
+- Added a Last.fm Similar Artists shelf to Artist Overview with relationship scores, separate **In your library** and **Explore** groups, local Artist navigation, provider links, and responsive light/dark layouts.
+- Added SQLite schema version 52 for cached directed artist relationships, with MusicBrainz-MBID-first local matching, normalized-name fallback, provider cache handling, and stale-result fallback.
+
+### Changed
+- Documented rating events as listening evidence for future Discovery recommendations: rating a track means it was played, so conventional play counts are not required.
+- Synchronized app metadata and provider user agents to `0.128.0`.
+
 ## [0.127.0] - 2026-08-12
 ### Added
 - Added Artists and Albums modes to **Complete the Collection**, with five randomized suggestions, Refresh, and exact year, decade, and genre filters.

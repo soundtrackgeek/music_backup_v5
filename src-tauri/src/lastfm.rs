@@ -1,6 +1,7 @@
 use crate::db::{
     self, ArtistImageCacheRecord, LastFmArtistIdentity, LastFmArtistPopularityCacheRecord,
-    LastFmLocalTrackCandidate, LastFmTrackPopularityCacheRecord,
+    LastFmArtistSimilarityCacheRecord, LastFmLocalTrackCandidate, LastFmSimilarArtistCacheRecord,
+    LastFmSimilarLocalArtist, LastFmTrackPopularityCacheRecord,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use base64::{engine::general_purpose, Engine as _};
@@ -24,12 +25,14 @@ use zeroize::Zeroizing;
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.lastfm";
 const KEYRING_USER: &str = "api-key";
 const LASTFM_API_BASE: &str = "https://ws.audioscrobbler.com/2.0/";
-const LASTFM_USER_AGENT: &str = "music-backup-v5/0.127.0 (local music metadata enrichment)";
+const LASTFM_USER_AGENT: &str = "music-backup-v5/0.128.0 (local music metadata enrichment)";
 const REQUEST_INTERVAL: Duration = Duration::from_millis(350);
 const POPULARITY_CACHE_DAYS: i64 = 7;
 const UNAVAILABLE_CACHE_DAYS: i64 = 30;
 const ARTIST_TOP_TRACK_LIMIT: usize = 50;
 const POPULAR_TRACK_RESPONSE_LIMIT: usize = 10;
+const SIMILAR_ARTIST_FETCH_LIMIT: usize = 24;
+const SIMILAR_ARTIST_RESPONSE_LIMIT: usize = 12;
 const ARTIST_TOP_TRACKS_MUSICBRAINZ_METHOD: &str = "artist-top-tracks-musicbrainz";
 const ARTIST_TOP_TRACKS_NAME_METHOD: &str = "artist-top-tracks-name";
 const ARTIST_NAME_EMPTY_MESSAGE: &str =
@@ -39,6 +42,7 @@ const LASTFM_PLACEHOLDER_HASH: &str = "2a96cbd8b46e442fc41c2b86b821562f";
 
 static REQUEST_GATE: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 static POPULARITY_GATE: OnceLock<Mutex<()>> = OnceLock::new();
+static SIMILARITY_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -97,6 +101,36 @@ pub struct LastFmArtistPopularity {
     pub cached: bool,
     pub stale: bool,
     pub tracks: Vec<LastFmPopularTrack>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LastFmSimilarArtist {
+    pub rank: i64,
+    pub name: String,
+    pub musicbrainz_mbid: Option<String>,
+    pub match_score: f64,
+    pub source_url: Option<String>,
+    pub local_artist_id: Option<String>,
+    pub local_artist_name: Option<String>,
+    pub local_album_count: i64,
+    pub portrait_available: bool,
+    pub representative_album_id: Option<String>,
+    pub representative_album: Option<String>,
+    pub representative_cover_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LastFmArtistSimilarity {
+    pub artist_id: String,
+    pub artist_name: String,
+    pub source_url: Option<String>,
+    pub fetched_at: Option<String>,
+    pub cached: bool,
+    pub stale: bool,
+    pub artists: Vec<LastFmSimilarArtist>,
     pub message: String,
 }
 
@@ -184,6 +218,36 @@ struct LastFmTrackInfo {
     playcount: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct LastFmSimilarArtistsPayload {
+    similarartists: LastFmSimilarArtistsPayloadBody,
+}
+
+#[derive(Debug, Deserialize)]
+struct LastFmSimilarArtistsPayloadBody {
+    #[serde(default)]
+    artist: Vec<LastFmSimilarArtistPayload>,
+    #[serde(rename = "@attr", default)]
+    attr: LastFmSimilarArtistsAttr,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct LastFmSimilarArtistsAttr {
+    #[serde(default)]
+    artist: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct LastFmSimilarArtistPayload {
+    name: String,
+    #[serde(default)]
+    mbid: String,
+    #[serde(rename = "match", default)]
+    match_value: serde_json::Value,
+    #[serde(default)]
+    url: String,
+}
+
 struct LastFmJsonResponse<T> {
     payload: T,
     fetched_at: String,
@@ -195,6 +259,14 @@ struct LastFmJsonResponse<T> {
 struct ArtistPopularitySnapshot {
     status: LastFmArtistPopularityCacheRecord,
     tracks: Vec<LastFmTrackPopularityCacheRecord>,
+    cached: bool,
+    stale: bool,
+}
+
+#[derive(Clone)]
+struct ArtistSimilaritySnapshot {
+    status: LastFmArtistSimilarityCacheRecord,
+    artists: Vec<LastFmSimilarArtistCacheRecord>,
     cached: bool,
     stale: bool,
 }
@@ -426,6 +498,13 @@ fn artist_cache_is_fresh(record: &LastFmArtistPopularityCacheRecord) -> bool {
         .is_ok_and(|expires_at| expires_at > Utc::now())
 }
 
+fn similarity_cache_is_fresh(record: &LastFmArtistSimilarityCacheRecord) -> bool {
+    record
+        .expires_at
+        .parse::<DateTime<Utc>>()
+        .is_ok_and(|expires_at| expires_at > Utc::now())
+}
+
 fn lastfm_artist_tracks_url(artist_name: &str) -> Option<String> {
     let mut url = Url::parse("https://www.last.fm/music/").ok()?;
     url.path_segments_mut()
@@ -433,6 +512,33 @@ fn lastfm_artist_tracks_url(artist_name: &str) -> Option<String> {
         .push(artist_name.trim())
         .push("+tracks");
     Some(url.into())
+}
+
+fn lastfm_artist_similar_url(artist_name: &str) -> Option<String> {
+    let mut url = Url::parse("https://www.last.fm/music/").ok()?;
+    url.path_segments_mut()
+        .ok()?
+        .push(artist_name.trim())
+        .push("+similar");
+    Some(url.into())
+}
+
+fn parse_match_score(value: &serde_json::Value) -> f64 {
+    value
+        .as_f64()
+        .or_else(|| value.as_str().and_then(|value| value.trim().parse().ok()))
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0)
+}
+
+fn normalize_artist_name_key(value: &str) -> String {
+    value
+        .nfkc()
+        .flat_map(char::to_lowercase)
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn artist_info(api_key: &str, artist: &str) -> Result<LastFmArtist> {
@@ -546,6 +652,140 @@ fn artist_top_tracks_url(api_key: &str, lookup: &ArtistTopTracksLookup) -> Resul
         }
     }
     Ok(url)
+}
+
+fn artist_similarity_url(api_key: &str, lookup: &ArtistTopTracksLookup) -> Result<Url> {
+    let mut url = Url::parse(LASTFM_API_BASE).context("Could not create the Last.fm API URL")?;
+    {
+        let mut query = url.query_pairs_mut();
+        query
+            .append_pair("method", "artist.getSimilar")
+            .append_pair("api_key", api_key)
+            .append_pair("autocorrect", "1")
+            .append_pair("limit", &SIMILAR_ARTIST_FETCH_LIMIT.to_string())
+            .append_pair("format", "json");
+        match lookup {
+            ArtistTopTracksLookup::MusicBrainz(mbid) => {
+                query.append_pair("mbid", mbid);
+            }
+            ArtistTopTracksLookup::ArtistName(artist_name) => {
+                query.append_pair("artist", artist_name);
+            }
+        }
+    }
+    Ok(url)
+}
+
+fn fetch_artist_similarity_once(
+    api_key: &str,
+    identity: &LastFmArtistIdentity,
+    lookup: &ArtistTopTracksLookup,
+) -> Result<(
+    LastFmArtistSimilarityCacheRecord,
+    Vec<LastFmSimilarArtistCacheRecord>,
+    bool,
+)> {
+    let url = artist_similarity_url(api_key, lookup)?;
+    let response = decode_lastfm_json::<LastFmSimilarArtistsPayload>(lastfm_json(
+        &url,
+        POPULARITY_CACHE_DAYS,
+    )?)?;
+    let response_artist = nonempty(&response.payload.similarartists.attr.artist)
+        .unwrap_or_else(|| identity.artist_name.clone());
+    let source_artist_key = normalize_artist_name_key(&response_artist);
+    let source_mbid = identity
+        .musicbrainz_mbid
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let mut seen = HashSet::new();
+    let artists = response
+        .payload
+        .similarartists
+        .artist
+        .into_iter()
+        .filter_map(|artist| {
+            let artist_name = nonempty(&artist.name)?;
+            let artist_name_key = normalize_artist_name_key(&artist_name);
+            let artist_mbid = nonempty(&artist.mbid);
+            if artist_name_key.is_empty()
+                || artist_name_key == source_artist_key
+                || source_mbid.is_some_and(|source| {
+                    artist_mbid
+                        .as_deref()
+                        .is_some_and(|candidate| candidate.eq_ignore_ascii_case(source))
+                })
+                || !seen.insert((artist_mbid.clone(), artist_name_key))
+            {
+                return None;
+            }
+            Some((
+                artist_name,
+                artist_mbid,
+                parse_match_score(&artist.match_value),
+                nonempty(&artist.url),
+            ))
+        })
+        .enumerate()
+        .map(
+            |(index, (similar_artist_name, similar_artist_mbid, match_score, source_url))| {
+                LastFmSimilarArtistCacheRecord {
+                    artist_key: identity.artist_key.clone(),
+                    rank: index as i64 + 1,
+                    similar_artist_name,
+                    similar_artist_mbid,
+                    match_score,
+                    source_url,
+                    fetched_at: response.fetched_at.clone(),
+                    expires_at: response.expires_at.clone(),
+                }
+            },
+        )
+        .collect::<Vec<_>>();
+    let state = if artists.is_empty() {
+        "unavailable"
+    } else {
+        "available"
+    };
+    let message = if artists.is_empty() {
+        "Last.fm returned no similar artists for this artist.".to_string()
+    } else {
+        format!("Last.fm returned {} similar artists.", artists.len())
+    };
+    let status = LastFmArtistSimilarityCacheRecord {
+        artist_key: identity.artist_key.clone(),
+        artist_name: identity.artist_name.clone(),
+        musicbrainz_mbid: identity.musicbrainz_mbid.clone(),
+        source_url: lastfm_artist_similar_url(&response_artist),
+        state: state.to_string(),
+        message,
+        fetched_at: response.fetched_at,
+        expires_at: response.expires_at,
+    };
+    Ok((status, artists, response.cacheable))
+}
+
+fn fetch_artist_similarity(
+    api_key: &str,
+    identity: &LastFmArtistIdentity,
+) -> Result<(
+    LastFmArtistSimilarityCacheRecord,
+    Vec<LastFmSimilarArtistCacheRecord>,
+    bool,
+)> {
+    let mut empty_result = None;
+    let mut last_error = None;
+    for lookup in artist_top_tracks_lookups(identity) {
+        match fetch_artist_similarity_once(api_key, identity, &lookup) {
+            Ok(result) if !result.1.is_empty() => return Ok(result),
+            Ok(result) => empty_result = Some(result),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    if let Some(result) = empty_result {
+        return Ok(result);
+    }
+    Err(last_error.unwrap_or_else(|| anyhow!("Last.fm similar-artist lookup did not run.")))
 }
 
 fn fetch_artist_top_tracks_once(
@@ -698,6 +938,154 @@ fn artist_popularity_snapshot(
     }
 }
 
+fn artist_similarity_snapshot(
+    app: &AppHandle,
+    identity: &LastFmArtistIdentity,
+    force_refresh: bool,
+) -> Result<ArtistSimilaritySnapshot> {
+    let cached_status = db::lastfm_artist_similarity_cache_for_app(app, &identity.artist_key)?;
+    let cached_artists = db::lastfm_similar_artist_cache_for_app(app, &identity.artist_key)?;
+    if !force_refresh
+        && cached_status
+            .as_ref()
+            .is_some_and(similarity_cache_is_fresh)
+    {
+        return Ok(ArtistSimilaritySnapshot {
+            status: cached_status.expect("fresh Last.fm artist similarity cache status"),
+            artists: cached_artists,
+            cached: true,
+            stale: false,
+        });
+    }
+
+    let refresh = stored_api_key()?
+        .context("Last.fm metadata is not configured. Add the API key in Settings > Providers.")
+        .and_then(|api_key| fetch_artist_similarity(api_key.as_str(), identity));
+    match refresh {
+        Ok((status, artists, cacheable)) => {
+            if cacheable {
+                db::replace_lastfm_artist_similarity_for_app(app, &status, &artists)?;
+            }
+            Ok(ArtistSimilaritySnapshot {
+                status,
+                artists,
+                cached: false,
+                stale: false,
+            })
+        }
+        Err(error) => {
+            let Some(mut status) = cached_status else {
+                return Err(error);
+            };
+            status.message =
+                format!("Using cached similar artists because refresh failed: {error}");
+            Ok(ArtistSimilaritySnapshot {
+                status,
+                artists: cached_artists,
+                cached: true,
+                stale: true,
+            })
+        }
+    }
+}
+
+fn local_similarity_fields(
+    local: Option<LastFmSimilarLocalArtist>,
+) -> (
+    Option<String>,
+    Option<String>,
+    i64,
+    bool,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
+    match local {
+        Some(local) => (
+            Some(local.artist_id),
+            Some(local.artist_name),
+            local.album_count,
+            local.portrait_available,
+            local.representative_album_id,
+            local.representative_album,
+            local.representative_cover_path,
+        ),
+        None => (None, None, 0, false, None, None, None),
+    }
+}
+
+fn artist_similarity_response(
+    app: &AppHandle,
+    identity: &LastFmArtistIdentity,
+    mut snapshot: ArtistSimilaritySnapshot,
+) -> Result<LastFmArtistSimilarity> {
+    snapshot.artists.sort_by_key(|artist| artist.rank);
+    snapshot.artists.truncate(SIMILAR_ARTIST_RESPONSE_LIMIT);
+    let candidates = snapshot
+        .artists
+        .iter()
+        .map(|artist| {
+            (
+                artist.similar_artist_mbid.clone(),
+                artist.similar_artist_name.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let local_matches = db::lastfm_similar_local_artists_for_app(app, &candidates)?;
+    let artists = snapshot
+        .artists
+        .into_iter()
+        .zip(local_matches)
+        .map(|(artist, local)| {
+            let (
+                local_artist_id,
+                local_artist_name,
+                local_album_count,
+                portrait_available,
+                representative_album_id,
+                representative_album,
+                representative_cover_path,
+            ) = local_similarity_fields(local);
+            LastFmSimilarArtist {
+                rank: artist.rank,
+                name: artist.similar_artist_name,
+                musicbrainz_mbid: artist.similar_artist_mbid,
+                match_score: artist.match_score,
+                source_url: artist.source_url,
+                local_artist_id,
+                local_artist_name,
+                local_album_count,
+                portrait_available,
+                representative_album_id,
+                representative_album,
+                representative_cover_path,
+            }
+        })
+        .collect::<Vec<_>>();
+    let local_count = artists
+        .iter()
+        .filter(|artist| artist.local_artist_id.is_some())
+        .count();
+    let message = if artists.is_empty() {
+        snapshot.status.message.clone()
+    } else {
+        format!(
+            "Showing {} similar artists; {local_count} are in this library.",
+            artists.len()
+        )
+    };
+    Ok(LastFmArtistSimilarity {
+        artist_id: identity.artist_key.clone(),
+        artist_name: identity.artist_name.clone(),
+        source_url: snapshot.status.source_url,
+        fetched_at: Some(snapshot.status.fetched_at),
+        cached: snapshot.cached,
+        stale: snapshot.stale,
+        artists,
+        message,
+    })
+}
+
 fn popularity_snapshot_used_name_lookup(snapshot: &ArtistPopularitySnapshot) -> bool {
     snapshot.status.message == ARTIST_NAME_EMPTY_MESSAGE
         || snapshot.tracks.iter().any(|track| {
@@ -842,6 +1230,19 @@ pub fn artist_popularity(
         }
     }
     Ok(response)
+}
+
+pub fn artist_similarity(
+    app: AppHandle,
+    artist_id: String,
+    force_refresh: bool,
+) -> Result<LastFmArtistSimilarity> {
+    let gate = SIMILARITY_GATE.get_or_init(|| Mutex::new(()));
+    let _guard = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let identity = db::lastfm_artist_identity_for_app(&app, artist_id.trim())?
+        .with_context(|| format!("Could not find artist {artist_id} in the local library"))?;
+    let snapshot = artist_similarity_snapshot(&app, &identity, force_refresh)?;
+    artist_similarity_response(&app, &identity, snapshot)
 }
 
 fn fetch_track_info(
@@ -1357,6 +1758,36 @@ mod tests {
             Some("1")
         );
         assert!(!query.contains_key("mbid"));
+    }
+
+    #[test]
+    fn builds_similar_artist_requests_with_identity_and_limit() {
+        let mbid_lookup =
+            ArtistTopTracksLookup::MusicBrainz("7249b899-8db8-43e7-9e6e-22f1e736024e".to_string());
+        let url = artist_similarity_url("test-key", &mbid_lookup).unwrap();
+        let query = url.query_pairs().collect::<HashMap<_, _>>();
+
+        assert_eq!(
+            query.get("method").map(|value| value.as_ref()),
+            Some("artist.getSimilar")
+        );
+        assert_eq!(
+            query.get("mbid").map(|value| value.as_ref()),
+            Some("7249b899-8db8-43e7-9e6e-22f1e736024e")
+        );
+        assert_eq!(
+            query.get("limit").map(|value| value.as_ref()),
+            Some(SIMILAR_ARTIST_FETCH_LIMIT.to_string().as_str())
+        );
+        assert!(!query.contains_key("artist"));
+    }
+
+    #[test]
+    fn parses_string_and_numeric_similarity_scores() {
+        assert_eq!(parse_match_score(&serde_json::json!("0.875")), 0.875);
+        assert_eq!(parse_match_score(&serde_json::json!(0.625)), 0.625);
+        assert_eq!(parse_match_score(&serde_json::json!(4)), 1.0);
+        assert_eq!(parse_match_score(&serde_json::json!("invalid")), 0.0);
     }
 
     #[test]

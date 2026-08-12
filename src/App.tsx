@@ -86,6 +86,7 @@ import {
   getArtistTrackHighlights,
   getLastFmAlbumPopularity,
   getLastFmArtistPopularity,
+  getLastFmArtistSimilarity,
   getAlbumDebutTimeline,
   getTrackDebutTimeline,
   getGenreProgress,
@@ -205,6 +206,7 @@ import type {
   LovedDensityStat,
   LastFmAlbumPopularity,
   LastFmArtistPopularity,
+  LastFmArtistSimilarity,
   AlbumReview,
   ArtistBiography,
   MetadataCoverageMetric,
@@ -394,6 +396,7 @@ import { ArtistPortrait } from "./components/ArtistPortrait";
 import { ArtistBiographyPanel } from "./components/ArtistBiographyPanel";
 import { AlbumReviewPanel } from "./components/AlbumReviewPanel";
 import { ArtistPopularTracksPanel } from "./components/ArtistPopularTracksPanel";
+import { ArtistSimilarArtistsPanel } from "./components/ArtistSimilarArtistsPanel";
 import {
   ArtistChartBustersPanel,
   ArtistLovedTracksPanel,
@@ -8335,6 +8338,13 @@ export default function App() {
   >(null);
   const [isArtistPopularityLoading, setIsArtistPopularityLoading] =
     useState(false);
+  const [artistSimilarity, setArtistSimilarity] =
+    useState<LastFmArtistSimilarity | null>(null);
+  const [artistSimilarityError, setArtistSimilarityError] = useState<
+    string | null
+  >(null);
+  const [isArtistSimilarityLoading, setIsArtistSimilarityLoading] =
+    useState(false);
   const [artistBiography, setArtistBiography] =
     useState<ArtistBiography | null>(null);
   const [artistBiographyError, setArtistBiographyError] = useState<
@@ -9286,6 +9296,39 @@ export default function App() {
       })
       .finally(() => {
         if (!cancelled) setIsArtistPopularityLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, selectedArtist, shouldLoadArtistPopularity]);
+
+  useEffect(() => {
+    if (
+      activeSection !== "Artists" ||
+      !shouldLoadArtistPopularity ||
+      !selectedArtist
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsArtistSimilarityLoading(true);
+    setArtistSimilarityError(null);
+    void getLastFmArtistSimilarity(selectedArtist.id)
+      .then((result) => {
+        if (!cancelled) setArtistSimilarity(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setArtistSimilarityError(
+            error instanceof Error ? error.message : String(error),
+          );
+          setArtistSimilarity(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsArtistSimilarityLoading(false);
       });
 
     return () => {
@@ -11029,6 +11072,9 @@ export default function App() {
     setArtistPopularity(null);
     setArtistPopularityError(null);
     setIsArtistPopularityLoading(false);
+    setArtistSimilarity(null);
+    setArtistSimilarityError(null);
+    setIsArtistSimilarityLoading(false);
     setArtistBiography(null);
     setArtistBiographyError(null);
     setIsArtistBiographyLoading(false);
@@ -11667,6 +11713,24 @@ export default function App() {
     }
   }
 
+  async function refreshArtistSimilarity() {
+    if (!selectedArtist) return;
+
+    setIsArtistSimilarityLoading(true);
+    setArtistSimilarityError(null);
+    try {
+      setArtistSimilarity(
+        await getLastFmArtistSimilarity(selectedArtist.id, true),
+      );
+    } catch (error) {
+      setArtistSimilarityError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setIsArtistSimilarityLoading(false);
+    }
+  }
+
   async function refreshArtistBiography() {
     if (!selectedArtist) return;
 
@@ -11725,6 +11789,7 @@ export default function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setArtistPopularityError(message);
+      setArtistSimilarityError(message);
       setAlbumPopularityError(message);
       setArtistAlbumPopularityError(message);
     }
@@ -16045,6 +16110,14 @@ export default function App() {
                     isLoading={isArtistPopularityLoading}
                     error={artistPopularityError}
                     onRefresh={() => void refreshArtistPopularity()}
+                    onOpenSource={(url) => void openLastFmSource(url)}
+                  />
+                  <ArtistSimilarArtistsPanel
+                    similarity={artistSimilarity}
+                    isLoading={isArtistSimilarityLoading}
+                    error={artistSimilarityError}
+                    onRefresh={() => void refreshArtistSimilarity()}
+                    onOpenArtist={openArtistFromMusicMap}
                     onOpenSource={(url) => void openLastFmSource(url)}
                   />
                   <ArtistBiographyPanel

@@ -172,6 +172,7 @@ import type {
   LastFmArtistImageRefreshSummary,
   LastFmAlbumPopularity,
   LastFmArtistPopularity,
+  LastFmArtistSimilarity,
   ArtistBiography,
   AlbumReview,
   LastFmConnectionTest,
@@ -2244,6 +2245,68 @@ export async function getLastFmArtistPopularity(
     } satisfies LastFmArtistPopularity;
   }
   return invoke<LastFmArtistPopularity>("get_lastfm_artist_popularity", {
+    artistId,
+    forceRefresh,
+  });
+}
+
+export async function getLastFmArtistSimilarity(
+  artistId: string,
+  forceRefresh = false,
+) {
+  if (!isTauriRuntime()) {
+    const artist = mockArtists.find((candidate) => candidate.id === artistId);
+    const artistName = artist?.name ?? artistId;
+    const localCandidates = mockArtists
+      .filter((candidate) => candidate.id !== artistId)
+      .slice(0, 10);
+    const missingCandidates = ["Sparks", "Big Star"];
+    const artists = [
+      ...localCandidates.map((candidate, index) => ({
+        rank: index + 1,
+        name: candidate.name,
+        musicbrainzMbid: candidate.musicBrainzMbid ?? null,
+        matchScore: Math.max(0.35, 0.96 - index * 0.055),
+        sourceUrl:
+          "https://www.last.fm/music/" + encodeURIComponent(candidate.name),
+        localArtistId: candidate.id,
+        localArtistName: candidate.name,
+        localAlbumCount: candidate.albumCount,
+        portraitAvailable: candidate.portraitAvailable ?? false,
+        representativeAlbumId: candidate.representativeAlbumId ?? null,
+        representativeAlbum: candidate.representativeAlbum ?? null,
+        representativeCoverPath: candidate.representativeCoverPath ?? null,
+      })),
+      ...missingCandidates.map((name, index) => ({
+        rank: localCandidates.length + index + 1,
+        name,
+        musicbrainzMbid: null,
+        matchScore: 0.42 - index * 0.04,
+        sourceUrl: "https://www.last.fm/music/" + encodeURIComponent(name),
+        localArtistId: null,
+        localArtistName: null,
+        localAlbumCount: 0,
+        portraitAvailable: false,
+        representativeAlbumId: null,
+        representativeAlbum: null,
+        representativeCoverPath: null,
+      })),
+    ];
+    return {
+      artistId,
+      artistName,
+      sourceUrl:
+        "https://www.last.fm/music/" +
+        encodeURIComponent(artistName) +
+        "/+similar",
+      fetchedAt: new Date().toISOString(),
+      cached: !forceRefresh,
+      stale: false,
+      artists,
+      message: `Showing ${artists.length} similar artists; ${localCandidates.length} are in this library.`,
+    } satisfies LastFmArtistSimilarity;
+  }
+  return invoke<LastFmArtistSimilarity>("get_lastfm_artist_similarity", {
     artistId,
     forceRefresh,
   });
