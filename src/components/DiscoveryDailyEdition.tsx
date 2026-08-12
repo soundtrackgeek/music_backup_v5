@@ -18,6 +18,7 @@ import type {
   DiscoveryCompletionSnapshotRequest,
   DiscoveryDailyEdition,
   DiscoveryDeepCutSnapshotRequest,
+  DiscoveryRecommendationSnapshotRequest,
 } from "../types";
 import { AlbumCover } from "./AlbumCover";
 import { ArtistPortrait } from "./ArtistPortrait";
@@ -29,10 +30,14 @@ type DiscoveryDailyEditionProps = {
   isChartLoading: boolean;
   isDeepCutLoading: boolean;
   isCompletionLoading: boolean;
+  isRecommendationLoading: boolean;
   onAnniversaryYearsChange: (years: number) => void;
   onChartSnapshotChange: (request: DiscoveryChartSnapshotRequest) => void;
   onDeepCutSnapshotChange: (request: DiscoveryDeepCutSnapshotRequest) => void;
   onCompletionSnapshotChange: (request: DiscoveryCompletionSnapshotRequest) => void;
+  onRecommendationSnapshotChange: (
+    request: DiscoveryRecommendationSnapshotRequest,
+  ) => void;
   onOpenAlbum: (albumId: string) => void;
   onOpenArtist: (artistId: string, artistName: string) => void;
   onOpenCompletion: () => void;
@@ -412,10 +417,12 @@ export function DiscoveryDailyEdition({
   isChartLoading,
   isDeepCutLoading,
   isCompletionLoading,
+  isRecommendationLoading,
   onAnniversaryYearsChange,
   onChartSnapshotChange,
   onDeepCutSnapshotChange,
   onCompletionSnapshotChange,
+  onRecommendationSnapshotChange,
   onOpenAlbum,
   onOpenArtist,
   onOpenCompletion,
@@ -457,7 +464,7 @@ export function DiscoveryDailyEdition({
   const completionDecades = Array.from(
     new Set(completionSnapshot.availableYears.map((year) => Math.floor(year / 10) * 10)),
   ).sort((left, right) => right - left);
-  const anchor = edition.ratingAnchor;
+  const recommendationSnapshot = edition.recommendationSnapshot;
 
   function navigateToStory(storyId: string) {
     const target = document.getElementById(storyId);
@@ -991,20 +998,56 @@ export function DiscoveryDailyEdition({
               aria-labelledby="because-heading"
               tabIndex={-1}
             >
-              <div className="daily-edition-section-heading">
-                <Sparkles aria-hidden="true" />
-                <div>
-                  <h3 id="because-heading">Because You Played…</h3>
-                  <p>
-                    {anchor
-                      ? `${anchor.artist} · ${anchor.album}`
-                      : "Connected through ratings and loved tracks"}
-                  </p>
+              <div className="daily-edition-because-header">
+                <div className="daily-edition-section-heading">
+                  <Sparkles aria-hidden="true" />
+                  <div>
+                    <h3 id="because-heading">
+                      Because You {recommendationSnapshot.mode === "played" ? "Played" : "Loved"}…
+                    </h3>
+                    <p>
+                      {recommendationSnapshot.anchors.length
+                        ? `${recommendationSnapshot.anchors.length} ${recommendationSnapshot.mode === "played" ? "recent" : "high-score"} albums · mixed artists`
+                        : "Connected through ratings and loved tracks"}
+                    </p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  className="daily-edition-completion-refresh"
+                  aria-label="Refresh recommendation suggestions"
+                  disabled={isRecommendationLoading}
+                  onClick={() => onRecommendationSnapshotChange({
+                    mode: recommendationSnapshot.mode,
+                  })}
+                >
+                  <RefreshCw aria-hidden="true" />
+                  Refresh
+                </button>
               </div>
-              {edition.becauseYouPlayed.length ? (
+              <div className="daily-edition-because-tabs" role="tablist" aria-label="Recommendation signal">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={recommendationSnapshot.mode === "played"}
+                  disabled={isRecommendationLoading}
+                  onClick={() => onRecommendationSnapshotChange({ mode: "played" })}
+                >
+                  Played
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={recommendationSnapshot.mode === "loved"}
+                  disabled={isRecommendationLoading}
+                  onClick={() => onRecommendationSnapshotChange({ mode: "loved" })}
+                >
+                  Loved
+                </button>
+              </div>
+              {recommendationSnapshot.stories.length ? (
                 <div className="daily-edition-stack-list">
-                  {edition.becauseYouPlayed.slice(0, 3).map((story) => (
+                  {recommendationSnapshot.stories.slice(0, 6).map((story) => (
                     <button
                       className="daily-edition-media-row daily-edition-because-row"
                       key={story.albumId}
@@ -1030,11 +1073,16 @@ export function DiscoveryDailyEdition({
                 </div>
               ) : (
                 <EditionEmpty>
-                  Rate an album to start a new recommendation thread.
+                  {recommendationSnapshot.mode === "played"
+                    ? "Rate tracks on a few albums to start recommendation threads."
+                    : "Love tracks or highly rate albums to start recommendation threads."}
                 </EditionEmpty>
               )}
               <p className="daily-edition-shelf-footer">
-                {anchor?.evidence ?? "Waiting for your first rating signal"}
+                {recommendationSnapshot.evidence}
+                {recommendationSnapshot.lastfmLinkedCount > 0
+                  ? ` · ${recommendationSnapshot.lastfmLinkedCount} Last.fm-linked matches`
+                  : ""}
               </p>
             </section>
           </div>
@@ -1053,7 +1101,7 @@ export function DiscoveryDailyEdition({
             ["discovery-charts", "Chart Toppers"],
             ["discovery-deep-cuts", "Deep Cuts"],
             ["discovery-completion", "Complete the Collection"],
-            ["discovery-because", "Because You Played"],
+            ["discovery-because", "Because You Played / Loved"],
           ].map(([storyId, label]) => (
             <button
               className={activeStoryId === storyId ? "active" : ""}

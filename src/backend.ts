@@ -243,6 +243,8 @@ import type {
   DiscoveryCompletionSnapshotRequest,
   DiscoveryDeepCutSnapshot,
   DiscoveryDeepCutSnapshotRequest,
+  DiscoveryRecommendationSnapshot,
+  DiscoveryRecommendationSnapshotRequest,
   DiscoveryResponse,
   ExportResult,
   ImportProgress,
@@ -1781,6 +1783,15 @@ export async function getDiscovery() {
             ...mockDiscovery.dailyEdition.completionSnapshot.artistStories,
           ].sort(() => Math.random() - 0.5),
         },
+        recommendationSnapshot: {
+          ...mockDiscovery.dailyEdition.recommendationSnapshot,
+          anchors: mockDiscovery.dailyEdition.recommendationSnapshot.anchors.filter(
+            (anchor) => anchor.signal.includes("rated recently"),
+          ),
+          stories: [
+            ...mockDiscovery.dailyEdition.recommendationSnapshot.stories,
+          ].sort(() => Math.random() - 0.5),
+        },
       },
     } satisfies DiscoveryResponse;
   }
@@ -1938,6 +1949,37 @@ export async function getDiscoveryCompletionSnapshot(
   return invoke<DiscoveryCompletionSnapshot>("get_discovery_completion_snapshot", {
     request,
   });
+}
+
+export async function getDiscoveryRecommendationSnapshot(
+  request: DiscoveryRecommendationSnapshotRequest,
+) {
+  if (!isTauriRuntime()) {
+    const base = mockDiscovery.dailyEdition.recommendationSnapshot;
+    const mode = request.mode ?? "played";
+    const anchors = mode === "played"
+      ? base.anchors.filter((anchor) => anchor.signal.includes("rated recently"))
+      : base.anchors.filter((anchor) => anchor.signal.includes("Album score"));
+    const stories = [...base.stories]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 6);
+    return {
+      ...base,
+      mode,
+      anchors,
+      matchingCount: base.stories.length,
+      lastfmLinkedCount: stories.filter((story) => story.reason !== "Shared genre").length,
+      stories,
+      evidence: mode === "played"
+        ? `${anchors.length} recent rating threads · suggestions are under 50% rated`
+        : `${anchors.length} high-score or loved anchors · suggestions are under 50% rated`,
+    } satisfies DiscoveryRecommendationSnapshot;
+  }
+
+  return invoke<DiscoveryRecommendationSnapshot>(
+    "get_discovery_recommendation_snapshot",
+    { request },
+  );
 }
 
 export async function getSettings() {

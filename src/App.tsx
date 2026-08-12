@@ -81,6 +81,7 @@ import {
   getDiscoveryChartSnapshot,
   getDiscoveryCompletionSnapshot,
   getDiscoveryDeepCutSnapshot,
+  getDiscoveryRecommendationSnapshot,
   getAlbumReview,
   getArtistBiography,
   getArtistTrackHighlights,
@@ -193,6 +194,7 @@ import type {
   DiscoveryChartSnapshotRequest,
   DiscoveryCompletionSnapshotRequest,
   DiscoveryDeepCutSnapshotRequest,
+  DiscoveryRecommendationSnapshotRequest,
   DiscoveryResponse,
   SavedExternalDiscovery,
   SavedPlaylist,
@@ -8503,10 +8505,13 @@ export default function App() {
   const [isDiscoveryDeepCutLoading, setIsDiscoveryDeepCutLoading] = useState(false);
   const [isDiscoveryCompletionLoading, setIsDiscoveryCompletionLoading] =
     useState(false);
+  const [isDiscoveryRecommendationLoading, setIsDiscoveryRecommendationLoading] =
+    useState(false);
   const discoveryAnniversaryYearsRef = useRef(50);
   const discoveryChartRequestRef = useRef(0);
   const discoveryDeepCutRequestRef = useRef(0);
   const discoveryCompletionRequestRef = useRef(0);
+  const discoveryRecommendationRequestRef = useRef(0);
   const [discoveryAlbumRequest, setDiscoveryAlbumRequest] =
     useState<BrowseRequest>(() =>
       createDiscoveryAlbumRequest(
@@ -12453,6 +12458,36 @@ export default function App() {
     }
   }
 
+  async function changeDiscoveryRecommendationSnapshot(
+    request: DiscoveryRecommendationSnapshotRequest,
+  ) {
+    const requestId = discoveryRecommendationRequestRef.current + 1;
+    discoveryRecommendationRequestRef.current = requestId;
+    setIsDiscoveryRecommendationLoading(true);
+    setDiscoveryError(null);
+    try {
+      const recommendationSnapshot = await getDiscoveryRecommendationSnapshot(request);
+      if (discoveryRecommendationRequestRef.current !== requestId) return;
+      setDiscovery((current) =>
+        current
+          ? {
+              ...current,
+              dailyEdition: {
+                ...current.dailyEdition,
+                recommendationSnapshot,
+              },
+            }
+          : current,
+      );
+    } catch (error) {
+      setDiscoveryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (discoveryRecommendationRequestRef.current === requestId) {
+        setIsDiscoveryRecommendationLoading(false);
+      }
+    }
+  }
+
   function openDiscoveryAlbums(
     selection: DiscoverySelection,
     nextRequest: BrowseRequest,
@@ -15696,10 +15731,12 @@ export default function App() {
               isChartLoading={isDiscoveryChartLoading}
               isDeepCutLoading={isDiscoveryDeepCutLoading}
               isCompletionLoading={isDiscoveryCompletionLoading}
+              isRecommendationLoading={isDiscoveryRecommendationLoading}
               onAnniversaryYearsChange={changeDiscoveryAnniversaryYears}
               onChartSnapshotChange={changeDiscoveryChartSnapshot}
               onDeepCutSnapshotChange={changeDiscoveryDeepCutSnapshot}
               onCompletionSnapshotChange={changeDiscoveryCompletionSnapshot}
+              onRecommendationSnapshotChange={changeDiscoveryRecommendationSnapshot}
               onOpenAlbum={openTimelineAlbum}
               onOpenArtist={openArtistFromMusicMap}
               onOpenCompletion={() => setActiveSection("Completion")}

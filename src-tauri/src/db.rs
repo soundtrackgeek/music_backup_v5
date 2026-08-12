@@ -19,7 +19,8 @@ use crate::models::{
     DiscoveryChartStory, DiscoveryCompletionSnapshot, DiscoveryCompletionSnapshotRequest,
     DiscoveryDailyEdition, DiscoveryDeepCutGenre, DiscoveryDeepCutSnapshot,
     DiscoveryDeepCutSnapshotRequest, DiscoveryDeepCutStory, DiscoveryGenrePoint,
-    DiscoveryHeatmapCell, DiscoveryLifeEventStory, DiscoveryMission, DiscoveryRatingAnchor,
+    DiscoveryHeatmapCell, DiscoveryLifeEventStory, DiscoveryMission, DiscoveryRecommendationAnchor,
+    DiscoveryRecommendationSnapshot, DiscoveryRecommendationSnapshotRequest,
     DiscoveryRecommendationStory, DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
     GenreProgressRequest, GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint,
@@ -10515,6 +10516,15 @@ pub fn discovery_completion_snapshot_for_app(
 }
 
 #[cfg(not(test))]
+pub fn discovery_recommendation_snapshot_for_app(
+    app: &AppHandle,
+    request: DiscoveryRecommendationSnapshotRequest,
+) -> Result<DiscoveryRecommendationSnapshot> {
+    let (conn, _) = open(app)?;
+    discovery_recommendation_snapshot(&conn, &request)
+}
+
+#[cfg(not(test))]
 pub fn list_music_tools_for_app(app: &AppHandle) -> Result<Vec<MusicToolSummary>> {
     let (conn, _) = open(app)?;
     list_music_tools(&conn)
@@ -14057,7 +14067,6 @@ fn discovery(conn: &Connection) -> Result<DiscoveryResponse> {
 }
 
 fn discovery_daily_edition(conn: &Connection, date: NaiveDate) -> Result<DiscoveryDailyEdition> {
-    let (rating_anchor, because_you_played) = discovery_because_you_played(conn)?;
     Ok(DiscoveryDailyEdition {
         date: date.format("%Y-%m-%d").to_string(),
         anniversary_years: 50,
@@ -14080,8 +14089,10 @@ fn discovery_daily_edition(conn: &Connection, date: NaiveDate) -> Result<Discove
             conn,
             &DiscoveryCompletionSnapshotRequest::default(),
         )?,
-        rating_anchor,
-        because_you_played,
+        recommendation_snapshot: discovery_recommendation_snapshot(
+            conn,
+            &DiscoveryRecommendationSnapshotRequest::default(),
+        )?,
         listening_evidence_note: "Listening stories use recent rating activity and loved tracks."
             .to_string(),
     })
@@ -15154,126 +15165,522 @@ fn discovery_album_completion_snapshot(
     })
 }
 
-fn discovery_because_you_played(
+fn discovery_recommendation_snapshot(
     conn: &Connection,
-) -> Result<(
-    Option<DiscoveryRatingAnchor>,
-    Vec<DiscoveryRecommendationStory>,
-)> {
-    let anchor = conn
-        .query_row(
-            "
-            SELECT
-                event.album_id,
-                COALESCE(NULLIF(TRIM(event.album), ''), NULLIF(TRIM(album.album), ''), 'Unknown Album'),
-                COALESCE(NULLIF(TRIM(event.album_artist_display), ''), NULLIF(TRIM(album.album_artist_display), ''), 'Unknown Artist'),
-                event.created_at,
-                COALESCE(event.current_effective_album_rating, album.effective_album_rating),
-                cover.cache_path,
-                COALESCE(album.genre_normalized, ''),
-                COALESCE(album.album_artist_display, '')
-            FROM rating_events event
-            JOIN albums album ON album.id = event.album_id
-            LEFT JOIN album_covers cover ON cover.album_id = album.id
-            ORDER BY event.id DESC
-            LIMIT 1
-            ",
-            [],
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, Option<i32>>(4)?,
-                    row.get::<_, Option<String>>(5)?,
-                    row.get::<_, String>(6)?,
-                    row.get::<_, String>(7)?,
-                ))
-            },
-        )
-        .optional()
-        .context("Could not load the recent discovery rating anchor")?;
-    let Some((album_id, album, artist, created_at, rating, cover_path, genre, anchor_artist)) =
-        anchor
-    else {
-        return Ok((None, Vec::new()));
-    };
+    request: &DiscoveryRecommendationSnapshotRequest,
+) -> Result<DiscoveryRecommendationSnapshot> {
+    #[derive(Clone)]
+    struct AnchorData {
+        album_id: String,
+        album: String,
+        artist: String,
+        artist_key: String,
+        genre_id: String,
+        genre: String,
+        rated_tracks: i64,
+        total_tracks: i64,
+        rating_completeness: f64,
+        loved_tracks: i64,
+        album_score: Option<f64>,
+        cover_path: Option<String>,
+        has_lastfm: bool,
+    }
 
-    let artist_key = normalize_artist_key(&anchor_artist);
-    let album_artist_key = artist_key_sql("candidate.album_artist_display");
-    let sql = format!(
-        "
-        SELECT
-            candidate.id,
-            COALESCE(NULLIF(TRIM(candidate.album), ''), 'Unknown Album'),
-            COALESCE(NULLIF(TRIM(candidate.album_artist_display), ''), 'Unknown Artist'),
-            candidate.loved_tracks,
-            candidate.album_score,
-            cover.cache_path,
-            CASE WHEN {album_artist_key} = ?2 THEN 'artist' ELSE 'genre' END AS connection
-        FROM albums candidate
-        LEFT JOIN album_covers cover ON cover.album_id = candidate.id
-        WHERE candidate.id <> ?1
-          AND (
-                {album_artist_key} = ?2
-             OR (NULLIF(?3, '') IS NOT NULL AND candidate.genre_normalized = ?3)
-          )
-        ORDER BY
-            CASE WHEN {album_artist_key} = ?2 THEN 0 ELSE 1 END,
-            candidate.loved_tracks DESC,
-            COALESCE(candidate.album_score, 0) DESC,
-            candidate.rating_completeness DESC,
-            LOWER(COALESCE(candidate.album, ''))
-        LIMIT 8
-        "
+    #[derive(Clone)]
+    struct CandidateAlbum {
+        album_id: String,
+        album: String,
+        artist: String,
+        artist_key: String,
+        album_key: String,
+        genre_id: String,
+        rated_tracks: i64,
+        total_tracks: i64,
+        rating_completeness: f64,
+        loved_tracks: i64,
+        album_score: Option<f64>,
+        cover_path: Option<String>,
+    }
+
+    #[derive(Clone)]
+    struct RecommendationEdge {
+        candidate_index: usize,
+        anchor_index: usize,
+        priority: u8,
+        lastfm_linked: bool,
+        reason: String,
+        evidence: String,
+    }
+
+    let mode = if request.mode.as_deref() == Some("loved") {
+        "loved"
+    } else {
+        "played"
+    };
+    let seed = conn.query_row("SELECT random()", [], |row| row.get::<_, i64>(0))? as u64;
+    let album_artist_key = artist_key_sql("album.album_artist_display");
+    let recent_sql = format!(
+        "WITH latest_events AS (
+            SELECT event.*,
+                   ROW_NUMBER() OVER (PARTITION BY event.album_id ORDER BY event.id DESC) AS recent_rank
+            FROM rating_events event
+        )
+        SELECT album.id,
+               COALESCE(NULLIF(TRIM(album.album), ''), 'Unknown Album'),
+               COALESCE(NULLIF(TRIM(album.album_artist_display), ''), 'Unknown Artist'),
+               {album_artist_key},
+               COALESCE(album.genre_normalized, ''),
+               COALESCE(NULLIF(TRIM(album.canonical_genre), ''), 'Genre unknown'),
+               album.rated_tracks, album.total_tracks, album.rating_completeness,
+               album.loved_tracks, album.album_score, cover.cache_path,
+               EXISTS(SELECT 1 FROM lastfm_album_relationships relation WHERE relation.album_id = album.id)
+               OR EXISTS(SELECT 1 FROM lastfm_artist_similarity similarity WHERE similarity.artist_key = {album_artist_key})
+        FROM latest_events event
+        JOIN albums album ON album.id = event.album_id
+        LEFT JOIN album_covers cover ON cover.album_id = album.id
+        WHERE event.recent_rank = 1
+          AND event.event_type IN ('addedPartial', 'addedRated', 'completed', 'ratedMore', 'ratingChanged')
+          AND COALESCE(event.current_rated_tracks, 0) > 0
+          AND COALESCE(event.current_rated_tracks, 0) >= COALESCE(event.previous_rated_tracks, 0)
+        ORDER BY event.id DESC
+        LIMIT 48"
     );
-    let recommendations = conn
-        .prepare(&sql)?
-        .query_map(params![&album_id, artist_key, genre], |row| {
-            let loved_tracks: i64 = row.get(3)?;
-            let album_score: Option<f64> = row.get(4)?;
-            let connection: String = row.get(6)?;
-            let reason = if connection == "artist" {
-                "Same artist".to_string()
-            } else {
-                "Shared genre".to_string()
-            };
-            let signal = if loved_tracks > 0 {
-                format!("{loved_tracks} loved tracks")
-            } else if let Some(score) = album_score {
-                format!("album score {:.0}", score)
-            } else {
-                "connected library album".to_string()
-            };
-            Ok(DiscoveryRecommendationStory {
+    let recent = conn
+        .prepare(&recent_sql)?
+        .query_map([], |row| {
+            Ok(AnchorData {
                 album_id: row.get(0)?,
                 album: row.get(1)?,
                 artist: row.get(2)?,
-                loved_tracks,
-                album_score,
-                cover_path: row.get(5)?,
-                reason: reason.clone(),
-                evidence: format!("{reason} · {signal}"),
+                artist_key: row.get(3)?,
+                genre_id: row.get(4)?,
+                genre: row.get(5)?,
+                rated_tracks: row.get(6)?,
+                total_tracks: row.get(7)?,
+                rating_completeness: row.get(8)?,
+                loved_tracks: row.get(9)?,
+                album_score: row.get(10)?,
+                cover_path: row.get(11)?,
+                has_lastfm: row.get(12)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
+    let recent_album_ids = recent
+        .iter()
+        .map(|anchor| anchor.album_id.clone())
+        .collect::<HashSet<_>>();
 
-    let evidence = rating
-        .map(|value| format!("Rated {value} · recent library rating activity"))
-        .unwrap_or_else(|| "Recent library rating activity".to_string());
-    Ok((
-        Some(DiscoveryRatingAnchor {
-            album_id,
-            album,
-            artist,
-            created_at,
-            rating,
-            cover_path,
-            evidence,
-        }),
-        recommendations,
-    ))
+    let anchor_pool = if mode == "played" {
+        recent.clone()
+    } else {
+        let loved_sql = format!(
+            "SELECT album.id,
+                    COALESCE(NULLIF(TRIM(album.album), ''), 'Unknown Album'),
+                    COALESCE(NULLIF(TRIM(album.album_artist_display), ''), 'Unknown Artist'),
+                    {album_artist_key},
+                    COALESCE(album.genre_normalized, ''),
+                    COALESCE(NULLIF(TRIM(album.canonical_genre), ''), 'Genre unknown'),
+                    album.rated_tracks, album.total_tracks, album.rating_completeness,
+                    album.loved_tracks, album.album_score, cover.cache_path,
+                    EXISTS(SELECT 1 FROM lastfm_album_relationships relation WHERE relation.album_id = album.id)
+                    OR EXISTS(SELECT 1 FROM lastfm_artist_similarity similarity WHERE similarity.artist_key = {album_artist_key})
+             FROM albums album
+             LEFT JOIN album_covers cover ON cover.album_id = album.id
+             WHERE album.album_score IS NOT NULL
+               AND (album.loved_tracks > 0 OR album.effective_album_rating >= 90)
+             ORDER BY album.album_score DESC, album.loved_tracks DESC
+             LIMIT 128"
+        );
+        conn.prepare(&loved_sql)?
+            .query_map([], |row| {
+                Ok(AnchorData {
+                    album_id: row.get(0)?,
+                    album: row.get(1)?,
+                    artist: row.get(2)?,
+                    artist_key: row.get(3)?,
+                    genre_id: row.get(4)?,
+                    genre: row.get(5)?,
+                    rated_tracks: row.get(6)?,
+                    total_tracks: row.get(7)?,
+                    rating_completeness: row.get(8)?,
+                    loved_tracks: row.get(9)?,
+                    album_score: row.get(10)?,
+                    cover_path: row.get(11)?,
+                    has_lastfm: row.get(12)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+    };
+
+    let mut ordered_anchor_pool = anchor_pool;
+    if mode == "loved" {
+        ordered_anchor_pool.sort_by_key(|anchor| {
+            (
+                !anchor.has_lastfm,
+                discovery_random_sort_key(seed, &anchor.album_id),
+            )
+        });
+    }
+    let mut artist_anchor_counts = HashMap::<String, usize>::new();
+    let mut anchors = Vec::new();
+    for anchor in ordered_anchor_pool {
+        let count = artist_anchor_counts
+            .entry(anchor.artist_key.clone())
+            .or_default();
+        if *count >= 2 {
+            continue;
+        }
+        *count += 1;
+        anchors.push(anchor);
+        if anchors.len() == 8 {
+            break;
+        }
+    }
+    let anchor_artist_keys = anchors
+        .iter()
+        .map(|anchor| anchor.artist_key.clone())
+        .collect::<HashSet<_>>();
+
+    let candidate_artist_key = artist_key_sql("album.album_artist_display");
+    let candidate_sql = format!(
+        "SELECT album.id,
+                COALESCE(NULLIF(TRIM(album.album), ''), 'Unknown Album'),
+                COALESCE(NULLIF(TRIM(album.album_artist_display), ''), 'Unknown Artist'),
+                {candidate_artist_key},
+                COALESCE(album.genre_normalized, ''),
+                COALESCE(NULLIF(TRIM(album.canonical_genre), ''), 'Genre unknown'),
+                album.rated_tracks, album.total_tracks, album.rating_completeness,
+                album.loved_tracks, album.album_score, cover.cache_path
+         FROM albums album
+         LEFT JOIN album_covers cover ON cover.album_id = album.id
+         WHERE album.total_tracks > 0 AND album.rating_completeness < 0.5"
+    );
+    let candidates = conn
+        .prepare(&candidate_sql)?
+        .query_map([], |row| {
+            let album: String = row.get(1)?;
+            Ok(CandidateAlbum {
+                album_id: row.get(0)?,
+                album_key: normalize_text(&album),
+                album,
+                artist: row.get(2)?,
+                artist_key: row.get(3)?,
+                genre_id: row.get(4)?,
+                rated_tracks: row.get(6)?,
+                total_tracks: row.get(7)?,
+                rating_completeness: row.get(8)?,
+                loved_tracks: row.get(9)?,
+                album_score: row.get(10)?,
+                cover_path: row.get(11)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut candidates_by_artist = HashMap::<String, Vec<usize>>::new();
+    let mut candidates_by_genre = HashMap::<String, Vec<usize>>::new();
+    let mut candidates_by_identity = HashMap::<(String, String), usize>::new();
+    let mut candidate_by_album_id = HashMap::<String, usize>::new();
+    for (index, candidate) in candidates.iter().enumerate() {
+        candidates_by_artist
+            .entry(candidate.artist_key.clone())
+            .or_default()
+            .push(index);
+        if !candidate.genre_id.is_empty() {
+            candidates_by_genre
+                .entry(candidate.genre_id.clone())
+                .or_default()
+                .push(index);
+        }
+        candidates_by_identity.insert(
+            (candidate.artist_key.clone(), candidate.album_key.clone()),
+            index,
+        );
+        candidate_by_album_id.insert(candidate.album_id.clone(), index);
+    }
+    let mut candidates_by_mbid = HashMap::<String, usize>::new();
+    for row in conn
+        .prepare(
+            "SELECT release_mbid, local_album_id FROM musicbrainz_release_decisions
+             WHERE decision = 'include' AND local_album_id IS NOT NULL",
+        )?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+    {
+        let (mbid, album_id) = row?;
+        if let Some(index) = candidate_by_album_id.get(&album_id) {
+            candidates_by_mbid.insert(mbid.to_lowercase(), *index);
+        }
+    }
+
+    let mut edges_by_anchor = vec![Vec::<RecommendationEdge>::new(); anchors.len()];
+    let mut related_stmt = conn.prepare(
+        "SELECT candidate_artist_name, candidate_album_title, candidate_album_mbid,
+                relationship_score
+         FROM lastfm_related_albums WHERE album_id = ?1 ORDER BY rank LIMIT 40",
+    )?;
+    let mut similar_stmt = conn.prepare(
+        "SELECT similar_artist_name, match_score
+         FROM lastfm_similar_artists WHERE artist_key = ?1 ORDER BY rank LIMIT 24",
+    )?;
+    for (anchor_index, anchor) in anchors.iter().enumerate() {
+        let mut best_edge_by_album = HashMap::<String, RecommendationEdge>::new();
+        for row in related_stmt.query_map([&anchor.album_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, f64>(3)?,
+            ))
+        })? {
+            let (artist, album, mbid, _) = row?;
+            let candidate_index = mbid
+                .as_ref()
+                .and_then(|mbid| candidates_by_mbid.get(&mbid.to_lowercase()).copied())
+                .or_else(|| {
+                    candidates_by_identity
+                        .get(&(normalize_artist_key(&artist), normalize_text(&album)))
+                        .copied()
+                });
+            let Some(candidate_index) = candidate_index else {
+                continue;
+            };
+            let candidate = &candidates[candidate_index];
+            if anchor_artist_keys.contains(&candidate.artist_key)
+                || recent_album_ids.contains(&candidate.album_id)
+            {
+                continue;
+            }
+            best_edge_by_album.insert(
+                candidate.album_id.clone(),
+                RecommendationEdge {
+                    candidate_index,
+                    anchor_index,
+                    priority: 0,
+                    lastfm_linked: true,
+                    reason: "Related album".to_string(),
+                    evidence: format!(
+                        "Related to {} on Last.fm · {}% rated",
+                        anchor.album,
+                        (candidate.rating_completeness * 100.0).round() as i64
+                    ),
+                },
+            );
+        }
+        for row in similar_stmt.query_map([&anchor.artist_key], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
+        })? {
+            let (similar_artist, _) = row?;
+            let similar_key = normalize_artist_key(&similar_artist);
+            let Some(album_indexes) = candidates_by_artist.get(&similar_key) else {
+                continue;
+            };
+            let mut album_indexes = album_indexes.clone();
+            album_indexes.sort_by_key(|index| {
+                discovery_random_sort_key(seed ^ anchor_index as u64, &candidates[*index].album_id)
+            });
+            for candidate_index in album_indexes.into_iter().take(2) {
+                let candidate = &candidates[candidate_index];
+                if anchor_artist_keys.contains(&candidate.artist_key)
+                    || recent_album_ids.contains(&candidate.album_id)
+                {
+                    continue;
+                }
+                best_edge_by_album
+                    .entry(candidate.album_id.clone())
+                    .or_insert_with(|| RecommendationEdge {
+                        candidate_index,
+                        anchor_index,
+                        priority: 1,
+                        lastfm_linked: true,
+                        reason: "Similar artist".to_string(),
+                        evidence: format!(
+                            "Last.fm links {} to {} · {}% rated",
+                            candidate.artist,
+                            anchor.artist,
+                            (candidate.rating_completeness * 100.0).round() as i64
+                        ),
+                    });
+            }
+        }
+        if let Some(album_indexes) = candidates_by_genre.get(&anchor.genre_id) {
+            let mut album_indexes = album_indexes.clone();
+            album_indexes.sort_by_key(|index| {
+                discovery_random_sort_key(
+                    seed ^ 0x9e37_79b9 ^ anchor_index as u64,
+                    &candidates[*index].album_id,
+                )
+            });
+            for candidate_index in album_indexes.into_iter().take(20) {
+                let candidate = &candidates[candidate_index];
+                if anchor_artist_keys.contains(&candidate.artist_key)
+                    || recent_album_ids.contains(&candidate.album_id)
+                {
+                    continue;
+                }
+                best_edge_by_album
+                    .entry(candidate.album_id.clone())
+                    .or_insert_with(|| RecommendationEdge {
+                        candidate_index,
+                        anchor_index,
+                        priority: 2,
+                        lastfm_linked: false,
+                        reason: "Shared genre".to_string(),
+                        evidence: format!(
+                            "{} link to {} · {}% rated",
+                            anchor.genre,
+                            anchor.album,
+                            (candidate.rating_completeness * 100.0).round() as i64
+                        ),
+                    });
+            }
+        }
+        let mut edges = best_edge_by_album.into_values().collect::<Vec<_>>();
+        edges.sort_by_key(|edge| {
+            (
+                edge.priority,
+                discovery_random_sort_key(seed, &candidates[edge.candidate_index].album_id),
+            )
+        });
+        edges_by_anchor[anchor_index] = edges;
+    }
+
+    let matching_album_ids = edges_by_anchor
+        .iter()
+        .flatten()
+        .map(|edge| candidates[edge.candidate_index].album_id.clone())
+        .collect::<HashSet<_>>();
+    let lastfm_album_ids = edges_by_anchor
+        .iter()
+        .flatten()
+        .filter(|edge| edge.lastfm_linked)
+        .map(|edge| candidates[edge.candidate_index].album_id.clone())
+        .collect::<HashSet<_>>();
+    let mut selected = Vec::<RecommendationEdge>::new();
+    let mut selected_albums = HashSet::<String>::new();
+    let mut selected_artists = HashSet::<String>::new();
+    let mut cursors = vec![0_usize; anchors.len()];
+    while selected.len() < 6 {
+        let mut progressed = false;
+        for anchor_index in 0..anchors.len() {
+            while let Some(edge) = edges_by_anchor[anchor_index].get(cursors[anchor_index]) {
+                cursors[anchor_index] += 1;
+                let candidate = &candidates[edge.candidate_index];
+                if selected_albums.contains(&candidate.album_id)
+                    || selected_artists.contains(&candidate.artist_key)
+                {
+                    continue;
+                }
+                selected_albums.insert(candidate.album_id.clone());
+                selected_artists.insert(candidate.artist_key.clone());
+                selected.push(edge.clone());
+                progressed = true;
+                break;
+            }
+            if selected.len() == 6 {
+                break;
+            }
+        }
+        if !progressed {
+            break;
+        }
+    }
+    if selected.len() < 6 {
+        for edges in &edges_by_anchor {
+            for edge in edges {
+                let candidate = &candidates[edge.candidate_index];
+                if selected_albums.insert(candidate.album_id.clone()) {
+                    selected.push(edge.clone());
+                }
+                if selected.len() == 6 {
+                    break;
+                }
+            }
+            if selected.len() == 6 {
+                break;
+            }
+        }
+    }
+
+    let stories = selected
+        .into_iter()
+        .map(|edge| {
+            let candidate = &candidates[edge.candidate_index];
+            let anchor = &anchors[edge.anchor_index];
+            DiscoveryRecommendationStory {
+                album_id: candidate.album_id.clone(),
+                album: candidate.album.clone(),
+                artist: candidate.artist.clone(),
+                loved_tracks: candidate.loved_tracks,
+                album_score: candidate.album_score,
+                rated_tracks: candidate.rated_tracks,
+                total_tracks: candidate.total_tracks,
+                rating_completeness: candidate.rating_completeness,
+                cover_path: candidate.cover_path.clone(),
+                reason: edge.reason,
+                anchor_album_id: anchor.album_id.clone(),
+                anchor_album: anchor.album.clone(),
+                anchor_artist: anchor.artist.clone(),
+                evidence: edge.evidence,
+            }
+        })
+        .collect::<Vec<_>>();
+    let anchor_stories = anchors
+        .iter()
+        .map(|anchor| {
+            let completion = (anchor.rating_completeness * 100.0).round() as i64;
+            let (signal, evidence) = if mode == "played" {
+                (
+                    format!("{completion}% rated recently"),
+                    format!(
+                        "{} of {} tracks rated in recent activity",
+                        anchor.rated_tracks, anchor.total_tracks
+                    ),
+                )
+            } else {
+                let score = anchor.album_score.unwrap_or_default().round() as i64;
+                (
+                    format!("Album score {score}"),
+                    format!(
+                        "Album score {score} · {} loved {}",
+                        anchor.loved_tracks,
+                        if anchor.loved_tracks == 1 {
+                            "track"
+                        } else {
+                            "tracks"
+                        }
+                    ),
+                )
+            };
+            DiscoveryRecommendationAnchor {
+                album_id: anchor.album_id.clone(),
+                album: anchor.album.clone(),
+                artist: anchor.artist.clone(),
+                signal,
+                cover_path: anchor.cover_path.clone(),
+                evidence,
+            }
+        })
+        .collect::<Vec<_>>();
+    let evidence = if mode == "played" {
+        format!(
+            "{} recent rating threads · suggestions are under 50% rated",
+            anchor_stories.len()
+        )
+    } else {
+        format!(
+            "{} high-score or loved anchors · suggestions are under 50% rated",
+            anchor_stories.len()
+        )
+    };
+
+    Ok(DiscoveryRecommendationSnapshot {
+        mode: mode.to_string(),
+        anchors: anchor_stories,
+        matching_count: matching_album_ids.len() as i64,
+        lastfm_linked_count: lastfm_album_ids.len() as i64,
+        stories,
+        evidence,
+    })
 }
 
 fn discovery_heatmap(conn: &Connection) -> Result<Vec<DiscoveryHeatmapCell>> {
@@ -21931,14 +22338,11 @@ mod tests {
             edition.completion_snapshot.artist_stories[0].missing_release_title,
             "Very"
         );
-        assert_eq!(
-            edition
-                .rating_anchor
-                .as_ref()
-                .map(|story| story.album.as_str()),
-            Some("Actually")
-        );
-        assert!(!edition.because_you_played.is_empty());
+        assert!(edition
+            .recommendation_snapshot
+            .anchors
+            .iter()
+            .any(|story| story.album == "Actually"));
         assert!(edition
             .listening_evidence_note
             .contains("recent rating activity"));
@@ -22155,6 +22559,172 @@ mod tests {
         assert_eq!(snapshot.matching_count, 1);
         assert_eq!(snapshot.album_stories[0].album_id, "gap-rock");
         assert_eq!(snapshot.album_stories[0].unrated_tracks, 3);
+    }
+
+    #[test]
+    fn discovery_recommendations_mix_recent_anchors_and_exclude_recent_or_well_rated_albums() {
+        let conn = seeded_connection();
+        for (album_id, artist, album, year) in [
+            ("played-a", "Played Artist A", "Played A", 1981),
+            (
+                "played-a-partial",
+                "Played Artist A",
+                "Nearly Finished",
+                1982,
+            ),
+            (
+                "same-artist-gap",
+                "Played Artist A",
+                "Same Artist Gap",
+                1983,
+            ),
+            ("played-b", "Played Artist B", "Played B", 1991),
+            ("related-gap", "Related Artist", "Related Gap", 1992),
+            ("similar-gap", "Similar Artist", "Similar Gap", 1993),
+            ("half-rated", "Half Artist", "Half Rated", 1994),
+        ] {
+            insert_test_album(&conn, album_id, artist, album, year, 10);
+        }
+        conn.execute_batch(
+            "UPDATE albums SET canonical_genre = 'Synthpop', genre_normalized = 'synthpop'
+             WHERE id IN ('played-a', 'played-a-partial', 'same-artist-gap', 'related-gap');
+             UPDATE albums SET canonical_genre = 'Jazz', genre_normalized = 'jazz'
+             WHERE id IN ('played-b', 'similar-gap');
+             UPDATE albums SET rated_tracks = 9, rating_completeness = 0.9
+             WHERE id = 'played-a-partial';
+             UPDATE albums SET rated_tracks = 0, rating_completeness = 0.0,
+                               effective_album_rating = NULL, album_score = NULL
+             WHERE id IN ('same-artist-gap', 'related-gap', 'similar-gap');
+             UPDATE albums SET rated_tracks = 5, rating_completeness = 0.5
+             WHERE id = 'half-rated';
+
+             INSERT INTO rating_events (
+                 import_run_id, created_at, event_type, album_id, album,
+                 album_artist_display, current_rated_tracks,
+                 current_rating_completeness, current_effective_album_rating
+             ) VALUES
+                 (1, '2026-08-12T08:00:00Z', 'ratedMore', 'played-a-partial',
+                  'Nearly Finished', 'Played Artist A', 9, 0.9, 88),
+                 (1, '2026-08-12T08:01:00Z', 'completed', 'played-a',
+                  'Played A', 'Played Artist A', 10, 1.0, 90),
+                 (1, '2026-08-12T08:02:00Z', 'completed', 'played-b',
+                  'Played B', 'Played Artist B', 10, 1.0, 92);
+
+             INSERT INTO lastfm_album_relationships (
+                 album_id, album_artist, album_title, state, message,
+                 fetched_at, expires_at
+             ) VALUES (
+                 'played-a', 'Played Artist A', 'Played A', 'available', '',
+                 '2026-08-12T08:03:00Z', '2026-09-12T08:03:00Z'
+             );
+             INSERT INTO lastfm_related_albums (
+                 album_id, rank, candidate_artist_name, candidate_album_title,
+                 relationship_score, shared_tags_json, fetched_at, expires_at
+             ) VALUES (
+                 'played-a', 1, 'Related Artist', 'Related Gap', 1.0,
+                 '[\"synthpop\"]', '2026-08-12T08:03:00Z', '2026-09-12T08:03:00Z'
+             );
+
+             INSERT INTO lastfm_artist_similarity (
+                 artist_key, artist_name, state, message, fetched_at, expires_at
+             ) VALUES (
+                 'played artist b', 'Played Artist B', 'available', '',
+                 '2026-08-12T08:04:00Z', '2026-09-12T08:04:00Z'
+             );
+             INSERT INTO lastfm_similar_artists (
+                 artist_key, rank, similar_artist_name, match_score,
+                 fetched_at, expires_at
+             ) VALUES (
+                 'played artist b', 1, 'Similar Artist', 0.9,
+                 '2026-08-12T08:04:00Z', '2026-09-12T08:04:00Z'
+             );",
+        )
+        .expect("insert recommendation fixtures");
+
+        let snapshot = discovery_recommendation_snapshot(
+            &conn,
+            &DiscoveryRecommendationSnapshotRequest {
+                mode: Some("played".to_string()),
+            },
+        )
+        .expect("load played recommendations");
+
+        let recommended_ids = snapshot
+            .stories
+            .iter()
+            .map(|story| story.album_id.as_str())
+            .collect::<HashSet<_>>();
+        assert!(recommended_ids.contains("related-gap"));
+        assert!(recommended_ids.contains("similar-gap"));
+        assert!(!recommended_ids.contains("played-a-partial"));
+        assert!(!recommended_ids.contains("same-artist-gap"));
+        assert!(!recommended_ids.contains("half-rated"));
+        assert!(snapshot
+            .stories
+            .iter()
+            .all(|story| story.rating_completeness < 0.5));
+        assert!(snapshot
+            .stories
+            .iter()
+            .any(|story| story.reason == "Related album"));
+        assert!(snapshot
+            .stories
+            .iter()
+            .any(|story| story.reason == "Similar artist"));
+        assert!(snapshot.lastfm_linked_count >= 2);
+    }
+
+    #[test]
+    fn discovery_loved_recommendations_use_high_score_anchors() {
+        let conn = seeded_connection();
+        insert_test_album(
+            &conn,
+            "loved-anchor",
+            "Loved Artist",
+            "Loved Anchor",
+            1984,
+            10,
+        );
+        insert_test_album(&conn, "loved-gap", "Loved Neighbor", "Loved Gap", 1985, 10);
+        conn.execute_batch(
+            "UPDATE albums SET loved_tracks = 4, album_score = 420.0
+             WHERE id = 'loved-anchor';
+             UPDATE albums SET rated_tracks = 0, rating_completeness = 0.0,
+                               effective_album_rating = NULL, album_score = NULL
+             WHERE id = 'loved-gap';
+             INSERT INTO lastfm_artist_similarity (
+                 artist_key, artist_name, state, message, fetched_at, expires_at
+             ) VALUES (
+                 'loved artist', 'Loved Artist', 'available', '',
+                 '2026-08-12T08:04:00Z', '2026-09-12T08:04:00Z'
+             );
+             INSERT INTO lastfm_similar_artists (
+                 artist_key, rank, similar_artist_name, match_score,
+                 fetched_at, expires_at
+             ) VALUES (
+                 'loved artist', 1, 'Loved Neighbor', 0.95,
+                 '2026-08-12T08:04:00Z', '2026-09-12T08:04:00Z'
+             );",
+        )
+        .expect("insert loved recommendation fixtures");
+
+        let snapshot = discovery_recommendation_snapshot(
+            &conn,
+            &DiscoveryRecommendationSnapshotRequest {
+                mode: Some("loved".to_string()),
+            },
+        )
+        .expect("load loved recommendations");
+
+        assert_eq!(snapshot.mode, "loved");
+        assert!(snapshot
+            .anchors
+            .iter()
+            .any(|anchor| anchor.album_id == "loved-anchor"));
+        assert!(snapshot
+            .stories
+            .iter()
+            .any(|story| story.album_id == "loved-gap" && story.anchor_album_id == "loved-anchor"));
     }
 
     #[test]

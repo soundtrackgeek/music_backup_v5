@@ -153,27 +153,40 @@ const edition: DiscoveryDailyEditionData = {
       },
     ],
   },
-  ratingAnchor: {
-    albumId: "album-anchor",
-    album: "Anchor Album",
-    artist: "Anchor Artist",
-    createdAt: "2026-08-11T08:00:00Z",
-    rating: 88,
-    coverPath: null,
-    evidence: "Rated 88 · recent library rating activity",
+  recommendationSnapshot: {
+    mode: "played",
+    anchors: [
+      {
+        albumId: "album-anchor",
+        album: "Anchor Album",
+        artist: "Anchor Artist",
+        signal: "100% rated recently",
+        coverPath: null,
+        evidence: "10 of 10 tracks rated in recent activity",
+      },
+    ],
+    matchingCount: 1,
+    lastfmLinkedCount: 1,
+    stories: [
+      {
+        albumId: "album-recommendation",
+        album: "Connected Album",
+        artist: "Connected Artist",
+        lovedTracks: 0,
+        albumScore: null,
+        ratedTracks: 2,
+        totalTracks: 10,
+        ratingCompleteness: 0.2,
+        coverPath: null,
+        reason: "Similar artist",
+        anchorAlbumId: "album-anchor",
+        anchorAlbum: "Anchor Album",
+        anchorArtist: "Anchor Artist",
+        evidence: "Last.fm links Connected Artist to Anchor Artist · 20% rated",
+      },
+    ],
+    evidence: "1 recent rating thread · suggestions are under 50% rated",
   },
-  becauseYouPlayed: [
-    {
-      albumId: "album-recommendation",
-      album: "Connected Album",
-      artist: "Connected Artist",
-      lovedTracks: 3,
-      albumScore: 121,
-      coverPath: null,
-      reason: "Shared genre",
-      evidence: "Shared genre · 3 loved tracks",
-    },
-  ],
   listeningEvidenceNote:
     "Listening stories use recent rating activity and loved tracks.",
 };
@@ -188,10 +201,12 @@ describe("DiscoveryDailyEdition", () => {
         isChartLoading={false}
         isDeepCutLoading={false}
         isCompletionLoading={false}
+        isRecommendationLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
         onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -231,10 +246,12 @@ describe("DiscoveryDailyEdition", () => {
         isChartLoading={false}
         isDeepCutLoading={false}
         isCompletionLoading={false}
+        isRecommendationLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
         onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={onOpenAlbum}
         onOpenArtist={onOpenArtist}
         onOpenCompletion={onOpenCompletion}
@@ -267,10 +284,12 @@ describe("DiscoveryDailyEdition", () => {
         isChartLoading={false}
         isDeepCutLoading={false}
         isCompletionLoading={false}
+        isRecommendationLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={onChartSnapshotChange}
         onDeepCutSnapshotChange={vi.fn()}
         onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -322,10 +341,12 @@ describe("DiscoveryDailyEdition", () => {
         isChartLoading={false}
         isDeepCutLoading={false}
         isCompletionLoading={false}
+        isRecommendationLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={onDeepCutSnapshotChange}
         onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -378,10 +399,12 @@ describe("DiscoveryDailyEdition", () => {
         isChartLoading={false}
         isDeepCutLoading={false}
         isCompletionLoading={false}
+        isRecommendationLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
         onCompletionSnapshotChange={onCompletionSnapshotChange}
+        onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -440,10 +463,12 @@ describe("DiscoveryDailyEdition", () => {
         isChartLoading={false}
         isDeepCutLoading={false}
         isCompletionLoading={false}
+        isRecommendationLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
         onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={onOpenAlbum}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -466,10 +491,12 @@ describe("DiscoveryDailyEdition", () => {
         isChartLoading={false}
         isDeepCutLoading={false}
         isCompletionLoading={false}
+        isRecommendationLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
         onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -514,10 +541,12 @@ describe("DiscoveryDailyEdition", () => {
         isChartLoading={false}
         isDeepCutLoading={false}
         isCompletionLoading={false}
+        isRecommendationLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
         onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -546,10 +575,12 @@ describe("DiscoveryDailyEdition", () => {
         isChartLoading={false}
         isDeepCutLoading={false}
         isCompletionLoading={false}
+        isRecommendationLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
         onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -579,10 +610,12 @@ describe("DiscoveryDailyEdition", () => {
         isChartLoading={false}
         isDeepCutLoading={false}
         isCompletionLoading={false}
+        isRecommendationLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
         onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -607,6 +640,75 @@ describe("DiscoveryDailyEdition", () => {
     expect(screen.queryByText("Test Artist")).not.toBeInTheDocument();
   });
 
+  it("switches recommendation signals and refreshes the active mode", () => {
+    const onRecommendationSnapshotChange = vi.fn();
+    const view = render(
+      <DiscoveryDailyEdition
+        edition={edition}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        isChartLoading={false}
+        isDeepCutLoading={false}
+        isCompletionLoading={false}
+        isRecommendationLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={onRecommendationSnapshotChange}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenCompletion={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("tab", { name: "Played" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByText(/suggestions are under 50% rated/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Loved" }));
+    view.rerender(
+      <DiscoveryDailyEdition
+        edition={{
+          ...edition,
+          recommendationSnapshot: {
+            ...edition.recommendationSnapshot,
+            mode: "loved",
+            evidence: "1 high-score or loved anchor · suggestions are under 50% rated",
+          },
+        }}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        isChartLoading={false}
+        isDeepCutLoading={false}
+        isCompletionLoading={false}
+        isRecommendationLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={onRecommendationSnapshotChange}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenCompletion={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Refresh recommendation suggestions" }),
+    );
+
+    expect(onRecommendationSnapshotChange).toHaveBeenNthCalledWith(1, {
+      mode: "loved",
+    });
+    expect(onRecommendationSnapshotChange).toHaveBeenNthCalledWith(2, {
+      mode: "loved",
+    });
+  });
+
   it("uses the contents rail to focus and flash a selected story", () => {
     const scrollIntoView = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -621,10 +723,12 @@ describe("DiscoveryDailyEdition", () => {
         isChartLoading={false}
         isDeepCutLoading={false}
         isCompletionLoading={false}
+        isRecommendationLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
         onDeepCutSnapshotChange={vi.fn()}
         onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -633,7 +737,7 @@ describe("DiscoveryDailyEdition", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: /^Because You Played$/ }),
+      screen.getByRole("button", { name: /^Because You Played \/ Loved$/ }),
     );
     const target = document.getElementById("discovery-because");
     expect(scrollIntoView).toHaveBeenCalledWith({

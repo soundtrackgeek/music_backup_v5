@@ -1491,9 +1491,25 @@ pub struct DiscoveryDailyEdition {
     pub chart_snapshot: DiscoveryChartSnapshot,
     pub deep_cut_snapshot: DiscoveryDeepCutSnapshot,
     pub completion_snapshot: DiscoveryCompletionSnapshot,
-    pub rating_anchor: Option<DiscoveryRatingAnchor>,
-    pub because_you_played: Vec<DiscoveryRecommendationStory>,
+    pub recommendation_snapshot: DiscoveryRecommendationSnapshot,
     pub listening_evidence_note: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryRecommendationSnapshotRequest {
+    pub mode: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryRecommendationSnapshot {
+    pub mode: String,
+    pub anchors: Vec<DiscoveryRecommendationAnchor>,
+    pub matching_count: i64,
+    pub lastfm_linked_count: i64,
+    pub stories: Vec<DiscoveryRecommendationStory>,
+    pub evidence: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1673,12 +1689,11 @@ pub struct DiscoveryAlbumCompletionStory {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DiscoveryRatingAnchor {
+pub struct DiscoveryRecommendationAnchor {
     pub album_id: String,
     pub album: String,
     pub artist: String,
-    pub created_at: String,
-    pub rating: Option<i32>,
+    pub signal: String,
     pub cover_path: Option<String>,
     pub evidence: String,
 }
@@ -1691,8 +1706,14 @@ pub struct DiscoveryRecommendationStory {
     pub artist: String,
     pub loved_tracks: i64,
     pub album_score: Option<f64>,
+    pub rated_tracks: i64,
+    pub total_tracks: i64,
+    pub rating_completeness: f64,
     pub cover_path: Option<String>,
     pub reason: String,
+    pub anchor_album_id: String,
+    pub anchor_album: String,
+    pub anchor_artist: String,
     pub evidence: String,
 }
 

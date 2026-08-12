@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.130.0] - 2026-08-12
+### Added
+- Added **Played** and **Loved** modes plus Refresh to the Discovery recommendation shelf, with up to six randomized albums mixed across as many as eight recent-rating or high-score/loved anchors.
+- Added explainable cached Last.fm related-album and similar-artist matching with a canonical-genre fallback and visible source-album evidence on every recommendation.
+
+### Fixed
+- Stopped recently rated albums, albums with 50% or more tracks rated, and albums by any anchor artist from being recommended; this prevents nearly completed releases and same-artist floods from returning in **Because You Played**.
+- Ignored rating-removal events when choosing recent listening anchors, so the shelf follows affirmative rating activity instead of treating deleted ratings as plays.
+
+### Changed
+- Replaced the single-album recommendation anchor with a mixed multi-album snapshot and synchronized app metadata and provider user agents to `0.130.0`.
+
 ## [0.129.0] - 2026-08-12
 ### Added
 - Added API-derived Last.fm Related Albums to Album pages using shared album tags plus similar-artist evidence, with separate **In your library** and **Explore** groups, local navigation, provider links, explicit refresh, and responsive layouts.

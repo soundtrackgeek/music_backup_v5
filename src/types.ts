@@ -2406,9 +2406,23 @@ export type DiscoveryDailyEdition = {
   chartSnapshot: DiscoveryChartSnapshot;
   deepCutSnapshot: DiscoveryDeepCutSnapshot;
   completionSnapshot: DiscoveryCompletionSnapshot;
-  ratingAnchor: DiscoveryRatingAnchor | null;
-  becauseYouPlayed: DiscoveryRecommendationStory[];
+  recommendationSnapshot: DiscoveryRecommendationSnapshot;
   listeningEvidenceNote: string;
+};
+
+export type DiscoveryRecommendationMode = "played" | "loved";
+
+export type DiscoveryRecommendationSnapshotRequest = {
+  mode?: DiscoveryRecommendationMode;
+};
+
+export type DiscoveryRecommendationSnapshot = {
+  mode: DiscoveryRecommendationMode;
+  anchors: DiscoveryRecommendationAnchor[];
+  matchingCount: number;
+  lastfmLinkedCount: number;
+  stories: DiscoveryRecommendationStory[];
+  evidence: string;
 };
 
 export type DiscoveryCompletionMode = "artist" | "album";
@@ -2563,12 +2577,11 @@ export type DiscoveryAlbumCompletionStory = {
   evidence: string;
 };
 
-export type DiscoveryRatingAnchor = {
+export type DiscoveryRecommendationAnchor = {
   albumId: string;
   album: string;
   artist: string;
-  createdAt: string;
-  rating: number | null;
+  signal: string;
   coverPath: string | null;
   evidence: string;
 };
@@ -2579,8 +2592,14 @@ export type DiscoveryRecommendationStory = {
   artist: string;
   lovedTracks: number;
   albumScore: number | null;
+  ratedTracks: number;
+  totalTracks: number;
+  ratingCompleteness: number;
   coverPath: string | null;
   reason: string;
+  anchorAlbumId: string;
+  anchorAlbum: string;
+  anchorArtist: string;
   evidence: string;
 };
 

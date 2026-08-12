@@ -23593,7 +23593,8 @@ button {
   height: 48px;
 }
 
-.daily-edition-completion-header {
+.daily-edition-completion-header,
+.daily-edition-because-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -23620,7 +23621,8 @@ button {
   height: 12px;
 }
 
-.daily-edition-completion-tabs {
+.daily-edition-completion-tabs,
+.daily-edition-because-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 3px;
@@ -23630,7 +23632,8 @@ button {
   border-radius: 5px;
 }
 
-.daily-edition-completion-tabs button {
+.daily-edition-completion-tabs button,
+.daily-edition-because-tabs button {
   min-height: 24px;
   border: 0;
   border-radius: 3px;
@@ -23641,7 +23644,8 @@ button {
   cursor: pointer;
 }
 
-.daily-edition-completion-tabs button[aria-selected="true"] {
+.daily-edition-completion-tabs button[aria-selected="true"],
+.daily-edition-because-tabs button[aria-selected="true"] {
   color: var(--edition-paper);
   background: var(--edition-teal);
 }
@@ -23685,6 +23689,7 @@ button {
 
 .daily-edition-completion-refresh:disabled,
 .daily-edition-completion-tabs button:disabled,
+.daily-edition-because-tabs button:disabled,
 .daily-edition-completion-controls select:disabled {
   cursor: wait;
   opacity: 0.55;

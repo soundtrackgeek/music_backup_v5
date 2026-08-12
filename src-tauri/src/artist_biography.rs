@@ -12,7 +12,7 @@ use url::Url;
 const MUSICBRAINZ_ARTIST_API: &str = "https://musicbrainz.org/ws/2/artist/";
 const WIKIDATA_ENTITY_API: &str = "https://www.wikidata.org/wiki/Special:EntityData/";
 const PROVIDER_USER_AGENT: &str =
-    "music-backup-v5/0.129.0 (artist biography; https://github.com/soundtrackgeek/music_backup_v5)";
+    "music-backup-v5/0.130.0 (artist biography; https://github.com/soundtrackgeek/music_backup_v5)";
 const BIOGRAPHY_CACHE_DAYS: i64 = 30;
 const UNAVAILABLE_CACHE_DAYS: i64 = 7;
 const NAME_LOOKUP_UNAVAILABLE_MESSAGE: &str =
