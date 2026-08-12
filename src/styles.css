@@ -7311,6 +7311,39 @@ button {
   outline-offset: 2px;
 }
 
+.table-entity-button {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #0b625c;
+  padding: 0;
+  overflow: hidden;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.album-title-cell > .table-entity-button {
+  width: 100%;
+  gap: 10px;
+}
+
+.table-entity-button:hover {
+  color: #0b625c;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.table-entity-button:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #168279;
+  outline-offset: 2px;
+}
+
 .run-table-row,
 .result-table-row {
   color: #26322f;
@@ -12503,6 +12536,11 @@ button {
 }
 
 :root[data-theme="dark"] .table-sort-button.active {
+  color: #8ee4d8;
+}
+
+:root[data-theme="dark"] .table-entity-button,
+:root[data-theme="dark"] .table-entity-button:hover {
   color: #8ee4d8;
 }
 

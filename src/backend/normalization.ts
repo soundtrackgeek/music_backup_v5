@@ -189,6 +189,11 @@ export function normalizeArtistKey(value: string | null) {
   return normalized || "unknown";
 }
 
+export function normalizeGenreKey(value: string | null) {
+  const normalized = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return normalized || "unknown";
+}
+
 function normalizeLeftSidebarMode(value: unknown): LeftSidebarMode {
   return value === "iconOnly" || value === "hidden" || value === "expanded"
     ? value

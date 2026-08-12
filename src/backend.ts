@@ -28,6 +28,7 @@ import {
   cacheSettings,
   loadCachedSettings,
   normalizeArtistKey,
+  normalizeGenreKey,
   normalizeMusicBrainzCachePath,
   normalizeSettings,
   settingsStorageKey,
@@ -7160,11 +7161,6 @@ export async function listenToMusicToolProgress(
   return listen<MusicToolProgress>("music-tool-progress", (event) => {
     handler(event.payload);
   });
-}
-
-function normalizeGenreKey(value: string | null) {
-  const normalized = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-  return normalized || "unknown";
 }
 
 function expandGenreFilterKeys(values: string[]) {

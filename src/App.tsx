@@ -156,7 +156,7 @@ import {
   runPerformanceProbe,
   undoMusicToolFix,
 } from "./backend";
-import { normalizeArtistKey } from "./backend/normalization";
+import { normalizeArtistKey, normalizeGenreKey } from "./backend/normalization";
 import type {
   AppSettings,
   AlbumDebutTimelineResponse,
@@ -2126,12 +2126,18 @@ function ResultTable({
   onSort,
   countryFlagDisplay,
   visibleColumns,
+  onOpenAlbum,
+  onOpenArtist,
+  onOpenGenre,
 }: {
   response: BrowseResponse | null;
   sort: BrowseSort;
   onSort: (field: string) => void;
   countryFlagDisplay: CountryFlagDisplay;
   visibleColumns: string[];
+  onOpenAlbum?: (albumId: string) => void;
+  onOpenArtist?: (artistId: string, artistName: string) => void;
+  onOpenGenre?: (genreId: string, genreName: string) => void;
 }) {
   if (!response) {
     return (
@@ -2380,6 +2386,7 @@ function ResultTable({
       </div>
       {response.rows.map((row) => {
         const singleLabel = formatBillboardSingleRank(row);
+        const artistName = row.displayArtist ?? row.albumArtistDisplay ?? "";
         return (
           <div className="result-table-row" role="row" key={row.id}>
             <span role="cell">
@@ -2397,16 +2404,42 @@ function ResultTable({
               </small>
             </span>
             <span className="album-title-cell" role="cell">
-              <AlbumTitleContents
-                row={row}
-                subtitle={
-                  row.albumArtistDisplay ?? row.year?.toString() ?? null
-                }
-                showBillboardBadge={!showBillboardColumn}
-              />
+              {onOpenAlbum ? (
+                <TableEntityButton
+                  label={`Open album ${row.album ?? "Untitled"}`}
+                  onClick={() => onOpenAlbum(row.albumId)}
+                >
+                  <AlbumTitleContents
+                    row={row}
+                    subtitle={
+                      row.albumArtistDisplay ?? row.year?.toString() ?? null
+                    }
+                    showBillboardBadge={!showBillboardColumn}
+                  />
+                </TableEntityButton>
+              ) : (
+                <AlbumTitleContents
+                  row={row}
+                  subtitle={
+                    row.albumArtistDisplay ?? row.year?.toString() ?? null
+                  }
+                  showBillboardBadge={!showBillboardColumn}
+                />
+              )}
             </span>
             <span role="cell">
-              {row.displayArtist ?? row.albumArtistDisplay ?? ""}
+              {artistName && onOpenArtist ? (
+                <TableEntityButton
+                  label={`Open artist ${artistName}`}
+                  onClick={() =>
+                    onOpenArtist(normalizeArtistKey(artistName), artistName)
+                  }
+                >
+                  {artistName}
+                </TableEntityButton>
+              ) : (
+                artistName
+              )}
             </span>
             <span role="cell">
               <CountryDisplay value={row} mode={countryFlagDisplay} />
@@ -2576,47 +2609,110 @@ function ResultTable({
           onSort={onSort}
         />
       </div>
-      {response.rows.map((row) => (
-        <div className="result-table-row" role="row" key={row.id}>
-          <span className="album-title-cell" role="cell">
-            <AlbumTitleContents
-              row={row}
-              showBillboardBadge={!showBillboardColumn}
-            />
-          </span>
-          <span role="cell">{row.albumArtistDisplay ?? ""}</span>
-          <span role="cell">
-            <CountryDisplay value={row} mode={countryFlagDisplay} />
-          </span>
-          <span role="cell">{row.year ?? ""}</span>
-          <span role="cell">{row.canonicalGenre ?? ""}</span>
-          {showBillboardColumn ? (
-            <span role="cell">{formatBillboardRank(row)}</span>
-          ) : null}
-          {showDebutColumn ? (
-            <span role="cell">{formatBillboardDebutWeek(row)}</span>
-          ) : null}
-          {showVgListaColumn ? (
-            <span role="cell">{formatVgListaRank(row)}</span>
-          ) : null}
-          {showVgListaDebutColumn ? (
-            <span role="cell">{formatVgListaDebutWeek(row)}</span>
-          ) : null}
-          {showOfficialUkColumn ? (
-            <span role="cell">{formatOfficialUkRank(row)}</span>
-          ) : null}
-          {showOfficialUkDebutColumn ? (
-            <span role="cell">{formatOfficialUkDebutWeek(row)}</span>
-          ) : null}
-          {showQualityColumn ? (
-            <span role="cell">{formatAudioQuality(row, true)}</span>
-          ) : null}
-          <span role="cell">{row.totalTracks ?? ""}</span>
-          <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
-          <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
-        </div>
-      ))}
+      {response.rows.map((row) => {
+        const artistName = row.albumArtistDisplay;
+        const genreName = row.canonicalGenre;
+        return (
+          <div className="result-table-row" role="row" key={row.id}>
+            <span className="album-title-cell" role="cell">
+              {onOpenAlbum ? (
+                <TableEntityButton
+                  label={`Open album ${row.album ?? "Untitled"}`}
+                  onClick={() => onOpenAlbum(row.albumId)}
+                >
+                  <AlbumTitleContents
+                    row={row}
+                    showBillboardBadge={!showBillboardColumn}
+                  />
+                </TableEntityButton>
+              ) : (
+                <AlbumTitleContents
+                  row={row}
+                  showBillboardBadge={!showBillboardColumn}
+                />
+              )}
+            </span>
+            <span role="cell">
+              {artistName && onOpenArtist ? (
+                <TableEntityButton
+                  label={`Open artist ${artistName}`}
+                  onClick={() =>
+                    onOpenArtist(normalizeArtistKey(artistName), artistName)
+                  }
+                >
+                  {artistName}
+                </TableEntityButton>
+              ) : (
+                artistName ?? ""
+              )}
+            </span>
+            <span role="cell">
+              <CountryDisplay value={row} mode={countryFlagDisplay} />
+            </span>
+            <span role="cell">{row.year ?? ""}</span>
+            <span role="cell">
+              {genreName && onOpenGenre ? (
+                <TableEntityButton
+                  label={`Open genre ${genreName}`}
+                  onClick={() =>
+                    onOpenGenre(normalizeGenreKey(genreName), genreName)
+                  }
+                >
+                  {genreName}
+                </TableEntityButton>
+              ) : (
+                genreName ?? ""
+              )}
+            </span>
+            {showBillboardColumn ? (
+              <span role="cell">{formatBillboardRank(row)}</span>
+            ) : null}
+            {showDebutColumn ? (
+              <span role="cell">{formatBillboardDebutWeek(row)}</span>
+            ) : null}
+            {showVgListaColumn ? (
+              <span role="cell">{formatVgListaRank(row)}</span>
+            ) : null}
+            {showVgListaDebutColumn ? (
+              <span role="cell">{formatVgListaDebutWeek(row)}</span>
+            ) : null}
+            {showOfficialUkColumn ? (
+              <span role="cell">{formatOfficialUkRank(row)}</span>
+            ) : null}
+            {showOfficialUkDebutColumn ? (
+              <span role="cell">{formatOfficialUkDebutWeek(row)}</span>
+            ) : null}
+            {showQualityColumn ? (
+              <span role="cell">{formatAudioQuality(row, true)}</span>
+            ) : null}
+            <span role="cell">{row.totalTracks ?? ""}</span>
+            <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
+            <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
+          </div>
+        );
+      })}
     </div>
+  );
+}
+
+function TableEntityButton({
+  children,
+  label,
+  onClick,
+}: {
+  children: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="table-entity-button"
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -5334,12 +5430,18 @@ function ChartResults({
   displaySort,
   onSort,
   countryFlagDisplay,
+  onOpenAlbum,
+  onOpenArtist,
+  onOpenGenre,
 }: {
   response: BrowseResponse | null;
   config: ChartConfig;
   displaySort: BrowseSort | null;
   onSort: (field: string) => void;
   countryFlagDisplay: CountryFlagDisplay;
+  onOpenAlbum: (albumId: string) => void;
+  onOpenArtist: (artistId: string, artistName: string) => void;
+  onOpenGenre: (genreId: string, genreName: string) => void;
 }) {
   if (!response) {
     return (
@@ -5503,15 +5605,34 @@ function ChartResults({
       sortField: "album",
       className: "album-title-cell",
       value: (row: BrowseRow) => (
-        <AlbumTitleContents row={row} showBillboardBadge={false} />
+        <TableEntityButton
+          label={`Open album ${row.album ?? "Untitled"}`}
+          onClick={() => onOpenAlbum(row.albumId)}
+        >
+          <AlbumTitleContents row={row} showBillboardBadge={false} />
+        </TableEntityButton>
       ),
     },
     {
       key: "artist",
       label: "Artist",
       sortField: isTracks ? "displayArtist" : "artist",
-      value: (row: BrowseRow) =>
-        (isTracks ? row.displayArtist : row.albumArtistDisplay) ?? "",
+      value: (row: BrowseRow) => {
+        const artistName =
+          (isTracks ? row.displayArtist : row.albumArtistDisplay) ?? "";
+        return artistName ? (
+          <TableEntityButton
+            label={`Open artist ${artistName}`}
+            onClick={() =>
+              onOpenArtist(normalizeArtistKey(artistName), artistName)
+            }
+          >
+            {artistName}
+          </TableEntityButton>
+        ) : (
+          ""
+        );
+      },
     },
     {
       key: "year",
@@ -5523,7 +5644,21 @@ function ChartResults({
       key: "genre",
       label: "Genre",
       sortField: "genre",
-      value: (row: BrowseRow) => row.canonicalGenre ?? "",
+      value: (row: BrowseRow) => {
+        const genreName = row.canonicalGenre;
+        return genreName ? (
+          <TableEntityButton
+            label={`Open genre ${genreName}`}
+            onClick={() =>
+              onOpenGenre(normalizeGenreKey(genreName), genreName)
+            }
+          >
+            {genreName}
+          </TableEntityButton>
+        ) : (
+          ""
+        );
+      },
     },
     {
       key: "originCountry",
@@ -11177,6 +11312,17 @@ export default function App() {
     openArtistFromMusicMap(normalizeArtistKey(artistName), artistName);
   }
 
+  function openGenreFromBrowse(genreId: string, genreName: string) {
+    setGenreRequest((previous) => ({
+      ...createGenreListRequest(),
+      searchText: genreName,
+      limit: previous.limit,
+    }));
+    setSelectedGenreId(genreId);
+    setGenreExportResult(null);
+    setActiveSection("Genres");
+  }
+
   function selectArtistAlbum(albumId: string) {
     setSelectedArtistAlbumId(albumId);
     setArtistAlbumTracksResponse(null);
@@ -15687,6 +15833,9 @@ export default function App() {
                 displaySort={chartTableSort}
                 onSort={sortChartBy}
                 countryFlagDisplay={settings.countryFlagDisplay}
+                onOpenAlbum={openTimelineAlbum}
+                onOpenArtist={openArtistFromMusicMap}
+                onOpenGenre={openGenreFromBrowse}
               />
             </section>
           </section>
@@ -20789,6 +20938,9 @@ export default function App() {
                 onSort={sortSearchBy}
                 countryFlagDisplay={settings.countryFlagDisplay}
                 visibleColumns={searchTableColumns}
+                onOpenAlbum={openTimelineAlbum}
+                onOpenArtist={openArtistFromMusicMap}
+                onOpenGenre={openGenreFromBrowse}
               />
             </section>
           </SearchWorkspace>

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.131.0] - 2026-08-12
+### Added
+- Added direct Album, Artist, and Genre navigation from the corresponding Search and Charts table cells, with visible link styling, keyboard focus, and descriptive accessible names.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.131.0`.
+
 ## [0.130.0] - 2026-08-12
 ### Added
 - Added **Played** and **Loved** modes plus Refresh to the Discovery recommendation shelf, with up to six randomized albums mixed across as many as eight recent-rating or high-score/loved anchors.

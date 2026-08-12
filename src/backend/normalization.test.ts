@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultMusicBrainzOverlaySyncPath,
+  normalizeGenreKey,
   normalizeSettings,
 } from "./normalization";
 
@@ -116,5 +117,12 @@ describe("settings normalization", () => {
       musicBrainzOverlayAutoSyncMinutes: 0,
       updateAutoCheckMinutes: 1440,
     });
+  });
+});
+
+describe("entity key normalization", () => {
+  it("creates the canonical genre key used by genre navigation", () => {
+    expect(normalizeGenreKey("  Video   Game  ")).toBe("video game");
+    expect(normalizeGenreKey(null)).toBe("unknown");
   });
 });

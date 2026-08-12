@@ -12,7 +12,7 @@ const KEYRING_USER: &str = "arl";
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_ALBUM_SEARCH_URL: &str = "https://api.deezer.com/search/album";
 const DEEMIX_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.130.0";
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.131.0";
 const MAX_SEARCH_LENGTH: usize = 300;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
