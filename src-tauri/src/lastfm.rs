@@ -24,7 +24,7 @@ use zeroize::Zeroizing;
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.lastfm";
 const KEYRING_USER: &str = "api-key";
 const LASTFM_API_BASE: &str = "https://ws.audioscrobbler.com/2.0/";
-const LASTFM_USER_AGENT: &str = "music-backup-v5/0.124.0 (local music metadata enrichment)";
+const LASTFM_USER_AGENT: &str = "music-backup-v5/0.124.1 (local music metadata enrichment)";
 const REQUEST_INTERVAL: Duration = Duration::from_millis(350);
 const POPULARITY_CACHE_DAYS: i64 = 7;
 const UNAVAILABLE_CACHE_DAYS: i64 = 30;

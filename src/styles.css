@@ -22753,11 +22753,6 @@ button {
   animation: daily-edition-carousel-progress 10s linear;
 }
 
-.daily-edition-anniversary-stage:hover .daily-edition-carousel-progress,
-.daily-edition-anniversary-stage:focus-within .daily-edition-carousel-progress {
-  animation-play-state: paused;
-}
-
 .daily-edition-carousel-timing {
   margin-left: auto;
   color: var(--edition-muted);

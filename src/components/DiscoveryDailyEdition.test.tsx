@@ -209,7 +209,7 @@ describe("DiscoveryDailyEdition", () => {
   it("supports manual selection, 10-second rotation, and anniversary changes", () => {
     vi.useFakeTimers();
     const onAnniversaryYearsChange = vi.fn();
-    render(
+    const view = render(
       <DiscoveryDailyEdition
         edition={edition}
         isLoading={false}
@@ -232,18 +232,74 @@ describe("DiscoveryDailyEdition", () => {
     const firstThumbnail = screen.getByRole("button", {
       name: "Show Hejira by Joni Mitchell",
     });
+    firstThumbnail.focus();
     fireEvent.click(firstThumbnail);
-    fireEvent.blur(firstThumbnail);
-    act(() => vi.advanceTimersByTime(10_000));
+    expect(firstThumbnail).toHaveFocus();
+    act(() => vi.advanceTimersByTime(9_000));
+    expect(
+      screen.getByRole("group", { name: "1 of 2: Hejira by Joni Mitchell" }),
+    ).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1_000));
     expect(
       screen.getByRole("group", { name: "2 of 2: Destroyer by KISS" }),
     ).toBeInTheDocument();
 
-    fireEvent.change(
-      screen.getByRole("combobox", { name: "Choose anniversary milestone" }),
-      { target: { value: "70" } },
-    );
+    const anniversaryPicker = screen.getByRole("combobox", {
+      name: "Choose anniversary milestone",
+    });
+    anniversaryPicker.focus();
+    fireEvent.change(anniversaryPicker, { target: { value: "70" } });
     expect(onAnniversaryYearsChange).toHaveBeenCalledWith(70);
+
+    view.rerender(
+      <DiscoveryDailyEdition
+        edition={edition}
+        isLoading={false}
+        isAnniversaryLoading
+        onAnniversaryYearsChange={onAnniversaryYearsChange}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenCompletion={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+    act(() => vi.advanceTimersByTime(20_000));
+    expect(
+      screen.getByRole("group", { name: "2 of 2: Destroyer by KISS" }),
+    ).toBeInTheDocument();
+
+    view.rerender(
+      <DiscoveryDailyEdition
+        edition={{
+          ...edition,
+          anniversaryYears: 70,
+          anniversaries: edition.anniversaries.map((story, index) => ({
+            ...story,
+            albumId: `${story.albumId}-70`,
+            album: index === 0 ? "First 70-year album" : "Second 70-year album",
+            releaseYear: 1956,
+          })),
+        }}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        onAnniversaryYearsChange={onAnniversaryYearsChange}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenCompletion={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("group", {
+        name: "1 of 2: First 70-year album by Joni Mitchell",
+      }),
+    ).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(
+      screen.getByRole("group", {
+        name: "2 of 2: Second 70-year album by KISS",
+      }),
+    ).toBeInTheDocument();
     vi.useRealTimers();
   });
 

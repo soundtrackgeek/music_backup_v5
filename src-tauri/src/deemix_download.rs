@@ -26,7 +26,7 @@ use zeroize::Zeroizing;
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_MEDIA_URL: &str = "https://media.deezer.com/v1/get_url";
 const DEEMIX_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.124.0";
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.124.1";
 const DOWNLOAD_EVENT: &str = "deemix-download-progress";
 const STREAM_CHUNK_SIZE: usize = 2048;
 const MAX_ARTWORK_BYTES: u64 = 20 * 1024 * 1024;

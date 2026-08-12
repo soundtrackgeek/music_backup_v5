@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CalendarDays,
   ChartLine,
@@ -209,33 +209,42 @@ function AnniversaryCarousel({
   onOpenAlbum,
 }: AnniversaryCarouselProps) {
   const anniversaries = edition.anniversaries.slice(0, 5);
-  const anniversaryKey = useMemo(
-    () => anniversaries.map((story) => story.albumId).join("|"),
-    [anniversaries],
-  );
+  const anniversaryKey = anniversaries.map((story) => story.albumId).join("|");
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isPointerPaused, setIsPointerPaused] = useState(false);
-  const [isFocusPaused, setIsFocusPaused] = useState(false);
+  const [rotationCycle, setRotationCycle] = useState(0);
   const anniversary = anniversaries[activeIndex] ?? anniversaries[0] ?? null;
 
   useEffect(() => {
     setActiveIndex(0);
+    setRotationCycle((current) => current + 1);
   }, [anniversaryKey, edition.anniversaryYears]);
 
   useEffect(() => {
     if (
       anniversaries.length < 2 ||
-      isPointerPaused ||
-      isFocusPaused ||
+      isLoading ||
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     ) {
       return;
     }
     const timer = window.setTimeout(() => {
       setActiveIndex((current) => (current + 1) % anniversaries.length);
+      setRotationCycle((current) => current + 1);
     }, 10_000);
     return () => window.clearTimeout(timer);
-  }, [activeIndex, anniversaries.length, isFocusPaused, isPointerPaused]);
+  }, [
+    activeIndex,
+    anniversaries.length,
+    anniversaryKey,
+    edition.anniversaryYears,
+    isLoading,
+    rotationCycle,
+  ]);
+
+  function selectAnniversary(index: number) {
+    setActiveIndex(index);
+    setRotationCycle((current) => current + 1);
+  }
 
   return (
     <div
@@ -244,14 +253,6 @@ function AnniversaryCarousel({
       aria-roledescription="carousel"
       aria-label={`${edition.anniversaryYears}-year album anniversaries`}
       aria-busy={isLoading}
-      onPointerEnter={() => setIsPointerPaused(true)}
-      onPointerLeave={() => setIsPointerPaused(false)}
-      onFocusCapture={() => setIsFocusPaused(true)}
-      onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          setIsFocusPaused(false);
-        }
-      }}
     >
       {anniversary ? (
         <div
@@ -368,7 +369,7 @@ function AnniversaryCarousel({
               type="button"
               aria-label={`Show ${story.album} by ${story.artist}`}
               aria-current={index === activeIndex ? "true" : undefined}
-              onClick={() => setActiveIndex(index)}
+              onClick={() => selectAnniversary(index)}
               title={`${story.artist} — ${story.album}`}
             >
               <AlbumCover
@@ -379,7 +380,11 @@ function AnniversaryCarousel({
                 }}
                 decorative
               />
-              <span className="daily-edition-carousel-progress" aria-hidden="true" />
+              <span
+                className="daily-edition-carousel-progress"
+                key={index === activeIndex ? rotationCycle : "idle"}
+                aria-hidden="true"
+              />
             </button>
           ))}
           <span className="daily-edition-carousel-timing">Changes every 10 seconds</span>

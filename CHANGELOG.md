@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.124.1] - 2026-08-12
+### Fixed
+- Fixed anniversary autoplay remaining paused after a thumbnail click or milestone selection; each interaction now starts a fresh ten-second cycle and keeps the cover, story copy, active thumbnail, and progress indicator synchronized.
+- Paused the anniversary timer only while replacement milestone data is loading, then restarted it for the new era.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.124.1`.
+
 ## [0.124.0] - 2026-08-12
 ### Added
 - Added separate **Birthdays** and **Memorials** tabs to the Daily Edition Today panel, each showing up to five locally represented artists whose MusicBrainz birth or death date matches today.
