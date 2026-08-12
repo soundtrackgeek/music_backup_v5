@@ -2348,11 +2348,32 @@ export type DiscoveryDailyEdition = {
   anniversaries: DiscoveryAnniversaryStory[];
   lifeEvents: DiscoveryLifeEventStory[];
   chartSnapshot: DiscoveryChartSnapshot;
-  deepCuts: DiscoveryDeepCutStory[];
+  deepCutSnapshot: DiscoveryDeepCutSnapshot;
   artistCompletions: DiscoveryArtistCompletionStory[];
   ratingAnchor: DiscoveryRatingAnchor | null;
   becauseYouPlayed: DiscoveryRecommendationStory[];
   listeningEvidenceNote: string;
+};
+
+export type DiscoveryDeepCutSnapshotRequest = {
+  year?: number;
+  decade?: number;
+  genre?: string;
+};
+
+export type DiscoveryDeepCutSnapshot = {
+  year: number | null;
+  decade: number | null;
+  genre: string | null;
+  availableYears: number[];
+  availableGenres: DiscoveryDeepCutGenre[];
+  matchingAlbumCount: number;
+  stories: DiscoveryDeepCutStory[];
+};
+
+export type DiscoveryDeepCutGenre = {
+  id: string;
+  label: string;
 };
 
 export type DiscoveryChartSource = "billboard" | "official-uk" | "vg-lista";
@@ -2427,6 +2448,8 @@ export type DiscoveryDeepCutStory = {
   trackNumber: number | null;
   timeSeconds: number | null;
   albumRating: number;
+  releaseYear: number | null;
+  genre: string;
   coverPath: string | null;
   evidence: string;
 };

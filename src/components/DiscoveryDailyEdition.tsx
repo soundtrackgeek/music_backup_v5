@@ -7,6 +7,7 @@ import {
   Heart,
   Info,
   Play,
+  RefreshCw,
   Shuffle,
   Sparkles,
 } from "lucide-react";
@@ -15,6 +16,7 @@ import type {
   DiscoveryChartSnapshotRequest,
   DiscoveryChartStory,
   DiscoveryDailyEdition,
+  DiscoveryDeepCutSnapshotRequest,
 } from "../types";
 import { AlbumCover } from "./AlbumCover";
 import { ArtistPortrait } from "./ArtistPortrait";
@@ -24,8 +26,10 @@ type DiscoveryDailyEditionProps = {
   isLoading: boolean;
   isAnniversaryLoading: boolean;
   isChartLoading: boolean;
+  isDeepCutLoading: boolean;
   onAnniversaryYearsChange: (years: number) => void;
   onChartSnapshotChange: (request: DiscoveryChartSnapshotRequest) => void;
+  onDeepCutSnapshotChange: (request: DiscoveryDeepCutSnapshotRequest) => void;
   onOpenAlbum: (albumId: string) => void;
   onOpenArtist: (artistId: string, artistName: string) => void;
   onOpenCompletion: () => void;
@@ -403,8 +407,10 @@ export function DiscoveryDailyEdition({
   isLoading,
   isAnniversaryLoading,
   isChartLoading,
+  isDeepCutLoading,
   onAnniversaryYearsChange,
   onChartSnapshotChange,
+  onDeepCutSnapshotChange,
   onOpenAlbum,
   onOpenArtist,
   onOpenCompletion,
@@ -438,6 +444,10 @@ export function DiscoveryDailyEdition({
   }
 
   const chartSnapshot = edition.chartSnapshot;
+  const deepCutSnapshot = edition.deepCutSnapshot;
+  const deepCutDecades = Array.from(
+    new Set(deepCutSnapshot.availableYears.map((year) => Math.floor(year / 10) * 10)),
+  ).sort((left, right) => right - left);
   const anchor = edition.ratingAnchor;
 
   function navigateToStory(storyId: string) {
@@ -621,16 +631,88 @@ export function DiscoveryDailyEdition({
               aria-labelledby="deep-cuts-heading"
               tabIndex={-1}
             >
-              <div className="daily-edition-section-heading">
-                <Heart aria-hidden="true" />
-                <div>
-                  <h3 id="deep-cuts-heading">Deep Cuts</h3>
-                  <p>Unrated tracks on highly rated albums</p>
+              <div className="daily-edition-deep-cuts-header">
+                <div className="daily-edition-section-heading">
+                  <Heart aria-hidden="true" />
+                  <div>
+                    <h3 id="deep-cuts-heading">Deep Cuts</h3>
+                    <p>One unrated track per highly rated album</p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  className="daily-edition-deep-cut-refresh"
+                  disabled={isDeepCutLoading}
+                  onClick={() => onDeepCutSnapshotChange({
+                    year: deepCutSnapshot.year ?? undefined,
+                    decade: deepCutSnapshot.decade ?? undefined,
+                    genre: deepCutSnapshot.genre ?? undefined,
+                  })}
+                >
+                  <RefreshCw aria-hidden="true" />
+                  Refresh
+                </button>
               </div>
-              {edition.deepCuts.length ? (
+              <div className="daily-edition-deep-cut-controls" aria-label="Deep Cuts filters">
+                <label>
+                  <span>Period</span>
+                  <select
+                    aria-label="Filter Deep Cuts by period"
+                    disabled={isDeepCutLoading}
+                    value={
+                      deepCutSnapshot.year != null
+                        ? `year:${deepCutSnapshot.year}`
+                        : deepCutSnapshot.decade != null
+                          ? `decade:${deepCutSnapshot.decade}`
+                          : "all"
+                    }
+                    onChange={(event) => {
+                      const [kind, rawValue] = event.target.value.split(":");
+                      const value = Number(rawValue);
+                      onDeepCutSnapshotChange({
+                        year: kind === "year" ? value : undefined,
+                        decade: kind === "decade" ? value : undefined,
+                        genre: deepCutSnapshot.genre ?? undefined,
+                      });
+                    }}
+                  >
+                    <option value="all">All years</option>
+                    <optgroup label="Decades">
+                      {deepCutDecades.map((decade) => (
+                        <option key={decade} value={`decade:${decade}`}>
+                          {decade}s
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Years">
+                      {deepCutSnapshot.availableYears.map((year) => (
+                        <option key={year} value={`year:${year}`}>{year}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </label>
+                <label>
+                  <span>Genre</span>
+                  <select
+                    aria-label="Filter Deep Cuts by genre"
+                    disabled={isDeepCutLoading}
+                    value={deepCutSnapshot.genre ?? ""}
+                    onChange={(event) => onDeepCutSnapshotChange({
+                      year: deepCutSnapshot.year ?? undefined,
+                      decade: deepCutSnapshot.decade ?? undefined,
+                      genre: event.target.value || undefined,
+                    })}
+                  >
+                    <option value="">All genres</option>
+                    {deepCutSnapshot.availableGenres.map((genre) => (
+                      <option key={genre.id} value={genre.id}>{genre.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {deepCutSnapshot.stories.length ? (
                 <div className="daily-edition-stack-list">
-                  {edition.deepCuts.slice(0, 4).map((story) => (
+                  {deepCutSnapshot.stories.slice(0, 4).map((story) => (
                     <button
                       className="daily-edition-media-row"
                       key={story.trackId}
@@ -651,6 +733,9 @@ export function DiscoveryDailyEdition({
                           {story.artist} · <em>{story.album}</em>
                         </small>
                         <small>
+                          {story.releaseYear ?? "Year unknown"} · {story.genre}
+                        </small>
+                        <small>
                           Album rated {story.albumRating}
                           {formatDuration(story.timeSeconds)
                             ? ` · ${formatDuration(story.timeSeconds)}`
@@ -665,11 +750,11 @@ export function DiscoveryDailyEdition({
                 </div>
               ) : (
                 <EditionEmpty>
-                  Rate an album highly to reveal unrated, non-charting tracks.
+                  No unrated, non-charting tracks match these filters.
                 </EditionEmpty>
               )}
               <p className="daily-edition-shelf-footer">
-                Explore {edition.deepCuts.length} evidence-backed deep cuts
+                Showing {Math.min(4, deepCutSnapshot.stories.length)} randomized cuts from {deepCutSnapshot.matchingAlbumCount} matching albums
               </p>
             </section>
 

@@ -237,6 +237,8 @@ import type {
   DiscoveryAnniversaryStory,
   DiscoveryChartSnapshot,
   DiscoveryChartSnapshotRequest,
+  DiscoveryDeepCutSnapshot,
+  DiscoveryDeepCutSnapshotRequest,
   DiscoveryResponse,
   ExportResult,
   ImportProgress,
@@ -1759,7 +1761,18 @@ export async function getGenreProgress(request: GenreProgressRequest) {
 
 export async function getDiscovery() {
   if (!isTauriRuntime()) {
-    return mockDiscovery;
+    return {
+      ...mockDiscovery,
+      dailyEdition: {
+        ...mockDiscovery.dailyEdition,
+        deepCutSnapshot: {
+          ...mockDiscovery.dailyEdition.deepCutSnapshot,
+          stories: [...mockDiscovery.dailyEdition.deepCutSnapshot.stories].sort(
+            () => Math.random() - 0.5,
+          ),
+        },
+      },
+    } satisfies DiscoveryResponse;
   }
 
   return invoke<DiscoveryResponse>("get_discovery");
@@ -1836,6 +1849,37 @@ export async function getDiscoveryChartSnapshot(
   }
 
   return invoke<DiscoveryChartSnapshot>("get_discovery_chart_snapshot", { request });
+}
+
+export async function getDiscoveryDeepCutSnapshot(
+  request: DiscoveryDeepCutSnapshotRequest,
+) {
+  if (!isTauriRuntime()) {
+    const base = mockDiscovery.dailyEdition.deepCutSnapshot;
+    const stories = base.stories.filter((story) => {
+      if (request.year != null && story.releaseYear !== request.year) return false;
+      if (
+        request.decade != null &&
+        (story.releaseYear == null ||
+          story.releaseYear < request.decade ||
+          story.releaseYear >= request.decade + 10)
+      ) return false;
+      return !request.genre || story.genre.toLowerCase() === request.genre.toLowerCase();
+    });
+    const shuffled = [...stories].sort(() => Math.random() - 0.5);
+    return {
+      ...base,
+      year: request.year ?? null,
+      decade: request.year == null ? request.decade ?? null : null,
+      genre: request.genre ?? null,
+      matchingAlbumCount: new Set(shuffled.map((story) => story.albumId)).size,
+      stories: shuffled,
+    } satisfies DiscoveryDeepCutSnapshot;
+  }
+
+  return invoke<DiscoveryDeepCutSnapshot>("get_discovery_deep_cut_snapshot", {
+    request,
+  });
 }
 
 export async function getSettings() {

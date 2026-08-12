@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.126.0] - 2026-08-12
+### Added
+- Added Deep Cuts period and genre filters with exact year, decade, and canonical genre choices, plus a Refresh action that preserves the active filters.
+
+### Changed
+- Deep Cuts now randomizes whenever Discovery opens or refreshes and shows at most one unrated, unloved, non-single track per highly rated album, preventing one release from taking over the shelf.
+- Deep Cut rows now explain their release year and genre, and the shelf reports both the randomized four-track display and the full matching album pool.
+- Synchronized app metadata and provider user agents to `0.126.0`.
+
 ## [0.125.1] - 2026-08-12
 ### Fixed
 - Made the Discovery memorial-date regression test follow the runner's active locale instead of assuming day-first formatting, restoring Windows release builds.

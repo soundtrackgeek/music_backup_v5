@@ -23110,6 +23110,77 @@ button {
   color: #43b8b3;
 }
 
+.daily-edition-deep-cuts-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.daily-edition-deep-cut-refresh {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 25px;
+  padding: 0 7px;
+  border: 1px solid var(--edition-rule);
+  border-radius: 4px;
+  color: #d9e2e0;
+  background: transparent;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.daily-edition-deep-cut-refresh svg {
+  width: 12px;
+  height: 12px;
+}
+
+.daily-edition-deep-cut-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.daily-edition-deep-cut-controls label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: #91a3a1;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.daily-edition-deep-cut-controls select {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 5px;
+  border: 1px solid var(--edition-rule);
+  border-radius: 4px;
+  color: #f1f4f3;
+  background: #10191c;
+  font: inherit;
+  font-size: 10px;
+}
+
+.daily-edition-deep-cut-refresh:hover,
+.daily-edition-deep-cut-refresh:focus-visible,
+.daily-edition-deep-cut-controls select:focus-visible {
+  border-color: #43b8b3;
+  outline: none;
+}
+
+.daily-edition-deep-cut-refresh:disabled,
+.daily-edition-deep-cut-controls select:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .daily-edition-stack-list {
   margin-top: 12px;
 }

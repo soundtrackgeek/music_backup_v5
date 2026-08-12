@@ -16,22 +16,23 @@ use crate::models::{
     ConcentrationPoint, CountryCatalogStats, DecadeProgressStats, DiscoveryAlbumPoint,
     DiscoveryAnniversaryStory, DiscoveryArtistCompletionStory, DiscoveryArtistPoint,
     DiscoveryChartSnapshot, DiscoveryChartSnapshotRequest, DiscoveryChartStory,
-    DiscoveryDailyEdition, DiscoveryDeepCutStory, DiscoveryGenrePoint, DiscoveryHeatmapCell,
-    DiscoveryLifeEventStory, DiscoveryMission, DiscoveryRatingAnchor, DiscoveryRecommendationStory,
-    DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats, ExportMusicToolRequest,
-    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressRequest,
-    GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint, GenreTimelineGenre,
-    GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount, ImportRun,
-    LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus, LovedDensityStat,
-    LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption, MusicToolFieldDiff,
-    MusicToolFixDiff, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
-    MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow, MusicToolProgress,
-    MusicToolSummary, MusicToolUndoSummary, NorsktoppenImportSummary, OfficialUkImportSummary,
-    OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse, RatingBucket, RatingEvent,
-    RatingHistoryPoint, RatingProgressStats, SaveChartRequest, SaveSearchRequest, SavedChart,
-    SavedSearch, StatisticsResponse, TextFilter, TiISkuddetImportSummary,
-    TrackDebutTimelineResponse, TrackDebutTimelineTrack, TrackDebutTimelineYear,
-    VgListaImportSummary, YearProgressRequest, YearProgressStats,
+    DiscoveryDailyEdition, DiscoveryDeepCutGenre, DiscoveryDeepCutSnapshot,
+    DiscoveryDeepCutSnapshotRequest, DiscoveryDeepCutStory, DiscoveryGenrePoint,
+    DiscoveryHeatmapCell, DiscoveryLifeEventStory, DiscoveryMission, DiscoveryRatingAnchor,
+    DiscoveryRecommendationStory, DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats,
+    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    GenreProgressRequest, GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint,
+    GenreTimelineGenre, GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount,
+    ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus,
+    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption,
+    MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry, MusicToolFixRequest,
+    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
+    MusicToolProgress, MusicToolSummary, MusicToolUndoSummary, NorsktoppenImportSummary,
+    OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse,
+    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
+    TiISkuddetImportSummary, TrackDebutTimelineResponse, TrackDebutTimelineTrack,
+    TrackDebutTimelineYear, VgListaImportSummary, YearProgressRequest, YearProgressStats,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, Local, NaiveDate, Utc, Weekday};
@@ -9854,6 +9855,15 @@ pub fn discovery_chart_snapshot_for_app(
 }
 
 #[cfg(not(test))]
+pub fn discovery_deep_cut_snapshot_for_app(
+    app: &AppHandle,
+    request: DiscoveryDeepCutSnapshotRequest,
+) -> Result<DiscoveryDeepCutSnapshot> {
+    let (conn, _) = open(app)?;
+    discovery_deep_cut_snapshot(&conn, &request)
+}
+
+#[cfg(not(test))]
 pub fn list_music_tools_for_app(app: &AppHandle) -> Result<Vec<MusicToolSummary>> {
     let (conn, _) = open(app)?;
     list_music_tools(&conn)
@@ -13411,7 +13421,10 @@ fn discovery_daily_edition(conn: &Connection, date: NaiveDate) -> Result<Discove
                 random: true,
             },
         )?,
-        deep_cuts: discovery_deep_cuts(conn)?,
+        deep_cut_snapshot: discovery_deep_cut_snapshot(
+            conn,
+            &DiscoveryDeepCutSnapshotRequest::default(),
+        )?,
         artist_completions: discovery_artist_completions(conn)?,
         rating_anchor,
         because_you_played,
@@ -13845,45 +13858,144 @@ fn discovery_chart_stories(
     Ok(stories)
 }
 
-fn discovery_deep_cuts(conn: &Connection) -> Result<Vec<DiscoveryDeepCutStory>> {
-    let mut stmt = conn.prepare(
-        "
-        SELECT
-            t.id,
-            COALESCE(NULLIF(TRIM(t.title), ''), 'Untitled'),
-            a.id,
-            COALESCE(NULLIF(TRIM(a.album), ''), 'Unknown Album'),
-            COALESCE(NULLIF(TRIM(a.album_artist_display), ''), 'Unknown Artist'),
-            t.track_number,
-            t.time_seconds,
-            a.effective_album_rating,
-            cover.cache_path
-        FROM tracks t
-        JOIN albums a ON a.id = t.album_id
-        LEFT JOIN album_covers cover ON cover.album_id = a.id
-        WHERE a.effective_album_rating >= 85
-          AND t.normalized_rating IS NULL
-          AND NULLIF(TRIM(COALESCE(t.love, '')), '') IS NULL
-          AND t.billboard_single_rank IS NULL
-          AND t.vg_lista_rank IS NULL
-          AND t.official_uk_rank IS NULL
-          AND t.ti_i_skuddet_rank IS NULL
-          AND t.norsktoppen_rank IS NULL
-          AND COALESCE(t.track_number, 2) > 1
-        ORDER BY
-            CASE WHEN cover.cache_path IS NULL THEN 1 ELSE 0 END,
-            a.effective_album_rating DESC,
-            COALESCE(a.album_score, 0) DESC,
-            LOWER(COALESCE(a.album_artist_display, '')),
-            LOWER(COALESCE(a.album, '')),
-            COALESCE(t.disc_number, 1),
-            COALESCE(t.track_number, 999)
-        LIMIT 16
-        ",
-    )?;
-    let stories = stmt
+fn discovery_deep_cut_snapshot(
+    conn: &Connection,
+    request: &DiscoveryDeepCutSnapshotRequest,
+) -> Result<DiscoveryDeepCutSnapshot> {
+    const ELIGIBLE_TRACK: &str = "
+        a.effective_album_rating >= 85
+        AND t.normalized_rating IS NULL
+        AND NULLIF(TRIM(COALESCE(t.love, '')), '') IS NULL
+        AND t.billboard_single_rank IS NULL
+        AND t.vg_lista_rank IS NULL
+        AND t.official_uk_rank IS NULL
+        AND t.ti_i_skuddet_rank IS NULL
+        AND t.norsktoppen_rank IS NULL
+        AND COALESCE(t.track_number, 2) > 1
+    ";
+    const RELEASE_YEAR: &str = "COALESCE(a.release_year, a.year)";
+    const GENRE_ID: &str =
+        "COALESCE(NULLIF(TRIM(a.genre_normalized), ''), NULLIF(TRIM(t.genre_normalized), ''))";
+
+    let years_sql = format!(
+        "SELECT DISTINCT {RELEASE_YEAR}
+         FROM tracks t JOIN albums a ON a.id = t.album_id
+         WHERE {ELIGIBLE_TRACK} AND {RELEASE_YEAR} IS NOT NULL
+         ORDER BY {RELEASE_YEAR} DESC"
+    );
+    let available_years = conn
+        .prepare(&years_sql)?
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load deep-cut years")?;
+
+    let genres_sql = format!(
+        "SELECT {GENRE_ID},
+                COALESCE(MIN(NULLIF(TRIM(a.canonical_genre), '')), MIN(NULLIF(TRIM(t.canonical_genre), '')), {GENRE_ID})
+         FROM tracks t JOIN albums a ON a.id = t.album_id
+         WHERE {ELIGIBLE_TRACK} AND {GENRE_ID} IS NOT NULL
+         GROUP BY {GENRE_ID}
+         ORDER BY LOWER(COALESCE(MIN(NULLIF(TRIM(a.canonical_genre), '')), MIN(NULLIF(TRIM(t.canonical_genre), '')), {GENRE_ID}))"
+    );
+    let available_genres = conn
+        .prepare(&genres_sql)?
         .query_map([], |row| {
+            Ok(DiscoveryDeepCutGenre {
+                id: row.get(0)?,
+                label: row.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load deep-cut genres")?;
+
+    let year = request.year.filter(|year| available_years.contains(year));
+    let decade = if year.is_none() {
+        request.decade.map(|decade| decade.div_euclid(10) * 10)
+    } else {
+        None
+    };
+    let genre = request.genre.as_ref().and_then(|genre| {
+        available_genres
+            .iter()
+            .find(|option| option.id.eq_ignore_ascii_case(genre))
+            .map(|option| option.id.clone())
+    });
+
+    let mut conditions = vec![ELIGIBLE_TRACK.to_string()];
+    let mut values = Vec::new();
+    if let Some(year) = year {
+        conditions.push(format!("{RELEASE_YEAR} = ?"));
+        values.push(Value::Integer(i64::from(year)));
+    } else if let Some(decade) = decade {
+        conditions.push(format!("{RELEASE_YEAR} >= ? AND {RELEASE_YEAR} < ?"));
+        values.push(Value::Integer(i64::from(decade)));
+        values.push(Value::Integer(i64::from(decade + 10)));
+    }
+    if let Some(genre) = genre.as_ref() {
+        conditions.push(format!("LOWER({GENRE_ID}) = LOWER(?)"));
+        values.push(Value::Text(genre.clone()));
+    }
+    let where_clause = conditions.join(" AND ");
+    let count_sql = format!(
+        "SELECT COUNT(DISTINCT a.id)
+         FROM tracks t JOIN albums a ON a.id = t.album_id
+         WHERE {where_clause}"
+    );
+    let matching_album_count =
+        conn.query_row(&count_sql, params_from_iter(values.iter()), |row| {
+            row.get(0)
+        })?;
+
+    let stories_sql = format!(
+        "WITH selected_albums AS (
+            SELECT DISTINCT a.id
+            FROM tracks t
+            JOIN albums a ON a.id = t.album_id
+            WHERE {where_clause}
+            ORDER BY random()
+            LIMIT 16
+        ),
+        candidates AS (
+            SELECT
+                t.id,
+                COALESCE(NULLIF(TRIM(t.title), ''), 'Untitled') AS title,
+                a.id AS album_id,
+                COALESCE(NULLIF(TRIM(a.album), ''), 'Unknown Album') AS album,
+                COALESCE(NULLIF(TRIM(a.album_artist_display), ''), 'Unknown Artist') AS artist,
+                t.track_number,
+                t.time_seconds,
+                a.effective_album_rating,
+                {RELEASE_YEAR} AS release_year,
+                COALESCE(NULLIF(TRIM(a.canonical_genre), ''), NULLIF(TRIM(t.canonical_genre), ''), 'Unknown') AS genre,
+                cover.cache_path,
+                ROW_NUMBER() OVER (PARTITION BY a.id ORDER BY random()) AS album_candidate
+            FROM tracks t
+            JOIN albums a ON a.id = t.album_id
+            JOIN selected_albums selected ON selected.id = a.id
+            LEFT JOIN album_covers cover ON cover.album_id = a.id
+            WHERE {where_clause}
+        )
+        SELECT id, title, album_id, album, artist, track_number, time_seconds,
+               effective_album_rating, release_year, genre, cache_path
+        FROM candidates
+        WHERE album_candidate = 1
+        ORDER BY random()
+        LIMIT 16"
+    );
+    let story_values = values
+        .iter()
+        .cloned()
+        .chain(values.iter().cloned())
+        .collect::<Vec<_>>();
+    let stories = conn
+        .prepare(&stories_sql)?
+        .query_map(params_from_iter(story_values.iter()), |row| {
             let album_rating: i32 = row.get(7)?;
+            let release_year: Option<i32> = row.get(8)?;
+            let genre: String = row.get(9)?;
+            let period = release_year
+                .map(|year| year.to_string())
+                .unwrap_or_else(|| "year unknown".to_string());
             Ok(DiscoveryDeepCutStory {
                 track_id: row.get(0)?,
                 title: row.get(1)?,
@@ -13893,15 +14005,26 @@ fn discovery_deep_cuts(conn: &Connection) -> Result<Vec<DiscoveryDeepCutStory>> 
                 track_number: row.get(5)?,
                 time_seconds: row.get(6)?,
                 album_rating,
-                cover_path: row.get(8)?,
+                release_year,
+                genre: genre.clone(),
+                cover_path: row.get(10)?,
                 evidence: format!(
-                    "Album rated {album_rating} · track unrated · no imported singles-chart match"
+                    "Album rated {album_rating} · {period} · {genre} · track unrated · no imported singles-chart match"
                 ),
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()
         .context("Could not load discovery deep cuts")?;
-    Ok(stories)
+
+    Ok(DiscoveryDeepCutSnapshot {
+        year,
+        decade,
+        genre,
+        available_years,
+        available_genres,
+        matching_album_count,
+        stories,
+    })
 }
 
 fn discovery_artist_completions(conn: &Connection) -> Result<Vec<DiscoveryArtistCompletionStory>> {
@@ -20869,7 +20992,7 @@ mod tests {
         assert_eq!(edition.chart_snapshot.year, Some(1987));
         assert_eq!(edition.chart_snapshot.week, Some(32));
         assert_eq!(edition.chart_snapshot.stories[0].rank, 1);
-        assert_eq!(edition.deep_cuts[0].title, "Hidden Finale");
+        assert_eq!(edition.deep_cut_snapshot.stories[0].title, "Hidden Finale");
         assert_eq!(edition.artist_completions[0].missing_release_title, "Very");
         assert_eq!(
             edition
@@ -20882,6 +21005,126 @@ mod tests {
         assert!(edition
             .listening_evidence_note
             .contains("recent rating activity"));
+    }
+
+    #[test]
+    fn discovery_deep_cuts_are_album_diverse_and_filter_exactly() {
+        let conn = seeded_connection();
+        let albums = [
+            (
+                "deep-1982",
+                "First Artist",
+                "First Album",
+                1982,
+                "Rock",
+                "rock",
+            ),
+            (
+                "deep-1987",
+                "Second Artist",
+                "Second Album",
+                1987,
+                "Rock",
+                "rock",
+            ),
+            (
+                "deep-2001",
+                "Third Artist",
+                "Third Album",
+                2001,
+                "Pop",
+                "pop",
+            ),
+            (
+                "deep-2005",
+                "Fourth Artist",
+                "Fourth Album",
+                2005,
+                "Rock",
+                "rock",
+            ),
+        ];
+        for (album_id, artist, album, year, genre, genre_id) in albums {
+            insert_test_album(&conn, album_id, artist, album, year, 10);
+            conn.execute(
+                "UPDATE albums
+                 SET effective_album_rating = 90, canonical_genre = ?2,
+                     genre_normalized = ?3
+                 WHERE id = ?1",
+                params![album_id, genre, genre_id],
+            )
+            .expect("update deep-cut album");
+            for track_number in 2..=3 {
+                conn.execute(
+                    "INSERT INTO tracks (
+                        import_run_id, album_id, album_unique_id, display_artist,
+                        album_artist_display, album, title, canonical_genre,
+                        genre_normalized, normalized_rating, track_number, year,
+                        release_year, time_seconds, row_hash
+                    ) VALUES (
+                        1, ?1, ?1, ?2, ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?8,
+                        ?8, 240, ?9
+                    )",
+                    params![
+                        album_id,
+                        artist,
+                        album,
+                        format!("Deep Track {track_number}"),
+                        genre,
+                        genre_id,
+                        track_number,
+                        year,
+                        format!("{album_id}-{track_number}"),
+                    ],
+                )
+                .expect("insert deep-cut track");
+            }
+        }
+
+        let all = discovery_deep_cut_snapshot(&conn, &DiscoveryDeepCutSnapshotRequest::default())
+            .expect("load unfiltered deep cuts");
+        assert_eq!(all.matching_album_count, 4);
+        assert_eq!(all.stories.len(), 4);
+        assert_eq!(
+            all.stories
+                .iter()
+                .map(|story| story.album_id.as_str())
+                .collect::<HashSet<_>>()
+                .len(),
+            all.stories.len()
+        );
+
+        let eighties_rock = discovery_deep_cut_snapshot(
+            &conn,
+            &DiscoveryDeepCutSnapshotRequest {
+                year: None,
+                decade: Some(1980),
+                genre: Some("rock".to_string()),
+            },
+        )
+        .expect("load 1980s rock deep cuts");
+        assert_eq!(eighties_rock.matching_album_count, 2);
+        assert_eq!(eighties_rock.stories.len(), 2);
+        assert!(eighties_rock.stories.iter().all(|story| {
+            story
+                .release_year
+                .is_some_and(|year| (1980..1990).contains(&year))
+                && story.genre == "Rock"
+        }));
+
+        let exact_year = discovery_deep_cut_snapshot(
+            &conn,
+            &DiscoveryDeepCutSnapshotRequest {
+                year: Some(2001),
+                decade: Some(1980),
+                genre: Some("pop".to_string()),
+            },
+        )
+        .expect("load exact-year pop deep cuts");
+        assert_eq!(exact_year.year, Some(2001));
+        assert_eq!(exact_year.decade, None);
+        assert_eq!(exact_year.matching_album_count, 1);
+        assert_eq!(exact_year.stories[0].album_id, "deep-2001");
     }
 
     #[test]

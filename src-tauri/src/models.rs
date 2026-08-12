@@ -1489,11 +1489,38 @@ pub struct DiscoveryDailyEdition {
     pub anniversaries: Vec<DiscoveryAnniversaryStory>,
     pub life_events: Vec<DiscoveryLifeEventStory>,
     pub chart_snapshot: DiscoveryChartSnapshot,
-    pub deep_cuts: Vec<DiscoveryDeepCutStory>,
+    pub deep_cut_snapshot: DiscoveryDeepCutSnapshot,
     pub artist_completions: Vec<DiscoveryArtistCompletionStory>,
     pub rating_anchor: Option<DiscoveryRatingAnchor>,
     pub because_you_played: Vec<DiscoveryRecommendationStory>,
     pub listening_evidence_note: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryDeepCutSnapshotRequest {
+    pub year: Option<i32>,
+    pub decade: Option<i32>,
+    pub genre: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryDeepCutSnapshot {
+    pub year: Option<i32>,
+    pub decade: Option<i32>,
+    pub genre: Option<String>,
+    pub available_years: Vec<i32>,
+    pub available_genres: Vec<DiscoveryDeepCutGenre>,
+    pub matching_album_count: i64,
+    pub stories: Vec<DiscoveryDeepCutStory>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryDeepCutGenre {
+    pub id: String,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1579,6 +1606,8 @@ pub struct DiscoveryDeepCutStory {
     pub track_number: Option<i32>,
     pub time_seconds: Option<i64>,
     pub album_rating: i32,
+    pub release_year: Option<i32>,
+    pub genre: String,
     pub cover_path: Option<String>,
     pub evidence: String,
 }

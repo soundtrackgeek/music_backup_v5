@@ -88,8 +88,14 @@ const edition: DiscoveryDailyEditionData = {
       evidence: "#1 on Official UK Albums · owned album",
     }],
   },
-  deepCuts: [
-    {
+  deepCutSnapshot: {
+    year: null,
+    decade: null,
+    genre: null,
+    availableYears: [2001],
+    availableGenres: [{ id: "rock", label: "Rock" }],
+    matchingAlbumCount: 1,
+    stories: [{
       trackId: 43,
       title: "Deep Track",
       albumId: "album-deep",
@@ -98,10 +104,12 @@ const edition: DiscoveryDailyEditionData = {
       trackNumber: 7,
       timeSeconds: 181,
       albumRating: 92,
+      releaseYear: 2001,
+      genre: "Rock",
       coverPath: null,
       evidence: "Album rated 92 · track unrated · no imported singles-chart match",
-    },
-  ],
+    }],
+  },
   artistCompletions: [
     {
       artistId: "artist-gap",
@@ -153,8 +161,10 @@ describe("DiscoveryDailyEdition", () => {
         isLoading={false}
         isAnniversaryLoading={false}
         isChartLoading={false}
+        isDeepCutLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -192,8 +202,10 @@ describe("DiscoveryDailyEdition", () => {
         isLoading={false}
         isAnniversaryLoading={false}
         isChartLoading={false}
+        isDeepCutLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
         onOpenAlbum={onOpenAlbum}
         onOpenArtist={onOpenArtist}
         onOpenCompletion={onOpenCompletion}
@@ -224,8 +236,10 @@ describe("DiscoveryDailyEdition", () => {
         isLoading={false}
         isAnniversaryLoading={false}
         isChartLoading={false}
+        isDeepCutLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={onChartSnapshotChange}
+        onDeepCutSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -259,6 +273,60 @@ describe("DiscoveryDailyEdition", () => {
     expect(onChartSnapshotChange).toHaveBeenNthCalledWith(4, { random: true });
   });
 
+  it("filters and refreshes Deep Cuts while preserving active filters", () => {
+    const onDeepCutSnapshotChange = vi.fn();
+    const filteredEdition = {
+      ...edition,
+      deepCutSnapshot: {
+        ...edition.deepCutSnapshot,
+        decade: 2000,
+        genre: "rock",
+      },
+    };
+    render(
+      <DiscoveryDailyEdition
+        edition={filteredEdition}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        isChartLoading={false}
+        isDeepCutLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={onDeepCutSnapshotChange}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenCompletion={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Filter Deep Cuts by period" }),
+      { target: { value: "year:2001" } },
+    );
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Filter Deep Cuts by genre" }),
+      { target: { value: "" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+
+    expect(onDeepCutSnapshotChange).toHaveBeenNthCalledWith(1, {
+      year: 2001,
+      decade: undefined,
+      genre: "rock",
+    });
+    expect(onDeepCutSnapshotChange).toHaveBeenNthCalledWith(2, {
+      year: undefined,
+      decade: 2000,
+      genre: undefined,
+    });
+    expect(onDeepCutSnapshotChange).toHaveBeenNthCalledWith(3, {
+      year: undefined,
+      decade: 2000,
+      genre: "rock",
+    });
+  });
+
   it("supports manual selection, 10-second rotation, and anniversary changes", () => {
     vi.useFakeTimers();
     const onAnniversaryYearsChange = vi.fn();
@@ -268,8 +336,10 @@ describe("DiscoveryDailyEdition", () => {
         isLoading={false}
         isAnniversaryLoading={false}
         isChartLoading={false}
+        isDeepCutLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
         onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -312,8 +382,10 @@ describe("DiscoveryDailyEdition", () => {
         isLoading={false}
         isAnniversaryLoading
         isChartLoading={false}
+        isDeepCutLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
         onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -340,8 +412,10 @@ describe("DiscoveryDailyEdition", () => {
         isLoading={false}
         isAnniversaryLoading={false}
         isChartLoading={false}
+        isDeepCutLoading={false}
         onAnniversaryYearsChange={onAnniversaryYearsChange}
         onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -369,8 +443,10 @@ describe("DiscoveryDailyEdition", () => {
         isLoading={false}
         isAnniversaryLoading={false}
         isChartLoading={false}
+        isDeepCutLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
@@ -407,8 +483,10 @@ describe("DiscoveryDailyEdition", () => {
         isLoading={false}
         isAnniversaryLoading={false}
         isChartLoading={false}
+        isDeepCutLoading={false}
         onAnniversaryYearsChange={vi.fn()}
         onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
         onOpenAlbum={vi.fn()}
         onOpenArtist={vi.fn()}
         onOpenCompletion={vi.fn()}
