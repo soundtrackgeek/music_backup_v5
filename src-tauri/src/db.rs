@@ -22,18 +22,19 @@ use crate::models::{
     DiscoveryDeepCutStory, DiscoveryGenrePoint, DiscoveryHeatmapCell, DiscoveryLifeEventStory,
     DiscoveryMission, DiscoveryRecommendationAnchor, DiscoveryRecommendationSnapshot,
     DiscoveryRecommendationSnapshotRequest, DiscoveryRecommendationStory, DiscoveryResponse,
-    DiscoveryShelfExplorerRequest, DiscoveryShelfExplorerResponse, DurationAlbumStat,
-    DurationAnalyticsStats, ExportMusicToolRequest, ExportResult, ExportSearchRequest,
-    GenreListRequest, GenreListResponse, GenreProgressRequest, GenreProgressStats, GenreSummary,
-    GenreTimelineAlbumPoint, GenreTimelineGenre, GenreTimelineRequest, GenreTimelineResponse,
-    GenreTimelineYearCount, ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats,
-    LibraryStatus, LovedDensityStat, LovedTrackStats, MetadataCoverageMetric,
-    MusicBrainzOriginCountryOption, MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry,
-    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
-    MusicToolIssueRow, MusicToolProgress, MusicToolSummary, MusicToolUndoSummary,
-    NorsktoppenImportSummary, OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation,
-    PerformanceProbeResponse, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
-    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
+    DiscoveryShelfExplorerRequest, DiscoveryShelfExplorerResponse, DiscoverySourceHealthItem,
+    DiscoverySourceHealthResponse, DurationAlbumStat, DurationAnalyticsStats,
+    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    GenreProgressRequest, GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint,
+    GenreTimelineGenre, GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount,
+    ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus,
+    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption,
+    MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry, MusicToolFixRequest,
+    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
+    MusicToolProgress, MusicToolSummary, MusicToolUndoSummary, NorsktoppenImportSummary,
+    OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse,
+    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
+    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
     TiISkuddetImportSummary, TrackDebutTimelineResponse, TrackDebutTimelineTrack,
     TrackDebutTimelineYear, VgListaImportSummary, YearProgressRequest, YearProgressStats,
 };
@@ -10823,6 +10824,35 @@ pub fn discovery_daily_edition_for_app(
 }
 
 #[cfg(not(test))]
+pub fn discovery_source_health_for_app(
+    app: &AppHandle,
+    date: &str,
+) -> Result<DiscoverySourceHealthResponse> {
+    let (conn, _) = open(app)?;
+    let requested_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .context("Daily Edition source-health date must use YYYY-MM-DD")?;
+    discovery_source_health(&conn, requested_date, Utc::now())
+}
+
+#[cfg(not(test))]
+pub fn rebuild_discovery_chart_matches_for_app(
+    app: &AppHandle,
+    date: &str,
+) -> Result<DiscoverySourceHealthResponse> {
+    let (conn, _) = open(app)?;
+    let requested_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .context("Daily Edition source-health date must use YYYY-MM-DD")?;
+    let transaction = conn
+        .unchecked_transaction()
+        .context("Could not start chart match rebuild")?;
+    reconcile_album_chart_matches(&transaction)?;
+    transaction
+        .commit()
+        .context("Could not commit chart match rebuild")?;
+    discovery_source_health(&conn, requested_date, Utc::now())
+}
+
+#[cfg(not(test))]
 pub fn discovery_anniversaries_for_app(
     app: &AppHandle,
     anniversary_years: i32,
@@ -14563,6 +14593,567 @@ fn daily_edition_snapshot_dates(conn: &Connection, today: NaiveDate) -> Result<V
     )?
     .collect::<rusqlite::Result<Vec<_>>>()
     .context("Could not list Daily Edition snapshot dates")
+}
+
+fn discovery_health_latest(conn: &Connection, sql: &str) -> Result<Option<String>> {
+    conn.query_row(sql, [], |row| row.get(0))
+        .context("Could not read Daily Edition source freshness")
+}
+
+fn discovery_health_freshness(value: Option<&str>, now: chrono::DateTime<Utc>) -> (String, bool) {
+    let Some(value) = value else {
+        return ("Never updated".to_string(), true);
+    };
+    let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(value) else {
+        return ("Update time unavailable".to_string(), true);
+    };
+    let days = now
+        .signed_duration_since(parsed.with_timezone(&Utc))
+        .num_days()
+        .max(0);
+    let label = match days {
+        0 => "Updated today".to_string(),
+        1 => "Updated 1 day ago".to_string(),
+        _ => format!("Updated {days} days ago"),
+    };
+    (label, false)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn discovery_health_item(
+    id: &str,
+    label: &str,
+    coverage_count: i64,
+    total_count: i64,
+    coverage_label: String,
+    last_successful_update: Option<String>,
+    stale_after_days: i64,
+    now: chrono::DateTime<Utc>,
+    shelves: &[&str],
+    details: Vec<String>,
+    sparse_reasons: Vec<String>,
+    action: &str,
+    action_label: &str,
+    force_stale: bool,
+) -> DiscoverySourceHealthItem {
+    let (freshness_label, timestamp_missing) =
+        discovery_health_freshness(last_successful_update.as_deref(), now);
+    let is_stale = force_stale
+        || timestamp_missing
+        || last_successful_update.as_deref().is_some_and(|value| {
+            chrono::DateTime::parse_from_rfc3339(value)
+                .map(|parsed| {
+                    now.signed_duration_since(parsed.with_timezone(&Utc))
+                        .num_days()
+                        > stale_after_days
+                })
+                .unwrap_or(true)
+        });
+    let state = if total_count == 0 || coverage_count == 0 {
+        "missing"
+    } else if is_stale {
+        "stale"
+    } else {
+        "healthy"
+    };
+    let coverage_percent = if total_count > 0 {
+        (coverage_count as f64 / total_count as f64).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    DiscoverySourceHealthItem {
+        id: id.to_string(),
+        label: label.to_string(),
+        state: state.to_string(),
+        coverage_count,
+        total_count,
+        coverage_percent,
+        coverage_label,
+        last_successful_update,
+        freshness_label,
+        shelves: shelves.iter().map(|value| (*value).to_string()).collect(),
+        details,
+        sparse_reasons,
+        action: action.to_string(),
+        action_label: action_label.to_string(),
+    }
+}
+
+fn discovery_source_health(
+    conn: &Connection,
+    edition_date: NaiveDate,
+    now: chrono::DateTime<Utc>,
+) -> Result<DiscoverySourceHealthResponse> {
+    let (album_count, track_count, rated_tracks, loved_tracks) = conn.query_row(
+        "SELECT COUNT(*),
+                COALESCE((SELECT COUNT(*) FROM tracks), 0),
+                COALESCE((SELECT COUNT(*) FROM tracks WHERE normalized_rating IS NOT NULL), 0),
+                COALESCE((SELECT COUNT(*) FROM tracks WHERE UPPER(TRIM(COALESCE(love, ''))) = 'L'), 0)
+         FROM albums",
+        [],
+        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?, row.get::<_, i64>(3)?)),
+    )?;
+    let latest_library = discovery_health_latest(
+        conn,
+        "SELECT completed_at FROM import_runs
+         WHERE status = 'completed' AND completed_at IS NOT NULL
+         ORDER BY id DESC LIMIT 1",
+    )?;
+    let rating_events: i64 =
+        conn.query_row("SELECT COUNT(*) FROM rating_events", [], |row| row.get(0))?;
+    let deep_cut_count: i64 = conn.query_row(
+        "SELECT COUNT(DISTINCT a.id)
+         FROM tracks t JOIN albums a ON a.id = t.album_id
+         WHERE a.effective_album_rating >= 85
+           AND t.normalized_rating IS NULL
+           AND NULLIF(TRIM(COALESCE(t.love, '')), '') IS NULL
+           AND t.billboard_single_rank IS NULL
+           AND t.vg_lista_rank IS NULL
+           AND t.official_uk_rank IS NULL
+           AND t.ti_i_skuddet_rank IS NULL
+           AND t.norsktoppen_rank IS NULL
+           AND COALESCE(t.track_number, 2) > 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let mut rating_reasons = Vec::new();
+    if track_count == 0 {
+        rating_reasons
+            .push("No imported tracks are available to build rating-led stories.".to_string());
+    } else if rated_tracks == 0 {
+        rating_reasons.push(
+            "No tracks are rated, so Played, Loved, and Deep Cuts have no listening evidence."
+                .to_string(),
+        );
+    }
+    if rating_events == 0 && rated_tracks > 0 {
+        rating_reasons.push("No rating-change history has been captured yet; Because You Played must use current album ratings instead of recent changes.".to_string());
+    }
+    if deep_cut_count == 0 && album_count > 0 {
+        rating_reasons.push("Deep Cuts found no highly rated album with an unrated track that also avoids imported singles charts.".to_string());
+    }
+    let ratings = discovery_health_item(
+        "ratings",
+        "Ratings & listening signals",
+        rated_tracks,
+        track_count,
+        format!("{rated_tracks} of {track_count} tracks rated"),
+        latest_library.clone(),
+        30,
+        now,
+        &[
+            "Deep Cuts",
+            "Because You Played / Loved",
+            "anniversary tie-breaks",
+        ],
+        vec![
+            format!("{album_count} owned albums"),
+            format!("{rating_events} recorded rating changes"),
+            format!("{loved_tracks} loved tracks"),
+        ],
+        rating_reasons,
+        "open-imports",
+        "Import ratings",
+        false,
+    );
+
+    let chart_rows = [
+        ("Billboard", "billboard_chart_entries"),
+        ("Official UK", "official_uk_album_chart_entries"),
+        ("VG-lista", "vg_lista_album_chart_entries"),
+    ]
+    .into_iter()
+    .map(|(label, table)| {
+        let sql =
+            format!("SELECT COUNT(*), COUNT(matched_album_id), MAX(imported_at) FROM {table}");
+        conn.query_row(&sql, [], |row| {
+            Ok((
+                label.to_string(),
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
+        })
+    })
+    .collect::<rusqlite::Result<Vec<_>>>()?;
+    let chart_total = chart_rows.iter().map(|row| row.1).sum::<i64>();
+    let chart_matched = chart_rows.iter().map(|row| row.2).sum::<i64>();
+    let latest_charts = chart_rows.iter().filter_map(|row| row.3.clone()).max();
+    let mut chart_reasons = Vec::new();
+    for (label, total, matched, _) in &chart_rows {
+        if *total == 0 {
+            chart_reasons.push(format!("The {label} album corpus has not been imported."));
+        } else if *matched == 0 {
+            chart_reasons.push(format!(
+                "{label} has {total} rows but none link to an owned album."
+            ));
+        }
+    }
+    let charts = discovery_health_item(
+        "charts",
+        "Album charts",
+        chart_matched,
+        chart_total,
+        format!("{chart_matched} of {chart_total} chart rows linked"),
+        latest_charts,
+        365,
+        now,
+        &["50 Years Ago", "Chart Toppers", "Deep Cuts"],
+        chart_rows
+            .iter()
+            .map(|(label, total, matched, _)| format!("{label}: {matched} of {total} rows linked"))
+            .collect(),
+        chart_reasons,
+        if chart_total > 0 {
+            "rebuild-chart-matches"
+        } else {
+            "open-imports"
+        },
+        if chart_total > 0 {
+            "Rebuild matches"
+        } else {
+            "Import charts"
+        },
+        chart_rows.iter().any(|row| row.1 == 0),
+    );
+
+    let album_artist_key = artist_key_sql("album_artist_display");
+    let identity_sql = format!(
+        "WITH local_artists AS (
+             SELECT DISTINCT {album_artist_key} AS artist_key FROM albums
+             WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL
+         )
+         SELECT COUNT(*), COALESCE(SUM(CASE WHEN EXISTS(
+             SELECT 1 FROM musicbrainz_artist_infos info
+             WHERE info.local_artist_key = local_artists.artist_key AND NULLIF(TRIM(info.mbid), '') IS NOT NULL
+         ) OR EXISTS(
+             SELECT 1 FROM musicbrainz_artist_links link
+             WHERE link.local_artist_key = local_artists.artist_key AND link.ignored = 0 AND NULLIF(TRIM(link.mbid), '') IS NOT NULL
+         ) OR EXISTS(
+             SELECT 1 FROM musicbrainz_artist_origin_countries origin
+             WHERE origin.local_artist_key = local_artists.artist_key AND NULLIF(TRIM(origin.mbid), '') IS NOT NULL
+         ) THEN 1 ELSE 0 END), 0) FROM local_artists"
+    );
+    let (local_artists, identified_artists) = conn.query_row(&identity_sql, [], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+    })?;
+    let latest_identities = discovery_health_latest(
+        conn,
+        "SELECT MAX(updated_at) FROM (
+             SELECT fetched_at AS updated_at FROM musicbrainz_artist_infos
+             UNION ALL SELECT updated_at FROM musicbrainz_artist_links
+             UNION ALL SELECT fetched_at FROM musicbrainz_artist_origin_countries
+         ) WHERE updated_at IS NOT NULL",
+    )?;
+    let mut identity_reasons = Vec::new();
+    if identified_artists == 0 {
+        identity_reasons.push("No local album artist has a MusicBrainz identity.".to_string());
+    } else if identified_artists < local_artists {
+        identity_reasons.push(format!(
+            "{} local artists still lack a MusicBrainz identity.",
+            local_artists - identified_artists
+        ));
+    }
+    let identities = discovery_health_item(
+        "musicbrainz-identities",
+        "MusicBrainz identities",
+        identified_artists,
+        local_artists,
+        format!("{identified_artists} of {local_artists} album artists identified"),
+        latest_identities.clone(),
+        180,
+        now,
+        &["Birthdays & Memorials", "Complete the Artist"],
+        vec!["Verified links, artist-info imports, and origin links are combined.".to_string()],
+        identity_reasons,
+        "open-musicbrainz",
+        "Refresh identities",
+        false,
+    );
+
+    let release_rows: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM musicbrainz_artist_release_groups WHERE status = 'Official'",
+        [],
+        |row| row.get(0),
+    )?;
+    let release_coverage_sql = format!(
+        "WITH local_artists AS (
+             SELECT DISTINCT {album_artist_key} AS artist_key FROM albums
+             WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL
+         ), identity_mbids AS (
+             SELECT local_artist_key, LOWER(mbid) AS mbid FROM musicbrainz_artist_infos
+             WHERE NULLIF(TRIM(mbid), '') IS NOT NULL
+             UNION SELECT local_artist_key, LOWER(mbid) FROM musicbrainz_artist_links
+             WHERE ignored = 0 AND NULLIF(TRIM(mbid), '') IS NOT NULL
+             UNION SELECT local_artist_key, LOWER(mbid) FROM musicbrainz_artist_origin_countries
+             WHERE NULLIF(TRIM(mbid), '') IS NOT NULL
+         ), release_artists AS (
+             SELECT DISTINCT LOWER(artist_mbid) AS mbid
+             FROM musicbrainz_artist_release_groups WHERE status = 'Official'
+         )
+         SELECT COUNT(DISTINCT local_artists.artist_key)
+         FROM local_artists
+         JOIN identity_mbids identity ON identity.local_artist_key = local_artists.artist_key
+         JOIN release_artists releases ON releases.mbid = identity.mbid"
+    );
+    let release_artists: i64 = conn.query_row(&release_coverage_sql, [], |row| row.get(0))?;
+    let latest_releases = discovery_health_latest(
+        conn,
+        "SELECT MAX(fetched_at) FROM musicbrainz_artist_release_groups",
+    )?;
+    let mut release_reasons = Vec::new();
+    if release_rows == 0 {
+        release_reasons
+            .push("No official MusicBrainz release groups have been cached.".to_string());
+    } else if release_artists < identified_artists {
+        release_reasons.push(format!(
+            "{} identified artists have no cached official release groups.",
+            identified_artists - release_artists
+        ));
+    }
+    let releases = discovery_health_item(
+        "musicbrainz-releases",
+        "MusicBrainz releases",
+        release_artists.min(identified_artists),
+        identified_artists,
+        format!(
+            "{} of {identified_artists} identified artists have releases",
+            release_artists.min(identified_artists)
+        ),
+        latest_releases,
+        180,
+        now,
+        &["Complete the Artist"],
+        vec![format!("{release_rows} official release groups cached")],
+        release_reasons,
+        "open-musicbrainz",
+        "Open MusicBrainz tools",
+        false,
+    );
+
+    let lastfm_artist_key = artist_key_sql("a.album_artist_display");
+    let lastfm_sql = format!(
+        "SELECT COUNT(*), COALESCE(SUM(CASE WHEN EXISTS(
+             SELECT 1 FROM lastfm_album_relationships relation WHERE relation.album_id = a.id
+         ) OR EXISTS(
+             SELECT 1 FROM lastfm_artist_similarity similarity WHERE similarity.artist_key = {lastfm_artist_key}
+         ) THEN 1 ELSE 0 END), 0) FROM albums a"
+    );
+    let (lastfm_total, lastfm_covered) = conn.query_row(&lastfm_sql, [], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+    })?;
+    let (lastfm_cache_rows, lastfm_active_rows): (i64, i64) = conn.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(CASE WHEN datetime(expires_at) > datetime('now') THEN 1 ELSE 0 END), 0)
+         FROM (
+             SELECT expires_at FROM lastfm_album_relationships
+             UNION ALL SELECT expires_at FROM lastfm_artist_similarity
+         )",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    let latest_lastfm = discovery_health_latest(
+        conn,
+        "SELECT MAX(fetched_at) FROM (
+             SELECT fetched_at FROM lastfm_album_relationships
+             UNION ALL SELECT fetched_at FROM lastfm_artist_similarity
+         )",
+    )?;
+    let mut lastfm_reasons = Vec::new();
+    if lastfm_cache_rows == 0 {
+        lastfm_reasons
+            .push("No related-album or similar-artist cache has been built yet.".to_string());
+    } else {
+        if lastfm_active_rows == 0 {
+            lastfm_reasons.push("Every Last.fm relationship cache entry is expired.".to_string());
+        }
+        if lastfm_covered * 5 < lastfm_total {
+            lastfm_reasons.push(format!(
+                "{} owned albums have no album or artist relationship cache.",
+                lastfm_total - lastfm_covered
+            ));
+        }
+    }
+    let lastfm = discovery_health_item(
+        "lastfm",
+        "Last.fm relationships",
+        lastfm_covered,
+        lastfm_total,
+        format!("{lastfm_covered} of {lastfm_total} albums have relationship evidence"),
+        latest_lastfm,
+        30,
+        now,
+        &["Because You Played / Loved"],
+        vec![
+            format!("{lastfm_cache_rows} relationship cache records"),
+            format!("{lastfm_active_rows} unexpired records"),
+        ],
+        lastfm_reasons,
+        "open-lastfm",
+        "Open Last.fm settings",
+        lastfm_cache_rows > 0 && lastfm_active_rows == 0,
+    );
+
+    let genre_covered: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM albums
+         WHERE NULLIF(TRIM(COALESCE(genre_normalized, canonical_genre, '')), '') IS NOT NULL",
+        [],
+        |row| row.get(0),
+    )?;
+    let genre_count: i64 = conn.query_row(
+        "SELECT COUNT(DISTINCT LOWER(TRIM(COALESCE(genre_normalized, canonical_genre)))) FROM albums
+         WHERE NULLIF(TRIM(COALESCE(genre_normalized, canonical_genre, '')), '') IS NOT NULL",
+        [],
+        |row| row.get(0),
+    )?;
+    let mut genre_reasons = Vec::new();
+    if genre_covered == 0 {
+        genre_reasons.push("No owned album has a usable genre.".to_string());
+    } else if genre_covered < album_count {
+        genre_reasons.push(format!(
+            "{} albums have no genre and disappear from genre filters.",
+            album_count - genre_covered
+        ));
+    }
+    let genres = discovery_health_item(
+        "genres",
+        "Genres",
+        genre_covered,
+        album_count,
+        format!("{genre_covered} of {album_count} albums have genres"),
+        latest_library.clone(),
+        30,
+        now,
+        &[
+            "Deep Cuts",
+            "Complete the Collection",
+            "Because You Played / Loved",
+        ],
+        vec![format!("{genre_count} distinct normalized genres")],
+        genre_reasons,
+        "open-imports",
+        "Import genres",
+        false,
+    );
+
+    let life_dated: i64 = conn.query_row(
+        "SELECT COUNT(DISTINCT info.local_artist_key)
+         FROM musicbrainz_artist_infos info
+         WHERE LOWER(COALESCE(info.artist_type, '')) = 'person'
+           AND (LENGTH(info.life_begin_date) = 10 OR LENGTH(info.life_end_date) = 10)",
+        [],
+        |row| row.get(0),
+    )?;
+    let month_day = edition_date.format("%m-%d").to_string();
+    let life_events_today: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM musicbrainz_artist_infos
+         WHERE LOWER(COALESCE(artist_type, '')) = 'person'
+           AND ((LENGTH(life_begin_date) = 10 AND SUBSTR(life_begin_date, 6, 5) = ?1)
+             OR (LENGTH(life_end_date) = 10 AND SUBSTR(life_end_date, 6, 5) = ?1))",
+        params![month_day],
+        |row| row.get(0),
+    )?;
+    let mut life_reasons = Vec::new();
+    if life_dated == 0 {
+        life_reasons.push("No MusicBrainz person has an exact birth or death date.".to_string());
+    } else if life_events_today == 0 {
+        life_reasons.push(format!(
+            "No imported person has an exact birthday or memorial on {}.",
+            edition_date.format("%B %-d")
+        ));
+    }
+    let life_dates = discovery_health_item(
+        "life-dates",
+        "Artist life dates",
+        life_dated.min(local_artists),
+        local_artists,
+        format!(
+            "{} of {local_artists} album artists have an exact life date",
+            life_dated.min(local_artists)
+        ),
+        latest_identities,
+        180,
+        now,
+        &["Birthdays & Memorials"],
+        vec![format!(
+            "{life_events_today} exact events match this edition date"
+        )],
+        life_reasons,
+        "open-musicbrainz",
+        "Refresh life dates",
+        false,
+    );
+
+    let cover_count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM albums a
+         JOIN album_covers c ON c.album_id = a.id
+         WHERE NULLIF(TRIM(COALESCE(c.cache_path, '')), '') IS NOT NULL",
+        [],
+        |row| row.get(0),
+    )?;
+    let latest_covers = discovery_health_latest(
+        conn,
+        "SELECT MAX(c.imported_at)
+         FROM albums a
+         JOIN album_covers c ON c.album_id = a.id",
+    )?;
+    let mut cover_reasons = Vec::new();
+    if cover_count == 0 {
+        cover_reasons.push("No owned album has cached cover art.".to_string());
+    } else if cover_count < album_count {
+        cover_reasons.push(format!(
+            "{} albums will render without cached cover art.",
+            album_count - cover_count
+        ));
+    }
+    let covers = discovery_health_item(
+        "covers",
+        "Cover art",
+        cover_count,
+        album_count,
+        format!("{} of {album_count} albums have covers", cover_count),
+        latest_covers,
+        180,
+        now,
+        &["All visual shelves"],
+        Vec::new(),
+        cover_reasons,
+        "open-covers",
+        "Scan covers",
+        false,
+    );
+
+    let sources = vec![
+        ratings, charts, identities, releases, lastfm, genres, life_dates, covers,
+    ];
+    let healthy_count = sources
+        .iter()
+        .filter(|source| source.state == "healthy")
+        .count() as i64;
+    let stale_count = sources
+        .iter()
+        .filter(|source| source.state == "stale")
+        .count() as i64;
+    let missing_count = sources
+        .iter()
+        .filter(|source| source.state == "missing")
+        .count() as i64;
+    let overall_state = if missing_count > 0 {
+        "missing"
+    } else if stale_count > 0 {
+        "stale"
+    } else {
+        "healthy"
+    };
+    Ok(DiscoverySourceHealthResponse {
+        checked_at: now.to_rfc3339(),
+        edition_date: edition_date.format("%Y-%m-%d").to_string(),
+        overall_state: overall_state.to_string(),
+        healthy_count,
+        stale_count,
+        missing_count,
+        sources,
+    })
 }
 
 fn discovery_daily_edition(conn: &Connection, date: NaiveDate) -> Result<DiscoveryDailyEdition> {
@@ -23252,6 +23843,165 @@ mod tests {
         .expect("insert track");
         rebuild_search_indexes(&conn).expect("rebuild search indexes");
         conn
+    }
+
+    #[test]
+    fn discovery_source_health_reports_healthy_sources_with_concrete_coverage() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "
+            UPDATE import_runs SET completed_at = '2026-08-13T08:00:00Z' WHERE id = 1;
+            INSERT INTO album_covers (
+                album_id, source, source_path, cache_path, mime_type, extension,
+                file_size_bytes, imported_at
+            ) VALUES (
+                'mb:test', 'test', 'cover.jpg', 'cache/cover.jpg', 'image/jpeg',
+                'jpg', 100, '2026-08-13T08:00:00Z'
+            );
+            INSERT INTO musicbrainz_artist_infos (
+                local_artist_key, display_artist, mbid, artist_type,
+                life_begin_date, life_begin_year, review_state, source,
+                fetched_at, created_at, updated_at
+            ) VALUES (
+                'pet shop boys', 'Pet Shop Boys', 'mbid-psb', 'Person',
+                '1959-08-13', 1959, 'imported', 'musicbrainz-live',
+                '2026-08-13T08:00:00Z', '2026-08-13T08:00:00Z',
+                '2026-08-13T08:00:00Z'
+            );
+            INSERT INTO musicbrainz_artist_release_groups (
+                artist_mbid, release_mbid, title, year, type, secondary_types,
+                track_count, status, source, fetched_at
+            ) VALUES (
+                'mbid-psb', 'release-1', 'Actually', 1987, 'Album', '', 10,
+                'Official', 'musicbrainz-live', '2026-08-13T08:00:00Z'
+            );
+            INSERT INTO lastfm_artist_similarity (
+                artist_key, artist_name, state, fetched_at, expires_at
+            ) VALUES (
+                'pet shop boys', 'Pet Shop Boys', 'available',
+                '2026-08-13T08:00:00Z', '2026-09-13T08:00:00Z'
+            );
+            INSERT INTO billboard_chart_entries (
+                source_file, year, rank, artist, album, artist_key, album_key,
+                matched_album_id, imported_at
+            ) VALUES (
+                'billboard.csv', 1988, 1, 'Pet Shop Boys', 'Actually',
+                'pet shop boys', 'actually', 'mb:test', '2026-08-13T08:00:00Z'
+            );
+            INSERT INTO official_uk_album_chart_entries (
+                source_file, year, week, chart_date, rank, artist, title,
+                artist_key, title_key, week_key, matched_album_id, imported_at
+            ) VALUES (
+                'uk.csv', 1987, 34, '1987-08-22', 1, 'Pet Shop Boys', 'Actually',
+                'pet shop boys', 'actually', '1987-34', 'mb:test', '2026-08-13T08:00:00Z'
+            );
+            INSERT INTO vg_lista_album_chart_entries (
+                source_file, year, week, rank, artist, title, artist_key,
+                title_key, week_date, week_key, matched_album_id, imported_at
+            ) VALUES (
+                'vg.csv', 1987, 34, 1, 'Pet Shop Boys', 'Actually',
+                'pet shop boys', 'actually', '1987-08-21', '1987-34',
+                'mb:test', '2026-08-13T08:00:00Z'
+            );
+            ",
+        )
+        .expect("seed healthy source health");
+
+        let health = discovery_source_health(
+            &conn,
+            NaiveDate::from_ymd_opt(2026, 8, 13).expect("valid date"),
+            chrono::DateTime::parse_from_rfc3339("2026-08-13T12:00:00Z")
+                .expect("valid timestamp")
+                .with_timezone(&Utc),
+        )
+        .expect("load source health");
+
+        for id in [
+            "ratings",
+            "charts",
+            "musicbrainz-identities",
+            "genres",
+            "life-dates",
+            "covers",
+        ] {
+            let source = health
+                .sources
+                .iter()
+                .find(|source| source.id == id)
+                .expect("source row");
+            assert_eq!(source.state, "healthy", "expected {id} healthy");
+            assert!(source.coverage_count > 0);
+            assert!(source.last_successful_update.is_some());
+        }
+    }
+
+    #[test]
+    fn discovery_source_health_distinguishes_stale_and_missing_sources() {
+        let conn = seeded_connection();
+        conn.execute(
+            "UPDATE import_runs SET completed_at = '2024-01-01T00:00:00Z'",
+            [],
+        )
+        .expect("age library import");
+        let health = discovery_source_health(
+            &conn,
+            NaiveDate::from_ymd_opt(2026, 8, 13).expect("valid date"),
+            chrono::DateTime::parse_from_rfc3339("2026-08-13T12:00:00Z")
+                .expect("valid timestamp")
+                .with_timezone(&Utc),
+        )
+        .expect("load sparse source health");
+
+        let ratings = health
+            .sources
+            .iter()
+            .find(|source| source.id == "ratings")
+            .expect("ratings");
+        assert_eq!(ratings.state, "stale");
+        assert!(ratings.freshness_label.contains("days ago"));
+
+        for id in [
+            "charts",
+            "musicbrainz-identities",
+            "musicbrainz-releases",
+            "lastfm",
+            "life-dates",
+            "covers",
+        ] {
+            let source = health
+                .sources
+                .iter()
+                .find(|source| source.id == id)
+                .expect("source row");
+            assert_eq!(source.state, "missing", "expected {id} missing");
+            assert!(!source.sparse_reasons.is_empty());
+        }
+        assert!(health.stale_count > 0);
+        assert!(health.missing_count > 0);
+    }
+
+    #[test]
+    fn chart_source_health_rebuild_repairs_owned_links() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "INSERT INTO billboard_chart_entries (
+                source_file, year, rank, artist, album, artist_key, album_key,
+                matched_album_id, imported_at
+             ) VALUES (
+                'billboard.csv', 1988, 1, 'Pet Shop Boys', 'Actually',
+                'pet shop boys', 'actually', NULL, '2026-08-13T08:00:00Z'
+             );",
+        )
+        .expect("seed unlinked chart");
+        reconcile_album_chart_matches(&conn).expect("rebuild chart matches");
+        let matched: Option<String> = conn
+            .query_row(
+                "SELECT matched_album_id FROM billboard_chart_entries LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read rebuilt match");
+        assert_eq!(matched.as_deref(), Some("mb:test"));
     }
 
     #[test]

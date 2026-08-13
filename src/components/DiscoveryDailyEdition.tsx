@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDot,
+  Database,
   Heart,
   Info,
   Play,
@@ -24,10 +25,13 @@ import type {
   DiscoveryShelf,
   DiscoveryShelfExplorerRequest,
   DiscoveryShelfExplorerResponse,
+  DiscoverySourceHealthAction,
+  DiscoverySourceHealthResponse,
 } from "../types";
 import { AlbumCover } from "./AlbumCover";
 import { ArtistPortrait } from "./ArtistPortrait";
 import { DiscoveryShelfExplorer } from "./DiscoveryShelfExplorer";
+import { DiscoverySourceHealth } from "./DiscoverySourceHealth";
 
 type DiscoveryDailyEditionProps = {
   edition: DiscoveryDailyEdition | null;
@@ -49,6 +53,10 @@ type DiscoveryDailyEditionProps = {
   onLoadExplorer?: (
     request: DiscoveryShelfExplorerRequest,
   ) => Promise<DiscoveryShelfExplorerResponse>;
+  onLoadSourceHealth?: (date: string) => Promise<DiscoverySourceHealthResponse>;
+  onRebuildChartMatches?: (date: string) => Promise<DiscoverySourceHealthResponse>;
+  onRebuildEdition?: () => Promise<void>;
+  onOpenSourceHealthAction?: (action: DiscoverySourceHealthAction) => void;
   onOpenAlbum: (albumId: string) => void;
   onOpenArtist: (artistId: string, artistName: string) => void;
   onOpenCompletion?: () => void;
@@ -72,6 +80,15 @@ const shortDateFormatter = new Intl.DateTimeFormat(undefined, {
   day: "numeric",
   year: "numeric",
 });
+
+const unavailableSourceHealth = async (): Promise<DiscoverySourceHealthResponse> => {
+  throw new Error("Source health is unavailable.");
+};
+const unavailableChartMatchRebuild = async (): Promise<DiscoverySourceHealthResponse> => {
+  throw new Error("Chart match rebuilding is unavailable.");
+};
+const noopAsync = async () => {};
+const noopSourceAction = () => {};
 
 function localDate(value: string) {
   const parsed = new Date(`${value.slice(0, 10)}T12:00:00`);
@@ -473,6 +490,10 @@ export function DiscoveryDailyEdition({
   onLoadExplorer = async () => {
     throw new Error("Shelf explorer loader is unavailable.");
   },
+  onLoadSourceHealth = unavailableSourceHealth,
+  onRebuildChartMatches = unavailableChartMatchRebuild,
+  onRebuildEdition = noopAsync,
+  onOpenSourceHealthAction = noopSourceAction,
   onOpenAlbum,
   onOpenArtist,
   onOpenTrack,
@@ -484,10 +505,12 @@ export function DiscoveryDailyEdition({
     openerId: string;
     scrollY: number;
   } | null>(null);
+  const [isSourceHealthOpen, setIsSourceHealthOpen] = useState(false);
   const pendingReturn = useRef<{ openerId: string; scrollY: number } | null>(null);
+  const sourceHealthReturn = useRef<{ openerId: string; scrollY: number } | null>(null);
 
   useLayoutEffect(() => {
-    if (explorer || !pendingReturn.current) return;
+    if (explorer || isSourceHealthOpen || !pendingReturn.current) return;
     const target = pendingReturn.current;
     pendingReturn.current = null;
     const restore = () => {
@@ -498,7 +521,7 @@ export function DiscoveryDailyEdition({
       window.requestAnimationFrame?.(restore) ?? restore();
     });
     if (firstFrame == null) restore();
-  }, [explorer]);
+  }, [explorer, isSourceHealthOpen]);
 
   function openExplorer(
     shelf: DiscoveryShelf,
@@ -520,6 +543,21 @@ export function DiscoveryDailyEdition({
       scrollY: explorer.scrollY,
     };
     setExplorer(null);
+  }
+
+  function openSourceHealth() {
+    sourceHealthReturn.current = {
+      openerId: "discovery-source-health",
+      scrollY: window.scrollY,
+    };
+    setIsSourceHealthOpen(true);
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
+  function closeSourceHealth() {
+    pendingReturn.current = sourceHealthReturn.current;
+    sourceHealthReturn.current = null;
+    setIsSourceHealthOpen(false);
   }
 
   if (isLoading && !edition) {
@@ -570,6 +608,20 @@ export function DiscoveryDailyEdition({
         onOpenAlbum={onOpenAlbum}
         onOpenArtist={onOpenArtist}
         onOpenTrack={onOpenTrack}
+      />
+    );
+  }
+
+  if (isSourceHealthOpen) {
+    return (
+      <DiscoverySourceHealth
+        editionDate={edition.date}
+        isArchived={isArchived}
+        onBack={closeSourceHealth}
+        onLoad={onLoadSourceHealth}
+        onRebuildCharts={onRebuildChartMatches}
+        onRebuildEdition={onRebuildEdition}
+        onOpenAction={onOpenSourceHealthAction}
       />
     );
   }
@@ -661,6 +713,15 @@ export function DiscoveryDailyEdition({
               ? "Archived snapshot · shelf selectors and refresh controls are locked."
               : `Saved for today · ${archiveState.retentionDays}-day archive.`}
           </p>
+          <button
+            id="discovery-source-health"
+            className="daily-edition-source-health-button"
+            type="button"
+            onClick={openSourceHealth}
+          >
+            <Database aria-hidden="true" />
+            Source health
+          </button>
         </div>
       </header>
 

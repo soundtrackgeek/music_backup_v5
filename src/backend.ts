@@ -247,6 +247,7 @@ import type {
   DiscoveryRecommendationSnapshot,
   DiscoveryRecommendationSnapshotRequest,
   DiscoveryDailyEditionSnapshotResponse,
+  DiscoverySourceHealthResponse,
   DiscoveryResponse,
   DiscoveryShelfExplorerRequest,
   DiscoveryShelfExplorerResponse,
@@ -1828,6 +1829,100 @@ export async function getDiscoveryDailyEdition(date: string) {
     "get_discovery_daily_edition",
     { date },
   );
+}
+
+let mockDiscoveryChartMatchesRebuilt = false;
+
+export async function getDiscoverySourceHealth(date: string) {
+  if (!isTauriRuntime()) {
+    const albumCount = mockStatus.albumCount;
+    const now = new Date();
+    const daysAgo = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+    const source = (
+      id: string,
+      label: string,
+      coverageCount: number,
+      totalCount: number,
+      shelves: string[],
+      action: DiscoverySourceHealthResponse["sources"][number]["action"],
+      actionLabel: string,
+      options: {
+        state?: DiscoverySourceHealthResponse["sources"][number]["state"];
+        lastSuccessfulUpdate?: string | null;
+        freshnessLabel?: string;
+        details?: string[];
+        sparseReasons?: string[];
+      } = {},
+    ): DiscoverySourceHealthResponse["sources"][number] => ({
+      id,
+      label,
+      state: options.state ?? (coverageCount === 0 ? "missing" : "healthy"),
+      coverageCount,
+      totalCount,
+      coveragePercent: totalCount > 0 ? coverageCount / totalCount : 0,
+      coverageLabel: `${coverageCount} of ${totalCount} covered`,
+      lastSuccessfulUpdate: options.lastSuccessfulUpdate === undefined
+        ? now.toISOString()
+        : options.lastSuccessfulUpdate,
+      freshnessLabel: options.freshnessLabel ?? "Updated today",
+      shelves,
+      details: options.details ?? [],
+      sparseReasons: options.sparseReasons ?? [],
+      action,
+      actionLabel,
+    });
+    const sources = [
+      source("ratings", "Ratings & listening signals", 420, 500, ["Deep Cuts", "Because You Played / Loved"], "open-imports", "Import ratings"),
+      source("charts", "Album charts", 160, 240, ["50 Years Ago", "Chart Toppers", "Deep Cuts"], "rebuild-chart-matches", "Rebuild matches", mockDiscoveryChartMatchesRebuilt ? {} : {
+        state: "stale",
+        lastSuccessfulUpdate: daysAgo(400),
+        freshnessLabel: "Updated 400 days ago",
+        details: ["Billboard, Official UK, and VG-lista are available"],
+        sparseReasons: ["Owned chart links have not been reconciled with the current library import."],
+      }),
+      source("musicbrainz-identities", "MusicBrainz identities", 72, 80, ["Birthdays & Memorials", "Complete the Artist"], "open-musicbrainz", "Refresh identities"),
+      source("musicbrainz-releases", "MusicBrainz releases", 64, 72, ["Complete the Artist"], "open-musicbrainz", "Refresh releases", {
+        sparseReasons: ["8 identified artists do not have cached official release groups yet."],
+      }),
+      source("lastfm", "Last.fm relationships", 110, albumCount, ["Because You Played / Loved"], "open-lastfm", "Manage Last.fm", {
+        state: "stale",
+        lastSuccessfulUpdate: daysAgo(45),
+        freshnessLabel: "Updated 45 days ago",
+        details: ["Album and artist similarity caches are checked together"],
+        sparseReasons: ["Similarity coverage is limited to albums and artists that have been requested from Last.fm."],
+      }),
+      source("genres", "Genres", albumCount - 4, albumCount, ["Deep Cuts", "Complete the Collection"], "open-imports", "Import genres"),
+      source("life-dates", "Artist life dates", 38, 80, ["Birthdays & Memorials"], "open-musicbrainz", "Refresh life dates", {
+        sparseReasons: ["42 identified artists do not have an exact birth or death date."],
+      }),
+      source("covers", "Cover art", mockStatus.coverCount, albumCount, ["All visual shelves"], "open-covers", "Scan covers", {
+        lastSuccessfulUpdate: null,
+        freshnessLabel: "Never updated",
+        sparseReasons: ["No owned album has cached cover art."],
+      }),
+    ];
+    const healthyCount = sources.filter((item) => item.state === "healthy").length;
+    const staleCount = sources.filter((item) => item.state === "stale").length;
+    const missingCount = sources.filter((item) => item.state === "missing").length;
+    return {
+      checkedAt: now.toISOString(),
+      editionDate: date,
+      overallState: missingCount > 0 ? "missing" : staleCount > 0 ? "stale" : "healthy",
+      healthyCount,
+      staleCount,
+      missingCount,
+      sources,
+    } satisfies DiscoverySourceHealthResponse;
+  }
+  return invoke<DiscoverySourceHealthResponse>("get_discovery_source_health", { date });
+}
+
+export async function rebuildDiscoveryChartMatches(date: string) {
+  if (!isTauriRuntime()) {
+    mockDiscoveryChartMatchesRebuilt = true;
+    return getDiscoverySourceHealth(date);
+  }
+  return invoke<DiscoverySourceHealthResponse>("rebuild_discovery_chart_matches", { date });
 }
 
 export async function getDiscoveryAnniversaries(anniversaryYears: number) {

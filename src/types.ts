@@ -2412,6 +2412,42 @@ export type DiscoveryDailyEditionSnapshotResponse = {
   archive: DiscoveryDailyEditionArchive;
 };
 
+export type DiscoverySourceHealthState = "healthy" | "stale" | "missing";
+
+export type DiscoverySourceHealthAction =
+  | "rebuild-chart-matches"
+  | "open-imports"
+  | "open-musicbrainz"
+  | "open-lastfm"
+  | "open-covers";
+
+export type DiscoverySourceHealthItem = {
+  id: string;
+  label: string;
+  state: DiscoverySourceHealthState;
+  coverageCount: number;
+  totalCount: number;
+  coveragePercent: number;
+  coverageLabel: string;
+  lastSuccessfulUpdate: string | null;
+  freshnessLabel: string;
+  shelves: string[];
+  details: string[];
+  sparseReasons: string[];
+  action: DiscoverySourceHealthAction;
+  actionLabel: string;
+};
+
+export type DiscoverySourceHealthResponse = {
+  checkedAt: string;
+  editionDate: string;
+  overallState: DiscoverySourceHealthState;
+  healthyCount: number;
+  staleCount: number;
+  missingCount: number;
+  sources: DiscoverySourceHealthItem[];
+};
+
 export type DiscoveryDailyEdition = {
   date: string;
   anniversaryYears: number;

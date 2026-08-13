@@ -5,6 +5,7 @@ import type {
   DiscoveryDailyEdition as DiscoveryDailyEditionData,
   DiscoveryShelfExplorerRequest,
   DiscoveryShelfExplorerResponse,
+  DiscoverySourceHealthResponse,
 } from "../types";
 import { DiscoveryDailyEdition } from "./DiscoveryDailyEdition";
 
@@ -967,5 +968,58 @@ describe("DiscoveryDailyEdition", () => {
     });
     expect(target).toHaveFocus();
     expect(target).toHaveClass("daily-edition-story-flash");
+  });
+
+  it("opens source health and returns to the edition with focus restored", async () => {
+    const health: DiscoverySourceHealthResponse = {
+      checkedAt: "2026-08-11T12:00:00Z",
+      editionDate: edition.date,
+      overallState: "healthy",
+      healthyCount: 1,
+      staleCount: 0,
+      missingCount: 0,
+      sources: [{
+        id: "ratings",
+        label: "Ratings",
+        state: "healthy",
+        coverageCount: 9,
+        totalCount: 10,
+        coveragePercent: 0.9,
+        coverageLabel: "9 of 10 tracks rated",
+        lastSuccessfulUpdate: "2026-08-11T08:00:00Z",
+        freshnessLabel: "Updated today",
+        shelves: ["Deep Cuts"],
+        details: [],
+        sparseReasons: [],
+        action: "open-imports",
+        actionLabel: "Import ratings",
+      }],
+    };
+    render(
+      <DiscoveryDailyEdition
+        edition={edition}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        isChartLoading={false}
+        isDeepCutLoading={false}
+        isCompletionLoading={false}
+        isRecommendationLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
+        onLoadSourceHealth={vi.fn(async () => health)}
+        onRebuildChartMatches={vi.fn(async () => health)}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Source health" }));
+    expect(await screen.findByRole("heading", { name: "Daily Edition Source Health" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back to Daily Edition" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Source health" })).toHaveFocus());
   });
 });

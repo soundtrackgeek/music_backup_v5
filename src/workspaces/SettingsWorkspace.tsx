@@ -1,5 +1,6 @@
 import {
   createContext,
+  useEffect,
   useContext,
   useState,
   type KeyboardEvent,
@@ -78,6 +79,14 @@ const settingsSections: SettingsSectionDefinition[] = [
 ];
 
 const SettingsSectionContext = createContext<SettingsSectionId>("general");
+const settingsSectionStorageKey = "music-library:settings-section";
+
+function initialSettingsSection(): SettingsSectionId {
+  const saved = sessionStorage.getItem(settingsSectionStorageKey);
+  return settingsSections.some((section) => section.id === saved)
+    ? saved as SettingsSectionId
+    : "general";
+}
 
 export function SettingsWorkspace({
   reloadAction,
@@ -87,7 +96,11 @@ export function SettingsWorkspace({
   children: ReactNode;
 }) {
   const [activeSection, setActiveSection] =
-    useState<SettingsSectionId>("general");
+    useState<SettingsSectionId>(initialSettingsSection);
+
+  useEffect(() => {
+    sessionStorage.setItem(settingsSectionStorageKey, activeSection);
+  }, [activeSection]);
 
   const handleSectionKeyDown = (
     event: KeyboardEvent<HTMLButtonElement>,

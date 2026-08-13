@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.134.0] - 2026-08-13
+### Added
+- Added a live **Source health** view to Daily Edition with coverage, freshness, exact last-success timestamps, affected shelves, source details, and concrete sparsity reasons for ratings, album charts, MusicBrainz identities and releases, Last.fm relationships, genres, artist life dates, and cover art.
+- Added safe source-specific actions: chart matches can be rebuilt in place, while imports, MusicBrainz, Last.fm, and cover work route to their existing guarded workflows.
+
+### Changed
+- Source health remains live while archived Daily Edition snapshots remain immutable; rebuilding today's edition is unavailable from an archived date.
+- Synchronized app metadata and provider user agents to `0.134.0`.
+
 ## [0.133.1] - 2026-08-13
 ### Fixed
 - Repaired Billboard, Official UK, and VG-lista album links that were cleared when a MusicBee snapshot rebuilt the local albums table, and now reconcile those links atomically after every future library import.

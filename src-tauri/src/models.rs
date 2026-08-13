@@ -1513,6 +1513,37 @@ pub struct DiscoveryDailyEditionSnapshotResponse {
     pub archive: DiscoveryDailyEditionArchive,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoverySourceHealthResponse {
+    pub checked_at: String,
+    pub edition_date: String,
+    pub overall_state: String,
+    pub healthy_count: i64,
+    pub stale_count: i64,
+    pub missing_count: i64,
+    pub sources: Vec<DiscoverySourceHealthItem>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoverySourceHealthItem {
+    pub id: String,
+    pub label: String,
+    pub state: String,
+    pub coverage_count: i64,
+    pub total_count: i64,
+    pub coverage_percent: f64,
+    pub coverage_label: String,
+    pub last_successful_update: Option<String>,
+    pub freshness_label: String,
+    pub shelves: Vec<String>,
+    pub details: Vec<String>,
+    pub sparse_reasons: Vec<String>,
+    pub action: String,
+    pub action_label: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryShelfExplorerRequest {

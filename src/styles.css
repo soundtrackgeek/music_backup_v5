@@ -22965,6 +22965,23 @@ button {
   text-align: right;
 }
 
+.daily-edition-source-health-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  padding: 5px 9px;
+  border: 1px solid var(--edition-rule);
+  border-radius: 5px;
+  color: var(--edition-teal);
+  font-size: 11px;
+}
+
+.daily-edition-source-health-button svg {
+  width: 14px;
+  height: 14px;
+}
+
 .daily-edition-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 170px;
@@ -23927,6 +23944,241 @@ button {
   height: 15px;
 }
 
+.daily-edition-source-health {
+  min-height: 640px;
+  color: var(--edition-text);
+}
+
+.daily-edition-source-health-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  padding: 20px 0 18px;
+  border-bottom: 1px solid var(--edition-rule);
+}
+
+.daily-edition-source-back {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  color: var(--edition-teal);
+  font-size: 12px;
+}
+
+.daily-edition-source-back svg,
+.daily-edition-source-health-heading > svg {
+  width: 18px;
+  height: 18px;
+}
+
+.daily-edition-source-health-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.daily-edition-source-health-heading h2 {
+  margin: 0;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 500;
+}
+
+.daily-edition-source-health-heading p {
+  margin: 2px 0 0;
+  color: var(--edition-muted);
+  font-size: 12px;
+}
+
+.daily-edition-source-health-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.daily-edition-source-health-actions button,
+.daily-edition-source-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid var(--edition-rule);
+  border-radius: 5px;
+  color: var(--edition-text);
+  font-size: 11px;
+}
+
+.daily-edition-source-health-actions button svg,
+.daily-edition-source-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.daily-edition-source-health-actions button:disabled,
+.daily-edition-source-action:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.daily-edition-source-loading {
+  padding: 40px 0;
+  color: var(--edition-muted);
+  font-size: 12px;
+}
+
+.daily-edition-source-summary {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--edition-rule);
+  font-size: 11px;
+}
+
+.daily-edition-source-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.daily-edition-source-summary svg {
+  width: 14px;
+  height: 14px;
+}
+
+.daily-edition-source-summary small {
+  margin-left: auto;
+  color: var(--edition-muted);
+}
+
+.daily-edition-source-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.daily-edition-source-row {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 18px 18px 0;
+  border-bottom: 1px solid var(--edition-rule);
+}
+
+.daily-edition-source-row:nth-child(2n) {
+  padding-right: 0;
+  padding-left: 18px;
+  border-left: 1px solid var(--edition-rule);
+}
+
+.daily-edition-source-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.daily-edition-source-title h3 {
+  margin: 0;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.daily-edition-source-title p {
+  margin: 2px 0 0;
+  color: var(--edition-muted);
+  font-size: 10px;
+}
+
+.daily-edition-source-state {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.daily-edition-source-state svg {
+  width: 14px;
+  height: 14px;
+}
+
+.source-state-healthy .daily-edition-source-state,
+.daily-edition-source-ready {
+  color: var(--edition-teal);
+}
+
+.source-state-stale .daily-edition-source-state {
+  color: var(--amber);
+}
+
+.source-state-missing .daily-edition-source-state {
+  color: var(--red);
+}
+
+.daily-edition-source-coverage > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--edition-muted);
+  font-size: 11px;
+}
+
+.daily-edition-source-coverage strong {
+  color: var(--edition-text);
+}
+
+.daily-edition-source-progress {
+  height: 3px;
+  margin-top: 6px;
+  background: var(--edition-rule);
+}
+
+.daily-edition-source-progress span {
+  display: block;
+  height: 100%;
+  background: var(--edition-teal);
+}
+
+.daily-edition-source-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  color: var(--edition-muted);
+  font-size: 10px;
+}
+
+.daily-edition-source-reasons strong {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.daily-edition-source-reasons ul {
+  margin: 6px 0 0 17px;
+  padding: 0;
+  color: var(--edition-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.daily-edition-source-ready {
+  margin: 0;
+  font-size: 11px;
+}
+
+.daily-edition-source-action {
+  width: fit-content;
+  margin-top: auto;
+}
+
 .daily-edition-empty {
   margin: 18px 0;
   color: var(--edition-muted);
@@ -24467,6 +24719,14 @@ button {
     text-align: left;
   }
 
+  .daily-edition-source-health-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .daily-edition-source-health-actions {
+    align-items: flex-start;
+  }
+
   .daily-edition-lead {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -24504,6 +24764,31 @@ button {
 }
 
 @media (max-width: 620px) {
+  .daily-edition-source-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .daily-edition-source-row,
+  .daily-edition-source-row:nth-child(2n) {
+    padding-right: 4px;
+    padding-left: 4px;
+    border-left: 0;
+  }
+
+  .daily-edition-source-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .daily-edition-source-summary small {
+    margin-left: 0;
+  }
+
+  .daily-edition-source-health-actions {
+    flex-wrap: wrap;
+  }
+
   .daily-edition-masthead h2 {
     font-size: 40px;
   }

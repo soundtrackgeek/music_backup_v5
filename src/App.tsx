@@ -84,6 +84,8 @@ import {
   getDiscoveryDeepCutSnapshot,
   getDiscoveryRecommendationSnapshot,
   getDiscoveryShelfExplorer,
+  getDiscoverySourceHealth,
+  rebuildDiscoveryChartMatches,
   getAlbumReview,
   getArtistBiography,
   getArtistTrackHighlights,
@@ -198,6 +200,7 @@ import type {
   DiscoveryDeepCutSnapshotRequest,
   DiscoveryRecommendationSnapshotRequest,
   DiscoveryResponse,
+  DiscoverySourceHealthAction,
   SavedExternalDiscovery,
   SavedPlaylist,
   ExportResult,
@@ -12498,6 +12501,20 @@ export default function App() {
     }
   }
 
+  function openDiscoverySourceAction(action: DiscoverySourceHealthAction) {
+    if (action === "open-musicbrainz") {
+      sessionStorage.setItem("music-library:settings-section", "musicbrainz");
+      setActiveSection("Settings");
+      return;
+    }
+    if (action === "open-lastfm") {
+      sessionStorage.setItem("music-library:settings-section", "providers");
+      setActiveSection("Settings");
+      return;
+    }
+    setActiveSection("Imports");
+  }
+
   async function changeDiscoveryEditionDate(date: string) {
     const requestId = discoveryDateRequestRef.current + 1;
     discoveryDateRequestRef.current = requestId;
@@ -15936,6 +15953,12 @@ export default function App() {
               onRecommendationSnapshotChange={changeDiscoveryRecommendationSnapshot}
               onEditionDateChange={changeDiscoveryEditionDate}
               onLoadExplorer={getDiscoveryShelfExplorer}
+              onLoadSourceHealth={getDiscoverySourceHealth}
+              onRebuildChartMatches={rebuildDiscoveryChartMatches}
+              onRebuildEdition={async () => {
+                await loadDiscoveryData(true);
+              }}
+              onOpenSourceHealthAction={openDiscoverySourceAction}
               onOpenAlbum={openTimelineAlbum}
               onOpenArtist={openArtistFromMusicMap}
               onOpenTrack={openTimelineTrack}

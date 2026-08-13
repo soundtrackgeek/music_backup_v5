@@ -33,10 +33,10 @@ use models::{
     DiscoveryCompletionSnapshotRequest, DiscoveryDailyEditionSnapshotResponse,
     DiscoveryDeepCutSnapshot, DiscoveryDeepCutSnapshotRequest, DiscoveryRecommendationSnapshot,
     DiscoveryRecommendationSnapshotRequest, DiscoveryResponse, DiscoveryShelfExplorerRequest,
-    DiscoveryShelfExplorerResponse, ExportMusicToolRequest, ExportResult, ExportSearchRequest,
-    GenreListRequest, GenreListResponse, GenreProgressRequest, GenreProgressStats,
-    GenreTimelineRequest, GenreTimelineResponse, LibraryUpdateArtistResponse, LibraryUpdateRequest,
-    LibraryUpdateResponse, MusicBrainzArtistDiscographyRequest,
+    DiscoveryShelfExplorerResponse, DiscoverySourceHealthResponse, ExportMusicToolRequest,
+    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressRequest,
+    GenreProgressStats, GenreTimelineRequest, GenreTimelineResponse, LibraryUpdateArtistResponse,
+    LibraryUpdateRequest, LibraryUpdateResponse, MusicBrainzArtistDiscographyRequest,
     MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
     MusicBrainzArtistInfoImportRequest, MusicBrainzArtistInfoImportSummary,
     MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus, MusicBrainzArtistLinkRequest,
@@ -1278,6 +1278,32 @@ async fn get_discovery_daily_edition(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_discovery_source_health(
+    app: AppHandle,
+    date: String,
+) -> Result<DiscoverySourceHealthResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || db::discovery_source_health_for_app(&app, &date))
+        .await
+        .map_err(|error| format!("Discovery source-health task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn rebuild_discovery_chart_matches(
+    app: AppHandle,
+    date: String,
+) -> Result<DiscoverySourceHealthResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::rebuild_discovery_chart_matches_for_app(&app, &date)
+    })
+    .await
+    .map_err(|error| format!("Chart match rebuild task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_discovery_anniversaries(
     app: AppHandle,
     anniversary_years: i32,
@@ -1944,6 +1970,8 @@ pub fn run() {
             get_genre_progress,
             get_discovery,
             get_discovery_daily_edition,
+            get_discovery_source_health,
+            rebuild_discovery_chart_matches,
             get_discovery_anniversaries,
             get_discovery_chart_snapshot,
             get_discovery_deep_cut_snapshot,
