@@ -245,6 +245,72 @@ function explorerResponse(
 }
 
 describe("DiscoveryDailyEdition", () => {
+  it("navigates saved dates and locks reshuffling controls on an archived edition", () => {
+    const onEditionDateChange = vi.fn();
+    const commonProps = {
+      isLoading: false,
+      isAnniversaryLoading: false,
+      isChartLoading: false,
+      isDeepCutLoading: false,
+      isCompletionLoading: false,
+      isRecommendationLoading: false,
+      onAnniversaryYearsChange: vi.fn(),
+      onChartSnapshotChange: vi.fn(),
+      onDeepCutSnapshotChange: vi.fn(),
+      onCompletionSnapshotChange: vi.fn(),
+      onRecommendationSnapshotChange: vi.fn(),
+      onEditionDateChange,
+      onOpenAlbum: vi.fn(),
+      onOpenArtist: vi.fn(),
+      onOpenTrack: vi.fn(),
+    };
+    const archive = {
+      availableDates: ["2026-08-11", "2026-08-10"],
+      snapshotCreatedAt: "2026-08-11T08:00:00Z",
+      retentionDays: 90,
+      isArchived: false,
+      today: "2026-08-11",
+    };
+    const { rerender } = render(
+      <DiscoveryDailyEdition edition={edition} archive={archive} {...commonProps} />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open previous saved edition" }),
+    );
+    expect(onEditionDateChange).toHaveBeenLastCalledWith("2026-08-10");
+
+    const archivedEdition = {
+      ...edition,
+      date: "2026-08-10",
+      anniversaries: edition.anniversaries.map((story, index) =>
+        index === 0 ? { ...story, album: "Frozen Archive Album" } : story,
+      ),
+    };
+    rerender(
+      <DiscoveryDailyEdition
+        edition={archivedEdition}
+        archive={{
+          ...archive,
+          snapshotCreatedAt: "2026-08-10T08:00:00Z",
+          isArchived: true,
+        }}
+        {...commonProps}
+      />,
+    );
+
+    expect(screen.getByText("Frozen Archive Album")).toBeInTheDocument();
+    expect(screen.getByText(/Archived snapshot/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Random" })).toBeDisabled();
+    expect(document.querySelector(".daily-edition-deep-cut-refresh")).toBeDisabled();
+    expect(
+      document.querySelectorAll("[data-daily-edition-see-all]:disabled"),
+    ).toHaveLength(6);
+
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    expect(onEditionDateChange).toHaveBeenLastCalledWith("2026-08-11");
+  });
+
   it("renders every story shelf and exposes the evidence model", () => {
     render(
       <DiscoveryDailyEdition

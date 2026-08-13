@@ -1472,6 +1472,7 @@ pub struct ArtistTimelineResponse {
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryResponse {
     pub daily_edition: DiscoveryDailyEdition,
+    pub daily_edition_archive: DiscoveryDailyEditionArchive,
     pub heatmap: Vec<DiscoveryHeatmapCell>,
     pub backlog_missions: Vec<DiscoveryMission>,
     pub smart_missions: Vec<DiscoveryMission>,
@@ -1481,7 +1482,7 @@ pub struct DiscoveryResponse {
     pub generated_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDailyEdition {
     pub date: String,
@@ -1493,6 +1494,23 @@ pub struct DiscoveryDailyEdition {
     pub completion_snapshot: DiscoveryCompletionSnapshot,
     pub recommendation_snapshot: DiscoveryRecommendationSnapshot,
     pub listening_evidence_note: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryDailyEditionArchive {
+    pub available_dates: Vec<String>,
+    pub snapshot_created_at: String,
+    pub retention_days: i32,
+    pub is_archived: bool,
+    pub today: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryDailyEditionSnapshotResponse {
+    pub daily_edition: DiscoveryDailyEdition,
+    pub archive: DiscoveryDailyEditionArchive,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1557,7 +1575,7 @@ pub struct DiscoveryRecommendationSnapshotRequest {
     pub mode: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRecommendationSnapshot {
     pub mode: String,
@@ -1577,7 +1595,7 @@ pub struct DiscoveryCompletionSnapshotRequest {
     pub genre: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryCompletionSnapshot {
     pub mode: String,
@@ -1599,7 +1617,7 @@ pub struct DiscoveryDeepCutSnapshotRequest {
     pub genre: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDeepCutSnapshot {
     pub year: Option<i32>,
@@ -1611,7 +1629,7 @@ pub struct DiscoveryDeepCutSnapshot {
     pub stories: Vec<DiscoveryDeepCutStory>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDeepCutGenre {
     pub id: String,
@@ -1628,7 +1646,7 @@ pub struct DiscoveryChartSnapshotRequest {
     pub random: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryChartSnapshot {
     pub source: String,
@@ -1640,7 +1658,7 @@ pub struct DiscoveryChartSnapshot {
     pub stories: Vec<DiscoveryChartStory>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryAnniversaryStory {
     pub album_id: String,
@@ -1654,7 +1672,7 @@ pub struct DiscoveryAnniversaryStory {
     pub selection_reason: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryLifeEventStory {
     pub artist_id: String,
@@ -1672,7 +1690,7 @@ pub struct DiscoveryLifeEventStory {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryChartStory {
     pub entity: String,
@@ -1690,7 +1708,7 @@ pub struct DiscoveryChartStory {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDeepCutStory {
     pub track_id: i64,
@@ -1707,7 +1725,7 @@ pub struct DiscoveryDeepCutStory {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryArtistCompletionStory {
     pub artist_id: String,
@@ -1727,7 +1745,7 @@ pub struct DiscoveryArtistCompletionStory {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryAlbumCompletionStory {
     pub album_id: String,
@@ -1743,7 +1761,7 @@ pub struct DiscoveryAlbumCompletionStory {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRecommendationAnchor {
     pub album_id: String,
@@ -1754,7 +1772,7 @@ pub struct DiscoveryRecommendationAnchor {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRecommendationStory {
     pub album_id: String,

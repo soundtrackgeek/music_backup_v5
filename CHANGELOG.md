@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.133.0] - 2026-08-13
+### Added
+- Added dated SQLite snapshots for Daily Editions with older/newer navigation, a saved-date picker, a Today return action, restart persistence, and an inclusive rolling 90-day retention policy.
+
+### Changed
+- Today's generated shelf selection is now reused until an explicit refresh; archived editions remain immutable and lock live shelf controls and explorers so changed library or chart data cannot reshuffle their evidence.
+- Added schema version 54 for snapshot storage, with a migration that starts saving editions on first post-upgrade use without fabricating historical dates.
+- Synchronized app metadata and provider user agents to `0.133.0`.
+
+### Fixed
+- Fixed **Chart Toppers From…** retaining or randomly choosing a chart source with no owned matches, which could leave the shelf empty and the Year selector unusable.
+
 ## [0.132.0] - 2026-08-13
 ### Added
 - Added a paginated **See all** explorer to every Daily Edition shelf, with shelf-specific filters and sorting for anniversaries, life events, charts, Deep Cuts, collection completion, and Played/Loved recommendations.

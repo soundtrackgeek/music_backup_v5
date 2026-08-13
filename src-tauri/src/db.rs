@@ -17,23 +17,23 @@ use crate::models::{
     DiscoveryAlbumPoint, DiscoveryAnniversaryStory, DiscoveryArtistCompletionStory,
     DiscoveryArtistPoint, DiscoveryChartSnapshot, DiscoveryChartSnapshotRequest,
     DiscoveryChartStory, DiscoveryCompletionSnapshot, DiscoveryCompletionSnapshotRequest,
-    DiscoveryDailyEdition, DiscoveryDeepCutGenre, DiscoveryDeepCutSnapshot,
-    DiscoveryDeepCutSnapshotRequest, DiscoveryDeepCutStory, DiscoveryGenrePoint,
-    DiscoveryHeatmapCell, DiscoveryLifeEventStory, DiscoveryMission, DiscoveryRecommendationAnchor,
-    DiscoveryRecommendationSnapshot, DiscoveryRecommendationSnapshotRequest,
-    DiscoveryRecommendationStory, DiscoveryResponse, DiscoveryShelfExplorerRequest,
-    DiscoveryShelfExplorerResponse, DurationAlbumStat, DurationAnalyticsStats,
-    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
-    GenreProgressRequest, GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint,
-    GenreTimelineGenre, GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount,
-    ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats, LibraryStatus,
-    LovedDensityStat, LovedTrackStats, MetadataCoverageMetric, MusicBrainzOriginCountryOption,
-    MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry, MusicToolFixRequest,
-    MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse, MusicToolIssueRow,
-    MusicToolProgress, MusicToolSummary, MusicToolUndoSummary, NorsktoppenImportSummary,
-    OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation, PerformanceProbeResponse,
-    RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats, SaveChartRequest,
-    SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
+    DiscoveryDailyEdition, DiscoveryDailyEditionArchive, DiscoveryDailyEditionSnapshotResponse,
+    DiscoveryDeepCutGenre, DiscoveryDeepCutSnapshot, DiscoveryDeepCutSnapshotRequest,
+    DiscoveryDeepCutStory, DiscoveryGenrePoint, DiscoveryHeatmapCell, DiscoveryLifeEventStory,
+    DiscoveryMission, DiscoveryRecommendationAnchor, DiscoveryRecommendationSnapshot,
+    DiscoveryRecommendationSnapshotRequest, DiscoveryRecommendationStory, DiscoveryResponse,
+    DiscoveryShelfExplorerRequest, DiscoveryShelfExplorerResponse, DurationAlbumStat,
+    DurationAnalyticsStats, ExportMusicToolRequest, ExportResult, ExportSearchRequest,
+    GenreListRequest, GenreListResponse, GenreProgressRequest, GenreProgressStats, GenreSummary,
+    GenreTimelineAlbumPoint, GenreTimelineGenre, GenreTimelineRequest, GenreTimelineResponse,
+    GenreTimelineYearCount, ImportRun, LibraryHealthScore, LibraryOverviewStats, LibraryShapeStats,
+    LibraryStatus, LovedDensityStat, LovedTrackStats, MetadataCoverageMetric,
+    MusicBrainzOriginCountryOption, MusicToolFieldDiff, MusicToolFixDiff, MusicToolFixHistoryEntry,
+    MusicToolFixRequest, MusicToolFixSummary, MusicToolIssueRequest, MusicToolIssueResponse,
+    MusicToolIssueRow, MusicToolProgress, MusicToolSummary, MusicToolUndoSummary,
+    NorsktoppenImportSummary, OfficialUkImportSummary, OutlierStat, PerformanceProbeOperation,
+    PerformanceProbeResponse, RatingBucket, RatingEvent, RatingHistoryPoint, RatingProgressStats,
+    SaveChartRequest, SaveSearchRequest, SavedChart, SavedSearch, StatisticsResponse, TextFilter,
     TiISkuddetImportSummary, TrackDebutTimelineResponse, TrackDebutTimelineTrack,
     TrackDebutTimelineYear, VgListaImportSummary, YearProgressRequest, YearProgressStats,
 };
@@ -106,6 +106,8 @@ const DEFAULT_COUNTRY_FLAG_DISPLAY: &str = "flagAndName";
 const MUSICBRAINZ_SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
 const MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES: u32 = 1440;
 const MAX_UPDATE_AUTO_CHECK_MINUTES: u32 = 1440;
+const DAILY_EDITION_RETENTION_DAYS: i32 = 90;
+const DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION: i64 = 1;
 const MIN_BACKUP_RETENTION: u32 = 1;
 const MAX_BACKUP_RETENTION: u32 = 50;
 const SCORE_GENRE_GROUP: &[&str] = &[
@@ -571,7 +573,21 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_fifty_three_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_fifty_four_schema_exists(conn)? {
+        return Ok(());
+    }
+
+    if user_version == 53 && migrations::phase_fifty_three_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 54 migration transaction")?;
+        ensure_daily_edition_snapshot_schema(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 54;")
+            .context("Could not mark the schema 54 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 54 migration")?;
         return Ok(());
     }
 
@@ -580,12 +596,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             .unchecked_transaction()
             .context("Could not start the schema 53 migration transaction")?;
         ensure_lastfm_related_albums_schema(&transaction)?;
+        ensure_daily_edition_snapshot_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 53;")
-            .context("Could not mark the schema 53 migration complete")?;
+            .execute_batch("PRAGMA user_version = 54;")
+            .context("Could not mark the schema 54 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 53 migration")?;
+            .context("Could not commit the schema 54 migration")?;
         return Ok(());
     }
 
@@ -595,12 +612,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             .context("Could not start the schema 52–53 migration transaction")?;
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
+        ensure_daily_edition_snapshot_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 53;")
-            .context("Could not mark the schema 52–53 migration complete")?;
+            .execute_batch("PRAGMA user_version = 54;")
+            .context("Could not mark the schema 52–54 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 52–53 migration")?;
+            .context("Could not commit the schema 52–54 migration")?;
         return Ok(());
     }
 
@@ -611,12 +629,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
+        ensure_daily_edition_snapshot_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 53;")
-            .context("Could not mark the schema 51–53 migration complete")?;
+            .execute_batch("PRAGMA user_version = 54;")
+            .context("Could not mark the schema 51–54 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 51–53 migration")?;
+            .context("Could not commit the schema 51–54 migration")?;
         return Ok(());
     }
 
@@ -628,12 +647,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
+        ensure_daily_edition_snapshot_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 53;")
-            .context("Could not mark the schema 50–53 migration complete")?;
+            .execute_batch("PRAGMA user_version = 54;")
+            .context("Could not mark the schema 50–54 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 50–53 migration")?;
+            .context("Could not commit the schema 50–54 migration")?;
         return Ok(());
     }
 
@@ -646,12 +666,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
+        ensure_daily_edition_snapshot_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 53;")
-            .context("Could not mark the schema 49–53 migration complete")?;
+            .execute_batch("PRAGMA user_version = 54;")
+            .context("Could not mark the schema 49–54 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 49–53 migration")?;
+            .context("Could not commit the schema 49–54 migration")?;
         return Ok(());
     }
 
@@ -665,12 +686,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
+        ensure_daily_edition_snapshot_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 53;")
-            .context("Could not mark the schema 48–53 migration complete")?;
+            .execute_batch("PRAGMA user_version = 54;")
+            .context("Could not mark the schema 48–54 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 48–53 migration")?;
+            .context("Could not commit the schema 48–54 migration")?;
         return Ok(());
     }
 
@@ -685,12 +707,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
+        ensure_daily_edition_snapshot_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 53;")
-            .context("Could not mark the schema 47–53 migration complete")?;
+            .execute_batch("PRAGMA user_version = 54;")
+            .context("Could not mark the schema 47–54 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 47–53 migration")?;
+            .context("Could not commit the schema 47–54 migration")?;
         return Ok(());
     }
 
@@ -706,12 +729,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
+        ensure_daily_edition_snapshot_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 53;")
-            .context("Could not mark the schema 46–53 migration complete")?;
+            .execute_batch("PRAGMA user_version = 54;")
+            .context("Could not mark the schema 46–54 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 46–53 migration")?;
+            .context("Could not commit the schema 46–54 migration")?;
         return Ok(());
     }
 
@@ -728,12 +752,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_album_review_schema(&transaction)?;
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
+        ensure_daily_edition_snapshot_schema(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 53;")
-            .context("Could not mark the schema 45–53 migration complete")?;
+            .execute_batch("PRAGMA user_version = 54;")
+            .context("Could not mark the schema 45–54 migration complete")?;
         transaction
             .commit()
-            .context("Could not commit the schema 45–53 migration")?;
+            .context("Could not commit the schema 45–54 migration")?;
         return Ok(());
     }
 
@@ -1952,12 +1977,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_album_review_schema(conn)?;
     ensure_album_artist_key_index(conn)?;
     ensure_music_doctor_schema(conn)?;
+    ensure_daily_edition_snapshot_schema(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
     migrations::migrate_billboard_album_source_default(conn)?;
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 53;
+        PRAGMA user_version = 54;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -2606,6 +2632,25 @@ fn ensure_album_review_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create the album review cache schema")?;
+    Ok(())
+}
+
+fn ensure_daily_edition_snapshot_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS daily_edition_snapshots (
+            edition_date TEXT PRIMARY KEY,
+            payload_version INTEGER NOT NULL,
+            edition_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_daily_edition_snapshots_created
+            ON daily_edition_snapshots(created_at DESC);
+        ",
+    )
+    .context("Could not create the Daily Edition snapshot schema")?;
     Ok(())
 }
 
@@ -10471,9 +10516,24 @@ pub fn genre_suggestion_names_for_app(app: &AppHandle) -> Result<Vec<String>> {
 }
 
 #[cfg(not(test))]
-pub fn discovery_for_app(app: &AppHandle) -> Result<DiscoveryResponse> {
+pub fn discovery_for_app(
+    app: &AppHandle,
+    refresh_daily_edition: bool,
+) -> Result<DiscoveryResponse> {
     let (conn, _) = open(app)?;
-    discovery(&conn)
+    discovery(&conn, refresh_daily_edition)
+}
+
+#[cfg(not(test))]
+pub fn discovery_daily_edition_for_app(
+    app: &AppHandle,
+    date: &str,
+) -> Result<DiscoveryDailyEditionSnapshotResponse> {
+    let (conn, _) = open(app)?;
+    let today = Local::now().date_naive();
+    let requested_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .context("Daily Edition date must use YYYY-MM-DD")?;
+    discovery_daily_edition_snapshot(&conn, requested_date, today, false)
 }
 
 #[cfg(not(test))]
@@ -12790,7 +12850,7 @@ fn performance_probe(conn: &Connection, database_path: String) -> Result<Perform
         "Discovery dashboard payload",
         "Discovery",
         || {
-            let response = discovery(conn)?;
+            let response = discovery(conn, false)?;
             let row_count = response.heatmap.len()
                 + response.backlog_missions.len()
                 + response.smart_missions.len()
@@ -14057,15 +14117,18 @@ fn genre_suggestion_names(conn: &Connection) -> Result<Vec<String>> {
     Ok(rows)
 }
 
-fn discovery(conn: &Connection) -> Result<DiscoveryResponse> {
+fn discovery(conn: &Connection, refresh_daily_edition: bool) -> Result<DiscoveryResponse> {
     let generated_at = list_import_runs(conn, 1)?
         .into_iter()
         .next()
         .map(|run| run.completed_at.unwrap_or(run.started_at));
     let today = Local::now().date_naive();
+    let daily_edition =
+        discovery_daily_edition_snapshot(conn, today, today, refresh_daily_edition)?;
 
     Ok(DiscoveryResponse {
-        daily_edition: discovery_daily_edition(conn, today)?,
+        daily_edition: daily_edition.daily_edition,
+        daily_edition_archive: daily_edition.archive,
         heatmap: discovery_heatmap(conn)?,
         backlog_missions: discovery_backlog_missions(conn)?,
         smart_missions: discovery_smart_missions(conn)?,
@@ -14074,6 +14137,131 @@ fn discovery(conn: &Connection) -> Result<DiscoveryResponse> {
         artist_points: discovery_artist_points(conn)?,
         generated_at,
     })
+}
+
+fn discovery_daily_edition_snapshot(
+    conn: &Connection,
+    requested_date: NaiveDate,
+    today: NaiveDate,
+    refresh: bool,
+) -> Result<DiscoveryDailyEditionSnapshotResponse> {
+    if requested_date > today {
+        bail!("Daily Edition snapshots cannot be opened for a future date");
+    }
+    if refresh && requested_date != today {
+        bail!("Archived Daily Editions are immutable");
+    }
+
+    prune_daily_edition_snapshots(conn, today)?;
+    let requested_key = requested_date.format("%Y-%m-%d").to_string();
+    let stored = if refresh {
+        None
+    } else {
+        load_daily_edition_snapshot(conn, &requested_key)?
+    };
+
+    let (daily_edition, snapshot_created_at) = match stored {
+        Some((payload_version, edition_json, created_at))
+            if payload_version == DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION =>
+        {
+            match serde_json::from_str::<DiscoveryDailyEdition>(&edition_json) {
+                Ok(edition) if edition.date == requested_key => (edition, created_at),
+                Ok(_) | Err(_) if requested_date == today => {
+                    persist_daily_edition_snapshot(conn, requested_date)?
+                }
+                Ok(_) => bail!("Archived Daily Edition date does not match its snapshot"),
+                Err(error) => {
+                    return Err(error).context("Could not read the archived Daily Edition snapshot")
+                }
+            }
+        }
+        Some(_) if requested_date != today => {
+            bail!("Archived Daily Edition uses an unsupported snapshot format")
+        }
+        _ if requested_date == today => persist_daily_edition_snapshot(conn, requested_date)?,
+        _ => bail!("No saved Daily Edition is available for {requested_key}"),
+    };
+
+    let available_dates = daily_edition_snapshot_dates(conn, today)?;
+    Ok(DiscoveryDailyEditionSnapshotResponse {
+        daily_edition,
+        archive: DiscoveryDailyEditionArchive {
+            available_dates,
+            snapshot_created_at,
+            retention_days: DAILY_EDITION_RETENTION_DAYS,
+            is_archived: requested_date != today,
+            today: today.format("%Y-%m-%d").to_string(),
+        },
+    })
+}
+
+fn load_daily_edition_snapshot(
+    conn: &Connection,
+    edition_date: &str,
+) -> Result<Option<(i64, String, String)>> {
+    conn.query_row(
+        "SELECT payload_version, edition_json, created_at
+         FROM daily_edition_snapshots
+         WHERE edition_date = ?1",
+        [edition_date],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )
+    .optional()
+    .context("Could not load the Daily Edition snapshot")
+}
+
+fn persist_daily_edition_snapshot(
+    conn: &Connection,
+    date: NaiveDate,
+) -> Result<(DiscoveryDailyEdition, String)> {
+    let edition = discovery_daily_edition(conn, date)?;
+    let edition_json = serde_json::to_string(&edition)
+        .context("Could not serialize the Daily Edition snapshot")?;
+    let created_at = Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO daily_edition_snapshots (
+             edition_date, payload_version, edition_json, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?4)
+         ON CONFLICT(edition_date) DO UPDATE SET
+             payload_version = excluded.payload_version,
+             edition_json = excluded.edition_json,
+             created_at = excluded.created_at,
+             updated_at = excluded.updated_at",
+        params![
+            edition.date,
+            DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION,
+            edition_json,
+            created_at
+        ],
+    )
+    .context("Could not save the Daily Edition snapshot")?;
+    Ok((edition, created_at))
+}
+
+fn prune_daily_edition_snapshots(conn: &Connection, today: NaiveDate) -> Result<()> {
+    let cutoff = today - chrono::Duration::days(i64::from(DAILY_EDITION_RETENTION_DAYS - 1));
+    conn.execute(
+        "DELETE FROM daily_edition_snapshots WHERE edition_date < ?1",
+        [cutoff.format("%Y-%m-%d").to_string()],
+    )
+    .context("Could not prune expired Daily Edition snapshots")?;
+    Ok(())
+}
+
+fn daily_edition_snapshot_dates(conn: &Connection, today: NaiveDate) -> Result<Vec<String>> {
+    let today_key = today.format("%Y-%m-%d").to_string();
+    conn.prepare(
+        "SELECT edition_date
+         FROM daily_edition_snapshots
+         WHERE payload_version = ?1 AND edition_date <= ?2
+         ORDER BY edition_date DESC",
+    )?
+    .query_map(
+        params![DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION, today_key],
+        |row| row.get(0),
+    )?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .context("Could not list Daily Edition snapshot dates")
 }
 
 fn discovery_daily_edition(conn: &Connection, date: NaiveDate) -> Result<DiscoveryDailyEdition> {
@@ -14372,20 +14560,20 @@ fn discovery_chart_snapshot(
 ) -> Result<DiscoveryChartSnapshot> {
     let sources = ["billboard", "official-uk", "vg-lista"];
     let requested_source = request.source.as_deref().unwrap_or_default();
-    let source = if request.random || !sources.contains(&requested_source) {
-        let mut available_sources = Vec::new();
-        for source in sources {
-            if !discovery_chart_years(conn, source)?.is_empty() {
-                available_sources.push(source);
-            }
+    let mut available_sources = Vec::new();
+    for source in sources {
+        if !discovery_chart_years(conn, source)?.is_empty() {
+            available_sources.push(source);
         }
-        if available_sources.is_empty() {
-            "billboard"
-        } else {
-            available_sources[discovery_random_index(conn, available_sources.len())?]
-        }
-    } else {
+    }
+    let source = if available_sources.is_empty() {
+        "billboard"
+    } else if request.random {
+        available_sources[discovery_random_index(conn, available_sources.len())?]
+    } else if available_sources.contains(&requested_source) {
         requested_source
+    } else {
+        available_sources[0]
     };
     let available_years = discovery_chart_years(conn, source)?;
     let year = if available_years.is_empty() {
@@ -22965,6 +23153,88 @@ mod tests {
     }
 
     #[test]
+    fn daily_edition_snapshot_survives_restart_and_source_changes_until_explicit_refresh() {
+        let dir = temp_test_dir("daily-edition-snapshot");
+        let db_path = dir.join("library.sqlite3");
+        let date = NaiveDate::from_ymd_opt(2026, 8, 13).expect("valid snapshot date");
+        let conn = seeded_file_database(&db_path, "snapshot-album", "Original Edition Album");
+        conn.execute(
+            "UPDATE albums SET year = 1976, release_year = 1976 WHERE id = 'snapshot-album'",
+            [],
+        )
+        .expect("make anniversary fixture");
+
+        let first = discovery_daily_edition_snapshot(&conn, date, date, false)
+            .expect("create first Daily Edition snapshot");
+        assert_eq!(
+            first.daily_edition.anniversaries[0].album,
+            "Original Edition Album"
+        );
+        assert!(!first.archive.is_archived);
+        drop(conn);
+
+        let restarted = Connection::open(&db_path).expect("reopen snapshot database");
+        configure(&restarted).expect("configure restarted database");
+        migrate(&restarted).expect("migrate restarted database");
+        restarted
+            .execute(
+                "UPDATE albums SET album = 'Changed Source Album' WHERE id = 'snapshot-album'",
+                [],
+            )
+            .expect("change source album after snapshot");
+
+        let persisted = discovery_daily_edition_snapshot(&restarted, date, date, false)
+            .expect("reload persisted Daily Edition snapshot");
+        assert_eq!(
+            persisted.daily_edition.anniversaries[0].album,
+            "Original Edition Album"
+        );
+        assert_eq!(
+            persisted.archive.snapshot_created_at,
+            first.archive.snapshot_created_at
+        );
+
+        let refreshed = discovery_daily_edition_snapshot(&restarted, date, date, true)
+            .expect("explicitly refresh today's snapshot");
+        assert_eq!(
+            refreshed.daily_edition.anniversaries[0].album,
+            "Changed Source Album"
+        );
+        assert_ne!(
+            refreshed.archive.snapshot_created_at,
+            first.archive.snapshot_created_at
+        );
+
+        drop(restarted);
+        fs::remove_dir_all(dir).expect("remove snapshot test directory");
+    }
+
+    #[test]
+    fn daily_edition_snapshot_prunes_expired_rows_and_keeps_archives_immutable() {
+        let conn = seeded_connection();
+        let today = NaiveDate::from_ymd_opt(2026, 8, 13).expect("valid today");
+        let archived = today - chrono::Duration::days(1);
+        let expired = today - chrono::Duration::days(i64::from(DAILY_EDITION_RETENTION_DAYS));
+
+        persist_daily_edition_snapshot(&conn, expired).expect("seed expired edition");
+        persist_daily_edition_snapshot(&conn, archived).expect("seed archived edition");
+        let response = discovery_daily_edition_snapshot(&conn, today, today, false)
+            .expect("create today's edition and prune archive");
+
+        assert_eq!(
+            response.archive.available_dates,
+            vec![
+                today.format("%Y-%m-%d").to_string(),
+                archived.format("%Y-%m-%d").to_string(),
+            ]
+        );
+        let archived_response = discovery_daily_edition_snapshot(&conn, archived, today, false)
+            .expect("open immutable archived edition");
+        assert!(archived_response.archive.is_archived);
+        assert!(discovery_daily_edition_snapshot(&conn, archived, today, true).is_err());
+    }
+
+    #[test]
     fn discovery_deep_cuts_are_album_diverse_and_filter_exactly() {
         let conn = seeded_connection();
         let albums = [
@@ -23494,24 +23764,59 @@ mod tests {
         assert!(billboard.available_weeks.is_empty());
         assert_eq!(billboard.stories[0].rank, 4);
 
-        let random = discovery_chart_snapshot(
+        for _ in 0..30 {
+            let random = discovery_chart_snapshot(
+                &conn,
+                &DiscoveryChartSnapshotRequest {
+                    source: None,
+                    year: None,
+                    week: None,
+                    random: true,
+                },
+            )
+            .expect("load random chart snapshot");
+            assert!(["billboard", "official-uk", "vg-lista"].contains(&random.source.as_str()));
+            assert!(random.year.is_some());
+            assert!(!random.stories.is_empty());
+            if random.source == "billboard" {
+                assert!(random.week.is_none());
+            } else {
+                assert!(random.week.is_some());
+            }
+        }
+    }
+
+    #[test]
+    fn discovery_chart_snapshot_falls_back_from_an_empty_requested_source() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "
+            INSERT INTO official_uk_album_chart_entries (
+                source_file, year, week, chart_date, rank, artist, title,
+                artist_key, title_key, week_key, matched_album_id, imported_at
+            ) VALUES (
+                'uk.csv', 1987, 32, '1987-08-08', 1, 'Pet Shop Boys',
+                'Actually', 'pet shop boys', 'actually', '1987-32', 'mb:test', 'now'
+            );
+            ",
+        )
+        .expect("insert only available chart source");
+
+        let snapshot = discovery_chart_snapshot(
             &conn,
             &DiscoveryChartSnapshotRequest {
-                source: None,
+                source: Some("billboard".to_string()),
                 year: None,
                 week: None,
-                random: true,
+                random: false,
             },
         )
-        .expect("load random chart snapshot");
-        assert!(["billboard", "official-uk", "vg-lista"].contains(&random.source.as_str()));
-        assert!(random.year.is_some());
-        assert!(!random.stories.is_empty());
-        if random.source == "billboard" {
-            assert!(random.week.is_none());
-        } else {
-            assert!(random.week.is_some());
-        }
+        .expect("fall back to chart source with matches");
+
+        assert_eq!(snapshot.source, "official-uk");
+        assert_eq!(snapshot.year, Some(1987));
+        assert_eq!(snapshot.week, Some(32));
+        assert_eq!(snapshot.stories.len(), 1);
     }
 
     #[test]
@@ -26408,6 +26713,8 @@ mod tests {
             .expect("phase fifty-two schema exists"));
         assert!(migrations::phase_fifty_three_schema_exists(&conn)
             .expect("phase fifty-three schema exists"));
+        assert!(migrations::phase_fifty_four_schema_exists(&conn)
+            .expect("phase fifty-four schema exists"));
         assert!(!schema_index_exists(&conn, "idx_tracks_file_identity")
             .expect("redundant track identity index is absent"));
         assert!(schema_table_exists(&conn, "import_sessions").expect("import session table exists"));
@@ -26589,6 +26896,37 @@ mod tests {
 
         assert!(migrations::phase_fifty_three_schema_exists(&conn)
             .expect("phase fifty-three schema exists"));
+        assert!(migrations::phase_fifty_four_schema_exists(&conn)
+            .expect("phase fifty-four schema exists"));
+        assert_eq!(
+            conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+                .expect("read upgraded schema version"),
+            LATEST_SCHEMA_VERSION,
+        );
+    }
+
+    #[test]
+    fn upgrades_schema_fifty_three_with_daily_edition_snapshots() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("create current schema");
+        conn.execute_batch(
+            "
+            DROP TABLE daily_edition_snapshots;
+            PRAGMA user_version = 53;
+            ",
+        )
+        .expect("restore schema fifty-three shape");
+
+        assert!(migrations::phase_fifty_three_schema_exists(&conn)
+            .expect("phase fifty-three schema exists"));
+        assert!(!migrations::phase_fifty_four_schema_exists(&conn)
+            .expect("phase fifty-four schema is absent"));
+
+        migrate(&conn).expect("upgrade schema fifty-three");
+
+        assert!(migrations::phase_fifty_four_schema_exists(&conn)
+            .expect("phase fifty-four schema exists"));
         assert_eq!(
             conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
                 .expect("read upgraded schema version"),

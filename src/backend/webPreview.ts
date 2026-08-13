@@ -2597,6 +2597,13 @@ const mockStatistics: StatisticsResponse = {
 };
 
 const mockDiscovery: DiscoveryResponse = {
+  dailyEditionArchive: {
+    availableDates: ["2026-08-11", "2026-08-10", "2026-08-09"],
+    snapshotCreatedAt: "2026-08-11T08:00:00Z",
+    retentionDays: 90,
+    isArchived: false,
+    today: "2026-08-11",
+  },
   dailyEdition: {
     date: "2026-08-11",
     anniversaryYears: 50,

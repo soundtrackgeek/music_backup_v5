@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   CalendarDays,
   ChartLine,
+  ChevronLeft,
   ChevronRight,
   CircleDot,
   Heart,
@@ -17,6 +18,7 @@ import type {
   DiscoveryChartStory,
   DiscoveryCompletionSnapshotRequest,
   DiscoveryDailyEdition,
+  DiscoveryDailyEditionArchive,
   DiscoveryDeepCutSnapshotRequest,
   DiscoveryRecommendationSnapshotRequest,
   DiscoveryShelf,
@@ -29,6 +31,7 @@ import { DiscoveryShelfExplorer } from "./DiscoveryShelfExplorer";
 
 type DiscoveryDailyEditionProps = {
   edition: DiscoveryDailyEdition | null;
+  archive?: DiscoveryDailyEditionArchive;
   isLoading: boolean;
   isAnniversaryLoading: boolean;
   isChartLoading: boolean;
@@ -42,6 +45,7 @@ type DiscoveryDailyEditionProps = {
   onRecommendationSnapshotChange: (
     request: DiscoveryRecommendationSnapshotRequest,
   ) => void;
+  onEditionDateChange?: (date: string) => void;
   onLoadExplorer?: (
     request: DiscoveryShelfExplorerRequest,
   ) => Promise<DiscoveryShelfExplorerResponse>;
@@ -112,11 +116,17 @@ function EditionEmpty({ children }: { children: string }) {
 
 type LifeEventsPanelProps = {
   edition: DiscoveryDailyEdition;
+  isArchived: boolean;
   onOpenArtist: (artistId: string, artistName: string) => void;
   onSeeAll: (eventType: "birthday" | "memorial") => void;
 };
 
-function LifeEventsPanel({ edition, onOpenArtist, onSeeAll }: LifeEventsPanelProps) {
+function LifeEventsPanel({
+  edition,
+  isArchived,
+  onOpenArtist,
+  onSeeAll,
+}: LifeEventsPanelProps) {
   const [activeEventType, setActiveEventType] = useState<"birthday" | "memorial">(
     "birthday",
   );
@@ -139,7 +149,7 @@ function LifeEventsPanel({ edition, onOpenArtist, onSeeAll }: LifeEventsPanelPro
         <div className="daily-edition-section-heading">
           <CalendarDays aria-hidden="true" />
           <div>
-            <h3 id="life-events-heading">Today</h3>
+            <h3 id="life-events-heading">{isArchived ? "On this date" : "Today"}</h3>
             <p>
               {activeEventType === "birthday"
                 ? "Artists born on this date"
@@ -220,6 +230,8 @@ function LifeEventsPanel({ edition, onOpenArtist, onSeeAll }: LifeEventsPanelPro
         className="daily-edition-shelf-footer daily-edition-footer-button"
         data-daily-edition-see-all="life-events"
         type="button"
+        disabled={isArchived}
+        title={isArchived ? "See all is available in today's live edition." : undefined}
         onClick={() => onSeeAll(activeEventType)}
       >
         See all {activeEventType === "birthday" ? "birthdays" : "memorials"}
@@ -232,6 +244,7 @@ function LifeEventsPanel({ edition, onOpenArtist, onSeeAll }: LifeEventsPanelPro
 type AnniversaryCarouselProps = {
   edition: DiscoveryDailyEdition;
   isLoading: boolean;
+  isArchived: boolean;
   onAnniversaryYearsChange: (years: number) => void;
   onOpenAlbum: (albumId: string) => void;
   onSeeAll: () => void;
@@ -240,6 +253,7 @@ type AnniversaryCarouselProps = {
 function AnniversaryCarousel({
   edition,
   isLoading,
+  isArchived,
   onAnniversaryYearsChange,
   onOpenAlbum,
   onSeeAll,
@@ -253,7 +267,7 @@ function AnniversaryCarousel({
   useEffect(() => {
     setActiveIndex(0);
     setRotationCycle((current) => current + 1);
-  }, [anniversaryKey, edition.anniversaryYears]);
+  }, [anniversaryKey, edition.anniversaryYears, edition.date]);
 
   useEffect(() => {
     if (
@@ -323,7 +337,7 @@ function AnniversaryCarousel({
                 <select
                   aria-label="Choose anniversary milestone"
                   value={edition.anniversaryYears}
-                  disabled={isLoading}
+                  disabled={isLoading || isArchived}
                   onChange={(event) =>
                     onAnniversaryYearsChange(Number(event.target.value))
                   }
@@ -375,7 +389,7 @@ function AnniversaryCarousel({
               <select
                 aria-label="Choose anniversary milestone"
                 value={edition.anniversaryYears}
-                disabled={isLoading}
+                disabled={isLoading || isArchived}
                 onChange={(event) =>
                   onAnniversaryYearsChange(Number(event.target.value))
                 }
@@ -427,6 +441,8 @@ function AnniversaryCarousel({
             className="daily-edition-carousel-see-all"
             data-daily-edition-see-all="anniversaries"
             type="button"
+            disabled={isArchived}
+            title={isArchived ? "See all is available in today's live edition." : undefined}
             onClick={onSeeAll}
           >
             See all
@@ -441,6 +457,7 @@ function AnniversaryCarousel({
 
 export function DiscoveryDailyEdition({
   edition,
+  archive,
   isLoading,
   isAnniversaryLoading,
   isChartLoading,
@@ -452,6 +469,7 @@ export function DiscoveryDailyEdition({
   onDeepCutSnapshotChange,
   onCompletionSnapshotChange,
   onRecommendationSnapshotChange,
+  onEditionDateChange = () => {},
   onLoadExplorer = async () => {
     throw new Error("Shelf explorer loader is unavailable.");
   },
@@ -529,6 +547,20 @@ export function DiscoveryDailyEdition({
     );
   }
 
+  const archiveState: DiscoveryDailyEditionArchive = archive ?? {
+    availableDates: [edition.date],
+    snapshotCreatedAt: `${edition.date}T00:00:00Z`,
+    retentionDays: 90,
+    isArchived: false,
+    today: edition.date,
+  };
+  const currentDateIndex = archiveState.availableDates.indexOf(edition.date);
+  const olderDate = archiveState.availableDates[currentDateIndex + 1] ?? null;
+  const newerDate = currentDateIndex > 0
+    ? archiveState.availableDates[currentDateIndex - 1]
+    : null;
+  const isArchived = archiveState.isArchived;
+
   if (explorer) {
     return (
       <DiscoveryShelfExplorer
@@ -578,11 +610,58 @@ export function DiscoveryDailyEdition({
       <header className="daily-edition-masthead">
         <div>
           <h2>Your Daily Edition</h2>
-          <p className="daily-edition-date">{formatLongDate(edition.date)}</p>
+          <div className="daily-edition-date-navigation" aria-label="Saved Daily Editions">
+            <button
+              type="button"
+              aria-label="Open previous saved edition"
+              disabled={!olderDate || isLoading}
+              onClick={() => olderDate && onEditionDateChange(olderDate)}
+            >
+              <ChevronLeft aria-hidden="true" />
+            </button>
+            <label>
+              <span className="sr-only">Choose saved edition date</span>
+              <select
+                aria-label="Choose saved edition date"
+                value={edition.date}
+                disabled={isLoading || archiveState.availableDates.length < 2}
+                onChange={(event) => onEditionDateChange(event.target.value)}
+              >
+                {archiveState.availableDates.map((date) => (
+                  <option key={date} value={date}>{formatLongDate(date)}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              aria-label="Open next saved edition"
+              disabled={!newerDate || isLoading}
+              onClick={() => newerDate && onEditionDateChange(newerDate)}
+            >
+              <ChevronRight aria-hidden="true" />
+            </button>
+            {isArchived && archiveState.availableDates.includes(archiveState.today) ? (
+              <button
+                className="daily-edition-today-button"
+                type="button"
+                disabled={isLoading}
+                onClick={() => onEditionDateChange(archiveState.today)}
+              >
+                Today
+              </button>
+            ) : null}
+          </div>
         </div>
-        <p className="daily-edition-listening-note">
-          {edition.listeningEvidenceNote}
-        </p>
+        <div className="daily-edition-edition-note">
+          <p className="daily-edition-listening-note">
+            {edition.listeningEvidenceNote}
+          </p>
+          <p className="daily-edition-snapshot-note">
+            {isArchived
+              ? "Archived snapshot · shelf selectors and refresh controls are locked."
+              : `Saved for today · ${archiveState.retentionDays}-day archive.`}
+          </p>
+        </div>
       </header>
 
       <div className="daily-edition-layout">
@@ -596,6 +675,7 @@ export function DiscoveryDailyEdition({
             <AnniversaryCarousel
               edition={edition}
               isLoading={isAnniversaryLoading}
+              isArchived={isArchived}
               onAnniversaryYearsChange={onAnniversaryYearsChange}
               onOpenAlbum={onOpenAlbum}
               onSeeAll={() => openExplorer("anniversaries", {
@@ -608,6 +688,7 @@ export function DiscoveryDailyEdition({
 
             <LifeEventsPanel
               edition={edition}
+              isArchived={isArchived}
               onOpenArtist={onOpenArtist}
               onSeeAll={(eventType) => openExplorer("life-events", {
                 date: edition.date,
@@ -637,7 +718,7 @@ export function DiscoveryDailyEdition({
                   <select
                     aria-label="Choose album chart"
                     value={chartSnapshot.source}
-                    disabled={isChartLoading}
+                    disabled={isChartLoading || isArchived}
                     onChange={(event) =>
                       onChartSnapshotChange({
                         source: event.target.value as DiscoveryChartSnapshotRequest["source"],
@@ -654,7 +735,7 @@ export function DiscoveryDailyEdition({
                   <select
                     aria-label="Choose chart year"
                     value={chartSnapshot.year ?? ""}
-                    disabled={isChartLoading || !chartSnapshot.availableYears.length}
+                    disabled={isChartLoading || isArchived || !chartSnapshot.availableYears.length}
                     onChange={(event) =>
                       onChartSnapshotChange({
                         source: chartSnapshot.source,
@@ -673,7 +754,7 @@ export function DiscoveryDailyEdition({
                     <select
                       aria-label="Choose chart week"
                       value={chartSnapshot.week ?? ""}
-                      disabled={isChartLoading || !chartSnapshot.availableWeeks.length}
+                      disabled={isChartLoading || isArchived || !chartSnapshot.availableWeeks.length}
                       onChange={(event) =>
                         onChartSnapshotChange({
                           source: chartSnapshot.source,
@@ -691,7 +772,7 @@ export function DiscoveryDailyEdition({
                 <button
                   type="button"
                   className="daily-edition-chart-random"
-                  disabled={isChartLoading}
+                  disabled={isChartLoading || isArchived}
                   onClick={() => onChartSnapshotChange({ random: true })}
                 >
                   <Shuffle aria-hidden="true" />
@@ -740,6 +821,8 @@ export function DiscoveryDailyEdition({
                 className="daily-edition-shelf-footer daily-edition-footer-button"
                 data-daily-edition-see-all="charts"
                 type="button"
+                disabled={isArchived}
+                title={isArchived ? "See all is available in today's live edition." : undefined}
                 onClick={() => openExplorer("charts", {
                   source: chartSnapshot.source,
                   year: chartSnapshot.year ?? undefined,
@@ -771,7 +854,7 @@ export function DiscoveryDailyEdition({
                 <button
                   type="button"
                   className="daily-edition-deep-cut-refresh"
-                  disabled={isDeepCutLoading}
+                  disabled={isDeepCutLoading || isArchived}
                   onClick={() => onDeepCutSnapshotChange({
                     year: deepCutSnapshot.year ?? undefined,
                     decade: deepCutSnapshot.decade ?? undefined,
@@ -787,7 +870,7 @@ export function DiscoveryDailyEdition({
                   <span>Period</span>
                   <select
                     aria-label="Filter Deep Cuts by period"
-                    disabled={isDeepCutLoading}
+                    disabled={isDeepCutLoading || isArchived}
                     value={
                       deepCutSnapshot.year != null
                         ? `year:${deepCutSnapshot.year}`
@@ -824,7 +907,7 @@ export function DiscoveryDailyEdition({
                   <span>Genre</span>
                   <select
                     aria-label="Filter Deep Cuts by genre"
-                    disabled={isDeepCutLoading}
+                    disabled={isDeepCutLoading || isArchived}
                     value={deepCutSnapshot.genre ?? ""}
                     onChange={(event) => onDeepCutSnapshotChange({
                       year: deepCutSnapshot.year ?? undefined,
@@ -887,6 +970,8 @@ export function DiscoveryDailyEdition({
                 className="daily-edition-shelf-footer daily-edition-footer-button"
                 data-daily-edition-see-all="deep-cuts"
                 type="button"
+                disabled={isArchived}
+                title={isArchived ? "See all is available in today's live edition." : undefined}
                 onClick={() => openExplorer("deep-cuts", {
                   year: deepCutSnapshot.year ?? undefined,
                   decade: deepCutSnapshot.decade ?? undefined,
@@ -921,7 +1006,7 @@ export function DiscoveryDailyEdition({
                   type="button"
                   className="daily-edition-completion-refresh"
                   aria-label="Refresh completion suggestions"
-                  disabled={isCompletionLoading}
+                  disabled={isCompletionLoading || isArchived}
                   onClick={() => onCompletionSnapshotChange({
                     mode: completionSnapshot.mode,
                     year: completionSnapshot.year ?? undefined,
@@ -938,7 +1023,7 @@ export function DiscoveryDailyEdition({
                   type="button"
                   role="tab"
                   aria-selected={completionSnapshot.mode === "artist"}
-                  disabled={isCompletionLoading}
+                  disabled={isCompletionLoading || isArchived}
                   onClick={() => onCompletionSnapshotChange({ mode: "artist" })}
                 >
                   Artists
@@ -947,7 +1032,7 @@ export function DiscoveryDailyEdition({
                   type="button"
                   role="tab"
                   aria-selected={completionSnapshot.mode === "album"}
-                  disabled={isCompletionLoading}
+                  disabled={isCompletionLoading || isArchived}
                   onClick={() => onCompletionSnapshotChange({ mode: "album" })}
                 >
                   Albums
@@ -958,7 +1043,7 @@ export function DiscoveryDailyEdition({
                   <span>Period</span>
                   <select
                     aria-label="Filter completion by period"
-                    disabled={isCompletionLoading}
+                    disabled={isCompletionLoading || isArchived}
                     value={
                       completionSnapshot.year != null
                         ? `year:${completionSnapshot.year}`
@@ -996,7 +1081,7 @@ export function DiscoveryDailyEdition({
                   <span>Genre</span>
                   <select
                     aria-label="Filter completion by genre"
-                    disabled={isCompletionLoading}
+                    disabled={isCompletionLoading || isArchived}
                     value={completionSnapshot.genre ?? ""}
                     onChange={(event) => onCompletionSnapshotChange({
                       mode: completionSnapshot.mode,
@@ -1106,6 +1191,8 @@ export function DiscoveryDailyEdition({
                 className="daily-edition-shelf-footer daily-edition-footer-button"
                 data-daily-edition-see-all="completion"
                 type="button"
+                disabled={isArchived}
+                title={isArchived ? "See all is available in today's live edition." : undefined}
                 onClick={() => openExplorer("completion", {
                   mode: completionSnapshot.mode,
                   year: completionSnapshot.year ?? undefined,
@@ -1143,7 +1230,7 @@ export function DiscoveryDailyEdition({
                   type="button"
                   className="daily-edition-completion-refresh"
                   aria-label="Refresh recommendation suggestions"
-                  disabled={isRecommendationLoading}
+                  disabled={isRecommendationLoading || isArchived}
                   onClick={() => onRecommendationSnapshotChange({
                     mode: recommendationSnapshot.mode,
                   })}
@@ -1157,7 +1244,7 @@ export function DiscoveryDailyEdition({
                   type="button"
                   role="tab"
                   aria-selected={recommendationSnapshot.mode === "played"}
-                  disabled={isRecommendationLoading}
+                  disabled={isRecommendationLoading || isArchived}
                   onClick={() => onRecommendationSnapshotChange({ mode: "played" })}
                 >
                   Played
@@ -1166,7 +1253,7 @@ export function DiscoveryDailyEdition({
                   type="button"
                   role="tab"
                   aria-selected={recommendationSnapshot.mode === "loved"}
-                  disabled={isRecommendationLoading}
+                  disabled={isRecommendationLoading || isArchived}
                   onClick={() => onRecommendationSnapshotChange({ mode: "loved" })}
                 >
                   Loved
@@ -1210,7 +1297,12 @@ export function DiscoveryDailyEdition({
                 className="daily-edition-shelf-footer daily-edition-footer-button daily-edition-because-see-all"
                 data-daily-edition-see-all="recommendations"
                 type="button"
-                title={recommendationSnapshot.evidence}
+                disabled={isArchived}
+                title={
+                  isArchived
+                    ? "See all is available in today's live edition."
+                    : recommendationSnapshot.evidence
+                }
                 onClick={() => openExplorer("recommendations", {
                   mode: recommendationSnapshot.mode,
                   connection: "all",

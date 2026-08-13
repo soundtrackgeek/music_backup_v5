@@ -2389,6 +2389,7 @@ export type LastFmRelatedAlbums = {
 
 export type DiscoveryResponse = {
   dailyEdition: DiscoveryDailyEdition;
+  dailyEditionArchive: DiscoveryDailyEditionArchive;
   heatmap: DiscoveryHeatmapCell[];
   backlogMissions: DiscoveryMission[];
   smartMissions: DiscoveryMission[];
@@ -2396,6 +2397,19 @@ export type DiscoveryResponse = {
   genrePoints: DiscoveryGenrePoint[];
   artistPoints: DiscoveryArtistPoint[];
   generatedAt: string | null;
+};
+
+export type DiscoveryDailyEditionArchive = {
+  availableDates: string[];
+  snapshotCreatedAt: string;
+  retentionDays: number;
+  isArchived: boolean;
+  today: string;
+};
+
+export type DiscoveryDailyEditionSnapshotResponse = {
+  dailyEdition: DiscoveryDailyEdition;
+  archive: DiscoveryDailyEditionArchive;
 };
 
 export type DiscoveryDailyEdition = {

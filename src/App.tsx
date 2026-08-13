@@ -77,6 +77,7 @@ import {
   fixMusicToolIssues,
   cacheSettings,
   getDiscovery,
+  getDiscoveryDailyEdition,
   getDiscoveryAnniversaries,
   getDiscoveryChartSnapshot,
   getDiscoveryCompletionSnapshot,
@@ -8644,6 +8645,7 @@ export default function App() {
   const [isDiscoveryRecommendationLoading, setIsDiscoveryRecommendationLoading] =
     useState(false);
   const discoveryAnniversaryYearsRef = useRef(50);
+  const discoveryDateRequestRef = useRef(0);
   const discoveryChartRequestRef = useRef(0);
   const discoveryDeepCutRequestRef = useRef(0);
   const discoveryCompletionRequestRef = useRef(0);
@@ -8922,11 +8924,14 @@ export default function App() {
     });
   }, [refreshGenreSuggestions]);
 
-  const loadDiscoveryData = useCallback(async () => {
+  const loadDiscoveryData = useCallback(async (refreshDailyEdition = false) => {
     setIsDiscoveryLoading(true);
-    let nextDiscovery = await getDiscovery();
+    let nextDiscovery = await getDiscovery({ refreshDailyEdition });
     const anniversaryYears = discoveryAnniversaryYearsRef.current;
-    if (anniversaryYears !== nextDiscovery.dailyEdition.anniversaryYears) {
+    if (
+      !nextDiscovery.dailyEditionArchive.isArchived &&
+      anniversaryYears !== nextDiscovery.dailyEdition.anniversaryYears
+    ) {
       const anniversaries = await getDiscoveryAnniversaries(anniversaryYears);
       nextDiscovery = {
         ...nextDiscovery,
@@ -12482,10 +12487,47 @@ export default function App() {
   async function refreshDiscovery() {
     setDiscoveryError(null);
     try {
-      await loadDiscoveryData();
+      if (discovery?.dailyEditionArchive.isArchived) {
+        await changeDiscoveryEditionDate(discovery.dailyEdition.date);
+      } else {
+        await loadDiscoveryData(true);
+      }
     } catch (error) {
       setDiscoveryError(error instanceof Error ? error.message : String(error));
       setIsDiscoveryLoading(false);
+    }
+  }
+
+  async function changeDiscoveryEditionDate(date: string) {
+    const requestId = discoveryDateRequestRef.current + 1;
+    discoveryDateRequestRef.current = requestId;
+    discoveryChartRequestRef.current += 1;
+    discoveryDeepCutRequestRef.current += 1;
+    discoveryCompletionRequestRef.current += 1;
+    discoveryRecommendationRequestRef.current += 1;
+    setIsDiscoveryLoading(true);
+    setDiscoveryError(null);
+    try {
+      const snapshot = await getDiscoveryDailyEdition(date);
+      if (discoveryDateRequestRef.current !== requestId) return;
+      setDiscovery((current) =>
+        current
+          ? {
+              ...current,
+              dailyEdition: snapshot.dailyEdition,
+              dailyEditionArchive: snapshot.archive,
+            }
+          : current,
+      );
+      if (!snapshot.archive.isArchived) {
+        discoveryAnniversaryYearsRef.current = snapshot.dailyEdition.anniversaryYears;
+      }
+    } catch (error) {
+      setDiscoveryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (discoveryDateRequestRef.current === requestId) {
+        setIsDiscoveryLoading(false);
+      }
     }
   }
 
@@ -15858,7 +15900,11 @@ export default function App() {
                 <button
                   className="icon-button"
                   type="button"
-                  aria-label="Refresh discovery"
+                  aria-label={
+                    discovery?.dailyEditionArchive.isArchived
+                      ? "Reload archived edition"
+                      : "Refresh today's discovery"
+                  }
                   onClick={() => void refreshDiscovery()}
                 >
                   <RotateCcw size={18} />
@@ -15876,6 +15922,7 @@ export default function App() {
 
             <DiscoveryDailyEdition
               edition={discovery?.dailyEdition ?? null}
+              archive={discovery?.dailyEditionArchive}
               isLoading={isDiscoveryLoading}
               isAnniversaryLoading={isDiscoveryAnniversaryLoading}
               isChartLoading={isDiscoveryChartLoading}
@@ -15887,6 +15934,7 @@ export default function App() {
               onDeepCutSnapshotChange={changeDiscoveryDeepCutSnapshot}
               onCompletionSnapshotChange={changeDiscoveryCompletionSnapshot}
               onRecommendationSnapshotChange={changeDiscoveryRecommendationSnapshot}
+              onEditionDateChange={changeDiscoveryEditionDate}
               onLoadExplorer={getDiscoveryShelfExplorer}
               onOpenAlbum={openTimelineAlbum}
               onOpenArtist={openArtistFromMusicMap}

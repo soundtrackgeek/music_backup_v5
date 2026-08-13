@@ -246,6 +246,7 @@ import type {
   DiscoveryDeepCutSnapshotRequest,
   DiscoveryRecommendationSnapshot,
   DiscoveryRecommendationSnapshotRequest,
+  DiscoveryDailyEditionSnapshotResponse,
   DiscoveryResponse,
   DiscoveryShelfExplorerRequest,
   DiscoveryShelfExplorerResponse,
@@ -1768,8 +1769,9 @@ export async function getGenreProgress(request: GenreProgressRequest) {
   return invoke<GenreProgressStats[]>("get_genre_progress", { request });
 }
 
-export async function getDiscovery() {
+export async function getDiscovery(options: { refreshDailyEdition?: boolean } = {}) {
   if (!isTauriRuntime()) {
+    if (!options.refreshDailyEdition) return mockDiscovery;
     return {
       ...mockDiscovery,
       dailyEdition: {
@@ -1799,7 +1801,33 @@ export async function getDiscovery() {
     } satisfies DiscoveryResponse;
   }
 
-  return invoke<DiscoveryResponse>("get_discovery");
+  return invoke<DiscoveryResponse>("get_discovery", {
+    refreshDailyEdition: options.refreshDailyEdition ?? false,
+  });
+}
+
+export async function getDiscoveryDailyEdition(date: string) {
+  if (!isTauriRuntime()) {
+    if (!mockDiscovery.dailyEditionArchive.availableDates.includes(date)) {
+      throw new Error(`No saved Daily Edition is available for ${date}`);
+    }
+    return {
+      dailyEdition: {
+        ...mockDiscovery.dailyEdition,
+        date,
+      },
+      archive: {
+        ...mockDiscovery.dailyEditionArchive,
+        isArchived: date !== mockDiscovery.dailyEditionArchive.today,
+        snapshotCreatedAt: `${date}T08:00:00Z`,
+      },
+    } satisfies DiscoveryDailyEditionSnapshotResponse;
+  }
+
+  return invoke<DiscoveryDailyEditionSnapshotResponse>(
+    "get_discovery_daily_edition",
+    { date },
+  );
 }
 
 export async function getDiscoveryAnniversaries(anniversaryYears: number) {
