@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.137.1] - 2026-08-13
+### Fixed
+- Made the Discovery Recommendation Mixer inherit the active dark theme across its surface, typography, search and seed controls, dividers, hover states, disabled action, evidence rows, and responsive layout while preserving its light appearance.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.137.1`.
+
 ## [0.137.0] - 2026-08-13
 ### Added
 - Added rule-backed Smart playlists that reevaluate saved SQLite filters after imports, on load, before sync, and on demand.
