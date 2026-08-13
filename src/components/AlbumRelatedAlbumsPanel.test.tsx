@@ -1,8 +1,17 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LastFmRelatedAlbums } from "../types";
 import { AlbumRelatedAlbumsPanel } from "./AlbumRelatedAlbumsPanel";
+
+const backendMocks = vi.hoisted(() => ({
+  addWishListItem: vi.fn(),
+  listWishList: vi.fn(),
+  searchWishListMusicBrainz: vi.fn(),
+}));
+
+vi.mock("../backend", () => backendMocks);
 
 const related: LastFmRelatedAlbums = {
   albumId: "hysteria",
@@ -51,6 +60,39 @@ const related: LastFmRelatedAlbums = {
 };
 
 describe("AlbumRelatedAlbumsPanel", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    backendMocks.listWishList.mockResolvedValue({ items: [], autoRemovedCount: 0 });
+    backendMocks.searchWishListMusicBrainz.mockResolvedValue({
+      entity: "album",
+      query: "Girls, Girls, Girls",
+      candidates: [
+        {
+          entity: "album",
+          title: "Girls, Girls, Girls",
+          artist: "Mötley Crüe",
+          year: 1987,
+          musicbrainzId: "b032340f-ef67-388f-b225-61e20b87e39b",
+          musicbrainzUrl:
+            "https://musicbrainz.org/release-group/b032340f-ef67-388f-b225-61e20b87e39b",
+          disambiguation: null,
+          country: null,
+          score: 100,
+        },
+      ],
+      searchedAt: "2026-08-13T12:00:00Z",
+    });
+    backendMocks.addWishListItem.mockImplementation(async (input) => ({
+      ...input,
+      id: 42,
+      createdAt: "2026-08-13T12:00:00Z",
+      downloadedDeezerAlbumId: null,
+      downloadedPath: null,
+      downloadedAt: null,
+      artistAlbumSummary: null,
+    }));
+  });
+
   it("separates owned and missing albums with transparent evidence", () => {
     render(
       <AlbumRelatedAlbumsPanel
@@ -125,5 +167,168 @@ describe("AlbumRelatedAlbumsPanel", () => {
 
     expect(onRefresh).toHaveBeenCalledOnce();
     expect(onOpenSource).toHaveBeenCalledWith(related.sourceUrl);
+  });
+
+  it("adds a missing album with MusicBrainz identity and recommendation provenance", async () => {
+    const user = userEvent.setup();
+    const onOpenSource = vi.fn();
+    render(
+      <AlbumRelatedAlbumsPanel
+        related={related}
+        isLoading={false}
+        error={null}
+        onRefresh={() => undefined}
+        onOpenAlbum={() => undefined}
+        onOpenSource={onOpenSource}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Add Girls, Girls, Girls by Mötley Crüe to Wish List",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(backendMocks.addWishListItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entity: "album",
+          title: "Girls, Girls, Girls",
+          artist: "Mötley Crüe",
+          year: 1987,
+          musicbrainzId: "b032340f-ef67-388f-b225-61e20b87e39b",
+          source: "Last.fm Related Albums · Def Leppard — Hysteria",
+        }),
+      ),
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "Girls, Girls, Girls by Mötley Crüe is on Wish List",
+      }),
+    ).toBeDisabled();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Explore Girls, Girls, Girls by Mötley Crüe on Last.fm",
+      }),
+    );
+    expect(onOpenSource).toHaveBeenCalledWith(
+      "https://www.last.fm/music/Mötley+Crüe/Girls,+Girls,+Girls",
+    );
+  });
+
+  it("detects album duplicates by normalized artist and title", async () => {
+    backendMocks.listWishList.mockResolvedValue({
+      autoRemovedCount: 0,
+      items: [
+        {
+          id: 9,
+          entity: "album",
+          title: "Girls Girls Girls",
+          artist: "MOTLEY CRUE",
+          year: 1987,
+          musicbrainzId: null,
+          musicbrainzUrl: null,
+          source: "Manual",
+          createdAt: "2026-08-13T12:00:00Z",
+          downloadedDeezerAlbumId: null,
+          downloadedPath: null,
+          downloadedAt: null,
+          artistAlbumSummary: null,
+        },
+      ],
+    });
+    render(
+      <AlbumRelatedAlbumsPanel
+        related={related}
+        isLoading={false}
+        error={null}
+        onRefresh={() => undefined}
+        onOpenAlbum={() => undefined}
+        onOpenSource={() => undefined}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Girls, Girls, Girls by Mötley Crüe is on Wish List",
+      }),
+    ).toBeDisabled();
+    expect(backendMocks.searchWishListMusicBrainz).not.toHaveBeenCalled();
+  });
+
+  it("transitions a recommended album to owned navigation after import", async () => {
+    backendMocks.listWishList.mockResolvedValue({
+      autoRemovedCount: 0,
+      items: [
+        {
+          id: 9,
+          entity: "album",
+          title: "Girls, Girls, Girls",
+          artist: "Mötley Crüe",
+          year: 1987,
+          musicbrainzId: null,
+          musicbrainzUrl: null,
+          source: "Last.fm Related Albums · Def Leppard — Hysteria",
+          createdAt: "2026-08-13T12:00:00Z",
+          downloadedDeezerAlbumId: null,
+          downloadedPath: null,
+          downloadedAt: null,
+          artistAlbumSummary: null,
+        },
+      ],
+    });
+    const onOpenAlbum = vi.fn();
+    const { rerender } = render(
+      <AlbumRelatedAlbumsPanel
+        related={related}
+        isLoading={false}
+        error={null}
+        onRefresh={() => undefined}
+        onOpenAlbum={onOpenAlbum}
+        onOpenSource={() => undefined}
+      />,
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: "Girls, Girls, Girls by Mötley Crüe is on Wish List",
+      }),
+    ).toBeDisabled();
+
+    rerender(
+      <AlbumRelatedAlbumsPanel
+        related={{
+          ...related,
+          albums: related.albums.map((album) =>
+            album.albumTitle === "Girls, Girls, Girls"
+              ? {
+                  ...album,
+                  localAlbumId: "girls-girls-girls",
+                  localAlbumArtist: "Mötley Crüe",
+                  localAlbumTitle: "Girls, Girls, Girls",
+                  localYear: 1987,
+                }
+              : album,
+          ),
+        }}
+        isLoading={false}
+        error={null}
+        onRefresh={() => undefined}
+        onOpenAlbum={onOpenAlbum}
+        onOpenSource={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", {
+        name: /Girls, Girls, Girls by Mötley Crüe is on Wish List/,
+      }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Open Girls, Girls, Girls by Mötley Crüe in Albums",
+      }),
+    );
+    expect(onOpenAlbum).toHaveBeenCalledWith("girls-girls-girls");
   });
 });

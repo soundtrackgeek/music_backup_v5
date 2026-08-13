@@ -1,9 +1,17 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LastFmArtistSimilarity } from "../types";
 import { ArtistSimilarArtistsPanel } from "./ArtistSimilarArtistsPanel";
+
+const backendMocks = vi.hoisted(() => ({
+  addWishListItem: vi.fn(),
+  listWishList: vi.fn(),
+  searchWishListMusicBrainz: vi.fn(),
+}));
+
+vi.mock("../backend", () => backendMocks);
 
 const similarity: LastFmArtistSimilarity = {
   artistId: "def leppard",
@@ -100,6 +108,39 @@ const branch: LastFmArtistSimilarity = {
 };
 
 describe("ArtistSimilarArtistsPanel", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    backendMocks.listWishList.mockResolvedValue({ items: [], autoRemovedCount: 0 });
+    backendMocks.searchWishListMusicBrainz.mockResolvedValue({
+      entity: "artist",
+      query: "Britny Fox",
+      candidates: [
+        {
+          entity: "artist",
+          title: "Britny Fox",
+          artist: "",
+          year: null,
+          musicbrainzId: "71fba2b3-03e3-4d87-93ea-55f09f7f1df0",
+          musicbrainzUrl:
+            "https://musicbrainz.org/artist/71fba2b3-03e3-4d87-93ea-55f09f7f1df0",
+          disambiguation: null,
+          country: "US",
+          score: 100,
+        },
+      ],
+      searchedAt: "2026-08-13T12:00:00Z",
+    });
+    backendMocks.addWishListItem.mockImplementation(async (input) => ({
+      ...input,
+      id: 41,
+      createdAt: "2026-08-13T12:00:00Z",
+      downloadedDeezerAlbumId: null,
+      downloadedPath: null,
+      downloadedAt: null,
+      artistAlbumSummary: null,
+    }));
+  });
+
   it("separates owned and missing artists and exposes similarity evidence", () => {
     render(
       <ArtistSimilarArtistsPanel
@@ -170,6 +211,156 @@ describe("ArtistSimilarArtistsPanel", () => {
 
     expect(onRefresh).toHaveBeenCalledOnce();
     expect(onOpenSource).toHaveBeenCalledWith(similarity.sourceUrl);
+  });
+
+  it("adds a missing artist through an exact MusicBrainz lookup and keeps Last.fm navigation", async () => {
+    const user = userEvent.setup();
+    const onOpenSource = vi.fn();
+    render(
+      <ArtistSimilarArtistsPanel
+        similarity={similarity}
+        isLoading={false}
+        error={null}
+        onRefresh={() => undefined}
+        onExpandArtist={() => Promise.resolve(branch)}
+        onOpenArtist={() => undefined}
+        onOpenSource={onOpenSource}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Add Britny Fox to Wish List" }),
+    );
+
+    await waitFor(() =>
+      expect(backendMocks.addWishListItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entity: "artist",
+          title: "Britny Fox",
+          musicbrainzId: "71fba2b3-03e3-4d87-93ea-55f09f7f1df0",
+          source: "Last.fm Similar Artists · Def Leppard",
+        }),
+      ),
+    );
+    expect(
+      screen.getByRole("button", { name: "Britny Fox is on Wish List" }),
+    ).toBeDisabled();
+
+    await user.click(
+      screen.getByRole("button", { name: "Explore Britny Fox on Last.fm" }),
+    );
+    expect(onOpenSource).toHaveBeenCalledWith(
+      "https://www.last.fm/music/Britny+Fox",
+    );
+  });
+
+  it("detects a normalized duplicate before making another provider request", async () => {
+    backendMocks.listWishList.mockResolvedValue({
+      autoRemovedCount: 0,
+      items: [
+        {
+          id: 7,
+          entity: "artist",
+          title: "BRITNY  FOX",
+          artist: "",
+          year: null,
+          musicbrainzId: null,
+          musicbrainzUrl: null,
+          source: "Manual",
+          createdAt: "2026-08-13T12:00:00Z",
+          downloadedDeezerAlbumId: null,
+          downloadedPath: null,
+          downloadedAt: null,
+          artistAlbumSummary: null,
+        },
+      ],
+    });
+    render(
+      <ArtistSimilarArtistsPanel
+        similarity={similarity}
+        isLoading={false}
+        error={null}
+        onRefresh={() => undefined}
+        onExpandArtist={() => Promise.resolve(branch)}
+        onOpenArtist={() => undefined}
+        onOpenSource={() => undefined}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Britny Fox is on Wish List" }),
+    ).toBeDisabled();
+    expect(backendMocks.searchWishListMusicBrainz).not.toHaveBeenCalled();
+  });
+
+  it("replaces the Wish List action with local navigation after an import", async () => {
+    backendMocks.listWishList.mockResolvedValue({
+      autoRemovedCount: 0,
+      items: [
+        {
+          id: 7,
+          entity: "artist",
+          title: "Britny Fox",
+          artist: "",
+          year: null,
+          musicbrainzId: null,
+          musicbrainzUrl: null,
+          source: "Last.fm Similar Artists · Def Leppard",
+          createdAt: "2026-08-13T12:00:00Z",
+          downloadedDeezerAlbumId: null,
+          downloadedPath: null,
+          downloadedAt: null,
+          artistAlbumSummary: null,
+        },
+      ],
+    });
+    const onOpenArtist = vi.fn();
+    const { rerender } = render(
+      <ArtistSimilarArtistsPanel
+        similarity={similarity}
+        isLoading={false}
+        error={null}
+        onRefresh={() => undefined}
+        onExpandArtist={() => Promise.resolve(branch)}
+        onOpenArtist={onOpenArtist}
+        onOpenSource={() => undefined}
+      />,
+    );
+    expect(
+      await screen.findByRole("button", { name: "Britny Fox is on Wish List" }),
+    ).toBeDisabled();
+
+    rerender(
+      <ArtistSimilarArtistsPanel
+        similarity={{
+          ...similarity,
+          artists: similarity.artists.map((artist) =>
+            artist.name === "Britny Fox"
+              ? {
+                  ...artist,
+                  localArtistId: "britny-fox",
+                  localArtistName: "Britny Fox",
+                  localAlbumCount: 1,
+                }
+              : artist,
+          ),
+        }}
+        isLoading={false}
+        error={null}
+        onRefresh={() => undefined}
+        onExpandArtist={() => Promise.resolve(branch)}
+        onOpenArtist={onOpenArtist}
+        onOpenSource={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /Britny Fox is on Wish List/ }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open Britny Fox in Artists" }),
+    );
+    expect(onOpenArtist).toHaveBeenCalledWith("britny-fox", "Britny Fox");
   });
 
   it("expands a first-hop artist once and reuses the in-panel cache", async () => {

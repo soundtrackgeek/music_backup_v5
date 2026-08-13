@@ -5119,6 +5119,19 @@ export async function searchWishListMusicBrainz(
     const previewAlbumYear = input.year ?? (albumQueryMatch?.[3]
       ? Number(albumQueryMatch[3])
       : 2002);
+    const previewIdentity = `${input.entity}\u001f${title}\u001f${previewAlbumArtist}`;
+    let previewHash = 0x811c9dc5;
+    const previewHex = Array.from({ length: 32 }, (_, index) => {
+      previewHash ^= previewIdentity.charCodeAt(index % previewIdentity.length);
+      previewHash = Math.imul(previewHash, 0x01000193);
+      return ((previewHash >>> ((index % 4) * 8)) & 0xf).toString(16);
+    });
+    previewHex[12] = "4";
+    previewHex[16] = "8";
+    const previewMusicBrainzId = [8, 13, 18, 23].reduce(
+      (value, position) => `${value.slice(0, position)}-${value.slice(position)}`,
+      previewHex.join(""),
+    );
     return {
       entity: input.entity,
       query: title,
@@ -5129,12 +5142,10 @@ export async function searchWishListMusicBrainz(
               title: isArtist ? title : previewAlbumTitle,
               artist: isArtist ? "" : previewAlbumArtist,
               year: isArtist ? null : previewAlbumYear,
-              musicbrainzId: isArtist
-                ? "11111111-1111-4111-8111-111111111111"
-                : "22222222-2222-4222-8222-222222222222",
+              musicbrainzId: previewMusicBrainzId,
               musicbrainzUrl: isArtist
-                ? "https://musicbrainz.org/artist/11111111-1111-4111-8111-111111111111"
-                : "https://musicbrainz.org/release-group/22222222-2222-4222-8222-222222222222",
+                ? `https://musicbrainz.org/artist/${previewMusicBrainzId}`
+                : `https://musicbrainz.org/release-group/${previewMusicBrainzId}`,
               disambiguation: isArtist ? "Irish alternative rock band" : null,
               country: isArtist ? "IE" : null,
               score: 100,

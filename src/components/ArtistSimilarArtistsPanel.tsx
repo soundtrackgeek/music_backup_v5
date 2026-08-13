@@ -2,14 +2,21 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import {
   ChevronDown,
+  Check,
   ExternalLink,
   GitBranch,
+  Heart,
   List,
   Network,
   Orbit,
   RotateCcw,
 } from "lucide-react";
 
+import { listWishList } from "../backend";
+import {
+  addSimilarArtistRecommendation,
+  isSimilarArtistWishListed,
+} from "../app/recommendationWishList";
 import type { LastFmArtistSimilarity, LastFmSimilarArtist } from "../types";
 import { ArtistPortrait } from "./ArtistPortrait";
 
@@ -447,10 +454,16 @@ function ArtistConstellation({
 
 function SimilarArtistCard({
   artist,
+  isWishListed,
+  isAddingToWishList,
+  onAddToWishList,
   onOpenArtist,
   onOpenSource,
 }: {
   artist: LastFmSimilarArtist;
+  isWishListed: boolean;
+  isAddingToWishList: boolean;
+  onAddToWishList: (artist: LastFmSimilarArtist) => void;
   onOpenArtist: (artistId: string, artistName: string) => void;
   onOpenSource: (url: string) => void;
 }) {
@@ -462,9 +475,9 @@ function SimilarArtistCard({
     : "Not in your library";
 
   return (
-    <li>
+    <li className={`artist-similar-card${isOwned ? " is-owned" : ""}`}>
       <button
-        className={`artist-similar-card${isOwned ? " is-owned" : ""}`}
+        className="artist-similar-card-main"
         type="button"
         onClick={() => {
           if (localArtistId) {
@@ -501,6 +514,32 @@ function SimilarArtistCard({
         <span className="artist-similar-match">{matchLabel(artist.matchScore)}</span>
         {!isOwned ? <ExternalLink size={14} aria-hidden="true" /> : null}
       </button>
+      {!isOwned ? (
+        <button
+          className={`recommendation-wish-action${isWishListed ? " active" : ""}`}
+          type="button"
+          disabled={isWishListed || isAddingToWishList}
+          aria-label={
+            isWishListed
+              ? `${displayName} is on Wish List`
+              : `Add ${displayName} to Wish List`
+          }
+          onClick={() => onAddToWishList(artist)}
+        >
+          {isWishListed ? (
+            <Check size={13} aria-hidden="true" />
+          ) : (
+            <Heart size={13} aria-hidden="true" />
+          )}
+          <span>
+            {isWishListed
+              ? "On Wish List"
+              : isAddingToWishList
+                ? "Adding…"
+                : "Wish List"}
+          </span>
+        </button>
+      ) : null}
     </li>
   );
 }
@@ -528,6 +567,53 @@ export function ArtistSimilarArtistsPanel({
     similarity?.artists.filter((artist) => artist.localArtistId !== null) ?? [];
   const explore =
     similarity?.artists.filter((artist) => artist.localArtistId === null) ?? [];
+  const [wishListItems, setWishListItems] = useState<
+    Awaited<ReturnType<typeof listWishList>>["items"]
+  >([]);
+  const [addingArtistKey, setAddingArtistKey] = useState<string | null>(null);
+  const [wishListError, setWishListError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listWishList()
+      .then((response) => {
+        if (!cancelled) setWishListItems(response.items);
+      })
+      .catch((loadError) => {
+        if (!cancelled) {
+          setWishListError(
+            loadError instanceof Error ? loadError.message : String(loadError),
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [similarity]);
+
+  async function addArtistToWishList(artist: LastFmSimilarArtist) {
+    const key = artistIdentityKey(artist);
+    if (addingArtistKey || isSimilarArtistWishListed(wishListItems, artist)) return;
+    setAddingArtistKey(key);
+    setWishListError(null);
+    try {
+      const item = await addSimilarArtistRecommendation(
+        artist,
+        similarity?.artistName ?? "Similar Artists",
+      );
+      setWishListItems((current) =>
+        current.some((candidate) => candidate.id === item.id)
+          ? current
+          : [item, ...current],
+      );
+    } catch (addError) {
+      setWishListError(
+        addError instanceof Error ? addError.message : String(addError),
+      );
+    } finally {
+      setAddingArtistKey(null);
+    }
+  }
 
   return (
     <section className="artist-similar-artists" aria-label="Similar artists">
@@ -552,6 +638,11 @@ export function ArtistSimilarArtistsPanel({
           {error}
         </p>
       ) : null}
+      {wishListError ? (
+        <p className="error-message recommendation-wish-error" role="alert">
+          {wishListError}
+        </p>
+      ) : null}
       {!similarity && isLoading ? (
         <div className="empty-state large">
           <Network size={19} />
@@ -566,6 +657,9 @@ export function ArtistSimilarArtistsPanel({
               <SimilarArtistCard
                 key={`${artist.rank}-${artist.name}`}
                 artist={artist}
+                isWishListed={isSimilarArtistWishListed(wishListItems, artist)}
+                isAddingToWishList={addingArtistKey === artistIdentityKey(artist)}
+                onAddToWishList={(candidate) => void addArtistToWishList(candidate)}
                 onOpenArtist={onOpenArtist}
                 onOpenSource={onOpenSource}
               />
@@ -581,6 +675,9 @@ export function ArtistSimilarArtistsPanel({
               <SimilarArtistCard
                 key={`${artist.rank}-${artist.name}`}
                 artist={artist}
+                isWishListed={isSimilarArtistWishListed(wishListItems, artist)}
+                isAddingToWishList={addingArtistKey === artistIdentityKey(artist)}
+                onAddToWishList={(candidate) => void addArtistToWishList(candidate)}
                 onOpenArtist={onOpenArtist}
                 onOpenSource={onOpenSource}
               />

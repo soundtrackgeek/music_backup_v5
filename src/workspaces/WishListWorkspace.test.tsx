@@ -1219,4 +1219,41 @@ describe("WishListWorkspace", () => {
     await waitFor(() => expect(removeWishListItem).toHaveBeenCalledWith(2));
     expect(screen.queryByText("Release")).not.toBeInTheDocument();
   });
+
+  it("shows recommendation provenance and removes the recommended item", async () => {
+    listWishList.mockResolvedValueOnce({
+      autoRemovedCount: 0,
+      items: [
+        {
+          id: 27,
+          entity: "album",
+          title: "Songs from the Big Chair",
+          artist: "Tears for Fears",
+          year: 1985,
+          musicbrainzId: null,
+          musicbrainzUrl: null,
+          source: "Last.fm Related Albums · Pet Shop Boys — Actually",
+          createdAt: "2026-08-13T12:00:00Z",
+          downloadedDeezerAlbumId: null,
+          downloadedPath: null,
+          downloadedAt: null,
+          artistAlbumSummary: null,
+        },
+      ],
+    });
+    render(<WishListWorkspace />);
+
+    expect(await screen.findByText("Songs from the Big Chair")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Added from Last.fm Related Albums · Pet Shop Boys — Actually",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByLabelText("Remove Songs from the Big Chair from Wish List"),
+    );
+
+    await waitFor(() => expect(removeWishListItem).toHaveBeenCalledWith(27));
+    expect(screen.queryByText("Songs from the Big Chair")).not.toBeInTheDocument();
+  });
 });

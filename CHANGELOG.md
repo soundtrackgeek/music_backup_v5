@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.138.0] - 2026-08-13
+### Added
+- Added direct Wish List actions to missing Similar Artist and Related Album cards while preserving owned-item navigation and Last.fm links.
+- Added exact normalized MusicBrainz enrichment, recommendation provenance, immediate and native duplicate detection, and observable add/remove states.
+- Added import reconciliation that completes Last.fm similar-artist wishes when the artist enters the library while preserving general artist discography trackers.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.138.0`.
+
 ## [0.137.1] - 2026-08-13
 ### Fixed
 - Made the Discovery Recommendation Mixer inherit the active dark theme across its surface, typography, search and seed controls, dividers, hover states, disabled action, evidence rows, and responsive layout while preserving its light appearance.

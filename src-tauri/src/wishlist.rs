@@ -21,10 +21,11 @@ const MAX_TITLE_LENGTH: usize = 300;
 const MAX_ARTIST_LENGTH: usize = 300;
 const MAX_ARTIST_DISCOVERY_ALBUMS: usize = 100;
 const MAX_MUSICBRAINZ_SEARCH_QUERY_LENGTH: usize = 200;
+const LASTFM_SIMILAR_ARTIST_SOURCE_PREFIX: &str = "Last.fm Similar Artists";
 #[cfg(not(test))]
 const MUSICBRAINZ_SEARCH_LIMIT: usize = 8;
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.137.1 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.138.0 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_REQUEST_INTERVAL: Duration = Duration::from_millis(1_100);
 #[cfg(not(test))]
@@ -491,6 +492,7 @@ struct DownloadReceiptSummary {
 struct OwnedLibrary {
     album_ids: HashSet<String>,
     albums: HashSet<String>,
+    artists: HashSet<String>,
 }
 
 fn default_source() -> String {
@@ -547,6 +549,7 @@ fn load_owned_library(conn: &Connection) -> Result<OwnedLibrary> {
     })?;
     for album in albums {
         let (artist, title) = album?;
+        owned.artists.insert(normalize_key(&artist));
         owned.albums.insert(album_key(&artist, &title));
     }
     drop(album_statement);
@@ -571,6 +574,9 @@ impl OwnedLibrary {
                     .as_deref()
                     .is_some_and(|id| self.album_ids.contains(&id.to_lowercase()))
                     || self.albums.contains(&album_key(&item.artist, &item.title))
+            }
+            "artist" if item.source.starts_with(LASTFM_SIMILAR_ARTIST_SOURCE_PREFIX) => {
+                self.artists.contains(&normalize_key(&item.title))
             }
             _ => false,
         }
@@ -837,6 +843,29 @@ fn identity_key(input: &AddWishListItemRequest) -> String {
     )
 }
 
+fn same_named_identity(item: &WishListItem, input: &AddWishListItemRequest) -> bool {
+    item.entity == input.entity
+        && normalize_key(&item.title) == normalize_key(&input.title)
+        && (input.entity == "artist" || normalize_key(&item.artist) == normalize_key(&input.artist))
+}
+
+fn existing_item_id(conn: &Connection, input: &AddWishListItemRequest) -> Result<Option<i64>> {
+    if let Some(id) = conn
+        .query_row(
+            "SELECT id FROM wish_list_items WHERE identity_key = ?1",
+            params![identity_key(input)],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()?
+    {
+        return Ok(Some(id));
+    }
+    Ok(all_items(conn)?
+        .into_iter()
+        .find(|item| same_named_identity(item, input))
+        .map(|item| item.id))
+}
+
 fn valid_musicbrainz_id(value: &str) -> bool {
     value.len() == 36
         && value.chars().enumerate().all(|(index, character)| {
@@ -904,13 +933,7 @@ fn add_validated_musicbrainz_candidate_with_source(
     source: &str,
 ) -> Result<AddWishListMusicBrainzCandidateResponse> {
     let input = candidate_add_request_with_source(candidate, source)?;
-    let existing_id = conn
-        .query_row(
-            "SELECT id FROM wish_list_items WHERE identity_key = ?1",
-            params![identity_key(&input)],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()?;
+    let existing_id = existing_item_id(conn, &input)?;
 
     if input.entity == "artist" {
         let (albums, updated_at) = artist_albums
@@ -1065,14 +1088,7 @@ fn add(conn: &Connection, mut input: AddWishListItemRequest) -> Result<WishListI
     }
 
     let identity_key = identity_key(&input);
-    if let Some(id) = conn
-        .query_row(
-            "SELECT id FROM wish_list_items WHERE identity_key = ?1",
-            params![identity_key],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()?
-    {
+    if let Some(id) = existing_item_id(conn, &input)? {
         return load_item(conn, id);
     }
 
@@ -1333,6 +1349,32 @@ mod tests {
     }
 
     #[test]
+    fn deduplicates_recommendations_by_normalized_name_when_identifiers_differ() {
+        let conn = connection();
+        let first = add(
+            &conn,
+            AddWishListItemRequest {
+                entity: "album".to_string(),
+                title: "Déjà Vu".to_string(),
+                artist: "Beyoncé".to_string(),
+                year: None,
+                musicbrainz_id: None,
+                musicbrainz_url: None,
+                source: "Last.fm Related Albums · Source".to_string(),
+            },
+        )
+        .expect("add Last.fm recommendation");
+        let duplicate = add(
+            &conn,
+            album_request("57f5e7c8-2a6e-34a0-b4cd-0e77695bc36f", "Deja-Vu", "BEYONCE"),
+        )
+        .expect("deduplicate normalized recommendation");
+
+        assert_eq!(duplicate.id, first.id);
+        assert_eq!(list(&conn).expect("list deduplicated item").items.len(), 1);
+    }
+
+    #[test]
     fn reconciliation_removes_acquired_albums_but_keeps_artist_trackers() {
         let conn = connection();
         add(&conn, album_request("release-2", "Déjà Vu", "Beyoncé")).expect("add album");
@@ -1365,6 +1407,59 @@ mod tests {
         assert_eq!(response.items.len(), 1);
         assert_eq!(response.items[0].entity, "artist");
         assert_eq!(response.items[0].title, "New Artist");
+    }
+
+    #[test]
+    fn reconciliation_completes_lastfm_recommendations_after_library_import() {
+        let conn = connection();
+        add(
+            &conn,
+            AddWishListItemRequest {
+                entity: "artist".to_string(),
+                title: "Sparks".to_string(),
+                artist: String::new(),
+                year: None,
+                musicbrainz_id: None,
+                musicbrainz_url: None,
+                source: "Last.fm Similar Artists · Pet Shop Boys".to_string(),
+            },
+        )
+        .expect("add similar artist recommendation");
+        add(
+            &conn,
+            AddWishListItemRequest {
+                entity: "artist".to_string(),
+                title: "Sparks".to_string(),
+                artist: String::new(),
+                year: None,
+                musicbrainz_id: Some("legacy-tracker".to_string()),
+                musicbrainz_url: Some("https://musicbrainz.org/artist/legacy-tracker".to_string()),
+                source: "MusicBrainz search".to_string(),
+            },
+        )
+        .expect("deduplicate legacy tracker");
+        add(
+            &conn,
+            AddWishListItemRequest {
+                entity: "album".to_string(),
+                title: "Kimono My House".to_string(),
+                artist: "Sparks".to_string(),
+                year: Some(1974),
+                musicbrainz_id: None,
+                musicbrainz_url: None,
+                source: "Last.fm Related Albums · Pet Shop Boys — Actually".to_string(),
+            },
+        )
+        .expect("add related album recommendation");
+        conn.execute(
+            "INSERT INTO albums (id, import_run_id, album, album_artist_display, total_tracks, rated_tracks, rating_completeness, total_seconds, loved_tracks, tmoe_seconds, ae_ratio) VALUES ('album-sparks', 1, 'Kimono My House', 'Sparks', 10, 0, 0, 1800, 0, 0, 0)",
+            [],
+        )
+        .expect("import recommended artist and album");
+
+        let response = list(&conn).expect("reconcile imported recommendations");
+        assert_eq!(response.auto_removed_count, 2);
+        assert!(response.items.is_empty());
     }
 
     #[test]

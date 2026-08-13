@@ -1,5 +1,12 @@
-import { Disc3, ExternalLink, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Disc3, ExternalLink, Heart, RotateCcw } from "lucide-react";
 
+import { listWishList } from "../backend";
+import {
+  addRelatedAlbumRecommendation,
+  isRelatedAlbumWishListed,
+  recommendationIdentityKey,
+} from "../app/recommendationWishList";
 import type { LastFmRelatedAlbum, LastFmRelatedAlbums } from "../types";
 import { AlbumCover } from "./AlbumCover";
 
@@ -11,10 +18,16 @@ function relationshipEvidence(album: LastFmRelatedAlbum) {
 
 function RelatedAlbumCard({
   album,
+  isWishListed,
+  isAddingToWishList,
+  onAddToWishList,
   onOpenAlbum,
   onOpenSource,
 }: {
   album: LastFmRelatedAlbum;
+  isWishListed: boolean;
+  isAddingToWishList: boolean;
+  onAddToWishList: (album: LastFmRelatedAlbum) => void;
   onOpenAlbum: (albumId: string) => void;
   onOpenSource: (url: string) => void;
 }) {
@@ -24,9 +37,9 @@ function RelatedAlbumCard({
   const artistName = album.localAlbumArtist ?? album.artistName;
 
   return (
-    <li>
+    <li className={`album-related-card${isOwned ? " is-owned" : ""}`}>
       <button
-        className={`album-related-card${isOwned ? " is-owned" : ""}`}
+        className="album-related-card-main"
         type="button"
         onClick={() => {
           if (localAlbumId) {
@@ -68,8 +81,38 @@ function RelatedAlbumCard({
         </span>
         {!isOwned ? <ExternalLink size={14} aria-hidden="true" /> : null}
       </button>
+      {!isOwned ? (
+        <button
+          className={`recommendation-wish-action${isWishListed ? " active" : ""}`}
+          type="button"
+          disabled={isWishListed || isAddingToWishList}
+          aria-label={
+            isWishListed
+              ? `${albumTitle} by ${artistName} is on Wish List`
+              : `Add ${albumTitle} by ${artistName} to Wish List`
+          }
+          onClick={() => onAddToWishList(album)}
+        >
+          {isWishListed ? (
+            <Check size={13} aria-hidden="true" />
+          ) : (
+            <Heart size={13} aria-hidden="true" />
+          )}
+          <span>
+            {isWishListed
+              ? "On Wish List"
+              : isAddingToWishList
+                ? "Adding…"
+                : "Wish List"}
+          </span>
+        </button>
+      ) : null}
     </li>
   );
+}
+
+function albumIdentityKey(album: LastFmRelatedAlbum) {
+  return `${recommendationIdentityKey(album.artistName)}\u001f${recommendationIdentityKey(album.albumTitle)}`;
 }
 
 export function AlbumRelatedAlbumsPanel({
@@ -91,6 +134,54 @@ export function AlbumRelatedAlbumsPanel({
     related?.albums.filter((album) => album.localAlbumId !== null) ?? [];
   const explore =
     related?.albums.filter((album) => album.localAlbumId === null) ?? [];
+  const [wishListItems, setWishListItems] = useState<
+    Awaited<ReturnType<typeof listWishList>>["items"]
+  >([]);
+  const [addingAlbumKey, setAddingAlbumKey] = useState<string | null>(null);
+  const [wishListError, setWishListError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listWishList()
+      .then((response) => {
+        if (!cancelled) setWishListItems(response.items);
+      })
+      .catch((loadError) => {
+        if (!cancelled) {
+          setWishListError(
+            loadError instanceof Error ? loadError.message : String(loadError),
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [related]);
+
+  async function addAlbumToWishList(album: LastFmRelatedAlbum) {
+    const key = albumIdentityKey(album);
+    if (addingAlbumKey || isRelatedAlbumWishListed(wishListItems, album)) return;
+    setAddingAlbumKey(key);
+    setWishListError(null);
+    try {
+      const item = await addRelatedAlbumRecommendation(
+        album,
+        related?.albumArtist ?? "Related Albums",
+        related?.albumTitle ?? "Album",
+      );
+      setWishListItems((current) =>
+        current.some((candidate) => candidate.id === item.id)
+          ? current
+          : [item, ...current],
+      );
+    } catch (addError) {
+      setWishListError(
+        addError instanceof Error ? addError.message : String(addError),
+      );
+    } finally {
+      setAddingAlbumKey(null);
+    }
+  }
 
   return (
     <section className="album-related" aria-label="Related albums">
@@ -115,6 +206,11 @@ export function AlbumRelatedAlbumsPanel({
           {error}
         </p>
       ) : null}
+      {wishListError ? (
+        <p className="error-message recommendation-wish-error" role="alert">
+          {wishListError}
+        </p>
+      ) : null}
       {!related && isLoading ? (
         <div className="empty-state large">
           <Disc3 size={19} />
@@ -134,6 +230,9 @@ export function AlbumRelatedAlbumsPanel({
               <RelatedAlbumCard
                 key={`${album.rank}-${album.artistName}-${album.albumTitle}`}
                 album={album}
+                isWishListed={isRelatedAlbumWishListed(wishListItems, album)}
+                isAddingToWishList={addingAlbumKey === albumIdentityKey(album)}
+                onAddToWishList={(candidate) => void addAlbumToWishList(candidate)}
                 onOpenAlbum={onOpenAlbum}
                 onOpenSource={onOpenSource}
               />
@@ -149,6 +248,9 @@ export function AlbumRelatedAlbumsPanel({
               <RelatedAlbumCard
                 key={`${album.rank}-${album.artistName}-${album.albumTitle}`}
                 album={album}
+                isWishListed={isRelatedAlbumWishListed(wishListItems, album)}
+                isAddingToWishList={addingAlbumKey === albumIdentityKey(album)}
+                onAddToWishList={(candidate) => void addAlbumToWishList(candidate)}
                 onOpenAlbum={onOpenAlbum}
                 onOpenSource={onOpenSource}
               />

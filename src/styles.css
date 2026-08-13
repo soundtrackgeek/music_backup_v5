@@ -18719,36 +18719,47 @@ button {
 }
 
 .artist-similar-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 62px;
+  border: 1px solid #e1e8e5;
+  border-radius: 10px;
+  background: #f8faf9;
+  color: inherit;
+  overflow: hidden;
+}
+
+.artist-similar-card-main {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto 14px;
   align-items: center;
   width: 100%;
-  min-height: 62px;
+  min-height: 60px;
   gap: 10px;
-  border: 1px solid #e1e8e5;
-  border-radius: 10px;
-  background: #f8faf9;
+  border: 0;
+  background: transparent;
   padding: 8px 10px;
   color: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.artist-similar-card.is-owned {
+.artist-similar-card.is-owned .artist-similar-card-main {
   grid-template-columns: 44px minmax(0, 1fr) auto;
 }
 
-.artist-similar-card:hover:not(:disabled) {
+.artist-similar-card:hover {
   border-color: #b7cbc4;
   background: #f2f7f5;
 }
 
-.artist-similar-card:disabled {
+.artist-similar-card-main:disabled {
   cursor: default;
   opacity: 0.66;
 }
 
-.artist-similar-card > .artist-portrait,
+.artist-similar-card-main > .artist-portrait,
 .artist-similar-fallback {
   width: 44px;
   height: 44px;
@@ -18783,6 +18794,41 @@ button {
 .artist-similar-match {
   color: #76847f;
   font-size: 0.66rem;
+}
+
+.recommendation-wish-action {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-end;
+  gap: 5px;
+  min-height: 27px;
+  margin: 0 9px 8px;
+  border: 1px solid #bfd0ca;
+  border-radius: 999px;
+  background: #f2f7f5;
+  padding: 4px 9px;
+  color: #176e66;
+  font-size: 0.64rem;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.recommendation-wish-action:hover:not(:disabled) {
+  border-color: #6e9c90;
+  background: #e7f1ed;
+}
+
+.recommendation-wish-action.active {
+  color: #4f6961;
+}
+
+.recommendation-wish-action:disabled {
+  cursor: default;
+  opacity: 0.76;
+}
+
+.recommendation-wish-error {
+  margin-bottom: 12px;
 }
 
 .artist-similar-match {
@@ -19519,31 +19565,42 @@ button {
 }
 
 .album-related-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 76px;
+  border: 1px solid #e1e8e5;
+  border-radius: 10px;
+  background: #f8faf9;
+  color: inherit;
+  overflow: hidden;
+}
+
+.album-related-card-main {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr) 14px;
   align-items: center;
   width: 100%;
-  min-height: 76px;
+  min-height: 74px;
   gap: 11px;
-  border: 1px solid #e1e8e5;
-  border-radius: 10px;
-  background: #f8faf9;
+  border: 0;
+  background: transparent;
   padding: 8px 10px;
   color: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.album-related-card.is-owned {
+.album-related-card.is-owned .album-related-card-main {
   grid-template-columns: 58px minmax(0, 1fr);
 }
 
-.album-related-card:hover:not(:disabled) {
+.album-related-card:hover {
   border-color: #b7cbc4;
   background: #f2f7f5;
 }
 
-.album-related-card:disabled {
+.album-related-card-main:disabled {
   cursor: default;
   opacity: 0.66;
 }
@@ -19803,9 +19860,24 @@ button {
   background: #151d1a;
 }
 
-:root[data-theme="dark"] .artist-similar-card:hover:not(:disabled) {
+:root[data-theme="dark"] .artist-similar-card:hover {
   border-color: #4d6b61;
   background: #1a2521;
+}
+
+:root[data-theme="dark"] .recommendation-wish-action {
+  border-color: #3f5a51;
+  color: #83d2c4;
+  background: #1b2924;
+}
+
+:root[data-theme="dark"] .recommendation-wish-action:hover:not(:disabled) {
+  border-color: #5d8d7e;
+  background: #22342d;
+}
+
+:root[data-theme="dark"] .recommendation-wish-action.active {
+  color: #abc4bc;
 }
 
 :root[data-theme="dark"] .artist-similar-fallback {
@@ -19936,7 +20008,7 @@ button {
   background: #151d1a;
 }
 
-:root[data-theme="dark"] .album-related-card:hover:not(:disabled) {
+:root[data-theme="dark"] .album-related-card:hover {
   border-color: #4d6b61;
   background: #1a2521;
 }
