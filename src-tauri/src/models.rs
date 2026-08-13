@@ -1495,6 +1495,62 @@ pub struct DiscoveryDailyEdition {
     pub listening_evidence_note: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryShelfExplorerRequest {
+    pub shelf: String,
+    pub date: Option<String>,
+    pub anniversary_years: Option<i32>,
+    pub event_type: Option<String>,
+    pub source: Option<String>,
+    pub year: Option<i32>,
+    pub week: Option<i32>,
+    pub decade: Option<i32>,
+    pub genre: Option<String>,
+    pub mode: Option<String>,
+    pub connection: Option<String>,
+    pub query: Option<String>,
+    pub sort: Option<String>,
+    pub seed: Option<i64>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryShelfExplorerResponse {
+    pub shelf: String,
+    pub title: String,
+    pub evidence_note: String,
+    pub total: i64,
+    pub limit: i64,
+    pub offset: i64,
+    pub seed: i64,
+    pub anniversary_years: Option<i32>,
+    pub event_type: Option<String>,
+    pub source: Option<String>,
+    pub source_label: Option<String>,
+    pub year: Option<i32>,
+    pub week: Option<i32>,
+    pub decade: Option<i32>,
+    pub genre: Option<String>,
+    pub mode: Option<String>,
+    pub connection: Option<String>,
+    pub query: Option<String>,
+    pub sort: String,
+    pub available_years: Vec<i32>,
+    pub available_weeks: Vec<i32>,
+    pub available_genres: Vec<DiscoveryDeepCutGenre>,
+    pub anniversaries: Vec<DiscoveryAnniversaryStory>,
+    pub life_events: Vec<DiscoveryLifeEventStory>,
+    pub chart_stories: Vec<DiscoveryChartStory>,
+    pub deep_cuts: Vec<DiscoveryDeepCutStory>,
+    pub artist_completions: Vec<DiscoveryArtistCompletionStory>,
+    pub album_completions: Vec<DiscoveryAlbumCompletionStory>,
+    pub recommendations: Vec<DiscoveryRecommendationStory>,
+    pub anchors: Vec<DiscoveryRecommendationAnchor>,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRecommendationSnapshotRequest {

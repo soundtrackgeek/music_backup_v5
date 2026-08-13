@@ -82,6 +82,7 @@ import {
   getDiscoveryCompletionSnapshot,
   getDiscoveryDeepCutSnapshot,
   getDiscoveryRecommendationSnapshot,
+  getDiscoveryShelfExplorer,
   getAlbumReview,
   getArtistBiography,
   getArtistTrackHighlights,
@@ -15886,9 +15887,9 @@ export default function App() {
               onDeepCutSnapshotChange={changeDiscoveryDeepCutSnapshot}
               onCompletionSnapshotChange={changeDiscoveryCompletionSnapshot}
               onRecommendationSnapshotChange={changeDiscoveryRecommendationSnapshot}
+              onLoadExplorer={getDiscoveryShelfExplorer}
               onOpenAlbum={openTimelineAlbum}
               onOpenArtist={openArtistFromMusicMap}
-              onOpenCompletion={() => setActiveSection("Completion")}
               onOpenTrack={openTimelineTrack}
             />
 

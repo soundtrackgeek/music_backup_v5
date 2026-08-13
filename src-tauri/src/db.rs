@@ -21,7 +21,8 @@ use crate::models::{
     DiscoveryDeepCutSnapshotRequest, DiscoveryDeepCutStory, DiscoveryGenrePoint,
     DiscoveryHeatmapCell, DiscoveryLifeEventStory, DiscoveryMission, DiscoveryRecommendationAnchor,
     DiscoveryRecommendationSnapshot, DiscoveryRecommendationSnapshotRequest,
-    DiscoveryRecommendationStory, DiscoveryResponse, DurationAlbumStat, DurationAnalyticsStats,
+    DiscoveryRecommendationStory, DiscoveryResponse, DiscoveryShelfExplorerRequest,
+    DiscoveryShelfExplorerResponse, DurationAlbumStat, DurationAnalyticsStats,
     ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
     GenreProgressRequest, GenreProgressStats, GenreSummary, GenreTimelineAlbumPoint,
     GenreTimelineGenre, GenreTimelineRequest, GenreTimelineResponse, GenreTimelineYearCount,
@@ -10525,6 +10526,15 @@ pub fn discovery_recommendation_snapshot_for_app(
 }
 
 #[cfg(not(test))]
+pub fn discovery_shelf_explorer_for_app(
+    app: &AppHandle,
+    request: DiscoveryShelfExplorerRequest,
+) -> Result<DiscoveryShelfExplorerResponse> {
+    let (conn, _) = open(app)?;
+    discovery_shelf_explorer(&conn, &request)
+}
+
+#[cfg(not(test))]
 pub fn list_music_tools_for_app(app: &AppHandle) -> Result<Vec<MusicToolSummary>> {
     let (conn, _) = open(app)?;
     list_music_tools(&conn)
@@ -14103,6 +14113,16 @@ fn discovery_anniversaries(
     date: NaiveDate,
     anniversary_years: i32,
 ) -> Result<Vec<DiscoveryAnniversaryStory>> {
+    let mut stories = discovery_anniversaries_all(conn, date, anniversary_years)?;
+    stories.truncate(5);
+    Ok(stories)
+}
+
+fn discovery_anniversaries_all(
+    conn: &Connection,
+    date: NaiveDate,
+    anniversary_years: i32,
+) -> Result<Vec<DiscoveryAnniversaryStory>> {
     let release_year = date.year() - anniversary_years;
     let mut stmt = conn.prepare(
         "
@@ -14141,7 +14161,6 @@ fn discovery_anniversaries(
             COALESCE(a.loved_tracks, 0) DESC,
             LOWER(COALESCE(a.album_artist_display, '')),
             LOWER(COALESCE(a.album, ''))
-        LIMIT 5
         ",
     )?;
     let stories = stmt
@@ -14198,6 +14217,26 @@ fn discovery_life_events(
     conn: &Connection,
     date: NaiveDate,
 ) -> Result<Vec<DiscoveryLifeEventStory>> {
+    let mut stories = discovery_life_events_all(conn, date)?;
+    let mut birthdays = stories
+        .iter()
+        .filter(|story| story.event_type == "birthday")
+        .take(5)
+        .cloned()
+        .collect::<Vec<_>>();
+    birthdays.extend(
+        stories
+            .drain(..)
+            .filter(|story| story.event_type == "memorial")
+            .take(5),
+    );
+    Ok(birthdays)
+}
+
+fn discovery_life_events_all(
+    conn: &Connection,
+    date: NaiveDate,
+) -> Result<Vec<DiscoveryLifeEventStory>> {
     let album_artist_key = artist_key_sql("album_artist_display");
     let month_day = date.format("%m-%d").to_string();
     let sql = format!(
@@ -14248,15 +14287,6 @@ fn discovery_life_events(
             WHERE LOWER(COALESCE(info.artist_type, '')) = 'person'
               AND LENGTH(info.life_end_date) = 10
               AND SUBSTR(info.life_end_date, 6, 5) = ?1
-        ),
-        ranked_events AS (
-            SELECT
-                events.*,
-                ROW_NUMBER() OVER (
-                    PARTITION BY events.event_type
-                    ORDER BY events.album_count DESC, LOWER(events.artist)
-                ) AS event_rank
-            FROM events
         )
         SELECT
             events.artist_id,
@@ -14297,8 +14327,7 @@ fn discovery_life_events(
                 ORDER BY COALESCE(a.album_score, 0) DESC
                 LIMIT 1
             ) AS representative_cover_path
-        FROM ranked_events events
-        WHERE events.event_rank <= 5
+        FROM events
         ORDER BY CASE events.event_type WHEN 'birthday' THEN 0 ELSE 1 END,
                  events.album_count DESC,
                  LOWER(events.artist)
@@ -14392,11 +14421,12 @@ fn discovery_chart_snapshot(
         _ => "Billboard Year-End Albums",
     }
     .to_string();
-    let stories = if let Some(year) = year {
+    let mut stories = if let Some(year) = year {
         discovery_chart_stories(conn, source, &source_label, year, week)?
     } else {
         Vec::new()
     };
+    stories.truncate(12);
 
     Ok(DiscoveryChartSnapshot {
         source: source.to_string(),
@@ -14499,7 +14529,6 @@ fn discovery_chart_stories(
         SELECT id, title, artist, album, rank, chart_date, loved, cache_path
         FROM ranked WHERE story_rank = 1
         ORDER BY rank ASC, LOWER(artist), LOWER(title)
-        LIMIT 12
         "
     );
     let mut stmt = conn.prepare(&sql)?;
@@ -14534,6 +14563,14 @@ fn discovery_chart_stories(
 fn discovery_deep_cut_snapshot(
     conn: &Connection,
     request: &DiscoveryDeepCutSnapshotRequest,
+) -> Result<DiscoveryDeepCutSnapshot> {
+    discovery_deep_cut_snapshot_with_scope(conn, request, false)
+}
+
+fn discovery_deep_cut_snapshot_with_scope(
+    conn: &Connection,
+    request: &DiscoveryDeepCutSnapshotRequest,
+    include_all: bool,
 ) -> Result<DiscoveryDeepCutSnapshot> {
     const ELIGIBLE_TRACK: &str = "
         a.effective_album_rating >= 85
@@ -14619,14 +14656,28 @@ fn discovery_deep_cut_snapshot(
             row.get(0)
         })?;
 
+    let selected_album_order = if include_all {
+        "ORDER BY LOWER(COALESCE(a.album_artist_display, '')), LOWER(COALESCE(a.album, ''))"
+    } else {
+        "ORDER BY random() LIMIT 16"
+    };
+    let candidate_order = if include_all {
+        "COALESCE(t.track_number, 0) DESC, t.id ASC"
+    } else {
+        "random()"
+    };
+    let story_order = if include_all {
+        "ORDER BY LOWER(artist), LOWER(album), LOWER(title)"
+    } else {
+        "ORDER BY random() LIMIT 16"
+    };
     let stories_sql = format!(
         "WITH selected_albums AS (
             SELECT DISTINCT a.id
             FROM tracks t
             JOIN albums a ON a.id = t.album_id
             WHERE {where_clause}
-            ORDER BY random()
-            LIMIT 16
+            {selected_album_order}
         ),
         candidates AS (
             SELECT
@@ -14641,7 +14692,7 @@ fn discovery_deep_cut_snapshot(
                 {RELEASE_YEAR} AS release_year,
                 COALESCE(NULLIF(TRIM(a.canonical_genre), ''), NULLIF(TRIM(t.canonical_genre), ''), 'Unknown') AS genre,
                 cover.cache_path,
-                ROW_NUMBER() OVER (PARTITION BY a.id ORDER BY random()) AS album_candidate
+                ROW_NUMBER() OVER (PARTITION BY a.id ORDER BY {candidate_order}) AS album_candidate
             FROM tracks t
             JOIN albums a ON a.id = t.album_id
             JOIN selected_albums selected ON selected.id = a.id
@@ -14652,8 +14703,7 @@ fn discovery_deep_cut_snapshot(
                effective_album_rating, release_year, genre, cache_path
         FROM candidates
         WHERE album_candidate = 1
-        ORDER BY random()
-        LIMIT 16"
+        {story_order}"
     );
     let story_values = values
         .iter()
@@ -14705,14 +14755,16 @@ fn discovery_completion_snapshot(
     request: &DiscoveryCompletionSnapshotRequest,
 ) -> Result<DiscoveryCompletionSnapshot> {
     if request.mode.as_deref() == Some("album") {
-        return discovery_album_completion_snapshot(conn, request);
+        return discovery_album_completion_snapshot_with_scope(conn, request, false);
     }
-    discovery_artist_completion_snapshot(conn, request)
+    discovery_artist_completion_snapshot_with_scope(conn, request, false, None)
 }
 
-fn discovery_artist_completion_snapshot(
+fn discovery_artist_completion_snapshot_with_scope(
     conn: &Connection,
     request: &DiscoveryCompletionSnapshotRequest,
+    include_all: bool,
+    seed_override: Option<u64>,
 ) -> Result<DiscoveryCompletionSnapshot> {
     #[derive(Default)]
     struct LocalArtistData {
@@ -14980,7 +15032,11 @@ fn discovery_artist_completion_snapshot(
             .find(|option| option.id.eq_ignore_ascii_case(genre))
             .map(|option| option.id.clone())
     });
-    let seed = conn.query_row("SELECT random()", [], |row| row.get::<_, i64>(0))? as u64;
+    let seed = if let Some(seed) = seed_override {
+        seed
+    } else {
+        conn.query_row("SELECT random()", [], |row| row.get::<_, i64>(0))? as u64
+    };
     let mut stories = Vec::new();
     for candidate in gaps {
         if genre
@@ -15039,8 +15095,17 @@ fn discovery_artist_completion_snapshot(
         });
     }
     let matching_count = stories.len() as i64;
-    stories.sort_by_key(|story| discovery_random_sort_key(seed, &story.artist_id));
-    stories.truncate(5);
+    if include_all {
+        stories.sort_by(|left, right| {
+            left.artist
+                .to_lowercase()
+                .cmp(&right.artist.to_lowercase())
+                .then_with(|| left.artist_id.cmp(&right.artist_id))
+        });
+    } else {
+        stories.sort_by_key(|story| discovery_random_sort_key(seed, &story.artist_id));
+        stories.truncate(5);
+    }
 
     Ok(DiscoveryCompletionSnapshot {
         mode: "artist".to_string(),
@@ -15055,9 +15120,10 @@ fn discovery_artist_completion_snapshot(
     })
 }
 
-fn discovery_album_completion_snapshot(
+fn discovery_album_completion_snapshot_with_scope(
     conn: &Connection,
     request: &DiscoveryCompletionSnapshotRequest,
+    include_all: bool,
 ) -> Result<DiscoveryCompletionSnapshot> {
     const RELEASE_YEAR: &str = "COALESCE(a.release_year, a.year)";
     const GENRE_ID: &str = "NULLIF(TRIM(a.genre_normalized), '')";
@@ -15117,6 +15183,11 @@ fn discovery_album_completion_snapshot(
         params_from_iter(values.iter()),
         |row| row.get(0),
     )?;
+    let story_order = if include_all {
+        "ORDER BY LOWER(COALESCE(a.album_artist_display, '')), LOWER(COALESCE(a.album, '')), a.id"
+    } else {
+        "ORDER BY random() LIMIT 5"
+    };
     let stories_sql = format!(
         "SELECT a.id,
                 COALESCE(NULLIF(TRIM(a.album), ''), 'Unknown Album'),
@@ -15128,7 +15199,7 @@ fn discovery_album_completion_snapshot(
          FROM albums a
          LEFT JOIN album_covers cover ON cover.album_id = a.id
          WHERE {where_clause}
-         ORDER BY random() LIMIT 5"
+         {story_order}"
     );
     let album_stories = conn
         .prepare(&stories_sql)?
@@ -15168,6 +15239,15 @@ fn discovery_album_completion_snapshot(
 fn discovery_recommendation_snapshot(
     conn: &Connection,
     request: &DiscoveryRecommendationSnapshotRequest,
+) -> Result<DiscoveryRecommendationSnapshot> {
+    discovery_recommendation_snapshot_with_scope(conn, request, 6, None)
+}
+
+fn discovery_recommendation_snapshot_with_scope(
+    conn: &Connection,
+    request: &DiscoveryRecommendationSnapshotRequest,
+    story_limit: usize,
+    seed_override: Option<u64>,
 ) -> Result<DiscoveryRecommendationSnapshot> {
     #[derive(Clone)]
     struct AnchorData {
@@ -15217,7 +15297,11 @@ fn discovery_recommendation_snapshot(
     } else {
         "played"
     };
-    let seed = conn.query_row("SELECT random()", [], |row| row.get::<_, i64>(0))? as u64;
+    let seed = if let Some(seed) = seed_override {
+        seed
+    } else {
+        conn.query_row("SELECT random()", [], |row| row.get::<_, i64>(0))? as u64
+    };
     let album_artist_key = artist_key_sql("album.album_artist_display");
     let recent_sql = format!(
         "WITH latest_events AS (
@@ -15559,7 +15643,7 @@ fn discovery_recommendation_snapshot(
     let mut selected_albums = HashSet::<String>::new();
     let mut selected_artists = HashSet::<String>::new();
     let mut cursors = vec![0_usize; anchors.len()];
-    while selected.len() < 6 {
+    while selected.len() < story_limit {
         let mut progressed = false;
         for anchor_index in 0..anchors.len() {
             while let Some(edge) = edges_by_anchor[anchor_index].get(cursors[anchor_index]) {
@@ -15576,7 +15660,7 @@ fn discovery_recommendation_snapshot(
                 progressed = true;
                 break;
             }
-            if selected.len() == 6 {
+            if selected.len() == story_limit {
                 break;
             }
         }
@@ -15584,18 +15668,18 @@ fn discovery_recommendation_snapshot(
             break;
         }
     }
-    if selected.len() < 6 {
+    if selected.len() < story_limit {
         for edges in &edges_by_anchor {
             for edge in edges {
                 let candidate = &candidates[edge.candidate_index];
                 if selected_albums.insert(candidate.album_id.clone()) {
                     selected.push(edge.clone());
                 }
-                if selected.len() == 6 {
+                if selected.len() == story_limit {
                     break;
                 }
             }
-            if selected.len() == 6 {
+            if selected.len() == story_limit {
                 break;
             }
         }
@@ -15681,6 +15765,517 @@ fn discovery_recommendation_snapshot(
         stories,
         evidence,
     })
+}
+
+fn discovery_shelf_explorer(
+    conn: &Connection,
+    request: &DiscoveryShelfExplorerRequest,
+) -> Result<DiscoveryShelfExplorerResponse> {
+    let shelf = match request.shelf.as_str() {
+        "anniversaries" | "life-events" | "charts" | "deep-cuts" | "completion"
+        | "recommendations" => request.shelf.as_str(),
+        _ => bail!("Unknown discovery shelf: {}", request.shelf),
+    };
+    let limit = request.limit.unwrap_or(24).clamp(1, 50);
+    let offset = request.offset.unwrap_or(0).max(0);
+    let seed = request.seed.unwrap_or(7_311_989);
+    let query = request
+        .query
+        .as_deref()
+        .map(str::trim)
+        .filter(|query| !query.is_empty())
+        .map(str::to_lowercase);
+    let mut response = DiscoveryShelfExplorerResponse {
+        shelf: shelf.to_string(),
+        title: String::new(),
+        evidence_note: String::new(),
+        total: 0,
+        limit,
+        offset,
+        seed,
+        anniversary_years: None,
+        event_type: None,
+        source: None,
+        source_label: None,
+        year: None,
+        week: None,
+        decade: None,
+        genre: None,
+        mode: None,
+        connection: None,
+        query: query.clone(),
+        sort: request.sort.clone().unwrap_or_default(),
+        available_years: Vec::new(),
+        available_weeks: Vec::new(),
+        available_genres: Vec::new(),
+        anniversaries: Vec::new(),
+        life_events: Vec::new(),
+        chart_stories: Vec::new(),
+        deep_cuts: Vec::new(),
+        artist_completions: Vec::new(),
+        album_completions: Vec::new(),
+        recommendations: Vec::new(),
+        anchors: Vec::new(),
+    };
+
+    match shelf {
+        "anniversaries" => {
+            let date = request
+                .date
+                .as_deref()
+                .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+                .unwrap_or_else(|| Local::now().date_naive());
+            let years = request.anniversary_years.unwrap_or(50).clamp(1, 100);
+            let source = match request.source.as_deref() {
+                Some("billboard" | "official-uk" | "vg-lista" | "uncharted") => {
+                    request.source.as_deref().unwrap_or("all")
+                }
+                _ => "all",
+            };
+            let sort = match request.sort.as_deref() {
+                Some("artist" | "album") => request.sort.as_deref().unwrap_or("chart"),
+                _ => "chart",
+            };
+            let mut stories = discovery_anniversaries_all(conn, date, years)?
+                .into_iter()
+                .filter(|story| match source {
+                    "billboard" => story
+                        .chart_evidence
+                        .iter()
+                        .any(|evidence| evidence.starts_with("Billboard")),
+                    "official-uk" => story
+                        .chart_evidence
+                        .iter()
+                        .any(|evidence| evidence.starts_with("Official UK")),
+                    "vg-lista" => story
+                        .chart_evidence
+                        .iter()
+                        .any(|evidence| evidence.starts_with("VG-lista")),
+                    "uncharted" => story.chart_evidence.is_empty(),
+                    _ => true,
+                })
+                .filter(|story| {
+                    explorer_matches(
+                        query.as_deref(),
+                        &[&story.album, &story.artist, &story.evidence],
+                    )
+                })
+                .collect::<Vec<_>>();
+            match sort {
+                "artist" => stories.sort_by(|left, right| {
+                    left.artist
+                        .to_lowercase()
+                        .cmp(&right.artist.to_lowercase())
+                        .then_with(|| left.album.to_lowercase().cmp(&right.album.to_lowercase()))
+                }),
+                "album" => stories.sort_by(|left, right| {
+                    left.album
+                        .to_lowercase()
+                        .cmp(&right.album.to_lowercase())
+                        .then_with(|| left.artist.to_lowercase().cmp(&right.artist.to_lowercase()))
+                }),
+                _ => {}
+            }
+            response.title = format!("{years}-Year Album Anniversaries");
+            response.evidence_note = format!(
+                "Owned albums released in {}. Imported Billboard, Official UK, and VG-lista positions rank charted albums first; local ratings only break ties and fill gaps.",
+                date.year() - years
+            );
+            response.total = stories.len() as i64;
+            response.anniversary_years = Some(years);
+            response.source = Some(source.to_string());
+            response.sort = sort.to_string();
+            response.anniversaries = explorer_page(&stories, offset, limit);
+        }
+        "life-events" => {
+            let date = request
+                .date
+                .as_deref()
+                .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+                .unwrap_or_else(|| Local::now().date_naive());
+            let event_type = if request.event_type.as_deref() == Some("memorial") {
+                "memorial"
+            } else {
+                "birthday"
+            };
+            let sort = match request.sort.as_deref() {
+                Some("loved" | "name" | "year") => request.sort.as_deref().unwrap_or("albums"),
+                _ => "albums",
+            };
+            let mut stories = discovery_life_events_all(conn, date)?
+                .into_iter()
+                .filter(|story| story.event_type == event_type)
+                .filter(|story| {
+                    explorer_matches(
+                        query.as_deref(),
+                        &[&story.artist, &story.event_date, &story.evidence],
+                    )
+                })
+                .collect::<Vec<_>>();
+            match sort {
+                "loved" => stories.sort_by(|left, right| {
+                    right
+                        .loved_tracks
+                        .cmp(&left.loved_tracks)
+                        .then_with(|| left.artist.to_lowercase().cmp(&right.artist.to_lowercase()))
+                }),
+                "name" => stories.sort_by_key(|story| story.artist.to_lowercase()),
+                "year" => stories.sort_by(|left, right| {
+                    right
+                        .event_date
+                        .cmp(&left.event_date)
+                        .then_with(|| left.artist.to_lowercase().cmp(&right.artist.to_lowercase()))
+                }),
+                _ => stories.sort_by(|left, right| {
+                    right
+                        .album_count
+                        .cmp(&left.album_count)
+                        .then_with(|| left.artist.to_lowercase().cmp(&right.artist.to_lowercase()))
+                }),
+            }
+            response.title = if event_type == "birthday" {
+                "Artist Birthdays".to_string()
+            } else {
+                "Artist Memorials".to_string()
+            };
+            response.evidence_note = format!(
+                "MusicBrainz person records whose {} date matches {}. Library album and loved-track counts provide the local evidence.",
+                if event_type == "birthday" { "birth" } else { "death" },
+                date.format("%B %-d")
+            );
+            response.total = stories.len() as i64;
+            response.event_type = Some(event_type.to_string());
+            response.sort = sort.to_string();
+            response.life_events = explorer_page(&stories, offset, limit);
+        }
+        "charts" => {
+            let snapshot = discovery_chart_snapshot(
+                conn,
+                &DiscoveryChartSnapshotRequest {
+                    source: request.source.clone(),
+                    year: request.year,
+                    week: request.week,
+                    random: false,
+                },
+            )?;
+            let sort = match request.sort.as_deref() {
+                Some("artist" | "album") => request.sort.as_deref().unwrap_or("rank"),
+                _ => "rank",
+            };
+            let mut stories = if let Some(year) = snapshot.year {
+                discovery_chart_stories(
+                    conn,
+                    &snapshot.source,
+                    &snapshot.source_label,
+                    year,
+                    snapshot.week,
+                )?
+            } else {
+                Vec::new()
+            }
+            .into_iter()
+            .filter(|story| {
+                explorer_matches(
+                    query.as_deref(),
+                    &[&story.title, &story.artist, &story.chart, &story.evidence],
+                )
+            })
+            .collect::<Vec<_>>();
+            match sort {
+                "artist" => stories.sort_by(|left, right| {
+                    left.artist
+                        .to_lowercase()
+                        .cmp(&right.artist.to_lowercase())
+                        .then_with(|| left.rank.cmp(&right.rank))
+                }),
+                "album" => stories.sort_by(|left, right| {
+                    left.title
+                        .to_lowercase()
+                        .cmp(&right.title.to_lowercase())
+                        .then_with(|| left.rank.cmp(&right.rank))
+                }),
+                _ => stories.sort_by_key(|story| story.rank),
+            }
+            response.title = "Chart Toppers From…".to_string();
+            response.evidence_note = "Imported album-chart rows matched to albums you own; duplicate chart rows collapse to each album's best position for the selected period.".to_string();
+            response.total = stories.len() as i64;
+            response.source = Some(snapshot.source);
+            response.source_label = Some(snapshot.source_label);
+            response.year = snapshot.year;
+            response.week = snapshot.week;
+            response.available_years = snapshot.available_years;
+            response.available_weeks = snapshot.available_weeks;
+            response.sort = sort.to_string();
+            response.chart_stories = explorer_page(&stories, offset, limit);
+        }
+        "deep-cuts" => {
+            let snapshot = discovery_deep_cut_snapshot_with_scope(
+                conn,
+                &DiscoveryDeepCutSnapshotRequest {
+                    year: request.year,
+                    decade: request.decade,
+                    genre: request.genre.clone(),
+                },
+                true,
+            )?;
+            let sort = match request.sort.as_deref() {
+                Some("newest" | "artist" | "track") => request.sort.as_deref().unwrap_or("rating"),
+                _ => "rating",
+            };
+            let mut stories = snapshot
+                .stories
+                .into_iter()
+                .filter(|story| {
+                    explorer_matches(
+                        query.as_deref(),
+                        &[
+                            &story.title,
+                            &story.album,
+                            &story.artist,
+                            &story.genre,
+                            &story.evidence,
+                        ],
+                    )
+                })
+                .collect::<Vec<_>>();
+            match sort {
+                "newest" => stories.sort_by(|left, right| {
+                    right
+                        .release_year
+                        .cmp(&left.release_year)
+                        .then_with(|| left.artist.to_lowercase().cmp(&right.artist.to_lowercase()))
+                }),
+                "artist" => stories.sort_by(|left, right| {
+                    left.artist
+                        .to_lowercase()
+                        .cmp(&right.artist.to_lowercase())
+                        .then_with(|| left.album.to_lowercase().cmp(&right.album.to_lowercase()))
+                }),
+                "track" => stories.sort_by_key(|story| story.title.to_lowercase()),
+                _ => stories.sort_by(|left, right| {
+                    right
+                        .album_rating
+                        .cmp(&left.album_rating)
+                        .then_with(|| left.artist.to_lowercase().cmp(&right.artist.to_lowercase()))
+                }),
+            }
+            response.title = "Deep Cuts".to_string();
+            response.evidence_note = "One unrated, unloved, non-opening track per album rated 85 or higher, excluding tracks found in any imported singles chart.".to_string();
+            response.total = stories.len() as i64;
+            response.year = snapshot.year;
+            response.decade = snapshot.decade;
+            response.genre = snapshot.genre;
+            response.available_years = snapshot.available_years;
+            response.available_genres = snapshot.available_genres;
+            response.sort = sort.to_string();
+            response.deep_cuts = explorer_page(&stories, offset, limit);
+        }
+        "completion" => {
+            let mode = if request.mode.as_deref() == Some("album") {
+                "album"
+            } else {
+                "artist"
+            };
+            let completion_request = DiscoveryCompletionSnapshotRequest {
+                mode: Some(mode.to_string()),
+                year: request.year,
+                decade: request.decade,
+                genre: request.genre.clone(),
+            };
+            let snapshot = if mode == "album" {
+                discovery_album_completion_snapshot_with_scope(conn, &completion_request, true)?
+            } else {
+                discovery_artist_completion_snapshot_with_scope(
+                    conn,
+                    &completion_request,
+                    true,
+                    Some(seed as u64),
+                )?
+            };
+            response.title = "Complete the Collection".to_string();
+            response.year = snapshot.year;
+            response.decade = snapshot.decade;
+            response.genre = snapshot.genre;
+            response.available_years = snapshot.available_years;
+            response.available_genres = snapshot.available_genres;
+            response.mode = Some(mode.to_string());
+            if mode == "album" {
+                let sort = match request.sort.as_deref() {
+                    Some("least-complete" | "newest" | "artist" | "album") => {
+                        request.sort.as_deref().unwrap_or("most-unrated")
+                    }
+                    _ => "most-unrated",
+                };
+                let mut stories = snapshot
+                    .album_stories
+                    .into_iter()
+                    .filter(|story| {
+                        explorer_matches(
+                            query.as_deref(),
+                            &[&story.album, &story.artist, &story.genre, &story.evidence],
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                match sort {
+                    "least-complete" => stories.sort_by(|left, right| {
+                        left.completion_percent
+                            .partial_cmp(&right.completion_percent)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    }),
+                    "newest" => {
+                        stories.sort_by(|left, right| right.release_year.cmp(&left.release_year))
+                    }
+                    "artist" => stories.sort_by_key(|story| story.artist.to_lowercase()),
+                    "album" => stories.sort_by_key(|story| story.album.to_lowercase()),
+                    _ => stories
+                        .sort_by(|left, right| right.unrated_tracks.cmp(&left.unrated_tracks)),
+                }
+                response.evidence_note = "Owned albums with at least one unrated track. Completion is calculated directly from rated and total track counts.".to_string();
+                response.total = stories.len() as i64;
+                response.sort = sort.to_string();
+                response.album_completions = explorer_page(&stories, offset, limit);
+            } else {
+                let sort = match request.sort.as_deref() {
+                    Some("least-complete" | "artist" | "missing-year") => {
+                        request.sort.as_deref().unwrap_or("most-missing")
+                    }
+                    _ => "most-missing",
+                };
+                let mut stories = snapshot
+                    .artist_stories
+                    .into_iter()
+                    .filter(|story| {
+                        explorer_matches(
+                            query.as_deref(),
+                            &[
+                                &story.artist,
+                                &story.missing_release_title,
+                                &story.genre,
+                                &story.evidence,
+                            ],
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                match sort {
+                    "least-complete" => stories.sort_by(|left, right| {
+                        left.completion_percent
+                            .partial_cmp(&right.completion_percent)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    }),
+                    "artist" => stories.sort_by_key(|story| story.artist.to_lowercase()),
+                    "missing-year" => stories.sort_by(|left, right| {
+                        right.missing_release_year.cmp(&left.missing_release_year)
+                    }),
+                    _ => stories.sort_by(|left, right| {
+                        right.missing_album_count.cmp(&left.missing_album_count)
+                    }),
+                }
+                response.evidence_note = "Official primary-album release groups from the local MusicBrainz cache compared with owned titles and saved release decisions.".to_string();
+                response.total = stories.len() as i64;
+                response.sort = sort.to_string();
+                response.artist_completions = explorer_page(&stories, offset, limit);
+            }
+        }
+        "recommendations" => {
+            let mode = if request.mode.as_deref() == Some("loved") {
+                "loved"
+            } else {
+                "played"
+            };
+            let connection = match request.connection.as_deref() {
+                Some("lastfm" | "related" | "similar" | "genre") => {
+                    request.connection.as_deref().unwrap_or("all")
+                }
+                _ => "all",
+            };
+            let snapshot = discovery_recommendation_snapshot_with_scope(
+                conn,
+                &DiscoveryRecommendationSnapshotRequest {
+                    mode: Some(mode.to_string()),
+                },
+                usize::MAX,
+                Some(seed as u64),
+            )?;
+            let sort = match request.sort.as_deref() {
+                Some("least-rated" | "artist" | "album") => {
+                    request.sort.as_deref().unwrap_or("relevance")
+                }
+                _ => "relevance",
+            };
+            let mut stories = snapshot
+                .stories
+                .into_iter()
+                .filter(|story| match connection {
+                    "lastfm" => story.reason != "Shared genre",
+                    "related" => story.reason == "Related album",
+                    "similar" => story.reason == "Similar artist",
+                    "genre" => story.reason == "Shared genre",
+                    _ => true,
+                })
+                .filter(|story| {
+                    explorer_matches(
+                        query.as_deref(),
+                        &[
+                            &story.album,
+                            &story.artist,
+                            &story.anchor_album,
+                            &story.anchor_artist,
+                            &story.evidence,
+                        ],
+                    )
+                })
+                .collect::<Vec<_>>();
+            match sort {
+                "least-rated" => stories.sort_by(|left, right| {
+                    left.rating_completeness
+                        .partial_cmp(&right.rating_completeness)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                }),
+                "artist" => stories.sort_by_key(|story| story.artist.to_lowercase()),
+                "album" => stories.sort_by_key(|story| story.album.to_lowercase()),
+                _ => {}
+            }
+            response.title = if mode == "played" {
+                "Because You Played…".to_string()
+            } else {
+                "Because You Loved…".to_string()
+            };
+            response.evidence_note = format!(
+                "{} from up to eight mixed album anchors; candidates are under 50% rated and exclude recent albums plus every anchor artist.",
+                if mode == "played" {
+                    "Recent positive rating activity is treated as listening evidence"
+                } else {
+                    "High album scores and loved tracks provide the listening signal"
+                }
+            );
+            response.total = stories.len() as i64;
+            response.mode = Some(mode.to_string());
+            response.connection = Some(connection.to_string());
+            response.sort = sort.to_string();
+            response.recommendations = explorer_page(&stories, offset, limit);
+            response.anchors = snapshot.anchors;
+        }
+        _ => unreachable!(),
+    }
+
+    Ok(response)
+}
+
+fn explorer_matches(query: Option<&str>, values: &[&str]) -> bool {
+    query.is_none_or(|query| {
+        values
+            .iter()
+            .any(|value| value.to_lowercase().contains(query))
+    })
+}
+
+fn explorer_page<T: Clone>(items: &[T], offset: i64, limit: i64) -> Vec<T> {
+    items
+        .iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .cloned()
+        .collect()
 }
 
 fn discovery_heatmap(conn: &Connection) -> Result<Vec<DiscoveryHeatmapCell>> {
@@ -21874,6 +22469,27 @@ fn format_seconds_as_minutes(seconds: i64) -> String {
 mod tests {
     use super::*;
 
+    fn shelf_explorer_request(shelf: &str) -> DiscoveryShelfExplorerRequest {
+        DiscoveryShelfExplorerRequest {
+            shelf: shelf.to_string(),
+            date: Some("2026-08-11".to_string()),
+            anniversary_years: None,
+            event_type: None,
+            source: None,
+            year: None,
+            week: None,
+            decade: None,
+            genre: None,
+            mode: None,
+            connection: None,
+            query: None,
+            sort: None,
+            seed: Some(42),
+            limit: Some(24),
+            offset: Some(0),
+        }
+    }
+
     fn temp_test_dir(label: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "music-library-{label}-{}",
@@ -22466,6 +23082,80 @@ mod tests {
         assert_eq!(exact_year.decade, None);
         assert_eq!(exact_year.matching_album_count, 1);
         assert_eq!(exact_year.stories[0].album_id, "deep-2001");
+    }
+
+    #[test]
+    fn discovery_shelf_explorer_pages_filters_sorts_and_keeps_row_evidence() {
+        let conn = seeded_connection();
+        for index in 0..5 {
+            let album_id = format!("explorer-deep-{index}");
+            let artist = format!("Explorer Artist {index}");
+            let album = format!("Explorer Album {index}");
+            insert_test_album(&conn, &album_id, &artist, &album, 1980 + index, 10);
+            conn.execute(
+                "UPDATE albums SET effective_album_rating = ?2 WHERE id = ?1",
+                params![album_id, 90 + index],
+            )
+            .expect("rate explorer album");
+            conn.execute(
+                "INSERT INTO tracks (
+                    import_run_id, album_id, album_unique_id, display_artist,
+                    album_artist_display, album, title, canonical_genre,
+                    genre_normalized, normalized_rating, track_number, year,
+                    release_year, time_seconds, row_hash
+                 ) VALUES (
+                    1, ?1, ?1, ?2, ?2, ?3, ?4, 'Rock', 'rock', NULL, 3,
+                    ?5, ?5, 240, ?6
+                 )",
+                params![
+                    album_id,
+                    artist,
+                    album,
+                    format!("Explorer Track {index}"),
+                    1980 + index,
+                    format!("explorer-track-{index}"),
+                ],
+            )
+            .expect("insert explorer track");
+        }
+
+        let mut first_request = shelf_explorer_request("deep-cuts");
+        first_request.genre = Some("rock".to_string());
+        first_request.sort = Some("artist".to_string());
+        first_request.limit = Some(2);
+        let first =
+            discovery_shelf_explorer(&conn, &first_request).expect("load first explorer page");
+        assert_eq!(first.total, 5);
+        assert_eq!(first.deep_cuts.len(), 2);
+        assert_eq!(first.offset, 0);
+        assert!(first
+            .deep_cuts
+            .iter()
+            .all(|story| story.evidence.contains("track unrated")
+                && story.evidence.contains("no imported singles-chart match")));
+        assert!(first.deep_cuts[0].artist < first.deep_cuts[1].artist);
+
+        let mut second_request = first_request.clone();
+        second_request.offset = Some(2);
+        let second =
+            discovery_shelf_explorer(&conn, &second_request).expect("load second explorer page");
+        assert_eq!(second.total, first.total);
+        assert_eq!(second.offset, 2);
+        assert_eq!(second.seed, first.seed);
+        assert!(first.deep_cuts.iter().all(|first_story| second
+            .deep_cuts
+            .iter()
+            .all(|second_story| first_story.album_id != second_story.album_id)));
+
+        let mut filtered_request = first_request;
+        filtered_request.query = Some("Explorer Artist 4".to_string());
+        filtered_request.offset = Some(0);
+        let filtered =
+            discovery_shelf_explorer(&conn, &filtered_request).expect("filter explorer page");
+        assert_eq!(filtered.total, 1);
+        assert_eq!(filtered.deep_cuts[0].artist, "Explorer Artist 4");
+        assert_eq!(filtered.sort, "artist");
+        assert_eq!(filtered.genre.as_deref(), Some("rock"));
     }
 
     #[test]

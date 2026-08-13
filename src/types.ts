@@ -2410,6 +2410,66 @@ export type DiscoveryDailyEdition = {
   listeningEvidenceNote: string;
 };
 
+export type DiscoveryShelf =
+  | "anniversaries"
+  | "life-events"
+  | "charts"
+  | "deep-cuts"
+  | "completion"
+  | "recommendations";
+
+export type DiscoveryShelfExplorerRequest = {
+  shelf: DiscoveryShelf;
+  date?: string;
+  anniversaryYears?: number;
+  eventType?: "birthday" | "memorial";
+  source?: string;
+  year?: number;
+  week?: number;
+  decade?: number;
+  genre?: string;
+  mode?: string;
+  connection?: string;
+  query?: string;
+  sort?: string;
+  seed?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type DiscoveryShelfExplorerResponse = {
+  shelf: DiscoveryShelf;
+  title: string;
+  evidenceNote: string;
+  total: number;
+  limit: number;
+  offset: number;
+  seed: number;
+  anniversaryYears: number | null;
+  eventType: string | null;
+  source: string | null;
+  sourceLabel: string | null;
+  year: number | null;
+  week: number | null;
+  decade: number | null;
+  genre: string | null;
+  mode: string | null;
+  connection: string | null;
+  query: string | null;
+  sort: string;
+  availableYears: number[];
+  availableWeeks: number[];
+  availableGenres: DiscoveryDeepCutGenre[];
+  anniversaries: DiscoveryAnniversaryStory[];
+  lifeEvents: DiscoveryLifeEventStory[];
+  chartStories: DiscoveryChartStory[];
+  deepCuts: DiscoveryDeepCutStory[];
+  artistCompletions: DiscoveryArtistCompletionStory[];
+  albumCompletions: DiscoveryAlbumCompletionStory[];
+  recommendations: DiscoveryRecommendationStory[];
+  anchors: DiscoveryRecommendationAnchor[];
+};
+
 export type DiscoveryRecommendationMode = "played" | "loved";
 
 export type DiscoveryRecommendationSnapshotRequest = {

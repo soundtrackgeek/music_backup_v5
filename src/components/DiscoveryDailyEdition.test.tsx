@@ -1,7 +1,11 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { DiscoveryDailyEdition as DiscoveryDailyEditionData } from "../types";
+import type {
+  DiscoveryDailyEdition as DiscoveryDailyEditionData,
+  DiscoveryShelfExplorerRequest,
+  DiscoveryShelfExplorerResponse,
+} from "../types";
 import { DiscoveryDailyEdition } from "./DiscoveryDailyEdition";
 
 const edition: DiscoveryDailyEditionData = {
@@ -191,6 +195,55 @@ const edition: DiscoveryDailyEditionData = {
     "Listening stories use recent rating activity and loved tracks.",
 };
 
+function explorerResponse(
+  request: DiscoveryShelfExplorerRequest,
+): DiscoveryShelfExplorerResponse {
+  return {
+    shelf: request.shelf,
+    title: request.shelf === "completion" ? "Complete the Collection" : "Shelf stories",
+    evidenceNote: "The same local evidence used by the compact shelf.",
+    total: 30,
+    limit: request.limit ?? 24,
+    offset: request.offset ?? 0,
+    seed: request.seed ?? 90210,
+    anniversaryYears: request.anniversaryYears ?? null,
+    eventType: request.eventType ?? null,
+    source: request.source ?? null,
+    sourceLabel: request.shelf === "charts" ? "Official UK Albums" : null,
+    year: request.year ?? null,
+    week: request.week ?? null,
+    decade: request.decade ?? null,
+    genre: request.genre ?? null,
+    mode: request.mode ?? null,
+    connection: request.connection ?? null,
+    query: request.query ?? null,
+    sort: request.sort ?? "relevance",
+    availableYears: [2001, 1999],
+    availableWeeks: [34, 35],
+    availableGenres: [{ id: "rock", label: "Rock" }],
+    anniversaries: request.shelf === "anniversaries" ? edition.anniversaries : [],
+    lifeEvents: request.shelf === "life-events" ? edition.lifeEvents : [],
+    chartStories: request.shelf === "charts" ? edition.chartSnapshot.stories : [],
+    deepCuts: request.shelf === "deep-cuts" ? edition.deepCutSnapshot.stories : [],
+    artistCompletions:
+      request.shelf === "completion" && request.mode !== "album"
+        ? edition.completionSnapshot.artistStories
+        : [],
+    albumCompletions:
+      request.shelf === "completion" && request.mode === "album"
+        ? edition.completionSnapshot.albumStories
+        : [],
+    recommendations:
+      request.shelf === "recommendations"
+        ? edition.recommendationSnapshot.stories
+        : [],
+    anchors:
+      request.shelf === "recommendations"
+        ? edition.recommendationSnapshot.anchors
+        : [],
+  };
+}
+
 describe("DiscoveryDailyEdition", () => {
   it("renders every story shelf and exposes the evidence model", () => {
     render(
@@ -233,10 +286,115 @@ describe("DiscoveryDailyEdition", () => {
     ).toBeInTheDocument();
   });
 
-  it("routes story actions to albums, tracks, artists, and completion", () => {
+  it("exposes a See all explorer from every compact shelf", () => {
+    render(
+      <DiscoveryDailyEdition
+        edition={edition}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        isChartLoading={false}
+        isDeepCutLoading={false}
+        isCompletionLoading={false}
+        isRecommendationLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
+        onLoadExplorer={vi.fn(async (request) => explorerResponse(request))}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={vi.fn()}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+
+    expect(
+      document.querySelectorAll("[data-daily-edition-see-all]"),
+    ).toHaveLength(6);
+    expect(
+      Array.from(document.querySelectorAll("[data-daily-edition-see-all]")).map(
+        (element) => element.getAttribute("data-daily-edition-see-all"),
+      ),
+    ).toEqual([
+      "anniversaries",
+      "life-events",
+      "charts",
+      "deep-cuts",
+      "completion",
+      "recommendations",
+    ]);
+  });
+
+  it("pages and sorts the explorer, opens a result, then restores shelf position and focus", async () => {
+    const onLoadExplorer = vi.fn(async (request: DiscoveryShelfExplorerRequest) =>
+      explorerResponse(request),
+    );
+    const onOpenArtist = vi.fn();
+    const scrollTo = vi.fn();
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 640 });
+    Object.defineProperty(window, "scrollTo", { configurable: true, value: scrollTo });
+    Object.defineProperty(window, "requestAnimationFrame", {
+      configurable: true,
+      writable: true,
+      value: (callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      },
+    });
+
+    render(
+      <DiscoveryDailyEdition
+        edition={edition}
+        isLoading={false}
+        isAnniversaryLoading={false}
+        isChartLoading={false}
+        isDeepCutLoading={false}
+        isCompletionLoading={false}
+        isRecommendationLoading={false}
+        onAnniversaryYearsChange={vi.fn()}
+        onChartSnapshotChange={vi.fn()}
+        onDeepCutSnapshotChange={vi.fn()}
+        onCompletionSnapshotChange={vi.fn()}
+        onRecommendationSnapshotChange={vi.fn()}
+        onLoadExplorer={onLoadExplorer}
+        onOpenAlbum={vi.fn()}
+        onOpenArtist={onOpenArtist}
+        onOpenTrack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /see all 1 artist gaps/i }));
+    expect(await screen.findByRole("button", { name: /back to daily edition/i })).toBeInTheDocument();
+    await waitFor(() => expect(onLoadExplorer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ shelf: "completion", mode: "artist", offset: 0, limit: 24 }),
+    ));
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort shelf explorer" }), {
+      target: { value: "least-complete" },
+    });
+    await waitFor(() => expect(onLoadExplorer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: "least-complete", offset: 0, seed: 90210 }),
+    ));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Next$/ }));
+    await waitFor(() => expect(onLoadExplorer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 24, limit: 24, seed: 90210 }),
+    ));
+    fireEvent.click(screen.getByText("Gap Artist").closest("button")!);
+    expect(onOpenArtist).toHaveBeenCalledWith("artist-gap", "Gap Artist");
+
+    fireEvent.click(screen.getByRole("button", { name: /back to daily edition/i }));
+    await waitFor(() => expect(
+      screen.getByRole("heading", { name: "Your Daily Edition" }),
+    ).toBeInTheDocument());
+    const opener = document.getElementById("discovery-see-all-completion");
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 640, behavior: "auto" });
+    expect(opener).toHaveFocus();
+  });
+
+  it("routes compact story actions to albums, tracks, and artists", () => {
     const onOpenAlbum = vi.fn();
     const onOpenArtist = vi.fn();
-    const onOpenCompletion = vi.fn();
     const onOpenTrack = vi.fn();
     render(
       <DiscoveryDailyEdition
@@ -254,7 +412,7 @@ describe("DiscoveryDailyEdition", () => {
         onRecommendationSnapshotChange={vi.fn()}
         onOpenAlbum={onOpenAlbum}
         onOpenArtist={onOpenArtist}
-        onOpenCompletion={onOpenCompletion}
+        onOpenCompletion={vi.fn()}
         onOpenTrack={onOpenTrack}
       />,
     );
@@ -269,9 +427,6 @@ describe("DiscoveryDailyEdition", () => {
 
     fireEvent.click(screen.getByText("Gap Artist").closest("button")!);
     expect(onOpenArtist).toHaveBeenCalledWith("artist-gap", "Gap Artist");
-
-    fireEvent.click(screen.getByRole("button", { name: /view all artist gaps/i }));
-    expect(onOpenCompletion).toHaveBeenCalledTimes(1);
   });
 
   it("chooses chart source, year, week, and a random owned-album snapshot", () => {

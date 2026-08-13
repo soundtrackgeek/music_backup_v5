@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   CalendarDays,
   ChartLine,
@@ -19,9 +19,13 @@ import type {
   DiscoveryDailyEdition,
   DiscoveryDeepCutSnapshotRequest,
   DiscoveryRecommendationSnapshotRequest,
+  DiscoveryShelf,
+  DiscoveryShelfExplorerRequest,
+  DiscoveryShelfExplorerResponse,
 } from "../types";
 import { AlbumCover } from "./AlbumCover";
 import { ArtistPortrait } from "./ArtistPortrait";
+import { DiscoveryShelfExplorer } from "./DiscoveryShelfExplorer";
 
 type DiscoveryDailyEditionProps = {
   edition: DiscoveryDailyEdition | null;
@@ -38,9 +42,12 @@ type DiscoveryDailyEditionProps = {
   onRecommendationSnapshotChange: (
     request: DiscoveryRecommendationSnapshotRequest,
   ) => void;
+  onLoadExplorer?: (
+    request: DiscoveryShelfExplorerRequest,
+  ) => Promise<DiscoveryShelfExplorerResponse>;
   onOpenAlbum: (albumId: string) => void;
   onOpenArtist: (artistId: string, artistName: string) => void;
-  onOpenCompletion: () => void;
+  onOpenCompletion?: () => void;
   onOpenTrack: (trackId: number) => void;
 };
 
@@ -106,9 +113,10 @@ function EditionEmpty({ children }: { children: string }) {
 type LifeEventsPanelProps = {
   edition: DiscoveryDailyEdition;
   onOpenArtist: (artistId: string, artistName: string) => void;
+  onSeeAll: (eventType: "birthday" | "memorial") => void;
 };
 
-function LifeEventsPanel({ edition, onOpenArtist }: LifeEventsPanelProps) {
+function LifeEventsPanel({ edition, onOpenArtist, onSeeAll }: LifeEventsPanelProps) {
   const [activeEventType, setActiveEventType] = useState<"birthday" | "memorial">(
     "birthday",
   );
@@ -207,6 +215,16 @@ function LifeEventsPanel({ edition, onOpenArtist }: LifeEventsPanelProps) {
           </EditionEmpty>
         )}
       </div>
+      <button
+        id="discovery-see-all-life-events"
+        className="daily-edition-shelf-footer daily-edition-footer-button"
+        data-daily-edition-see-all="life-events"
+        type="button"
+        onClick={() => onSeeAll(activeEventType)}
+      >
+        See all {activeEventType === "birthday" ? "birthdays" : "memorials"}
+        <ChevronRight aria-hidden="true" />
+      </button>
     </div>
   );
 }
@@ -216,6 +234,7 @@ type AnniversaryCarouselProps = {
   isLoading: boolean;
   onAnniversaryYearsChange: (years: number) => void;
   onOpenAlbum: (albumId: string) => void;
+  onSeeAll: () => void;
 };
 
 function AnniversaryCarousel({
@@ -223,6 +242,7 @@ function AnniversaryCarousel({
   isLoading,
   onAnniversaryYearsChange,
   onOpenAlbum,
+  onSeeAll,
 }: AnniversaryCarouselProps) {
   const anniversaries = edition.anniversaries.slice(0, 5);
   const anniversaryKey = anniversaries.map((story) => story.albumId).join("|");
@@ -376,8 +396,7 @@ function AnniversaryCarousel({
         </div>
       )}
 
-      {anniversaries.length > 1 ? (
-        <div className="daily-edition-carousel-rail" aria-label="Anniversary albums">
+      <div className="daily-edition-carousel-rail" aria-label="Anniversary albums">
           {anniversaries.map((story, index) => (
             <button
               className={index === activeIndex ? "active" : ""}
@@ -403,9 +422,19 @@ function AnniversaryCarousel({
               />
             </button>
           ))}
-          <span className="daily-edition-carousel-timing">Changes every 10 seconds</span>
-        </div>
-      ) : null}
+          <button
+            id="discovery-see-all-anniversaries"
+            className="daily-edition-carousel-see-all"
+            data-daily-edition-see-all="anniversaries"
+            type="button"
+            onClick={onSeeAll}
+          >
+            See all
+          </button>
+          {anniversaries.length > 1 ? (
+            <span className="daily-edition-carousel-timing">Changes every 10 seconds</span>
+          ) : null}
+      </div>
     </div>
   );
 }
@@ -423,12 +452,57 @@ export function DiscoveryDailyEdition({
   onDeepCutSnapshotChange,
   onCompletionSnapshotChange,
   onRecommendationSnapshotChange,
+  onLoadExplorer = async () => {
+    throw new Error("Shelf explorer loader is unavailable.");
+  },
   onOpenAlbum,
   onOpenArtist,
-  onOpenCompletion,
   onOpenTrack,
 }: DiscoveryDailyEditionProps) {
   const [activeStoryId, setActiveStoryId] = useState("discovery-anniversary");
+  const [explorer, setExplorer] = useState<{
+    shelf: DiscoveryShelf;
+    request: DiscoveryShelfExplorerRequest;
+    openerId: string;
+    scrollY: number;
+  } | null>(null);
+  const pendingReturn = useRef<{ openerId: string; scrollY: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (explorer || !pendingReturn.current) return;
+    const target = pendingReturn.current;
+    pendingReturn.current = null;
+    const restore = () => {
+      window.scrollTo({ top: target.scrollY, behavior: "auto" });
+      document.getElementById(target.openerId)?.focus({ preventScroll: true });
+    };
+    const firstFrame = window.requestAnimationFrame?.(() => {
+      window.requestAnimationFrame?.(restore) ?? restore();
+    });
+    if (firstFrame == null) restore();
+  }, [explorer]);
+
+  function openExplorer(
+    shelf: DiscoveryShelf,
+    request: Omit<DiscoveryShelfExplorerRequest, "shelf">,
+  ) {
+    setExplorer({
+      shelf,
+      request: { shelf, ...request },
+      openerId: `discovery-see-all-${shelf}`,
+      scrollY: window.scrollY,
+    });
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
+  function closeExplorer() {
+    if (!explorer) return;
+    pendingReturn.current = {
+      openerId: explorer.openerId,
+      scrollY: explorer.scrollY,
+    };
+    setExplorer(null);
+  }
 
   if (isLoading && !edition) {
     return (
@@ -452,6 +526,19 @@ export function DiscoveryDailyEdition({
           <p>Import your library to build evidence-backed discovery stories.</p>
         </div>
       </section>
+    );
+  }
+
+  if (explorer) {
+    return (
+      <DiscoveryShelfExplorer
+        initialRequest={explorer.request}
+        onLoad={onLoadExplorer}
+        onBack={closeExplorer}
+        onOpenAlbum={onOpenAlbum}
+        onOpenArtist={onOpenArtist}
+        onOpenTrack={onOpenTrack}
+      />
     );
   }
 
@@ -511,9 +598,23 @@ export function DiscoveryDailyEdition({
               isLoading={isAnniversaryLoading}
               onAnniversaryYearsChange={onAnniversaryYearsChange}
               onOpenAlbum={onOpenAlbum}
+              onSeeAll={() => openExplorer("anniversaries", {
+                date: edition.date,
+                anniversaryYears: edition.anniversaryYears,
+                source: "all",
+                sort: "chart",
+              })}
             />
 
-            <LifeEventsPanel edition={edition} onOpenArtist={onOpenArtist} />
+            <LifeEventsPanel
+              edition={edition}
+              onOpenArtist={onOpenArtist}
+              onSeeAll={(eventType) => openExplorer("life-events", {
+                date: edition.date,
+                eventType,
+                sort: "albums",
+              })}
+            />
           </section>
 
           <div className="daily-edition-shelves">
@@ -634,11 +735,23 @@ export function DiscoveryDailyEdition({
                   No owned albums match this imported chart period.
                 </EditionEmpty>
               )}
-              <p className="daily-edition-shelf-footer">
-                {chartSnapshot.stories.length
+              <button
+                id="discovery-see-all-charts"
+                className="daily-edition-shelf-footer daily-edition-footer-button"
+                data-daily-edition-see-all="charts"
+                type="button"
+                onClick={() => openExplorer("charts", {
+                  source: chartSnapshot.source,
+                  year: chartSnapshot.year ?? undefined,
+                  week: chartSnapshot.week ?? undefined,
+                  sort: "rank",
+                })}
+              >
+                See all {chartSnapshot.stories.length
                   ? `${chartSnapshot.stories.length} matched chart entries`
-                  : "Import charts to unlock this story"}
-              </p>
+                  : "chart matches"}
+                <ChevronRight aria-hidden="true" />
+              </button>
             </section>
 
             <section
@@ -769,9 +882,21 @@ export function DiscoveryDailyEdition({
                   No unrated, non-charting tracks match these filters.
                 </EditionEmpty>
               )}
-              <p className="daily-edition-shelf-footer">
-                Showing {Math.min(4, deepCutSnapshot.stories.length)} randomized cuts from {deepCutSnapshot.matchingAlbumCount} matching albums
-              </p>
+              <button
+                id="discovery-see-all-deep-cuts"
+                className="daily-edition-shelf-footer daily-edition-footer-button"
+                data-daily-edition-see-all="deep-cuts"
+                type="button"
+                onClick={() => openExplorer("deep-cuts", {
+                  year: deepCutSnapshot.year ?? undefined,
+                  decade: deepCutSnapshot.decade ?? undefined,
+                  genre: deepCutSnapshot.genre ?? undefined,
+                  sort: "rating",
+                })}
+              >
+                See all {deepCutSnapshot.matchingAlbumCount} evidence-backed cuts
+                <ChevronRight aria-hidden="true" />
+              </button>
             </section>
 
             <section
@@ -976,20 +1101,22 @@ export function DiscoveryDailyEdition({
                     : "No albums with unrated tracks match these filters."}
                 </EditionEmpty>
               )}
-              {completionSnapshot.mode === "artist" ? (
-                <button
-                  className="daily-edition-shelf-footer daily-edition-footer-button"
-                  type="button"
-                  onClick={onOpenCompletion}
-                >
-                  View all artist gaps
-                  <ChevronRight aria-hidden="true" />
-                </button>
-              ) : (
-                <p className="daily-edition-shelf-footer">
-                  Showing {completionSnapshot.albumStories.length} randomized albums from {completionSnapshot.matchingCount} matching albums
-                </p>
-              )}
+              <button
+                id="discovery-see-all-completion"
+                className="daily-edition-shelf-footer daily-edition-footer-button"
+                data-daily-edition-see-all="completion"
+                type="button"
+                onClick={() => openExplorer("completion", {
+                  mode: completionSnapshot.mode,
+                  year: completionSnapshot.year ?? undefined,
+                  decade: completionSnapshot.decade ?? undefined,
+                  genre: completionSnapshot.genre ?? undefined,
+                  sort: completionSnapshot.mode === "artist" ? "most-missing" : "most-unrated",
+                })}
+              >
+                See all {completionSnapshot.matchingCount} {completionSnapshot.mode === "artist" ? "artist gaps" : "incomplete albums"}
+                <ChevronRight aria-hidden="true" />
+              </button>
             </section>
 
             <section
@@ -1078,12 +1205,27 @@ export function DiscoveryDailyEdition({
                     : "Love tracks or highly rate albums to start recommendation threads."}
                 </EditionEmpty>
               )}
-              <p className="daily-edition-shelf-footer">
-                {recommendationSnapshot.evidence}
-                {recommendationSnapshot.lastfmLinkedCount > 0
-                  ? ` · ${recommendationSnapshot.lastfmLinkedCount} Last.fm-linked matches`
-                  : ""}
-              </p>
+              <button
+                id="discovery-see-all-recommendations"
+                className="daily-edition-shelf-footer daily-edition-footer-button daily-edition-because-see-all"
+                data-daily-edition-see-all="recommendations"
+                type="button"
+                title={recommendationSnapshot.evidence}
+                onClick={() => openExplorer("recommendations", {
+                  mode: recommendationSnapshot.mode,
+                  connection: "all",
+                  sort: "relevance",
+                })}
+              >
+                <span>
+                  {recommendationSnapshot.evidence}
+                  {recommendationSnapshot.lastfmLinkedCount > 0
+                    ? ` · ${recommendationSnapshot.lastfmLinkedCount} Last.fm-linked matches`
+                    : ""}
+                </span>
+                <strong>See all {recommendationSnapshot.matchingCount} recommendations</strong>
+                <ChevronRight aria-hidden="true" />
+              </button>
             </section>
           </div>
         </div>

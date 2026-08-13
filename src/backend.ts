@@ -247,6 +247,8 @@ import type {
   DiscoveryRecommendationSnapshot,
   DiscoveryRecommendationSnapshotRequest,
   DiscoveryResponse,
+  DiscoveryShelfExplorerRequest,
+  DiscoveryShelfExplorerResponse,
   ExportResult,
   ImportProgress,
   ImportPreview,
@@ -1981,6 +1983,229 @@ export async function getDiscoveryRecommendationSnapshot(
     "get_discovery_recommendation_snapshot",
     { request },
   );
+}
+
+export async function getDiscoveryShelfExplorer(
+  request: DiscoveryShelfExplorerRequest,
+): Promise<DiscoveryShelfExplorerResponse> {
+  if (isTauriRuntime()) {
+    return invoke<DiscoveryShelfExplorerResponse>("get_discovery_shelf_explorer", {
+      request,
+    });
+  }
+
+  const limit = Math.min(50, Math.max(1, request.limit ?? 24));
+  const offset = Math.max(0, request.offset ?? 0);
+  const seed = request.seed ?? 7_311_989;
+  const query = request.query?.trim().toLowerCase() || null;
+  const base: DiscoveryShelfExplorerResponse = {
+    shelf: request.shelf,
+    title: "",
+    evidenceNote: "",
+    total: 0,
+    limit,
+    offset,
+    seed,
+    anniversaryYears: request.anniversaryYears ?? null,
+    eventType: request.eventType ?? null,
+    source: request.source ?? null,
+    sourceLabel: null,
+    year: request.year ?? null,
+    week: request.week ?? null,
+    decade: request.year == null ? request.decade ?? null : null,
+    genre: request.genre ?? null,
+    mode: request.mode ?? null,
+    connection: request.connection ?? null,
+    query,
+    sort: request.sort ?? "",
+    availableYears: [],
+    availableWeeks: [],
+    availableGenres: [],
+    anniversaries: [],
+    lifeEvents: [],
+    chartStories: [],
+    deepCuts: [],
+    artistCompletions: [],
+    albumCompletions: [],
+    recommendations: [],
+    anchors: [],
+  };
+  const page = <T,>(items: T[]) => items.slice(offset, offset + limit);
+  const matches = (...values: Array<string | null | undefined>) =>
+    !query || values.some((value) => value?.toLowerCase().includes(query));
+
+  if (request.shelf === "anniversaries") {
+    const years = request.anniversaryYears ?? 50;
+    const source = request.source ?? "all";
+    const original = await getDiscoveryAnniversaries(years);
+    let items = Array.from({ length: Math.max(30, original.length) }, (_, index) => {
+      const story = original[index % original.length];
+      return { ...story, albumId: `${story.albumId}:explorer:${index}` };
+    }).filter((story) => {
+      const sourceMatches = source === "all" ||
+        (source === "uncharted" && story.chartEvidence.length === 0) ||
+        story.chartEvidence.some((evidence) =>
+          evidence.toLowerCase().startsWith(source.replace("official-uk", "official uk")),
+        );
+      return sourceMatches && matches(story.album, story.artist, story.evidence);
+    });
+    if (request.sort === "artist") items.sort((a, b) => a.artist.localeCompare(b.artist));
+    if (request.sort === "album") items.sort((a, b) => a.album.localeCompare(b.album));
+    return {
+      ...base,
+      title: `${years}-Year Album Anniversaries`,
+      evidenceNote: "Owned anniversary releases ranked by imported album-chart evidence, with local ratings only breaking ties and filling gaps.",
+      total: items.length,
+      anniversaryYears: years,
+      source,
+      sort: request.sort ?? "chart",
+      anniversaries: page(items),
+    };
+  }
+
+  if (request.shelf === "life-events") {
+    const eventType = request.eventType ?? "birthday";
+    let items = mockDiscovery.dailyEdition.lifeEvents
+      .filter((story) => story.eventType === eventType)
+      .filter((story) => matches(story.artist, story.eventDate, story.evidence));
+    if (request.sort === "loved") items = [...items].sort((a, b) => b.lovedTracks - a.lovedTracks);
+    if (request.sort === "name") items = [...items].sort((a, b) => a.artist.localeCompare(b.artist));
+    return {
+      ...base,
+      title: eventType === "birthday" ? "Artist Birthdays" : "Artist Memorials",
+      evidenceNote: "MusicBrainz person dates matched to today, with local album and loved-track counts as evidence.",
+      total: items.length,
+      eventType,
+      sort: request.sort ?? "albums",
+      lifeEvents: page(items),
+    };
+  }
+
+  if (request.shelf === "charts") {
+    const snapshot = await getDiscoveryChartSnapshot({
+      source: request.source as DiscoveryChartSnapshotRequest["source"],
+      year: request.year,
+      week: request.week,
+    });
+    let items = Array.from({ length: Math.max(30, snapshot.stories.length) }, (_, index) => {
+      const story = snapshot.stories[index % snapshot.stories.length];
+      return { ...story, albumId: `${story.albumId}:explorer:${index}`, rank: index + 1 };
+    }).filter((story) => matches(story.title, story.artist, story.chart, story.evidence));
+    if (request.sort === "artist") items.sort((a, b) => a.artist.localeCompare(b.artist));
+    if (request.sort === "album") items.sort((a, b) => a.title.localeCompare(b.title));
+    return {
+      ...base,
+      title: "Chart Toppers From…",
+      evidenceNote: "Imported chart rows matched to owned albums; duplicate rows collapse to each album's best position.",
+      total: items.length,
+      source: snapshot.source,
+      sourceLabel: snapshot.sourceLabel,
+      year: snapshot.year,
+      week: snapshot.week,
+      availableYears: snapshot.availableYears,
+      availableWeeks: snapshot.availableWeeks,
+      sort: request.sort ?? "rank",
+      chartStories: page(items),
+    };
+  }
+
+  if (request.shelf === "deep-cuts") {
+    const snapshot = await getDiscoveryDeepCutSnapshot(request);
+    let items = Array.from({ length: Math.max(30, snapshot.stories.length) }, (_, index) => {
+      const story = snapshot.stories[index % snapshot.stories.length];
+      return { ...story, trackId: story.trackId * 100 + index };
+    }).filter((story) => matches(story.title, story.album, story.artist, story.genre, story.evidence));
+    if (request.sort === "rating") items.sort((a, b) => b.albumRating - a.albumRating);
+    if (request.sort === "newest") items.sort((a, b) => (b.releaseYear ?? 0) - (a.releaseYear ?? 0));
+    if (request.sort === "artist") items.sort((a, b) => a.artist.localeCompare(b.artist));
+    if (request.sort === "track") items.sort((a, b) => a.title.localeCompare(b.title));
+    return {
+      ...base,
+      title: "Deep Cuts",
+      evidenceNote: "One unrated, unloved, non-opening track per highly rated album, excluding imported singles-chart matches.",
+      total: items.length,
+      year: snapshot.year,
+      decade: snapshot.decade,
+      genre: snapshot.genre,
+      availableYears: snapshot.availableYears,
+      availableGenres: snapshot.availableGenres,
+      sort: request.sort ?? "rating",
+      deepCuts: page(items),
+    };
+  }
+
+  if (request.shelf === "completion") {
+    const snapshot = await getDiscoveryCompletionSnapshot({
+      mode: request.mode as DiscoveryCompletionSnapshotRequest["mode"],
+      year: request.year,
+      decade: request.decade,
+      genre: request.genre,
+    });
+    const mode = snapshot.mode;
+    const copies = <T,>(items: T[], mutate: (item: T, index: number) => T) =>
+      Array.from({ length: Math.max(30, items.length) }, (_, index) =>
+        mutate(items[index % items.length], index),
+      );
+    let artistItems = mode === "artist"
+      ? copies(snapshot.artistStories, (story, index) => ({ ...story, artistId: `${story.artistId}:explorer:${index}` }))
+          .filter((story) => matches(story.artist, story.missingReleaseTitle, story.genre, story.evidence))
+      : [];
+    let albumItems = mode === "album"
+      ? copies(snapshot.albumStories, (story, index) => ({ ...story, albumId: `${story.albumId}:explorer:${index}` }))
+          .filter((story) => matches(story.album, story.artist, story.genre, story.evidence))
+      : [];
+    if (request.sort === "artist") {
+      artistItems.sort((a, b) => a.artist.localeCompare(b.artist));
+      albumItems.sort((a, b) => a.artist.localeCompare(b.artist));
+    }
+    return {
+      ...base,
+      title: "Complete the Collection",
+      evidenceNote: mode === "artist"
+        ? "Official MusicBrainz album groups compared with owned titles and saved release decisions."
+        : "Owned albums with at least one unrated track, calculated from rated and total track counts.",
+      total: mode === "artist" ? artistItems.length : albumItems.length,
+      mode,
+      year: snapshot.year,
+      decade: snapshot.decade,
+      genre: snapshot.genre,
+      availableYears: snapshot.availableYears,
+      availableGenres: snapshot.availableGenres,
+      sort: request.sort ?? (mode === "artist" ? "most-missing" : "most-unrated"),
+      artistCompletions: page(artistItems),
+      albumCompletions: page(albumItems),
+    };
+  }
+
+  const snapshot = await getDiscoveryRecommendationSnapshot({
+    mode: request.mode as DiscoveryRecommendationSnapshotRequest["mode"],
+  });
+  const connection = request.connection ?? "all";
+  let items = Array.from({ length: Math.max(30, snapshot.stories.length) }, (_, index) => {
+    const story = snapshot.stories[index % snapshot.stories.length];
+    return { ...story, albumId: `${story.albumId}:explorer:${index}` };
+  }).filter((story) => {
+    const connectionMatches = connection === "all" ||
+      (connection === "lastfm" && story.reason !== "Shared genre") ||
+      (connection === "related" && story.reason === "Related album") ||
+      (connection === "similar" && story.reason === "Similar artist") ||
+      (connection === "genre" && story.reason === "Shared genre");
+    return connectionMatches && matches(story.album, story.artist, story.anchorAlbum, story.anchorArtist, story.evidence);
+  });
+  if (request.sort === "least-rated") items.sort((a, b) => a.ratingCompleteness - b.ratingCompleteness);
+  if (request.sort === "artist") items.sort((a, b) => a.artist.localeCompare(b.artist));
+  if (request.sort === "album") items.sort((a, b) => a.album.localeCompare(b.album));
+  return {
+    ...base,
+    title: snapshot.mode === "played" ? "Because You Played…" : "Because You Loved…",
+    evidenceNote: "Rating activity or loved/high-score anchors connected through cached Last.fm data and genre fallback; candidates remain under 50% rated.",
+    total: items.length,
+    mode: snapshot.mode,
+    connection,
+    sort: request.sort ?? "relevance",
+    recommendations: page(items),
+    anchors: snapshot.anchors,
+  };
 }
 
 export async function getSettings() {

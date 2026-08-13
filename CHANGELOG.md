@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.132.0] - 2026-08-13
+### Added
+- Added a paginated **See all** explorer to every Daily Edition shelf, with shelf-specific filters and sorting for anniversaries, life events, charts, Deep Cuts, collection completion, and Played/Loved recommendations.
+- Added visible per-result explanation evidence, anniversary selection reasons, direct album/artist/track navigation, stable seeded paging, and search within each shelf explorer.
+
+### Changed
+- Preserved the compact Daily Edition shelf layout while replacing the old Completion-only link with one consistent drill-down and restoring the exact originating shelf position and keyboard focus on return.
+- Synchronized app metadata and provider user agents to `0.132.0`.
+
 ## [0.131.0] - 2026-08-12
 ### Added
 - Added direct Album, Artist, and Genre navigation from the corresponding Search and Charts table cells, with visible link styling, keyboard focus, and descriptive accessible names.
