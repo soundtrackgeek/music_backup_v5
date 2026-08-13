@@ -82,6 +82,8 @@ import {
   getDiscoveryChartSnapshot,
   getDiscoveryCompletionSnapshot,
   getDiscoveryDeepCutSnapshot,
+  getDiscoveryMixer,
+  getDiscoveryMixerSeedOptions,
   getDiscoveryRecommendationSnapshot,
   getDiscoveryShelfExplorer,
   getDiscoverySourceHealth,
@@ -401,6 +403,7 @@ import { NaturalLanguageQueryPanel } from "./components/NaturalLanguageQueryPane
 import { MusicResearchPanel } from "./components/MusicResearchPanel";
 import { OutsideLibraryDiscovery } from "./components/OutsideLibraryDiscovery";
 import { DiscoveryDailyEdition } from "./components/DiscoveryDailyEdition";
+import { DiscoveryMixer } from "./components/DiscoveryMixer";
 import { GenreTimeline } from "./components/GenreTimeline";
 import { ArtistTimeline } from "./components/ArtistTimeline";
 import { ArtistPortrait } from "./components/ArtistPortrait";
@@ -15975,6 +15978,12 @@ export default function App() {
               onOpenAlbum={openTimelineAlbum}
               onOpenArtist={openArtistFromMusicMap}
               onOpenTrack={openTimelineTrack}
+            />
+
+            <DiscoveryMixer
+              onSearchSeeds={getDiscoveryMixerSeedOptions}
+              onGenerate={getDiscoveryMixer}
+              onOpenAlbum={openTimelineAlbum}
             />
 
             <details className="discovery-archive-tools">

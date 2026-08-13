@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.136.0] - 2026-08-13
+### Added
+- Added an independent **Recommendation Mixer** below Daily Edition where two to eight local artist or album seeds can be combined with a Familiar-to-Explore ranking control.
+- Added explicit per-album evidence, seed attribution, cached-Last.fm/local-match totals, direct Album navigation, mixed-seed search, and responsive keyboard-accessible controls.
+- Added deterministic backend and component coverage for balance-sensitive ordering, repeatable output, duplicate and seed-artist exclusion, mixed seed selection, keyboard generation, evidence rendering, and local navigation.
+
+### Changed
+- Mixer ranking reads the existing schema-52 Similar Artists and schema-53 Related Albums caches without making provider requests, falls back to canonical genre, matches MBIDs before normalized identities, and applies seed-load and repeated-artist diversity penalties.
+- Synchronized app metadata and provider user agents to `0.136.0`.
+
 ## [0.135.0] - 2026-08-13
 ### Added
 - Added an optional Artist Overview constellation without replacing the existing Similar Artists shelf, showing up to eight first-hop artists and six on-demand second-hop connections with clear owned-versus-missing states.

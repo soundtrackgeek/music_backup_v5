@@ -2713,6 +2713,57 @@ export type DiscoveryRecommendationStory = {
   evidence: string;
 };
 
+export type DiscoveryMixerSeedKind = "artist" | "album";
+
+export type DiscoveryMixerSeedOption = {
+  kind: DiscoveryMixerSeedKind;
+  id: string;
+  title: string;
+  subtitle: string;
+  artist: string | null;
+  coverPath: string | null;
+};
+
+export type DiscoveryMixerSeedSearchRequest = {
+  query?: string;
+  kind?: DiscoveryMixerSeedKind;
+  limit?: number;
+};
+
+export type DiscoveryMixerSeedInput = Pick<
+  DiscoveryMixerSeedOption,
+  "kind" | "id"
+>;
+
+export type DiscoveryMixerRequest = {
+  seeds: DiscoveryMixerSeedInput[];
+  explorePercent?: number;
+  limit?: number;
+};
+
+export type DiscoveryMixerRecommendation = {
+  albumId: string;
+  album: string;
+  artist: string;
+  releaseYear: number | null;
+  genre: string;
+  coverPath: string | null;
+  ratingCompleteness: number;
+  reason: string;
+  seedLabels: string[];
+  evidence: string[];
+  rankingScore: number;
+};
+
+export type DiscoveryMixerResponse = {
+  seeds: DiscoveryMixerSeedOption[];
+  explorePercent: number;
+  matchingCount: number;
+  lastfmLinkedCount: number;
+  recommendations: DiscoveryMixerRecommendation[];
+  evidence: string;
+};
+
 export type DiscoveryHeatmapCell = {
   genreId: string;
   genre: string;

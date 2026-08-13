@@ -244,6 +244,10 @@ import type {
   DiscoveryCompletionSnapshotRequest,
   DiscoveryDeepCutSnapshot,
   DiscoveryDeepCutSnapshotRequest,
+  DiscoveryMixerRequest,
+  DiscoveryMixerResponse,
+  DiscoveryMixerSeedOption,
+  DiscoveryMixerSeedSearchRequest,
   DiscoveryRecommendationSnapshot,
   DiscoveryRecommendationSnapshotRequest,
   DiscoveryDailyEditionSnapshotResponse,
@@ -2106,6 +2110,186 @@ export async function getDiscoveryRecommendationSnapshot(
     "get_discovery_recommendation_snapshot",
     { request },
   );
+}
+
+function mockDiscoveryMixerSeedOptions(): DiscoveryMixerSeedOption[] {
+  const albumRows = mockRows.filter(
+    (row) => row.trackId === null && row.album != null && row.albumArtistDisplay != null,
+  );
+  const artistOptions = mockArtists.map((artist) => ({
+    kind: "artist" as const,
+    id: artist.id,
+    title: artist.name,
+    subtitle: `${artist.albumCount} ${artist.albumCount === 1 ? "album" : "albums"} · ${artist.topGenre ?? "Genre unknown"}`,
+    artist: null,
+    coverPath:
+      albumRows.find(
+        (row) => normalizeArtistKey(row.albumArtistDisplay) === artist.id,
+      )?.coverPath ?? null,
+  }));
+  const albumOptions = albumRows.map((row) => ({
+    kind: "album" as const,
+    id: row.albumId,
+    title: row.album ?? "Untitled album",
+    subtitle: `${row.albumArtistDisplay ?? "Unknown Artist"}${row.releaseYear == null ? "" : ` · ${row.releaseYear}`} · ${row.canonicalGenre ?? "Genre unknown"}`,
+    artist: row.albumArtistDisplay,
+    coverPath: row.coverPath,
+  }));
+  return [...artistOptions, ...albumOptions];
+}
+
+export async function getDiscoveryMixerSeedOptions(
+  request: DiscoveryMixerSeedSearchRequest,
+): Promise<DiscoveryMixerSeedOption[]> {
+  if (isTauriRuntime()) {
+    return invoke<DiscoveryMixerSeedOption[]>("get_discovery_mixer_seed_options", {
+      request,
+    });
+  }
+
+  const query = request.query?.trim().toLocaleLowerCase() ?? "";
+  return mockDiscoveryMixerSeedOptions()
+    .filter((option) => !request.kind || option.kind === request.kind)
+    .filter(
+      (option) =>
+        !query ||
+        option.title.toLocaleLowerCase().includes(query) ||
+        option.subtitle.toLocaleLowerCase().includes(query),
+    )
+    .slice(0, Math.min(40, Math.max(4, request.limit ?? 16)));
+}
+
+function mockMixerFamiliarity(row: BrowseRow) {
+  const completion = Math.min(1, Math.max(0, row.ratingCompleteness ?? 0));
+  const score = Math.min(1, Math.max(0, (row.albumScore ?? 0) / 400));
+  const loved = Math.min(1, Math.max(0, (row.lovedTracks ?? 0) / 3));
+  return completion * 0.7 + score * 0.2 + loved * 0.1;
+}
+
+export async function getDiscoveryMixer(
+  request: DiscoveryMixerRequest,
+): Promise<DiscoveryMixerResponse> {
+  if (isTauriRuntime()) {
+    return invoke<DiscoveryMixerResponse>("get_discovery_mixer", { request });
+  }
+
+  const allOptions = mockDiscoveryMixerSeedOptions();
+  const seeds = request.seeds
+    .map((seed) =>
+      allOptions.find(
+        (option) => option.kind === seed.kind && option.id === seed.id,
+      ),
+    )
+    .filter((seed): seed is DiscoveryMixerSeedOption => seed != null)
+    .filter(
+      (seed, index, values) =>
+        values.findIndex(
+          (candidate) => candidate.kind === seed.kind && candidate.id === seed.id,
+        ) === index,
+    )
+    .slice(0, 8);
+  if (seeds.length < 2) {
+    throw new Error("Choose at least two different local artists or albums.");
+  }
+
+  const explorePercent = Math.min(100, Math.max(0, request.explorePercent ?? 50));
+  const explore = explorePercent / 100;
+  const resultLimit = Math.min(20, Math.max(4, request.limit ?? 12));
+  const excludedAlbumIds = new Set(
+    seeds.filter((seed) => seed.kind === "album").map((seed) => seed.id),
+  );
+  const excludedArtists = new Set(
+    seeds.map((seed) =>
+      normalizeArtistKey(seed.kind === "artist" ? seed.title : seed.artist),
+    ),
+  );
+  const identities = new Set<string>();
+  const candidates = mockRows
+    .filter(
+      (row) =>
+        row.trackId === null &&
+        row.album != null &&
+        row.albumArtistDisplay != null &&
+        !excludedAlbumIds.has(row.albumId) &&
+        !excludedArtists.has(normalizeArtistKey(row.albumArtistDisplay)),
+    )
+    .filter((row) => {
+      const identity = `${normalizeArtistKey(row.albumArtistDisplay)}\u0000${row.album?.trim().toLocaleLowerCase()}`;
+      if (identities.has(identity)) return false;
+      identities.add(identity);
+      return true;
+    })
+    .map((row, index) => {
+      const familiarity = mockMixerFamiliarity(row);
+      const preference = (1 - explore) * familiarity + explore * (1 - familiarity);
+      const primarySeed = index % seeds.length;
+      const secondarySeed = seeds.length > 1 ? (index + 1) % seeds.length : primarySeed;
+      const strength = 0.92 - (index % 4) * 0.07;
+      return {
+        row,
+        primarySeed,
+        secondarySeed,
+        score: strength * 0.55 + preference * 0.3 + 0.15,
+        strength,
+      };
+    })
+    .sort(
+      (left, right) =>
+        right.score - left.score || left.row.albumId.localeCompare(right.row.albumId),
+    );
+
+  const artistLoads = new Map<string, number>();
+  const selected = [...candidates]
+    .sort((left, right) => {
+      const leftLoad = artistLoads.get(normalizeArtistKey(left.row.albumArtistDisplay)) ?? 0;
+      const rightLoad = artistLoads.get(normalizeArtistKey(right.row.albumArtistDisplay)) ?? 0;
+      return (
+        right.score - rightLoad * 0.18 - (left.score - leftLoad * 0.18) ||
+        left.row.albumId.localeCompare(right.row.albumId)
+      );
+    })
+    .slice(0, resultLimit);
+  selected.forEach(({ row }) => {
+    const key = normalizeArtistKey(row.albumArtistDisplay);
+    artistLoads.set(key, (artistLoads.get(key) ?? 0) + 1);
+  });
+
+  const recommendations = selected.map(
+    ({ row, primarySeed, secondarySeed, score, strength }) => {
+      const seed = seeds[primarySeed];
+      const secondSeed = seeds[secondarySeed];
+      const reason = seed.kind === "album" ? "Related album" : "Similar artist";
+      const balanceLabel =
+        explorePercent < 40 ? "Familiar" : explorePercent > 60 ? "Explore" : "Balanced";
+      const lovedTracks = row.lovedTracks ?? 0;
+      return {
+        albumId: row.albumId,
+        album: row.album ?? "Untitled album",
+        artist: row.albumArtistDisplay ?? "Unknown Artist",
+        releaseYear: row.releaseYear,
+        genre: row.canonicalGenre ?? "Genre unknown",
+        coverPath: row.coverPath,
+        ratingCompleteness: row.ratingCompleteness ?? 0,
+        reason,
+        seedLabels: [...new Set([seed.title, secondSeed.title])],
+        evidence: [
+          `${reason === "Related album" ? "Related to" : "Last.fm links this artist to"} ${seed.title} · ${Math.round(strength * 100)}% match`,
+          `Also connects to ${secondSeed.title}`,
+          `${balanceLabel} balance signal · ${Math.round((row.ratingCompleteness ?? 0) * 100)}% of tracks rated · ${lovedTracks} loved ${lovedTracks === 1 ? "track" : "tracks"}`,
+        ],
+        rankingScore: Math.round(score * 1_000_000) / 1_000_000,
+      };
+    },
+  );
+
+  return {
+    seeds,
+    explorePercent,
+    matchingCount: candidates.length,
+    lastfmLinkedCount: candidates.length,
+    recommendations,
+    evidence: `${candidates.length} cached Last.fm matches · ${candidates.length} local candidates · duplicate albums and seed artists excluded`,
+  } satisfies DiscoveryMixerResponse;
 }
 
 export async function getDiscoveryShelfExplorer(

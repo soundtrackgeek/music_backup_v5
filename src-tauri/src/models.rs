@@ -1822,6 +1822,67 @@ pub struct DiscoveryRecommendationStory {
     pub evidence: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryMixerSeedOption {
+    pub kind: String,
+    pub id: String,
+    pub title: String,
+    pub subtitle: String,
+    pub artist: Option<String>,
+    pub cover_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryMixerSeedSearchRequest {
+    pub query: Option<String>,
+    pub kind: Option<String>,
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryMixerSeedInput {
+    pub kind: String,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryMixerRequest {
+    pub seeds: Vec<DiscoveryMixerSeedInput>,
+    pub explore_percent: Option<i64>,
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryMixerRecommendation {
+    pub album_id: String,
+    pub album: String,
+    pub artist: String,
+    pub release_year: Option<i32>,
+    pub genre: String,
+    pub cover_path: Option<String>,
+    pub rating_completeness: f64,
+    pub reason: String,
+    pub seed_labels: Vec<String>,
+    pub evidence: Vec<String>,
+    pub ranking_score: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryMixerResponse {
+    pub seeds: Vec<DiscoveryMixerSeedOption>,
+    pub explore_percent: i64,
+    pub matching_count: i64,
+    pub lastfm_linked_count: i64,
+    pub recommendations: Vec<DiscoveryMixerRecommendation>,
+    pub evidence: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryHeatmapCell {

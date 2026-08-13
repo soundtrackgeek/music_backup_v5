@@ -20,7 +20,9 @@ use crate::models::{
     DiscoveryDailyEdition, DiscoveryDailyEditionArchive, DiscoveryDailyEditionSnapshotResponse,
     DiscoveryDeepCutGenre, DiscoveryDeepCutSnapshot, DiscoveryDeepCutSnapshotRequest,
     DiscoveryDeepCutStory, DiscoveryGenrePoint, DiscoveryHeatmapCell, DiscoveryLifeEventStory,
-    DiscoveryMission, DiscoveryRecommendationAnchor, DiscoveryRecommendationSnapshot,
+    DiscoveryMission, DiscoveryMixerRecommendation, DiscoveryMixerRequest, DiscoveryMixerResponse,
+    DiscoveryMixerSeedInput, DiscoveryMixerSeedOption, DiscoveryMixerSeedSearchRequest,
+    DiscoveryRecommendationAnchor, DiscoveryRecommendationSnapshot,
     DiscoveryRecommendationSnapshotRequest, DiscoveryRecommendationStory, DiscoveryResponse,
     DiscoveryShelfExplorerRequest, DiscoveryShelfExplorerResponse, DiscoverySourceHealthItem,
     DiscoverySourceHealthResponse, DurationAlbumStat, DurationAnalyticsStats,
@@ -10902,6 +10904,24 @@ pub fn discovery_recommendation_snapshot_for_app(
 }
 
 #[cfg(not(test))]
+pub fn discovery_mixer_seed_options_for_app(
+    app: &AppHandle,
+    request: DiscoveryMixerSeedSearchRequest,
+) -> Result<Vec<DiscoveryMixerSeedOption>> {
+    let (conn, _) = open(app)?;
+    discovery_mixer_seed_options(&conn, &request)
+}
+
+#[cfg(not(test))]
+pub fn discovery_mixer_for_app(
+    app: &AppHandle,
+    request: DiscoveryMixerRequest,
+) -> Result<DiscoveryMixerResponse> {
+    let (conn, _) = open(app)?;
+    discovery_mixer(&conn, &request)
+}
+
+#[cfg(not(test))]
 pub fn discovery_shelf_explorer_for_app(
     app: &AppHandle,
     request: DiscoveryShelfExplorerRequest,
@@ -16844,6 +16864,745 @@ fn discovery_recommendation_snapshot_with_scope(
         lastfm_linked_count: lastfm_album_ids.len() as i64,
         stories,
         evidence,
+    })
+}
+
+#[derive(Clone)]
+struct DiscoveryMixerSeedData {
+    option: DiscoveryMixerSeedOption,
+    artist_key: String,
+    album_id: Option<String>,
+    genre_id: String,
+    genre: String,
+}
+
+#[derive(Clone)]
+struct DiscoveryMixerCandidateData {
+    album_id: String,
+    album: String,
+    artist: String,
+    artist_key: String,
+    album_key: String,
+    release_year: Option<i32>,
+    genre_id: String,
+    genre: String,
+    cover_path: Option<String>,
+    rating_completeness: f64,
+    loved_tracks: i64,
+    album_score: Option<f64>,
+}
+
+#[derive(Clone)]
+struct DiscoveryMixerConnection {
+    seed_index: usize,
+    strength: f64,
+    reason: String,
+    evidence: String,
+    lastfm_linked: bool,
+}
+
+#[derive(Clone)]
+struct DiscoveryMixerRankedCandidate {
+    candidate_index: usize,
+    artist_key: String,
+    score: f64,
+    seed_indices: Vec<usize>,
+}
+
+fn discovery_mixer_familiarity(candidate: &DiscoveryMixerCandidateData) -> f64 {
+    let completion = candidate.rating_completeness.clamp(0.0, 1.0);
+    let score = (candidate.album_score.unwrap_or_default() / 400.0).clamp(0.0, 1.0);
+    let loved = (candidate.loved_tracks as f64 / 3.0).clamp(0.0, 1.0);
+    completion * 0.7 + score * 0.2 + loved * 0.1
+}
+
+fn discovery_mixer_preference(
+    candidate: &DiscoveryMixerCandidateData,
+    explore_percent: i64,
+) -> f64 {
+    let explore = explore_percent.clamp(0, 100) as f64 / 100.0;
+    let familiarity = discovery_mixer_familiarity(candidate);
+    (1.0 - explore) * familiarity + explore * (1.0 - familiarity)
+}
+
+fn select_discovery_mixer_candidates(
+    mut candidates: Vec<DiscoveryMixerRankedCandidate>,
+    seed_count: usize,
+    limit: usize,
+) -> Vec<DiscoveryMixerRankedCandidate> {
+    candidates.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.candidate_index.cmp(&right.candidate_index))
+    });
+    let mut selected = Vec::new();
+    let mut seed_loads = vec![0_usize; seed_count];
+    let mut artist_loads = HashMap::<String, usize>::new();
+
+    while selected.len() < limit && !candidates.is_empty() {
+        let choice = candidates
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| {
+                let least_seed_load = candidate
+                    .seed_indices
+                    .iter()
+                    .map(|seed_index| seed_loads[*seed_index])
+                    .min()
+                    .unwrap_or_default();
+                let artist_load = artist_loads
+                    .get(&candidate.artist_key)
+                    .copied()
+                    .unwrap_or_default();
+                let adjusted =
+                    candidate.score - least_seed_load as f64 * 0.08 - artist_load as f64 * 0.18;
+                (index, adjusted, candidate.score)
+            })
+            .max_by(|left, right| {
+                left.1
+                    .partial_cmp(&right.1)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| {
+                        left.2
+                            .partial_cmp(&right.2)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .then_with(|| right.0.cmp(&left.0))
+            })
+            .map(|choice| choice.0)
+            .unwrap_or_default();
+        let candidate = candidates.remove(choice);
+        if let Some(seed_index) = candidate
+            .seed_indices
+            .iter()
+            .min_by_key(|seed_index| (seed_loads[**seed_index], **seed_index))
+            .copied()
+        {
+            seed_loads[seed_index] += 1;
+        }
+        *artist_loads
+            .entry(candidate.artist_key.clone())
+            .or_default() += 1;
+        selected.push(candidate);
+    }
+
+    selected
+}
+
+fn discovery_mixer_seed_options(
+    conn: &Connection,
+    request: &DiscoveryMixerSeedSearchRequest,
+) -> Result<Vec<DiscoveryMixerSeedOption>> {
+    let kind = match request.kind.as_deref() {
+        Some("artist") => "artist",
+        Some("album") => "album",
+        _ => "all",
+    };
+    let limit = request.limit.unwrap_or(16).clamp(4, 40) as usize;
+    let query = request.query.as_deref().unwrap_or_default().trim();
+    let pattern = format!("%{}%", escape_like(&query.to_lowercase()));
+    let artist_limit = if kind == "all" {
+        limit.div_ceil(2)
+    } else {
+        limit
+    };
+    let album_limit = if kind == "all" { limit / 2 } else { limit };
+    let mut options = Vec::new();
+
+    if kind != "album" {
+        let artist_key = artist_key_sql("album.album_artist_display");
+        let representative_key = artist_key_sql("candidate.album_artist_display");
+        let artist_sql = format!(
+            "WITH grouped AS (
+                SELECT {artist_key} AS artist_key,
+                       COALESCE(MIN(NULLIF(TRIM(album.album_artist_display), '')), 'Unknown Artist') AS artist_name,
+                       COUNT(*) AS album_count,
+                       COALESCE(MIN(NULLIF(TRIM(album.canonical_genre), '')), 'Genre unknown') AS genre
+                FROM albums album
+                GROUP BY {artist_key}
+             )
+             SELECT grouped.artist_key, grouped.artist_name, grouped.album_count, grouped.genre,
+                    (
+                        SELECT cover.cache_path
+                        FROM albums candidate
+                        JOIN album_covers cover ON cover.album_id = candidate.id
+                        WHERE {representative_key} = grouped.artist_key
+                        ORDER BY candidate.album_score DESC, candidate.year ASC, candidate.id ASC
+                        LIMIT 1
+                    )
+             FROM grouped
+             WHERE unicode_lower(grouped.artist_name) LIKE ?1 ESCAPE '\\'
+             ORDER BY grouped.album_count DESC, unicode_lower(grouped.artist_name), grouped.artist_key
+             LIMIT ?2"
+        );
+        let artist_options = conn
+            .prepare(&artist_sql)?
+            .query_map(params![pattern, artist_limit as i64], |row| {
+                let album_count = row.get::<_, i64>(2)?;
+                let genre = row.get::<_, String>(3)?;
+                Ok(DiscoveryMixerSeedOption {
+                    kind: "artist".to_string(),
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    subtitle: format!(
+                        "{album_count} {} · {genre}",
+                        if album_count == 1 { "album" } else { "albums" }
+                    ),
+                    artist: None,
+                    cover_path: row.get(4)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        options.extend(artist_options);
+    }
+
+    if kind != "artist" {
+        let album_options = conn
+            .prepare(
+                "SELECT album.id,
+                        COALESCE(NULLIF(TRIM(album.album), ''), 'Untitled album'),
+                        COALESCE(NULLIF(TRIM(album.album_artist_display), ''), 'Unknown Artist'),
+                        album.year,
+                        COALESCE(NULLIF(TRIM(album.canonical_genre), ''), 'Genre unknown'),
+                        cover.cache_path
+                 FROM albums album
+                 LEFT JOIN album_covers cover ON cover.album_id = album.id
+                 WHERE unicode_lower(COALESCE(album.album, '')) LIKE ?1 ESCAPE '\\'
+                    OR unicode_lower(COALESCE(album.album_artist_display, '')) LIKE ?1 ESCAPE '\\'
+                 ORDER BY album.album_score IS NULL, album.album_score DESC,
+                          unicode_lower(COALESCE(album.album, '')), album.id
+                 LIMIT ?2",
+            )?
+            .query_map(params![pattern, album_limit as i64], |row| {
+                let artist = row.get::<_, String>(2)?;
+                let year = row.get::<_, Option<i32>>(3)?;
+                let genre = row.get::<_, String>(4)?;
+                Ok(DiscoveryMixerSeedOption {
+                    kind: "album".to_string(),
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    subtitle: format!(
+                        "{artist}{} · {genre}",
+                        year.map(|value| format!(" · {value}")).unwrap_or_default()
+                    ),
+                    artist: Some(artist),
+                    cover_path: row.get(5)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        options.extend(album_options);
+    }
+
+    options.truncate(limit);
+    Ok(options)
+}
+
+fn discovery_mixer_seed_data(
+    conn: &Connection,
+    input: &DiscoveryMixerSeedInput,
+) -> Result<DiscoveryMixerSeedData> {
+    match input.kind.as_str() {
+        "album" => {
+            let artist_key = artist_key_sql("album.album_artist_display");
+            conn.query_row(
+                &format!(
+                    "SELECT album.id,
+                            COALESCE(NULLIF(TRIM(album.album), ''), 'Untitled album'),
+                            COALESCE(NULLIF(TRIM(album.album_artist_display), ''), 'Unknown Artist'),
+                            {artist_key},
+                            COALESCE(album.genre_normalized, ''),
+                            COALESCE(NULLIF(TRIM(album.canonical_genre), ''), 'Genre unknown'),
+                            album.year, cover.cache_path
+                     FROM albums album
+                     LEFT JOIN album_covers cover ON cover.album_id = album.id
+                     WHERE album.id = ?1"
+                ),
+                [input.id.trim()],
+                |row| {
+                    let id = row.get::<_, String>(0)?;
+                    let title = row.get::<_, String>(1)?;
+                    let artist = row.get::<_, String>(2)?;
+                    let genre = row.get::<_, String>(5)?;
+                    let year = row.get::<_, Option<i32>>(6)?;
+                    Ok(DiscoveryMixerSeedData {
+                        option: DiscoveryMixerSeedOption {
+                            kind: "album".to_string(),
+                            id: id.clone(),
+                            title,
+                            subtitle: format!(
+                                "{artist}{} · {genre}",
+                                year.map(|value| format!(" · {value}"))
+                                    .unwrap_or_default()
+                            ),
+                            artist: Some(artist),
+                            cover_path: row.get(7)?,
+                        },
+                        artist_key: row.get(3)?,
+                        album_id: Some(id),
+                        genre_id: row.get(4)?,
+                        genre,
+                    })
+                },
+            )
+            .optional()?
+            .with_context(|| format!("Could not find mixer album seed {}", input.id))
+        }
+        "artist" => {
+            let artist_key = input.id.trim();
+            let grouped_key = artist_key_sql("album.album_artist_display");
+            let representative_key = artist_key_sql("candidate.album_artist_display");
+            let sql = format!(
+                "WITH grouped AS (
+                    SELECT {grouped_key} AS artist_key,
+                           COALESCE(MIN(NULLIF(TRIM(album.album_artist_display), '')), 'Unknown Artist') AS artist_name,
+                           COUNT(*) AS album_count,
+                           COALESCE(MIN(NULLIF(TRIM(album.genre_normalized), '')), '') AS genre_id,
+                           COALESCE(MIN(NULLIF(TRIM(album.canonical_genre), '')), 'Genre unknown') AS genre
+                    FROM albums album
+                    WHERE {grouped_key} = ?1
+                    GROUP BY {grouped_key}
+                 )
+                 SELECT grouped.artist_key, grouped.artist_name, grouped.album_count,
+                        grouped.genre_id, grouped.genre,
+                        (
+                            SELECT cover.cache_path
+                            FROM albums candidate
+                            JOIN album_covers cover ON cover.album_id = candidate.id
+                            WHERE {representative_key} = grouped.artist_key
+                            ORDER BY candidate.album_score DESC, candidate.year ASC, candidate.id ASC
+                            LIMIT 1
+                        )
+                 FROM grouped"
+            );
+            conn.query_row(&sql, [artist_key], |row| {
+                let artist_name = row.get::<_, String>(1)?;
+                let album_count = row.get::<_, i64>(2)?;
+                let genre = row.get::<_, String>(4)?;
+                Ok(DiscoveryMixerSeedData {
+                    option: DiscoveryMixerSeedOption {
+                        kind: "artist".to_string(),
+                        id: row.get(0)?,
+                        title: artist_name,
+                        subtitle: format!(
+                            "{album_count} {} · {genre}",
+                            if album_count == 1 { "album" } else { "albums" }
+                        ),
+                        artist: None,
+                        cover_path: row.get(5)?,
+                    },
+                    artist_key: row.get(0)?,
+                    album_id: None,
+                    genre_id: row.get(3)?,
+                    genre,
+                })
+            })
+            .optional()?
+            .with_context(|| format!("Could not find mixer artist seed {}", input.id))
+        }
+        _ => bail!("Mixer seeds must be local artists or albums."),
+    }
+}
+
+fn discovery_mixer(
+    conn: &Connection,
+    request: &DiscoveryMixerRequest,
+) -> Result<DiscoveryMixerResponse> {
+    let mut seen_seeds = HashSet::<(String, String)>::new();
+    let mut seeds = Vec::new();
+    for input in &request.seeds {
+        let seed = discovery_mixer_seed_data(conn, input)?;
+        let identity = (seed.option.kind.clone(), seed.option.id.clone());
+        if seen_seeds.insert(identity) {
+            seeds.push(seed);
+        }
+        if seeds.len() == 8 {
+            break;
+        }
+    }
+    if seeds.len() < 2 {
+        bail!("Choose at least two different local artists or albums.")
+    }
+    let explore_percent = request.explore_percent.unwrap_or(50).clamp(0, 100);
+    let result_limit = request.limit.unwrap_or(12).clamp(4, 20) as usize;
+    let excluded_album_ids = seeds
+        .iter()
+        .filter_map(|seed| seed.album_id.clone())
+        .collect::<HashSet<_>>();
+    let excluded_artist_keys = seeds
+        .iter()
+        .map(|seed| seed.artist_key.clone())
+        .collect::<HashSet<_>>();
+    let candidate_artist_key = artist_key_sql("album.album_artist_display");
+    let candidate_sql = format!(
+        "SELECT album.id,
+                COALESCE(NULLIF(TRIM(album.album), ''), 'Untitled album'),
+                COALESCE(NULLIF(TRIM(album.album_artist_display), ''), 'Unknown Artist'),
+                {candidate_artist_key},
+                COALESCE(album.genre_normalized, ''),
+                COALESCE(NULLIF(TRIM(album.canonical_genre), ''), 'Genre unknown'),
+                album.year, cover.cache_path, album.rating_completeness,
+                album.loved_tracks, album.album_score
+         FROM albums album
+         LEFT JOIN album_covers cover ON cover.album_id = album.id
+         WHERE album.total_tracks > 0
+         ORDER BY album.id"
+    );
+    let mut candidates = conn
+        .prepare(&candidate_sql)?
+        .query_map([], |row| {
+            let album = row.get::<_, String>(1)?;
+            Ok(DiscoveryMixerCandidateData {
+                album_id: row.get(0)?,
+                album_key: normalize_text(&album),
+                album,
+                artist: row.get(2)?,
+                artist_key: row.get(3)?,
+                genre_id: row.get(4)?,
+                genre: row.get(5)?,
+                release_year: row.get(6)?,
+                cover_path: row.get(7)?,
+                rating_completeness: row.get(8)?,
+                loved_tracks: row.get(9)?,
+                album_score: row.get(10)?,
+            })
+        })?
+        .filter_map(|row| match row {
+            Ok(candidate)
+                if !excluded_album_ids.contains(&candidate.album_id)
+                    && !excluded_artist_keys.contains(&candidate.artist_key) =>
+            {
+                Some(Ok(candidate))
+            }
+            Ok(_) => None,
+            Err(error) => Some(Err(error)),
+        })
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut seen_candidate_identities = HashSet::<(String, String)>::new();
+    candidates.retain(|candidate| {
+        seen_candidate_identities
+            .insert((candidate.artist_key.clone(), candidate.album_key.clone()))
+    });
+
+    let mut candidates_by_artist = HashMap::<String, Vec<usize>>::new();
+    let mut candidates_by_genre = HashMap::<String, Vec<usize>>::new();
+    let mut candidates_by_identity = HashMap::<(String, String), usize>::new();
+    let mut candidate_by_album_id = HashMap::<String, usize>::new();
+    for (index, candidate) in candidates.iter().enumerate() {
+        candidates_by_artist
+            .entry(candidate.artist_key.clone())
+            .or_default()
+            .push(index);
+        if !candidate.genre_id.is_empty() {
+            candidates_by_genre
+                .entry(candidate.genre_id.clone())
+                .or_default()
+                .push(index);
+        }
+        candidates_by_identity
+            .entry((candidate.artist_key.clone(), candidate.album_key.clone()))
+            .or_insert(index);
+        candidate_by_album_id.insert(candidate.album_id.clone(), index);
+    }
+    let mut candidates_by_release_mbid = HashMap::<String, usize>::new();
+    for row in conn
+        .prepare(
+            "SELECT release_mbid, local_album_id
+             FROM musicbrainz_release_decisions
+             WHERE decision = 'include' AND local_album_id IS NOT NULL",
+        )?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+    {
+        let (mbid, album_id) = row?;
+        if let Some(index) = candidate_by_album_id.get(&album_id) {
+            candidates_by_release_mbid.insert(mbid.to_lowercase(), *index);
+        }
+    }
+    let mut artist_key_by_mbid = HashMap::<String, String>::new();
+    for row in conn
+        .prepare(
+            "SELECT LOWER(TRIM(mbid)), local_artist_key
+             FROM musicbrainz_artist_links
+             WHERE NULLIF(TRIM(mbid), '') IS NOT NULL
+             UNION ALL
+             SELECT LOWER(TRIM(mbid)), local_artist_key
+             FROM musicbrainz_artist_infos
+             WHERE NULLIF(TRIM(mbid), '') IS NOT NULL",
+        )?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+    {
+        let (mbid, artist_key) = row?;
+        artist_key_by_mbid.insert(mbid, artist_key);
+    }
+
+    let mut connections = HashMap::<usize, Vec<DiscoveryMixerConnection>>::new();
+    let mut upsert_connection = |candidate_index: usize, connection: DiscoveryMixerConnection| {
+        let candidate_connections = connections.entry(candidate_index).or_default();
+        if let Some(existing) = candidate_connections
+            .iter_mut()
+            .find(|existing| existing.seed_index == connection.seed_index)
+        {
+            if connection.strength > existing.strength {
+                *existing = connection;
+            }
+        } else {
+            candidate_connections.push(connection);
+        }
+    };
+    let mut related_stmt = conn.prepare(
+        "SELECT candidate_artist_name, candidate_album_title, candidate_album_mbid,
+                relationship_score, shared_tags_json
+         FROM lastfm_related_albums
+         WHERE album_id = ?1 ORDER BY rank LIMIT 40",
+    )?;
+    let mut similar_stmt = conn.prepare(
+        "SELECT similar_artist_name, similar_artist_mbid, match_score
+         FROM lastfm_similar_artists
+         WHERE artist_key = ?1 ORDER BY rank LIMIT 24",
+    )?;
+    for (seed_index, seed) in seeds.iter().enumerate() {
+        if let Some(album_id) = seed.album_id.as_deref() {
+            for row in related_stmt.query_map([album_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, f64>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })? {
+                let (artist, album, mbid, strength, tags_json) = row?;
+                let candidate_index = mbid
+                    .as_deref()
+                    .and_then(|mbid| candidates_by_release_mbid.get(&mbid.to_lowercase()))
+                    .copied()
+                    .or_else(|| {
+                        candidates_by_identity
+                            .get(&(normalize_artist_key(&artist), normalize_text(&album)))
+                            .copied()
+                    });
+                let Some(candidate_index) = candidate_index else {
+                    continue;
+                };
+                let tags = serde_json::from_str::<Vec<String>>(&tags_json)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .take(2)
+                    .collect::<Vec<_>>();
+                let tag_evidence = if tags.is_empty() {
+                    String::new()
+                } else {
+                    format!(" · {}", tags.join(" · "))
+                };
+                upsert_connection(
+                    candidate_index,
+                    DiscoveryMixerConnection {
+                        seed_index,
+                        strength: strength.clamp(0.0, 1.0),
+                        reason: "Related album".to_string(),
+                        evidence: format!(
+                            "Related to {}{} · {}% relationship",
+                            seed.option.title,
+                            tag_evidence,
+                            (strength.clamp(0.0, 1.0) * 100.0).round() as i64
+                        ),
+                        lastfm_linked: true,
+                    },
+                );
+            }
+        }
+
+        for row in similar_stmt.query_map([seed.artist_key.as_str()], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, f64>(2)?,
+            ))
+        })? {
+            let (similar_artist, similar_mbid, match_score) = row?;
+            let similar_key = similar_mbid
+                .as_deref()
+                .and_then(|mbid| artist_key_by_mbid.get(&mbid.to_lowercase()))
+                .cloned()
+                .unwrap_or_else(|| normalize_artist_key(&similar_artist));
+            let Some(album_indexes) = candidates_by_artist.get(&similar_key) else {
+                continue;
+            };
+            let mut album_indexes = album_indexes.clone();
+            album_indexes.sort_by(|left, right| {
+                discovery_mixer_preference(&candidates[*right], explore_percent)
+                    .partial_cmp(&discovery_mixer_preference(
+                        &candidates[*left],
+                        explore_percent,
+                    ))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| candidates[*left].album_id.cmp(&candidates[*right].album_id))
+            });
+            for candidate_index in album_indexes.into_iter().take(3) {
+                upsert_connection(
+                    candidate_index,
+                    DiscoveryMixerConnection {
+                        seed_index,
+                        strength: match_score.clamp(0.0, 1.0) * 0.9,
+                        reason: "Similar artist".to_string(),
+                        evidence: format!(
+                            "Last.fm links {} to {} · {}% match",
+                            candidates[candidate_index].artist,
+                            seed.option.title,
+                            (match_score.clamp(0.0, 1.0) * 100.0).round() as i64
+                        ),
+                        lastfm_linked: true,
+                    },
+                );
+            }
+        }
+
+        if let Some(genre_indexes) = candidates_by_genre.get(&seed.genre_id) {
+            let mut genre_indexes = genre_indexes.clone();
+            genre_indexes.sort_by(|left, right| {
+                discovery_mixer_preference(&candidates[*right], explore_percent)
+                    .partial_cmp(&discovery_mixer_preference(
+                        &candidates[*left],
+                        explore_percent,
+                    ))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| candidates[*left].album_id.cmp(&candidates[*right].album_id))
+            });
+            for candidate_index in genre_indexes.into_iter().take(120) {
+                upsert_connection(
+                    candidate_index,
+                    DiscoveryMixerConnection {
+                        seed_index,
+                        strength: 0.28,
+                        reason: "Shared genre".to_string(),
+                        evidence: format!("Shares {} with {}", seed.genre, seed.option.title),
+                        lastfm_linked: false,
+                    },
+                );
+            }
+        }
+    }
+
+    let seed_count = seeds.len();
+    let mut ranked = connections
+        .iter()
+        .map(|(candidate_index, candidate_connections)| {
+            let candidate = &candidates[*candidate_index];
+            let best_strength = candidate_connections
+                .iter()
+                .map(|connection| connection.strength)
+                .fold(0.0_f64, f64::max);
+            let mut seed_indices = candidate_connections
+                .iter()
+                .map(|connection| connection.seed_index)
+                .collect::<Vec<_>>();
+            seed_indices.sort_unstable();
+            seed_indices.dedup();
+            let coverage = (seed_indices.len() as f64 / seed_count as f64).clamp(0.0, 1.0);
+            DiscoveryMixerRankedCandidate {
+                candidate_index: *candidate_index,
+                artist_key: candidate.artist_key.clone(),
+                score: best_strength * 0.55
+                    + discovery_mixer_preference(candidate, explore_percent) * 0.30
+                    + coverage * 0.15,
+                seed_indices,
+            }
+        })
+        .collect::<Vec<_>>();
+    ranked.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                candidates[left.candidate_index]
+                    .album_id
+                    .cmp(&candidates[right.candidate_index].album_id)
+            })
+    });
+    let matching_count = ranked.len() as i64;
+    let lastfm_linked_count = ranked
+        .iter()
+        .filter(|ranked| {
+            connections[&ranked.candidate_index]
+                .iter()
+                .any(|connection| connection.lastfm_linked)
+        })
+        .count() as i64;
+    let selected = select_discovery_mixer_candidates(ranked, seed_count, result_limit);
+    let recommendations = selected
+        .into_iter()
+        .map(|ranked| {
+            let candidate = &candidates[ranked.candidate_index];
+            let mut candidate_connections = connections[&ranked.candidate_index].clone();
+            candidate_connections.sort_by(|left, right| {
+                right
+                    .strength
+                    .partial_cmp(&left.strength)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| left.seed_index.cmp(&right.seed_index))
+            });
+            let strongest = candidate_connections
+                .first()
+                .expect("mixer candidate has relationship evidence");
+            let mut seed_labels = candidate_connections
+                .iter()
+                .map(|connection| seeds[connection.seed_index].option.title.clone())
+                .collect::<Vec<_>>();
+            seed_labels.sort();
+            seed_labels.dedup();
+            let mut evidence = candidate_connections
+                .iter()
+                .take(3)
+                .map(|connection| connection.evidence.clone())
+                .collect::<Vec<_>>();
+            let completion = (candidate.rating_completeness.clamp(0.0, 1.0) * 100.0).round();
+            evidence.push(format!(
+                "{} balance signal · {completion:.0}% of tracks rated · {} loved {}",
+                if explore_percent < 40 {
+                    "Familiar"
+                } else if explore_percent > 60 {
+                    "Explore"
+                } else {
+                    "Balanced"
+                },
+                candidate.loved_tracks,
+                if candidate.loved_tracks == 1 {
+                    "track"
+                } else {
+                    "tracks"
+                }
+            ));
+            DiscoveryMixerRecommendation {
+                album_id: candidate.album_id.clone(),
+                album: candidate.album.clone(),
+                artist: candidate.artist.clone(),
+                release_year: candidate.release_year,
+                genre: candidate.genre.clone(),
+                cover_path: candidate.cover_path.clone(),
+                rating_completeness: candidate.rating_completeness,
+                reason: strongest.reason.clone(),
+                seed_labels,
+                evidence,
+                ranking_score: (ranked.score * 1_000_000.0).round() / 1_000_000.0,
+            }
+        })
+        .collect::<Vec<_>>();
+    Ok(DiscoveryMixerResponse {
+        seeds: seeds.into_iter().map(|seed| seed.option).collect(),
+        explore_percent,
+        matching_count,
+        lastfm_linked_count,
+        recommendations,
+        evidence: format!(
+            "{} cached Last.fm matches · {} local candidates · duplicate albums and seed artists excluded",
+            lastfm_linked_count, matching_count
+        ),
     })
 }
 
@@ -24683,6 +25442,207 @@ mod tests {
             .iter()
             .any(|story| story.reason == "Similar artist"));
         assert!(snapshot.lastfm_linked_count >= 2);
+    }
+
+    fn insert_discovery_mixer_fixtures(conn: &Connection) {
+        for (album_id, artist, album, year) in [
+            ("mix-seed-a", "Seed Artist A", "Mix Seed A", 1981),
+            ("mix-seed-b", "Seed Artist B", "Mix Seed B", 1991),
+            ("familiar-direct", "Familiar Artist", "Signal", 1982),
+            ("familiar-copy", "Familiar Artist", "Signal", 1983),
+            ("explore-direct", "Explore Artist", "Unknown Signal", 2025),
+            ("cross-candidate", "Cross Artist", "Crossfade", 2004),
+            ("second-candidate", "Second Artist", "Second Wave", 1992),
+            (
+                "seed-artist-extra",
+                "Seed Artist A",
+                "Should Be Excluded",
+                1984,
+            ),
+        ] {
+            insert_test_album(conn, album_id, artist, album, year, 10);
+        }
+        conn.execute_batch(
+            "UPDATE albums SET canonical_genre = 'Seed A', genre_normalized = 'seed-a'
+             WHERE id IN ('mix-seed-a', 'seed-artist-extra');
+             UPDATE albums SET canonical_genre = 'Seed B', genre_normalized = 'seed-b'
+             WHERE id = 'mix-seed-b';
+             UPDATE albums SET canonical_genre = 'Candidate', genre_normalized = 'candidate'
+             WHERE id IN ('familiar-direct', 'familiar-copy', 'explore-direct',
+                          'cross-candidate', 'second-candidate');
+             UPDATE albums SET rated_tracks = 10, rating_completeness = 1.0,
+                               loved_tracks = 3, album_score = 400.0
+             WHERE id IN ('familiar-direct', 'familiar-copy');
+             UPDATE albums SET rated_tracks = 0, rating_completeness = 0.0,
+                               loved_tracks = 0, album_score = NULL
+             WHERE id = 'explore-direct';
+             UPDATE albums SET rated_tracks = 5, rating_completeness = 0.5,
+                               loved_tracks = 1, album_score = 200.0
+             WHERE id = 'cross-candidate';
+
+             INSERT INTO lastfm_album_relationships (
+                 album_id, album_artist, album_title, state, message,
+                 fetched_at, expires_at
+             ) VALUES
+                 ('mix-seed-a', 'Seed Artist A', 'Mix Seed A', 'available', '',
+                  '2026-08-13T08:00:00Z', '2026-09-13T08:00:00Z'),
+                 ('mix-seed-b', 'Seed Artist B', 'Mix Seed B', 'available', '',
+                  '2026-08-13T08:00:00Z', '2026-09-13T08:00:00Z');
+             INSERT INTO lastfm_related_albums (
+                 album_id, rank, candidate_artist_name, candidate_album_title,
+                 relationship_score, shared_tags_json, fetched_at, expires_at
+             ) VALUES
+                 ('mix-seed-a', 1, 'Familiar Artist', 'Signal', 0.9, '[\"rock\"]',
+                  '2026-08-13T08:00:00Z', '2026-09-13T08:00:00Z'),
+                 ('mix-seed-a', 2, 'Explore Artist', 'Unknown Signal', 0.9, '[\"rock\"]',
+                  '2026-08-13T08:00:00Z', '2026-09-13T08:00:00Z'),
+                 ('mix-seed-a', 3, 'Cross Artist', 'Crossfade', 0.6, '[\"pop\"]',
+                  '2026-08-13T08:00:00Z', '2026-09-13T08:00:00Z'),
+                 ('mix-seed-b', 1, 'Second Artist', 'Second Wave', 0.85, '[\"pop\"]',
+                  '2026-08-13T08:00:00Z', '2026-09-13T08:00:00Z'),
+                 ('mix-seed-b', 2, 'Cross Artist', 'Crossfade', 0.6, '[\"pop\"]',
+                  '2026-08-13T08:00:00Z', '2026-09-13T08:00:00Z');",
+        )
+        .expect("insert mixer fixtures");
+    }
+
+    #[test]
+    fn discovery_mixer_seed_search_returns_local_artists_and_albums() {
+        let conn = seeded_connection();
+        insert_discovery_mixer_fixtures(&conn);
+
+        let options = discovery_mixer_seed_options(
+            &conn,
+            &DiscoveryMixerSeedSearchRequest {
+                query: Some("seed artist a".to_string()),
+                kind: None,
+                limit: Some(12),
+            },
+        )
+        .expect("search mixer seeds");
+
+        assert!(options
+            .iter()
+            .any(|option| option.kind == "artist" && option.title == "Seed Artist A"));
+        assert!(options.iter().any(|option| {
+            option.kind == "album" && option.artist.as_deref() == Some("Seed Artist A")
+        }));
+    }
+
+    #[test]
+    fn discovery_mixer_is_deterministic_and_excludes_seeds_and_duplicates() {
+        let conn = seeded_connection();
+        insert_discovery_mixer_fixtures(&conn);
+        let request = |explore_percent| DiscoveryMixerRequest {
+            seeds: vec![
+                DiscoveryMixerSeedInput {
+                    kind: "album".to_string(),
+                    id: "mix-seed-a".to_string(),
+                },
+                DiscoveryMixerSeedInput {
+                    kind: "album".to_string(),
+                    id: "mix-seed-b".to_string(),
+                },
+            ],
+            explore_percent: Some(explore_percent),
+            limit: Some(8),
+        };
+
+        let familiar = discovery_mixer(&conn, &request(0)).expect("build familiar mixer");
+        let repeated = discovery_mixer(&conn, &request(0)).expect("repeat familiar mixer");
+        let explore = discovery_mixer(&conn, &request(100)).expect("build explore mixer");
+
+        assert_eq!(familiar, repeated);
+        assert_eq!(familiar.recommendations[0].artist, "Familiar Artist");
+        assert_eq!(explore.recommendations[0].artist, "Explore Artist");
+        assert!(familiar.lastfm_linked_count >= 4);
+        assert!(familiar
+            .recommendations
+            .iter()
+            .all(|item| !["Seed Artist A", "Seed Artist B"].contains(&item.artist.as_str())));
+        assert!(familiar
+            .recommendations
+            .iter()
+            .all(|item| !item.evidence.is_empty() && !item.seed_labels.is_empty()));
+        let identities = familiar
+            .recommendations
+            .iter()
+            .map(|item| {
+                (
+                    normalize_artist_key(&item.artist),
+                    normalize_text(&item.album),
+                )
+            })
+            .collect::<HashSet<_>>();
+        assert_eq!(identities.len(), familiar.recommendations.len());
+    }
+
+    #[test]
+    fn discovery_mixer_uses_local_genres_when_relationship_caches_are_empty() {
+        let conn = seeded_connection();
+        insert_test_album(
+            &conn,
+            "offline-seed",
+            "Offline Seed Artist",
+            "Offline Seed",
+            1990,
+            10,
+        );
+        insert_test_album(
+            &conn,
+            "offline-synthpop",
+            "Offline Candidate A",
+            "Local Synthpop",
+            1991,
+            10,
+        );
+        insert_test_album(
+            &conn,
+            "offline-rock",
+            "Offline Candidate B",
+            "Local Rock",
+            1992,
+            10,
+        );
+        conn.execute_batch(
+            "UPDATE albums SET canonical_genre = 'Synthpop', genre_normalized = 'synthpop'
+             WHERE id = 'offline-synthpop';
+             UPDATE albums SET canonical_genre = 'Rock', genre_normalized = 'rock'
+             WHERE id IN ('offline-seed', 'offline-rock');",
+        )
+        .expect("set offline mixer genres");
+
+        let response = discovery_mixer(
+            &conn,
+            &DiscoveryMixerRequest {
+                seeds: vec![
+                    DiscoveryMixerSeedInput {
+                        kind: "album".to_string(),
+                        id: "mb:test".to_string(),
+                    },
+                    DiscoveryMixerSeedInput {
+                        kind: "album".to_string(),
+                        id: "offline-seed".to_string(),
+                    },
+                ],
+                explore_percent: Some(50),
+                limit: Some(8),
+            },
+        )
+        .expect("build offline mixer");
+
+        let ids = response
+            .recommendations
+            .iter()
+            .map(|item| item.album_id.as_str())
+            .collect::<HashSet<_>>();
+        assert_eq!(response.lastfm_linked_count, 0);
+        assert!(ids.contains("offline-synthpop"));
+        assert!(ids.contains("offline-rock"));
+        assert!(response
+            .recommendations
+            .iter()
+            .all(|item| item.reason == "Shared genre"));
     }
 
     #[test]

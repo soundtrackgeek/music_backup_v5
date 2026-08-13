@@ -31,20 +31,21 @@ use models::{
     CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryAnniversaryStory,
     DiscoveryChartSnapshot, DiscoveryChartSnapshotRequest, DiscoveryCompletionSnapshot,
     DiscoveryCompletionSnapshotRequest, DiscoveryDailyEditionSnapshotResponse,
-    DiscoveryDeepCutSnapshot, DiscoveryDeepCutSnapshotRequest, DiscoveryRecommendationSnapshot,
-    DiscoveryRecommendationSnapshotRequest, DiscoveryResponse, DiscoveryShelfExplorerRequest,
-    DiscoveryShelfExplorerResponse, DiscoverySourceHealthResponse, ExportMusicToolRequest,
-    ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse, GenreProgressRequest,
-    GenreProgressStats, GenreTimelineRequest, GenreTimelineResponse, LibraryUpdateArtistResponse,
-    LibraryUpdateRequest, LibraryUpdateResponse, MusicBrainzArtistDiscographyRequest,
-    MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
-    MusicBrainzArtistInfoImportRequest, MusicBrainzArtistInfoImportSummary,
-    MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus, MusicBrainzArtistLinkRequest,
-    MusicBrainzArtistOriginCountryRequest, MusicBrainzArtistOriginCountryUpdate,
-    MusicBrainzArtistRefreshRequest, MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus,
-    MusicBrainzOriginCountryImportRequest, MusicBrainzOriginCountryImportSummary,
-    MusicBrainzOriginCountryPreview, MusicBrainzOriginCountryStatus,
-    MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
+    DiscoveryDeepCutSnapshot, DiscoveryDeepCutSnapshotRequest, DiscoveryMixerRequest,
+    DiscoveryMixerResponse, DiscoveryMixerSeedOption, DiscoveryMixerSeedSearchRequest,
+    DiscoveryRecommendationSnapshot, DiscoveryRecommendationSnapshotRequest, DiscoveryResponse,
+    DiscoveryShelfExplorerRequest, DiscoveryShelfExplorerResponse, DiscoverySourceHealthResponse,
+    ExportMusicToolRequest, ExportResult, ExportSearchRequest, GenreListRequest, GenreListResponse,
+    GenreProgressRequest, GenreProgressStats, GenreTimelineRequest, GenreTimelineResponse,
+    LibraryUpdateArtistResponse, LibraryUpdateRequest, LibraryUpdateResponse,
+    MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
+    MusicBrainzArtistExportRequest, MusicBrainzArtistInfoImportRequest,
+    MusicBrainzArtistInfoImportSummary, MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus,
+    MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginCountryRequest,
+    MusicBrainzArtistOriginCountryUpdate, MusicBrainzArtistRefreshRequest,
+    MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzOriginCountryImportRequest,
+    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
+    MusicBrainzOriginCountryStatus, MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
     MusicBrainzReleaseDecisionRequest, MusicMapLocationDetails, MusicMapRefreshSummary,
     MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
@@ -1390,6 +1391,32 @@ async fn get_discovery_recommendation_snapshot(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_discovery_mixer_seed_options(
+    app: AppHandle,
+    request: DiscoveryMixerSeedSearchRequest,
+) -> Result<Vec<DiscoveryMixerSeedOption>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        db::discovery_mixer_seed_options_for_app(&app, request)
+    })
+    .await
+    .map_err(|error| format!("Discovery mixer seed search task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_discovery_mixer(
+    app: AppHandle,
+    request: DiscoveryMixerRequest,
+) -> Result<DiscoveryMixerResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || db::discovery_mixer_for_app(&app, request))
+        .await
+        .map_err(|error| format!("Discovery mixer task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_discovery_shelf_explorer(
     app: AppHandle,
     request: DiscoveryShelfExplorerRequest,
@@ -1994,6 +2021,8 @@ pub fn run() {
             get_discovery_deep_cut_snapshot,
             get_discovery_completion_snapshot,
             get_discovery_recommendation_snapshot,
+            get_discovery_mixer_seed_options,
+            get_discovery_mixer,
             get_discovery_shelf_explorer,
             get_import_preview,
             prepare_import_preview,
