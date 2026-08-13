@@ -90,6 +90,7 @@ import {
   getArtistBiography,
   getArtistTrackHighlights,
   getLastFmAlbumPopularity,
+  getLastFmArtistConstellationBranch,
   getLastFmRelatedAlbums,
   getLastFmArtistPopularity,
   getLastFmArtistSimilarity,
@@ -216,6 +217,7 @@ import type {
   LastFmRelatedAlbums,
   LastFmArtistPopularity,
   LastFmArtistSimilarity,
+  LastFmSimilarArtist,
   AlbumReview,
   ArtistBiography,
   MetadataCoverageMetric,
@@ -11935,6 +11937,17 @@ export default function App() {
     }
   }
 
+  function expandArtistConstellation(artist: LastFmSimilarArtist) {
+    if (!selectedArtist) {
+      return Promise.reject(new Error("Select an artist before expanding the constellation."));
+    }
+    return getLastFmArtistConstellationBranch(
+      selectedArtist.id,
+      artist.name,
+      artist.musicbrainzMbid,
+    );
+  }
+
   async function refreshArtistBiography() {
     if (!selectedArtist) return;
 
@@ -16436,6 +16449,7 @@ export default function App() {
                     isLoading={isArtistSimilarityLoading}
                     error={artistSimilarityError}
                     onRefresh={() => void refreshArtistSimilarity()}
+                    onExpandArtist={expandArtistConstellation}
                     onOpenArtist={openArtistFromMusicMap}
                     onOpenSource={(url) => void openLastFmSource(url)}
                   />

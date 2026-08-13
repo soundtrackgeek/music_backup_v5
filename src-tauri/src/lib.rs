@@ -300,6 +300,22 @@ async fn get_lastfm_artist_similarity(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_lastfm_artist_constellation_branch(
+    app: AppHandle,
+    root_artist_id: String,
+    branch_name: String,
+    branch_mbid: Option<String>,
+) -> Result<lastfm::LastFmArtistSimilarity, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        lastfm::artist_constellation_branch(app, root_artist_id, branch_name, branch_mbid)
+    })
+    .await
+    .map_err(|error| format!("Last.fm artist constellation task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn get_artist_biography(
     app: AppHandle,
     artist_id: String,
@@ -1858,6 +1874,7 @@ pub fn run() {
             test_lastfm_connection,
             get_lastfm_artist_popularity,
             get_lastfm_artist_similarity,
+            get_lastfm_artist_constellation_branch,
             get_artist_biography,
             get_album_review,
             get_lastfm_album_popularity,

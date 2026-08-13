@@ -2704,6 +2704,82 @@ export async function getLastFmArtistSimilarity(
   });
 }
 
+export async function getLastFmArtistConstellationBranch(
+  rootArtistId: string,
+  branchName: string,
+  branchMbid: string | null,
+) {
+  if (!isTauriRuntime()) {
+    const branch = mockArtists.find(
+      (candidate) =>
+        candidate.id === branchName ||
+        candidate.name.toLocaleLowerCase() === branchName.toLocaleLowerCase(),
+    );
+    const branchArtistName = branch?.name ?? branchName;
+    const localCandidates = mockArtists
+      .filter(
+        (candidate) =>
+          candidate.id !== rootArtistId &&
+          candidate.name.toLocaleLowerCase() !== branchArtistName.toLocaleLowerCase(),
+      )
+      .slice(0, 8);
+    const missingName = `${branchArtistName} Collective`;
+    const artists = [
+      ...localCandidates.map((candidate, index) => ({
+        rank: index + 1,
+        name: candidate.name,
+        musicbrainzMbid: candidate.musicBrainzMbid ?? null,
+        matchScore: Math.max(0.32, 0.88 - index * 0.07),
+        sourceUrl:
+          "https://www.last.fm/music/" + encodeURIComponent(candidate.name),
+        localArtistId: candidate.id,
+        localArtistName: candidate.name,
+        localAlbumCount: candidate.albumCount,
+        portraitAvailable: candidate.portraitAvailable ?? false,
+        representativeAlbumId: candidate.representativeAlbumId ?? null,
+        representativeAlbum: candidate.representativeAlbum ?? null,
+        representativeCoverPath: candidate.representativeCoverPath ?? null,
+      })),
+      {
+        rank: localCandidates.length + 1,
+        name: missingName,
+        musicbrainzMbid: null,
+        matchScore: 0.31,
+        sourceUrl:
+          "https://www.last.fm/music/" + encodeURIComponent(missingName),
+        localArtistId: null,
+        localArtistName: null,
+        localAlbumCount: 0,
+        portraitAvailable: false,
+        representativeAlbumId: null,
+        representativeAlbum: null,
+        representativeCoverPath: null,
+      },
+    ];
+    return {
+      artistId: branch?.id ?? branchArtistName.toLocaleLowerCase(),
+      artistName: branchArtistName,
+      sourceUrl:
+        "https://www.last.fm/music/" +
+        encodeURIComponent(branchArtistName) +
+        "/+similar",
+      fetchedAt: new Date().toISOString(),
+      cached: true,
+      stale: false,
+      artists,
+      message: `Showing ${artists.length} similar artists for ${branchArtistName}.`,
+    } satisfies LastFmArtistSimilarity;
+  }
+  return invoke<LastFmArtistSimilarity>(
+    "get_lastfm_artist_constellation_branch",
+    {
+      rootArtistId,
+      branchName,
+      branchMbid,
+    },
+  );
+}
+
 export async function getArtistBiography(
   artistId: string,
   forceRefresh = false,

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.135.0] - 2026-08-13
+### Added
+- Added an optional Artist Overview constellation without replacing the existing Similar Artists shelf, showing up to eight first-hop artists and six on-demand second-hop connections with clear owned-versus-missing states.
+- Added native-button keyboard traversal, a fully navigable list fallback, and direct local Artist or Last.fm actions for every visible relationship.
+- Added focused coverage for observable expansion, in-session request reuse, stale-cache offline rendering, uncached failures, identity validation, and Last.fm request bounds.
+
+### Changed
+- Reused the schema-52 directed relationship cache for constellation branches, serialized expansion, limited each root to three explicit branch requests, rejected non-cached or conflicting first-hop identities, and prevented third-hop expansion.
+- Synchronized app metadata and provider user agents to `0.135.0`.
+
 ## [0.134.0] - 2026-08-13
 ### Added
 - Added a live **Source health** view to Daily Edition with coverage, freshness, exact last-success timestamps, affected shelves, source details, and concrete sparsity reasons for ratings, album charts, MusicBrainz identities and releases, Last.fm relationships, genres, artist life dates, and cover art.
