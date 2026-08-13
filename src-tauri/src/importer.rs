@@ -1575,6 +1575,8 @@ fn apply_staged_import(
     insert_library_updates(&tx, import_run_id, &session.source_path, &library_updates)?;
     insert_rating_snapshot(&tx, import_run_id, &final_albums)?;
     db::rebuild_search_indexes(&tx)?;
+    db::reconcile_album_chart_matches(&tx)
+        .context("Could not relink imported album charts after applying the library snapshot")?;
     let completed_at = Utc::now().to_rfc3339();
     let duration_ms = started.elapsed().as_millis() as i64;
     tx.execute(

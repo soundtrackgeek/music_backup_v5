@@ -23057,7 +23057,7 @@ button {
 }
 
 .daily-edition-anniversary-picker select:disabled {
-  cursor: wait;
+  cursor: default;
 }
 
 .daily-edition-kicker {
@@ -23494,7 +23494,7 @@ button {
 
 .daily-edition-chart-controls select:disabled,
 .daily-edition-chart-random:disabled {
-  cursor: wait;
+  cursor: default;
   opacity: 0.55;
 }
 
@@ -23645,7 +23645,7 @@ button {
 
 .daily-edition-deep-cut-refresh:disabled,
 .daily-edition-deep-cut-controls select:disabled {
-  cursor: wait;
+  cursor: default;
   opacity: 0.55;
 }
 
@@ -23782,7 +23782,7 @@ button {
 .daily-edition-completion-tabs button:disabled,
 .daily-edition-because-tabs button:disabled,
 .daily-edition-completion-controls select:disabled {
-  cursor: wait;
+  cursor: default;
   opacity: 0.55;
 }
 

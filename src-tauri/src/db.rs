@@ -107,7 +107,8 @@ const MUSICBRAINZ_SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
 const MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES: u32 = 1440;
 const MAX_UPDATE_AUTO_CHECK_MINUTES: u32 = 1440;
 const DAILY_EDITION_RETENTION_DAYS: i32 = 90;
-const DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION: i64 = 1;
+const DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION: i64 = 2;
+const MIN_DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION: i64 = 1;
 const MIN_BACKUP_RETENTION: u32 = 1;
 const MAX_BACKUP_RETENTION: u32 = 50;
 const SCORE_GENRE_GROUP: &[&str] = &[
@@ -573,7 +574,22 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_fifty_four_schema_exists(conn)? {
+    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_fifty_five_schema_exists(conn)? {
+        return Ok(());
+    }
+
+    if user_version == 54 && migrations::phase_fifty_four_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 55 migration transaction")?;
+        ensure_chart_album_match_state_schema(&transaction)?;
+        reconcile_album_chart_matches(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 55;")
+            .context("Could not mark the schema 55 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 55 migration")?;
         return Ok(());
     }
 
@@ -582,9 +598,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             .unchecked_transaction()
             .context("Could not start the schema 54 migration transaction")?;
         ensure_daily_edition_snapshot_schema(&transaction)?;
+        ensure_chart_album_match_state_schema(&transaction)?;
+        reconcile_album_chart_matches(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 54;")
-            .context("Could not mark the schema 54 migration complete")?;
+            .execute_batch("PRAGMA user_version = 55;")
+            .context("Could not mark the schema 55 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 54 migration")?;
@@ -597,9 +615,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             .context("Could not start the schema 53 migration transaction")?;
         ensure_lastfm_related_albums_schema(&transaction)?;
         ensure_daily_edition_snapshot_schema(&transaction)?;
+        ensure_chart_album_match_state_schema(&transaction)?;
+        reconcile_album_chart_matches(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 54;")
-            .context("Could not mark the schema 54 migration complete")?;
+            .execute_batch("PRAGMA user_version = 55;")
+            .context("Could not mark the schema 55 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 54 migration")?;
@@ -613,9 +633,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
         ensure_daily_edition_snapshot_schema(&transaction)?;
+        ensure_chart_album_match_state_schema(&transaction)?;
+        reconcile_album_chart_matches(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 54;")
-            .context("Could not mark the schema 52–54 migration complete")?;
+            .execute_batch("PRAGMA user_version = 55;")
+            .context("Could not mark the schema 52–55 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 52–54 migration")?;
@@ -630,9 +652,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
         ensure_daily_edition_snapshot_schema(&transaction)?;
+        ensure_chart_album_match_state_schema(&transaction)?;
+        reconcile_album_chart_matches(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 54;")
-            .context("Could not mark the schema 51–54 migration complete")?;
+            .execute_batch("PRAGMA user_version = 55;")
+            .context("Could not mark the schema 51–55 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 51–54 migration")?;
@@ -648,9 +672,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
         ensure_daily_edition_snapshot_schema(&transaction)?;
+        ensure_chart_album_match_state_schema(&transaction)?;
+        reconcile_album_chart_matches(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 54;")
-            .context("Could not mark the schema 50–54 migration complete")?;
+            .execute_batch("PRAGMA user_version = 55;")
+            .context("Could not mark the schema 50–55 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 50–54 migration")?;
@@ -667,9 +693,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
         ensure_daily_edition_snapshot_schema(&transaction)?;
+        ensure_chart_album_match_state_schema(&transaction)?;
+        reconcile_album_chart_matches(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 54;")
-            .context("Could not mark the schema 49–54 migration complete")?;
+            .execute_batch("PRAGMA user_version = 55;")
+            .context("Could not mark the schema 49–55 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 49–54 migration")?;
@@ -687,9 +715,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
         ensure_daily_edition_snapshot_schema(&transaction)?;
+        ensure_chart_album_match_state_schema(&transaction)?;
+        reconcile_album_chart_matches(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 54;")
-            .context("Could not mark the schema 48–54 migration complete")?;
+            .execute_batch("PRAGMA user_version = 55;")
+            .context("Could not mark the schema 48–55 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 48–54 migration")?;
@@ -708,9 +738,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
         ensure_daily_edition_snapshot_schema(&transaction)?;
+        ensure_chart_album_match_state_schema(&transaction)?;
+        reconcile_album_chart_matches(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 54;")
-            .context("Could not mark the schema 47–54 migration complete")?;
+            .execute_batch("PRAGMA user_version = 55;")
+            .context("Could not mark the schema 47–55 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 47–54 migration")?;
@@ -730,9 +762,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
         ensure_daily_edition_snapshot_schema(&transaction)?;
+        ensure_chart_album_match_state_schema(&transaction)?;
+        reconcile_album_chart_matches(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 54;")
-            .context("Could not mark the schema 46–54 migration complete")?;
+            .execute_batch("PRAGMA user_version = 55;")
+            .context("Could not mark the schema 46–55 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 46–54 migration")?;
@@ -753,9 +787,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_lastfm_similarity_schema(&transaction)?;
         ensure_lastfm_related_albums_schema(&transaction)?;
         ensure_daily_edition_snapshot_schema(&transaction)?;
+        ensure_chart_album_match_state_schema(&transaction)?;
+        reconcile_album_chart_matches(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 54;")
-            .context("Could not mark the schema 45–54 migration complete")?;
+            .execute_batch("PRAGMA user_version = 55;")
+            .context("Could not mark the schema 45–55 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 45–54 migration")?;
@@ -1978,12 +2014,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_album_artist_key_index(conn)?;
     ensure_music_doctor_schema(conn)?;
     ensure_daily_edition_snapshot_schema(conn)?;
+    ensure_chart_album_match_state_schema(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
     migrations::migrate_billboard_album_source_default(conn)?;
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 54;
+        PRAGMA user_version = 55;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -2651,6 +2688,255 @@ fn ensure_daily_edition_snapshot_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create the Daily Edition snapshot schema")?;
+    Ok(())
+}
+
+fn ensure_chart_album_match_state_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS chart_album_match_state (
+            source TEXT PRIMARY KEY,
+            reconciled_import_run_id INTEGER,
+            reconciled_at TEXT NOT NULL
+        );
+        ",
+    )
+    .context("Could not create chart album match state schema")?;
+    Ok(())
+}
+
+pub(crate) fn reconcile_album_chart_matches(conn: &Connection) -> Result<()> {
+    ensure_chart_album_match_state_schema(conn)?;
+    conn.execute_batch(
+        "
+        DROP TABLE IF EXISTS temp_discovery_album_match_keys;
+        CREATE TEMP TABLE temp_discovery_album_match_keys (
+            artist_key TEXT NOT NULL,
+            album_key TEXT NOT NULL,
+            album_id TEXT NOT NULL,
+            PRIMARY KEY (artist_key, album_key)
+        ) WITHOUT ROWID;
+        ",
+    )
+    .context("Could not prepare album chart reconciliation")?;
+
+    {
+        let mut album_stmt =
+            conn.prepare("SELECT id, album_artist_display, album FROM albums ORDER BY id")?;
+        let albums = album_stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut insert_key = conn.prepare(
+            "INSERT OR IGNORE INTO temp_discovery_album_match_keys
+             (artist_key, album_key, album_id) VALUES (?1, ?2, ?3)",
+        )?;
+        for (album_id, artist, album) in albums {
+            let artist_key = billboard_text_key(artist.as_deref().unwrap_or_default());
+            let album_key = billboard_text_key(album.as_deref().unwrap_or_default());
+            if artist_key.is_empty() || album_key.is_empty() {
+                continue;
+            }
+            for artist_variant in billboard_key_variants(&artist_key) {
+                for album_variant in billboard_key_variants(&album_key) {
+                    insert_key.execute(params![artist_variant, album_variant, album_id])?;
+                }
+            }
+        }
+    }
+
+    reconcile_album_chart_entry_ids(conn, "billboard_chart_entries", "album_key")?;
+    reconcile_album_chart_entry_ids(conn, "official_uk_album_chart_entries", "title_key")?;
+    reconcile_album_chart_entry_ids(conn, "vg_lista_album_chart_entries", "title_key")?;
+    reconcile_billboard_album_summaries(conn)?;
+    reconcile_weekly_album_summaries(
+        conn,
+        "official_uk_album_chart_entries",
+        "official_uk",
+        "chart_date",
+    )?;
+    reconcile_weekly_album_summaries(
+        conn,
+        "vg_lista_album_chart_entries",
+        "vg_lista",
+        "week_date",
+    )?;
+    conn.execute_batch("DROP TABLE IF EXISTS temp_discovery_album_match_keys;")?;
+
+    // During an import this runs in the same transaction before that run is marked
+    // completed, so retain the current run id rather than the previous snapshot's id.
+    let import_run_id = conn.query_row("SELECT MAX(id) FROM import_runs", [], |row| {
+        row.get::<_, Option<i64>>(0)
+    })?;
+    let reconciled_at = Utc::now().to_rfc3339();
+    let mut record_state = conn.prepare(
+        "INSERT INTO chart_album_match_state
+         (source, reconciled_import_run_id, reconciled_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(source) DO UPDATE SET
+             reconciled_import_run_id = excluded.reconciled_import_run_id,
+             reconciled_at = excluded.reconciled_at",
+    )?;
+    for source in ["billboard", "official-uk", "vg-lista"] {
+        record_state.execute(params![source, import_run_id, reconciled_at])?;
+    }
+    Ok(())
+}
+
+fn reconcile_album_chart_entry_ids(
+    conn: &Connection,
+    table: &str,
+    title_key_column: &str,
+) -> Result<()> {
+    let sql = format!(
+        "
+         DROP TABLE IF EXISTS temp_discovery_chart_matches;
+         CREATE TEMP TABLE temp_discovery_chart_matches (
+             entry_id INTEGER PRIMARY KEY,
+             album_id TEXT NOT NULL
+         );
+         INSERT OR IGNORE INTO temp_discovery_chart_matches (entry_id, album_id)
+         SELECT entry.id, keys.album_id
+         FROM {table} entry
+         JOIN temp_discovery_album_match_keys keys
+           ON keys.artist_key = entry.artist_key
+          AND keys.album_key = entry.{title_key_column};
+         INSERT OR IGNORE INTO temp_discovery_chart_matches (entry_id, album_id)
+         SELECT entry.id, keys.album_id
+         FROM {table} entry
+         JOIN temp_discovery_album_match_keys keys
+           ON keys.artist_key = SUBSTR(entry.artist_key, 5)
+          AND keys.album_key = entry.{title_key_column}
+         WHERE entry.artist_key LIKE 'the %';
+         INSERT OR IGNORE INTO temp_discovery_chart_matches (entry_id, album_id)
+         SELECT entry.id, keys.album_id
+         FROM {table} entry
+         JOIN temp_discovery_album_match_keys keys
+           ON keys.artist_key = entry.artist_key
+          AND keys.album_key = SUBSTR(entry.{title_key_column}, 5)
+         WHERE entry.{title_key_column} LIKE 'the %';
+         INSERT OR IGNORE INTO temp_discovery_chart_matches (entry_id, album_id)
+         SELECT entry.id, keys.album_id
+         FROM {table} entry
+         JOIN temp_discovery_album_match_keys keys
+           ON keys.artist_key = SUBSTR(entry.artist_key, 5)
+          AND keys.album_key = SUBSTR(entry.{title_key_column}, 5)
+         WHERE entry.artist_key LIKE 'the %'
+           AND entry.{title_key_column} LIKE 'the %';
+         UPDATE {table}
+         SET matched_album_id = (
+             SELECT album_id FROM temp_discovery_chart_matches matched
+             WHERE matched.entry_id = {table}.id
+         )
+         WHERE id IN (SELECT entry_id FROM temp_discovery_chart_matches);
+         DROP TABLE temp_discovery_chart_matches;
+         "
+    );
+    conn.execute_batch(&sql)
+        .with_context(|| format!("Could not reconcile owned albums with {table}"))?;
+    Ok(())
+}
+
+fn reconcile_billboard_album_summaries(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        DROP TABLE IF EXISTS temp_discovery_billboard_summaries;
+        CREATE TEMP TABLE temp_discovery_billboard_summaries AS
+        SELECT best.matched_album_id, best.rank, best.year,
+               debut.first_appearance_year, debut.first_appearance_month,
+               debut.first_appearance_week, debut.first_appearance_week_key
+        FROM (
+            SELECT matched_album_id, rank, year,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY matched_album_id ORDER BY rank, year, id
+                   ) AS position
+            FROM billboard_chart_entries
+            WHERE matched_album_id IS NOT NULL
+        ) best
+        JOIN (
+            SELECT matched_album_id, first_appearance_year, first_appearance_month,
+                   first_appearance_week, first_appearance_week_key,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY matched_album_id
+                       ORDER BY COALESCE(first_appearance_week_key, printf('%04d', year)), id
+                   ) AS position
+            FROM billboard_chart_entries
+            WHERE matched_album_id IS NOT NULL
+        ) debut ON debut.matched_album_id = best.matched_album_id
+        WHERE best.position = 1 AND debut.position = 1;
+        CREATE UNIQUE INDEX temp_discovery_billboard_summaries_album
+            ON temp_discovery_billboard_summaries(matched_album_id);
+        UPDATE albums SET
+            (billboard_rank, billboard_year, billboard_debut_year,
+             billboard_debut_month, billboard_debut_week,
+             billboard_debut_week_key) = (
+                SELECT rank, year, first_appearance_year,
+                       first_appearance_month, first_appearance_week,
+                       first_appearance_week_key
+                FROM temp_discovery_billboard_summaries summary
+                WHERE summary.matched_album_id = albums.id
+            )
+        WHERE id IN (SELECT matched_album_id FROM temp_discovery_billboard_summaries);
+        DROP TABLE temp_discovery_billboard_summaries;
+        ",
+    )
+    .context("Could not rebuild Billboard album summaries")?;
+    Ok(())
+}
+
+fn reconcile_weekly_album_summaries(
+    conn: &Connection,
+    table: &str,
+    column_prefix: &str,
+    date_column: &str,
+) -> Result<()> {
+    let sql = format!(
+        "
+        DROP TABLE IF EXISTS temp_discovery_weekly_summaries;
+        CREATE TEMP TABLE temp_discovery_weekly_summaries AS
+        SELECT best.matched_album_id, best.rank, best.year,
+               debut.year AS debut_year, debut.week AS debut_week,
+               debut.week_key AS debut_week_key,
+               debut.month AS debut_month
+        FROM (
+            SELECT matched_album_id, rank, year,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY matched_album_id ORDER BY rank, year, week, id
+                   ) AS position
+            FROM {table}
+            WHERE matched_album_id IS NOT NULL
+        ) best
+        JOIN (
+            SELECT matched_album_id, year, week, week_key,
+                   CAST(SUBSTR({date_column}, 6, 2) AS INTEGER) AS month,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY matched_album_id ORDER BY {date_column}, rank, id
+                   ) AS position
+            FROM {table}
+            WHERE matched_album_id IS NOT NULL
+        ) debut ON debut.matched_album_id = best.matched_album_id
+        WHERE best.position = 1 AND debut.position = 1;
+        CREATE UNIQUE INDEX temp_discovery_weekly_summaries_album
+            ON temp_discovery_weekly_summaries(matched_album_id);
+        UPDATE albums SET
+            ({column_prefix}_rank, {column_prefix}_year,
+             {column_prefix}_debut_year, {column_prefix}_debut_month,
+             {column_prefix}_debut_week, {column_prefix}_debut_week_key) = (
+                SELECT rank, year, debut_year, debut_month,
+                       debut_week, debut_week_key
+                FROM temp_discovery_weekly_summaries summary
+                WHERE summary.matched_album_id = albums.id
+            )
+        WHERE id IN (SELECT matched_album_id FROM temp_discovery_weekly_summaries);
+        DROP TABLE temp_discovery_weekly_summaries;
+        "
+    );
+    conn.execute_batch(&sql)
+        .with_context(|| format!("Could not rebuild {column_prefix} album summaries"))?;
     Ok(())
 }
 
@@ -14162,10 +14448,21 @@ fn discovery_daily_edition_snapshot(
 
     let (daily_edition, snapshot_created_at) = match stored {
         Some((payload_version, edition_json, created_at))
-            if payload_version == DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION =>
+            if (MIN_DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION
+                ..=DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION)
+                .contains(&payload_version) =>
         {
             match serde_json::from_str::<DiscoveryDailyEdition>(&edition_json) {
-                Ok(edition) if edition.date == requested_key => (edition, created_at),
+                Ok(edition)
+                    if edition.date == requested_key
+                        && (requested_date != today
+                            || payload_version == DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION) =>
+                {
+                    (edition, created_at)
+                }
+                Ok(edition) if edition.date == requested_key => {
+                    persist_daily_edition_snapshot(conn, requested_date)?
+                }
                 Ok(_) | Err(_) if requested_date == today => {
                     persist_daily_edition_snapshot(conn, requested_date)?
                 }
@@ -14253,11 +14550,15 @@ fn daily_edition_snapshot_dates(conn: &Connection, today: NaiveDate) -> Result<V
     conn.prepare(
         "SELECT edition_date
          FROM daily_edition_snapshots
-         WHERE payload_version = ?1 AND edition_date <= ?2
+         WHERE payload_version BETWEEN ?1 AND ?2 AND edition_date <= ?3
          ORDER BY edition_date DESC",
     )?
     .query_map(
-        params![DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION, today_key],
+        params![
+            MIN_DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION,
+            DAILY_EDITION_SNAPSHOT_PAYLOAD_VERSION,
+            today_key
+        ],
         |row| row.get(0),
     )?
     .collect::<rusqlite::Result<Vec<_>>>()
@@ -23820,6 +24121,87 @@ mod tests {
     }
 
     #[test]
+    fn reconciles_unlinked_chart_corpora_with_the_current_album_snapshot() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "
+            INSERT INTO billboard_chart_entries (
+                source_file, year, rank, artist, album, artist_key, album_key,
+                first_appearance, first_appearance_year, first_appearance_month,
+                first_appearance_week, first_appearance_week_key,
+                matched_album_id, imported_at
+            ) VALUES (
+                'billboard.csv', 1988, 11, 'Pet Shop Boys', 'Actually',
+                'pet shop boys', 'actually', 'September 1987', 1987, 9, 36,
+                '1987-36', NULL, 'now'
+            );
+            INSERT INTO official_uk_album_chart_entries (
+                source_file, year, week, chart_date, rank, artist, title,
+                artist_key, title_key, week_key, matched_album_id, imported_at
+            ) VALUES (
+                'uk.csv', 1987, 37, '1987-09-12', 2, 'Pet Shop Boys',
+                'Actually', 'pet shop boys', 'actually', '1987-37', NULL, 'now'
+            );
+            INSERT INTO vg_lista_album_chart_entries (
+                source_file, year, week, rank, artist, title, artist_key,
+                title_key, week_date, week_key, matched_album_id, imported_at
+            ) VALUES (
+                'vg.csv', 1987, 38, 4, 'Pet Shop Boys', 'Actually',
+                'pet shop boys', 'actually', '1987-09-18', '1987-38', NULL, 'now'
+            );
+            ",
+        )
+        .expect("insert unlinked chart fixtures");
+
+        reconcile_album_chart_matches(&conn).expect("reconcile album charts");
+
+        for table in [
+            "billboard_chart_entries",
+            "official_uk_album_chart_entries",
+            "vg_lista_album_chart_entries",
+        ] {
+            let matched: Option<String> = conn
+                .query_row(
+                    &format!("SELECT matched_album_id FROM {table} LIMIT 1"),
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("read reconciled match");
+            assert_eq!(matched.as_deref(), Some("mb:test"));
+        }
+        let ranks = conn
+            .query_row(
+                "SELECT billboard_rank, official_uk_rank, vg_lista_rank
+                 FROM albums WHERE id = 'mb:test'",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, Option<i32>>(0)?,
+                        row.get::<_, Option<i32>>(1)?,
+                        row.get::<_, Option<i32>>(2)?,
+                    ))
+                },
+            )
+            .expect("read reconciled summaries");
+        assert_eq!(ranks, (Some(11), Some(2), Some(4)));
+
+        for _ in 0..20 {
+            let snapshot = discovery_chart_snapshot(
+                &conn,
+                &DiscoveryChartSnapshotRequest {
+                    source: None,
+                    year: None,
+                    week: None,
+                    random: true,
+                },
+            )
+            .expect("load populated random chart");
+            assert!(snapshot.year.is_some());
+            assert!(!snapshot.stories.is_empty());
+        }
+    }
+
+    #[test]
     fn searches_albums_with_fts_and_filters() {
         let conn = seeded_connection();
         let mut request = BrowseRequest::default();
@@ -26898,6 +27280,50 @@ mod tests {
             .expect("phase fifty-three schema exists"));
         assert!(migrations::phase_fifty_four_schema_exists(&conn)
             .expect("phase fifty-four schema exists"));
+        assert!(migrations::phase_fifty_five_schema_exists(&conn)
+            .expect("phase fifty-five schema exists"));
+        assert_eq!(
+            conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+                .expect("read upgraded schema version"),
+            LATEST_SCHEMA_VERSION,
+        );
+    }
+
+    #[test]
+    fn upgrades_schema_fifty_four_and_repairs_chart_album_links() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "
+            INSERT INTO billboard_chart_entries (
+                source_file, year, rank, artist, album, artist_key, album_key,
+                matched_album_id, imported_at
+            ) VALUES (
+                'billboard.csv', 1988, 11, 'Pet Shop Boys', 'Actually',
+                'pet shop boys', 'actually', NULL, 'now'
+            );
+            DROP TABLE chart_album_match_state;
+            PRAGMA user_version = 54;
+            ",
+        )
+        .expect("restore schema fifty-four shape");
+
+        assert!(migrations::phase_fifty_four_schema_exists(&conn)
+            .expect("phase fifty-four schema exists"));
+        assert!(!migrations::phase_fifty_five_schema_exists(&conn)
+            .expect("phase fifty-five schema is absent"));
+
+        migrate(&conn).expect("upgrade schema fifty-four");
+
+        assert!(migrations::phase_fifty_five_schema_exists(&conn)
+            .expect("phase fifty-five schema exists"));
+        let matched_album_id: Option<String> = conn
+            .query_row(
+                "SELECT matched_album_id FROM billboard_chart_entries LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read repaired chart link");
+        assert_eq!(matched_album_id.as_deref(), Some("mb:test"));
         assert_eq!(
             conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
                 .expect("read upgraded schema version"),

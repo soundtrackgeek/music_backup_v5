@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.133.1] - 2026-08-13
+### Fixed
+- Repaired Billboard, Official UK, and VG-lista album links that were cleared when a MusicBee snapshot rebuilt the local albums table, and now reconcile those links atomically after every future library import.
+- Added schema version 55 to repair existing chart corpora against the current owned albums and refresh today's saved edition once without rewriting archived dates.
+- Replaced the misleading busy cursor on disabled Daily Edition selectors with a normal cursor.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.133.1`.
+
 ## [0.133.0] - 2026-08-13
 ### Added
 - Added dated SQLite snapshots for Daily Editions with older/newer navigation, a saved-date picker, a Today return action, restart persistence, and an inclusive rolling 90-day retention policy.
