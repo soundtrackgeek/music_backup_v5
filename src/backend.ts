@@ -207,6 +207,14 @@ import type {
   WishListMusicBrainzSearchRequest,
   WishListMusicBrainzSearchResponse,
   SavedPlaylist,
+  SetPlaylistAutomationRequest,
+  SmartPlaylistRefreshResult,
+  PlexBootstrap,
+  PlexConnectionTest,
+  PlexCredentialStatus,
+  PlexPlaylistSyncResult,
+  PlexSyncSummary,
+  SavePlexProfileRequest,
   SaveAiSnapshotRequest,
   ArtistListRequest,
   ArtistListResponse,
@@ -318,6 +326,36 @@ import type {
 } from "./types";
 
 let mockSavedPlaylists: SavedPlaylist[] = [];
+
+const emptyPlaylistAutomation = (): SavedPlaylist["automation"] => ({
+  smart: false,
+  plexSyncEnabled: false,
+  plexPlaylistRatingKey: null,
+  lastEvaluatedAt: null,
+  lastPlexAttemptAt: null,
+  lastPlexSuccessAt: null,
+  lastPlexError: null,
+  desiredCount: 0,
+  matchedCount: 0,
+  missingCount: 0,
+});
+
+let mockPlexBootstrap: PlexBootstrap = {
+  profile: {
+    baseUrl: "http://localhost:32400",
+    libraryName: "Music",
+    autoSyncEnabled: true,
+    autoSyncMinutes: 360,
+  },
+  credential: { configured: false, source: "none" },
+  schedule: {
+    nextAutoSyncAt: null,
+    lastAttemptAt: null,
+    lastSuccessAt: null,
+    lastError: null,
+    cacheTrackCount: 0,
+  },
+};
 let mockSavedExternalDiscoveries: SavedExternalDiscovery[] = [];
 let mockWishListItems: WishListItem[] = [
   {
@@ -3982,6 +4020,7 @@ export async function savePlaylist(input: SavePlaylistRequest) {
       libraryTrackCount: mockStatus.trackCount,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
+      automation: existing?.automation ?? emptyPlaylistAutomation(),
     } satisfies SavedPlaylist;
     mockSavedPlaylists = [
       saved,
@@ -4000,6 +4039,192 @@ export async function deleteSavedPlaylist(id: number) {
     return;
   }
   return invoke<void>("delete_saved_playlist", { id });
+}
+
+export async function setPlaylistAutomation(
+  input: SetPlaylistAutomationRequest,
+) {
+  if (!isTauriRuntime()) {
+    const index = mockSavedPlaylists.findIndex(
+      (playlist) => playlist.id === input.id,
+    );
+    if (index < 0) {
+      throw new Error(`Saved playlist ${input.id} was not found.`);
+    }
+    const existing = mockSavedPlaylists[index];
+    const updated: SavedPlaylist = {
+      ...existing,
+      updatedAt: new Date().toISOString(),
+      automation: {
+        ...existing.automation,
+        smart: input.smart,
+        plexSyncEnabled: input.smart && input.plexSyncEnabled,
+        lastPlexError: null,
+        desiredCount: input.smart ? existing.playlist.matchingTrackCount : 0,
+      },
+    };
+    mockSavedPlaylists = mockSavedPlaylists.map((playlist) =>
+      playlist.id === input.id ? updated : playlist,
+    );
+    return updated;
+  }
+  return invoke<SavedPlaylist>("set_playlist_automation", { input });
+}
+
+export async function refreshSmartPlaylist(id: number) {
+  if (!isTauriRuntime()) {
+    const playlist = mockSavedPlaylists.find((item) => item.id === id);
+    if (!playlist) {
+      throw new Error(`Saved playlist ${id} was not found.`);
+    }
+    const refreshedAt = new Date().toISOString();
+    const updated: SavedPlaylist = {
+      ...playlist,
+      updatedAt: refreshedAt,
+      automation: {
+        ...playlist.automation,
+        lastEvaluatedAt: refreshedAt,
+        desiredCount: playlist.playlist.matchingTrackCount,
+      },
+    };
+    mockSavedPlaylists = mockSavedPlaylists.map((item) =>
+      item.id === id ? updated : item,
+    );
+    return {
+      playlist: updated,
+      desiredCount: updated.automation.desiredCount,
+      previewCount: updated.playlist.tracks.length,
+      refreshedAt,
+    } satisfies SmartPlaylistRefreshResult;
+  }
+  return invoke<SmartPlaylistRefreshResult>("refresh_smart_playlist", { id });
+}
+
+export async function getPlexBootstrap() {
+  if (!isTauriRuntime()) {
+    return mockPlexBootstrap;
+  }
+  return invoke<PlexBootstrap>("plex_bootstrap");
+}
+
+export async function savePlexProfile(input: SavePlexProfileRequest) {
+  if (!isTauriRuntime()) {
+    mockPlexBootstrap = {
+      ...mockPlexBootstrap,
+      profile: { ...input },
+    };
+    return mockPlexBootstrap;
+  }
+  return invoke<PlexBootstrap>("plex_save_profile", { input });
+}
+
+export async function savePlexToken(token: string) {
+  if (!isTauriRuntime()) {
+    const credential: PlexCredentialStatus = {
+      configured: token.trim().length > 0,
+      source: token.trim().length > 0 ? "windowsCredentialManager" : "none",
+    };
+    mockPlexBootstrap = { ...mockPlexBootstrap, credential };
+    return credential;
+  }
+  return invoke<PlexCredentialStatus>("plex_save_token", { token });
+}
+
+export async function deletePlexToken() {
+  if (!isTauriRuntime()) {
+    const credential: PlexCredentialStatus = {
+      configured: false,
+      source: "none",
+    };
+    mockPlexBootstrap = { ...mockPlexBootstrap, credential };
+    return credential;
+  }
+  return invoke<PlexCredentialStatus>("plex_delete_token");
+}
+
+export async function testPlexConnection() {
+  if (!isTauriRuntime()) {
+    return {
+      connected: true,
+      serverName: "Preview Plex",
+      serverVersion: "1.0.0",
+      machineIdentifier: "preview-server",
+      libraryName: mockPlexBootstrap.profile.libraryName,
+      librarySectionKey: "1",
+      message: `Connected to ${mockPlexBootstrap.profile.libraryName}.`,
+    } satisfies PlexConnectionTest;
+  }
+  return invoke<PlexConnectionTest>("plex_test_connection");
+}
+
+export async function syncAllPlexPlaylists() {
+  if (!isTauriRuntime()) {
+    const completedAt = new Date().toISOString();
+    const playlists = mockSavedPlaylists
+      .filter((item) => item.automation.plexSyncEnabled)
+      .map(
+        (item) =>
+          ({
+            savedPlaylistId: item.id,
+            playlistName: item.name,
+            status: "unchanged",
+            desiredCount: item.automation.desiredCount,
+            matchedCount: item.automation.desiredCount,
+            missingCount: 0,
+            addedCount: 0,
+            removedCount: 0,
+            movedCount: 0,
+            plexPlaylistRatingKey: item.automation.plexPlaylistRatingKey,
+            syncedAt: completedAt,
+            message: "Already synchronized.",
+          }) satisfies PlexPlaylistSyncResult,
+      );
+    return {
+      trigger: "manual",
+      playlistCount: playlists.length,
+      syncedCount: playlists.length,
+      failedCount: 0,
+      desiredCount: playlists.reduce(
+        (total, item) => total + item.desiredCount,
+        0,
+      ),
+      matchedCount: playlists.reduce(
+        (total, item) => total + item.matchedCount,
+        0,
+      ),
+      missingCount: 0,
+      cacheRefreshed: true,
+      cacheTrackCount: mockPlexBootstrap.schedule.cacheTrackCount,
+      completedAt,
+      message: `Synchronized ${playlists.length} Plex playlist${playlists.length === 1 ? "" : "s"}.`,
+      playlists,
+    } satisfies PlexSyncSummary;
+  }
+  return invoke<PlexSyncSummary>("plex_sync_all");
+}
+
+export async function syncPlexPlaylist(id: number) {
+  if (!isTauriRuntime()) {
+    const item = mockSavedPlaylists.find((playlist) => playlist.id === id);
+    if (!item) {
+      throw new Error(`Saved playlist ${id} was not found.`);
+    }
+    return {
+      savedPlaylistId: id,
+      playlistName: item.name,
+      status: "unchanged",
+      desiredCount: item.automation.desiredCount,
+      matchedCount: item.automation.desiredCount,
+      missingCount: 0,
+      addedCount: 0,
+      removedCount: 0,
+      movedCount: 0,
+      plexPlaylistRatingKey: item.automation.plexPlaylistRatingKey,
+      syncedAt: new Date().toISOString(),
+      message: "Already synchronized.",
+    } satisfies PlexPlaylistSyncResult;
+  }
+  return invoke<PlexPlaylistSyncResult>("plex_sync_playlist", { id });
 }
 
 const previewExternalCatalog: Record<

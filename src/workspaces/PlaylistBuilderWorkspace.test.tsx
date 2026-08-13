@@ -129,6 +129,23 @@ describe("playlist builder workspace", () => {
     });
     expect(screen.getByText("Luna preview mix")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("checkbox", { name: /Smart playlist/ }));
+    expect(
+      await screen.findByText(
+        "Smart rules enabled. The playlist now follows the saved filters.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Sync automatically to Plex/ }),
+    );
+    expect(
+      await screen.findByText(
+        "Automatic Plex sync enabled for this playlist.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Smart")).toBeInTheDocument();
+    expect(screen.getByText("Plex")).toBeInTheDocument();
+
     fireEvent.click(
       screen.getByRole("button", {
         name: "Remove What Have I Done to Deserve This?",

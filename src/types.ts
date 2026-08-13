@@ -1012,6 +1012,101 @@ export type SavedPlaylist = {
   libraryTrackCount: number;
   createdAt: string;
   updatedAt: string;
+  automation: PlaylistAutomationStatus;
+};
+
+export type PlaylistAutomationStatus = {
+  smart: boolean;
+  plexSyncEnabled: boolean;
+  plexPlaylistRatingKey: string | null;
+  lastEvaluatedAt: string | null;
+  lastPlexAttemptAt: string | null;
+  lastPlexSuccessAt: string | null;
+  lastPlexError: string | null;
+  desiredCount: number;
+  matchedCount: number;
+  missingCount: number;
+};
+
+export type SetPlaylistAutomationRequest = {
+  id: number;
+  smart: boolean;
+  plexSyncEnabled: boolean;
+};
+
+export type SmartPlaylistRefreshResult = {
+  playlist: SavedPlaylist;
+  desiredCount: number;
+  previewCount: number;
+  refreshedAt: string;
+};
+
+export type PlexProfile = {
+  baseUrl: string;
+  libraryName: string;
+  autoSyncEnabled: boolean;
+  autoSyncMinutes: number;
+};
+
+export type SavePlexProfileRequest = PlexProfile;
+
+export type PlexCredentialStatus = {
+  configured: boolean;
+  source: "windowsCredentialManager" | "environment" | "none";
+};
+
+export type PlexScheduleStatus = {
+  nextAutoSyncAt: string | null;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+  cacheTrackCount: number;
+};
+
+export type PlexBootstrap = {
+  profile: PlexProfile;
+  credential: PlexCredentialStatus;
+  schedule: PlexScheduleStatus;
+};
+
+export type PlexConnectionTest = {
+  connected: boolean;
+  serverName: string;
+  serverVersion: string;
+  machineIdentifier: string;
+  libraryName: string;
+  librarySectionKey: string;
+  message: string;
+};
+
+export type PlexPlaylistSyncResult = {
+  savedPlaylistId: number;
+  playlistName: string;
+  status: "synced" | "unchanged" | "partial" | "waitingForPlex" | "failed";
+  desiredCount: number;
+  matchedCount: number;
+  missingCount: number;
+  addedCount: number;
+  removedCount: number;
+  movedCount: number;
+  plexPlaylistRatingKey: string | null;
+  syncedAt: string;
+  message: string;
+};
+
+export type PlexSyncSummary = {
+  trigger: string;
+  playlistCount: number;
+  syncedCount: number;
+  failedCount: number;
+  desiredCount: number;
+  matchedCount: number;
+  missingCount: number;
+  cacheRefreshed: boolean;
+  cacheTrackCount: number;
+  completedAt: string;
+  message: string;
+  playlists: PlexPlaylistSyncResult[];
 };
 
 export type ExternalDiscoveryEntity = "artist" | "album" | "song";

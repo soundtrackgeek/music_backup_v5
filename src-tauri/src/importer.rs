@@ -425,6 +425,9 @@ pub fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSum
             let duration_ms = started.elapsed().as_millis();
             wishlist::reconcile_for_connection(&conn)
                 .context("Could not reconcile the wish list after import")?;
+            if let Err(error) = db::refresh_all_smart_playlists_for_connection(&conn) {
+                eprintln!("Could not refresh smart playlists after import: {error:#}");
+            }
             cleanup_completed_stage(&conn, session_id)?;
             match completed_stage_storage_should_be_reclaimed(&conn) {
                 Ok(true) => {

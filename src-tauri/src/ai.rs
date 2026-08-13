@@ -424,6 +424,38 @@ pub struct SavePlaylistRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SetPlaylistAutomationRequest {
+    pub id: i64,
+    pub smart: bool,
+    pub plex_sync_enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistAutomationStatus {
+    pub smart: bool,
+    pub plex_sync_enabled: bool,
+    pub plex_playlist_rating_key: Option<String>,
+    pub last_evaluated_at: Option<String>,
+    pub last_plex_attempt_at: Option<String>,
+    pub last_plex_success_at: Option<String>,
+    pub last_plex_error: Option<String>,
+    pub desired_count: i64,
+    pub matched_count: i64,
+    pub missing_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SmartPlaylistRefreshResult {
+    pub playlist: SavedPlaylist,
+    pub desired_count: i64,
+    pub preview_count: usize,
+    pub refreshed_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExportPlaylistRequest {
     pub name: String,
     pub playlist: AiPlaylist,
@@ -441,6 +473,7 @@ pub struct SavedPlaylist {
     pub library_track_count: i64,
     pub created_at: String,
     pub updated_at: String,
+    pub automation: PlaylistAutomationStatus,
 }
 
 #[derive(Debug, Clone, Deserialize)]

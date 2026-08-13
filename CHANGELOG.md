@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.137.0] - 2026-08-13
+### Added
+- Added rule-backed Smart playlists that reevaluate saved SQLite filters after imports, on load, before sync, and on demand.
+- Added secure Plex settings for server URL, music library, Windows Credential Manager token storage, connection checks, six-hour automatic sync, manual all-playlist sync, and per-playlist sync.
+- Added managed Plex audio playlist reconciliation with exact full-path matching, stable add/remove/reorder updates, persistent status, and safe retry behavior for files Plex has not scanned yet.
+- Added an indexed read-only local Plex database accelerator with authenticated API fallback, targeted caching, schema version 56, focused Rust/UI coverage, and responsive Smart/Plex controls.
+
+### Changed
+- Saved playlists now expose automation state and live desired, matched, and waiting-for-Plex counts.
+- Synchronized app metadata and provider user agents to `0.137.0`.
+
 ## [0.136.0] - 2026-08-13
 ### Added
 - Added an independent **Recommendation Mixer** below Daily Edition where two to eight local artist or album seeds can be combined with a Familiar-to-Explore ranking control.

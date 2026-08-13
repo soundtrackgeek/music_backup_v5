@@ -18,6 +18,16 @@ Official UK albums and singles import from weekly CSV rows in `CSV_ALBUMS_UK/` a
 
 Settings is split into **General**, **Providers**, **AI**, **Data & Backups**, **MusicBrainz**, **Updates**, and **Diagnostics**. A sticky section switcher keeps the active area close at hand, supports click and arrow-key navigation, and changes to a three-column layout at the supported 1040px minimum width. Only the selected section is shown, while every section remains mounted so unsaved drafts and live operation state survive switching between areas.
 
+## Smart playlists and Plex sync
+
+Saved Playlist Builder results can be turned into **Smart playlists**. A Smart playlist keeps its saved SQLite filters rather than treating the original track IDs as permanent membership, so a rule such as loved tracks from 1980 through 1989 is reevaluated after a successful MusicBee import, when saved playlists are loaded, before every Plex sync, or from **Refresh rules**. Direct Search handoffs that contain an explicit list of track IDs remain snapshots and must be rebuilt as a rule-based Playlist Builder recipe before Smart mode can be enabled.
+
+Configure Plex under **Settings → Providers → Plex playlists**. The default server is `http://localhost:32400`, the default music library is `Music`, and automatic sync runs every 360 minutes while Music Library is open. Each Smart playlist has its own **Sync automatically to Plex** switch plus a **Sync to Plex** action; Settings also provides **Sync all now**. The app creates an ordinary Plex audio playlist with a private management marker, then adds, removes, and reorders only that managed playlist. It never changes Plex library metadata or unmanaged playlists.
+
+Track identity is the normalized full path built from MusicBee `<File Path>` plus `<Filename>` and Plex's media-part file path. For a local Plex server, the indexed Plex SQLite catalog is opened read-only to avoid scanning very large libraries; remote servers and unresolved paths use authenticated Plex API queries. Matches are cached locally. A track that Music Library knows about before Plex's nightly scan is counted as **waiting for Plex**, skipped for that run, and retried later. If a non-empty Smart playlist maps zero tracks, the existing Plex playlist is left untouched.
+
+The Plex token is stored as a generic credential in Windows Credential Manager and is never returned to the frontend, written to SQLite or `plex.json`, logged, exported, or included in backups. Debug builds may temporarily read `PLEX_TOKEN` from the repo-root `.env`; a token saved in Settings takes precedence, and production builds do not load `.env`.
+
 ## Album reviews
 
 Selecting an album in **Albums** resolves its CritiqueBrainz release group from an app-owned MusicBrainz decision when one exists, otherwise by an exact MusicBrainz album-title and artist match. The review panel loads the strongest available community review, preferring English and then Norwegian text, and shows the contributor, optional one-to-five rating, language, exact Creative Commons license, and a direct CritiqueBrainz link. Long reviews expand in place and **Refresh** bypasses the local cache.

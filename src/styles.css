@@ -10719,8 +10719,98 @@ button {
 .deemix-settings-panel,
 .soulseek-settings-panel,
 .usenet-settings-panel,
-.discogs-settings-panel {
+.discogs-settings-panel,
+.plex-settings-panel {
   grid-column: span 2;
+}
+
+.plex-settings-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 2fr) minmax(180px, 1fr) 160px;
+  align-items: end;
+  gap: 12px;
+}
+
+.plex-auto-sync-toggle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background: #f8fbfa;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.plex-auto-sync-toggle input {
+  margin-top: 2px;
+  accent-color: #1d6b55;
+}
+
+.plex-auto-sync-toggle > span {
+  display: grid;
+  gap: 2px;
+}
+
+.plex-auto-sync-toggle strong {
+  color: #263630;
+  font-size: 13px;
+}
+
+.plex-auto-sync-toggle small {
+  color: #697671;
+  font-size: 11px;
+}
+
+.plex-settings-actions,
+.plex-token-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.plex-token-row .criterion {
+  flex: 1 1 320px;
+}
+
+.plex-schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.plex-schedule-grid article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 7px;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background: #f8fbfa;
+  padding: 10px;
+  color: #60706a;
+}
+
+.plex-schedule-grid article > span {
+  font-size: 11px;
+}
+
+.plex-schedule-grid article > strong {
+  grid-column: 2;
+  overflow: hidden;
+  color: #263630;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plex-sync-detail {
+  margin: 10px 0 0;
+  color: #53635d;
+  font-size: 12px;
 }
 
 .usenet-settings-group {
@@ -12031,6 +12121,23 @@ button {
   color: #9bd2bf;
 }
 
+:root[data-theme="dark"] .plex-auto-sync-toggle,
+:root[data-theme="dark"] .plex-schedule-grid article {
+  border-color: #35433e;
+  background: #111815;
+}
+
+:root[data-theme="dark"] .plex-auto-sync-toggle strong,
+:root[data-theme="dark"] .plex-schedule-grid article > strong {
+  color: #dce7e3;
+}
+
+:root[data-theme="dark"] .plex-auto-sync-toggle small,
+:root[data-theme="dark"] .plex-schedule-grid article,
+:root[data-theme="dark"] .plex-sync-detail {
+  color: #a9b7b2;
+}
+
 :root[data-theme="dark"] .criterion .criterion-checkbox-row {
   border-color: #35433e;
   background: #111815;
@@ -13187,6 +13294,7 @@ button {
   .soulseek-settings-panel,
   .usenet-settings-panel,
   .discogs-settings-panel,
+  .plex-settings-panel,
   .update-settings-panel,
   .backup-settings-panel,
   .performance-settings-panel,
@@ -13204,6 +13312,8 @@ button {
   .soulseek-settings-actions,
   .soulseek-share-heading,
   .discogs-settings-toolbar,
+  .plex-settings-grid,
+  .plex-schedule-grid,
   .deemix-download-toolbar,
   .deemix-preference-grid,
   .soulseek-connection-grid,
@@ -17478,6 +17588,101 @@ button {
   white-space: nowrap;
 }
 
+.playlist-automation-panel {
+  display: grid;
+  gap: 10px;
+  border-bottom: 1px solid #e0e8e5;
+  background: #fbfdfc;
+  padding: 14px;
+}
+
+.playlist-automation-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.playlist-automation-heading span {
+  color: #34776b;
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.playlist-automation-heading h3 {
+  margin: 1px 0 0;
+  color: #263530;
+  font-size: 14px;
+}
+
+.playlist-automation-heading small {
+  color: #788680;
+  font-size: 10px;
+}
+
+.playlist-automation-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.playlist-automation-options label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid #dce5e1;
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.playlist-automation-options input {
+  margin-top: 2px;
+  accent-color: #1d6b55;
+}
+
+.playlist-automation-options label > span {
+  display: grid;
+  gap: 1px;
+}
+
+.playlist-automation-options strong {
+  color: #2c3a35;
+  font-size: 11px;
+}
+
+.playlist-automation-options small {
+  color: #73817c;
+  font-size: 9px;
+  line-height: 14px;
+}
+
+.playlist-automation-status,
+.playlist-automation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.playlist-automation-status span {
+  color: #788680;
+  font-size: 10px;
+}
+
+.playlist-automation-status strong {
+  margin-right: 4px;
+  color: #285f55;
+  font-size: 12px;
+}
+
+.playlist-automation-panel .error-message,
+.playlist-automation-panel .success-message {
+  margin: 0;
+}
+
 .playlist-track-list {
   display: grid;
 }
@@ -17693,6 +17898,26 @@ button {
   line-height: 14px;
 }
 
+.playlist-saved-list article > button:first-child .playlist-automation-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+  overflow: visible;
+  white-space: normal;
+}
+
+.playlist-automation-badges em {
+  border: 1px solid #b9d8d0;
+  border-radius: 999px;
+  color: #286d60;
+  background: #edf7f4;
+  padding: 0 5px;
+  font-size: 8px;
+  font-style: normal;
+  line-height: 13px;
+}
+
 .playlist-empty-state {
   display: grid;
   justify-items: center;
@@ -17771,6 +17996,37 @@ button {
   background: #131a18;
 }
 
+:root[data-theme="dark"] .playlist-automation-panel {
+  border-color: #34423d;
+  background: #131a18;
+}
+
+:root[data-theme="dark"] .playlist-automation-heading h3,
+:root[data-theme="dark"] .playlist-automation-options strong {
+  color: #e8f1ee;
+}
+
+:root[data-theme="dark"] .playlist-automation-options label {
+  border-color: #34433e;
+  background: #111815;
+}
+
+:root[data-theme="dark"] .playlist-automation-heading small,
+:root[data-theme="dark"] .playlist-automation-options small,
+:root[data-theme="dark"] .playlist-automation-status span {
+  color: #98a8a2;
+}
+
+:root[data-theme="dark"] .playlist-automation-status strong {
+  color: #8fd0c3;
+}
+
+:root[data-theme="dark"] .playlist-automation-badges em {
+  border-color: #42655d;
+  color: #9bd9ce;
+  background: #1b302a;
+}
+
 :root[data-theme="dark"] .playlist-result-heading input,
 :root[data-theme="dark"] .playlist-saved-panel h2,
 :root[data-theme="dark"] .playlist-recipe-stats dd,
@@ -17827,7 +18083,8 @@ button {
 
 @media (max-width: 900px) {
   .playlist-prompt-form,
-  .playlist-recipe-stats {
+  .playlist-recipe-stats,
+  .playlist-automation-options {
     grid-template-columns: 1fr;
   }
 

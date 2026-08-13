@@ -43,7 +43,7 @@ const settingsSections: SettingsSectionDefinition[] = [
   {
     id: "providers",
     label: "Providers",
-    description: "Discogs, Last.fm, downloads, sharing, and artist enrichment",
+    description: "Plex, Discogs, Last.fm, downloads, sharing, and artist enrichment",
     icon: Plug,
   },
   {

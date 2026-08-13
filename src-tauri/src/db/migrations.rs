@@ -1,7 +1,15 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 55;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 56;
+
+pub(super) fn phase_fifty_six_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_fifty_five_schema_exists(conn)?
+        && super::schema_table_exists(conn, "playlist_automations")?
+        && super::schema_table_exists(conn, "plex_track_cache")?
+        && super::schema_table_exists(conn, "plex_sync_state")?
+        && super::schema_index_exists(conn, "idx_plex_track_cache_path")?)
+}
 
 pub(super) fn phase_fifty_five_schema_exists(conn: &Connection) -> Result<bool> {
     Ok(phase_fifty_four_schema_exists(conn)?
