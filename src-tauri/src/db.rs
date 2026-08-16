@@ -16330,15 +16330,20 @@ fn discovery_artist_completion_snapshot_with_scope(
         }
     }
 
-    let mut releases_by_artist: HashMap<String, Vec<(String, String, Option<i32>)>> =
+    let mut releases_by_artist: HashMap<String, Vec<(String, String, Option<i32>, Option<bool>)>> =
         HashMap::new();
     for row in conn
         .prepare(
-            "SELECT artist_mbid, release_mbid, title, year
-             FROM musicbrainz_artist_release_groups
-             WHERE LOWER(COALESCE(type, '')) = 'album'
-               AND TRIM(COALESCE(secondary_types, '')) = ''
-               AND status = 'Official'",
+            "SELECT release_group.artist_mbid, release_group.release_mbid,
+                    release_group.title, release_group.year,
+                    release_status.has_official_release
+             FROM musicbrainz_artist_release_groups release_group
+             LEFT JOIN musicbrainz_release_status_cache release_status
+               ON release_status.artist_mbid = release_group.artist_mbid
+              AND release_status.release_mbid = release_group.release_mbid
+             WHERE LOWER(COALESCE(release_group.type, '')) = 'album'
+               AND TRIM(COALESCE(release_group.secondary_types, '')) = ''
+               AND release_group.status = 'Official'",
         )?
         .query_map([], |row| {
             Ok((
@@ -16346,14 +16351,15 @@ fn discovery_artist_completion_snapshot_with_scope(
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, Option<i32>>(3)?,
+                row.get::<_, Option<i64>>(4)?.map(|value| value != 0),
             ))
         })?
     {
-        let (artist_mbid, release_mbid, title, year) = row?;
+        let (artist_mbid, release_mbid, title, year, has_official_release) = row?;
         releases_by_artist
             .entry(artist_mbid.to_lowercase())
             .or_default()
-            .push((release_mbid, title, year));
+            .push((release_mbid, title, year, has_official_release));
     }
 
     let mut decisions = HashMap::new();
@@ -16397,18 +16403,17 @@ fn discovery_artist_completion_snapshot_with_scope(
         let releases = &releases_by_artist[&mbid.to_lowercase()];
         let relevant = releases
             .iter()
-            .filter(|(release_mbid, _, _)| {
-                !matches!(
-                    decisions
-                        .get(&(candidate.artist_id.clone(), release_mbid.clone()))
-                        .map(String::as_str),
-                    Some("not-in-scope" | "ignored")
-                )
+            .filter(|(release_mbid, _, _, has_official_release)| {
+                let decision = decisions
+                    .get(&(candidate.artist_id.clone(), release_mbid.clone()))
+                    .map(String::as_str);
+                !matches!(decision, Some("not-in-scope" | "ignored"))
+                    && (decision == Some("include") || *has_official_release != Some(false))
             })
             .collect::<Vec<_>>();
         let missing = relevant
             .iter()
-            .filter(|(release_mbid, title, _)| {
+            .filter(|(release_mbid, title, _, _)| {
                 !local.titles.contains(&normalize_text(title))
                     && !matches!(
                         decisions
@@ -16417,7 +16422,7 @@ fn discovery_artist_completion_snapshot_with_scope(
                         Some("owned")
                     )
             })
-            .map(|(_, title, year)| (title.clone(), *year))
+            .map(|(_, title, year, _)| (title.clone(), *year))
             .collect::<Vec<_>>();
         let official = relevant.len() as i64;
         let owned = official - missing.len() as i64;
@@ -25625,7 +25630,13 @@ mod tests {
                 ('mbid-target artist', 'target-rg-1', 'Target One', 1984, 'Album', '', 'Official', 'test', '2026-08-12'),
                 ('mbid-target artist', 'target-rg-2', 'Target Two', 1986, 'Album', '', 'Official', 'test', '2026-08-12'),
                 ('mbid-target artist', 'target-rg-3', 'Target Three', 1988, 'Album', '', 'Official', 'test', '2026-08-12'),
-                ('mbid-target artist', 'target-rg-4', 'Missing Target', 1989, 'Album', '', 'Official', 'test', '2026-08-12');"
+                ('mbid-target artist', 'target-rg-4', 'Missing Target', 1989, 'Album', '', 'Official', 'test', '2026-08-12'),
+                ('mbid-target artist', 'target-rg-5', 'Unofficial Bootleg', 1987, 'Album', '', 'Official', 'test', '2026-08-12');
+             INSERT INTO musicbrainz_release_status_cache (
+                 artist_mbid, release_mbid, has_official_release, checked_at
+             ) VALUES (
+                 'mbid-target artist', 'target-rg-5', 0, '2026-08-12'
+             );"
         )
         .expect("insert target release groups");
 
@@ -25642,6 +25653,9 @@ mod tests {
 
         assert_eq!(snapshot.matching_count, 1);
         assert_eq!(snapshot.artist_stories[0].artist, target);
+        assert_eq!(snapshot.artist_stories[0].owned_album_count, 3);
+        assert_eq!(snapshot.artist_stories[0].official_album_count, 4);
+        assert_eq!(snapshot.artist_stories[0].missing_album_count, 1);
         assert_eq!(
             snapshot.artist_stories[0].missing_release_title,
             "Missing Target"

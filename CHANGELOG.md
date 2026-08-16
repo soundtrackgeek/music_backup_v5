@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.138.1] - 2026-08-16
+### Fixed
+- Made Discovery's artist **Complete the Collection** counts honor the same cached per-release official-status verification as the main Artist discography, excluding unofficial bootlegs unless they are manually included.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.138.1`.
+
 ## [0.138.0] - 2026-08-13
 ### Added
 - Added direct Wish List actions to missing Similar Artist and Related Album cards while preserving owned-item navigation and Last.fm links.

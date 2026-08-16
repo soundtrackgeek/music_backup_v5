@@ -12,7 +12,7 @@ use url::Url;
 const MUSICBRAINZ_RELEASE_GROUP_API: &str = "https://musicbrainz.org/ws/2/release-group/";
 const CRITIQUEBRAINZ_REVIEW_API: &str = "https://critiquebrainz.org/ws/1/review/";
 const PROVIDER_USER_AGENT: &str =
-    "music-backup-v5/0.138.0 (album reviews; https://github.com/soundtrackgeek/music_backup_v5)";
+    "music-backup-v5/0.138.1 (album reviews; https://github.com/soundtrackgeek/music_backup_v5)";
 const REVIEW_CACHE_DAYS: i64 = 30;
 const UNAVAILABLE_CACHE_DAYS: i64 = 7;
 
