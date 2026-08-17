@@ -26,7 +26,7 @@ use zeroize::Zeroizing;
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_MEDIA_URL: &str = "https://media.deezer.com/v1/get_url";
 const DEEMIX_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.139.0";
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.139.1";
 const DOWNLOAD_EVENT: &str = "deemix-download-progress";
 const STREAM_CHUNK_SIZE: usize = 2048;
 const MAX_ARTWORK_BYTES: u64 = 20 * 1024 * 1024;
@@ -1015,9 +1015,8 @@ fn parse_album_metadata(
     gateway_tracks: &Value,
     quality_candidates: &[DownloadQuality],
 ) -> Result<AlbumMetadata> {
-    let preferred_quality = quality_candidates
+    quality_candidates
         .first()
-        .copied()
         .context("No Deezer download quality is available for this account")?;
     let id = required_string(public_album.get("id"), "album ID")?;
     if id != requested_id {
@@ -1123,17 +1122,8 @@ fn parse_album_metadata(
         let fallback_id = gateway_fallback_id(gateway_track, &track_id);
         let download_quality = select_download_quality(gateway_track, quality_candidates);
         let Some(download_quality) = download_quality else {
-            let accepted = quality_candidates
-                .iter()
-                .map(|quality| quality.display_name())
-                .collect::<Vec<_>>()
-                .join(", then ");
-            bail!(
-                "{} is unavailable as {}. Accepted qualities were: {}.",
-                track_title,
-                preferred_quality.display_name(),
-                accepted
-            );
+            let message = unavailable_track_message(&track_title, quality_candidates);
+            bail!(message);
         };
         let (composers, involved_people) = contributor_tags(gateway_track.get("SNG_CONTRIBUTORS"));
         tracks.push(TrackMetadata {
@@ -1212,6 +1202,19 @@ fn accepted_quality_names(quality_candidates: &[DownloadQuality]) -> String {
         .map(|quality| quality.display_name())
         .collect::<Vec<_>>()
         .join(", then ")
+}
+
+fn unavailable_track_message(track_title: &str, quality_candidates: &[DownloadQuality]) -> String {
+    let checked_qualities = accepted_quality_names(quality_candidates);
+    if quality_candidates.len() > 1 {
+        format!(
+            "{track_title} has no full Deezer audio file at any accepted quality. Quality fallback checked {checked_qualities}. The album was not downloaded because every track must be available."
+        )
+    } else {
+        format!(
+            "{track_title} has no full Deezer audio file at the accepted quality: {checked_qualities}. The album was not downloaded because every track must be available."
+        )
+    }
 }
 
 fn update_track_media_source(
@@ -2462,6 +2465,17 @@ mod tests {
                 &DownloadQuality::Flac.fallback_candidates(false)
             ),
             None
+        );
+        assert_eq!(
+            unavailable_track_message(
+                "Flyin' Shoes",
+                &[DownloadQuality::Mp3_320, DownloadQuality::Mp3_128]
+            ),
+            "Flyin' Shoes has no full Deezer audio file at any accepted quality. Quality fallback checked MP3 320 kbps, then MP3 128 kbps. The album was not downloaded because every track must be available."
+        );
+        assert_eq!(
+            unavailable_track_message("Flyin' Shoes", &[DownloadQuality::Mp3_320]),
+            "Flyin' Shoes has no full Deezer audio file at the accepted quality: MP3 320 kbps. The album was not downloaded because every track must be available."
         );
     }
 

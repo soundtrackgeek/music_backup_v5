@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.139.1] - 2026-08-17
+### Fixed
+- Clarified Deemix unavailable-track failures so they name the qualities checked, state that Deezer supplied no full audio file, and explain why an incomplete album was not downloaded.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.139.1`.
+
 ## [0.139.0] - 2026-08-17
 ### Changed
 - Removed the 500-track cap from direct Search playlist creation, saving, export, Smart refresh previews, and local search retrieval while retaining Luna's intentional 500-candidate and 200-selected-track planning bounds.
