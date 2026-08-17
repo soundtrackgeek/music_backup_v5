@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.139.2] - 2026-08-17
+### Fixed
+- Made Wish List artist additions request only MusicBrainz Album release groups, so an unrelated EP lookup failure no longer prevents album-only validation or adding the artist.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.139.2`.
+
 ## [0.139.1] - 2026-08-17
 ### Fixed
 - Clarified Deemix unavailable-track failures so they name the qualities checked, state that Deezer supplied no full audio file, and explain why an incomplete album was not downloaded.

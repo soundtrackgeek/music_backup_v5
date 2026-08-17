@@ -44,7 +44,7 @@ const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.139.1 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.139.2 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
 const MUSICBRAINZ_RATE_LIMIT_DELAY_MS: u64 = 1100;
@@ -226,7 +226,7 @@ pub fn refresh_artist_release_groups_for_app(
     let artist_name = normalize_display_name(&request.artist_name, &request.artist_key);
     let artist_key = normalize_local_artist_key(&request.artist_key, &artist_name);
     let mbid = required_mbid(request.musicbrainz_mbid.as_deref())?;
-    let rows = fetch_artist_release_groups(&mbid)?;
+    let rows = fetch_artist_release_groups(&mbid, ArtistReleaseGroupScope::AlbumsAndEps)?;
     thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
     let origin_payload = fetch_artist_origin(&mbid)?;
     let fetched_at = Utc::now().to_rfc3339();
@@ -323,13 +323,35 @@ fn save_refreshed_artist_release_groups(
     Ok(rows.len())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ArtistReleaseGroupScope {
+    AlbumsOnly,
+    AlbumsAndEps,
+}
+
+fn release_group_types_for_scope(
+    scope: ArtistReleaseGroupScope,
+) -> &'static [(&'static str, &'static str)] {
+    match scope {
+        ArtistReleaseGroupScope::AlbumsOnly => &[("album", "Album")],
+        ArtistReleaseGroupScope::AlbumsAndEps => &[("album", "Album"), ("ep", "EP")],
+    }
+}
+
+fn wishlist_release_group_scope() -> ArtistReleaseGroupScope {
+    ArtistReleaseGroupScope::AlbumsOnly
+}
+
 #[cfg(not(test))]
-fn fetch_artist_release_groups(artist_mbid: &str) -> Result<Vec<RefreshedReleaseGroup>> {
+fn fetch_artist_release_groups(
+    artist_mbid: &str,
+    scope: ArtistReleaseGroupScope,
+) -> Result<Vec<RefreshedReleaseGroup>> {
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(30))
         .build();
     let mut rows = Vec::new();
-    for (type_filter, fallback_type) in [("album", "Album"), ("ep", "EP")] {
+    for &(type_filter, fallback_type) in release_group_types_for_scope(scope) {
         let mut offset = 0usize;
         loop {
             let url = format!(
@@ -3416,7 +3438,7 @@ pub(crate) fn official_album_release_groups_for_wishlist(
     artist_mbid: &str,
 ) -> Result<(Vec<WishListOfficialAlbum>, String)> {
     let artist_mbid = required_mbid(Some(artist_mbid))?;
-    let rows = fetch_artist_release_groups(&artist_mbid)?;
+    let rows = fetch_artist_release_groups(&artist_mbid, wishlist_release_group_scope())?;
     thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
     let official_ids = fetch_official_release_group_ids(&artist_mbid)?
         .context("MusicBrainz could not verify official album releases")?;
@@ -4997,6 +5019,18 @@ fn invalid_status(
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn wish_list_artist_discovery_requests_album_release_groups_only() {
+        assert_eq!(
+            release_group_types_for_scope(wishlist_release_group_scope()),
+            &[("album", "Album")]
+        );
+        assert_eq!(
+            release_group_types_for_scope(ArtistReleaseGroupScope::AlbumsAndEps),
+            &[("album", "Album"), ("ep", "EP")]
+        );
+    }
 
     #[test]
     fn wish_list_artist_discovery_keeps_only_pure_official_albums() {
