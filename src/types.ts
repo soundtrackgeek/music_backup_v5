@@ -2987,6 +2987,11 @@ export type MusicToolIssueRow = {
   value: string | null;
   filename: string | null;
   filePath: string | null;
+  billboard?: string | null;
+  officialUk?: string | null;
+  vgLista?: string | null;
+  tiISkuddet?: string | null;
+  norsktoppen?: string | null;
 };
 
 export type MusicToolIssueResponse = {

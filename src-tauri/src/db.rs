@@ -361,16 +361,17 @@ const MUSIC_TOOLS: &[MusicToolDefinition] = &[
         scope: "albums",
     },
     MusicToolDefinition {
-        id: "missing-billboard-albums",
-        label: "Missing Billboard Albums",
-        description: "Imported Billboard chart albums that are not linked to any library album.",
+        id: "missing-chart-albums",
+        label: "Missing Chart Albums",
+        description:
+            "Imported Billboard, Official UK, and VG Lista albums not linked to the library.",
         severity: "low",
         scope: "albums",
     },
     MusicToolDefinition {
-        id: "missing-billboard-singles",
-        label: "Missing Billboard Singles",
-        description: "Imported Billboard chart singles that are not linked to any library track.",
+        id: "missing-chart-singles",
+        label: "Missing Chart Singles",
+        description: "Imported Billboard, Official UK, VG Lista, Ti i Skuddet, and Norsktoppen singles not linked to the library.",
         severity: "low",
         scope: "tracks",
     },
@@ -11074,45 +11075,147 @@ fn ensure_music_tool_data_for_request(
     request: &MusicToolIssueRequest,
 ) -> Result<()> {
     match request.tool_id.as_str() {
-        "missing-billboard-albums" => {
-            if count_rows(conn, "billboard_chart_entries")? > 0 {
-                return Ok(());
+        "missing-chart-albums" => {
+            let settings = settings_for_connection(conn)?;
+
+            if count_rows(conn, "billboard_chart_entries")? == 0 {
+                if let Ok(source_path) =
+                    resolve_billboard_source_path(&settings.billboard_source_path)
+                {
+                    emit_music_tool_progress(
+                        Some(app),
+                        &request.tool_id,
+                        &request.request_id,
+                        "loading",
+                        8,
+                        "Preparing Billboard album chart rows.",
+                    );
+                    import_billboard_charts(conn, &source_path)
+                        .context("Could not prepare Billboard album chart data")?;
+                }
             }
 
-            let Ok(source_path) = resolve_billboard_source_path("CSV_ALBUMS") else {
-                return Ok(());
-            };
+            if count_rows(conn, "official_uk_album_chart_entries")? == 0 {
+                if let Ok(source_path) =
+                    resolve_official_uk_source_path(&settings.official_uk_album_source_path)
+                {
+                    emit_music_tool_progress(
+                        Some(app),
+                        &request.tool_id,
+                        &request.request_id,
+                        "loading",
+                        12,
+                        "Preparing Official UK album chart rows.",
+                    );
+                    import_official_uk_albums(conn, &source_path)
+                        .context("Could not prepare Official UK album chart data")?;
+                }
+            }
 
-            emit_music_tool_progress(
-                Some(app),
-                &request.tool_id,
-                &request.request_id,
-                "loading",
-                15,
-                "Preparing Billboard album chart rows from CSV_ALBUMS.",
-            );
-            import_billboard_charts(conn, &source_path)
-                .context("Could not prepare Missing Billboard Albums data from CSV_ALBUMS")?;
+            if count_rows(conn, "vg_lista_album_chart_entries")? == 0 {
+                if let Ok(source_path) =
+                    resolve_vg_lista_source_path(&settings.vg_lista_album_source_path)
+                {
+                    emit_music_tool_progress(
+                        Some(app),
+                        &request.tool_id,
+                        &request.request_id,
+                        "loading",
+                        16,
+                        "Preparing VG Lista album chart rows.",
+                    );
+                    import_vg_lista_albums(conn, &source_path)
+                        .context("Could not prepare VG Lista album chart data")?;
+                }
+            }
         }
-        "missing-billboard-singles" => {
-            if count_rows(conn, "billboard_single_chart_entries")? > 0 {
-                return Ok(());
+        "missing-chart-singles" => {
+            let settings = settings_for_connection(conn)?;
+
+            if count_rows(conn, "billboard_single_chart_entries")? == 0 {
+                if let Ok(source_path) =
+                    resolve_billboard_source_path(&settings.billboard_singles_source_path)
+                {
+                    emit_music_tool_progress(
+                        Some(app),
+                        &request.tool_id,
+                        &request.request_id,
+                        "loading",
+                        7,
+                        "Preparing Billboard singles chart rows.",
+                    );
+                    import_billboard_singles(conn, &source_path)
+                        .context("Could not prepare Billboard singles chart data")?;
+                }
             }
 
-            let Ok(source_path) = resolve_billboard_source_path("CSV_SINGLES") else {
-                return Ok(());
-            };
+            if count_rows(conn, "official_uk_single_chart_entries")? == 0 {
+                if let Ok(source_path) =
+                    resolve_official_uk_source_path(&settings.official_uk_singles_source_path)
+                {
+                    emit_music_tool_progress(
+                        Some(app),
+                        &request.tool_id,
+                        &request.request_id,
+                        "loading",
+                        10,
+                        "Preparing Official UK singles chart rows.",
+                    );
+                    import_official_uk_singles(conn, &source_path)
+                        .context("Could not prepare Official UK singles chart data")?;
+                }
+            }
 
-            emit_music_tool_progress(
-                Some(app),
-                &request.tool_id,
-                &request.request_id,
-                "loading",
-                15,
-                "Preparing Billboard singles chart rows from CSV_SINGLES.",
-            );
-            import_billboard_singles(conn, &source_path)
-                .context("Could not prepare Missing Billboard Singles data from CSV_SINGLES")?;
+            if count_rows(conn, "vg_lista_single_chart_entries")? == 0 {
+                if let Ok(source_path) =
+                    resolve_vg_lista_source_path(&settings.vg_lista_singles_source_path)
+                {
+                    emit_music_tool_progress(
+                        Some(app),
+                        &request.tool_id,
+                        &request.request_id,
+                        "loading",
+                        13,
+                        "Preparing VG Lista singles chart rows.",
+                    );
+                    import_vg_lista_singles(conn, &source_path)
+                        .context("Could not prepare VG Lista singles chart data")?;
+                }
+            }
+
+            if count_rows(conn, "ti_i_skuddet_chart_entries")? == 0 {
+                if let Ok(source_path) =
+                    resolve_ti_i_skuddet_source_path(&settings.ti_i_skuddet_source_path)
+                {
+                    emit_music_tool_progress(
+                        Some(app),
+                        &request.tool_id,
+                        &request.request_id,
+                        "loading",
+                        16,
+                        "Preparing Ti i Skuddet chart rows.",
+                    );
+                    import_ti_i_skuddet_singles(conn, &source_path)
+                        .context("Could not prepare Ti i Skuddet chart data")?;
+                }
+            }
+
+            if count_rows(conn, "norsktoppen_chart_entries")? == 0 {
+                if let Ok(source_path) =
+                    resolve_norsktoppen_source_path(&settings.norsktoppen_source_path)
+                {
+                    emit_music_tool_progress(
+                        Some(app),
+                        &request.tool_id,
+                        &request.request_id,
+                        "loading",
+                        19,
+                        "Preparing Norsktoppen chart rows.",
+                    );
+                    import_norsktoppen_singles(conn, &source_path)
+                        .context("Could not prepare Norsktoppen chart data")?;
+                }
+            }
         }
         "artists-without-musicbrainz-data"
         | "high-confidence-missing-musicbrainz-albums"
@@ -20453,7 +20556,7 @@ fn music_tool_summary(
         FROM ({base_sql}) issue_rows
         "
     );
-    let (issue_count, album_count, track_count) = conn
+    let (issue_count, album_count, mut track_count) = conn
         .query_row(&sql, [], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
@@ -20462,6 +20565,10 @@ fn music_tool_summary(
             ))
         })
         .with_context(|| format!("Could not count {} issues", definition.label))?;
+
+    if definition.id == "missing-chart-singles" {
+        track_count = issue_count;
+    }
 
     Ok(MusicToolSummary {
         id: definition.id.to_string(),
@@ -20647,6 +20754,7 @@ fn music_tool_definition(tool_id: &str) -> Result<MusicToolDefinition> {
 }
 
 fn music_tool_issue_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MusicToolIssueRow> {
+    let includes_chart_columns = row.as_ref().column_count() >= 20;
     Ok(MusicToolIssueRow {
         id: row.get(0)?,
         tool_id: row.get(1)?,
@@ -20663,6 +20771,31 @@ fn music_tool_issue_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MusicT
         value: row.get(12)?,
         filename: row.get(13)?,
         file_path: row.get(14)?,
+        billboard: if includes_chart_columns {
+            row.get(15)?
+        } else {
+            None
+        },
+        official_uk: if includes_chart_columns {
+            row.get(16)?
+        } else {
+            None
+        },
+        vg_lista: if includes_chart_columns {
+            row.get(17)?
+        } else {
+            None
+        },
+        ti_i_skuddet: if includes_chart_columns {
+            row.get(18)?
+        } else {
+            None
+        },
+        norsktoppen: if includes_chart_columns {
+            row.get(19)?
+        } else {
+            None
+        },
     })
 }
 
@@ -20788,69 +20921,295 @@ fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             "
             .to_string(),
         ),
-        "missing-billboard-albums" => Ok(
+        "missing-chart-albums" => Ok(
             "
-            WITH ranked_missing AS (
+            WITH missing_entries AS (
                 SELECT
-                    b.*,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY b.artist_key, b.album_key
-                        ORDER BY b.year ASC, b.rank ASC, b.id ASC
-                    ) AS duplicate_rank
+                    1 AS chart_order,
+                    'billboard' AS chart,
+                    'Billboard' AS chart_label,
+                    b.id,
+                    b.artist,
+                    b.album AS title,
+                    b.artist_key,
+                    b.album_key AS title_key,
+                    b.year,
+                    b.rank,
+                    b.source_file
                 FROM billboard_chart_entries b
                 WHERE b.matched_album_id IS NULL
+
+                UNION ALL
+
+                SELECT
+                    2 AS chart_order,
+                    'official_uk' AS chart,
+                    'Official UK' AS chart_label,
+                    uk.id,
+                    uk.artist,
+                    uk.title,
+                    uk.artist_key,
+                    uk.title_key,
+                    uk.year,
+                    uk.rank,
+                    uk.source_file
+                FROM official_uk_album_chart_entries uk
+                WHERE uk.matched_album_id IS NULL
+
+                UNION ALL
+
+                SELECT
+                    3 AS chart_order,
+                    'vg_lista' AS chart,
+                    'VG Lista' AS chart_label,
+                    vg.id,
+                    vg.artist,
+                    vg.title,
+                    vg.artist_key,
+                    vg.title_key,
+                    vg.year,
+                    vg.rank,
+                    vg.source_file
+                FROM vg_lista_album_chart_entries vg
+                WHERE vg.matched_album_id IS NULL
+            ),
+            ranked_missing AS (
+                SELECT
+                    missing_entries.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY chart, artist_key, title_key
+                        ORDER BY year ASC, rank ASC, id ASC
+                    ) AS duplicate_rank
+                FROM missing_entries
+            ),
+            best_sources AS (
+                SELECT *
+                FROM ranked_missing
+                WHERE duplicate_rank = 1
+                ORDER BY chart_order
+            ),
+            missing_items AS (
+                SELECT
+                    artist_key,
+                    title_key,
+                    COALESCE(
+                        MAX(CASE WHEN chart = 'billboard' THEN artist END),
+                        MAX(CASE WHEN chart = 'official_uk' THEN artist END),
+                        MAX(CASE WHEN chart = 'vg_lista' THEN artist END)
+                    ) AS artist,
+                    COALESCE(
+                        MAX(CASE WHEN chart = 'billboard' THEN title END),
+                        MAX(CASE WHEN chart = 'official_uk' THEN title END),
+                        MAX(CASE WHEN chart = 'vg_lista' THEN title END)
+                    ) AS title,
+                    MIN(year) AS year,
+                    GROUP_CONCAT(
+                        chart_label || ' ' || printf('#%d / %d', rank, year),
+                        ' · '
+                    ) AS chart_summary,
+                    GROUP_CONCAT(DISTINCT source_file) AS source_files,
+                    MAX(CASE
+                        WHEN chart = 'billboard' THEN printf('#%d / %d', rank, year)
+                    END) AS billboard,
+                    MAX(CASE
+                        WHEN chart = 'official_uk' THEN printf('#%d / %d', rank, year)
+                    END) AS official_uk,
+                    MAX(CASE
+                        WHEN chart = 'vg_lista' THEN printf('#%d / %d', rank, year)
+                    END) AS vg_lista
+                FROM best_sources
+                GROUP BY artist_key, title_key
             )
             SELECT
-                'missing-billboard-albums:' || b.id AS id,
-                'missing-billboard-albums' AS tool_id,
+                'missing-chart-albums:' || artist_key || char(31) || title_key AS id,
+                'missing-chart-albums' AS tool_id,
                 'low' AS severity,
                 'albums' AS entity_type,
-                'billboard:' || b.artist_key || char(31) || b.album_key AS album_id,
+                'chart-album:' || artist_key || char(31) || title_key AS album_id,
                 NULL AS track_id,
-                b.album,
-                b.artist AS album_artist_display,
+                title AS album,
+                artist AS album_artist_display,
                 NULL AS title,
                 NULL AS canonical_genre,
-                b.year,
-                'Billboard album missing from library' AS detail,
-                printf('#%d / %d', b.rank, b.year) AS value,
-                b.source_file AS filename,
-                NULL AS file_path
-            FROM ranked_missing b
-            WHERE b.duplicate_rank = 1
+                year,
+                'Chart album missing from library' AS detail,
+                chart_summary AS value,
+                source_files AS filename,
+                NULL AS file_path,
+                billboard,
+                official_uk,
+                vg_lista,
+                NULL AS ti_i_skuddet,
+                NULL AS norsktoppen
+            FROM missing_items
             "
             .to_string(),
         ),
-        "missing-billboard-singles" => Ok(
+        "missing-chart-singles" => Ok(
             "
-            WITH ranked_missing AS (
+            WITH missing_entries AS (
                 SELECT
-                    b.*,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY b.artist_key, b.title_key
-                        ORDER BY b.rank ASC, b.year ASC, b.id ASC
-                    ) AS duplicate_rank
+                    1 AS chart_order,
+                    'billboard' AS chart,
+                    'Billboard' AS chart_label,
+                    b.id,
+                    b.display_artist AS artist,
+                    b.title,
+                    b.artist_key,
+                    b.title_key,
+                    b.year,
+                    b.rank,
+                    b.source_file
                 FROM billboard_single_chart_entries b
                 WHERE b.matched_track_id IS NULL
+
+                UNION ALL
+
+                SELECT
+                    2 AS chart_order,
+                    'official_uk' AS chart,
+                    'Official UK' AS chart_label,
+                    uk.id,
+                    uk.artist,
+                    uk.title,
+                    uk.artist_key,
+                    uk.title_key,
+                    uk.year,
+                    uk.rank,
+                    uk.source_file
+                FROM official_uk_single_chart_entries uk
+                WHERE uk.matched_track_id IS NULL
+
+                UNION ALL
+
+                SELECT
+                    3 AS chart_order,
+                    'vg_lista' AS chart,
+                    'VG Lista' AS chart_label,
+                    vg.id,
+                    vg.artist,
+                    vg.title,
+                    vg.artist_key,
+                    vg.title_key,
+                    vg.year,
+                    vg.rank,
+                    vg.source_file
+                FROM vg_lista_single_chart_entries vg
+                WHERE vg.matched_track_id IS NULL
+
+                UNION ALL
+
+                SELECT
+                    4 AS chart_order,
+                    'ti_i_skuddet' AS chart,
+                    'Ti i Skuddet' AS chart_label,
+                    ti.id,
+                    ti.artist,
+                    ti.title,
+                    ti.artist_key,
+                    ti.title_key,
+                    ti.year,
+                    ti.rank,
+                    ti.source_file
+                FROM ti_i_skuddet_chart_entries ti
+                WHERE ti.matched_track_id IS NULL
+
+                UNION ALL
+
+                SELECT
+                    5 AS chart_order,
+                    'norsktoppen' AS chart,
+                    'Norsktoppen' AS chart_label,
+                    no.id,
+                    no.artist,
+                    no.title,
+                    no.artist_key,
+                    no.title_key,
+                    no.year,
+                    no.rank,
+                    no.source_file
+                FROM norsktoppen_chart_entries no
+                WHERE no.matched_track_id IS NULL
+            ),
+            ranked_missing AS (
+                SELECT
+                    missing_entries.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY chart, artist_key, title_key
+                        ORDER BY rank ASC, year ASC, id ASC
+                    ) AS duplicate_rank
+                FROM missing_entries
+            ),
+            best_sources AS (
+                SELECT *
+                FROM ranked_missing
+                WHERE duplicate_rank = 1
+                ORDER BY chart_order
+            ),
+            missing_items AS (
+                SELECT
+                    artist_key,
+                    title_key,
+                    COALESCE(
+                        MAX(CASE WHEN chart = 'billboard' THEN artist END),
+                        MAX(CASE WHEN chart = 'official_uk' THEN artist END),
+                        MAX(CASE WHEN chart = 'vg_lista' THEN artist END),
+                        MAX(CASE WHEN chart = 'ti_i_skuddet' THEN artist END),
+                        MAX(CASE WHEN chart = 'norsktoppen' THEN artist END)
+                    ) AS artist,
+                    COALESCE(
+                        MAX(CASE WHEN chart = 'billboard' THEN title END),
+                        MAX(CASE WHEN chart = 'official_uk' THEN title END),
+                        MAX(CASE WHEN chart = 'vg_lista' THEN title END),
+                        MAX(CASE WHEN chart = 'ti_i_skuddet' THEN title END),
+                        MAX(CASE WHEN chart = 'norsktoppen' THEN title END)
+                    ) AS title,
+                    MIN(year) AS year,
+                    GROUP_CONCAT(
+                        chart_label || ' ' || printf('#%d / %d', rank, year),
+                        ' · '
+                    ) AS chart_summary,
+                    GROUP_CONCAT(DISTINCT source_file) AS source_files,
+                    MAX(CASE
+                        WHEN chart = 'billboard' THEN printf('#%d / %d', rank, year)
+                    END) AS billboard,
+                    MAX(CASE
+                        WHEN chart = 'official_uk' THEN printf('#%d / %d', rank, year)
+                    END) AS official_uk,
+                    MAX(CASE
+                        WHEN chart = 'vg_lista' THEN printf('#%d / %d', rank, year)
+                    END) AS vg_lista,
+                    MAX(CASE
+                        WHEN chart = 'ti_i_skuddet' THEN printf('#%d / %d', rank, year)
+                    END) AS ti_i_skuddet,
+                    MAX(CASE
+                        WHEN chart = 'norsktoppen' THEN printf('#%d / %d', rank, year)
+                    END) AS norsktoppen
+                FROM best_sources
+                GROUP BY artist_key, title_key
             )
             SELECT
-                'missing-billboard-singles:' || b.id AS id,
-                'missing-billboard-singles' AS tool_id,
+                'missing-chart-singles:' || artist_key || char(31) || title_key AS id,
+                'missing-chart-singles' AS tool_id,
                 'low' AS severity,
                 'tracks' AS entity_type,
-                'billboard-single:' || b.artist_key || char(31) || b.title_key AS album_id,
+                'chart-single:' || artist_key || char(31) || title_key AS album_id,
                 NULL AS track_id,
                 NULL AS album,
-                b.display_artist AS album_artist_display,
-                b.title,
+                artist AS album_artist_display,
+                title,
                 NULL AS canonical_genre,
-                b.year,
-                'Billboard single missing from library' AS detail,
-                printf('#%d / %d', b.rank, b.year) AS value,
-                b.source_file AS filename,
-                NULL AS file_path
-            FROM ranked_missing b
-            WHERE b.duplicate_rank = 1
+                year,
+                'Chart single missing from library' AS detail,
+                chart_summary AS value,
+                source_files AS filename,
+                NULL AS file_path,
+                billboard,
+                official_uk,
+                vg_lista,
+                ti_i_skuddet,
+                norsktoppen
+            FROM missing_items
             "
             .to_string(),
         ),
@@ -24573,7 +24932,7 @@ fn issue_export_table(
     } else {
         "Value"
     };
-    let headers = vec![
+    let mut headers = vec![
         "Tool",
         "Severity",
         "Scope",
@@ -24584,14 +24943,24 @@ fn issue_export_table(
         genre_header,
         "Issue",
         value_header,
-        "Filename",
-        "File Path",
     ];
+    if tool_id == "missing-chart-albums" {
+        headers.extend(["Billboard", "Official UK", "VG Lista"]);
+    } else if tool_id == "missing-chart-singles" {
+        headers.extend([
+            "Billboard",
+            "Official UK",
+            "VG Lista",
+            "Ti i Skuddet",
+            "Norsktoppen",
+        ]);
+    }
+    headers.extend(["Filename", "File Path"]);
 
     let values = rows
         .iter()
         .map(|row| {
-            vec![
+            let mut values = vec![
                 row.tool_id.clone(),
                 row.severity.clone(),
                 row.entity_type.clone(),
@@ -24602,9 +24971,24 @@ fn issue_export_table(
                 optional_text(&row.canonical_genre),
                 row.detail.clone(),
                 optional_text(&row.value),
-                optional_text(&row.filename),
-                optional_text(&row.file_path),
-            ]
+            ];
+            if tool_id == "missing-chart-albums" {
+                values.extend([
+                    optional_text(&row.billboard),
+                    optional_text(&row.official_uk),
+                    optional_text(&row.vg_lista),
+                ]);
+            } else if tool_id == "missing-chart-singles" {
+                values.extend([
+                    optional_text(&row.billboard),
+                    optional_text(&row.official_uk),
+                    optional_text(&row.vg_lista),
+                    optional_text(&row.ti_i_skuddet),
+                    optional_text(&row.norsktoppen),
+                ]);
+            }
+            values.extend([optional_text(&row.filename), optional_text(&row.file_path)]);
+            values
         })
         .collect::<Vec<_>>();
 
@@ -26725,9 +27109,9 @@ mod tests {
         assert_eq!(timeline.albums[0].billboard_debut_week, 36);
 
         let mut request = MusicToolIssueRequest::default();
-        request.tool_id = "missing-billboard-albums".to_string();
-        let missing_response = list_music_tool_issues(&conn, request, 50, None)
-            .expect("list missing Billboard albums");
+        request.tool_id = "missing-chart-albums".to_string();
+        let missing_response =
+            list_music_tool_issues(&conn, request, 50, None).expect("list missing chart albums");
 
         assert_eq!(missing_response.tool.issue_count, 1);
         assert_eq!(missing_response.tool.album_count, 1);
@@ -26737,9 +27121,138 @@ mod tests {
             missing_response.rows[0].album_artist_display.as_deref(),
             Some("WHITNEY HOUSTON")
         );
-        assert_eq!(missing_response.rows[0].value.as_deref(), Some("#1 / 1987"));
+        assert_eq!(
+            missing_response.rows[0].value.as_deref(),
+            Some("Billboard #1 / 1987")
+        );
+        assert_eq!(
+            missing_response.rows[0].billboard.as_deref(),
+            Some("#1 / 1987")
+        );
 
         fs::remove_dir_all(source_dir).expect("remove billboard csv dir");
+    }
+
+    #[test]
+    fn missing_chart_tools_merge_sources_and_export_chart_columns() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "
+            INSERT INTO billboard_chart_entries (
+                source_file, year, rank, artist, album, artist_key, album_key, imported_at
+            ) VALUES (
+                'billboard-albums.csv', 1987, 5, 'Missing Artist', 'Missing Album',
+                'missing artist', 'missing album', 'now'
+            );
+            INSERT INTO official_uk_album_chart_entries (
+                source_file, year, week, chart_date, rank, artist, title,
+                artist_key, title_key, week_key, imported_at
+            ) VALUES (
+                'uk-albums.csv', 1988, 4, '1988-01-29', 2, 'Missing Artist', 'Missing Album',
+                'missing artist', 'missing album', '1988-04', 'now'
+            );
+            INSERT INTO vg_lista_album_chart_entries (
+                source_file, year, week, rank, artist, title, artist_key, title_key,
+                week_date, week_key, imported_at
+            ) VALUES (
+                'vg-albums.csv', 1989, 6, 1, 'Missing Artist', 'Missing Album',
+                'missing artist', 'missing album', '1989-02-10', '1989-06', 'now'
+            );
+
+            INSERT INTO billboard_single_chart_entries (
+                source_file, year, rank, artist, display_artist, title,
+                artist_key, title_key, imported_at
+            ) VALUES (
+                'billboard-singles.csv', 1990, 8, 'Missing Artist', 'Missing Artist',
+                'Missing Single', 'missing artist', 'missing single', 'now'
+            );
+            INSERT INTO official_uk_single_chart_entries (
+                source_file, year, week, chart_date, rank, artist, title,
+                artist_key, title_key, week_key, imported_at
+            ) VALUES (
+                'uk-singles.csv', 1991, 7, '1991-02-15', 4, 'Missing Artist',
+                'Missing Single', 'missing artist', 'missing single', '1991-07', 'now'
+            );
+            INSERT INTO vg_lista_single_chart_entries (
+                source_file, year, week, rank, artist, title, artist_key, title_key,
+                week_date, week_key, imported_at
+            ) VALUES (
+                'vg-singles.csv', 1992, 8, 3, 'Missing Artist', 'Missing Single',
+                'missing artist', 'missing single', '1992-02-21', '1992-08', 'now'
+            );
+            INSERT INTO ti_i_skuddet_chart_entries (
+                source_file, year, week, chart_date, rank, rank_raw, artist, title,
+                artist_key, title_key, imported_at
+            ) VALUES (
+                'ti-i-skuddet.csv', 1993, 9, '1993-03-01', 2, '2', 'Missing Artist',
+                'Missing Single', 'missing artist', 'missing single', 'now'
+            );
+            INSERT INTO norsktoppen_chart_entries (
+                source_file, year, week, chart_date, rank, rank_raw, artist, title,
+                artist_key, title_key, imported_at
+            ) VALUES (
+                'norsktoppen.csv', 1994, 10, '1994-03-07', 1, '1', 'Missing Artist',
+                'Missing Single', 'missing artist', 'missing single', 'now'
+            );
+            ",
+        )
+        .expect("insert unmatched chart rows");
+
+        let mut album_request = MusicToolIssueRequest::default();
+        album_request.tool_id = "missing-chart-albums".to_string();
+        let album_response = list_music_tool_issues(&conn, album_request, 50, None)
+            .expect("list missing chart albums");
+        assert_eq!(album_response.total, 1);
+        assert_eq!(album_response.tool.album_count, 1);
+        assert_eq!(album_response.rows[0].year, Some(1987));
+        assert_eq!(
+            album_response.rows[0].billboard.as_deref(),
+            Some("#5 / 1987")
+        );
+        assert_eq!(
+            album_response.rows[0].official_uk.as_deref(),
+            Some("#2 / 1988")
+        );
+        assert_eq!(
+            album_response.rows[0].vg_lista.as_deref(),
+            Some("#1 / 1989")
+        );
+        let album_summary = album_response.rows[0]
+            .value
+            .as_deref()
+            .expect("album chart summary");
+        assert!(album_summary.contains("Billboard #5 / 1987"));
+        assert!(album_summary.contains("Official UK #2 / 1988"));
+        assert!(album_summary.contains("VG Lista #1 / 1989"));
+
+        let mut single_request = MusicToolIssueRequest::default();
+        single_request.tool_id = "missing-chart-singles".to_string();
+        let single_response = list_music_tool_issues(&conn, single_request, 50, None)
+            .expect("list missing chart singles");
+        assert_eq!(single_response.total, 1);
+        assert_eq!(single_response.tool.track_count, 1);
+        let single = &single_response.rows[0];
+        assert_eq!(single.billboard.as_deref(), Some("#8 / 1990"));
+        assert_eq!(single.official_uk.as_deref(), Some("#4 / 1991"));
+        assert_eq!(single.vg_lista.as_deref(), Some("#3 / 1992"));
+        assert_eq!(single.ti_i_skuddet.as_deref(), Some("#2 / 1993"));
+        assert_eq!(single.norsktoppen.as_deref(), Some("#1 / 1994"));
+
+        let (headers, values) = issue_export_table("missing-chart-singles", &single_response.rows);
+        for header in [
+            "Billboard",
+            "Official UK",
+            "VG Lista",
+            "Ti i Skuddet",
+            "Norsktoppen",
+        ] {
+            assert!(headers.contains(&header), "missing export header {header}");
+        }
+        let norsktoppen_column = headers
+            .iter()
+            .position(|header| *header == "Norsktoppen")
+            .expect("Norsktoppen export column");
+        assert_eq!(values[0][norsktoppen_column], "#1 / 1994");
     }
 
     #[test]
@@ -27697,9 +28210,9 @@ mod tests {
         );
 
         let mut tool_request = MusicToolIssueRequest::default();
-        tool_request.tool_id = "missing-billboard-singles".to_string();
+        tool_request.tool_id = "missing-chart-singles".to_string();
         let missing_response = list_music_tool_issues(&conn, tool_request, 50, None)
-            .expect("list missing Billboard singles");
+            .expect("list missing chart singles");
         assert_eq!(missing_response.total, 0);
 
         fs::remove_dir_all(source_dir).expect("remove billboard singles csv dir");

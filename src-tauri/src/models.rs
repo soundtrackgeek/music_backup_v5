@@ -2047,6 +2047,11 @@ pub struct MusicToolIssueRow {
     pub value: Option<String>,
     pub filename: Option<String>,
     pub file_path: Option<String>,
+    pub billboard: Option<String>,
+    pub official_uk: Option<String>,
+    pub vg_lista: Option<String>,
+    pub ti_i_skuddet: Option<String>,
+    pub norsktoppen: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

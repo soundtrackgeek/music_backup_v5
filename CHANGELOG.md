@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.140.0] - 2026-08-17
+### Added
+- Replaced the Billboard-only missing-album and missing-single validators with Missing Chart Albums for Billboard, Official UK, and VG Lista plus Missing Chart Singles for those sources, Ti i Skuddet, and Norsktoppen.
+- Added source-specific Billboard, Official UK, VG Lista, Ti i Skuddet, and Norsktoppen columns to applicable Music Tools exports, including XLSX.
+
+### Changed
+- Missing chart appearances with the same normalized artist/title now merge into one row with a visible per-chart rank/year summary, and empty source tables prepare independently from their configured import folders.
+- Synchronized app metadata and provider user agents to `0.140.0`.
+
 ## [0.139.2] - 2026-08-17
 ### Fixed
 - Made Wish List artist additions request only MusicBrainz Album release groups, so an unrelated EP lookup failure no longer prevents album-only validation or adding the artist.

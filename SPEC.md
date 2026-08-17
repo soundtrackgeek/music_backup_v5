@@ -481,7 +481,7 @@ Expected next backend modularization:
 - Search, Albums, Charts, Discovery, Artists, Genres, details, and exports surface Billboard ranks.
 - Billboard album and single rank filters plus album chart-debut ISO-week ranges.
 - Billboard chart ranking metric and template plus the standalone Albums through the years Timeline workspace.
-- Missing Billboard Albums and Missing Billboard Singles tools.
+- Missing Chart Albums and Missing Chart Singles tools covering every imported US, UK, and Norwegian chart source for their respective media type.
 
 ### Phase 11.5: Maintainability
 

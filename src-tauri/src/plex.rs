@@ -27,7 +27,7 @@ const MAX_AUTO_SYNC_MINUTES: u32 = 1_440;
 const TRACK_LOOKUP_BATCH_SIZE: usize = 25;
 const PLAYLIST_PAGE_SIZE: u32 = 1_000;
 const PLEX_PRODUCT: &str = "Music Library";
-const PLEX_VERSION: &str = "0.139.2";
+const PLEX_VERSION: &str = "0.140.0";
 
 static SYNC_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -946,8 +946,8 @@ fn prepare_track_cache(
 ) -> Result<CacheState> {
     let library_key = format!("{}:{}", identity.machine_identifier, library.key);
     if let Some(mut state) = cache_state(conn)? {
-        let scan_changed = !library.scanned_at.is_empty()
-            && state.library_scanned_at != library.scanned_at;
+        let scan_changed =
+            !library.scanned_at.is_empty() && state.library_scanned_at != library.scanned_at;
         if state.library_key == library_key && !scan_changed {
             state.track_count = conn.query_row(
                 "

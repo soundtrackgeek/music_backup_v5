@@ -5191,12 +5191,12 @@ function MusicToolIssueTable({
 
   if (response.rows.length === 0) {
     let emptyMessage = "No matching issues.";
-    if (response.tool.id === "missing-billboard-albums") {
+    if (response.tool.id === "missing-chart-albums") {
       emptyMessage =
-        "No missing Billboard albums. If you expected rows, import the Billboard CSV folder once.";
-    } else if (response.tool.id === "missing-billboard-singles") {
+        "No missing chart albums. If you expected rows, import the Billboard, Official UK, or VG Lista album CSV folders once.";
+    } else if (response.tool.id === "missing-chart-singles") {
       emptyMessage =
-        "No missing Billboard singles. If you expected rows, import the Billboard singles CSV folder once.";
+        "No missing chart singles. If you expected rows, import the Billboard, Official UK, VG Lista, Ti i Skuddet, or Norsktoppen CSV folders once.";
     } else if (response.tool.id === "artists-without-musicbrainz-data") {
       emptyMessage =
         "Every library artist has a usable MusicBrainz cache or verified overlay match.";
@@ -5226,11 +5226,23 @@ function MusicToolIssueTable({
     );
   }
 
-  const primaryHeader = response.tool.scope === "artists" ? "Artist" : "Album";
-  const secondaryHeader =
-    response.tool.scope === "artists" ? "Sample album" : "Track";
+  const isMissingChartSingles = response.tool.id === "missing-chart-singles";
+  const isMissingChartTool =
+    response.tool.id === "missing-chart-albums" || isMissingChartSingles;
+  const primaryHeader = isMissingChartSingles
+    ? "Artist"
+    : response.tool.scope === "artists"
+      ? "Artist"
+      : "Album";
+  const secondaryHeader = isMissingChartSingles
+    ? "Single"
+    : response.tool.scope === "artists"
+      ? "Sample album"
+      : "Track";
   const valueHeader =
-    response.tool.id === "owned-musicbrainz-special-releases"
+    isMissingChartTool
+      ? "Charts"
+      : response.tool.id === "owned-musicbrainz-special-releases"
       ? "MusicBrainz type"
       : "Value";
 
@@ -5252,12 +5264,21 @@ function MusicToolIssueTable({
             </small>
           </span>
           <span role="cell">
-            <strong>{issue.album ?? "Untitled"}</strong>
-            <small>
-              {[issue.albumArtistDisplay, issue.year]
-                .filter(Boolean)
-                .join(" / ")}
-            </small>
+            {isMissingChartSingles ? (
+              <>
+                <strong>{issue.albumArtistDisplay ?? "Unknown artist"}</strong>
+                <small>{issue.year ?? ""}</small>
+              </>
+            ) : (
+              <>
+                <strong>{issue.album ?? "Untitled"}</strong>
+                <small>
+                  {[issue.albumArtistDisplay, issue.year]
+                    .filter(Boolean)
+                    .join(" / ")}
+                </small>
+              </>
+            )}
           </span>
           <span role="cell">
             <strong>
