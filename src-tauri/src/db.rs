@@ -9496,8 +9496,10 @@ pub fn rebuild_search_indexes(conn: &Connection) -> Result<()> {
 pub fn search_library_for_app(app: &AppHandle, request: BrowseRequest) -> Result<BrowseResponse> {
     let (conn, _) = open(app)?;
     ensure_search_indexes(&conn)?;
-    search_library(&conn, request, 500)
+    search_library(&conn, request, COMPLETE_SEARCH_RESULT_LIMIT)
 }
+
+const COMPLETE_SEARCH_RESULT_LIMIT: u32 = u32::MAX;
 
 #[cfg(not(test))]
 pub fn inspect_current_view_for_app(
@@ -12531,8 +12533,6 @@ fn build_playlist(conn: &Connection, plan: AiPlaylistPlan) -> Result<AiPlaylist>
     })
 }
 
-const MAX_SAVED_PLAYLIST_TRACKS: usize = 500;
-
 fn normalize_playlist(mut playlist: AiPlaylist) -> Result<AiPlaylist> {
     if playlist.prompt.trim().is_empty() || playlist.prompt.chars().count() > 2_000 {
         bail!("A saved playlist requires its original prompt")
@@ -12548,12 +12548,10 @@ fn normalize_playlist(mut playlist: AiPlaylist) -> Result<AiPlaylist> {
             playlist.strategy.as_str(),
             "ranked" | "variety" | "discovery" | "random"
         )
-        || playlist.target_track_count > MAX_SAVED_PLAYLIST_TRACKS as u32
         || playlist.target_minutes > 1_440
         || (playlist.target_track_count == 0 && playlist.target_minutes == 0)
         || !(1..=10).contains(&playlist.max_tracks_per_artist)
         || !(1..=10).contains(&playlist.max_tracks_per_album)
-        || playlist.tracks.len() > MAX_SAVED_PLAYLIST_TRACKS
     {
         bail!("The playlist recipe is outside the supported local limits")
     }
@@ -12672,9 +12670,6 @@ fn save_playlist(conn: &Connection, input: SavePlaylistRequest) -> Result<SavedP
     }
     let playlist_json =
         serde_json::to_string(&playlist).context("Could not serialize the playlist")?;
-    if playlist_json.len() > 4_000_000 {
-        bail!("The playlist is too large to save")
-    }
     let (import_run_id, imported_at, album_count, track_count) =
         current_library_snapshot_state(conn)?;
     let now = Utc::now().to_rfc3339();
@@ -12759,7 +12754,7 @@ fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SmartPlaylistEv
         request.sort.direction = "asc".to_string();
     }
 
-    let mut preview_tracks = Vec::with_capacity(MAX_SAVED_PLAYLIST_TRACKS);
+    let mut playlist_tracks = Vec::new();
     let mut desired_paths = Vec::new();
     let mut seen_paths = HashSet::new();
     let mut desired_count = 0_i64;
@@ -12770,9 +12765,7 @@ fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SmartPlaylistEv
         }
         let page_count = response.rows.len();
         for row in response.rows {
-            if preview_tracks.len() < MAX_SAVED_PLAYLIST_TRACKS {
-                preview_tracks.push(playlist_track_from_row(row.clone())?);
-            }
+            playlist_tracks.push(playlist_track_from_row(row.clone())?);
             let directory = row.file_path.as_deref().map(str::trim).unwrap_or("");
             let filename = row.filename.as_deref().map(str::trim).unwrap_or("");
             if !directory.is_empty() && !filename.is_empty() {
@@ -12795,7 +12788,7 @@ fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SmartPlaylistEv
     }
 
     let refreshed_at = Utc::now().to_rfc3339();
-    saved.playlist.tracks = preview_tracks;
+    saved.playlist.tracks = playlist_tracks;
     saved.playlist.total_seconds = saved
         .playlist
         .tracks
@@ -12803,12 +12796,10 @@ fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SmartPlaylistEv
         .map(|track| track.seconds.max(0))
         .sum();
     saved.playlist.matching_track_count = desired_count;
-    saved.playlist.candidate_count = usize::try_from(desired_count)
-        .unwrap_or(usize::MAX)
-        .min(MAX_SAVED_PLAYLIST_TRACKS);
+    saved.playlist.candidate_count = usize::try_from(desired_count).unwrap_or(usize::MAX);
     saved.playlist.request = request;
     saved.playlist.request.offset = 0;
-    saved.playlist.request.limit = MAX_SAVED_PLAYLIST_TRACKS as u32;
+    saved.playlist.request.limit = u32::try_from(desired_count.max(1)).unwrap_or(u32::MAX);
     let playlist_json = serde_json::to_string(&saved.playlist)
         .context("Could not serialize the refreshed smart playlist")?;
     let (import_run_id, imported_at, album_count, track_count) =
@@ -30495,40 +30486,80 @@ mod tests {
             },
         )
         .is_err());
-        assert!(!load_saved_playlist(&conn, saved.id)
-            .expect("reload snapshot")
-            .automation
-            .smart);
+        assert!(
+            !load_saved_playlist(&conn, saved.id)
+                .expect("reload snapshot")
+                .automation
+                .smart
+        );
     }
 
     #[test]
-    fn accepts_local_search_playlists_up_to_five_hundred_tracks() {
-        let mut playlist =
-            build_playlist(&seeded_connection(), test_playlist_plan()).expect("build playlist");
+    fn accepts_local_search_playlists_above_five_hundred_tracks() {
+        let conn = seeded_connection();
+        let mut playlist = build_playlist(&conn, test_playlist_plan()).expect("build playlist");
         let template = playlist.tracks[0].clone();
         playlist.model = "Local Search".to_string();
-        playlist.target_track_count = MAX_SAVED_PLAYLIST_TRACKS as u32;
-        playlist.tracks = (1..=MAX_SAVED_PLAYLIST_TRACKS)
+        playlist.target_track_count = 750;
+        playlist.tracks = (1..=750)
             .map(|track_id| AiPlaylistTrack {
                 track_id: track_id as i64,
                 ..template.clone()
             })
             .collect();
 
-        assert_eq!(
-            normalize_playlist(playlist.clone())
-                .expect("normalize five hundred tracks")
-                .tracks
-                .len(),
-            MAX_SAVED_PLAYLIST_TRACKS
-        );
+        let saved = save_playlist(
+            &conn,
+            SavePlaylistRequest {
+                id: None,
+                name: "Long Search playlist".to_string(),
+                playlist,
+            },
+        )
+        .expect("save seven hundred fifty tracks");
 
-        playlist.tracks.push(AiPlaylistTrack {
-            track_id: (MAX_SAVED_PLAYLIST_TRACKS + 1) as i64,
-            ..template
-        });
-        playlist.target_track_count = (MAX_SAVED_PLAYLIST_TRACKS + 1) as u32;
-        assert!(normalize_playlist(playlist).is_err());
+        assert_eq!(saved.playlist.tracks.len(), 750);
+    }
+
+    #[test]
+    fn loads_more_than_five_hundred_tracks_for_complete_search_requests() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "
+            WITH RECURSIVE sequence(track_number) AS (
+                SELECT 2
+                UNION ALL
+                SELECT track_number + 1
+                FROM sequence
+                WHERE track_number < 750
+            )
+            INSERT INTO tracks (
+                import_run_id, album_id, album_unique_id, display_artist,
+                album_artist_display, album, title, canonical_genre, genre_normalized,
+                publisher, love, normalized_rating, year, release_year, time_seconds,
+                file_path, filename, row_hash
+            )
+            SELECT
+                1, 'mb:test', 'test', 'Pet Shop Boys', 'Pet Shop Boys',
+                'Actually', 'Track ' || track_number, 'Synthpop', 'synthpop',
+                'Parlophone', NULL, NULL, 1987, 1987, 180,
+                'D:\\Music\\Pet Shop Boys\\Actually',
+                printf('%03d Track.mp3', track_number),
+                'hash-' || track_number
+            FROM sequence;
+            ",
+        )
+        .expect("insert long playlist scope");
+        rebuild_search_indexes(&conn).expect("rebuild long playlist search index");
+        let mut request = BrowseRequest::default();
+        request.view = "tracks".to_string();
+        request.limit = COMPLETE_SEARCH_RESULT_LIMIT;
+
+        let response = search_library(&conn, request, COMPLETE_SEARCH_RESULT_LIMIT)
+            .expect("load complete playlist scope");
+
+        assert_eq!(response.total, 750);
+        assert_eq!(response.rows.len(), 750);
     }
 
     #[test]

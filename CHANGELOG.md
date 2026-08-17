@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.139.0] - 2026-08-17
+### Changed
+- Removed the 500-track cap from direct Search playlist creation, saving, export, Smart refresh previews, and local search retrieval while retaining Luna's intentional 500-candidate and 200-selected-track planning bounds.
+- Large playlist reviews now reveal tracks in 500-row batches to keep the Playlist Builder responsive without truncating the saved or exported playlist.
+- Synchronized app metadata and provider user agents to `0.139.0`.
+
 ## [0.138.1] - 2026-08-16
 ### Fixed
 - Made Discovery's artist **Complete the Collection** counts honor the same cached per-release official-status verification as the main Artist discography, excluding unofficial bootlegs unless they are manually included.

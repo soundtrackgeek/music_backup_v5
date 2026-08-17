@@ -4,8 +4,8 @@ import type { BrowseResponse, BrowseRow } from "../types";
 import { createRequest } from "./requests";
 import {
   createSearchPlaylistRequest,
+  completePlaylistRequestLimit,
   localSearchPlaylistFromResponse,
-  searchPlaylistTrackLimit,
 } from "./searchPlaylist";
 
 function trackRow(values: Partial<BrowseRow>): BrowseRow {
@@ -28,7 +28,7 @@ function trackRow(values: Partial<BrowseRow>): BrowseRow {
 }
 
 describe("local Search playlists", () => {
-  it("requests the complete bounded track scope without changing filters or sort", () => {
+  it("requests the complete track scope without changing filters or sort", () => {
     const source = createRequest("albums");
     source.searchText = "Dio";
     source.filters.genres = ["Heavy Metal"];
@@ -41,7 +41,7 @@ describe("local Search playlists", () => {
       searchText: "Dio",
       filters: { genres: ["Heavy Metal"] },
       sort: { field: "albumScore", direction: "desc" },
-      limit: searchPlaylistTrackLimit,
+      limit: completePlaylistRequestLimit,
       offset: 0,
     });
   });
@@ -62,7 +62,7 @@ describe("local Search playlists", () => {
         }),
       ],
       total: 2,
-      limit: searchPlaylistTrackLimit,
+      limit: completePlaylistRequestLimit,
       offset: 0,
     } satisfies BrowseResponse;
 

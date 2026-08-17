@@ -7,7 +7,10 @@ import type {
 } from "../types";
 import { normalizeBrowseRequestForClient } from "./requests";
 
-export const searchPlaylistTrackLimit = 500;
+// BrowseRequest.limit is a u32 across the Tauri boundary. Asking for its full
+// range lets the dedicated Search handoff return every matching local track in
+// one stable query, including when Search is using random ordering.
+export const completePlaylistRequestLimit = 0xffff_ffff;
 
 export function createSearchPlaylistRequest(
   sourceRequest: BrowseRequest,
@@ -16,7 +19,7 @@ export function createSearchPlaylistRequest(
     ...sourceRequest,
     view: "tracks",
     offset: 0,
-    limit: searchPlaylistTrackLimit,
+    limit: completePlaylistRequestLimit,
   });
 }
 
@@ -61,10 +64,7 @@ export function localSearchPlaylistFromResponse(
   if (tracks.length === 0) {
     throw new Error("The current search did not return any playlist tracks.");
   }
-  const isLimited = response.total > tracks.length;
-  const description = isLimited
-    ? `The first ${tracks.length.toLocaleString()} of ${response.total.toLocaleString()} matching tracks, preserved in Search order.`
-    : `${tracks.length.toLocaleString()} matching tracks preserved in Search order.`;
+  const description = `${tracks.length.toLocaleString()} matching tracks preserved in Search order.`;
 
   return {
     prompt: `Created directly from ${sourceTitle} without Luna.`,

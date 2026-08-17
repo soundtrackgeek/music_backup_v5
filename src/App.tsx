@@ -530,10 +530,7 @@ import {
   yearCohort,
   type InsightCohort,
 } from "./app/insightCohorts";
-import {
-  createLocalSearchPlaylist,
-  searchPlaylistTrackLimit,
-} from "./app/searchPlaylist";
+import { createLocalSearchPlaylist } from "./app/searchPlaylist";
 
 type AppUpdateStatus =
   | "idle"
@@ -21642,10 +21639,8 @@ export default function App() {
                 <strong>Turn this search into music</strong>
                 <span>
                   {request.view === "tracks"
-                    ? total > searchPlaylistTrackLimit
-                      ? `Create the first ${formatNumber(searchPlaylistTrackLimit)} of ${formatNumber(total)} matching tracks locally in Search order.`
-                      : `Create all ${formatNumber(total)} matching tracks locally in Search order.`
-                    : `Create a local draft from tracks on ${formatNumber(total)} matching albums, up to ${formatNumber(searchPlaylistTrackLimit)} tracks.`}{" "}
+                    ? `Create all ${formatNumber(total)} matching tracks locally in Search order.`
+                    : `Create a local draft from every matching track on ${formatNumber(total)} matching albums.`}{" "}
                   No Luna request.
                 </span>
               </div>

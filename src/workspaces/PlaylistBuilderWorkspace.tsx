@@ -59,6 +59,8 @@ const examplePrompts = [
   "Discover unrated deep cuts from highly rated albums",
 ];
 
+const playlistReviewBatchSize = 500;
+
 function durationLabel(seconds: number | null | undefined) {
   if (!seconds) return "—";
   const minutes = Math.floor(seconds / 60);
@@ -105,6 +107,9 @@ export function PlaylistBuilderWorkspace({
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [sourceCohortTitle, setSourceCohortTitle] = useState<string | null>(null);
   const [directSearchTitle, setDirectSearchTitle] = useState<string | null>(null);
+  const [visibleTrackCount, setVisibleTrackCount] = useState(
+    playlistReviewBatchSize,
+  );
   const [sourceRequest, setSourceRequest] =
     useState<BrowseRequest | null>(null);
 
@@ -119,6 +124,7 @@ export function PlaylistBuilderWorkspace({
     setAutomationMessage(null);
     setExportResult(null);
     setDirectSearchTitle(launch.draft ? launch.cohortTitle : null);
+    setVisibleTrackCount(playlistReviewBatchSize);
     setSourceCohortTitle(launch.draft ? null : launch.cohortTitle);
     setSourceRequest(launch.draft ? null : launch.request);
     onLaunchConsumed?.();
@@ -166,6 +172,7 @@ export function PlaylistBuilderWorkspace({
         sourceRequest,
       });
       setPlaylist(result);
+      setVisibleTrackCount(playlistReviewBatchSize);
       setName(result.name);
       setActiveSavedId(null);
       setAutomationMessage(null);
@@ -228,6 +235,7 @@ export function PlaylistBuilderWorkspace({
 
   function openSaved(saved: SavedPlaylist) {
     setPlaylist(saved.playlist);
+    setVisibleTrackCount(playlistReviewBatchSize);
     setPrompt(saved.playlist.prompt);
     setName(saved.name);
     setActiveSavedId(saved.id);
@@ -266,6 +274,7 @@ export function PlaylistBuilderWorkspace({
     ]);
     if (activeSavedId === saved.id) {
       setPlaylist(saved.playlist);
+      setVisibleTrackCount(playlistReviewBatchSize);
       setName(saved.name);
     }
   }
@@ -338,6 +347,7 @@ export function PlaylistBuilderWorkspace({
       const active = refreshed.find((saved) => saved.id === activeSavedId);
       if (active) {
         setPlaylist(active.playlist);
+        setVisibleTrackCount(playlistReviewBatchSize);
         setName(active.name);
       }
       setAutomationMessage(result.message);
@@ -370,6 +380,13 @@ export function PlaylistBuilderWorkspace({
   const activeSavedPlaylist =
     savedPlaylists.find((saved) => saved.id === activeSavedId) ?? undefined;
   const isLocalSearchPlaylist = playlist?.model === "Local Search";
+  const visibleTracks = playlist?.tracks.slice(0, visibleTrackCount) ?? [];
+  const nextTrackBatchSize = playlist
+    ? Math.min(
+        playlistReviewBatchSize,
+        playlist.tracks.length - visibleTrackCount,
+      )
+    : 0;
 
   return (
     <section className="workspace playlist-workspace">
@@ -695,7 +712,7 @@ export function PlaylistBuilderWorkspace({
                     <span>Build again or reopen a saved playlist.</span>
                   </div>
                 ) : (
-                  playlist.tracks.map((track, index) => (
+                  visibleTracks.map((track, index) => (
                     <article
                       className="playlist-track"
                       key={`${track.trackId}-${index}`}
@@ -770,6 +787,30 @@ export function PlaylistBuilderWorkspace({
                   ))
                 )}
               </div>
+
+              {playlist.tracks.length > visibleTrackCount ? (
+                <div className="playlist-track-load-more">
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() =>
+                      setVisibleTrackCount((count) =>
+                        Math.min(
+                          playlist.tracks.length,
+                          count + playlistReviewBatchSize,
+                        ),
+                      )
+                    }
+                  >
+                    Show next {nextTrackBatchSize.toLocaleString()}{" "}
+                    {nextTrackBatchSize === 1 ? "track" : "tracks"}
+                  </button>
+                  <span>
+                    {visibleTrackCount.toLocaleString()} of{" "}
+                    {playlist.tracks.length.toLocaleString()} shown
+                  </span>
+                </div>
+              ) : null}
 
               <footer className="playlist-result-footer">
                 <span>

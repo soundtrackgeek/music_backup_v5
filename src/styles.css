@@ -17687,6 +17687,20 @@ button {
   display: grid;
 }
 
+.playlist-track-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-top: 1px solid #edf1ef;
+  padding: 12px;
+}
+
+.playlist-track-load-more span {
+  color: #73817c;
+  font-size: 10px;
+}
+
 .playlist-track {
   display: grid;
   grid-template-columns: 34px minmax(190px, 1.7fr) minmax(90px, 0.7fr) 48px auto;
