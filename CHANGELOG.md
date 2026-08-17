@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.140.1] - 2026-08-17
+### Fixed
+- Kept the Wish List Deemix queue and its live track progress attached to the app session, so navigating to another workspace and returning no longer hides active, queued, completed, or failed downloads.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.140.1`.
+
 ## [0.140.0] - 2026-08-17
 ### Added
 - Replaced the Billboard-only missing-album and missing-single validators with Missing Chart Albums for Billboard, Official UK, and VG Lista plus Missing Chart Singles for those sources, Ti i Skuddet, and Norsktoppen.

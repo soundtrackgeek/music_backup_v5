@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -33,13 +34,11 @@ import {
   clearCompletedSoulseekTransfers,
   clearCompletedUsenetTransfers,
   discoverWishListArtistAlbums,
-  downloadDeemixAlbum,
   enqueueSoulseekRelease,
   enqueueUsenetDownload,
   getSoulseekTransfers,
   getUsenetTransfers,
   listWishList,
-  listenToDeemixDownloadProgress,
   listenToSoulseekTransfers,
   listenToUsenetTransfers,
   openExternalUrl,
@@ -52,7 +51,6 @@ import {
   searchUsenet,
 } from "../backend";
 import type {
-  DeemixAlbumDownloadProgress,
   DeemixAlbumDownloadSummary,
   DeemixAlbumMatch,
   DeemixAlbumSearchResponse,
@@ -73,6 +71,16 @@ import type {
   WishListMusicBrainzCandidate,
   WishListMusicBrainzSearchResponse,
 } from "../types";
+import {
+  deemixDownloadKey,
+  enqueueDeemixDownload,
+  getDeemixDownloadQueueSnapshot,
+  subscribeToDeemixDownloadQueue,
+} from "../app/deemixDownloadQueue";
+import type {
+  DeemixDownloadContext as DownloadContext,
+  DeemixDownloadQueueJob as DownloadQueueJob,
+} from "../app/deemixDownloadQueue";
 
 type SoulseekReleaseCandidate = {
   id: string;
@@ -684,32 +692,11 @@ function UsenetSourceList({
   );
 }
 
-type DownloadContext = {
-  wishListItemId: number | null;
-  musicbrainzReleaseGroupId: string | null;
-  label: string;
-};
-
-type DownloadQueueJob = {
-  id: string;
-  key: string;
-  match: DeemixAlbumMatch;
-  context: DownloadContext;
-  allowDuplicate: boolean;
-  status: "queued" | "downloading" | "complete" | "failed";
-  summary: DeemixAlbumDownloadSummary | null;
-  error: string | null;
-};
-
 type DuplicatePrompt = {
   match: DeemixAlbumMatch;
   context: DownloadContext;
   path: string;
 };
-
-function downloadKey(match: DeemixAlbumMatch, context: DownloadContext) {
-  return `${context.musicbrainzReleaseGroupId ?? context.wishListItemId ?? "deezer"}:${match.id}`;
-}
 
 function missingAlbumLabel(count: number) {
   if (count === 0) return "No albums missing";
@@ -1185,15 +1172,15 @@ export function WishListWorkspace() {
   const artistSummaryGeneration = useRef(0);
   const [isQueueingAll, setIsQueueingAll] = useState(false);
   const [queueNotice, setQueueNotice] = useState<string | null>(null);
-  const [downloadQueue, setDownloadQueue] = useState<DownloadQueueJob[]>([]);
-  const downloadQueueRef = useRef<DownloadQueueJob[]>([]);
-  const isProcessingQueue = useRef(false);
-  const [downloadProgress, setDownloadProgress] =
-    useState<DeemixAlbumDownloadProgress | null>(null);
-  const [downloadSummary, setDownloadSummary] =
-    useState<DeemixAlbumDownloadSummary | null>(null);
+  const downloadState = useSyncExternalStore(
+    subscribeToDeemixDownloadQueue,
+    getDeemixDownloadQueueSnapshot,
+  );
+  const downloadQueue = downloadState.jobs;
+  const downloadProgress = downloadState.progress;
+  const downloadSummary = downloadState.summary;
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt | null>(null);
-  const activeDownloadRequest = useRef<string | null>(null);
+  const appliedDownloadJobs = useRef(new Set<string>());
   const [error, setError] = useState<string | null>(null);
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [addEntity, setAddEntity] = useState<WishListEntity>("artist");
@@ -1204,15 +1191,6 @@ export function WishListWorkspace() {
   const [addingCandidateId, setAddingCandidateId] = useState<string | null>(null);
   const [addNotice, setAddNotice] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
-
-  const replaceQueue = useCallback(
-    (update: (previous: DownloadQueueJob[]) => DownloadQueueJob[]) => {
-      const next = update(downloadQueueRef.current);
-      downloadQueueRef.current = next;
-      setDownloadQueue(next);
-    },
-    [],
-  );
 
   const refreshMissingArtistSummaries = useCallback(
     async (sourceItems: WishListItem[], generation: number) => {
@@ -1279,23 +1257,6 @@ export function WishListWorkspace() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-    void listenToDeemixDownloadProgress((progress) => {
-      if (progress.requestId === activeDownloadRequest.current) {
-        setDownloadProgress(progress);
-      }
-    }).then((nextUnlisten) => {
-      if (disposed) nextUnlisten();
-      else unlisten = nextUnlisten;
-    });
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -1479,103 +1440,26 @@ export function WishListWorkspace() {
     );
   }
 
-  async function processDownloadQueue() {
-    if (isProcessingQueue.current) return;
-    isProcessingQueue.current = true;
-    try {
-      while (true) {
-        const next = downloadQueueRef.current.find((job) => job.status === "queued");
-        if (!next) break;
-        const requestId =
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `download-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-        activeDownloadRequest.current = requestId;
-        setDownloadSummary(null);
-        setDownloadProgress({
-          requestId,
-          albumId: next.match.id,
-          phase: "metadata",
-          message: `Preparing ${next.match.title}…`,
-          currentTrack: null,
-          completedTracks: 0,
-          totalTracks: next.match.trackCount ?? 0,
-        });
-        replaceQueue((previous) =>
-          previous.map((job) =>
-            job.id === next.id ? { ...job, status: "downloading" } : job,
-          ),
-        );
-        try {
-          const summary = await downloadDeemixAlbum({
-            albumId: next.match.id,
-            requestId,
-            wishListItemId: next.context.wishListItemId,
-            musicbrainzReleaseGroupId: next.context.musicbrainzReleaseGroupId,
-            expectedArtist: next.match.artist,
-            expectedAlbum: next.match.title,
-            expectedYear: next.match.year,
-            allowDuplicate: next.allowDuplicate,
-          });
-          replaceQueue((previous) =>
-            previous.map((job) =>
-              job.id === next.id
-                ? { ...job, status: "complete", summary, error: null }
-                : job,
-            ),
-          );
-          applyCompletedDownload(next, summary);
-          setDownloadSummary(summary);
-        } catch (downloadError) {
-          const message =
-            downloadError instanceof Error
-              ? downloadError.message
-              : String(downloadError);
-          replaceQueue((previous) =>
-            previous.map((job) =>
-              job.id === next.id
-                ? { ...job, status: "failed", error: message }
-                : job,
-            ),
-          );
-          setError(message);
-        } finally {
-          activeDownloadRequest.current = null;
-          setDownloadProgress(null);
-        }
+  useEffect(() => {
+    for (const job of downloadQueue) {
+      if (
+        job.status !== "complete" ||
+        !job.summary ||
+        appliedDownloadJobs.current.has(job.id)
+      ) {
+        continue;
       }
-    } finally {
-      isProcessingQueue.current = false;
+      appliedDownloadJobs.current.add(job.id);
+      applyCompletedDownload(job, job.summary);
     }
-  }
+  }, [downloadQueue]);
 
   function enqueueDownload(
     match: DeemixAlbumMatch,
     context: DownloadContext,
     allowDuplicate: boolean,
   ) {
-    const key = downloadKey(match, context);
-    if (
-      downloadQueueRef.current.some(
-        (job) =>
-          job.key === key && (job.status === "queued" || job.status === "downloading"),
-      )
-    ) {
-      return false;
-    }
-    const job: DownloadQueueJob = {
-      id: `${key}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-      key,
-      match,
-      context,
-      allowDuplicate,
-      status: "queued",
-      summary: null,
-      error: null,
-    };
-    replaceQueue((previous) => [...previous, job]);
-    void processDownloadQueue();
-    return true;
+    return enqueueDeemixDownload(match, context, allowDuplicate);
   }
 
   async function requestDownload(
@@ -1623,7 +1507,7 @@ export function WishListWorkspace() {
   }
 
   function jobStatus(match: DeemixAlbumMatch, context: DownloadContext) {
-    const key = downloadKey(match, context);
+    const key = deemixDownloadKey(match, context);
     const matchingJobs = downloadQueue.filter((job) => job.key === key);
     return matchingJobs.length
       ? matchingJobs[matchingJobs.length - 1].status
@@ -2389,7 +2273,9 @@ export function WishListWorkspace() {
           </span>
         </div>
       ) : null}
-      {error ? <p className="error-message">{error}</p> : null}
+      {error ?? downloadState.error ? (
+        <p className="error-message">{error ?? downloadState.error}</p>
+      ) : null}
 
       <div className="wish-list-columns" aria-busy={isLoading}>
         <WishListGroup

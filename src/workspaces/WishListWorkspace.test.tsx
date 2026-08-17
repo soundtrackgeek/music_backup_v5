@@ -1,7 +1,12 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { SoulseekTransferQueue, UsenetTransferQueue } from "../types";
+import { resetDeemixDownloadQueueForTests } from "../app/deemixDownloadQueue";
+import type {
+  DeemixAlbumDownloadProgress,
+  SoulseekTransferQueue,
+  UsenetTransferQueue,
+} from "../types";
 import { WishListWorkspace } from "./WishListWorkspace";
 
 const discoverWishListArtistAlbums = vi.fn();
@@ -29,6 +34,9 @@ let soulseekTransferListener:
   | ((snapshot: SoulseekTransferQueue) => void)
   | null = null;
 let usenetTransferListener: ((snapshot: UsenetTransferQueue) => void) | null = null;
+let deemixProgressListener:
+  | ((progress: DeemixAlbumDownloadProgress) => void)
+  | null = null;
 
 vi.mock("../backend", () => ({
   addWishListMusicBrainzCandidate: (...args: unknown[]) =>
@@ -122,12 +130,21 @@ function soulseekResponse(title: string, year: number) {
 
 describe("WishListWorkspace", () => {
   beforeEach(() => {
+    resetDeemixDownloadQueueForTests();
     vi.clearAllMocks();
+    deemixProgressListener = null;
     soulseekTransferListener = null;
     usenetTransferListener = null;
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
-    listenToDeemixDownloadProgress.mockResolvedValue(() => undefined);
+    listenToDeemixDownloadProgress.mockImplementation(
+      async (handler: (progress: DeemixAlbumDownloadProgress) => void) => {
+        deemixProgressListener = handler;
+        return () => {
+          if (deemixProgressListener === handler) deemixProgressListener = null;
+        };
+      },
+    );
     listenToSoulseekTransfers.mockImplementation(
       async (handler: (snapshot: SoulseekTransferQueue) => void) => {
         soulseekTransferListener = handler;
@@ -977,6 +994,74 @@ describe("WishListWorkspace", () => {
     ).toBeGreaterThan(0);
     expect(screen.getByText("0 queued · 1 completed")).toBeInTheDocument();
     expect(screen.queryByText(/1 failed/)).not.toBeInTheDocument();
+  });
+
+  it("keeps an active Deemix download visible after the Wish List remounts", async () => {
+    let finishDownload: (() => void) | null = null;
+    downloadDeemixAlbum.mockImplementationOnce(
+      (input: {
+        requestId: string;
+        albumId: string;
+        expectedArtist: string;
+        expectedAlbum: string;
+        expectedYear: number | null;
+      }) =>
+        new Promise((resolve) => {
+          finishDownload = () =>
+            resolve({
+              requestId: input.requestId,
+              albumId: input.albumId,
+              artist: input.expectedArtist,
+              album: input.expectedAlbum,
+              year: input.expectedYear,
+              quality: "mp3_320",
+              destinationPath: "D:\\Music\\Pet Shop Boys - Release (2002)",
+              coverPath: "D:\\Music\\Pet Shop Boys - Release (2002)\\cover.jpg",
+              warning: null,
+              trackCount: 10,
+              completedAt: "2026-08-17T18:00:00Z",
+            });
+        }),
+    );
+
+    const firstVisit = render(<WishListWorkspace />);
+    await screen.findByText("Release");
+    fireEvent.click(screen.getByLabelText("Search Release with Deemix"));
+    await screen.findByText("Release (2017 Remaster)");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Download Release (2017 Remaster)" }),
+    );
+    await waitFor(() => expect(downloadDeemixAlbum).toHaveBeenCalledTimes(1));
+
+    const progressListener = deemixProgressListener;
+    expect(progressListener).not.toBeNull();
+    act(() => {
+      progressListener?.({
+        requestId: downloadDeemixAlbum.mock.calls[0][0].requestId,
+        albumId: "123",
+        phase: "downloading",
+        message: "Downloading track 5 of 10…",
+        currentTrack: "London",
+        completedTracks: 4,
+        totalTracks: 10,
+      });
+    });
+    expect(screen.getAllByText("Downloading track 5 of 10…")).toHaveLength(2);
+
+    firstVisit.unmount();
+    render(<WishListWorkspace />);
+
+    expect(
+      await screen.findByRole("region", { name: "Deemix download queue" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Downloading track 5 of 10…")).toHaveLength(2);
+    expect(
+      screen.getByRole("progressbar", { name: "Deemix album download progress" }),
+    ).toHaveAttribute("value", "4");
+
+    act(() => finishDownload?.());
+    expect(await screen.findByText("Downloaded and tagged 10 tracks")).toBeInTheDocument();
+    expect(screen.getByText("0 queued · 1 completed")).toBeInTheDocument();
   });
 
   it("warns before a duplicate and only queues another copy after confirmation", async () => {
