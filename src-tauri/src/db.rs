@@ -580,6 +580,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .context("Could not read SQLite schema version")?;
 
     if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_fifty_six_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the UK origin-country migration transaction")?;
+        migrations::migrate_uk_origin_country_alias(&transaction)?;
+        transaction
+            .commit()
+            .context("Could not commit the UK origin-country migration")?;
         return Ok(());
     }
 
@@ -2110,6 +2117,7 @@ fn ensure_plex_sync_schema(conn: &Connection) -> Result<()> {
         ",
     )
     .context("Could not create Plex playlist synchronization schema")?;
+    migrations::migrate_uk_origin_country_alias(conn)?;
     Ok(())
 }
 
@@ -24467,7 +24475,12 @@ fn normalize_text(value: &str) -> String {
 }
 
 fn normalize_country_code(value: &str) -> String {
-    value.trim().to_uppercase()
+    let normalized = value.trim().to_uppercase();
+    if normalized == "UK" {
+        "GB".to_string()
+    } else {
+        normalized
+    }
 }
 
 fn normalize_artist_text(value: &str) -> String {
@@ -29619,6 +29632,52 @@ mod tests {
         assert_eq!(response.tool.issue_count, 0);
         assert_eq!(response.tool.album_count, 0);
         assert_eq!(response.total, 0);
+    }
+
+    #[test]
+    fn canonicalizes_existing_uk_artist_origins_to_gb() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            INSERT INTO musicbrainz_origin_countries (
+                country_code, country_name, iso_source, created_at, updated_at
+            ) VALUES (
+                'UK', 'United Kingdom', 'manual',
+                '2026-08-19T00:00:00Z', '2026-08-19T00:00:00Z'
+            );
+            INSERT INTO musicbrainz_artist_origin_countries (
+                local_artist_key, display_artist, mbid, country_code, country_name,
+                derived_from, review_state, source, created_at, updated_at
+            ) VALUES (
+                'lazy racer', 'Lazy Racer', 'manual', 'UK', 'United Kingdom',
+                'manual', 'manual', 'manual',
+                '2026-08-19T00:00:00Z', '2026-08-19T00:00:00Z'
+            );
+            ",
+        )
+        .expect("insert legacy UK artist origin");
+
+        migrate(&conn).expect("canonicalize legacy UK artist origin");
+
+        let saved = conn
+            .query_row(
+                "SELECT country_code, country_name FROM musicbrainz_artist_origin_countries WHERE local_artist_key = 'lazy racer'",
+                [],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .expect("read canonical artist origin");
+        let uk_option_count = conn
+            .query_row(
+                "SELECT COUNT(*) FROM musicbrainz_origin_countries WHERE UPPER(TRIM(country_code)) = 'UK'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("count legacy UK country options");
+
+        assert_eq!(saved, ("GB".to_string(), "United Kingdom".to_string()));
+        assert_eq!(uk_option_count, 0);
     }
 
     #[test]

@@ -3,6 +3,63 @@ use rusqlite::{params, Connection};
 
 pub(super) const LATEST_SCHEMA_VERSION: i32 = 56;
 
+pub(super) fn migrate_uk_origin_country_alias(conn: &Connection) -> Result<()> {
+    if !super::schema_table_exists(conn, "musicbrainz_origin_countries")?
+        || !super::schema_table_exists(conn, "musicbrainz_artist_origin_countries")?
+    {
+        return Ok(());
+    }
+
+    conn.execute_batch(
+        "
+        INSERT OR IGNORE INTO musicbrainz_origin_countries (
+            country_code, country_name, area_mbid, iso_source,
+            is_historical, is_special, created_at, updated_at
+        )
+        SELECT
+            'GB', 'United Kingdom', area_mbid, iso_source,
+            is_historical, is_special, created_at, updated_at
+        FROM musicbrainz_origin_countries
+        WHERE UPPER(TRIM(country_code)) = 'UK'
+        LIMIT 1;
+
+        UPDATE musicbrainz_artist_origin_countries
+        SET
+            country_code = 'GB',
+            country_name = CASE
+                WHEN country_name IS NULL
+                    OR TRIM(country_name) = ''
+                    OR UPPER(TRIM(country_name)) IN ('UK', 'GB')
+                THEN 'United Kingdom'
+                ELSE country_name
+            END
+        WHERE UPPER(TRIM(country_code)) = 'UK';
+
+        DELETE FROM musicbrainz_origin_countries
+        WHERE UPPER(TRIM(country_code)) = 'UK';
+
+        UPDATE musicbrainz_origin_countries
+        SET country_name = 'United Kingdom'
+        WHERE country_code = 'GB'
+            AND (
+                TRIM(country_name) = ''
+                OR UPPER(TRIM(country_name)) IN ('UK', 'GB')
+            );
+        ",
+    )
+    .context("Could not canonicalize UK artist origins to GB")?;
+
+    if super::schema_table_exists(conn, "musicbrainz_map_locations")? {
+        conn.execute(
+            "UPDATE musicbrainz_map_locations SET country_code = 'GB' WHERE UPPER(TRIM(country_code)) = 'UK'",
+            [],
+        )
+        .context("Could not canonicalize UK map locations to GB")?;
+    }
+
+    Ok(())
+}
+
 pub(super) fn phase_fifty_six_schema_exists(conn: &Connection) -> Result<bool> {
     Ok(phase_fifty_five_schema_exists(conn)?
         && super::schema_table_exists(conn, "playlist_automations")?

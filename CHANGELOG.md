@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.140.2] - 2026-08-19
+### Fixed
+- Canonicalized manually entered `UK` artist origins to ISO `GB`, so the United Kingdom flag renders throughout Artist views and future saves store the supported country code.
+- Migrated existing `UK` artist-origin references and map locations to `GB`, removing the legacy `UK` entry from origin-country options.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.140.2`.
+
 ## [0.140.1] - 2026-08-17
 ### Fixed
 - Kept the Wish List Deemix queue and its live track progress attached to the app session, so navigating to another workspace and returning no longer hides active, queued, completed, or failed downloads.

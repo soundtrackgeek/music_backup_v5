@@ -42,6 +42,7 @@ import {
   normalizeSavedSearchesForClient,
 } from "./app/requests";
 import { scoreGenreGroup } from "./app/genreGroups";
+import { canonicalCountryCode } from "./app/countryNames";
 import { normalizeAllowedExternalUrl } from "./backend/externalUrl";
 import {
   applyMockArtistOriginCountry,
@@ -6025,7 +6026,7 @@ export async function setMusicBrainzArtistOriginCountry(input: {
   countryName?: string | null;
 }) {
   if (!isTauriRuntime()) {
-    const countryCode = input.countryCode.trim().toUpperCase();
+    const countryCode = canonicalCountryCode(input.countryCode);
     if (!/^[A-Z]{2}$/.test(countryCode)) {
       throw new Error("Origin Country must be a two-letter country code.");
     }

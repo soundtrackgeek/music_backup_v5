@@ -14,8 +14,18 @@ const regionDisplayNames =
       ).DisplayNames(["en"], { type: "region" })
     : null;
 
+export function canonicalCountryCode(code: string | null | undefined) {
+  const normalizedCode = code?.trim().toUpperCase() ?? "";
+  return normalizedCode === "UK" ? "GB" : normalizedCode;
+}
+
+export function countryFlagCodeFromCode(code: string | null | undefined) {
+  const normalizedCode = canonicalCountryCode(code).toLowerCase();
+  return /^[a-z]{2}$/.test(normalizedCode) ? normalizedCode : "";
+}
+
 export function countryNameFromCode(code: string) {
-  const normalizedCode = code.trim().toUpperCase();
+  const normalizedCode = canonicalCountryCode(code);
   if (!/^[A-Z]{2}$/.test(normalizedCode)) {
     return null;
   }
@@ -30,10 +40,10 @@ export function resolveCountryName(
   countryCode: string,
   storedCountryName: string | null | undefined,
 ) {
-  const normalizedCode = countryCode.trim().toUpperCase();
+  const normalizedCode = canonicalCountryCode(countryCode);
   const storedName = storedCountryName?.trim() ?? "";
 
-  if (storedName && storedName.toUpperCase() !== normalizedCode) {
+  if (storedName && canonicalCountryCode(storedName) !== normalizedCode) {
     return storedName;
   }
 

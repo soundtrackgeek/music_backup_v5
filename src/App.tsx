@@ -337,7 +337,11 @@ import {
   severityLabel,
   textFilterLabel,
 } from "./app/display";
-import { countryNameFromCode } from "./app/countryNames";
+import {
+  canonicalCountryCode,
+  countryFlagCodeFromCode,
+  countryNameFromCode,
+} from "./app/countryNames";
 import {
   currentGenreToken,
   formatList,
@@ -719,11 +723,6 @@ type OriginCountryValue = {
   originCountryRawArea?: string | null;
 };
 
-function countryCodeForFlag(code: string | null | undefined) {
-  const normalized = code?.trim().toLowerCase() ?? "";
-  return /^[a-z]{2}$/.test(normalized) ? normalized : "";
-}
-
 function CountryFlag({
   code,
   label,
@@ -760,7 +759,7 @@ function CountryDisplay({
     originCountryRawArea: value.originCountryRawArea ?? null,
   };
   const label = formatOriginCountry(normalizedValue);
-  const flagCode = countryCodeForFlag(value.originCountryCode);
+  const flagCode = countryFlagCodeFromCode(value.originCountryCode);
   const showFlag = mode !== "name" && Boolean(flagCode);
   const showName = mode !== "flag" && Boolean(label);
 
@@ -797,7 +796,7 @@ function countryValueFromCode(
   code: string,
   countryOptions: MusicBrainzOriginCountryOption[],
 ): OriginCountryValue {
-  const normalizedCode = code.trim().toUpperCase();
+  const normalizedCode = canonicalCountryCode(code);
   const option = countryOptionForCode(countryOptions, normalizedCode);
   return {
     originCountryCode: normalizedCode,
@@ -1434,11 +1433,11 @@ function GenreListCriterion({
 }
 
 function normalizeCountryCodes(values: string[]) {
-  return values.map((code) => code.trim().toUpperCase()).filter(Boolean);
+  return values.map(canonicalCountryCode).filter(Boolean);
 }
 
 function countryOptionCode(country: MusicBrainzOriginCountryOption) {
-  return country.code.trim().toUpperCase();
+  return canonicalCountryCode(country.code);
 }
 
 function countryOptionName(country: MusicBrainzOriginCountryOption) {
@@ -1459,7 +1458,7 @@ function countryOptionForCode(
   countryOptions: MusicBrainzOriginCountryOption[],
   code: string,
 ) {
-  const normalizedCode = code.trim().toUpperCase();
+  const normalizedCode = canonicalCountryCode(code);
   return countryOptions.find(
     (country) => countryOptionCode(country) === normalizedCode,
   );
@@ -1469,7 +1468,7 @@ function countryOptionNameForCode(
   countryOptions: MusicBrainzOriginCountryOption[],
   code: string,
 ) {
-  const normalizedCode = code.trim().toUpperCase();
+  const normalizedCode = canonicalCountryCode(code);
   const option = countryOptionForCode(countryOptions, normalizedCode);
   return option
     ? countryOptionName(option)
@@ -1522,7 +1521,7 @@ function formatCountryCode(
   code: string,
   countryOptions: MusicBrainzOriginCountryOption[],
 ) {
-  const normalizedCode = code.trim().toUpperCase();
+  const normalizedCode = canonicalCountryCode(code);
   const name = countryOptionNameForCode(countryOptions, normalizedCode);
   return name && name.toUpperCase() !== normalizedCode
     ? `${normalizedCode} - ${name}`
@@ -3457,7 +3456,7 @@ function MusicBrainzArtistInfoPanel({
       !isLoading,
   );
   const manualMbidValue = manualMbid.trim();
-  const manualOriginCodeValue = manualOriginCode.trim().toUpperCase();
+  const manualOriginCodeValue = canonicalCountryCode(manualOriginCode);
   const selectedOriginName = countryOptionNameForCode(
     countryOptions,
     manualOriginCodeValue,
@@ -3717,7 +3716,7 @@ function MusicBrainzArtistInfoPanel({
                 }
                 onBlur={(event) =>
                   setManualOriginCode(
-                    event.currentTarget.value.trim().toUpperCase(),
+                    canonicalCountryCode(event.currentTarget.value),
                   )
                 }
               />
