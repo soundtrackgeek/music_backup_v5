@@ -23887,9 +23887,24 @@ fn add_exists_text_condition(
     filter: &TextFilter,
     album_ref: &str,
 ) {
-    if let Some(condition) = text_condition(field, filter, values) {
+    let excludes_match = filter.operator == "doesNotContain";
+    let inner_filter = if excludes_match {
+        TextFilter {
+            operator: "contains".to_string(),
+            value: filter.value.clone(),
+        }
+    } else {
+        filter.clone()
+    };
+
+    if let Some(condition) = text_condition(field, &inner_filter, values) {
+        let exists_operator = if excludes_match {
+            "NOT EXISTS"
+        } else {
+            "EXISTS"
+        };
         conditions.push(format!(
-            "EXISTS (SELECT 1 FROM tracks tx WHERE tx.album_id = {album_ref} AND {condition})"
+            "{exists_operator} (SELECT 1 FROM tracks tx WHERE tx.album_id = {album_ref} AND {condition})"
         ));
     }
 }
@@ -23905,6 +23920,12 @@ fn text_condition(field: &str, filter: &TextFilter, values: &mut Vec<Value>) -> 
         "equals" => {
             values.push(Value::Text(normalized));
             Some(format!("LOWER(COALESCE({field}, '')) = ?"))
+        }
+        "doesNotContain" => {
+            values.push(Value::Text(format!("%{}%", escape_like(&normalized))));
+            Some(format!(
+                "LOWER(COALESCE({field}, '')) NOT LIKE ? ESCAPE '\\'"
+            ))
         }
         "startsWith" => {
             values.push(Value::Text(format!("{}%", escape_like(&normalized))));
@@ -28614,6 +28635,56 @@ mod tests {
             Some("What Have I Done to Deserve This?")
         );
         assert_eq!(response.rows[0].track_seconds, Some(260));
+    }
+
+    #[test]
+    fn excludes_tracks_and_albums_by_display_artist_substring() {
+        let conn = seeded_connection();
+        insert_test_album(&conn, "mb:korn", "Korn", "Issues", 1999, 1);
+        conn.execute_batch(
+            "
+            INSERT INTO tracks (
+                import_run_id, album_id, album_unique_id, display_artist,
+                album_artist_display, album, title, canonical_genre, genre_normalized,
+                normalized_rating, year, time_seconds, row_hash
+            ) VALUES
+                (
+                    1, 'mb:test', 'test', 'Dusty Springfield', 'Pet Shop Boys',
+                    'Actually', 'What Have I Done to Deserve This? (Duet)', 'Synthpop',
+                    'synthpop', 100, 1987, 260, 'hash-duet'
+                ),
+                (
+                    1, 'mb:korn', 'korn', 'Korn', 'Korn', 'Issues', 'Falling Away from Me',
+                    'Rock', 'rock', 100, 1999, 270, 'hash-korn'
+                );
+            ",
+        )
+        .expect("insert display-artist exclusion tracks");
+
+        let exclusion = TextFilter {
+            operator: "doesNotContain".to_string(),
+            value: "SHOP".to_string(),
+        };
+
+        let mut track_request = BrowseRequest::default();
+        track_request.view = "tracks".to_string();
+        track_request.filters.display_artist = exclusion.clone();
+        let track_response =
+            search_library(&conn, track_request, 50).expect("exclude matching tracks");
+
+        assert_eq!(track_response.total, 2);
+        assert!(track_response
+            .rows
+            .iter()
+            .all(|row| row.display_artist.as_deref() != Some("Pet Shop Boys")));
+
+        let mut album_request = BrowseRequest::default();
+        album_request.filters.display_artist = exclusion;
+        let album_response =
+            search_library(&conn, album_request, 50).expect("exclude matching albums");
+
+        assert_eq!(album_response.total, 1);
+        assert_eq!(album_response.rows[0].album.as_deref(), Some("Issues"));
     }
 
     #[test]

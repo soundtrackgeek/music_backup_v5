@@ -104,6 +104,7 @@ export const artistGenderOptions = [
 
 export const operatorLabels: Record<TextFilterOperator, string> = {
   contains: "Contains",
+  doesNotContain: "Does not contain",
   equals: "Equals",
   startsWith: "Starts with",
 };

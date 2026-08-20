@@ -63,4 +63,29 @@ describe("App startup", () => {
     await user.click((await screen.findAllByRole("button", { name: /^Open genre / }))[0]);
     expect(await screen.findByRole("heading", { name: "Genres" })).toBeVisible();
   });
+
+  it("offers display-artist exclusion in Search and Charts", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByText("Advanced filters"));
+    const searchArtistCriterion = screen.getByText("Display artist").closest("label");
+    expect(searchArtistCriterion).not.toBeNull();
+    expect(
+      within(searchArtistCriterion!).getByRole("option", {
+        name: "Does not contain",
+      }),
+    ).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Charts" }));
+    await user.click(screen.getByRole("button", { name: "Tracks" }));
+    await user.click(screen.getByText("Advanced chart controls"));
+    const chartArtistCriterion = screen.getByText("Display artist").closest("label");
+    expect(chartArtistCriterion).not.toBeNull();
+    expect(
+      within(chartArtistCriterion!).getByRole("option", {
+        name: "Does not contain",
+      }),
+    ).toBeVisible();
+  });
 });

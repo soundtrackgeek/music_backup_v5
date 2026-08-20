@@ -2003,7 +2003,11 @@ export type AiConnectionTest = {
   usage: AiUsage;
 };
 
-export type TextFilterOperator = "contains" | "equals" | "startsWith";
+export type TextFilterOperator =
+  | "contains"
+  | "doesNotContain"
+  | "equals"
+  | "startsWith";
 
 export type TextFilter = {
   operator: TextFilterOperator;

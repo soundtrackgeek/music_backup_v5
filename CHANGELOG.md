@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.141.0] - 2026-08-20
+### Added
+- Added a **Does not contain** text-filter operator to Search and Charts, including Display Artist exclusion for track results and albums containing matching artists.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.141.0`.
+
 ## [0.140.2] - 2026-08-19
 ### Fixed
 - Canonicalized manually entered `UK` artist origins to ISO `GB`, so the United Kingdom flag renders throughout Artist views and future saves store the supported country code.
