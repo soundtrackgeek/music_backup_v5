@@ -267,6 +267,48 @@ struct WeeklyChartTrackCandidate {
     entry_indexes: Vec<usize>,
 }
 
+#[derive(Debug)]
+struct TrackChartReconciliationRow {
+    track_id: i64,
+    album_key: String,
+    display_artist_key: String,
+    title_key: String,
+    album_artist_key: String,
+    year: Option<i32>,
+    normalized_rating: Option<i32>,
+    has_cover: bool,
+}
+
+#[derive(Debug)]
+struct StoredTrackChartEntry {
+    entry_id: i64,
+    match_artist_keys: Vec<String>,
+    source_artist_key: String,
+    title_key: String,
+    source_album_key: String,
+    rank: i32,
+    chart_year: i32,
+    chart_week: Option<i32>,
+    debut_date: Option<String>,
+    debut_year: Option<i32>,
+    debut_month: Option<i32>,
+    debut_week: Option<i32>,
+    debut_week_key: Option<String>,
+}
+
+#[derive(Debug)]
+struct ReconciledTrackChartMatch {
+    track_id: i64,
+    rank: i32,
+    chart_year: i32,
+    debut_date: Option<String>,
+    debut_year: Option<i32>,
+    debut_month: Option<i32>,
+    debut_week: Option<i32>,
+    debut_week_key: Option<String>,
+    entry_indexes: Vec<usize>,
+}
+
 #[derive(Debug, Clone)]
 struct TiISkuddetChartEntry {
     source_file: String,
@@ -544,6 +586,7 @@ pub fn open(app: &AppHandle) -> Result<(Connection, PathBuf)> {
         .with_context(|| format!("Could not open SQLite database at {}", db_path.display()))?;
     configure(&conn)?;
     migrate(&conn)?;
+    reconcile_track_chart_matches_if_needed(&conn)?;
     Ok((conn, db_path))
 }
 
@@ -2799,6 +2842,54 @@ fn ensure_chart_album_match_state_schema(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn ensure_chart_track_match_state_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS chart_track_match_state (
+            singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+            reconciled_import_run_id INTEGER,
+            reconciled_at TEXT NOT NULL
+        );
+        ",
+    )
+    .context("Could not create chart track match state schema")?;
+    Ok(())
+}
+
+pub(crate) fn reconcile_track_chart_matches_if_needed(conn: &Connection) -> Result<()> {
+    ensure_chart_track_match_state_schema(conn)?;
+    let active_import_run_id =
+        conn.query_row("SELECT MAX(import_run_id) FROM tracks", [], |row| {
+            row.get::<_, Option<i64>>(0)
+        })?;
+    let reconciled_import_run_id = conn
+        .query_row(
+            "SELECT reconciled_import_run_id FROM chart_track_match_state WHERE singleton = 1",
+            [],
+            |row| row.get::<_, Option<i64>>(0),
+        )
+        .optional()?
+        .flatten();
+    if reconciled_import_run_id == active_import_run_id
+        && conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM chart_track_match_state WHERE singleton = 1)",
+            [],
+            |row| row.get::<_, bool>(0),
+        )?
+    {
+        return Ok(());
+    }
+
+    let transaction = conn
+        .unchecked_transaction()
+        .context("Could not start singles chart repair transaction")?;
+    reconcile_track_chart_matches(&transaction)?;
+    transaction
+        .commit()
+        .context("Could not commit singles chart repair transaction")?;
+    Ok(())
+}
+
 pub(crate) fn reconcile_album_chart_matches(conn: &Connection) -> Result<()> {
     ensure_chart_album_match_state_schema(conn)?;
     conn.execute_batch(
@@ -2877,6 +2968,473 @@ pub(crate) fn reconcile_album_chart_matches(conn: &Connection) -> Result<()> {
     )?;
     for source in ["billboard", "official-uk", "vg-lista"] {
         record_state.execute(params![source, import_run_id, reconciled_at])?;
+    }
+    Ok(())
+}
+
+pub(crate) fn reconcile_track_chart_matches(conn: &Connection) -> Result<()> {
+    ensure_chart_track_match_state_schema(conn)?;
+    let tracks = load_track_chart_reconciliation_rows(conn)?;
+
+    let billboard_entries = load_billboard_single_reconciliation_entries(conn)?;
+    let billboard_matches = reconcile_billboard_single_entries(&tracks, &billboard_entries);
+    apply_track_chart_reconciliation(
+        conn,
+        "billboard_single_chart_entries",
+        "billboard_single",
+        &billboard_entries,
+        &billboard_matches,
+    )?;
+
+    for (table, column_prefix, date_column, week_key_column) in [
+        (
+            "vg_lista_single_chart_entries",
+            "vg_lista",
+            "week_date",
+            Some("week_key"),
+        ),
+        (
+            "official_uk_single_chart_entries",
+            "official_uk",
+            "chart_date",
+            Some("week_key"),
+        ),
+        (
+            "ti_i_skuddet_chart_entries",
+            "ti_i_skuddet",
+            "chart_date",
+            None,
+        ),
+        (
+            "norsktoppen_chart_entries",
+            "norsktoppen",
+            "chart_date",
+            None,
+        ),
+    ] {
+        let entries = load_weekly_track_chart_reconciliation_entries(
+            conn,
+            table,
+            date_column,
+            week_key_column,
+        )?;
+        let matches = reconcile_weekly_track_chart_entries(&tracks, &entries);
+        apply_track_chart_reconciliation(conn, table, column_prefix, &entries, &matches)?;
+    }
+
+    let active_import_run_id =
+        conn.query_row("SELECT MAX(import_run_id) FROM tracks", [], |row| {
+            row.get::<_, Option<i64>>(0)
+        })?;
+    conn.execute(
+        "
+        INSERT INTO chart_track_match_state (
+            singleton, reconciled_import_run_id, reconciled_at
+        ) VALUES (1, ?1, ?2)
+        ON CONFLICT(singleton) DO UPDATE SET
+            reconciled_import_run_id = excluded.reconciled_import_run_id,
+            reconciled_at = excluded.reconciled_at
+        ",
+        params![active_import_run_id, Utc::now().to_rfc3339()],
+    )?;
+
+    Ok(())
+}
+
+fn load_track_chart_reconciliation_rows(
+    conn: &Connection,
+) -> Result<Vec<TrackChartReconciliationRow>> {
+    let mut statement = conn.prepare(
+        "
+        SELECT t.id, t.album, t.display_artist, t.title, t.album_artist_display,
+               t.year, t.normalized_rating, c.album_id IS NOT NULL
+        FROM tracks t
+        LEFT JOIN album_covers c ON c.album_id = t.album_id
+        ORDER BY t.id
+        ",
+    )?;
+    let tracks = statement
+        .query_map([], |row| {
+            Ok(TrackChartReconciliationRow {
+                track_id: row.get(0)?,
+                album_key: billboard_text_key(
+                    row.get::<_, Option<String>>(1)?
+                        .as_deref()
+                        .unwrap_or_default(),
+                ),
+                display_artist_key: billboard_text_key(
+                    row.get::<_, Option<String>>(2)?
+                        .as_deref()
+                        .unwrap_or_default(),
+                ),
+                title_key: billboard_text_key(
+                    row.get::<_, Option<String>>(3)?
+                        .as_deref()
+                        .unwrap_or_default(),
+                ),
+                album_artist_key: billboard_text_key(
+                    row.get::<_, Option<String>>(4)?
+                        .as_deref()
+                        .unwrap_or_default(),
+                ),
+                year: row.get(5)?,
+                normalized_rating: row.get(6)?,
+                has_cover: row.get(7)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load tracks for singles chart reconciliation")?;
+    Ok(tracks)
+}
+
+fn load_billboard_single_reconciliation_entries(
+    conn: &Connection,
+) -> Result<Vec<StoredTrackChartEntry>> {
+    let mut statement = conn.prepare(
+        "
+        SELECT id, artist, artist_key, title_key, COALESCE(album_key, ''),
+               rank, year, date_entered, date_entered_year, date_entered_month,
+               date_entered_week, date_entered_week_key
+        FROM billboard_single_chart_entries
+        ORDER BY id
+        ",
+    )?;
+    let entries = statement
+        .query_map([], |row| {
+            let artist = row.get::<_, String>(1)?;
+            let artist_key = row.get::<_, String>(2)?;
+            let source_artist_key = billboard_text_key(&artist);
+            let mut match_artist_keys = vec![artist_key];
+            push_unique(&mut match_artist_keys, source_artist_key.clone());
+            Ok(StoredTrackChartEntry {
+                entry_id: row.get(0)?,
+                match_artist_keys,
+                source_artist_key,
+                title_key: row.get(3)?,
+                source_album_key: row.get(4)?,
+                rank: row.get(5)?,
+                chart_year: row.get(6)?,
+                chart_week: None,
+                debut_date: row.get(7)?,
+                debut_year: row.get(8)?,
+                debut_month: row.get(9)?,
+                debut_week: row.get(10)?,
+                debut_week_key: row.get(11)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load Billboard singles chart entries for reconciliation")?;
+    Ok(entries)
+}
+
+fn load_weekly_track_chart_reconciliation_entries(
+    conn: &Connection,
+    table: &str,
+    date_column: &str,
+    week_key_column: Option<&str>,
+) -> Result<Vec<StoredTrackChartEntry>> {
+    let week_key_select = week_key_column.unwrap_or("NULL");
+    let sql = format!(
+        "SELECT id, artist_key, title_key, rank, year, week, {date_column}, {week_key_select}
+         FROM {table} ORDER BY id"
+    );
+    let mut statement = conn.prepare(&sql)?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i32>(3)?,
+                row.get::<_, i32>(4)?,
+                row.get::<_, i32>(5)?,
+                row.get::<_, String>(6)?,
+                row.get::<_, Option<String>>(7)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    rows.into_iter()
+        .map(
+            |(entry_id, artist_key, title_key, rank, year, week, date, stored_week_key)| {
+                let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
+                    .with_context(|| format!("Invalid chart date {date} in {table}"))?;
+                let week_key = stored_week_key
+                    .unwrap_or_else(|| format!("{year:04}-W{week:02}"));
+                Ok(StoredTrackChartEntry {
+                    entry_id,
+                    match_artist_keys: vec![artist_key.clone()],
+                    source_artist_key: artist_key,
+                    title_key,
+                    source_album_key: String::new(),
+                    rank,
+                    chart_year: year,
+                    chart_week: Some(week),
+                    debut_date: Some(date),
+                    debut_year: Some(year),
+                    debut_month: Some(parsed_date.month() as i32),
+                    debut_week: Some(week),
+                    debut_week_key: Some(week_key),
+                })
+            },
+        )
+        .collect()
+}
+
+fn track_chart_entry_indexes_by_match_key(
+    entries: &[StoredTrackChartEntry],
+) -> HashMap<String, Vec<usize>> {
+    let mut indexes_by_match_key: HashMap<String, Vec<usize>> = HashMap::new();
+    for (entry_index, entry) in entries.iter().enumerate() {
+        for artist_key in &entry.match_artist_keys {
+            for key in billboard_single_match_keys(artist_key, &entry.title_key) {
+                let indexes = indexes_by_match_key.entry(key).or_default();
+                if !indexes.contains(&entry_index) {
+                    indexes.push(entry_index);
+                }
+            }
+        }
+    }
+    indexes_by_match_key
+}
+
+fn matching_track_chart_entry_indexes(
+    track: &TrackChartReconciliationRow,
+    indexes_by_match_key: &HashMap<String, Vec<usize>>,
+) -> Vec<usize> {
+    let mut entry_indexes = Vec::new();
+    for key in billboard_single_match_keys(&track.display_artist_key, &track.title_key) {
+        if let Some(indexes) = indexes_by_match_key.get(&key) {
+            for &entry_index in indexes {
+                if !entry_indexes.contains(&entry_index) {
+                    entry_indexes.push(entry_index);
+                }
+            }
+        }
+    }
+    entry_indexes
+}
+
+fn reconcile_billboard_single_entries(
+    tracks: &[TrackChartReconciliationRow],
+    entries: &[StoredTrackChartEntry],
+) -> Vec<ReconciledTrackChartMatch> {
+    let indexes_by_match_key = track_chart_entry_indexes_by_match_key(entries);
+    let mut candidates_by_identity: HashMap<String, Vec<BillboardSingleTrackCandidate>> =
+        HashMap::new();
+
+    for track in tracks {
+        if track.display_artist_key.is_empty() || track.title_key.is_empty() {
+            continue;
+        }
+        let entry_indexes = matching_track_chart_entry_indexes(track, &indexes_by_match_key);
+        if entry_indexes.is_empty() {
+            continue;
+        }
+        let best = entry_indexes
+            .iter()
+            .map(|index| &entries[*index])
+            .min_by_key(|entry| (entry.rank, entry.chart_year))
+            .expect("matched Billboard singles entries are not empty");
+        let debut = entry_indexes
+            .iter()
+            .map(|index| &entries[*index])
+            .filter(|entry| entry.debut_date.is_some())
+            .min_by_key(|entry| entry.debut_date.as_deref());
+        let source_album_key = entry_indexes
+            .iter()
+            .map(|index| &entries[*index])
+            .filter(|entry| !entry.source_album_key.is_empty())
+            .min_by(|left, right| {
+                (
+                    left.debut_date.is_none(),
+                    left.debut_date.as_deref().unwrap_or_default(),
+                    left.chart_year,
+                )
+                    .cmp(&(
+                        right.debut_date.is_none(),
+                        right.debut_date.as_deref().unwrap_or_default(),
+                        right.chart_year,
+                    ))
+            })
+            .map(|entry| entry.source_album_key.clone())
+            .unwrap_or_default();
+        let identity_key = billboard_match_key(&best.source_artist_key, &best.title_key);
+        candidates_by_identity
+            .entry(identity_key)
+            .or_default()
+            .push(BillboardSingleTrackCandidate {
+                track_id: track.track_id,
+                album_key: track.album_key.clone(),
+                album_artist_key: track.album_artist_key.clone(),
+                year: track.year,
+                normalized_rating: track.normalized_rating,
+                has_cover: track.has_cover,
+                source_album_key,
+                source_artist_key: best.source_artist_key.clone(),
+                rank: best.rank,
+                chart_year: best.chart_year,
+                debut_date: debut.and_then(|entry| entry.debut_date.clone()),
+                debut_year: debut.and_then(|entry| entry.debut_year),
+                debut_month: debut.and_then(|entry| entry.debut_month),
+                debut_week: debut.and_then(|entry| entry.debut_week),
+                debut_week_key: debut.and_then(|entry| entry.debut_week_key.clone()),
+                entry_indexes,
+            });
+    }
+
+    candidates_by_identity
+        .into_values()
+        .filter_map(|candidates| {
+            let candidate = candidates
+                .iter()
+                .max_by_key(|candidate| billboard_single_candidate_priority(candidate))?;
+            Some(ReconciledTrackChartMatch {
+                track_id: candidate.track_id,
+                rank: candidate.rank,
+                chart_year: candidate.chart_year,
+                debut_date: candidate.debut_date.clone(),
+                debut_year: candidate.debut_year,
+                debut_month: candidate.debut_month,
+                debut_week: candidate.debut_week,
+                debut_week_key: candidate.debut_week_key.clone(),
+                entry_indexes: candidate.entry_indexes.clone(),
+            })
+        })
+        .collect()
+}
+
+fn reconcile_weekly_track_chart_entries(
+    tracks: &[TrackChartReconciliationRow],
+    entries: &[StoredTrackChartEntry],
+) -> Vec<ReconciledTrackChartMatch> {
+    let indexes_by_match_key = track_chart_entry_indexes_by_match_key(entries);
+    let mut candidates_by_identity: HashMap<String, Vec<WeeklyChartTrackCandidate>> =
+        HashMap::new();
+
+    for track in tracks {
+        if track.display_artist_key.is_empty() || track.title_key.is_empty() {
+            continue;
+        }
+        let entry_indexes = matching_track_chart_entry_indexes(track, &indexes_by_match_key);
+        if entry_indexes.is_empty() {
+            continue;
+        }
+        let best = entry_indexes
+            .iter()
+            .map(|index| &entries[*index])
+            .min_by_key(|entry| {
+                (
+                    entry.rank,
+                    entry.chart_year,
+                    entry.chart_week.unwrap_or_default(),
+                )
+            })
+            .expect("matched weekly singles chart entries are not empty");
+        let debut = entry_indexes
+            .iter()
+            .map(|index| &entries[*index])
+            .min_by_key(|entry| {
+                (
+                    entry.chart_year,
+                    entry.chart_week.unwrap_or_default(),
+                    entry.debut_date.as_deref().unwrap_or_default(),
+                )
+            })
+            .expect("matched weekly singles chart entries are not empty");
+        let identity_key = billboard_match_key(&best.source_artist_key, &best.title_key);
+        candidates_by_identity
+            .entry(identity_key)
+            .or_default()
+            .push(WeeklyChartTrackCandidate {
+                track_id: track.track_id,
+                album_artist_key: track.album_artist_key.clone(),
+                year: track.year,
+                normalized_rating: track.normalized_rating,
+                has_cover: track.has_cover,
+                source_artist_key: best.source_artist_key.clone(),
+                rank: best.rank,
+                chart_year: best.chart_year,
+                debut_date: debut.debut_date.clone().unwrap_or_default(),
+                debut_year: debut.debut_year.unwrap_or(debut.chart_year),
+                debut_month: debut.debut_month.unwrap_or_default(),
+                debut_week: debut.debut_week.unwrap_or_default(),
+                debut_week_key: debut.debut_week_key.clone().unwrap_or_default(),
+                entry_indexes,
+            });
+    }
+
+    candidates_by_identity
+        .into_values()
+        .filter_map(|candidates| {
+            let candidate = candidates
+                .iter()
+                .max_by_key(|candidate| weekly_chart_track_candidate_priority(candidate))?;
+            Some(ReconciledTrackChartMatch {
+                track_id: candidate.track_id,
+                rank: candidate.rank,
+                chart_year: candidate.chart_year,
+                debut_date: Some(candidate.debut_date.clone()),
+                debut_year: Some(candidate.debut_year),
+                debut_month: Some(candidate.debut_month),
+                debut_week: Some(candidate.debut_week),
+                debut_week_key: Some(candidate.debut_week_key.clone()),
+                entry_indexes: candidate.entry_indexes.clone(),
+            })
+        })
+        .collect()
+}
+
+fn apply_track_chart_reconciliation(
+    conn: &Connection,
+    table: &str,
+    column_prefix: &str,
+    entries: &[StoredTrackChartEntry],
+    matches: &[ReconciledTrackChartMatch],
+) -> Result<()> {
+    conn.execute_batch(&format!(
+        "
+        UPDATE tracks
+        SET {column_prefix}_rank = NULL,
+            {column_prefix}_year = NULL,
+            {column_prefix}_debut_date = NULL,
+            {column_prefix}_debut_year = NULL,
+            {column_prefix}_debut_month = NULL,
+            {column_prefix}_debut_week = NULL,
+            {column_prefix}_debut_week_key = NULL;
+        UPDATE {table} SET matched_track_id = NULL;
+        "
+    ))
+    .with_context(|| format!("Could not clear stale {column_prefix} track chart matches"))?;
+
+    let update_track_sql = format!(
+        "UPDATE tracks
+         SET {column_prefix}_rank = ?1,
+             {column_prefix}_year = ?2,
+             {column_prefix}_debut_date = ?3,
+             {column_prefix}_debut_year = ?4,
+             {column_prefix}_debut_month = ?5,
+             {column_prefix}_debut_week = ?6,
+             {column_prefix}_debut_week_key = ?7
+         WHERE id = ?8"
+    );
+    let update_entry_sql = format!("UPDATE {table} SET matched_track_id = ?1 WHERE id = ?2");
+    let mut update_track = conn.prepare(&update_track_sql)?;
+    let mut update_entry = conn.prepare(&update_entry_sql)?;
+    for chart_match in matches {
+        update_track.execute(params![
+            chart_match.rank,
+            chart_match.chart_year,
+            &chart_match.debut_date,
+            chart_match.debut_year,
+            chart_match.debut_month,
+            chart_match.debut_week,
+            &chart_match.debut_week_key,
+            chart_match.track_id,
+        ])?;
+        for &entry_index in &chart_match.entry_indexes {
+            update_entry.execute(params![chart_match.track_id, entries[entry_index].entry_id])?;
+        }
     }
     Ok(())
 }

@@ -1580,6 +1580,8 @@ fn apply_staged_import(
     db::rebuild_search_indexes(&tx)?;
     db::reconcile_album_chart_matches(&tx)
         .context("Could not relink imported album charts after applying the library snapshot")?;
+    db::reconcile_track_chart_matches(&tx)
+        .context("Could not relink imported singles charts after applying the library snapshot")?;
     let completed_at = Utc::now().to_rfc3339();
     let duration_ms = started.elapsed().as_millis() as i64;
     tx.execute(
@@ -4104,5 +4106,244 @@ mod tests {
         );
 
         fs::remove_dir_all(&test_dir).expect("remove atomic import test directory");
+    }
+
+    #[test]
+    fn staged_import_relinks_every_single_chart_source() {
+        let test_id = format!(
+            "music-library-import-single-charts-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        );
+        let test_dir = std::env::temp_dir().join(test_id);
+        fs::create_dir_all(&test_dir).expect("create singles chart import test directory");
+        let source_path = test_dir.join("library.tsv");
+        let values = [
+            "Chart Artist",
+            "",
+            "1",
+            "Chart Album",
+            "Pop",
+            "",
+            "Label",
+            "5",
+            "Chart Song",
+            "1",
+            "2025",
+            "2025",
+            "chart-album",
+            r"D:\Music\Chart Album",
+            "01.mp3",
+            "Chart Artist",
+            "3:30",
+        ];
+        fs::write(
+            &source_path,
+            format!("{}\n{}\n", REQUIRED_COLUMNS.join("\t"), values.join("\t")),
+        )
+        .expect("write singles chart import TSV");
+
+        let mut conn = Connection::open_in_memory().expect("open singles chart import database");
+        crate::db::configure(&conn).expect("configure singles chart import database");
+        crate::db::migrate(&conn).expect("migrate singles chart import database");
+        let imported_at = Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO import_runs (source_path, started_at, status) VALUES ('old.tsv', ?1, 'completed')",
+            params![&imported_at],
+        )
+        .expect("seed previous import run");
+        let old_run_id = conn.last_insert_rowid();
+        conn.execute(
+            "
+            INSERT INTO tracks (
+                import_run_id, album_id, album_unique_id, display_artist,
+                album_artist_display, album, title, normalized_rating, year,
+                file_path, filename, row_hash
+            ) VALUES (
+                ?1, 'mb:chart-album', 'chart-album', 'Chart Artist',
+                'Chart Artist', 'Chart Album', 'Chart Song', 100, 2025,
+                'D:\\Music\\Chart Album', '01.mp3', 'old-chart-hash'
+            )
+            ",
+            params![old_run_id],
+        )
+        .expect("seed previously imported chart track");
+        let old_track_id = conn.last_insert_rowid();
+
+        conn.execute(
+            "
+            INSERT INTO billboard_single_chart_entries (
+                source_file, year, rank, artist, display_artist, title,
+                artist_key, title_key, album, album_key, date_entered,
+                date_entered_year, date_entered_month, date_entered_week,
+                date_entered_week_key, date_entered_quality, matched_track_id,
+                imported_at
+            ) VALUES (
+                'billboard.csv', 2025, 7, 'Chart Artist', 'Chart Artist',
+                'Chart Song', 'chart artist', 'chart song', 'Chart Album',
+                'chart album', '2025-01-04', 2025, 1, 1, '2025-W01',
+                'exact', ?1, ?2
+            )
+            ",
+            params![old_track_id, &imported_at],
+        )
+        .expect("seed Billboard single entry");
+        conn.execute(
+            "
+            INSERT INTO vg_lista_single_chart_entries (
+                source_file, year, week, rank, artist, title, artist_key,
+                title_key, week_date, week_key, matched_track_id, imported_at
+            ) VALUES (
+                'vg.csv', 2025, 2, 3, 'Chart Artist', 'Chart Song',
+                'chart artist', 'chart song', '2025-01-06', '2025-W02', ?1, ?2
+            )
+            ",
+            params![old_track_id, &imported_at],
+        )
+        .expect("seed VG Lista single entry");
+        conn.execute(
+            "
+            INSERT INTO official_uk_single_chart_entries (
+                source_file, year, week, chart_date, rank, artist, title,
+                artist_key, title_key, week_key, matched_track_id, imported_at
+            ) VALUES (
+                'uk.csv', 2025, 3, '2025-01-13', 2, 'Chart Artist',
+                'Chart Song', 'chart artist', 'chart song', '2025-W03', ?1, ?2
+            )
+            ",
+            params![old_track_id, &imported_at],
+        )
+        .expect("seed Official UK single entry");
+        conn.execute(
+            "
+            INSERT INTO ti_i_skuddet_chart_entries (
+                source_file, year, week, chart_date, rank, rank_raw, artist,
+                title, artist_key, title_key, matched_track_id, imported_at
+            ) VALUES (
+                'ti.csv', 2025, 4, '2025-01-20', 4, '4', 'Chart Artist',
+                'Chart Song', 'chart artist', 'chart song', ?1, ?2
+            )
+            ",
+            params![old_track_id, &imported_at],
+        )
+        .expect("seed Ti i Skuddet entry");
+        conn.execute(
+            "
+            INSERT INTO norsktoppen_chart_entries (
+                source_file, year, week, chart_date, rank, rank_raw, artist,
+                title, artist_key, title_key, matched_track_id, imported_at
+            ) VALUES (
+                'norsktoppen.csv', 2025, 5, '2025-01-27', 1, '1',
+                'Chart Artist', 'Chart Song', 'chart artist', 'chart song', ?1, ?2
+            )
+            ",
+            params![old_track_id, &imported_at],
+        )
+        .expect("seed Norsktoppen entry");
+
+        let fingerprint = source_fingerprint(&source_path.display().to_string())
+            .expect("fingerprint singles chart import TSV");
+        let ready = prepare_import_preview_for_connection(
+            &mut conn,
+            &fingerprint,
+            &AtomicBool::new(false),
+            &|_, _, _, _, _, _| {},
+        )
+        .expect("prepare singles chart import");
+        conn.execute(
+            "INSERT INTO import_runs (source_path, started_at, status) VALUES (?1, ?2, 'running')",
+            params![&ready.source_path, Utc::now().to_rfc3339()],
+        )
+        .expect("seed applying singles chart import run");
+        let applying_run_id = conn.last_insert_rowid();
+        let session =
+            load_import_session(&conn, ready.session_id).expect("load ready import session");
+        apply_staged_import(&mut conn, &session, applying_run_id, Instant::now())
+            .expect("apply singles chart import");
+
+        let new_track_id = conn
+            .query_row("SELECT id FROM tracks", [], |row| row.get::<_, i64>(0))
+            .expect("load reimported track id");
+        assert_ne!(new_track_id, old_track_id);
+        assert_eq!(
+            conn.query_row(
+                "
+                SELECT billboard_single_rank, vg_lista_rank, official_uk_rank,
+                       ti_i_skuddet_rank, norsktoppen_rank
+                FROM tracks WHERE id = ?1
+                ",
+                params![new_track_id],
+                |row| {
+                    Ok((
+                        row.get::<_, Option<i32>>(0)?,
+                        row.get::<_, Option<i32>>(1)?,
+                        row.get::<_, Option<i32>>(2)?,
+                        row.get::<_, Option<i32>>(3)?,
+                        row.get::<_, Option<i32>>(4)?,
+                    ))
+                },
+            )
+            .expect("load reimported singles chart rankings"),
+            (Some(7), Some(3), Some(2), Some(4), Some(1))
+        );
+        for table in [
+            "billboard_single_chart_entries",
+            "vg_lista_single_chart_entries",
+            "official_uk_single_chart_entries",
+            "ti_i_skuddet_chart_entries",
+            "norsktoppen_chart_entries",
+        ] {
+            let matched_track_id = conn
+                .query_row(
+                    &format!("SELECT matched_track_id FROM {table}"),
+                    [],
+                    |row| row.get::<_, Option<i64>>(0),
+                )
+                .expect("load reconciled singles chart entry");
+            assert_eq!(matched_track_id, Some(new_track_id), "{table}");
+        }
+
+        conn.execute_batch(
+            "
+            UPDATE tracks SET
+                billboard_single_rank = NULL,
+                vg_lista_rank = NULL,
+                official_uk_rank = NULL,
+                ti_i_skuddet_rank = NULL,
+                norsktoppen_rank = NULL;
+            UPDATE billboard_single_chart_entries SET matched_track_id = NULL;
+            UPDATE vg_lista_single_chart_entries SET matched_track_id = NULL;
+            UPDATE official_uk_single_chart_entries SET matched_track_id = NULL;
+            UPDATE ti_i_skuddet_chart_entries SET matched_track_id = NULL;
+            UPDATE norsktoppen_chart_entries SET matched_track_id = NULL;
+            DELETE FROM chart_track_match_state;
+            ",
+        )
+        .expect("simulate rankings erased by an older TSV import");
+        crate::db::reconcile_track_chart_matches_if_needed(&conn)
+            .expect("repair previously erased singles chart rankings");
+        assert_eq!(
+            conn.query_row(
+                "
+                SELECT billboard_single_rank, vg_lista_rank, official_uk_rank,
+                       ti_i_skuddet_rank, norsktoppen_rank
+                FROM tracks WHERE id = ?1
+                ",
+                params![new_track_id],
+                |row| {
+                    Ok((
+                        row.get::<_, Option<i32>>(0)?,
+                        row.get::<_, Option<i32>>(1)?,
+                        row.get::<_, Option<i32>>(2)?,
+                        row.get::<_, Option<i32>>(3)?,
+                        row.get::<_, Option<i32>>(4)?,
+                    ))
+                },
+            )
+            .expect("load repaired singles chart rankings"),
+            (Some(7), Some(3), Some(2), Some(4), Some(1))
+        );
+
+        fs::remove_dir_all(&test_dir).expect("remove singles chart import test directory");
     }
 }

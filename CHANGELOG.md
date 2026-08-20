@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.141.1] - 2026-08-20
+### Fixed
+- Preserved and relinked Billboard, VG-lista, Official UK, Ti i Skuddet, and Norsktoppen single-chart rankings whenever a MusicBee TSV snapshot replaces the track table.
+- Added a one-time automatic repair that restores single-chart rankings already erased by an earlier TSV import from the retained chart-entry data.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.141.1`.
+
 ## [0.141.0] - 2026-08-20
 ### Added
 - Added a **Does not contain** text-filter operator to Search and Charts, including Display Artist exclusion for track results and albums containing matching artists.
