@@ -10,6 +10,45 @@ pub(super) fn migrate_uk_origin_country_alias(conn: &Connection) -> Result<()> {
         return Ok(());
     }
 
+    let artist_origin_alias_exists = conn
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1
+                FROM musicbrainz_origin_countries
+                WHERE UPPER(TRIM(country_code)) = 'UK'
+                   OR (
+                       country_code = 'GB'
+                       AND (
+                           TRIM(country_name) = ''
+                           OR UPPER(TRIM(country_name)) IN ('UK', 'GB')
+                       )
+                   )
+                UNION ALL
+                SELECT 1
+                FROM musicbrainz_artist_origin_countries
+                WHERE UPPER(TRIM(country_code)) = 'UK'
+            )",
+            [],
+            |row| row.get::<_, bool>(0),
+        )
+        .context("Could not inspect artist origins for legacy UK country codes")?;
+    let map_location_alias_exists = super::schema_table_exists(conn, "musicbrainz_map_locations")?
+        && conn
+            .query_row(
+                "SELECT EXISTS(
+                    SELECT 1
+                    FROM musicbrainz_map_locations
+                    WHERE UPPER(TRIM(country_code)) = 'UK'
+                )",
+                [],
+                |row| row.get::<_, bool>(0),
+            )
+            .context("Could not inspect map locations for legacy UK country codes")?;
+
+    if !artist_origin_alias_exists && !map_location_alias_exists {
+        return Ok(());
+    }
+
     conn.execute_batch(
         "
         INSERT OR IGNORE INTO musicbrainz_origin_countries (

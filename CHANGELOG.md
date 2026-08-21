@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.141.3] - 2026-08-21
+### Fixed
+- Stopped completed UK-to-GB origin migrations from requesting SQLite write access on every database open, so album-chart imports can start while another app operation holds the writer lock.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.141.3`.
+
 ## [0.141.2] - 2026-08-21
 ### Fixed
 - Stopped ordinary database opens from launching the one-time single-chart repair, which could make concurrent startup queries contend for SQLite's write lock and leave the app showing an empty library.

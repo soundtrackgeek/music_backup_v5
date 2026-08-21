@@ -30243,6 +30243,30 @@ mod tests {
     }
 
     #[test]
+    fn current_schema_migration_stays_read_only_when_uk_alias_is_absent() {
+        let directory = tempfile::tempdir().expect("create temporary database directory");
+        let database_path = directory.path().join("library.sqlite3");
+        let writer = Connection::open(&database_path).expect("open writer connection");
+        configure(&writer).expect("configure writer connection");
+        migrate(&writer).expect("create current schema");
+
+        let reader = Connection::open(&database_path).expect("open reader connection");
+        configure(&reader).expect("configure reader connection");
+        reader
+            .execute_batch("PRAGMA busy_timeout = 10;")
+            .expect("set short test timeout");
+        writer
+            .execute_batch("BEGIN IMMEDIATE;")
+            .expect("hold database write lock");
+
+        migrate(&reader).expect("open current schema without requesting a write lock");
+
+        writer
+            .execute_batch("ROLLBACK;")
+            .expect("release database write lock");
+    }
+
+    #[test]
     fn skips_noop_migration_for_current_schema() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
