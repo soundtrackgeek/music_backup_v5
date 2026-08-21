@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.141.2] - 2026-08-21
+### Fixed
+- Stopped ordinary database opens from launching the one-time single-chart repair, which could make concurrent startup queries contend for SQLite's write lock and leave the app showing an empty library.
+
+### Changed
+- Kept single-chart reconciliation inside the explicit atomic TSV apply, where it runs once without blocking unrelated database reads.
+- Synchronized app metadata and provider user agents to `0.141.2`.
+
 ## [0.141.1] - 2026-08-20
 ### Fixed
 - Preserved and relinked Billboard, VG-lista, Official UK, Ti i Skuddet, and Norsktoppen single-chart rankings whenever a MusicBee TSV snapshot replaces the track table.

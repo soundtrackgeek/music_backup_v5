@@ -586,7 +586,6 @@ pub fn open(app: &AppHandle) -> Result<(Connection, PathBuf)> {
         .with_context(|| format!("Could not open SQLite database at {}", db_path.display()))?;
     configure(&conn)?;
     migrate(&conn)?;
-    reconcile_track_chart_matches_if_needed(&conn)?;
     Ok((conn, db_path))
 }
 
@@ -2842,54 +2841,6 @@ fn ensure_chart_album_match_state_schema(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn ensure_chart_track_match_state_schema(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        "
-        CREATE TABLE IF NOT EXISTS chart_track_match_state (
-            singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
-            reconciled_import_run_id INTEGER,
-            reconciled_at TEXT NOT NULL
-        );
-        ",
-    )
-    .context("Could not create chart track match state schema")?;
-    Ok(())
-}
-
-pub(crate) fn reconcile_track_chart_matches_if_needed(conn: &Connection) -> Result<()> {
-    ensure_chart_track_match_state_schema(conn)?;
-    let active_import_run_id =
-        conn.query_row("SELECT MAX(import_run_id) FROM tracks", [], |row| {
-            row.get::<_, Option<i64>>(0)
-        })?;
-    let reconciled_import_run_id = conn
-        .query_row(
-            "SELECT reconciled_import_run_id FROM chart_track_match_state WHERE singleton = 1",
-            [],
-            |row| row.get::<_, Option<i64>>(0),
-        )
-        .optional()?
-        .flatten();
-    if reconciled_import_run_id == active_import_run_id
-        && conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM chart_track_match_state WHERE singleton = 1)",
-            [],
-            |row| row.get::<_, bool>(0),
-        )?
-    {
-        return Ok(());
-    }
-
-    let transaction = conn
-        .unchecked_transaction()
-        .context("Could not start singles chart repair transaction")?;
-    reconcile_track_chart_matches(&transaction)?;
-    transaction
-        .commit()
-        .context("Could not commit singles chart repair transaction")?;
-    Ok(())
-}
-
 pub(crate) fn reconcile_album_chart_matches(conn: &Connection) -> Result<()> {
     ensure_chart_album_match_state_schema(conn)?;
     conn.execute_batch(
@@ -2973,7 +2924,6 @@ pub(crate) fn reconcile_album_chart_matches(conn: &Connection) -> Result<()> {
 }
 
 pub(crate) fn reconcile_track_chart_matches(conn: &Connection) -> Result<()> {
-    ensure_chart_track_match_state_schema(conn)?;
     let tracks = load_track_chart_reconciliation_rows(conn)?;
 
     let billboard_entries = load_billboard_single_reconciliation_entries(conn)?;
@@ -3021,22 +2971,6 @@ pub(crate) fn reconcile_track_chart_matches(conn: &Connection) -> Result<()> {
         let matches = reconcile_weekly_track_chart_entries(&tracks, &entries);
         apply_track_chart_reconciliation(conn, table, column_prefix, &entries, &matches)?;
     }
-
-    let active_import_run_id =
-        conn.query_row("SELECT MAX(import_run_id) FROM tracks", [], |row| {
-            row.get::<_, Option<i64>>(0)
-        })?;
-    conn.execute(
-        "
-        INSERT INTO chart_track_match_state (
-            singleton, reconciled_import_run_id, reconciled_at
-        ) VALUES (1, ?1, ?2)
-        ON CONFLICT(singleton) DO UPDATE SET
-            reconciled_import_run_id = excluded.reconciled_import_run_id,
-            reconciled_at = excluded.reconciled_at
-        ",
-        params![active_import_run_id, Utc::now().to_rfc3339()],
-    )?;
 
     Ok(())
 }
@@ -3159,8 +3093,7 @@ fn load_weekly_track_chart_reconciliation_entries(
             |(entry_id, artist_key, title_key, rank, year, week, date, stored_week_key)| {
                 let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
                     .with_context(|| format!("Invalid chart date {date} in {table}"))?;
-                let week_key = stored_week_key
-                    .unwrap_or_else(|| format!("{year:04}-W{week:02}"));
+                let week_key = stored_week_key.unwrap_or_else(|| format!("{year:04}-W{week:02}"));
                 Ok(StoredTrackChartEntry {
                     entry_id,
                     match_artist_keys: vec![artist_key.clone()],

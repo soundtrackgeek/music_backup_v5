@@ -4303,47 +4303,6 @@ mod tests {
             assert_eq!(matched_track_id, Some(new_track_id), "{table}");
         }
 
-        conn.execute_batch(
-            "
-            UPDATE tracks SET
-                billboard_single_rank = NULL,
-                vg_lista_rank = NULL,
-                official_uk_rank = NULL,
-                ti_i_skuddet_rank = NULL,
-                norsktoppen_rank = NULL;
-            UPDATE billboard_single_chart_entries SET matched_track_id = NULL;
-            UPDATE vg_lista_single_chart_entries SET matched_track_id = NULL;
-            UPDATE official_uk_single_chart_entries SET matched_track_id = NULL;
-            UPDATE ti_i_skuddet_chart_entries SET matched_track_id = NULL;
-            UPDATE norsktoppen_chart_entries SET matched_track_id = NULL;
-            DELETE FROM chart_track_match_state;
-            ",
-        )
-        .expect("simulate rankings erased by an older TSV import");
-        crate::db::reconcile_track_chart_matches_if_needed(&conn)
-            .expect("repair previously erased singles chart rankings");
-        assert_eq!(
-            conn.query_row(
-                "
-                SELECT billboard_single_rank, vg_lista_rank, official_uk_rank,
-                       ti_i_skuddet_rank, norsktoppen_rank
-                FROM tracks WHERE id = ?1
-                ",
-                params![new_track_id],
-                |row| {
-                    Ok((
-                        row.get::<_, Option<i32>>(0)?,
-                        row.get::<_, Option<i32>>(1)?,
-                        row.get::<_, Option<i32>>(2)?,
-                        row.get::<_, Option<i32>>(3)?,
-                        row.get::<_, Option<i32>>(4)?,
-                    ))
-                },
-            )
-            .expect("load repaired singles chart rankings"),
-            (Some(7), Some(3), Some(2), Some(4), Some(1))
-        );
-
         fs::remove_dir_all(&test_dir).expect("remove singles chart import test directory");
     }
 }
