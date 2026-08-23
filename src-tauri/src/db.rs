@@ -9504,28 +9504,32 @@ fn genre_progress_stats_filtered(
 }
 
 fn track_rating_distribution(conn: &Connection) -> Result<Vec<RatingBucket>> {
-    let mut counts = [0_i64; 6];
+    let mut counts = [0_i64; 11];
     let mut stmt = conn.prepare(
         "
-        SELECT normalized_rating / 20, COUNT(*)
+        SELECT normalized_rating / 10, COUNT(*)
         FROM tracks
         WHERE normalized_rating IS NOT NULL
-        GROUP BY normalized_rating / 20
+        GROUP BY normalized_rating / 10
         ",
     )?;
     let mut rows = stmt.query([])?;
     while let Some(row) = rows.next()? {
         let rating: i64 = row.get(0)?;
-        if (0..=5).contains(&rating) {
+        if (0..=10).contains(&rating) {
             counts[rating as usize] = row.get(1)?;
         }
     }
 
-    Ok((0..=5)
+    Ok((0..=10)
         .rev()
-        .map(|rating| RatingBucket {
-            label: rating.to_string(),
-            count: counts[rating as usize],
+        .map(|half_star_steps| RatingBucket {
+            label: if half_star_steps % 2 == 0 {
+                (half_star_steps / 2).to_string()
+            } else {
+                format!("{}.5", half_star_steps / 2)
+            },
+            count: counts[half_star_steps as usize],
         })
         .collect())
 }
@@ -24587,24 +24591,24 @@ fn add_track_rating_range(
     conditions: &mut Vec<String>,
     values: &mut Vec<Value>,
     field: &str,
-    minimum: Option<i32>,
-    maximum: Option<i32>,
+    minimum: Option<f64>,
+    maximum: Option<f64>,
 ) {
     if let Some(minimum) = minimum {
         conditions.push(format!("{field} >= ?"));
-        values.push(Value::Integer(i64::from(track_rating_points(minimum))));
+        values.push(Value::Integer(track_rating_points(minimum)));
     }
     if let Some(maximum) = maximum {
         conditions.push(format!("{field} <= ?"));
-        values.push(Value::Integer(i64::from(track_rating_points(maximum))));
+        values.push(Value::Integer(track_rating_points(maximum)));
     }
 }
 
 fn add_album_track_rating_range(
     conditions: &mut Vec<String>,
     values: &mut Vec<Value>,
-    minimum: Option<i32>,
-    maximum: Option<i32>,
+    minimum: Option<f64>,
+    maximum: Option<f64>,
 ) {
     if minimum.is_none() && maximum.is_none() {
         return;
@@ -24613,11 +24617,11 @@ fn add_album_track_rating_range(
     let mut track_conditions = Vec::new();
     if let Some(minimum) = minimum {
         track_conditions.push("tx.normalized_rating >= ?".to_string());
-        values.push(Value::Integer(i64::from(track_rating_points(minimum))));
+        values.push(Value::Integer(track_rating_points(minimum)));
     }
     if let Some(maximum) = maximum {
         track_conditions.push("tx.normalized_rating <= ?".to_string());
-        values.push(Value::Integer(i64::from(track_rating_points(maximum))));
+        values.push(Value::Integer(track_rating_points(maximum)));
     }
     conditions.push(format!(
         "EXISTS (
@@ -24947,11 +24951,11 @@ fn normalize_percentage(value: f64) -> f64 {
     }
 }
 
-fn track_rating_points(value: i32) -> i32 {
-    if value <= 5 {
-        value * 20
+fn track_rating_points(value: f64) -> i64 {
+    if value <= 5.0 {
+        (value * 20.0).round() as i64
     } else {
-        value
+        value.round() as i64
     }
 }
 

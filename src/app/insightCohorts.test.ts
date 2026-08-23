@@ -81,6 +81,10 @@ describe("insight cohort requests", () => {
         .filters,
     ).toMatchObject({ albumRatingMin: 80, albumRatingMax: 89 });
     expect(
+      ratingBucketCohort({ label: "4.5", count: 12 }, "tracks")?.request
+        .filters,
+    ).toMatchObject({ trackRatingMin: 4.5, trackRatingMax: 4.5 });
+    expect(
       lovedDensityCohort({
         scope: "Genre",
         label: "Boy Band",

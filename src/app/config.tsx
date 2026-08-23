@@ -306,7 +306,7 @@ export const defaultProgress: ImportProgress = {
   processedBytes: 0,
   totalBytes: 0,
   albumCount: 0,
-  message: "Ready to import a MusicBee TSV export.",
+  message: "Ready to sync a tagged album folder or import a MusicBee TSV.",
 };
 
 export const defaultCoverProgress: CoverImportProgress = {

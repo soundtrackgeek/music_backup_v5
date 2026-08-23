@@ -6054,6 +6054,16 @@ button {
   margin-top: 0;
 }
 
+.import-source-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.import-source-row .secondary-button {
+  height: 38px;
+}
+
 .import-safety-note,
 .import-safety-warning,
 .import-safety-rollback {

@@ -15,7 +15,7 @@ mod search;
 mod service;
 mod settings;
 mod shares;
-mod soundcheck;
+pub(crate) mod soundcheck;
 mod uploads;
 mod wanted;
 

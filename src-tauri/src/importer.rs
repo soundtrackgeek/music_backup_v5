@@ -6,7 +6,9 @@ use crate::wishlist;
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
 use csv::{Position, StringRecord};
-use rusqlite::{params, Connection, InterruptHandle, OptionalExtension, Transaction};
+use rusqlite::{
+    params, Connection, InterruptHandle, OptionalExtension, Transaction, TransactionBehavior,
+};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -52,7 +54,7 @@ static IMPORT_CANCEL_REQUESTED: AtomicBool = AtomicBool::new(false);
 static IMPORT_WORKFLOW_RUNNING: AtomicBool = AtomicBool::new(false);
 static IMPORT_INTERRUPT_HANDLE: Mutex<Option<InterruptHandle>> = Mutex::new(None);
 
-const REQUIRED_COLUMNS: [&str; 17] = [
+pub(crate) const REQUIRED_COLUMNS: [&str; 17] = [
     "Display Artist",
     "Album Rating",
     "Disc#",
@@ -314,7 +316,29 @@ impl Drop for ImportInterruptGuard {
 
 #[cfg(not(test))]
 pub fn get_import_preview(app: &AppHandle, source_path: String) -> Result<Option<ImportPreview>> {
-    let (conn, _) = db::open(app)?;
+    let (conn, db_path) = db::open(app)?;
+    if let Ok(path) = resolve_source_path(&source_path) {
+        if path.is_dir() {
+            let app_data_dir = db_path
+                .parent()
+                .ok_or_else(|| anyhow!("Music Library database has no parent directory"))?;
+            let snapshot = crate::folder_sync::snapshot_path(app_data_dir, &path);
+            let fingerprint = source_fingerprint(snapshot.to_string_lossy().as_ref()).ok();
+            let Some(mut preview) = latest_import_preview(
+                &conn,
+                snapshot.to_string_lossy().as_ref(),
+                fingerprint.as_ref(),
+            )?
+            else {
+                return Ok(None);
+            };
+            if !crate::folder_sync::source_is_unchanged(&conn, &snapshot).unwrap_or(false) {
+                preview.source_changed = true;
+                preview.can_resume = false;
+            }
+            return Ok(Some(preview));
+        }
+    }
     let fingerprint = source_fingerprint(&source_path).ok();
     latest_import_preview(&conn, source_path.trim(), fingerprint.as_ref())
 }
@@ -323,9 +347,47 @@ pub fn get_import_preview(app: &AppHandle, source_path: String) -> Result<Option
 pub fn prepare_import_preview(app: AppHandle, source_path: String) -> Result<ImportPreview> {
     let _workflow_guard = ImportWorkflowGuard::acquire()?;
     IMPORT_CANCEL_REQUESTED.store(false, Ordering::SeqCst);
-    let (mut conn, _) = db::open(&app)?;
+    let (mut conn, db_path) = db::open(&app)?;
     let _interrupt_guard = ImportInterruptGuard::register(&conn);
-    let fingerprint = source_fingerprint(&source_path)?;
+    let resolved_source = resolve_source_path(&source_path)?;
+    let fingerprint = if resolved_source.is_dir() {
+        let app_data_dir = db_path
+            .parent()
+            .ok_or_else(|| anyhow!("Music Library database has no parent directory"))?;
+        let snapshot = crate::folder_sync::snapshot_path(app_data_dir, &resolved_source);
+        let can_reuse_snapshot = snapshot.is_file()
+            && crate::folder_sync::source_is_unchanged(&conn, &snapshot).unwrap_or(false);
+        if !can_reuse_snapshot {
+            emit_progress(
+                &app,
+                "scanning",
+                None,
+                0,
+                0,
+                0,
+                0,
+                "Reading tags from the selected album folder.",
+            );
+            let build_result = crate::folder_sync::build_snapshot(
+                &conn,
+                &resolved_source,
+                &snapshot,
+                &IMPORT_CANCEL_REQUESTED,
+                &mut |processed_rows, _total_rows, message| {
+                    emit_progress(&app, "scanning", None, processed_rows, 0, 0, 0, message);
+                },
+            );
+            if let Err(error) = build_result {
+                if IMPORT_CANCEL_REQUESTED.load(Ordering::SeqCst) {
+                    bail!("Album folder snapshot preparation cancelled safely");
+                }
+                return Err(error);
+            }
+        }
+        source_fingerprint(snapshot.to_string_lossy().as_ref())?
+    } else {
+        source_fingerprint(&source_path)?
+    };
     let progress = |status: &str,
                     session_id: Option<i64>,
                     processed_rows: u64,
@@ -371,8 +433,12 @@ pub fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSum
     if session.status != "ready" {
         bail!("Prepare the import delta before applying this import");
     }
+    let source_apply_guard =
+        crate::folder_sync::prepare_source_apply_guard(&conn, &session.source_path)?;
     let fingerprint = source_fingerprint(&session.source_path)?;
     ensure_session_source_matches(&session, &fingerprint)?;
+    let reported_source_path = crate::folder_sync::original_folder_path(&session.source_path)
+        .unwrap_or_else(|| session.source_path.clone());
     let settings = db::settings_for_connection(&conn)?;
 
     emit_progress(
@@ -388,7 +454,7 @@ pub fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSum
     let backup_path = create_backup(
         &conn,
         &db_path,
-        &fingerprint.path,
+        Path::new(&reported_source_path),
         fingerprint.size_bytes,
         settings.backup_retention as usize,
     )?;
@@ -404,7 +470,7 @@ pub fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSum
         ) VALUES (?1, ?2, ?3, 'running', ?4, ?5, ?6, ?7, ?8, ?9, ?10)
         ",
         params![
-            &session.source_path,
+            &reported_source_path,
             session.source_size_bytes,
             &now,
             &backup_path_text,
@@ -419,7 +485,14 @@ pub fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSum
     .context("Could not create import run for the prepared delta")?;
     let import_run_id = conn.last_insert_rowid();
 
-    let result = apply_staged_import(&mut conn, &session, import_run_id, started);
+    let result = apply_staged_import(
+        &mut conn,
+        &session,
+        import_run_id,
+        started,
+        &reported_source_path,
+        source_apply_guard.as_ref(),
+    );
     match result {
         Ok((track_rows, album_count, rating_events_count)) => {
             let duration_ms = started.elapsed().as_millis();
@@ -462,6 +535,7 @@ pub fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSum
             );
             let import_run = db::get_import_run(&conn, import_run_id)?;
             debug_assert_eq!(import_run.rating_events_count, rating_events_count);
+            crate::folder_sync::cleanup_generated_snapshot(&session.source_path);
             Ok(ImportSummary {
                 import_run,
                 track_rows,
@@ -1445,9 +1519,15 @@ fn apply_staged_import(
     session: &ImportSessionRecord,
     import_run_id: i64,
     started: Instant,
+    reported_source_path: &str,
+    source_apply_guard: Option<&crate::folder_sync::SourceApplyGuard>,
 ) -> Result<(u64, u64, i64)> {
-    let final_albums = load_stage_final_albums(conn, session.id)?;
-    let mut previous_albums = load_previous_albums(conn)?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .context("Could not start atomic staged import")?;
+    crate::folder_sync::ensure_source_apply_guard(&tx, source_apply_guard)?;
+    let final_albums = load_stage_final_albums(&tx, session.id)?;
+    let mut previous_albums = load_previous_albums(&tx)?;
     let previous_album_match_index = build_previous_album_match_index(&previous_albums);
     let mut rating_events = Vec::new();
     let mut library_updates = Vec::new();
@@ -1475,9 +1555,6 @@ fn apply_staged_import(
         }
     }
 
-    let tx = conn
-        .transaction()
-        .context("Could not start atomic staged import")?;
     tx.execute_batch(
         "
         DELETE FROM raw_tracks;
@@ -1575,7 +1652,7 @@ fn apply_staged_import(
     .context("Could not copy staged albums")?;
 
     insert_rating_events(&tx, import_run_id, &rating_events)?;
-    insert_library_updates(&tx, import_run_id, &session.source_path, &library_updates)?;
+    insert_library_updates(&tx, import_run_id, reported_source_path, &library_updates)?;
     insert_rating_snapshot(&tx, import_run_id, &final_albums)?;
     db::rebuild_search_indexes(&tx)?;
     db::reconcile_album_chart_matches(&tx)
@@ -2871,7 +2948,7 @@ impl AlbumAggregate {
 
         if let Some(time_seconds) = track.time_seconds {
             self.total_seconds += time_seconds;
-            if track.track_rating_value == Some(5) {
+            if track.track_rating_value == Some(10) {
                 self.tmoe_seconds += time_seconds;
             }
         }
@@ -3026,10 +3103,10 @@ fn enforce_backup_retention(backup_dir: &Path, backup_retention: usize) -> Resul
     Ok(())
 }
 
-fn resolve_source_path(source_path: &str) -> Result<PathBuf> {
+pub(crate) fn resolve_source_path(source_path: &str) -> Result<PathBuf> {
     let trimmed = source_path.trim();
     if trimmed.is_empty() {
-        bail!("Choose a TSV source path before starting import");
+        bail!("Choose a tagged album folder or MusicBee TSV before starting import");
     }
 
     let provided = PathBuf::from(trimmed);
@@ -3044,11 +3121,14 @@ fn resolve_source_path(source_path: &str) -> Result<PathBuf> {
         candidates
     };
 
-    candidates
+    let candidate = candidates
         .into_iter()
         .find(|candidate| candidate.exists())
-        .map(|candidate| candidate.canonicalize().unwrap_or(candidate))
-        .ok_or_else(|| anyhow!("Could not find TSV source path: {source_path}"))
+        .ok_or_else(|| anyhow!("Could not find import source path: {source_path}"))?;
+    if candidate.is_dir() {
+        crate::folder_sync::ensure_source_root_is_not_linked(&candidate)?;
+    }
+    Ok(candidate.canonicalize().unwrap_or(candidate))
 }
 
 fn musicbee_tsv_reader_builder() -> csv::ReaderBuilder {
@@ -3175,16 +3255,20 @@ fn parse_year_value(value: &str) -> Option<i32> {
 }
 
 fn parse_track_rating(value: &str) -> Option<i32> {
-    let rating = parse_whole_number(value)?;
-    if (0..=5).contains(&rating) {
-        Some(rating)
+    let rating = value.trim().parse::<f64>().ok()?;
+    let half_star_steps = rating * 2.0;
+    if rating.is_finite()
+        && (0.0..=5.0).contains(&rating)
+        && (half_star_steps - half_star_steps.round()).abs() < f64::EPSILON
+    {
+        Some(half_star_steps.round() as i32)
     } else {
         None
     }
 }
 
 fn normalize_track_rating(value: &str) -> Option<i32> {
-    parse_track_rating(value).map(|rating| rating * 20)
+    parse_track_rating(value).map(|half_star_steps| half_star_steps * 10)
 }
 
 fn parse_album_rating(value: &str) -> Option<i32> {
@@ -3220,6 +3304,9 @@ fn album_identity(
     file_path: &str,
 ) -> String {
     if let Some(unique_id) = empty_to_none(album_unique_id) {
+        if unique_id.starts_with("aurora:") {
+            return unique_id.to_owned();
+        }
         return format!("mb:{unique_id}");
     }
 
@@ -3392,11 +3479,12 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_only_whole_track_ratings() {
+    fn normalizes_musicbee_half_star_ratings() {
         assert_eq!(normalize_track_rating("5"), Some(100));
         assert_eq!(normalize_track_rating("5.0"), Some(100));
         assert_eq!(normalize_track_rating("0"), Some(0));
-        assert_eq!(normalize_track_rating("3.5"), None);
+        assert_eq!(normalize_track_rating("3.5"), Some(70));
+        assert_eq!(normalize_track_rating("3.25"), None);
         assert_eq!(normalize_track_rating("6"), None);
     }
 
@@ -4086,8 +4174,15 @@ mod tests {
         )
         .expect("create apply failure trigger");
         let session = load_import_session(&conn, ready.session_id).expect("load ready session");
-        let error = apply_staged_import(&mut conn, &session, applying_run_id, Instant::now())
-            .expect_err("atomic apply should fail");
+        let error = apply_staged_import(
+            &mut conn,
+            &session,
+            applying_run_id,
+            Instant::now(),
+            &session.source_path,
+            None,
+        )
+        .expect_err("atomic apply should fail");
         assert!(error.to_string().contains("Could not copy staged albums"));
         assert_eq!(
             conn.query_row("SELECT COUNT(*) FROM tracks", [], |row| row
@@ -4258,8 +4353,15 @@ mod tests {
         let applying_run_id = conn.last_insert_rowid();
         let session =
             load_import_session(&conn, ready.session_id).expect("load ready import session");
-        apply_staged_import(&mut conn, &session, applying_run_id, Instant::now())
-            .expect("apply singles chart import");
+        apply_staged_import(
+            &mut conn,
+            &session,
+            applying_run_id,
+            Instant::now(),
+            &session.source_path,
+            None,
+        )
+        .expect("apply singles chart import");
 
         let new_track_id = conn
             .query_row("SELECT id FROM tracks", [], |row| row.get::<_, i64>(0))

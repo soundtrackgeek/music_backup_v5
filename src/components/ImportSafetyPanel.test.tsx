@@ -78,6 +78,7 @@ function renderPanel(
 ) {
   const handlers = {
     onSourcePathChange: vi.fn(),
+    onBrowseFolder: vi.fn(),
     onPrepare: vi.fn(),
     onCancel: vi.fn(),
     onApply: vi.fn(),
@@ -102,6 +103,18 @@ function renderPanel(
 }
 
 describe("ImportSafetyPanel", () => {
+  it("presents tagged album folders as the primary import source", () => {
+    const handlers = renderPanel({
+      sourcePath: "H:\\Music\\New Album",
+      preview: null,
+    });
+
+    expect(screen.getByText("Tagged album folder")).toBeVisible();
+    expect(screen.getByText("Complete album folder")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Browse" }));
+    expect(handlers.onBrowseFolder).toHaveBeenCalledOnce();
+  });
+
   it("shows the complete pre-import delta and suspicious album evidence", () => {
     const handlers = renderPanel();
 

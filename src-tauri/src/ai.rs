@@ -2697,12 +2697,12 @@ fn apply_condition(request: &mut BrowseRequest, condition: &QueryCondition) -> R
             0,
             100,
         )?,
-        "trackRating" => apply_i32_range(
+        "trackRating" => apply_f64_range(
             condition,
             &mut request.filters.track_rating_min,
             &mut request.filters.track_rating_max,
-            0,
-            100,
+            0.0,
+            100.0,
         )?,
         "ratingCompleteness" => apply_f64_range(
             condition,

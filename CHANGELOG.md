@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.142.0] - 2026-08-23
+### Added
+- Added safe synchronization of one complete, already-tagged MP3 album folder without MusicBee. The app reads ID3 album, artist, display-artist, title, track/disc, genre, publisher, year, release-year, Love/Ban, MusicBee POPM half-star rating, and duration fields.
+- Added a native album-folder picker and kept MusicBee TSV as the legacy fallback in the same reviewed import workflow.
+
+### Changed
+- Folder sync builds a compatibility snapshot from the active normalized catalog outside the selected folder plus the freshly scanned folder, preserving app-owned metadata repairs before using the existing delta review, suspicious-removal warnings, rollback backup, and atomic apply.
+- Album-folder ID3 bytes, exact path spelling, and the active catalog are fingerprinted before staging and apply. The atomic apply then rechecks the folder and rejects any catalog commit that raced with preflight, without hashing the million-track catalog while holding SQLite's writer lock. Stale previews, linked path ancestors, mixed albums, and unrecognized non-MP3 files are rejected before replacement.
+- Existing album identities are preserved, partial album ratings use MusicBee's floor-average behavior, half-star ratings are first-class in statistics and drilldowns, and activity history records the selected folder instead of an internal generated snapshot.
+- Synchronized app metadata and provider user agents to `0.142.0`.
+
 ## [0.141.3] - 2026-08-21
 ### Fixed
 - Stopped completed UK-to-GB origin migrations from requesting SQLite write access on every database open, so album-chart imports can start while another app operation holds the writer lock.

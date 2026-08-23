@@ -209,11 +209,11 @@ export function genreCohort(
 }
 
 function numericBucket(label: string) {
-  if (/^\d+$/.test(label)) {
+  if (/^\d+(?:\.\d+)?$/.test(label)) {
     const value = Number(label);
     return { min: value, max: value };
   }
-  const match = label.match(/^(\d+)-(\d+)$/);
+  const match = label.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
   return match ? { min: Number(match[1]), max: Number(match[2]) } : null;
 }
 

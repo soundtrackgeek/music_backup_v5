@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   Check,
   DatabaseBackup,
+  FolderOpen,
   Pause,
   Play,
   RotateCcw,
@@ -20,6 +21,7 @@ type ImportSafetyPanelProps = {
   isApplying: boolean;
   isCancelling: boolean;
   onSourcePathChange: (value: string) => void;
+  onBrowseFolder: () => void;
   onPrepare: () => void;
   onCancel: () => void;
   onApply: () => void;
@@ -40,7 +42,7 @@ function progressPercent(progress: ImportProgress) {
       Math.max(2, (progress.processedBytes / progress.totalBytes) * 100),
     );
   }
-  return ["preparing", "resuming", "analyzing", "applying"].includes(
+  return ["scanning", "preparing", "resuming", "analyzing", "applying"].includes(
     progress.status,
   )
     ? 4
@@ -75,18 +77,24 @@ export function ImportSafetyPanel({
   isApplying,
   isCancelling,
   onSourcePathChange,
+  onBrowseFolder,
   onPrepare,
   onCancel,
   onApply,
   onRollback,
 }: ImportSafetyPanelProps) {
   const isReady = preview?.status === "ready" && !preview.sourceChanged;
+  const isLegacyTsv = sourcePath.trim().toLowerCase().endsWith(".tsv");
   const canResume = preview?.canResume && !preview.sourceChanged;
   const isBusy = isPreparing || isApplying;
   const percent = progressPercent(progress);
-  const preparationStatus = ["preparing", "resuming", "analyzing", "optimizing"].includes(
-    progress.status,
-  )
+  const preparationStatus = [
+    "scanning",
+    "preparing",
+    "resuming",
+    "analyzing",
+    "optimizing",
+  ].includes(progress.status)
     ? progress.status
     : canResume
       ? "resuming"
@@ -100,13 +108,15 @@ export function ImportSafetyPanel({
   return (
     <section
       className="import-panel import-safety-panel"
-      aria-label="Safe MusicBee library import"
+      aria-label="Safe library import"
     >
       <div className="panel-heading">
         <div>
-          <h2>musicbee-library.tsv</h2>
+          <h2>{isLegacyTsv ? "MusicBee TSV fallback" : "Tagged album folder"}</h2>
           <p>
-            Stage and inspect the delta before the active library is replaced.
+            {isLegacyTsv
+              ? "Keep the existing TSV route available while you move away from MusicBee."
+              : "Read your finished MP3 tags, then inspect the catalog delta before applying it."}
           </p>
         </div>
         <span className={`run-status run-status-${status}`}>{status}</span>
@@ -117,21 +127,32 @@ export function ImportSafetyPanel({
         <div>
           <strong>Your current library stays live during preparation.</strong>
           <span>
-            Only resumable checkpoints are written, so the SQLite file can grow
-            temporarily. Apply creates a rollback backup before replacing the
-            active snapshot, then reclaims completed staging space.
+            A complete replacement snapshot is staged so albums outside the
+            selected folder are preserved. Apply creates a rollback backup
+            before replacing the active snapshot.
           </span>
         </div>
       </div>
 
       <label className="source-input">
-        <span>TSV source path</span>
-        <input
-          value={sourcePath}
-          onChange={(event) => onSourcePathChange(event.target.value)}
-          placeholder="C:\Music\musicbee-library.tsv"
-          disabled={isBusy}
-        />
+        <span>{isLegacyTsv ? "TSV source path" : "Complete album folder"}</span>
+        <div className="import-source-row">
+          <input
+            value={sourcePath}
+            onChange={(event) => onSourcePathChange(event.target.value)}
+            placeholder="H:\Music\Artist - Album (2026)"
+            disabled={isBusy}
+          />
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={onBrowseFolder}
+            disabled={isBusy}
+          >
+            <FolderOpen size={16} aria-hidden="true" />
+            Browse
+          </button>
+        </div>
       </label>
 
       <div className="progress-block" aria-live="polite">
@@ -162,8 +183,8 @@ export function ImportSafetyPanel({
       {preview?.sourceChanged ? (
         <p className="import-safety-warning">
           <AlertTriangle size={17} aria-hidden="true" />
-          The source file changed after this checkpoint. Prepare a fresh delta
-          before applying.
+          The source changed after this checkpoint. Prepare a fresh delta before
+          applying.
         </p>
       ) : null}
 

@@ -10,6 +10,7 @@ mod deemix;
 mod deemix_download;
 mod discogs;
 mod external_discovery;
+mod folder_sync;
 mod importer;
 mod lastfm;
 mod library_completion;

@@ -145,6 +145,7 @@ import {
   saveChart,
   saveSearch,
   saveSettings,
+  selectTaggedAlbumFolder,
   previewMusicBrainzArtistInfoImport,
   previewMusicBrainzOriginCountryImport,
   prepareImportPreview,
@@ -11426,8 +11427,8 @@ export default function App() {
       status: "starting",
       message:
         importPreview?.canResume && !importPreview.sourceChanged
-          ? "Opening the last durable TSV checkpoint."
-          : "Starting a resumable pre-import scan.",
+          ? "Opening the last durable import checkpoint."
+          : "Scanning the selected source before staging its delta.",
     });
 
     try {
@@ -11447,11 +11448,14 @@ export default function App() {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setImportError(message);
+      const wasCancelled = message.toLowerCase().includes("cancelled safely");
+      setImportError(wasCancelled ? null : message);
       setProgress((previous) => ({
         ...previous,
-        status: "failed",
-        message,
+        status: wasCancelled ? "cancelled" : "failed",
+        message: wasCancelled
+          ? "Album folder scan cancelled before the active library changed."
+          : message,
       }));
     } finally {
       setIsImporting(false);
@@ -11470,13 +11474,32 @@ export default function App() {
     }
   }
 
+  async function browseForImportAlbumFolder() {
+    setImportError(null);
+    try {
+      const selected = await selectTaggedAlbumFolder(
+        sourcePath.trim().toLowerCase().endsWith(".tsv")
+          ? undefined
+          : sourcePath,
+      );
+      if (!selected) {
+        return;
+      }
+      setSourcePath(selected);
+      setImportPreview(null);
+      setProgress(defaultProgress);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async function applyPreparedLibraryImport() {
     if (!importPreview || importPreview.status !== "ready") {
       return;
     }
     const confirmed = window.confirm(
       [
-        "Apply this prepared MusicBee import?",
+        "Apply this prepared library update?",
         "",
         `${formatNumber(importPreview.addedAlbums)} added albums`,
         `${formatNumber(importPreview.changedAlbums)} changed albums`,
@@ -14146,7 +14169,7 @@ export default function App() {
             </div>
             <div>
               <strong>Music Library</strong>
-              <span>Local TSV browser</span>
+              <span>Local music catalog</span>
             </div>
           </div>
 
@@ -14310,8 +14333,8 @@ export default function App() {
               <div>
                 <h1>Imports</h1>
                 <p>
-                  Build the local SQLite database from a MusicBee TSV export.
-                  Path edits save automatically.
+                  Sync one already-tagged MP3 album folder, or use the legacy
+                  MusicBee TSV route. Path edits save automatically.
                 </p>
               </div>
               <div className="topbar-actions">
@@ -14398,6 +14421,7 @@ export default function App() {
                   setImportError(null);
                 }
               }}
+              onBrowseFolder={() => void browseForImportAlbumFolder()}
               onPrepare={() => void prepareLibraryImport()}
               onCancel={() => void cancelLibraryImportPreparation()}
               onApply={() => void applyPreparedLibraryImport()}
@@ -20631,6 +20655,7 @@ export default function App() {
                   value={currentFilters.trackRatingMin}
                   min={0}
                   max={5}
+                  step={0.5}
                   onChange={(value) => updateFilter("trackRatingMin", value)}
                 />
                 <NumberField
@@ -20638,6 +20663,7 @@ export default function App() {
                   value={currentFilters.trackRatingMax}
                   min={0}
                   max={5}
+                  step={0.5}
                   onChange={(value) => updateFilter("trackRatingMax", value)}
                 />
 

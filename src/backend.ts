@@ -6287,6 +6287,13 @@ export async function getImportPreview(sourcePath: string) {
   return invoke<ImportPreview | null>("get_import_preview", { sourcePath });
 }
 
+export async function selectTaggedAlbumFolder(defaultPath?: string) {
+  if (!isTauriRuntime()) {
+    return null;
+  }
+  return selectDirectory(defaultPath, "Choose one complete tagged album folder");
+}
+
 export async function prepareImportPreview(sourcePath: string) {
   if (!isTauriRuntime()) {
     mockImportCancellationRequested = false;
