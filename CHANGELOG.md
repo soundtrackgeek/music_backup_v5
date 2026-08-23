@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.143.0] - 2026-08-24
+### Added
+- Added the versioned Aurora album-intake bridge, invoked as `music-library.exe --aurora-bridge <request.json> <response.json>`, with JSON `capabilities`, `previewBatch`, and `applyBatch` operations.
+- Added one-album and immediate-child batch intake for General music (`D:\MUSIC`), Movie / TV / game music (`G:\_BACKUP\SCORES`), and Synthwave (`H:\Synthwave`). Album folder names, nested disc paths, sidecars, tags, ratings, genres, and every source byte remain unchanged.
+- Added cross-volume copy-and-verify transfer, hidden owned staging folders, full-file SHA-256 verification, one whole-catalog staged delta, the existing SQLite rollback backup, and quarantine-first source cleanup after the catalog commit.
+
+### Changed
+- Aurora intake is strictly add-only and preview-required. Plans bind the exact source inventory, destination mappings, generated snapshot, import session, and active-catalog fingerprint; stale, mixed, linked/reparse, overlapping, occupied, case-colliding, unsupported, or changed inputs fail closed.
+- Bridge preview/apply workflows are serialized across processes, write responses and recovery journals atomically, retain durable completed receipts, recover abandoned bridge-only previews without touching legacy imports, and preserve both source and verified destination whenever commit or cleanup state is uncertain.
+- Synchronized app metadata and provider user agents to `0.143.0`.
+
 ## [0.142.0] - 2026-08-23
 ### Added
 - Added safe synchronization of one complete, already-tagged MP3 album folder without MusicBee. The app reads ID3 album, artist, display-artist, title, track/disc, genre, publisher, year, release-year, Love/Ban, MusicBee POPM half-star rating, and duration fields.

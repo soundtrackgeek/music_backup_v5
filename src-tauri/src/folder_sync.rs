@@ -15,9 +15,12 @@ use std::time::UNIX_EPOCH;
 
 const SNAPSHOT_DIRECTORY: &str = "album-folder-imports";
 const SNAPSHOT_FORMAT_VERSION: u32 = 1;
+const BATCH_SNAPSHOT_FORMAT_VERSION: u32 = 2;
 const MAX_FOLDER_DEPTH: usize = 8;
 const MAX_ALBUM_TRACKS: usize = 5_000;
 const MAX_SCAN_ENTRIES: usize = 20_000;
+const MAX_BATCH_ALBUMS: usize = 100;
+const MAX_BATCH_TRACKS: usize = 50_000;
 const MUSICBEE_POPM_OWNER: &str = "MusicBee";
 const DISPLAY_ARTIST_DESCRIPTION: &str = "DISPLAY ARTIST";
 const LOVE_RATING_DESCRIPTION: &str = "LOVE RATING";
@@ -86,6 +89,30 @@ struct FolderSnapshotManifest {
     catalog_fingerprint: CatalogFingerprint,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchSnapshotManifest {
+    format_version: u32,
+    source_path: String,
+    catalog_fingerprint: CatalogFingerprint,
+    albums: Vec<BatchSnapshotAlbumManifest>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchSnapshotAlbumManifest {
+    source_path: String,
+    source_fingerprint: FolderFingerprint,
+    destination_path: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+enum SnapshotManifest {
+    Single(FolderSnapshotManifest),
+    Batch(BatchSnapshotManifest),
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CatalogFingerprint {
@@ -97,12 +124,35 @@ struct CatalogFingerprint {
 #[derive(Clone, Debug)]
 pub(crate) struct SourceApplyGuard {
     data_version: i64,
-    folder_path: String,
-    folder_fingerprint: FolderFingerprint,
+    folders: Vec<(String, FolderFingerprint)>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct BatchAlbumInput {
+    pub source: PathBuf,
+    pub destination: PathBuf,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BatchAlbumMetadata {
+    pub source_path: String,
+    pub destination_path: String,
+    pub artist: String,
+    pub album: String,
+    pub year: String,
+    pub track_count: usize,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct BatchSnapshotResult {
+    pub albums: Vec<BatchAlbumMetadata>,
+    pub track_count: usize,
 }
 
 #[derive(Clone, Debug)]
 struct ScannedTrack {
+    path: PathBuf,
     display_artist: String,
     album: String,
     genre: String,
@@ -135,6 +185,184 @@ pub(crate) fn snapshot_path(app_data_dir: &Path, folder: &Path) -> PathBuf {
         .join(format!("album-folder-{}.tsv", &digest[..20]))
 }
 
+pub(crate) fn ensure_batch_snapshot_bindings(
+    snapshot: &Path,
+    selected_source: &Path,
+    albums: &[BatchAlbumInput],
+) -> Result<()> {
+    let SnapshotManifest::Batch(manifest) = read_snapshot_manifest(snapshot)? else {
+        bail!("The prepared snapshot is not an Aurora batch snapshot");
+    };
+    if normalized_path(Path::new(&manifest.source_path)) != normalized_path(selected_source)
+        || manifest.albums.len() != albums.len()
+    {
+        bail!("The Aurora intake plan does not match its prepared batch snapshot");
+    }
+    let expected = albums
+        .iter()
+        .map(|album| {
+            format!(
+                "{}\0{}",
+                normalized_path(&album.source),
+                normalized_path(&album.destination)
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    let actual = manifest
+        .albums
+        .iter()
+        .map(|album| {
+            format!(
+                "{}\0{}",
+                normalized_path(Path::new(&album.source_path)),
+                normalized_path(Path::new(&album.destination_path))
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    if expected != actual {
+        bail!("The Aurora intake plan album mappings do not match its prepared batch snapshot");
+    }
+    Ok(())
+}
+
+pub(crate) fn ensure_path_entry_is_not_linked(path: &Path) -> Result<()> {
+    let metadata = fs::symlink_metadata(path)
+        .with_context(|| format!("Could not inspect filesystem entry {}", path.display()))?;
+    if metadata.file_type().is_symlink() || is_reparse_point(path)? {
+        bail!(
+            "The album folder contains a linked or redirected entry: {}",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
+pub(crate) fn discover_batch_album_sources(selected: &Path) -> Result<Vec<PathBuf>> {
+    ensure_source_root_is_not_linked(selected)?;
+    let canonical = selected
+        .canonicalize()
+        .with_context(|| format!("Could not resolve intake folder {}", selected.display()))?;
+    if !canonical.is_dir() {
+        bail!(
+            "The selected intake path is not a folder: {}",
+            selected.display()
+        );
+    }
+    let mut direct_mp3 = false;
+    let mut child_dirs = Vec::new();
+    let mut child_with_mp3 = false;
+    for entry in fs::read_dir(&canonical)
+        .with_context(|| format!("Could not read intake folder {}", canonical.display()))?
+    {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() || is_reparse_point(&entry.path())? {
+            bail!(
+                "The selected intake folder contains a linked file or folder: {}",
+                entry.path().display()
+            );
+        }
+        if file_type.is_dir() {
+            if child_dirs.len() >= MAX_BATCH_ALBUMS {
+                bail!(
+                    "An Aurora intake batch can contain at most {MAX_BATCH_ALBUMS} album folders"
+                );
+            }
+            let mut paths = Vec::new();
+            let mut count = 0;
+            collect_mp3_paths(&entry.path(), 0, &mut count, &mut paths)?;
+            if !paths.is_empty() {
+                child_with_mp3 = true;
+            }
+            child_dirs.push((entry.path(), !paths.is_empty()));
+        } else if file_type.is_file() {
+            let extension = entry
+                .path()
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            if extension == "mp3" {
+                direct_mp3 = true;
+            } else if !is_safe_sidecar(&entry.path(), &extension) {
+                bail!(
+                    "The selected intake folder contains an unsupported file: {}",
+                    entry.path().display()
+                );
+            }
+        }
+    }
+    if direct_mp3 && child_with_mp3 {
+        bail!(
+            "The selected folder mixes top-level MP3 files with child album folders. Select the album itself or its parent batch folder"
+        );
+    }
+
+    let cancel = AtomicBool::new(false);
+    if direct_mp3 {
+        let whole_scan = scan_folder(&canonical, &cancel)?;
+        validate_single_album(&whole_scan.tracks)?;
+        return Ok(vec![canonical]);
+    }
+
+    let populated_children = child_dirs
+        .iter()
+        .filter(|(_, has_mp3)| *has_mp3)
+        .collect::<Vec<_>>();
+    if populated_children.len() == 1 && !looks_like_disc_folder(&populated_children[0].0) {
+        if child_dirs.len() != 1 {
+            bail!("Every immediate child of a batch folder must be a complete album folder");
+        }
+        let scan = scan_folder(&populated_children[0].0, &cancel)?;
+        validate_single_album(&scan.tracks)?;
+        return Ok(vec![scan.canonical_folder]);
+    }
+    if !populated_children.is_empty()
+        && populated_children.len() == child_dirs.len()
+        && populated_children
+            .iter()
+            .all(|(child, _)| looks_like_disc_folder(child))
+    {
+        let whole_scan = scan_folder(&canonical, &cancel)?;
+        validate_single_album(&whole_scan.tracks)?;
+        return Ok(vec![canonical]);
+    }
+
+    let mut albums = Vec::new();
+    for (child, has_mp3) in child_dirs {
+        if !has_mp3 {
+            bail!(
+                "Every immediate child of a batch folder must be a complete album folder; {} contains no MP3 files",
+                child.display()
+            );
+        }
+        let scan = scan_folder(&child, &cancel)?;
+        validate_single_album(&scan.tracks)?;
+        albums.push(scan.canonical_folder);
+    }
+    if albums.is_empty() {
+        bail!("The selected folder does not contain any complete tagged albums");
+    }
+    albums.sort_by_key(|path| normalized_path(path));
+    Ok(albums)
+}
+
+fn looks_like_disc_folder(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    let compact = name
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect::<String>();
+    ["disc", "disk", "cd"].iter().any(|prefix| {
+        compact.strip_prefix(prefix).is_some_and(|suffix| {
+            !suffix.is_empty() && suffix.chars().all(|value| value.is_ascii_digit())
+        })
+    })
+}
+
 pub(crate) fn ensure_source_root_is_not_linked(folder: &Path) -> Result<()> {
     for ancestor in folder.ancestors() {
         let metadata = fs::symlink_metadata(ancestor).with_context(|| {
@@ -154,17 +382,31 @@ pub(crate) fn ensure_source_root_is_not_linked(folder: &Path) -> Result<()> {
 }
 
 pub(crate) fn source_is_unchanged(conn: &Connection, snapshot: &Path) -> Result<bool> {
-    let manifest = read_manifest(snapshot)?;
-    let folder = PathBuf::from(&manifest.folder_path);
-    if !folder.is_dir() {
-        return Ok(false);
+    match read_snapshot_manifest(snapshot)? {
+        SnapshotManifest::Single(manifest) => {
+            let folder = PathBuf::from(&manifest.folder_path);
+            if !folder.is_dir() {
+                return Ok(false);
+            }
+            ensure_source_root_is_not_linked(&folder)?;
+            let (current, _) = fingerprint_folder(&folder)?;
+            Ok(current == manifest.folder_fingerprint
+                && catalog_fingerprint(conn)? == manifest.catalog_fingerprint)
+        }
+        SnapshotManifest::Batch(manifest) => {
+            for album in &manifest.albums {
+                let folder = PathBuf::from(&album.source_path);
+                if !folder.is_dir() {
+                    return Ok(false);
+                }
+                ensure_source_root_is_not_linked(&folder)?;
+                if fingerprint_folder(&folder)?.0 != album.source_fingerprint {
+                    return Ok(false);
+                }
+            }
+            Ok(catalog_fingerprint(conn)? == manifest.catalog_fingerprint)
+        }
     }
-    ensure_source_root_is_not_linked(&folder)?;
-    let (current, _) = fingerprint_folder(&folder)?;
-    if current != manifest.folder_fingerprint {
-        return Ok(false);
-    }
-    Ok(catalog_fingerprint(conn)? == manifest.catalog_fingerprint)
 }
 
 pub(crate) fn prepare_source_apply_guard(
@@ -175,30 +417,47 @@ pub(crate) fn prepare_source_apply_guard(
     if !is_generated_snapshot(snapshot) {
         return Ok(None);
     }
-    let manifest = read_manifest(snapshot)?;
-    let folder = PathBuf::from(&manifest.folder_path);
-    if !folder.is_dir() {
-        bail!(
-            "The tagged album folder or active catalog changed after its delta was prepared. Prepare a new delta before importing"
-        );
-    }
-    ensure_source_root_is_not_linked(&folder)?;
-    let (folder_fingerprint, _) = fingerprint_folder(&folder)?;
-    if folder_fingerprint != manifest.folder_fingerprint {
-        bail!(
-            "The tagged album folder or active catalog changed after its delta was prepared. Prepare a new delta before importing"
-        );
+    let manifest = read_snapshot_manifest(snapshot)?;
+    let (catalog, expected_folders) = match manifest {
+        SnapshotManifest::Single(manifest) => (
+            manifest.catalog_fingerprint,
+            vec![(manifest.folder_path, manifest.folder_fingerprint)],
+        ),
+        SnapshotManifest::Batch(manifest) => (
+            manifest.catalog_fingerprint,
+            manifest
+                .albums
+                .into_iter()
+                .map(|album| (album.source_path, album.source_fingerprint))
+                .collect(),
+        ),
+    };
+    let mut folders = Vec::with_capacity(expected_folders.len());
+    for (folder_path, expected_fingerprint) in expected_folders {
+        let folder = PathBuf::from(&folder_path);
+        if !folder.is_dir() {
+            bail!(
+                "The tagged album folder or active catalog changed after its delta was prepared. Prepare a new delta before importing"
+            );
+        }
+        ensure_source_root_is_not_linked(&folder)?;
+        let (folder_fingerprint, _) = fingerprint_folder(&folder)?;
+        if folder_fingerprint != expected_fingerprint {
+            bail!(
+                "The tagged album folder or active catalog changed after its delta was prepared. Prepare a new delta before importing"
+            );
+        }
+        folders.push((folder_path, folder_fingerprint));
     }
     let (catalog_fingerprint, data_version) = catalog_fingerprint_with_data_version(conn)?;
-    if catalog_fingerprint != manifest.catalog_fingerprint {
+    if catalog_fingerprint != catalog {
         bail!(
             "The tagged album folder or active catalog changed after its delta was prepared. Prepare a new delta before importing"
         );
     }
     Ok(Some(SourceApplyGuard {
         data_version,
-        folder_path: manifest.folder_path,
-        folder_fingerprint,
+        folders,
     }))
 }
 
@@ -214,17 +473,19 @@ pub(crate) fn ensure_source_apply_guard(
             "The active catalog changed while the prepared import was waiting to apply. Prepare a new delta before importing"
         );
     }
-    let folder = Path::new(&guard.folder_path);
-    if !folder.is_dir() {
-        bail!(
-            "The tagged album folder changed while the prepared import was waiting to apply. Prepare a new delta before importing"
-        );
-    }
-    ensure_source_root_is_not_linked(folder)?;
-    if fingerprint_folder(folder)?.0 != guard.folder_fingerprint {
-        bail!(
-            "The tagged album folder changed while the prepared import was waiting to apply. Prepare a new delta before importing"
-        );
+    for (folder_path, expected_fingerprint) in &guard.folders {
+        let folder = Path::new(folder_path);
+        if !folder.is_dir() {
+            bail!(
+                "The tagged album folder changed while the prepared import was waiting to apply. Prepare a new delta before importing"
+            );
+        }
+        ensure_source_root_is_not_linked(folder)?;
+        if fingerprint_folder(folder)?.0 != *expected_fingerprint {
+            bail!(
+                "The tagged album folder changed while the prepared import was waiting to apply. Prepare a new delta before importing"
+            );
+        }
     }
     Ok(())
 }
@@ -234,18 +495,27 @@ pub(crate) fn original_folder_path(snapshot_source: &str) -> Option<String> {
     if !is_generated_snapshot(snapshot) {
         return None;
     }
-    read_manifest(snapshot)
-        .ok()
-        .map(|manifest| manifest.folder_path)
+    match read_snapshot_manifest(snapshot).ok()? {
+        SnapshotManifest::Single(manifest) => Some(manifest.folder_path),
+        SnapshotManifest::Batch(manifest) => Some(manifest.source_path),
+    }
 }
 
 pub(crate) fn cleanup_generated_snapshot(snapshot_source: &str) {
     let snapshot = Path::new(snapshot_source);
-    if !is_generated_snapshot(snapshot) || read_manifest(snapshot).is_err() {
+    if !is_generated_snapshot(snapshot) || read_snapshot_manifest(snapshot).is_err() {
         return;
     }
     let _ = fs::remove_file(snapshot);
     let _ = fs::remove_file(manifest_path(snapshot));
+}
+
+pub(crate) fn cleanup_generated_snapshot_file(snapshot_source: &str) {
+    let snapshot = Path::new(snapshot_source);
+    if !is_generated_snapshot(snapshot) || read_snapshot_manifest(snapshot).is_err() {
+        return;
+    }
+    let _ = fs::remove_file(snapshot);
 }
 
 pub(crate) fn build_snapshot(
@@ -392,6 +662,214 @@ pub(crate) fn build_snapshot(
             "Tagged album snapshot built. Preparing the reviewable delta.",
         );
         Ok(())
+    })();
+
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+pub(crate) fn build_batch_snapshot(
+    conn: &Connection,
+    selected_source: &Path,
+    albums: &[BatchAlbumInput],
+    output: &Path,
+    cancel_requested: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64, &str),
+) -> Result<BatchSnapshotResult> {
+    ensure_not_cancelled(cancel_requested)?;
+    if albums.is_empty() {
+        bail!("The selected folder does not contain any complete tagged albums");
+    }
+    let canonical_selected_source = selected_source.canonicalize().with_context(|| {
+        format!(
+            "Could not resolve intake folder {}",
+            selected_source.display()
+        )
+    })?;
+    ensure_source_root_is_not_linked(&canonical_selected_source)?;
+
+    let mut scans = Vec::with_capacity(albums.len());
+    let mut seen_sources = BTreeSet::new();
+    let mut seen_destinations = BTreeSet::new();
+    for input in albums {
+        ensure_not_cancelled(cancel_requested)?;
+        ensure_source_root_is_not_linked(&input.source)?;
+        let scan = scan_folder(&input.source, cancel_requested)?;
+        validate_single_album(&scan.tracks)?;
+        let source_key = normalized_path(&scan.canonical_folder);
+        if !seen_sources.insert(source_key) {
+            bail!("The same source album was included more than once");
+        }
+        let destination_key = normalized_path(&input.destination);
+        if !seen_destinations.insert(destination_key) {
+            bail!("Two source albums resolve to the same destination folder");
+        }
+        if input.destination.exists() {
+            bail!(
+                "The destination album folder already exists: {}",
+                input.destination.display()
+            );
+        }
+        scans.push((scan, input.destination.clone()));
+    }
+
+    let total_catalog_rows = conn
+        .query_row("SELECT COUNT(*) FROM tracks", [], |row| {
+            row.get::<_, i64>(0)
+        })?
+        .max(0) as u64;
+    let added_rows = scans
+        .iter()
+        .map(|(scan, _)| scan.tracks.len() as u64)
+        .sum::<u64>();
+    if added_rows > MAX_BATCH_TRACKS as u64 {
+        bail!("An Aurora intake batch can contain at most {MAX_BATCH_TRACKS} tracks");
+    }
+    let total_rows = total_catalog_rows.saturating_add(added_rows);
+    let parent = output
+        .parent()
+        .ok_or_else(|| anyhow!("Generated batch snapshot has no parent directory"))?;
+    fs::create_dir_all(parent)
+        .with_context(|| format!("Could not create snapshot directory {}", parent.display()))?;
+    let temporary = output.with_extension("tsv.building");
+    if temporary.exists() {
+        fs::remove_file(&temporary).with_context(|| {
+            format!(
+                "Could not remove stale snapshot work file {}",
+                temporary.display()
+            )
+        })?;
+    }
+
+    let result = (|| -> Result<BatchSnapshotResult> {
+        let file = File::create(&temporary).with_context(|| {
+            format!(
+                "Could not create generated snapshot {}",
+                temporary.display()
+            )
+        })?;
+        let mut writer = WriterBuilder::new()
+            .delimiter(b'\t')
+            .has_headers(false)
+            .quote_style(QuoteStyle::Never)
+            .terminator(Terminator::Any(b'\n'))
+            .from_writer(file);
+        write_record(&mut writer, REQUIRED_COLUMNS.iter().copied())?;
+
+        let initial_data_version = sqlite_data_version(conn)?;
+        let mut catalog_hasher = Sha256::new();
+        let mut catalog_track_count = 0_u64;
+        let mut written_rows = 0_u64;
+        let mut statement = conn.prepare(CATALOG_TRACK_SNAPSHOT_SQL)?;
+        let mut rows = statement.query([])?;
+        while let Some(row) = rows.next()? {
+            ensure_not_cancelled(cancel_requested)?;
+            let values = catalog_track_record(row)?;
+            hash_record(&mut catalog_hasher, &values);
+            catalog_track_count += 1;
+            if scans.iter().any(|(scan, destination)| {
+                path_is_within_folder(&values[13], &scan.canonical_folder)
+                    || path_is_within_folder(&values[13], destination)
+            }) {
+                bail!(
+                    "An intake source or destination is already represented in the active catalog: {}",
+                    values[13]
+                );
+            }
+            write_record(&mut writer, values.iter().map(String::as_str))?;
+            written_rows += 1;
+            if written_rows.is_multiple_of(10_000) {
+                progress(
+                    written_rows,
+                    total_rows,
+                    "Building one complete catalog snapshot for the album batch.",
+                );
+            }
+        }
+        drop(rows);
+        drop(statement);
+        if sqlite_data_version(conn)? != initial_data_version {
+            bail!("The active catalog changed while its safe snapshot was being built. Try again");
+        }
+        let catalog_fingerprint = CatalogFingerprint {
+            digest: hex::encode(catalog_hasher.finalize()),
+            track_count: catalog_track_count,
+            completed_import_revision: completed_import_revision(conn)?,
+        };
+
+        let mut metadata = Vec::with_capacity(scans.len());
+        let mut manifest_albums = Vec::with_capacity(scans.len());
+        for (scan, destination) in &scans {
+            let album_unique_id = generated_album_id(destination);
+            let album_rating = calculated_album_rating(&scan.tracks);
+            for track in &scan.tracks {
+                ensure_not_cancelled(cancel_requested)?;
+                let source_parent = track.path.parent().ok_or_else(|| {
+                    anyhow!("MP3 has no parent directory: {}", track.path.display())
+                })?;
+                let relative_parent = source_parent
+                    .strip_prefix(&scan.canonical_folder)
+                    .with_context(|| {
+                        format!(
+                            "Could not preserve the relative disc folder for {}",
+                            track.filename
+                        )
+                    })?;
+                let mut remapped = track.clone();
+                remapped.file_path = display_path(&destination.join(relative_parent));
+                let values = scanned_track_record(&remapped, Some(&album_unique_id), album_rating);
+                write_record(&mut writer, values.iter().map(String::as_str))?;
+                written_rows += 1;
+            }
+            let first = scan
+                .tracks
+                .first()
+                .ok_or_else(|| anyhow!("A prepared album contains no tracks"))?;
+            metadata.push(BatchAlbumMetadata {
+                source_path: display_path(&scan.canonical_folder),
+                destination_path: display_path(destination),
+                artist: first.album_artist.clone(),
+                album: first.album.clone(),
+                year: first.year.clone(),
+                track_count: scan.tracks.len(),
+            });
+            manifest_albums.push(BatchSnapshotAlbumManifest {
+                source_path: display_path(&scan.canonical_folder),
+                source_fingerprint: scan.fingerprint.clone(),
+                destination_path: display_path(destination),
+            });
+        }
+        writer
+            .flush()
+            .context("Could not flush the generated batch snapshot")?;
+        writer
+            .get_ref()
+            .sync_all()
+            .context("Could not synchronize the generated batch snapshot")?;
+        drop(writer);
+
+        for (scan, _) in &scans {
+            if fingerprint_folder(&scan.canonical_folder)?.0 != scan.fingerprint {
+                bail!("A selected album folder changed while it was being scanned. Try again");
+            }
+        }
+        replace_generated_file(&temporary, output)?;
+        write_batch_manifest(
+            output,
+            &BatchSnapshotManifest {
+                format_version: BATCH_SNAPSHOT_FORMAT_VERSION,
+                source_path: display_path(&canonical_selected_source),
+                catalog_fingerprint,
+                albums: manifest_albums,
+            },
+        )?;
+        progress(written_rows, written_rows, "Album batch snapshot built.");
+        Ok(BatchSnapshotResult {
+            track_count: metadata.iter().map(|album| album.track_count).sum(),
+            albums: metadata,
+        })
     })();
 
     if result.is_err() {
@@ -731,6 +1209,7 @@ fn read_track(path: &Path) -> Result<ScannedTrack> {
         .and_then(|value| value.to_str())
         .ok_or_else(|| anyhow!("MP3 filename is not valid Unicode: {}", path.display()))?;
     Ok(ScannedTrack {
+        path: path.to_path_buf(),
         display_artist,
         album,
         genre: tag.genre().unwrap_or_default().trim().to_owned(),
@@ -962,19 +1441,31 @@ fn manifest_path(snapshot: &Path) -> PathBuf {
     snapshot.with_extension("manifest.json")
 }
 
-fn read_manifest(snapshot: &Path) -> Result<FolderSnapshotManifest> {
+fn read_snapshot_manifest(snapshot: &Path) -> Result<SnapshotManifest> {
     let path = manifest_path(snapshot);
     let bytes = fs::read(&path)
         .with_context(|| format!("Could not read album snapshot manifest {}", path.display()))?;
-    let manifest: FolderSnapshotManifest = serde_json::from_slice(&bytes)
+    let manifest: SnapshotManifest = serde_json::from_slice(&bytes)
         .with_context(|| format!("Could not parse album snapshot manifest {}", path.display()))?;
-    if manifest.format_version != SNAPSHOT_FORMAT_VERSION {
+    let supported = match &manifest {
+        SnapshotManifest::Single(value) => value.format_version == SNAPSHOT_FORMAT_VERSION,
+        SnapshotManifest::Batch(value) => value.format_version == BATCH_SNAPSHOT_FORMAT_VERSION,
+    };
+    if !supported {
         bail!("Album snapshot manifest version is unsupported");
     }
     Ok(manifest)
 }
 
 fn write_manifest(snapshot: &Path, manifest: &FolderSnapshotManifest) -> Result<()> {
+    write_manifest_value(snapshot, manifest)
+}
+
+fn write_batch_manifest(snapshot: &Path, manifest: &BatchSnapshotManifest) -> Result<()> {
+    write_manifest_value(snapshot, manifest)
+}
+
+fn write_manifest_value(snapshot: &Path, manifest: &impl Serialize) -> Result<()> {
     let path = manifest_path(snapshot);
     let temporary = path.with_extension("json.building");
     let bytes = serde_json::to_vec_pretty(manifest)?;
@@ -1159,6 +1650,86 @@ mod tests {
             .and_then(|scan| validate_single_album(&scan.tracks))
             .expect_err("multiple albums should fail");
         assert!(error.to_string().contains("more than one album"));
+    }
+
+    #[test]
+    fn batch_discovery_uses_immediate_album_children_and_preserves_disc_roots() {
+        let temp = tempdir().expect("tempdir");
+        let inbox = temp.path().join("Friday intake");
+        let first = inbox.join("First score");
+        let second = inbox.join("Second score");
+        fs::create_dir_all(&first).expect("first folder");
+        fs::create_dir_all(&second).expect("second folder");
+        write_tagged_mp3(&first.join("01.mp3"), "First");
+        write_tagged_mp3(&second.join("01.mp3"), "Second");
+        assert_eq!(
+            discover_batch_album_sources(&inbox).expect("batch sources"),
+            vec![
+                first.canonicalize().unwrap(),
+                second.canonicalize().unwrap()
+            ]
+        );
+
+        let single_inbox = temp.path().join("One album inbox");
+        let only_album = single_inbox.join("Actual album name");
+        fs::create_dir_all(&only_album).expect("only album");
+        write_tagged_mp3(&only_album.join("01.mp3"), "Only");
+        assert_eq!(
+            discover_batch_album_sources(&single_inbox).expect("single child batch"),
+            vec![only_album.canonicalize().unwrap()]
+        );
+
+        let disc_album = temp.path().join("Multi-disc album");
+        let disc_one = disc_album.join("Disc 1");
+        fs::create_dir_all(&disc_one).expect("disc folder");
+        write_tagged_mp3(&disc_one.join("01.mp3"), "Disc Album");
+        assert_eq!(
+            discover_batch_album_sources(&disc_album).expect("disc album"),
+            vec![disc_album.canonicalize().unwrap()]
+        );
+    }
+
+    #[test]
+    fn batch_snapshot_rewrites_tracks_to_final_nested_destinations() {
+        let temp = tempdir().expect("tempdir");
+        let inbox = temp.path().join("Inbox");
+        let album = inbox.join("Score Album");
+        let disc = album.join("Disc 2");
+        fs::create_dir_all(&disc).expect("disc folder");
+        write_tagged_mp3(&disc.join("01.mp3"), "Score Album");
+        let destination = temp.path().join("Library").join("Score Album");
+        fs::create_dir(destination.parent().unwrap()).expect("library root");
+        let conn = Connection::open_in_memory().expect("database");
+        create_catalog(&conn);
+        let output = temp
+            .path()
+            .join(SNAPSHOT_DIRECTORY)
+            .join("album-folder-batch-test.tsv");
+
+        let result = build_batch_snapshot(
+            &conn,
+            &inbox,
+            &[BatchAlbumInput {
+                source: album.clone(),
+                destination: destination.clone(),
+            }],
+            &output,
+            &AtomicBool::new(false),
+            &mut |_, _, _| {},
+        )
+        .expect("batch snapshot");
+
+        assert_eq!(result.albums.len(), 1);
+        assert_eq!(result.track_count, 1);
+        let mut reader = csv::ReaderBuilder::new()
+            .delimiter(b'\t')
+            .quoting(false)
+            .from_path(&output)
+            .expect("read snapshot");
+        let rows = reader.records().collect::<csv::Result<Vec<_>>>().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(&rows[0][13], display_path(&destination.join("Disc 2")));
+        assert!(source_is_unchanged(&conn, &output).expect("batch guard"));
     }
 
     #[test]
@@ -1351,6 +1922,7 @@ mod tests {
     #[test]
     fn partial_album_rating_uses_the_floored_musicbee_mean() {
         let fixture = |rating| ScannedTrack {
+            path: PathBuf::from(r"H:\Music\Album\track.mp3"),
             display_artist: "Artist".to_owned(),
             album: "Album".to_owned(),
             genre: String::new(),

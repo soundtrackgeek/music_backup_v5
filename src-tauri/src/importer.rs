@@ -1,7 +1,7 @@
 use crate::db;
-use crate::models::{ImportPreview, ImportSuspiciousAlbum};
 #[cfg(not(test))]
-use crate::models::{ImportProgress, ImportSummary};
+use crate::models::ImportProgress;
+use crate::models::{ImportPreview, ImportSummary, ImportSuspiciousAlbum};
 use crate::wishlist;
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
@@ -423,6 +423,236 @@ pub fn cancel_import_preview() {
     }
 }
 
+pub(crate) fn prepare_bridge_import_preview(
+    conn: &mut Connection,
+    snapshot_path: &Path,
+) -> Result<ImportPreview> {
+    let _workflow_guard = ImportWorkflowGuard::acquire()?;
+    let cancel_requested = AtomicBool::new(false);
+    let fingerprint = source_fingerprint(snapshot_path.to_string_lossy().as_ref())?;
+    prepare_import_preview_for_connection_scoped(
+        conn,
+        &fingerprint,
+        &cancel_requested,
+        &|_, _, _, _, _, _| {},
+        false,
+    )
+}
+
+#[derive(Debug)]
+pub(crate) struct BridgeImportSummary {
+    pub import_run_id: i64,
+    pub backup_path: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct BridgeSessionState {
+    pub status: String,
+    pub source_path: String,
+    pub import_run_id: Option<i64>,
+    pub backup_path: Option<String>,
+    pub added_tracks: i64,
+    pub changed_tracks: i64,
+    pub removed_tracks: i64,
+    pub added_albums: i64,
+    pub changed_albums: i64,
+    pub removed_albums: i64,
+}
+
+pub(crate) fn bridge_session_state(
+    conn: &Connection,
+    session_id: i64,
+) -> Result<BridgeSessionState> {
+    bridge_session_state_optional(conn, session_id)?
+        .ok_or_else(|| anyhow!("Could not find Aurora import session {session_id}"))
+}
+
+pub(crate) fn bridge_session_state_optional(
+    conn: &Connection,
+    session_id: i64,
+) -> Result<Option<BridgeSessionState>> {
+    conn.query_row(
+        "
+        SELECT sessions.status, sessions.source_path, sessions.import_run_id, runs.backup_path,
+               sessions.added_tracks, sessions.changed_tracks, sessions.removed_tracks,
+               sessions.added_albums, sessions.changed_albums, sessions.removed_albums
+        FROM import_sessions AS sessions
+        LEFT JOIN import_runs AS runs ON runs.id = sessions.import_run_id
+        WHERE sessions.id = ?1
+        ",
+        params![session_id],
+        |row| {
+            Ok(BridgeSessionState {
+                status: row.get(0)?,
+                source_path: row.get(1)?,
+                import_run_id: row.get(2)?,
+                backup_path: row.get(3)?,
+                added_tracks: row.get(4)?,
+                changed_tracks: row.get(5)?,
+                removed_tracks: row.get(6)?,
+                added_albums: row.get(7)?,
+                changed_albums: row.get(8)?,
+                removed_albums: row.get(9)?,
+            })
+        },
+    )
+    .optional()
+    .with_context(|| format!("Could not inspect Aurora import session {session_id}"))
+}
+
+pub(crate) fn discard_bridge_import_preview(conn: &Connection, session_id: i64) -> Result<()> {
+    let session = load_import_session(conn, session_id)?;
+    if session.status == "completed" {
+        bail!("A completed import session cannot be discarded");
+    }
+    conn.execute(
+        "DELETE FROM import_sessions WHERE id = ?1",
+        params![session_id],
+    )?;
+    crate::folder_sync::cleanup_generated_snapshot(&session.source_path);
+    Ok(())
+}
+
+pub(crate) fn noncompleted_bridge_sessions(conn: &Connection) -> Result<Vec<(i64, String)>> {
+    let mut statement = conn.prepare(
+        "SELECT id, source_path FROM import_sessions WHERE status != 'completed' ORDER BY id",
+    )?;
+    let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not list incomplete import sessions")
+}
+
+pub(crate) fn apply_bridge_import_preview(
+    conn: &mut Connection,
+    db_path: &Path,
+    session_id: i64,
+) -> Result<BridgeImportSummary> {
+    let _workflow_guard = ImportWorkflowGuard::acquire()?;
+    let started = Instant::now();
+    let session = load_import_session(conn, session_id)?;
+    if session.status != "ready" {
+        bail!("Prepare the import delta before applying this import");
+    }
+    let source_apply_guard =
+        crate::folder_sync::prepare_source_apply_guard(conn, &session.source_path)?;
+    let fingerprint = source_fingerprint(&session.source_path)?;
+    ensure_session_source_matches(&session, &fingerprint)?;
+    let reported_source_path = crate::folder_sync::original_folder_path(&session.source_path)
+        .unwrap_or_else(|| session.source_path.clone());
+    let settings = db::settings_for_connection(conn)?;
+    let backup_path = create_backup(
+        conn,
+        db_path,
+        Path::new(&reported_source_path),
+        fingerprint.size_bytes,
+        settings.backup_retention as usize,
+    )?;
+    let backup_path_text = backup_path.as_ref().map(|path| path.display().to_string());
+
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "
+        INSERT INTO import_runs (
+            source_path, source_size_bytes, started_at, status, backup_path,
+            added_tracks, changed_tracks, removed_tracks,
+            added_albums, changed_albums, removed_albums
+        ) VALUES (?1, ?2, ?3, 'running', ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        ",
+        params![
+            &reported_source_path,
+            session.source_size_bytes,
+            &now,
+            &backup_path_text,
+            session.added_tracks,
+            session.changed_tracks,
+            session.removed_tracks,
+            session.added_albums,
+            session.changed_albums,
+            session.removed_albums,
+        ],
+    )
+    .context("Could not create import run for the prepared Aurora batch")?;
+    let import_run_id = conn.last_insert_rowid();
+
+    let result = apply_staged_import(
+        conn,
+        &session,
+        import_run_id,
+        started,
+        &reported_source_path,
+        source_apply_guard.as_ref(),
+    );
+    match result {
+        Ok((_track_rows, _album_count, rating_events_count)) => {
+            if let Err(error) = wishlist::reconcile_for_connection(conn) {
+                eprintln!(
+                    "Could not reconcile the wish list after committed Aurora import: {error:#}"
+                );
+            }
+            if let Err(error) = db::refresh_all_smart_playlists_for_connection(conn) {
+                eprintln!("Could not refresh smart playlists after import: {error:#}");
+            }
+            if let Err(error) = cleanup_completed_stage(conn, session_id) {
+                eprintln!("Could not clean committed Aurora import staging rows: {error:#}");
+            }
+            if completed_stage_storage_should_be_reclaimed(conn).unwrap_or(false) {
+                if let Err(error) = reclaim_completed_stage_storage(conn) {
+                    eprintln!("Could not reclaim completed import staging space: {error:#}");
+                }
+            }
+            debug_assert!(rating_events_count >= 0);
+            crate::folder_sync::cleanup_generated_snapshot_file(&session.source_path);
+            Ok(BridgeImportSummary {
+                import_run_id,
+                backup_path: backup_path_text,
+            })
+        }
+        Err(error) => {
+            match bridge_session_state(conn, session_id) {
+                Ok(state)
+                    if state.status == "completed"
+                        && state.import_run_id == Some(import_run_id) =>
+                {
+                    eprintln!(
+                        "Aurora import commit returned an ambiguous error, but the committed session was verified: {error:#}"
+                    );
+                    let _ = cleanup_completed_stage(conn, session_id);
+                    crate::folder_sync::cleanup_generated_snapshot_file(&session.source_path);
+                    return Ok(BridgeImportSummary {
+                        import_run_id,
+                        backup_path: backup_path_text,
+                    });
+                }
+                Ok(_) => {}
+                Err(verification_error) => {
+                    return Err(error.context(format!(
+                        "Could not prove whether the atomic catalog commit completed; published destinations and sources must be retained for retry: {verification_error:#}"
+                    )));
+                }
+            }
+            let message = error.to_string();
+            let _ = conn.execute(
+                "
+                UPDATE import_runs
+                SET completed_at = ?1, status = 'failed', duration_ms = ?2, error_message = ?3
+                WHERE id = ?4
+                ",
+                params![
+                    Utc::now().to_rfc3339(),
+                    started.elapsed().as_millis() as i64,
+                    &message,
+                    import_run_id
+                ],
+            );
+            let _ = conn.execute(
+                "UPDATE import_sessions SET status = 'ready', updated_at = ?1, error_message = ?2 WHERE id = ?3",
+                params![Utc::now().to_rfc3339(), &message, session_id],
+            );
+            Err(error)
+        }
+    }
+}
+
 #[cfg(not(test))]
 pub fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSummary> {
     let _workflow_guard = ImportWorkflowGuard::acquire()?;
@@ -782,7 +1012,29 @@ fn prepare_import_preview_for_connection(
     cancel_requested: &AtomicBool,
     progress: &ImportProgressCallback<'_>,
 ) -> Result<ImportPreview> {
-    match prepare_import_preview_inner(conn, fingerprint, cancel_requested, progress) {
+    prepare_import_preview_for_connection_scoped(
+        conn,
+        fingerprint,
+        cancel_requested,
+        progress,
+        true,
+    )
+}
+
+fn prepare_import_preview_for_connection_scoped(
+    conn: &mut Connection,
+    fingerprint: &SourceFingerprint,
+    cancel_requested: &AtomicBool,
+    progress: &ImportProgressCallback<'_>,
+    cleanup_other_sessions: bool,
+) -> Result<ImportPreview> {
+    match prepare_import_preview_inner(
+        conn,
+        fingerprint,
+        cancel_requested,
+        progress,
+        cleanup_other_sessions,
+    ) {
         Ok(preview) => Ok(preview),
         Err(error) => {
             if cancel_requested.load(Ordering::SeqCst) {
@@ -842,6 +1094,7 @@ fn prepare_import_preview_inner(
     fingerprint: &SourceFingerprint,
     cancel_requested: &AtomicBool,
     progress: &ImportProgressCallback<'_>,
+    cleanup_other_sessions: bool,
 ) -> Result<ImportPreview> {
     let existing = latest_import_session(conn, &fingerprint.path_text)?;
     if let Some(session) = existing.as_ref() {
@@ -872,10 +1125,12 @@ fn prepare_import_preview_inner(
         session.id
     } else {
         let cleanup = conn.transaction()?;
-        cleanup.execute(
-            "DELETE FROM import_sessions WHERE status != 'completed'",
-            [],
-        )?;
+        if cleanup_other_sessions {
+            cleanup.execute(
+                "DELETE FROM import_sessions WHERE status != 'completed'",
+                [],
+            )?;
+        }
         let now = Utc::now().to_rfc3339();
         cleanup.execute(
             "
@@ -1695,7 +1950,6 @@ fn apply_staged_import(
     ))
 }
 
-#[cfg(not(test))]
 fn cleanup_completed_stage(conn: &Connection, session_id: i64) -> Result<()> {
     conn.execute(
         "DELETE FROM import_stage_tracks WHERE session_id = ?1",
@@ -1708,14 +1962,12 @@ fn cleanup_completed_stage(conn: &Connection, session_id: i64) -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(test))]
 fn completed_stage_storage_should_be_reclaimed(conn: &Connection) -> Result<bool> {
     let page_size = conn.query_row("PRAGMA page_size", [], |row| row.get::<_, i64>(0))?;
     let free_pages = conn.query_row("PRAGMA freelist_count", [], |row| row.get::<_, i64>(0))?;
     Ok(page_size.saturating_mul(free_pages) >= IMPORT_STAGE_VACUUM_THRESHOLD_BYTES)
 }
 
-#[cfg(not(test))]
 fn reclaim_completed_stage_storage(conn: &Connection) -> Result<()> {
     conn.execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")
         .context("Could not compact SQLite after removing completed import staging rows")
@@ -3021,7 +3273,6 @@ impl AlbumAggregate {
     }
 }
 
-#[cfg(not(test))]
 fn create_backup(
     conn: &Connection,
     db_path: &Path,
@@ -3073,7 +3324,6 @@ fn create_backup(
     Ok(Some(backup_path))
 }
 
-#[cfg(not(test))]
 fn enforce_backup_retention(backup_dir: &Path, backup_retention: usize) -> Result<()> {
     let mut backups = fs::read_dir(backup_dir)
         .with_context(|| format!("Could not read backup directory {}", backup_dir.display()))?

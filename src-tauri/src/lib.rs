@@ -4,6 +4,7 @@ mod ai;
 mod album_review;
 mod artist_biography;
 mod artist_completion;
+mod aurora_bridge;
 mod covers;
 mod db;
 mod deemix;
@@ -24,6 +25,10 @@ mod soulseek;
 mod updates;
 mod usenet;
 mod wishlist;
+
+pub fn run_aurora_bridge_from_args() -> bool {
+    aurora_bridge::run_from_process_args()
+}
 
 #[cfg(not(test))]
 use models::{
