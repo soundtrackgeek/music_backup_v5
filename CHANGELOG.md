@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.144.3] - 2026-08-24
+
+### Fixed
+
+- Preserved legacy embedded NUL bytes when existing catalog rows are written into generated album snapshots, preventing Aurora add-only previews from reporting unrelated changed tracks.
+- Confirmed that Release Year remains optional for new album intake while keeping the strict zero-unrelated-change safety guard.
+
+### Changed
+
+- Synchronized app metadata and provider user agents to `0.144.3`.
+
 ## [0.144.2] - 2026-08-24
 
 ### Fixed

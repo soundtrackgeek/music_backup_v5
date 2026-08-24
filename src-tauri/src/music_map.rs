@@ -16,7 +16,7 @@ use tauri::AppHandle;
 #[cfg(not(test))]
 const WIKIDATA_SPARQL_URL: &str = "https://query.wikidata.org/sparql";
 #[cfg(not(test))]
-const MAP_USER_AGENT: &str = "music-backup-v5/0.144.2 (local desktop app)";
+const MAP_USER_AGENT: &str = "music-backup-v5/0.144.3 (local desktop app)";
 const UNKNOWN_GENRE: &str = "Unknown";
 
 #[derive(Debug, Clone)]

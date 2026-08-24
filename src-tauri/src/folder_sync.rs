@@ -666,7 +666,7 @@ pub(crate) fn build_snapshot(
                     existing_unique_ids.insert(unique_id.to_owned());
                 }
             } else {
-                write_record(&mut writer, values.iter().map(String::as_str))?;
+                write_catalog_record(&mut writer, values.iter().map(String::as_str))?;
                 written_rows += 1;
             }
             if (written_rows + touched_rows).is_multiple_of(10_000) {
@@ -849,7 +849,7 @@ pub(crate) fn build_batch_snapshot(
                     values[13]
                 );
             }
-            write_record(&mut writer, values.iter().map(String::as_str))?;
+            write_catalog_record(&mut writer, values.iter().map(String::as_str))?;
             written_rows += 1;
             if written_rows.is_multiple_of(10_000) {
                 progress(
@@ -1559,6 +1559,24 @@ fn write_record<'a>(
         .context("Could not write generated album snapshot row")
 }
 
+fn write_catalog_record<'a>(
+    writer: &mut csv::Writer<File>,
+    values: impl Iterator<Item = &'a str>,
+) -> Result<()> {
+    let values = values.collect::<Vec<_>>();
+    if values
+        .iter()
+        .any(|value| value.contains(['\t', '\r', '\n']))
+    {
+        bail!(
+            "The active catalog contains a tab or line break that cannot be represented losslessly in a MusicBee TSV snapshot"
+        );
+    }
+    writer
+        .write_record(values)
+        .context("Could not write existing catalog snapshot row")
+}
+
 fn sanitize_tsv_field(value: &str) -> String {
     value
         .chars()
@@ -1810,6 +1828,25 @@ mod tests {
     }
 
     #[test]
+    fn scanner_accepts_a_missing_release_year() {
+        let temp = tempdir().expect("tempdir");
+        let album = temp.path().join("Album");
+        fs::create_dir(&album).expect("album folder");
+        let track = album.join("01.mp3");
+        write_tagged_mp3(&track, "Album");
+        let mut tag = Tag::read_from_path(&track).expect("read fixture tag");
+        tag.remove("TDRL");
+        tag.write_to_path(&track, Version::Id3v24)
+            .expect("remove release year");
+
+        let scan = scan_folder(&album, &AtomicBool::new(false)).expect("scan without release year");
+
+        assert_eq!(scan.tracks.len(), 1);
+        assert_eq!(scan.tracks[0].year, "2026");
+        assert!(scan.tracks[0].release_year.is_empty());
+    }
+
+    #[test]
     fn tagged_folder_snapshot_preserves_outside_rows_and_replaces_inside_rows() {
         let temp = tempdir().expect("tempdir");
         let album = temp.path().join("Album");
@@ -2021,6 +2058,58 @@ mod tests {
         let rows = reader.records().collect::<csv::Result<Vec<_>>>().unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(&rows[0][13], display_path(&destination.join("Disc 2")));
+        assert!(source_is_unchanged(&conn, &output).expect("batch guard"));
+    }
+
+    #[test]
+    fn batch_snapshot_preserves_legacy_nul_release_year_losslessly() {
+        let temp = tempdir().expect("tempdir");
+        let inbox = temp.path().join("Inbox");
+        let album = inbox.join("New Album");
+        fs::create_dir_all(&album).expect("album folder");
+        write_tagged_mp3(&album.join("01.mp3"), "New Album");
+        let destination = temp.path().join("Library").join("New Album");
+        fs::create_dir(destination.parent().unwrap()).expect("library root");
+        let conn = Connection::open_in_memory().expect("database");
+        create_catalog(&conn);
+        conn.execute(
+            "INSERT INTO tracks (id, title, release_year, file_path, filename) VALUES (1, 'Legacy', 2017, 'D:\\Music\\Legacy', '01.mp3')",
+            [],
+        )
+        .expect("legacy track");
+        let legacy_release_year = "2017\02017";
+        conn.execute(
+            "INSERT INTO raw_tracks (id, title, release_year, file_path, filename) VALUES (1, 'Legacy', ?1, 'D:\\Music\\Legacy', '01.mp3')",
+            [legacy_release_year],
+        )
+        .expect("legacy raw track");
+        let output = temp
+            .path()
+            .join(SNAPSHOT_DIRECTORY)
+            .join("album-folder-batch-legacy-nul.tsv");
+
+        build_batch_snapshot(
+            &conn,
+            &inbox,
+            &[BatchAlbumInput {
+                source: album,
+                destination,
+            }],
+            &output,
+            &AtomicBool::new(false),
+            &mut |_, _, _| {},
+        )
+        .expect("batch snapshot");
+
+        let mut reader = csv::ReaderBuilder::new()
+            .delimiter(b'\t')
+            .quoting(false)
+            .from_path(&output)
+            .expect("read snapshot");
+        let rows = reader.records().collect::<csv::Result<Vec<_>>>().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(&rows[0][11], legacy_release_year);
+        assert_eq!(&rows[1][11], "2026");
         assert!(source_is_unchanged(&conn, &output).expect("batch guard"));
     }
 
