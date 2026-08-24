@@ -1850,6 +1850,28 @@ export async function getDiscovery(options: { refreshDailyEdition?: boolean } = 
   });
 }
 
+export async function getCatalogRevision() {
+  if (!isTauriRuntime()) {
+    const completedRuns = mockImportRuns.filter(
+      (run) => run.status === "completed",
+    );
+    const latestId = completedRuns.reduce(
+      (maximum, run) => Math.max(maximum, run.id),
+      0,
+    );
+    const latestCompletion = completedRuns.reduce(
+      (maximum, run) => {
+        const completedAt = run.completedAt ?? run.startedAt;
+        return completedAt > maximum ? completedAt : maximum;
+      },
+      "",
+    );
+    return `${completedRuns.length}:${latestId}:${latestCompletion}`;
+  }
+
+  return invoke<string>("get_catalog_revision");
+}
+
 export async function getDiscoveryDailyEdition(date: string) {
   if (!isTauriRuntime()) {
     if (!mockDiscovery.dailyEditionArchive.availableDates.includes(date)) {

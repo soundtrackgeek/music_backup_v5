@@ -632,14 +632,29 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         return Ok(());
     }
 
+    if user_version == 56 && migrations::phase_fifty_six_schema_exists(conn)? {
+        let transaction = conn
+            .unchecked_transaction()
+            .context("Could not start the schema 57 migration transaction")?;
+        migrations::migrate_half_star_ratings(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 57 migration complete")?;
+        transaction
+            .commit()
+            .context("Could not commit the schema 57 migration")?;
+        return Ok(());
+    }
+
     if user_version == 55 && migrations::phase_fifty_five_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
             .context("Could not start the schema 56 migration transaction")?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 56 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 56 migration")?;
@@ -653,9 +668,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 55 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 55 migration")?;
@@ -670,9 +686,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 55 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 54 migration")?;
@@ -688,9 +705,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 55 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 54 migration")?;
@@ -707,9 +725,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 52–55 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 52–57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 52–54 migration")?;
@@ -727,9 +746,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 51–55 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 51–57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 51–54 migration")?;
@@ -748,9 +768,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 50–55 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 50–57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 50–54 migration")?;
@@ -770,9 +791,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 49–55 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 49–57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 49–54 migration")?;
@@ -793,9 +815,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 48–55 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 48–57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 48–54 migration")?;
@@ -817,9 +840,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 47–55 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 47–57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 47–54 migration")?;
@@ -842,9 +866,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 46–55 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 46–57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 46–54 migration")?;
@@ -868,9 +893,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
         ensure_plex_sync_schema(&transaction)?;
+        migrations::migrate_half_star_ratings(&transaction)?;
         transaction
-            .execute_batch("PRAGMA user_version = 56;")
-            .context("Could not mark the schema 45–55 migration complete")?;
+            .execute_batch("PRAGMA user_version = 57;")
+            .context("Could not mark the schema 45–57 migration complete")?;
         transaction
             .commit()
             .context("Could not commit the schema 45–54 migration")?;
@@ -2095,12 +2121,13 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     ensure_daily_edition_snapshot_schema(conn)?;
     ensure_chart_album_match_state_schema(conn)?;
     ensure_plex_sync_schema(conn)?;
+    migrations::migrate_half_star_ratings(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
     migrations::migrate_billboard_album_source_default(conn)?;
     conn.execute_batch(
         "
         DROP INDEX IF EXISTS idx_tracks_file_identity;
-        PRAGMA user_version = 56;
+        PRAGMA user_version = 57;
         ",
     )
     .context("Could not update SQLite schema version")?;
@@ -7752,6 +7779,19 @@ pub fn list_import_runs_for_app(app: &AppHandle, limit: u32) -> Result<Vec<Impor
 }
 
 #[cfg(not(test))]
+pub fn catalog_revision_for_app(app: &AppHandle) -> Result<String> {
+    let db_path = database_path(app)?;
+    if !db_path.exists() {
+        return Ok("0:0:".to_string());
+    }
+
+    let conn = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .with_context(|| format!("Could not open SQLite database at {}", db_path.display()))?;
+    conn.busy_timeout(Duration::from_millis(250))?;
+    catalog_revision(&conn)
+}
+
+#[cfg(not(test))]
 pub fn statistics_for_app(app: &AppHandle) -> Result<StatisticsResponse> {
     let (conn, _) = open(app)?;
     statistics(&conn)
@@ -8305,6 +8345,22 @@ pub fn list_import_runs(conn: &Connection, limit: u32) -> Result<Vec<ImportRun>>
         .query_map(params![limit], import_run_from_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(runs)
+}
+
+pub fn catalog_revision(conn: &Connection) -> Result<String> {
+    let (completed_count, latest_id, latest_completion): (i64, i64, String) = conn
+        .query_row(
+            "SELECT COUNT(*),
+                    COALESCE(MAX(id), 0),
+                    COALESCE(MAX(COALESCE(completed_at, started_at)), '')
+             FROM import_runs
+             WHERE status = 'completed'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .context("Could not read the completed catalog revision")?;
+
+    Ok(format!("{completed_count}:{latest_id}:{latest_completion}"))
 }
 
 fn statistics(conn: &Connection) -> Result<StatisticsResponse> {
@@ -30361,6 +30417,89 @@ mod tests {
     }
 
     #[test]
+    fn upgrades_schema_fifty_six_half_star_ratings_and_album_aggregates() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "
+            UPDATE tracks
+            SET rating_raw = '3.5', normalized_rating = NULL, love = NULL,
+                time_seconds = 180
+            WHERE id = 1;
+            UPDATE albums
+            SET total_tracks = 1, rated_tracks = 0, rating_completeness = 0.0,
+                total_seconds = 180, loved_tracks = 0, tmoe_seconds = 0,
+                ae_ratio = 0.0, album_rating = NULL,
+                calculated_album_rating = NULL, effective_album_rating = NULL,
+                album_score = NULL
+            WHERE id = 'mb:test';
+
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, album_rating,
+                calculated_album_rating, effective_album_rating, album_score
+            ) VALUES (
+                'mb:half-star', 1, 'half-star', 'Half Star', 'Test Artist',
+                1, 0, 0.0, 120, 0, 0, 0.0, 95, NULL, 95, 4.75
+            );
+            INSERT INTO tracks (
+                import_run_id, album_id, album_unique_id, display_artist,
+                album_artist_display, album, title, rating_raw,
+                normalized_rating, time_seconds, file_path, filename, row_hash
+            ) VALUES (
+                1, 'mb:half-star', 'half-star', 'Test Artist', 'Test Artist',
+                'Half Star', 'Legacy 4.5', '4.5', NULL, 120,
+                'D:\\Music\\Test Artist\\Half Star', '01 Legacy 4.5.mp3',
+                'legacy-half-star-hash'
+            );
+            PRAGMA user_version = 56;
+            ",
+        )
+        .expect("restore schema fifty-six half-star data");
+
+        migrate(&conn).expect("upgrade schema fifty-six ratings");
+
+        type RatingAggregate = (Option<i32>, i64, f64, Option<i32>, Option<i32>, Option<f64>);
+        let load_rating_aggregate = |album_id: &str| -> RatingAggregate {
+            conn.query_row(
+                "
+                SELECT t.normalized_rating, a.rated_tracks, a.rating_completeness,
+                       a.calculated_album_rating, a.effective_album_rating, a.album_score
+                FROM tracks t JOIN albums a ON a.id = t.album_id
+                WHERE a.id = ?1
+                ",
+                [album_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .expect("load migrated half-star rating")
+        };
+        let first = load_rating_aggregate("mb:test");
+        let second = load_rating_aggregate("mb:half-star");
+
+        assert_eq!(first, (Some(70), 1, 1.0, Some(70), Some(70), Some(3.5)));
+        assert_eq!(second, (Some(90), 1, 1.0, Some(90), Some(95), Some(4.75)));
+        assert_eq!(
+            conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+                .expect("read upgraded schema version"),
+            LATEST_SCHEMA_VERSION,
+        );
+
+        migrate(&conn).expect("repeat current schema migration");
+
+        assert_eq!(load_rating_aggregate("mb:test"), first);
+        assert_eq!(load_rating_aggregate("mb:half-star"), second);
+    }
+
+    #[test]
     fn upgrades_schema_forty_eight_with_lastfm_popularity_cache() {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         configure(&conn).expect("configure database");
@@ -32501,6 +32640,86 @@ mod tests {
 
         assert!(order_clause(false, &ae_sort).contains("a.ae_ratio DESC"));
         assert!(order_clause(false, &tmoe_sort).contains("a.tmoe_seconds DESC"));
+    }
+
+    #[test]
+    fn catalog_revision_ignores_newer_incomplete_imports() {
+        let conn = seeded_connection();
+        let initial_revision = catalog_revision(&conn).expect("read initial revision");
+        conn.execute_batch(
+            "
+            INSERT INTO import_runs (source_path, started_at, status)
+            VALUES ('running.tsv', '2026-08-24T10:00:00Z', 'running');
+            INSERT INTO import_runs (source_path, started_at, status)
+            VALUES ('failed.tsv', '2026-08-24T10:01:00Z', 'failed');
+            ",
+        )
+        .expect("insert incomplete imports");
+
+        assert_eq!(
+            catalog_revision(&conn).expect("read revision"),
+            initial_revision
+        );
+
+        conn.execute(
+            "INSERT INTO import_runs (source_path, started_at, status) VALUES (?1, ?2, 'completed')",
+            params!["aurora://folder", "2026-08-24T10:02:00Z"],
+        )
+        .expect("insert completed Aurora import");
+
+        assert_ne!(
+            catalog_revision(&conn).expect("read revision"),
+            initial_revision
+        );
+    }
+
+    #[test]
+    fn catalog_revision_changes_when_imports_complete_out_of_id_order() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "
+            INSERT INTO import_runs (source_path, started_at, status)
+            VALUES ('older-running.tsv', '2026-08-24T10:00:00Z', 'running');
+            INSERT INTO import_runs (source_path, started_at, completed_at, status)
+            VALUES (
+                'newer-completed.tsv',
+                '2026-08-24T10:01:00Z',
+                '2026-08-24T10:02:00Z',
+                'completed'
+            );
+            ",
+        )
+        .expect("insert overlapping imports");
+
+        let revision_after_newer = catalog_revision(&conn).expect("read newer revision");
+        let maximum_id_after_newer: i64 = conn
+            .query_row(
+                "SELECT MAX(id) FROM import_runs WHERE status = 'completed'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read maximum completed id");
+
+        conn.execute(
+            "UPDATE import_runs
+             SET status = 'completed', completed_at = '2026-08-24T10:03:00Z'
+             WHERE source_path = 'older-running.tsv'",
+            [],
+        )
+        .expect("complete older import last");
+
+        let maximum_id_after_older: i64 = conn
+            .query_row(
+                "SELECT MAX(id) FROM import_runs WHERE status = 'completed'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read unchanged maximum completed id");
+        assert_eq!(maximum_id_after_older, maximum_id_after_newer);
+        assert_ne!(
+            catalog_revision(&conn).expect("read older completion revision"),
+            revision_after_newer
+        );
     }
 
     #[test]

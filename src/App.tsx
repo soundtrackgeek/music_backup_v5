@@ -108,6 +108,7 @@ import {
   getStatistics,
   getYearProgress,
   getLibraryStatus,
+  getCatalogRevision,
   importAlbumCovers,
   importBillboardCharts,
   importBillboardSingles,
@@ -479,6 +480,7 @@ import {
   type AppUpdateInstallProgress,
 } from "./app/updater";
 import { setAppUpdateIndicator } from "./app/updateIndicator";
+import { createCatalogRevisionChecker } from "./app/catalogRevisionWatcher";
 import {
   chartCompletenessRange,
   chartRequestFromConfig,
@@ -8366,6 +8368,9 @@ export default function App() {
   const [coverReplaceExisting, setCoverReplaceExisting] = useState(false);
   const [status, setStatus] = useState<LibraryStatus | null>(null);
   const [runs, setRuns] = useState<ImportRun[]>([]);
+  const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
+  const observedCatalogRevisionRef = useRef("");
+  const hasObservedCatalogRevisionRef = useRef(false);
   const [progress, setProgress] = useState(defaultProgress);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(
     null,
@@ -8989,6 +8994,75 @@ export default function App() {
   }, [loadData, loadDiscoveryData]);
 
   useEffect(() => {
+    if (!canImport) return;
+
+    let disposed = false;
+
+    const checkCatalogRevision = createCatalogRevisionChecker({
+      isVisible: () => !disposed && document.visibilityState !== "hidden",
+      getRevision: getCatalogRevision,
+      hasObservedRevision: () => hasObservedCatalogRevisionRef.current,
+      getObservedRevision: () => observedCatalogRevisionRef.current,
+      setObservedRevision: (revision) => {
+        observedCatalogRevisionRef.current = revision;
+        hasObservedCatalogRevisionRef.current = true;
+      },
+      onRevision: async (_revision, reason) => {
+        if (disposed) return;
+
+        // Invalidate live catalog queries before doing any secondary bookkeeping.
+        // The checker issues one follow-up retry pulse after acknowledgement so a
+        // transient child query failure cannot leave the visible view stale.
+        setCatalogRefreshKey((current) => current + 1);
+        if (reason === "retry") return;
+
+        const nextRuns = await listImportRuns(8);
+        if (disposed) return;
+
+        setRuns(nextRuns);
+        setLatestAppliedImport(
+          nextRuns.find(
+            (run) => run.status === "completed" && Boolean(run.backupPath),
+          ) ?? null,
+        );
+        void Promise.all([getLibraryStatus(), getStatistics()])
+          .then(([nextStatus, nextStatistics]) => {
+            if (disposed) return;
+            setStatus(nextStatus);
+            setStatistics(nextStatistics);
+          })
+          .catch(() => {
+            // The catalog views are already refreshing; summary cards can wait for a later reload.
+          });
+      },
+    });
+    const checkForExternalImport = () => {
+      void checkCatalogRevision().catch(() => {
+        // A locked or temporarily unavailable database can be retried on the next tick.
+      });
+    };
+
+    const handleFocus = checkForExternalImport;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkForExternalImport();
+      }
+    };
+
+    const intervalId = window.setInterval(checkForExternalImport, 1_000);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    checkForExternalImport();
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [canImport]);
+
+  useEffect(() => {
     if (!settings.musicDoctorAutoSync) return;
 
     let disposed = false;
@@ -9231,7 +9305,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeSection, request]);
+  }, [activeSection, catalogRefreshKey, request]);
 
   useEffect(() => {
     if (activeSection !== "Albums") {
@@ -9269,7 +9343,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeSection, albumRequest]);
+  }, [activeSection, albumRequest, catalogRefreshKey]);
 
   useEffect(() => {
     if (activeSection !== "Albums") {
@@ -9323,7 +9397,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, albumTracksRequest]);
+  }, [activeSection, albumTracksRequest, catalogRefreshKey]);
 
   useEffect(() => {
     const album = albumResponse?.rows.find(
@@ -9464,7 +9538,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeSection, artistRequest]);
+  }, [activeSection, artistRequest, catalogRefreshKey]);
 
   useEffect(() => {
     if (activeSection !== "Artists") {
@@ -9615,7 +9689,12 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, selectedArtist, shouldLoadArtistTrackHighlights]);
+  }, [
+    activeSection,
+    catalogRefreshKey,
+    selectedArtist,
+    shouldLoadArtistTrackHighlights,
+  ]);
 
   useEffect(() => {
     if (activeSection !== "Artists" || !artistAlbumsRequest) {
@@ -9651,7 +9730,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, artistAlbumsRequest]);
+  }, [activeSection, artistAlbumsRequest, catalogRefreshKey]);
 
   useEffect(() => {
     if (activeSection !== "Artists") {
@@ -9708,7 +9787,12 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, artistAlbumTracksRequest, shouldLoadArtistAlbumTracks]);
+  }, [
+    activeSection,
+    artistAlbumTracksRequest,
+    catalogRefreshKey,
+    shouldLoadArtistAlbumTracks,
+  ]);
 
   useEffect(() => {
     if (
@@ -9853,7 +9937,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeSection, genreRequest]);
+  }, [activeSection, catalogRefreshKey, genreRequest]);
 
   useEffect(() => {
     const visibleGenreNames =
@@ -9914,7 +9998,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, genreAlbumsRequest]);
+  }, [activeSection, catalogRefreshKey, genreAlbumsRequest]);
 
   useEffect(() => {
     if (activeSection !== "Tools") {
@@ -10170,6 +10254,7 @@ export default function App() {
     timelineMode,
     timelineChartSource,
     albumTimelineRefreshKey,
+    catalogRefreshKey,
   ]);
 
   useEffect(() => {
@@ -10208,7 +10293,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeSection, chartRequest]);
+  }, [activeSection, catalogRefreshKey, chartRequest]);
 
   useEffect(() => {
     if (activeSection !== "Discovery" || !discoverySelection) {
@@ -10246,7 +10331,12 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeSection, discoveryAlbumRequest, discoverySelection]);
+  }, [
+    activeSection,
+    catalogRefreshKey,
+    discoveryAlbumRequest,
+    discoverySelection,
+  ]);
 
   const coverProgressPercent = useMemo(() => {
     if (coverProgress.status === "completed") return 100;
@@ -14323,6 +14413,7 @@ export default function App() {
           </TimelinesWorkspace>
         ) : activeSection === "Updates" ? (
           <UpdatesWorkspace
+            catalogRefreshKey={catalogRefreshKey}
             selectedUpdateId={selectedUpdate?.id ?? null}
             onSelectUpdate={setSelectedUpdate}
             onOpenArtist={openArtistFromUpdates}
@@ -17195,7 +17286,10 @@ export default function App() {
                   className="icon-button"
                   type="button"
                   aria-label="Refresh albums"
-                  onClick={() => void loadData()}
+                  onClick={() => {
+                    setCatalogRefreshKey((current) => current + 1);
+                    void loadData();
+                  }}
                 >
                   <Database size={18} />
                 </button>

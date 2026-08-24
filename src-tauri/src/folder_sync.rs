@@ -80,6 +80,13 @@ struct FolderFingerprint {
     total_bytes: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct TrackTagFingerprint {
+    digest: String,
+    size_bytes: u64,
+    modified_ns: u128,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct FolderSnapshotManifest {
@@ -175,6 +182,67 @@ struct FolderScan {
     canonical_folder: PathBuf,
     fingerprint: FolderFingerprint,
     tracks: Vec<ScannedTrack>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ExistingAlbumScan {
+    scan: FolderScan,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ExistingTrackScan {
+    canonical_path: PathBuf,
+    fingerprint: TrackTagFingerprint,
+    track: ScannedTrack,
+}
+
+impl ExistingAlbumScan {
+    pub(crate) fn folder(&self) -> &Path {
+        &self.scan.canonical_folder
+    }
+
+    pub(crate) fn track_count(&self) -> usize {
+        self.scan.tracks.len()
+    }
+
+    pub(crate) fn source_size_bytes(&self) -> u64 {
+        self.scan.fingerprint.total_bytes
+    }
+
+    pub(crate) fn track_identities(&self) -> Vec<(String, String)> {
+        self.scan
+            .tracks
+            .iter()
+            .map(|track| (track.file_path.clone(), track.filename.clone()))
+            .collect()
+    }
+
+    pub(crate) fn records(&self, album_unique_id: Option<&str>) -> Vec<[String; 17]> {
+        let album_rating = calculated_album_rating(&self.scan.tracks);
+        self.scan
+            .tracks
+            .iter()
+            .map(|track| scanned_track_record(track, album_unique_id, album_rating))
+            .collect()
+    }
+}
+
+impl ExistingTrackScan {
+    pub(crate) fn source_size_bytes(&self) -> u64 {
+        self.fingerprint.size_bytes
+    }
+
+    pub(crate) fn identity(&self) -> (String, String) {
+        (self.track.file_path.clone(), self.track.filename.clone())
+    }
+
+    pub(crate) fn record(
+        &self,
+        album_unique_id: Option<&str>,
+        album_rating: Option<i32>,
+    ) -> [String; 17] {
+        scanned_track_record(&self.track, album_unique_id, album_rating)
+    }
 }
 
 pub(crate) fn snapshot_path(app_data_dir: &Path, folder: &Path) -> PathBuf {
@@ -966,6 +1034,63 @@ fn sqlite_data_version(conn: &Connection) -> Result<i64> {
         .context("Could not identify concurrent catalog changes")
 }
 
+pub(crate) fn scan_existing_album(folder: &Path) -> Result<ExistingAlbumScan> {
+    let cancel_requested = AtomicBool::new(false);
+    let scan = scan_folder(folder, &cancel_requested)?;
+    validate_single_album(&scan.tracks)?;
+    Ok(ExistingAlbumScan { scan })
+}
+
+pub(crate) fn scan_existing_track(path: &Path) -> Result<ExistingTrackScan> {
+    if !path.is_absolute() {
+        bail!("Targeted Aurora sync requires an absolute MP3 path");
+    }
+    ensure_source_root_is_not_linked(path)?;
+    let canonical_path = path
+        .canonicalize()
+        .with_context(|| format!("Could not resolve targeted MP3 {}", path.display()))?;
+    ensure_source_root_is_not_linked(&canonical_path)?;
+    if !canonical_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("mp3"))
+    {
+        bail!(
+            "Targeted Aurora sync only accepts MP3 files: {}",
+            canonical_path.display()
+        );
+    }
+    let fingerprint = fingerprint_track_tags(&canonical_path)?;
+    let track = read_track(&canonical_path)?;
+    if fingerprint_track_tags(&canonical_path)? != fingerprint {
+        bail!(
+            "The targeted MP3 changed while its tags were being read: {}",
+            canonical_path.display()
+        );
+    }
+    Ok(ExistingTrackScan {
+        canonical_path,
+        fingerprint,
+        track,
+    })
+}
+
+pub(crate) fn existing_album_scan_is_unchanged(scan: &ExistingAlbumScan) -> Result<bool> {
+    if !scan.scan.canonical_folder.is_dir() {
+        return Ok(false);
+    }
+    ensure_source_root_is_not_linked(&scan.scan.canonical_folder)?;
+    Ok(fingerprint_folder(&scan.scan.canonical_folder)?.0 == scan.scan.fingerprint)
+}
+
+pub(crate) fn existing_track_scan_is_unchanged(scan: &ExistingTrackScan) -> Result<bool> {
+    if !scan.canonical_path.is_file() {
+        return Ok(false);
+    }
+    ensure_source_root_is_not_linked(&scan.canonical_path)?;
+    Ok(fingerprint_track_tags(&scan.canonical_path)? == scan.fingerprint)
+}
+
 fn scan_folder(folder: &Path, cancel_requested: &AtomicBool) -> Result<FolderScan> {
     let canonical_folder = folder
         .canonicalize()
@@ -1018,6 +1143,37 @@ fn fingerprint_folder(folder: &Path) -> Result<(FolderFingerprint, Vec<PathBuf>)
         },
         paths,
     ))
+}
+
+fn fingerprint_track_tags(path: &Path) -> Result<TrackTagFingerprint> {
+    let metadata = fs::symlink_metadata(path)
+        .with_context(|| format!("Could not inspect targeted MP3 {}", path.display()))?;
+    if !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || is_reparse_point(path)?
+    {
+        bail!(
+            "The targeted Aurora path is not a regular unlinked MP3 file: {}",
+            path.display()
+        );
+    }
+    let modified_ns = metadata
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|value| value.as_nanos())
+        .unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(normalized_path(path).as_bytes());
+    hasher.update([0]);
+    hasher.update(metadata.len().to_le_bytes());
+    hasher.update(modified_ns.to_le_bytes());
+    hash_id3_regions(path, metadata.len(), &mut hasher)?;
+    Ok(TrackTagFingerprint {
+        digest: hex::encode(hasher.finalize()),
+        size_bytes: metadata.len(),
+        modified_ns,
+    })
 }
 
 fn hash_id3_regions(path: &Path, file_len: u64, hasher: &mut Sha256) -> Result<()> {

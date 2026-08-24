@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import * as backend from "../backend";
 import { UpdatesWorkspace } from "./UpdatesWorkspace";
 
 describe("UpdatesWorkspace", () => {
@@ -76,5 +77,27 @@ describe("UpdatesWorkspace", () => {
       screen.getByRole("button", { name: "Open Hans Zimmer in Artists" }),
     );
     expect(onOpenArtist).toHaveBeenCalledWith("Hans Zimmer");
+  });
+
+  it("reloads when an external catalog revision arrives", async () => {
+    const listUpdates = vi.spyOn(backend, "listLibraryUpdates");
+    const props = {
+      selectedUpdateId: null,
+      onSelectUpdate: vi.fn(),
+      onOpenArtist: vi.fn(),
+    };
+    const { rerender } = render(
+      <UpdatesWorkspace {...props} catalogRefreshKey={1} />,
+    );
+
+    await waitFor(() => expect(listUpdates).toHaveBeenCalled());
+    const callsBeforeRevision = listUpdates.mock.calls.length;
+
+    rerender(<UpdatesWorkspace {...props} catalogRefreshKey={2} />);
+
+    await waitFor(() =>
+      expect(listUpdates.mock.calls.length).toBeGreaterThan(callsBeforeRevision),
+    );
+    listUpdates.mockRestore();
   });
 });

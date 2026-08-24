@@ -31,6 +31,7 @@ import type {
 } from "../types";
 
 type UpdatesWorkspaceProps = {
+  catalogRefreshKey?: number;
   selectedUpdateId: number | null;
   onSelectUpdate: (update: LibraryUpdate | null) => void;
   onOpenArtist: (artistName: string) => void;
@@ -350,6 +351,7 @@ function ArtistUpdateList({
 }
 
 export function UpdatesWorkspace({
+  catalogRefreshKey = 0,
   selectedUpdateId,
   onSelectUpdate,
   onOpenArtist,
@@ -419,6 +421,7 @@ export function UpdatesWorkspace({
     }
   }, [
     changeKind,
+    catalogRefreshKey,
     dateRange,
     deferredQuery,
     offset,

@@ -22,8 +22,8 @@ const MAX_TRANSFER_ENTRIES: usize = 50_000;
 const MAX_SYNC_FOLDERS: usize = 32;
 const MAX_SYNC_TRACKS: usize = 50_000;
 const SYNC_SNAPSHOT_PREFIX: &str = "album-folder-aurora-sync-";
-const SYNC_BACKUP_PREFIX: &str = "music-library-aurora-sync-";
-const SYNC_BACKUP_SUFFIX: &str = "-before-import.sqlite3";
+const DEPRECATED_SYNC_BACKUP_PREFIX: &str = "music-library-aurora-sync-";
+const DEPRECATED_SYNC_BACKUP_SUFFIX: &str = "-before-import.sqlite3";
 const STAGING_OWNER_FILE: &str = ".aurora-intake-owner.json";
 
 #[derive(Debug, Deserialize)]
@@ -53,6 +53,8 @@ struct ApplyBatchRequest {
 #[serde(rename_all = "camelCase")]
 struct SyncExistingFoldersRequest {
     folder_paths: Vec<String>,
+    #[serde(default)]
+    changed_file_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -325,6 +327,7 @@ fn capabilities() -> Result<Value> {
             "crossVolumeCopy": true,
             "previewRequired": true,
             "syncExistingFolders": true,
+            "targetedExistingFileSync": true,
         },
     }))
 }
@@ -484,16 +487,35 @@ fn sync_existing_folders(
     }
 
     let database_path = app_data_dir.join("music-library.sqlite3");
+    prune_deprecated_sync_backups(&database_path, 1)?;
     let mut conn = open_database(&database_path)?;
     cleanup_abandoned_bridge_sync_sessions(&conn, app_data_dir)?;
 
-    let library_roots = canonical_available_library_roots()?;
+    let library_roots = canonical_available_library_roots_for_paths(&request.folder_paths)?;
     let folders = canonicalize_sync_folder_paths(request.folder_paths, &library_roots)?;
+    let changed_file_target =
+        canonicalize_changed_file_target(request.changed_file_paths, &folders, &library_roots)?;
     let mut scopes = Vec::with_capacity(folders.len());
     let mut seen_album_ids = BTreeSet::new();
     let mut total_tracks = 0_usize;
-    for folder in folders {
-        let scope = catalog_scope_for_existing_folder(&conn, folder)?;
+    for (folder_index, folder) in folders.into_iter().enumerate() {
+        let candidate = if let Some((target_folder_index, target_path)) = &changed_file_target {
+            if *target_folder_index == folder_index {
+                match importer::prepare_existing_file_fast_sync(&conn, &folder, target_path)? {
+                    Some(candidate) => candidate,
+                    None => importer::prepare_existing_album_fast_sync(&conn, &folder)?,
+                }
+            } else {
+                importer::prepare_existing_album_fast_sync(&conn, &folder)?
+            }
+        } else {
+            importer::prepare_existing_album_fast_sync(&conn, &folder)?
+        };
+        let scope = ExistingFolderScope {
+            folder: candidate.folder().to_path_buf(),
+            album_id: candidate.album_id().to_owned(),
+            track_count: candidate.track_count(),
+        };
         if !seen_album_ids.insert(scope.album_id.clone()) {
             bail!(
                 "Two requested folders belong to the same catalog album {}",
@@ -506,31 +528,14 @@ fn sync_existing_folders(
                 "syncExistingFolders accepts at most {MAX_SYNC_TRACKS} cataloged MP3 tracks per request"
             );
         }
-        scopes.push(scope);
+        scopes.push((scope, candidate));
     }
 
-    let batch_backup = create_sync_batch_backup(&conn, &database_path)?;
     let mut folders = Vec::with_capacity(scopes.len());
-    for scope in scopes {
-        let backup_exists = batch_backup.try_exists().with_context(|| {
-            format!(
-                "Could not verify the Aurora folder-sync backup {}",
-                batch_backup.display()
-            )
-        })?;
-        if !backup_exists {
-            bail!(
-                "The Aurora folder-sync backup disappeared before the catalog update: {}",
-                batch_backup.display()
-            );
-        }
-        let receipt = sync_existing_folder(&mut conn, &database_path, app_data_dir, &scope)
-            .with_context(|| {
-                format!(
-                    "The pre-sync database backup was retained at {}",
-                    batch_backup.display()
-                )
-            })?;
+    for (scope, candidate) in scopes {
+        let receipt =
+            sync_existing_folder(&mut conn, &database_path, app_data_dir, &scope, &candidate)
+                .with_context(|| format!("Could not sync {}", scope.folder.display()))?;
         folders.push(receipt);
     }
 
@@ -538,27 +543,6 @@ fn sync_existing_folders(
         .iter()
         .filter(|folder| matches!(folder.status, SyncedFolderStatus::Updated))
         .count();
-    if updated_folder_count == 0 {
-        if let Err(error) = fs::remove_file(&batch_backup) {
-            eprintln!(
-                "Could not remove unused Aurora folder-sync backup {}: {error}",
-                batch_backup.display()
-            );
-        }
-    } else {
-        let batch_backup_text = display_path(&batch_backup);
-        for folder in &mut folders {
-            if matches!(folder.status, SyncedFolderStatus::Updated) {
-                folder.backup_path = Some(batch_backup_text.clone());
-            }
-        }
-        if let Err(error) = enforce_sync_backup_retention(&conn, &database_path, &batch_backup) {
-            eprintln!(
-                "Could not prune old Aurora folder-sync backups after a committed sync: {error:#}"
-            );
-        }
-    }
-
     let result = SyncExistingFoldersResult {
         synced_folder_count: folders.len(),
         updated_folder_count,
@@ -579,89 +563,31 @@ fn sync_existing_folders(
     serde_json::to_value(result).context("Could not encode syncExistingFolders result")
 }
 
-fn create_sync_batch_backup(conn: &Connection, database_path: &Path) -> Result<PathBuf> {
+fn prune_deprecated_sync_backups(database_path: &Path, keep: usize) -> Result<usize> {
     let backup_directory = database_path
         .parent()
         .ok_or_else(|| anyhow!("Music Library database path has no parent directory"))?
         .join("backups");
-    fs::create_dir_all(&backup_directory).with_context(|| {
-        format!(
-            "Could not create database backup directory {}",
-            backup_directory.display()
-        )
-    })?;
-    for _ in 0..100 {
-        let backup_id = new_plan_id(database_path, "sync-existing-backup");
-        let backup_path = backup_directory.join(format!(
-            "{SYNC_BACKUP_PREFIX}{backup_id}{SYNC_BACKUP_SUFFIX}"
-        ));
-        if backup_path.try_exists()? {
-            continue;
-        }
-        let backup_path_text = display_path(&backup_path);
-        if let Err(error) = conn.execute("VACUUM INTO ?1", params![backup_path_text]) {
-            if is_bridge_sync_backup_path(database_path, &backup_path) {
-                let _ = fs::remove_file(&backup_path);
-            }
-            return Err(error).with_context(|| {
-                format!(
-                    "Could not create the pre-sync database backup {}",
-                    backup_path.display()
-                )
-            });
-        }
-        let metadata = fs::metadata(&backup_path).with_context(|| {
+    if !backup_directory.try_exists()? {
+        return Ok(0);
+    }
+    let mut backups = fs::read_dir(&backup_directory)
+        .with_context(|| {
             format!(
-                "Could not verify the pre-sync database backup {}",
-                backup_path.display()
+                "Could not inspect deprecated Aurora sync backups {}",
+                backup_directory.display()
             )
-        })?;
-        if metadata.len() == 0 {
-            let _ = fs::remove_file(&backup_path);
-            bail!(
-                "The pre-sync database backup is empty: {}",
-                backup_path.display()
-            );
-        }
-        if let Err(error) = fs::OpenOptions::new()
-            .write(true)
-            .open(&backup_path)
-            .and_then(|file| file.sync_all())
-        {
-            let _ = fs::remove_file(&backup_path);
-            return Err(error).with_context(|| {
-                format!(
-                    "Could not synchronize the pre-sync database backup {}",
-                    backup_path.display()
-                )
-            });
-        }
-        return Ok(backup_path);
-    }
-    bail!("Could not reserve a unique Aurora folder-sync backup filename")
-}
-
-fn enforce_sync_backup_retention(
-    conn: &Connection,
-    database_path: &Path,
-    current_backup: &Path,
-) -> Result<()> {
-    if !is_bridge_sync_backup_path(database_path, current_backup) {
-        bail!("Refusing to retain an invalid Aurora folder-sync backup path");
-    }
-    let retention = db::settings_for_connection(conn)?.backup_retention.max(1) as usize;
-    let backup_directory = current_backup
-        .parent()
-        .ok_or_else(|| anyhow!("Aurora folder-sync backup has no parent directory"))?;
-    let mut previous = fs::read_dir(backup_directory)?
+        })?
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
-            entry.path() != current_backup
-                && entry.file_type().is_ok_and(|file_type| file_type.is_file())
-                && is_bridge_sync_backup_path(database_path, &entry.path())
+            entry.file_type().is_ok_and(|file_type| file_type.is_file())
+                && entry
+                    .file_name()
+                    .to_str()
+                    .is_some_and(is_deprecated_sync_backup_name)
         })
         .collect::<Vec<_>>();
-    previous.sort_by_key(|entry| {
+    backups.sort_by_key(|entry| {
         std::cmp::Reverse(
             entry
                 .metadata()
@@ -669,39 +595,39 @@ fn enforce_sync_backup_retention(
                 .ok(),
         )
     });
-    for stale in previous.into_iter().skip(retention.saturating_sub(1)) {
-        fs::remove_file(stale.path()).with_context(|| {
+    let stale = backups.into_iter().skip(keep).collect::<Vec<_>>();
+    for entry in &stale {
+        fs::remove_file(entry.path()).with_context(|| {
             format!(
-                "Could not remove old Aurora folder-sync backup {}",
-                stale.path().display()
+                "Could not remove deprecated Aurora sync backup {}",
+                entry.path().display()
             )
         })?;
     }
-    Ok(())
+    Ok(stale.len())
 }
 
-fn is_bridge_sync_backup_path(database_path: &Path, path: &Path) -> bool {
-    path.parent().map(normalized_path)
-        == database_path
-            .parent()
-            .map(|parent| normalized_path(&parent.join("backups")))
-        && path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .is_some_and(is_bridge_sync_backup_name)
-}
-
-fn is_bridge_sync_backup_name(name: &str) -> bool {
-    name.strip_prefix(SYNC_BACKUP_PREFIX)
-        .and_then(|value| value.strip_suffix(SYNC_BACKUP_SUFFIX))
+fn is_deprecated_sync_backup_name(name: &str) -> bool {
+    name.strip_prefix(DEPRECATED_SYNC_BACKUP_PREFIX)
+        .and_then(|value| value.strip_suffix(DEPRECATED_SYNC_BACKUP_SUFFIX))
         .is_some_and(|token| {
             token.len() == 24 && token.bytes().all(|byte| byte.is_ascii_hexdigit())
         })
 }
 
-fn canonical_available_library_roots() -> Result<Vec<PathBuf>> {
+fn canonical_available_library_roots_for_paths(requested_paths: &[String]) -> Result<Vec<PathBuf>> {
+    let requested_volumes = requested_paths
+        .iter()
+        .filter_map(|path| path_volume_key(Path::new(path.trim())))
+        .collect::<BTreeSet<_>>();
     let mut roots = Vec::new();
     for category in category_definitions()? {
+        if !requested_volumes.is_empty()
+            && path_volume_key(&category.root)
+                .is_some_and(|volume| !requested_volumes.contains(&volume))
+        {
+            continue;
+        }
         if !category.root.try_exists().with_context(|| {
             format!(
                 "Could not inspect the {} library root {}",
@@ -731,6 +657,17 @@ fn canonical_available_library_roots() -> Result<Vec<PathBuf>> {
         bail!("No configured Music Library destination is currently available");
     }
     Ok(roots)
+}
+
+fn path_volume_key(path: &Path) -> Option<String> {
+    path.is_absolute().then(|| {
+        path.components()
+            .next()
+            .expect("an absolute path has a root component")
+            .as_os_str()
+            .to_string_lossy()
+            .to_lowercase()
+    })
 }
 
 fn canonicalize_sync_folder_paths(
@@ -811,6 +748,119 @@ fn canonicalize_sync_folder_paths(
     Ok(folders)
 }
 
+fn canonicalize_changed_file_target(
+    changed_file_paths: Vec<String>,
+    folders: &[PathBuf],
+    library_roots: &[PathBuf],
+) -> Result<Option<(usize, PathBuf)>> {
+    if changed_file_paths.is_empty() {
+        return Ok(None);
+    }
+    if changed_file_paths.len() > MAX_SYNC_TRACKS {
+        bail!("syncExistingFolders accepts at most {MAX_SYNC_TRACKS} changed file paths");
+    }
+
+    let mut targets = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut all_targets_available = true;
+    for raw_path in changed_file_paths {
+        let raw_path = raw_path.trim();
+        if raw_path.is_empty() {
+            all_targets_available = false;
+            continue;
+        }
+        let requested = PathBuf::from(raw_path);
+        if !requested.is_absolute() {
+            bail!(
+                "syncExistingFolders requires absolute changed MP3 paths: {}",
+                requested.display()
+            );
+        }
+        if requested
+            .components()
+            .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
+        {
+            bail!(
+                "syncExistingFolders requires canonical changed MP3 paths without . or .. components: {}",
+                requested.display()
+            );
+        }
+        if !requested
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|value| value.eq_ignore_ascii_case("mp3"))
+        {
+            bail!(
+                "syncExistingFolders changedFilePaths only accepts MP3 files: {}",
+                requested.display()
+            );
+        }
+        let containing_folders = folders
+            .iter()
+            .enumerate()
+            .filter(|(_, folder)| path_is_strictly_within(&requested, folder))
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        if containing_folders.len() != 1
+            || !library_roots
+                .iter()
+                .any(|root| path_is_strictly_within(&requested, root))
+        {
+            bail!(
+                "The changed MP3 is outside the requested album folders or configured Music Library destinations: {}",
+                requested.display()
+            );
+        }
+        if !requested
+            .try_exists()
+            .with_context(|| format!("Could not inspect changed MP3 {}", requested.display()))?
+        {
+            all_targets_available = false;
+            continue;
+        }
+        folder_sync::ensure_source_root_is_not_linked(&requested)?;
+        let metadata = fs::symlink_metadata(&requested)
+            .with_context(|| format!("Could not inspect changed MP3 {}", requested.display()))?;
+        if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+            bail!(
+                "The changed Aurora path is not a regular unlinked MP3 file: {}",
+                requested.display()
+            );
+        }
+        let canonical = requested
+            .canonicalize()
+            .with_context(|| format!("Could not resolve changed MP3 {}", requested.display()))?;
+        folder_sync::ensure_source_root_is_not_linked(&canonical)?;
+        if normalized_path(&requested) != normalized_path(&canonical) {
+            bail!(
+                "Use the canonical changed MP3 path instead of {}",
+                requested.display()
+            );
+        }
+        let folder_index = containing_folders[0];
+        if !path_is_strictly_within(&canonical, &folders[folder_index])
+            || !library_roots
+                .iter()
+                .any(|root| path_is_strictly_within(&canonical, root))
+        {
+            bail!(
+                "The changed MP3 resolves outside its requested album folder or Music Library destination: {}",
+                canonical.display()
+            );
+        }
+        if seen.insert(normalized_path(&canonical)) {
+            targets.push((folder_index, canonical));
+        }
+    }
+
+    if all_targets_available && targets.len() == 1 {
+        Ok(targets.into_iter().next())
+    } else {
+        Ok(None)
+    }
+}
+
+#[cfg(test)]
 fn catalog_scope_for_existing_folder(
     conn: &Connection,
     folder: PathBuf,
@@ -883,7 +933,36 @@ fn sync_existing_folder(
     database_path: &Path,
     app_data_dir: &Path,
     scope: &ExistingFolderScope,
+    candidate: &importer::ExistingAlbumSyncCandidate,
 ) -> Result<SyncedFolderReceipt> {
+    match importer::apply_existing_album_fast_sync(conn, candidate)? {
+        importer::ExistingAlbumFastSyncOutcome::Updated {
+            import_run_id,
+            changed_tracks,
+            changed_albums,
+        } => {
+            return Ok(SyncedFolderReceipt {
+                folder_path: display_path(&scope.folder),
+                status: SyncedFolderStatus::Updated,
+                changed_tracks,
+                changed_albums,
+                import_run_id: Some(import_run_id),
+                backup_path: None,
+            });
+        }
+        importer::ExistingAlbumFastSyncOutcome::Unchanged => {
+            return Ok(SyncedFolderReceipt {
+                folder_path: display_path(&scope.folder),
+                status: SyncedFolderStatus::Unchanged,
+                changed_tracks: 0,
+                changed_albums: 0,
+                import_run_id: None,
+                backup_path: None,
+            });
+        }
+        importer::ExistingAlbumFastSyncOutcome::Fallback => {}
+    }
+
     let snapshot_id = new_plan_id(&scope.folder, "sync-existing");
     let snapshot_path = app_data_dir
         .join("album-folder-imports")
@@ -934,6 +1013,7 @@ fn sync_existing_folder(
     if changed_tracks == 0 && changed_albums == 0 {
         importer::discard_bridge_import_preview(conn, preview.session_id)
             .context("Could not discard an unchanged Aurora folder-sync preview")?;
+        checkpoint_discarded_sync_stage(conn)?;
         cleanup_sync_snapshot_artifacts(app_data_dir, &snapshot_path)?;
         return Ok(SyncedFolderReceipt {
             folder_path: display_path(&scope.folder),
@@ -1018,7 +1098,12 @@ fn validate_sync_delta_counts(counts: &SyncDeltaCounts, scoped_track_count: usiz
         );
     }
     if counts.changed_tracks > scoped_track_count as i64 || counts.changed_albums > 1 {
-        bail!("The existing-folder sync delta exceeds its selected album scope");
+        bail!(
+            "The existing-folder sync delta exceeds its selected album scope: {} changed tracks for {} scoped tracks and {} changed albums",
+            counts.changed_tracks,
+            scoped_track_count,
+            counts.changed_albums
+        );
     }
     Ok(())
 }
@@ -1303,6 +1388,7 @@ fn apply_existing_folder_preview(
             }
             Ok(Some(_)) => {
                 let cleanup = importer::discard_bridge_import_preview(conn, session_id)
+                    .and_then(|_| checkpoint_discarded_sync_stage(conn))
                     .and_then(|_| cleanup_sync_snapshot_artifacts(app_data_dir, snapshot_path));
                 Err(with_sync_cleanup_context(error, cleanup))
             }
@@ -1325,6 +1411,7 @@ fn discard_invalid_sync_preview(
     error: anyhow::Error,
 ) -> anyhow::Error {
     let cleanup = importer::discard_bridge_import_preview(conn, session_id)
+        .and_then(|_| checkpoint_discarded_sync_stage(conn))
         .and_then(|_| cleanup_sync_snapshot_artifacts(app_data_dir, snapshot_path));
     with_sync_cleanup_context(error, cleanup)
 }
@@ -1340,12 +1427,17 @@ fn with_sync_cleanup_context(error: anyhow::Error, cleanup: Result<()>) -> anyho
 
 fn cleanup_abandoned_bridge_sync_sessions(conn: &Connection, app_data_dir: &Path) -> Result<()> {
     let snapshot_directory = app_data_dir.join("album-folder-imports");
+    let mut discarded_session = false;
     for (session_id, source_path) in importer::noncompleted_bridge_sessions(conn)? {
         if is_bridge_sync_snapshot_path(app_data_dir, Path::new(&source_path)) {
             importer::discard_bridge_import_preview(conn, session_id).with_context(|| {
                 format!("Could not discard abandoned Aurora folder-sync session {session_id}")
             })?;
+            discarded_session = true;
         }
+    }
+    if discarded_session {
+        checkpoint_discarded_sync_stage(conn)?;
     }
     if !snapshot_directory.try_exists()? {
         return Ok(());
@@ -1370,6 +1462,20 @@ fn cleanup_abandoned_bridge_sync_sessions(conn: &Connection, app_data_dir: &Path
                 )
             })?;
         }
+    }
+    Ok(())
+}
+
+fn checkpoint_discarded_sync_stage(conn: &Connection) -> Result<()> {
+    let (busy, _, _): (i64, i64, i64) = conn
+        .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
+        .context("Could not reclaim discarded Aurora folder-sync staging space")?;
+    if busy != 0 {
+        eprintln!(
+            "Music Library could not immediately reclaim every discarded Aurora staging page because another catalog reader is active"
+        );
     }
     Ok(())
 }
@@ -2957,6 +3063,7 @@ mod tests {
             "folderPaths": [display_path(&album), display_path(&album)]
         }))
         .expect("sync request");
+        assert!(request.changed_file_paths.is_empty());
         let folders = canonicalize_sync_folder_paths(request.folder_paths, &[root])
             .expect("deduplicated folders");
         assert_eq!(folders, vec![album]);
@@ -2975,10 +3082,79 @@ mod tests {
     }
 
     #[test]
+    fn sync_request_accepts_additive_changed_file_paths_without_a_protocol_bump() {
+        let request: SyncExistingFoldersRequest = serde_json::from_value(json!({
+            "folderPaths": [r"G:\Scores\Album"],
+            "changedFilePaths": [r"G:\Scores\Album\01.mp3"]
+        }))
+        .expect("additive exact-file request");
+
+        assert_eq!(request.folder_paths, vec![r"G:\Scores\Album"]);
+        assert_eq!(request.changed_file_paths, vec![r"G:\Scores\Album\01.mp3"]);
+        assert_eq!(PROTOCOL_VERSION, 1);
+    }
+
+    #[test]
+    fn changed_file_target_is_canonical_regular_mp3_inside_the_requested_folder() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path().join("library");
+        let album = root.join("Album");
+        let outside = temp.path().join("outside.mp3");
+        fs::create_dir_all(&album).expect("album folder");
+        let target = album.join("01.mp3");
+        fs::write(&target, b"mp3").expect("target mp3");
+        fs::write(&outside, b"outside").expect("outside mp3");
+        let root = root.canonicalize().expect("canonical root");
+        let album = album.canonicalize().expect("canonical album");
+        let target = target.canonicalize().expect("canonical target");
+
+        let selected = canonicalize_changed_file_target(
+            vec![display_path(&target), display_path(&target)],
+            std::slice::from_ref(&album),
+            std::slice::from_ref(&root),
+        )
+        .expect("valid exact-file target")
+        .expect("one deduplicated target");
+        assert_eq!(selected, (0, target));
+
+        let relative = canonicalize_changed_file_target(
+            vec!["01.mp3".to_owned()],
+            std::slice::from_ref(&album),
+            std::slice::from_ref(&root),
+        )
+        .expect_err("relative target");
+        assert!(relative.to_string().contains("absolute"));
+        let outside = canonicalize_changed_file_target(
+            vec![display_path(
+                &outside.canonicalize().expect("canonical outside"),
+            )],
+            std::slice::from_ref(&album),
+            std::slice::from_ref(&root),
+        )
+        .expect_err("outside target");
+        assert!(outside.to_string().contains("outside"));
+        let non_mp3 = canonicalize_changed_file_target(
+            vec![display_path(&album.join("cover.jpg"))],
+            std::slice::from_ref(&album),
+            std::slice::from_ref(&root),
+        )
+        .expect_err("non-MP3 target");
+        assert!(non_mp3.to_string().contains("only accepts MP3"));
+        assert!(canonicalize_changed_file_target(
+            vec![display_path(&album.join("missing.mp3"))],
+            std::slice::from_ref(&album),
+            std::slice::from_ref(&root),
+        )
+        .expect("missing target falls back")
+        .is_none());
+    }
+
+    #[test]
     fn sync_request_count_is_bounded_before_database_or_filesystem_work() {
         let temp = tempdir().expect("tempdir");
         let request = SyncExistingFoldersRequest {
             folder_paths: vec!["C:\\Music\\Album".to_owned(); MAX_SYNC_FOLDERS + 1],
+            changed_file_paths: Vec::new(),
         };
 
         let error = sync_existing_folders(temp.path(), request).expect_err("bounded request");
@@ -2991,6 +3167,7 @@ mod tests {
     fn capabilities_advertise_existing_folder_sync() {
         let result = capabilities().expect("capabilities");
         assert_eq!(result["supports"]["syncExistingFolders"], true);
+        assert_eq!(result["supports"]["targetedExistingFileSync"], true);
     }
 
     #[test]
@@ -3007,34 +3184,28 @@ mod tests {
     }
 
     #[test]
-    fn sync_batch_backup_is_valid_and_uses_separate_bounded_retention() {
+    fn deprecated_sync_backups_are_pruned_without_touching_regular_backups() {
         let temp = tempdir().expect("tempdir");
         let app_data = temp.path().join("app-data");
-        fs::create_dir(&app_data).expect("app data");
+        let backup_directory = app_data.join("backups");
+        fs::create_dir_all(&backup_directory).expect("backup directory");
         let database = app_data.join("music-library.sqlite3");
-        let conn = open_database(&database).expect("database");
-        conn.execute(
-            "UPDATE app_settings SET backup_retention = 1 WHERE id = 1",
-            [],
-        )
-        .expect("backup retention");
-
-        let current = create_sync_batch_backup(&conn, &database).expect("batch backup");
-        let backup_conn = Connection::open(&current).expect("read batch backup");
-        let schema_version: i64 = backup_conn
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .expect("backup schema");
-        assert!(schema_version > 0);
-        drop(backup_conn);
-
-        let old = current.parent().expect("backup directory").join(format!(
-            "{SYNC_BACKUP_PREFIX}abcdef0123456789abcdef01{SYNC_BACKUP_SUFFIX}"
+        let old = backup_directory.join(format!(
+            "{DEPRECATED_SYNC_BACKUP_PREFIX}abcdef0123456789abcdef01{DEPRECATED_SYNC_BACKUP_SUFFIX}"
         ));
-        fs::write(&old, b"older protected backup").expect("old backup");
-        enforce_sync_backup_retention(&conn, &database, &current).expect("sync retention");
+        let current = backup_directory.join(format!(
+            "{DEPRECATED_SYNC_BACKUP_PREFIX}abcdef0123456789abcdef02{DEPRECATED_SYNC_BACKUP_SUFFIX}"
+        ));
+        let regular = backup_directory.join("music-library-20260824-before-import.sqlite3");
+        fs::write(&old, b"old deprecated backup").expect("old backup");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        fs::write(&current, b"current deprecated backup").expect("current backup");
+        fs::write(&regular, b"regular backup").expect("regular backup");
 
-        assert!(current.is_file());
+        assert_eq!(prune_deprecated_sync_backups(&database, 1).unwrap(), 1);
         assert!(!old.exists());
+        assert!(current.is_file());
+        assert!(regular.is_file());
     }
 
     #[test]

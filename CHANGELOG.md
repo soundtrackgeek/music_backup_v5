@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.144.1] - 2026-08-24
+### Fixed
+- Repaired canonical MusicBee half-star ratings that older catalogs retained only in `rating_raw`, including the affected album aggregates, before Aurora existing-folder sync compares a scoped edit.
+- Existing-folder no-op, rejected, failed, and abandoned previews now checkpoint discarded staging pages so a multi-gigabyte WAL is not retained after cleanup.
+- Exact deprecated Aurora pre-import backups are pruned down to the newest safety copy without touching ordinary Music Library backups.
+- A running Music Library window now detects completed imports from Aurora once per second while visible and immediately on focus, then invalidates Albums, Updates, and the active catalog-backed view; the Albums refresh button now reloads album rows and selected tracks as well as summary data.
+- Catalog revision tokens now detect imports that complete out of ID order, startup performs a consistency refresh, and automatic invalidation retries prevent a transient read from permanently hiding an Aurora commit.
+- Exact-file Aurora receipts scan only the edited MP3 for ordinary supported tag changes; absent, ambiguous, stale, or unsupported targets retain the complete-folder safety path.
+- Scoped metadata commits no longer wait for an irrelevant wish-list reconciliation or eager rebuild of every smart playlist; smart playlists already evaluate against current catalog rows when opened, refreshed, or synchronized to Plex.
+
+### Changed
+- Rating, Love/Ban, and Release Year edits with an unchanged album identity now use a guarded in-place transaction that preserves catalog IDs, stored durations, and chart metadata while still writing import history, Updates activity, rating events, and the global rating snapshot. One-second scanner/catalog duration rounding is accepted without rewriting catalog time. Other edits retain the safe full-catalog fallback and its normal rollback backup.
+- Full-catalog Aurora existing-folder apply now creates only the normal rollback backup immediately before the atomic import instead of creating a second redundant whole-database copy during preview.
+- Advanced the SQLite schema to version 57 and synchronized app metadata and provider user agents to `0.144.1`.
+
 ## [0.144.0] - 2026-08-24
 ### Added
 - Added the Aurora `syncExistingFolders` bridge operation for synchronizing up to 32 already-cataloged album folders after verified MP3 tag edits, with one protected whole-request rollback baseline and per-folder import receipts.

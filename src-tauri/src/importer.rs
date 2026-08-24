@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
 use csv::{Position, StringRecord};
 use rusqlite::{
-    params, Connection, InterruptHandle, OptionalExtension, Transaction, TransactionBehavior,
+    params, Connection, InterruptHandle, OptionalExtension, Row, Transaction, TransactionBehavior,
 };
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -50,6 +50,63 @@ const REMOVED_TRACKS_SQL: &str = "
      AND staged.filename = COALESCE(current.filename, '')
     WHERE staged.row_number IS NULL
 ";
+const SCOPED_TRACK_RECORD_SQL: &str = r#"
+    SELECT t.id, r.id, t.album_id, t.row_hash,
+           t.display_artist,
+           COALESCE(t.album_rating_raw, r.album_rating, CAST(t.album_rating AS TEXT)),
+           COALESCE(r.disc_number, CAST(t.disc_number AS TEXT)),
+           t.album, t.genre, t.love, t.publisher,
+           COALESCE(
+             t.rating_raw,
+             r.rating,
+             CASE
+               WHEN t.normalized_rating IS NULL THEN NULL
+               WHEN t.normalized_rating % 20 = 0 THEN CAST(t.normalized_rating / 20 AS TEXT)
+               ELSE printf('%.1f', t.normalized_rating / 20.0)
+             END
+           ),
+           t.title, COALESCE(r.track_number, CAST(t.track_number AS TEXT)),
+           COALESCE(r.year_value, CAST(t.year AS TEXT)),
+           COALESCE(r.release_year, CAST(t.release_year AS TEXT)),
+           t.album_unique_id, t.file_path, t.filename, t.album_artist_display,
+           COALESCE(r.time_value, CAST(t.time_seconds AS TEXT)),
+           r.row_hash
+    FROM tracks AS t
+    LEFT JOIN raw_tracks AS r
+      ON r.id = t.id
+     AND COALESCE(r.file_path, '') = COALESCE(t.file_path, '')
+     AND COALESCE(r.filename, '') = COALESCE(t.filename, '')
+    WHERE t.id = ?1
+"#;
+const SCOPED_ALBUM_TRACK_RECORD_SQL: &str = r#"
+    SELECT t.id, r.id, t.album_id, t.row_hash,
+           t.display_artist,
+           COALESCE(t.album_rating_raw, r.album_rating, CAST(t.album_rating AS TEXT)),
+           COALESCE(r.disc_number, CAST(t.disc_number AS TEXT)),
+           t.album, t.genre, t.love, t.publisher,
+           COALESCE(
+             t.rating_raw,
+             r.rating,
+             CASE
+               WHEN t.normalized_rating IS NULL THEN NULL
+               WHEN t.normalized_rating % 20 = 0 THEN CAST(t.normalized_rating / 20 AS TEXT)
+               ELSE printf('%.1f', t.normalized_rating / 20.0)
+             END
+           ),
+           t.title, COALESCE(r.track_number, CAST(t.track_number AS TEXT)),
+           COALESCE(r.year_value, CAST(t.year AS TEXT)),
+           COALESCE(r.release_year, CAST(t.release_year AS TEXT)),
+           t.album_unique_id, t.file_path, t.filename, t.album_artist_display,
+           COALESCE(r.time_value, CAST(t.time_seconds AS TEXT)),
+           r.row_hash
+    FROM tracks AS t
+    LEFT JOIN raw_tracks AS r
+      ON r.id = t.id
+     AND COALESCE(r.file_path, '') = COALESCE(t.file_path, '')
+     AND COALESCE(r.filename, '') = COALESCE(t.filename, '')
+    WHERE t.album_id = ?1
+    ORDER BY t.id
+"#;
 static IMPORT_CANCEL_REQUESTED: AtomicBool = AtomicBool::new(false);
 static IMPORT_WORKFLOW_RUNNING: AtomicBool = AtomicBool::new(false);
 static BACKUP_FILENAME_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -96,7 +153,7 @@ struct HeaderMap {
     time: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct TrackRow {
     display_artist: String,
     album_rating_raw: String,
@@ -178,7 +235,7 @@ struct FinalAlbum {
     album_artist_display_inferred: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct PreviousAlbum {
     album_id: String,
     album: Option<String>,
@@ -273,6 +330,94 @@ struct SourceFingerprint {
     path_text: String,
     size_bytes: i64,
     modified_ms: i64,
+}
+
+#[derive(Debug)]
+pub(crate) struct ExistingAlbumSyncCandidate {
+    folder: PathBuf,
+    album_id: String,
+    track_count: usize,
+    prepared: Option<PreparedExistingAlbumSync>,
+}
+
+impl ExistingAlbumSyncCandidate {
+    pub(crate) fn folder(&self) -> &Path {
+        &self.folder
+    }
+
+    pub(crate) fn album_id(&self) -> &str {
+        &self.album_id
+    }
+
+    pub(crate) fn track_count(&self) -> usize {
+        self.track_count
+    }
+}
+
+#[derive(Debug)]
+struct PreparedExistingAlbumSync {
+    source_guard: ExistingSyncSourceGuard,
+    data_version: i64,
+    tracks: Vec<ScopedTrackUpdate>,
+    current_album: ScopedAlbumState,
+    desired_album: FinalAlbum,
+    changed_tracks: i64,
+    changed_albums: i64,
+}
+
+#[derive(Debug)]
+enum ExistingSyncSourceGuard {
+    Album(crate::folder_sync::ExistingAlbumScan),
+    Track(crate::folder_sync::ExistingTrackScan),
+}
+
+impl ExistingSyncSourceGuard {
+    fn source_size_bytes(&self) -> u64 {
+        match self {
+            Self::Album(scan) => scan.source_size_bytes(),
+            Self::Track(scan) => scan.source_size_bytes(),
+        }
+    }
+
+    fn is_unchanged(&self) -> bool {
+        match self {
+            Self::Album(scan) => {
+                crate::folder_sync::existing_album_scan_is_unchanged(scan).unwrap_or(false)
+            }
+            Self::Track(scan) => {
+                crate::folder_sync::existing_track_scan_is_unchanged(scan).unwrap_or(false)
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ScopedTrackUpdate {
+    id: i64,
+    raw_id: Option<i64>,
+    previous_row_hash: String,
+    current: TrackRow,
+    desired: TrackRow,
+}
+
+#[derive(Debug, PartialEq)]
+struct ScopedAlbumState {
+    import_run_id: i64,
+    album_unique_id: Option<String>,
+    genre_normalized: Option<String>,
+    calculated_album_rating: Option<i32>,
+    previous: PreviousAlbum,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ExistingAlbumFastSyncOutcome {
+    Updated {
+        import_run_id: i64,
+        changed_tracks: i64,
+        changed_albums: i64,
+    },
+    Unchanged,
+    Fallback,
 }
 
 struct ImportWorkflowGuard;
@@ -521,6 +666,1131 @@ pub(crate) fn noncompleted_bridge_sessions(conn: &Connection) -> Result<Vec<(i64
     let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
     rows.collect::<rusqlite::Result<Vec<_>>>()
         .context("Could not list incomplete import sessions")
+}
+
+pub(crate) fn prepare_existing_album_fast_sync(
+    conn: &Connection,
+    folder: &Path,
+) -> Result<ExistingAlbumSyncCandidate> {
+    let scan = crate::folder_sync::scan_existing_album(folder)?;
+    let folder = scan.folder().to_path_buf();
+    let track_count = scan.track_count();
+    let data_version = scoped_sync_data_version(conn)?;
+    let identities = scan.track_identities();
+    let mut matched_tracks = HashMap::with_capacity(identities.len());
+    let mut album_ids = HashSet::new();
+    let mut lookup = conn.prepare(
+        "SELECT id, album_id, album_unique_id, row_hash
+         FROM tracks
+         WHERE file_path = ?1 AND filename = ?2",
+    )?;
+    for (file_path, filename) in &identities {
+        let matches = lookup
+            .query_map(params![file_path, filename], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        if matches.is_empty() {
+            bail!(
+                "The requested folder contains an MP3 that is not represented in the active Music Library catalog: {}",
+                Path::new(file_path).join(filename).display()
+            );
+        }
+        if matches.len() != 1 {
+            bail!(
+                "The active Music Library catalog contains a duplicate file identity for {}",
+                Path::new(file_path).join(filename).display()
+            );
+        }
+        let matched = matches.into_iter().next().expect("one catalog track");
+        album_ids.insert(matched.1.clone());
+        if matched_tracks
+            .insert((file_path.clone(), filename.clone()), matched)
+            .is_some()
+        {
+            bail!("The requested folder contains a duplicate MP3 file identity");
+        }
+    }
+    drop(lookup);
+
+    if album_ids.len() != 1 {
+        bail!(
+            "The requested folder belongs to more than one catalog album and cannot be synced safely: {}",
+            folder.display()
+        );
+    }
+    let album_id = album_ids.into_iter().next().expect("one album id");
+    let catalog_album_tracks = conn
+        .prepare(
+            "SELECT id, COALESCE(file_path, ''), COALESCE(filename, '')
+             FROM tracks WHERE album_id = ?1",
+        )?
+        .query_map(params![&album_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let matched_ids = matched_tracks
+        .values()
+        .map(|matched| matched.0)
+        .collect::<HashSet<_>>();
+    let catalog_ids = catalog_album_tracks
+        .iter()
+        .map(|track| track.0)
+        .collect::<HashSet<_>>();
+    if catalog_album_tracks.len() != track_count
+        || matched_ids.len() != track_count
+        || catalog_ids != matched_ids
+    {
+        bail!(
+            "Catalog album {album_id} does not have the exact MP3 identity set in {}. Sync its complete album folder instead",
+            folder.display()
+        );
+    }
+
+    let current_album = load_scoped_album(conn, &album_id)?;
+    let headers = StringRecord::from(REQUIRED_COLUMNS.to_vec());
+    let header_map = HeaderMap::from_headers(&headers)?;
+    let mut tracks = Vec::with_capacity(track_count);
+    let mut fast_supported = true;
+    for values in scan.records(current_album.album_unique_id.as_deref()) {
+        let scanned_record = StringRecord::from(values.into_iter().collect::<Vec<_>>());
+        let scanned = TrackRow::from_record(&scanned_record, &header_map)?;
+        let identity = (scanned.file_path.clone(), scanned.filename.clone());
+        let Some((id, stored_album_id, stored_unique_id, _)) = matched_tracks.get(&identity) else {
+            bail!(
+                "The scanned folder track identities changed while its catalog scope was prepared"
+            );
+        };
+        let (raw_id, raw_row_hash, previous_row_hash, current) =
+            load_scoped_track(conn, *id, &header_map)?;
+        if stored_album_id != &album_id
+            || scanned.album_id != album_id
+            || stored_unique_id != &current_album.album_unique_id
+            || current.album_unique_id != scanned.album_unique_id
+            || current.row_hash != previous_row_hash
+            || !fast_sync_track_changes_are_supported(&current, &scanned)
+            || raw_id.is_none()
+            || raw_row_hash.as_deref() != Some(previous_row_hash.as_str())
+        {
+            fast_supported = false;
+        }
+        let desired = fast_sync_desired_track(&current, &scanned);
+        tracks.push(ScopedTrackUpdate {
+            id: *id,
+            raw_id,
+            previous_row_hash,
+            current,
+            desired,
+        });
+    }
+    if tracks.len() != track_count {
+        bail!("The scanned folder changed while its catalog metadata was prepared");
+    }
+
+    let mut aggregate = AlbumAggregate::new(&tracks[0].desired);
+    for track in &tracks {
+        if track.desired.album_id != album_id {
+            fast_supported = false;
+        }
+        aggregate.apply(&track.desired);
+    }
+    let desired_album = aggregate.finalize();
+    if !fast_sync_album_changes_are_supported(&current_album, &desired_album)
+        || scoped_sync_data_version(conn)? != data_version
+    {
+        fast_supported = false;
+    }
+    let changed_tracks = tracks
+        .iter()
+        .filter(|track| track.previous_row_hash != track.desired.row_hash)
+        .count() as i64;
+    let changed_albums = i64::from(scoped_album_changed(&current_album, &desired_album));
+    let prepared = fast_supported.then_some(PreparedExistingAlbumSync {
+        source_guard: ExistingSyncSourceGuard::Album(scan),
+        data_version,
+        tracks,
+        current_album,
+        desired_album,
+        changed_tracks,
+        changed_albums,
+    });
+    Ok(ExistingAlbumSyncCandidate {
+        folder,
+        album_id,
+        track_count,
+        prepared,
+    })
+}
+
+pub(crate) fn prepare_existing_file_fast_sync(
+    conn: &Connection,
+    folder: &Path,
+    target_path: &Path,
+) -> Result<Option<ExistingAlbumSyncCandidate>> {
+    let folder = folder.to_path_buf();
+    let Some(target_parent) = target_path.parent() else {
+        return Ok(None);
+    };
+    let Some(target_filename) = target_path.file_name().and_then(|value| value.to_str()) else {
+        return Ok(None);
+    };
+    let target_file_path = display_scoped_path(target_parent);
+    let data_version = scoped_sync_data_version(conn)?;
+    let matches = conn
+        .prepare(
+            "SELECT id, COALESCE(album_id, '')
+             FROM tracks
+             WHERE file_path = ?1 AND filename = ?2",
+        )?
+        .query_map(params![&target_file_path, target_filename], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if matches.len() != 1 || matches[0].1.trim().is_empty() {
+        return Ok(None);
+    }
+    let (target_id, album_id) = (matches[0].0, matches[0].1.clone());
+    let current_album = load_scoped_album(conn, &album_id)?;
+    let headers = StringRecord::from(REQUIRED_COLUMNS.to_vec());
+    let header_map = HeaderMap::from_headers(&headers)?;
+    let catalog_tracks = load_scoped_album_tracks(conn, &album_id, &header_map)?;
+    if catalog_tracks.is_empty()
+        || catalog_tracks
+            .iter()
+            .filter(|track| track.0 == target_id)
+            .count()
+            != 1
+        || catalog_tracks.iter().any(|track| {
+            !scoped_path_is_within_folder(&track.4.file_path, &folder)
+                || !Path::new(&track.4.filename)
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|value| value.eq_ignore_ascii_case("mp3"))
+        })
+    {
+        return Ok(None);
+    }
+    let mut identities = HashSet::with_capacity(catalog_tracks.len());
+    if catalog_tracks.iter().any(|track| {
+        !identities.insert((
+            track.4.file_path.replace('/', "\\").to_lowercase(),
+            track.4.filename.to_lowercase(),
+        ))
+    }) {
+        return Ok(None);
+    }
+
+    let track_count = catalog_tracks.len();
+    let fallback_candidate = || ExistingAlbumSyncCandidate {
+        folder: folder.clone(),
+        album_id: album_id.clone(),
+        track_count,
+        prepared: None,
+    };
+    let scan = match crate::folder_sync::scan_existing_track(target_path) {
+        Ok(scan) => scan,
+        Err(_) => return Ok(Some(fallback_candidate())),
+    };
+    if scan.identity() != (target_file_path.clone(), target_filename.to_owned()) {
+        return Ok(Some(fallback_candidate()));
+    }
+
+    let scanned_record = StringRecord::from(
+        scan.record(current_album.album_unique_id.as_deref(), None)
+            .into_iter()
+            .collect::<Vec<_>>(),
+    );
+    let scanned = match TrackRow::from_record(&scanned_record, &header_map) {
+        Ok(scanned) => scanned,
+        Err(_) => return Ok(Some(fallback_candidate())),
+    };
+
+    let mut tracks = Vec::with_capacity(track_count);
+    let mut target_index = None;
+    let mut fast_supported = true;
+    for (id, raw_id, raw_row_hash, previous_row_hash, current) in catalog_tracks {
+        if current.album_id != album_id
+            || current.album_unique_id != current_album.album_unique_id.clone().unwrap_or_default()
+            || current.row_hash != previous_row_hash
+            || raw_id.is_none()
+            || raw_row_hash.as_deref() != Some(previous_row_hash.as_str())
+        {
+            fast_supported = false;
+        }
+        if id == target_id {
+            if current.file_path != scanned.file_path
+                || current.filename != scanned.filename
+                || scanned.album_id != album_id
+                || !fast_sync_track_changes_are_supported(&current, &scanned)
+            {
+                fast_supported = false;
+            }
+            target_index = Some(tracks.len());
+        }
+        tracks.push(ScopedTrackUpdate {
+            id,
+            raw_id,
+            previous_row_hash,
+            desired: current.clone(),
+            current,
+        });
+    }
+    let Some(target_index) = target_index else {
+        return Ok(None);
+    };
+
+    let mut target_desired = fast_sync_desired_track(&tracks[target_index].current, &scanned);
+    let mut rating_sum = 0_i64;
+    let mut rated_tracks = 0_i64;
+    for (index, track) in tracks.iter().enumerate() {
+        let normalized_rating = if index == target_index {
+            target_desired.normalized_rating
+        } else {
+            track.current.normalized_rating
+        };
+        if let Some(rating) = normalized_rating {
+            rating_sum += i64::from(rating);
+            rated_tracks += 1;
+        }
+    }
+    let album_rating = (rated_tracks > 0).then(|| (rating_sum / rated_tracks) as i32);
+    set_fast_sync_album_rating(&mut target_desired, album_rating);
+    tracks[target_index].desired = target_desired;
+
+    let aggregate_tracks = tracks
+        .iter()
+        .map(|track| {
+            let mut desired = track.desired.clone();
+            desired.album_rating = album_rating;
+            desired.album_rating_raw = album_rating
+                .map(|value| value.to_string())
+                .unwrap_or_default();
+            desired
+        })
+        .collect::<Vec<_>>();
+    let mut aggregate = AlbumAggregate::new(&aggregate_tracks[0]);
+    for track in &aggregate_tracks {
+        if track.album_id != album_id {
+            fast_supported = false;
+        }
+        aggregate.apply(track);
+    }
+    let desired_album = aggregate.finalize();
+    if !fast_sync_album_changes_are_supported(&current_album, &desired_album)
+        || scoped_sync_data_version(conn)? != data_version
+        || !crate::folder_sync::existing_track_scan_is_unchanged(&scan).unwrap_or(false)
+    {
+        fast_supported = false;
+    }
+    let changed_tracks = tracks
+        .iter()
+        .filter(|track| track.previous_row_hash != track.desired.row_hash)
+        .count() as i64;
+    let changed_albums = i64::from(scoped_album_changed(&current_album, &desired_album));
+    let prepared = fast_supported.then_some(PreparedExistingAlbumSync {
+        source_guard: ExistingSyncSourceGuard::Track(scan),
+        data_version,
+        tracks,
+        current_album,
+        desired_album,
+        changed_tracks,
+        changed_albums,
+    });
+    Ok(Some(ExistingAlbumSyncCandidate {
+        folder,
+        album_id,
+        track_count,
+        prepared,
+    }))
+}
+
+fn scoped_sync_data_version(conn: &Connection) -> Result<i64> {
+    conn.query_row("PRAGMA data_version", [], |row| row.get(0))
+        .context("Could not identify concurrent catalog changes")
+}
+
+fn load_scoped_track(
+    conn: &Connection,
+    track_id: i64,
+    header_map: &HeaderMap,
+) -> Result<(Option<i64>, Option<String>, String, TrackRow)> {
+    let (_, raw_id, raw_row_hash, row_hash, track) = conn
+        .query_row(SCOPED_TRACK_RECORD_SQL, params![track_id], |row| {
+            scoped_track_record(row, header_map)
+        })
+        .with_context(|| format!("Could not load catalog track {track_id} for Aurora tag sync"))?;
+    Ok((raw_id, raw_row_hash, row_hash, track))
+}
+
+fn load_scoped_album_tracks(
+    conn: &Connection,
+    album_id: &str,
+    header_map: &HeaderMap,
+) -> Result<Vec<(i64, Option<i64>, Option<String>, String, TrackRow)>> {
+    let mut statement = conn
+        .prepare(SCOPED_ALBUM_TRACK_RECORD_SQL)
+        .with_context(|| {
+            format!("Could not prepare catalog album {album_id} for Aurora tag sync")
+        })?;
+    let rows = statement
+        .query_map(params![album_id], |row| {
+            scoped_track_record(row, header_map)
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .with_context(|| {
+            format!("Could not load catalog album {album_id} tracks for Aurora tag sync")
+        })?;
+    Ok(rows)
+}
+
+fn scoped_track_record(
+    row: &Row<'_>,
+    header_map: &HeaderMap,
+) -> rusqlite::Result<(i64, Option<i64>, Option<String>, String, TrackRow)> {
+    let text = |index| {
+        row.get::<_, Option<String>>(index)
+            .map(|value| value.unwrap_or_default())
+    };
+    let raw_time = text(20)?;
+    let time = if raw_time.contains(':') {
+        raw_time
+    } else {
+        raw_time
+            .parse::<f64>()
+            .ok()
+            .map(format_snapshot_duration)
+            .unwrap_or_default()
+    };
+    let record = StringRecord::from(vec![
+        text(4)?,
+        text(5)?,
+        text(6)?,
+        text(7)?,
+        text(8)?,
+        text(9)?,
+        text(10)?,
+        text(11)?,
+        text(12)?,
+        text(13)?,
+        text(14)?,
+        text(15)?,
+        text(16)?,
+        text(17)?,
+        text(18)?,
+        text(19)?,
+        time,
+    ]);
+    let track = TrackRow::from_record(&record, header_map).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, error.into())
+    })?;
+    Ok((
+        row.get::<_, i64>(0)?,
+        row.get::<_, Option<i64>>(1)?,
+        row.get::<_, Option<String>>(21)?,
+        row.get::<_, String>(3)?,
+        track,
+    ))
+}
+
+fn load_scoped_album(conn: &Connection, album_id: &str) -> Result<ScopedAlbumState> {
+    conn.query_row(
+        "SELECT import_run_id, album_unique_id, genre_normalized,
+                calculated_album_rating, album, album_artist_display,
+                canonical_genre, publisher, year, release_year, total_tracks,
+                rated_tracks, rating_completeness, total_seconds, loved_tracks,
+                tmoe_seconds, ae_ratio, album_rating, effective_album_rating,
+                album_score
+         FROM albums WHERE id = ?1",
+        params![album_id],
+        |row| {
+            Ok(ScopedAlbumState {
+                import_run_id: row.get(0)?,
+                album_unique_id: row.get(1)?,
+                genre_normalized: row.get(2)?,
+                calculated_album_rating: row.get(3)?,
+                previous: PreviousAlbum {
+                    album_id: album_id.to_owned(),
+                    album: row.get(4)?,
+                    album_artist_display: row.get(5)?,
+                    canonical_genre: row.get(6)?,
+                    publisher: row.get(7)?,
+                    year: row.get(8)?,
+                    release_year: row.get(9)?,
+                    total_tracks: row.get::<_, i64>(10)? as u32,
+                    rated_tracks: row.get::<_, i64>(11)? as u32,
+                    rating_completeness: row.get(12)?,
+                    total_seconds: row.get(13)?,
+                    loved_tracks: row.get::<_, i64>(14)? as u32,
+                    tmoe_seconds: row.get(15)?,
+                    ae_ratio: row.get(16)?,
+                    album_rating: row.get(17)?,
+                    effective_album_rating: row.get(18)?,
+                    album_score: row.get(19)?,
+                },
+            })
+        },
+    )
+    .with_context(|| format!("Could not load catalog album {album_id} for Aurora tag sync"))
+}
+
+fn fast_sync_track_changes_are_supported(current: &TrackRow, desired: &TrackRow) -> bool {
+    current.display_artist == desired.display_artist
+        && current.disc_number_raw == desired.disc_number_raw
+        && current.album == desired.album
+        && current.genre == desired.genre
+        && current.canonical_genre == desired.canonical_genre
+        && current.genre_normalized == desired.genre_normalized
+        && current.publisher == desired.publisher
+        && current.title == desired.title
+        && current.track_number_raw == desired.track_number_raw
+        && current.year_raw == desired.year_raw
+        && current.album_unique_id == desired.album_unique_id
+        && current.file_path == desired.file_path
+        && current.filename == desired.filename
+        && current.album_artist_display == desired.album_artist_display
+        && current.disc_number == desired.disc_number
+        && current.track_number == desired.track_number
+        && current.year == desired.year
+        && fast_sync_durations_are_equivalent(current.time_seconds, desired.time_seconds)
+        && current.album_id == desired.album_id
+}
+
+fn fast_sync_durations_are_equivalent(current: Option<i64>, scanned: Option<i64>) -> bool {
+    match (current, scanned) {
+        (Some(current), Some(scanned)) => current.abs_diff(scanned) <= 1,
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+fn fast_sync_desired_track(current: &TrackRow, scanned: &TrackRow) -> TrackRow {
+    let mut desired = current.clone();
+    desired.album_rating_raw = scanned.album_rating_raw.clone();
+    desired.album_rating = scanned.album_rating;
+    desired.love = scanned.love.clone();
+    desired.rating_raw = scanned.rating_raw.clone();
+    desired.normalized_rating = scanned.normalized_rating;
+    desired.track_rating_value = scanned.track_rating_value;
+    desired.release_year_raw = scanned.release_year_raw.clone();
+    desired.release_year = scanned.release_year;
+    refresh_fast_sync_row_hash(&mut desired);
+    desired
+}
+
+fn set_fast_sync_album_rating(track: &mut TrackRow, album_rating: Option<i32>) {
+    track.album_rating = album_rating;
+    track.album_rating_raw = album_rating
+        .map(|value| value.to_string())
+        .unwrap_or_default();
+    refresh_fast_sync_row_hash(track);
+}
+
+fn refresh_fast_sync_row_hash(desired: &mut TrackRow) {
+    desired.row_hash = row_hash(&[
+        &desired.display_artist,
+        &desired.album_rating_raw,
+        &desired.disc_number_raw,
+        &desired.album,
+        &desired.genre,
+        &desired.love,
+        &desired.publisher,
+        &desired.rating_raw,
+        &desired.title,
+        &desired.track_number_raw,
+        &desired.year_raw,
+        &desired.release_year_raw,
+        &desired.album_unique_id,
+        &desired.file_path,
+        &desired.filename,
+        &desired.album_artist_display,
+        &desired.time_raw,
+    ]);
+}
+
+fn fast_sync_album_changes_are_supported(current: &ScopedAlbumState, desired: &FinalAlbum) -> bool {
+    current.album_unique_id == desired.album_unique_id
+        && current.previous.album == desired.album
+        && current.previous.album_artist_display == desired.album_artist_display
+        && current.previous.canonical_genre == desired.canonical_genre
+        && current.genre_normalized == desired.genre_normalized
+        && current.previous.publisher == desired.publisher
+        && current.previous.year == desired.year
+        && current.previous.total_tracks == desired.total_tracks
+        && current.previous.total_seconds == desired.total_seconds
+}
+
+fn scoped_album_changed(current: &ScopedAlbumState, desired: &FinalAlbum) -> bool {
+    album_changed(&current.previous, desired)
+        || current.album_unique_id != desired.album_unique_id
+        || current.genre_normalized != desired.genre_normalized
+        || current.calculated_album_rating != desired.calculated_album_rating
+}
+
+fn format_snapshot_duration(value: f64) -> String {
+    let seconds = value.round().max(0.0) as u64;
+    if seconds >= 3_600 {
+        format!(
+            "{}:{:02}:{:02}",
+            seconds / 3_600,
+            (seconds / 60) % 60,
+            seconds % 60
+        )
+    } else {
+        format!("{}:{:02}", seconds / 60, seconds % 60)
+    }
+}
+
+pub(crate) fn apply_existing_album_fast_sync(
+    conn: &mut Connection,
+    candidate: &ExistingAlbumSyncCandidate,
+) -> Result<ExistingAlbumFastSyncOutcome> {
+    let Some(prepared) = candidate.prepared.as_ref() else {
+        return Ok(ExistingAlbumFastSyncOutcome::Fallback);
+    };
+    let _workflow_guard = ImportWorkflowGuard::acquire()?;
+    if scoped_sync_data_version(conn)? != prepared.data_version
+        || !prepared.source_guard.is_unchanged()
+    {
+        return Ok(ExistingAlbumFastSyncOutcome::Fallback);
+    }
+    if prepared.changed_tracks == 0 && prepared.changed_albums == 0 {
+        return Ok(ExistingAlbumFastSyncOutcome::Unchanged);
+    }
+
+    let started = Instant::now();
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .context("Could not start atomic Aurora album metadata sync")?;
+    if scoped_sync_data_version(&tx)? != prepared.data_version
+        || !prepared.source_guard.is_unchanged()
+        || !scoped_album_catalog_is_unchanged(&tx, candidate, prepared)?
+    {
+        drop(tx);
+        return Ok(ExistingAlbumFastSyncOutcome::Fallback);
+    }
+
+    let started_at = Utc::now().to_rfc3339();
+    let source_path = display_scoped_path(candidate.folder());
+    let source_size_bytes =
+        i64::try_from(prepared.source_guard.source_size_bytes()).unwrap_or(i64::MAX);
+    tx.execute(
+        "INSERT INTO import_runs (
+             source_path, source_size_bytes, started_at, status, backup_path,
+             added_tracks, changed_tracks, removed_tracks,
+             added_albums, changed_albums, removed_albums
+         ) VALUES (?1, ?2, ?3, 'running', NULL, 0, ?4, 0, 0, ?5, 0)",
+        params![
+            &source_path,
+            source_size_bytes,
+            &started_at,
+            prepared.changed_tracks,
+            prepared.changed_albums,
+        ],
+    )
+    .context("Could not create the targeted Aurora tag-sync import run")?;
+    let import_run_id = tx.last_insert_rowid();
+
+    for track in &prepared.tracks {
+        update_scoped_raw_track(&tx, import_run_id, track)?;
+        update_scoped_track(&tx, import_run_id, candidate.album_id(), track)?;
+    }
+    update_scoped_album(
+        &tx,
+        import_run_id,
+        &prepared.current_album,
+        &prepared.desired_album,
+    )?;
+
+    let mut library_updates = library_updates_for_changed_album(
+        &prepared.current_album.previous,
+        &prepared.desired_album,
+    );
+    if library_updates.is_empty() && prepared.changed_tracks > 0 {
+        library_updates.push(scoped_track_history_update(
+            &prepared.tracks,
+            &prepared.desired_album,
+        ));
+    }
+    let rating_events =
+        rating_event_for_changed_album(&prepared.current_album.previous, &prepared.desired_album)
+            .into_iter()
+            .collect::<Vec<_>>();
+    insert_rating_events(&tx, import_run_id, &rating_events)?;
+    insert_library_updates(&tx, import_run_id, &source_path, &library_updates)?;
+    let (track_rows, album_count) = insert_rating_snapshot_from_catalog(&tx, import_run_id)?;
+
+    let completed_at = Utc::now().to_rfc3339();
+    tx.execute(
+        "UPDATE import_runs
+         SET completed_at = ?1, status = 'completed', track_rows = ?2,
+             album_count = ?3, duration_ms = ?4, rating_events_count = ?5
+         WHERE id = ?6",
+        params![
+            &completed_at,
+            track_rows,
+            album_count,
+            started.elapsed().as_millis() as i64,
+            rating_events.len() as i64,
+            import_run_id,
+        ],
+    )?;
+    if scoped_sync_data_version(&tx)? != prepared.data_version
+        || !prepared.source_guard.is_unchanged()
+    {
+        drop(tx);
+        return Ok(ExistingAlbumFastSyncOutcome::Fallback);
+    }
+    tx.commit()
+        .context("Could not commit the atomic Aurora album metadata sync")?;
+    Ok(ExistingAlbumFastSyncOutcome::Updated {
+        import_run_id,
+        changed_tracks: prepared.changed_tracks,
+        changed_albums: prepared.changed_albums,
+    })
+}
+
+fn scoped_album_catalog_is_unchanged(
+    conn: &Connection,
+    candidate: &ExistingAlbumSyncCandidate,
+    prepared: &PreparedExistingAlbumSync,
+) -> Result<bool> {
+    let album_track_count = conn.query_row(
+        "SELECT COUNT(*) FROM tracks WHERE album_id = ?1",
+        params![candidate.album_id()],
+        |row| row.get::<_, i64>(0),
+    )?;
+    if album_track_count != prepared.tracks.len() as i64
+        || load_scoped_album(conn, candidate.album_id())? != prepared.current_album
+    {
+        return Ok(false);
+    }
+
+    let headers = StringRecord::from(REQUIRED_COLUMNS.to_vec());
+    let header_map = HeaderMap::from_headers(&headers)?;
+    for expected in &prepared.tracks {
+        let (raw_id, raw_row_hash, row_hash, current) =
+            load_scoped_track(conn, expected.id, &header_map)?;
+        if raw_id != expected.raw_id
+            || raw_row_hash.as_deref() != Some(expected.previous_row_hash.as_str())
+            || row_hash != expected.previous_row_hash
+            || current != expected.current
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn update_scoped_raw_track(
+    tx: &Transaction<'_>,
+    import_run_id: i64,
+    track: &ScopedTrackUpdate,
+) -> Result<()> {
+    let raw_id = track
+        .raw_id
+        .ok_or_else(|| anyhow!("The targeted Aurora track has no matching raw catalog row"))?;
+    let desired = &track.desired;
+    let updated = tx.execute(
+        "UPDATE raw_tracks
+         SET import_run_id = ?1,
+             display_artist = NULLIF(?2, ''),
+             album_rating = NULLIF(?3, ''),
+             disc_number = NULLIF(?4, ''),
+             album = NULLIF(?5, ''),
+             genre = NULLIF(?6, ''),
+             love = NULLIF(?7, ''),
+             publisher = NULLIF(?8, ''),
+             rating = NULLIF(?9, ''),
+             title = NULLIF(?10, ''),
+             track_number = NULLIF(?11, ''),
+             year_value = NULLIF(?12, ''),
+             release_year = NULLIF(?13, ''),
+             album_unique_id = NULLIF(?14, ''),
+             file_path = NULLIF(?15, ''),
+             filename = NULLIF(?16, ''),
+             album_artist_display = NULLIF(?17, ''),
+             time_value = NULLIF(?18, ''),
+             row_hash = ?19
+         WHERE id = ?20
+           AND row_hash = ?21
+           AND COALESCE(file_path, '') = ?22
+           AND COALESCE(filename, '') = ?23",
+        params![
+            import_run_id,
+            &desired.display_artist,
+            &desired.album_rating_raw,
+            &desired.disc_number_raw,
+            &desired.album,
+            &desired.genre,
+            &desired.love,
+            &desired.publisher,
+            &desired.rating_raw,
+            &desired.title,
+            &desired.track_number_raw,
+            &desired.year_raw,
+            &desired.release_year_raw,
+            &desired.album_unique_id,
+            &desired.file_path,
+            &desired.filename,
+            &desired.album_artist_display,
+            &desired.time_raw,
+            &desired.row_hash,
+            raw_id,
+            &track.previous_row_hash,
+            &track.current.file_path,
+            &track.current.filename,
+        ],
+    )?;
+    if updated != 1 {
+        bail!(
+            "The raw catalog row for {} changed while Aurora tag sync was applying",
+            Path::new(&track.current.file_path)
+                .join(&track.current.filename)
+                .display()
+        );
+    }
+    Ok(())
+}
+
+fn update_scoped_track(
+    tx: &Transaction<'_>,
+    import_run_id: i64,
+    album_id: &str,
+    track: &ScopedTrackUpdate,
+) -> Result<()> {
+    let desired = &track.desired;
+    let updated = tx.execute(
+        "UPDATE tracks
+         SET import_run_id = ?1,
+             album_id = ?2,
+             album_unique_id = NULLIF(?3, ''),
+             display_artist = NULLIF(?4, ''),
+             album_artist_display = NULLIF(?5, ''),
+             album = NULLIF(?6, ''),
+             title = NULLIF(?7, ''),
+             genre = NULLIF(?8, ''),
+             canonical_genre = NULLIF(?9, ''),
+             genre_normalized = NULLIF(?10, ''),
+             publisher = NULLIF(?11, ''),
+             love = NULLIF(?12, ''),
+             rating_raw = NULLIF(?13, ''),
+             normalized_rating = ?14,
+             album_rating_raw = NULLIF(?15, ''),
+             album_rating = ?16,
+             disc_number = ?17,
+             track_number = ?18,
+             year = ?19,
+             release_year = ?20,
+             time_seconds = ?21,
+             file_path = NULLIF(?22, ''),
+             filename = NULLIF(?23, ''),
+             row_hash = ?24
+         WHERE id = ?25
+           AND album_id = ?26
+           AND row_hash = ?27
+           AND COALESCE(file_path, '') = ?28
+           AND COALESCE(filename, '') = ?29",
+        params![
+            import_run_id,
+            &desired.album_id,
+            &desired.album_unique_id,
+            &desired.display_artist,
+            &desired.album_artist_display,
+            &desired.album,
+            &desired.title,
+            &desired.genre,
+            &desired.canonical_genre,
+            &desired.genre_normalized,
+            &desired.publisher,
+            &desired.love,
+            &desired.rating_raw,
+            desired.normalized_rating,
+            &desired.album_rating_raw,
+            desired.album_rating,
+            desired.disc_number,
+            desired.track_number,
+            desired.year,
+            desired.release_year,
+            desired.time_seconds,
+            &desired.file_path,
+            &desired.filename,
+            &desired.row_hash,
+            track.id,
+            album_id,
+            &track.previous_row_hash,
+            &track.current.file_path,
+            &track.current.filename,
+        ],
+    )?;
+    if updated != 1 {
+        bail!(
+            "The catalog row for {} changed while Aurora tag sync was applying",
+            Path::new(&track.current.file_path)
+                .join(&track.current.filename)
+                .display()
+        );
+    }
+    Ok(())
+}
+
+fn update_scoped_album(
+    tx: &Transaction<'_>,
+    import_run_id: i64,
+    current: &ScopedAlbumState,
+    desired: &FinalAlbum,
+) -> Result<()> {
+    let updated = tx.execute(
+        "UPDATE albums
+         SET import_run_id = ?1,
+             album_unique_id = ?2,
+             album = ?3,
+             album_artist_display = ?4,
+             canonical_genre = ?5,
+             genre_normalized = ?6,
+             publisher = ?7,
+             year = ?8,
+             release_year = ?9,
+             total_tracks = ?10,
+             rated_tracks = ?11,
+             rating_completeness = ?12,
+             total_seconds = ?13,
+             loved_tracks = ?14,
+             tmoe_seconds = ?15,
+             ae_ratio = ?16,
+             album_rating = ?17,
+             calculated_album_rating = ?18,
+             effective_album_rating = ?19,
+             album_score = ?20
+         WHERE id = ?21 AND import_run_id = ?22",
+        params![
+            import_run_id,
+            &desired.album_unique_id,
+            &desired.album,
+            &desired.album_artist_display,
+            &desired.canonical_genre,
+            &desired.genre_normalized,
+            &desired.publisher,
+            desired.year,
+            desired.release_year,
+            desired.total_tracks,
+            desired.rated_tracks,
+            desired.rating_completeness,
+            desired.total_seconds,
+            desired.loved_tracks,
+            desired.tmoe_seconds,
+            desired.ae_ratio,
+            desired.album_rating,
+            desired.calculated_album_rating,
+            desired.effective_album_rating,
+            desired.album_score,
+            &desired.album_id,
+            current.import_run_id,
+        ],
+    )?;
+    if updated != 1 {
+        bail!(
+            "Catalog album {} changed while Aurora tag sync was applying",
+            desired.album_id
+        );
+    }
+    Ok(())
+}
+
+fn scoped_track_history_update(
+    tracks: &[ScopedTrackUpdate],
+    album: &FinalAlbum,
+) -> LibraryUpdateRecord {
+    let mut field_changes = Vec::new();
+    let mut changed_track_ids = HashSet::new();
+    for track in tracks {
+        if track.previous_row_hash == track.desired.row_hash {
+            continue;
+        }
+        changed_track_ids.insert(track.id);
+        for (field, label, category, previous, current) in [
+            (
+                "track_rating",
+                "Track rating",
+                "ratings",
+                update_value(empty_to_none(&track.current.rating_raw)),
+                update_value(empty_to_none(&track.desired.rating_raw)),
+            ),
+            (
+                "track_love",
+                "Love",
+                "ratings",
+                love_update_value(&track.current.love),
+                love_update_value(&track.desired.love),
+            ),
+            (
+                "track_release_year",
+                "Track release year",
+                "metadata",
+                update_value(empty_to_none(&track.current.release_year_raw)),
+                update_value(empty_to_none(&track.desired.release_year_raw)),
+            ),
+        ] {
+            if previous != current {
+                field_changes.push((
+                    field,
+                    label,
+                    category,
+                    previous,
+                    current,
+                    track.desired.title.clone(),
+                ));
+            }
+        }
+    }
+    if field_changes.len() == 1 {
+        let (field, label, category, previous, current, title) =
+            field_changes.into_iter().next().expect("one field change");
+        return LibraryUpdateRecord {
+            change_kind: "changed",
+            category,
+            album_id: album.album_id.clone(),
+            album_artist_display: album.album_artist_display.clone(),
+            album: album.album.clone(),
+            year: album.year,
+            field: Some(field),
+            field_label: Some(label),
+            previous_value: Some(previous.clone()),
+            current_value: Some(current.clone()),
+            change_count: Some(1),
+            description: format!("{label} changed for {title} from {previous} to {current}"),
+        };
+    }
+
+    let changed_tracks = changed_track_ids.len().max(1) as i64;
+    let only_ratings =
+        !field_changes.is_empty() && field_changes.iter().all(|change| change.2 == "ratings");
+    LibraryUpdateRecord {
+        change_kind: "changed",
+        category: if only_ratings { "ratings" } else { "metadata" },
+        album_id: album.album_id.clone(),
+        album_artist_display: album.album_artist_display.clone(),
+        album: album.album.clone(),
+        year: album.year,
+        field: Some("track_metadata"),
+        field_label: Some("Track metadata"),
+        previous_value: None,
+        current_value: None,
+        change_count: Some(changed_tracks),
+        description: format!(
+            "{} scoped track {} synchronized from Aurora",
+            changed_tracks,
+            if changed_tracks == 1 {
+                "change"
+            } else {
+                "changes"
+            }
+        ),
+    }
+}
+
+fn love_update_value(value: &str) -> String {
+    match value {
+        "L" => "loved".to_string(),
+        "B" => "banned".to_string(),
+        _ => "neutral".to_string(),
+    }
+}
+
+fn insert_rating_snapshot_from_catalog(
+    tx: &Transaction<'_>,
+    import_run_id: i64,
+) -> Result<(i64, i64)> {
+    let (
+        track_count,
+        album_count,
+        rated_tracks,
+        fully_rated_albums,
+        partially_rated_albums,
+        unrated_albums,
+        albums_with_effective_rating,
+        average_album_rating,
+        average_album_score,
+    ): (i64, i64, i64, i64, i64, i64, i64, Option<f64>, Option<f64>) = tx.query_row(
+        "SELECT
+             (SELECT COUNT(*) FROM tracks),
+             COUNT(*),
+             COALESCE(SUM(rated_tracks), 0),
+             COALESCE(SUM(CASE WHEN rating_completeness >= 1.0 THEN 1 ELSE 0 END), 0),
+             COALESCE(SUM(CASE WHEN rating_completeness > 0.0 AND rating_completeness < 1.0 THEN 1 ELSE 0 END), 0),
+             COALESCE(SUM(CASE WHEN rating_completeness = 0.0 THEN 1 ELSE 0 END), 0),
+             COALESCE(SUM(CASE WHEN effective_album_rating IS NOT NULL THEN 1 ELSE 0 END), 0),
+             AVG(effective_album_rating),
+             AVG(album_score)
+         FROM albums",
+        [],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+                row.get(8)?,
+            ))
+        },
+    )?;
+    tx.execute(
+        "INSERT INTO rating_snapshots (
+             import_run_id, created_at, track_count, album_count, rated_tracks,
+             unrated_tracks, fully_rated_albums, partially_rated_albums,
+             unrated_albums, albums_with_effective_rating, average_album_rating,
+             average_album_score
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        params![
+            import_run_id,
+            Utc::now().to_rfc3339(),
+            track_count,
+            album_count,
+            rated_tracks,
+            track_count - rated_tracks,
+            fully_rated_albums,
+            partially_rated_albums,
+            unrated_albums,
+            albums_with_effective_rating,
+            average_album_rating,
+            average_album_score,
+        ],
+    )
+    .context("Could not record the targeted Aurora rating snapshot")?;
+    Ok((track_count, album_count))
+}
+
+fn display_scoped_path(path: &Path) -> String {
+    let value = path.display().to_string();
+    if let Some(rest) = value.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else {
+        value.strip_prefix(r"\\?\").unwrap_or(&value).to_owned()
+    }
+}
+
+fn scoped_path_is_within_folder(path: &str, folder: &Path) -> bool {
+    let normalized = |value: &Path| {
+        display_scoped_path(value)
+            .replace('/', "\\")
+            .trim_end_matches('\\')
+            .to_lowercase()
+    };
+    let path = normalized(Path::new(path));
+    let folder = normalized(folder);
+    path == folder || path.starts_with(&(folder + "\\"))
 }
 
 pub(crate) fn apply_bridge_import_preview(
@@ -3673,6 +4943,755 @@ fn emit_progress(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use id3::frame::{ExtendedText, Popularimeter};
+    use id3::{Tag, TagLike, Version};
+
+    fn write_fast_sync_mp3(
+        path: &Path,
+        title: &str,
+        rating_byte: Option<u8>,
+        love: &str,
+        release_year: i32,
+    ) {
+        fs::write(path, [0xFF, 0xFB, 0x90, 0x64, 0, 0, 0, 0]).expect("seed MP3");
+        let mut tag = Tag::new();
+        tag.set_artist("Track Artist");
+        tag.set_album_artist("Album Artist");
+        tag.set_album("Fast Album");
+        tag.set_title(title);
+        tag.set_genre("Score");
+        tag.set_track(1);
+        tag.set_disc(1);
+        tag.set_year(2008);
+        tag.set_duration(125_000);
+        tag.set_text("TPUB", "Label");
+        tag.set_text("TDRL", release_year.to_string());
+        if !love.is_empty() {
+            tag.add_frame(ExtendedText {
+                description: "LOVE RATING".to_owned(),
+                value: love.to_owned(),
+            });
+        }
+        if let Some(rating) = rating_byte {
+            tag.add_frame(Popularimeter {
+                user: "MusicBee".to_owned(),
+                rating,
+                counter: 0,
+            });
+        }
+        tag.write_to_path(path, Version::Id3v24)
+            .expect("write fast-sync tags");
+    }
+
+    fn parse_fast_sync_record(values: Vec<String>) -> TrackRow {
+        let headers = StringRecord::from(REQUIRED_COLUMNS.to_vec());
+        let header_map = HeaderMap::from_headers(&headers).expect("fast-sync headers");
+        TrackRow::from_record(&StringRecord::from(values), &header_map)
+            .expect("parse fast-sync record")
+    }
+
+    fn seed_fast_sync_track(
+        conn: &Connection,
+        import_run_id: i64,
+        row_number: i64,
+        track: &TrackRow,
+    ) -> i64 {
+        conn.execute(
+            "INSERT INTO raw_tracks (
+                 import_run_id, row_number, display_artist, album_rating, disc_number,
+                 album, genre, love, publisher, rating, title, track_number,
+                 year_value, release_year, album_unique_id, file_path, filename,
+                 album_artist_display, time_value, row_hash
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
+                       ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+            params![
+                import_run_id,
+                row_number,
+                empty_to_none(&track.display_artist),
+                empty_to_none(&track.album_rating_raw),
+                empty_to_none(&track.disc_number_raw),
+                empty_to_none(&track.album),
+                empty_to_none(&track.genre),
+                empty_to_none(&track.love),
+                empty_to_none(&track.publisher),
+                empty_to_none(&track.rating_raw),
+                empty_to_none(&track.title),
+                empty_to_none(&track.track_number_raw),
+                empty_to_none(&track.year_raw),
+                empty_to_none(&track.release_year_raw),
+                empty_to_none(&track.album_unique_id),
+                empty_to_none(&track.file_path),
+                empty_to_none(&track.filename),
+                empty_to_none(&track.album_artist_display),
+                empty_to_none(&track.time_raw),
+                &track.row_hash,
+            ],
+        )
+        .expect("seed fast-sync raw track");
+        let raw_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO tracks (
+                 import_run_id, album_id, album_unique_id, display_artist,
+                 album_artist_display, album, title, genre, canonical_genre,
+                 genre_normalized, publisher, love, rating_raw, normalized_rating,
+                 album_rating_raw, album_rating, disc_number, track_number, year,
+                 release_year, time_seconds, file_path, filename, row_hash
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+                       ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+            params![
+                import_run_id,
+                &track.album_id,
+                empty_to_none(&track.album_unique_id),
+                empty_to_none(&track.display_artist),
+                empty_to_none(&track.album_artist_display),
+                empty_to_none(&track.album),
+                empty_to_none(&track.title),
+                empty_to_none(&track.genre),
+                empty_to_none(&track.canonical_genre),
+                empty_to_none(&track.genre_normalized),
+                empty_to_none(&track.publisher),
+                empty_to_none(&track.love),
+                empty_to_none(&track.rating_raw),
+                track.normalized_rating,
+                empty_to_none(&track.album_rating_raw),
+                track.album_rating,
+                track.disc_number,
+                track.track_number,
+                track.year,
+                track.release_year,
+                track.time_seconds,
+                empty_to_none(&track.file_path),
+                empty_to_none(&track.filename),
+                &track.row_hash,
+            ],
+        )
+        .expect("seed fast-sync track");
+        let track_id = conn.last_insert_rowid();
+        assert_eq!(
+            track_id, raw_id,
+            "raw/normalized test identities must align"
+        );
+        track_id
+    }
+
+    fn seed_fast_sync_album(conn: &Connection, import_run_id: i64, tracks: &[TrackRow]) {
+        let mut aggregate = AlbumAggregate::new(&tracks[0]);
+        for track in tracks {
+            aggregate.apply(track);
+        }
+        let album = aggregate.finalize();
+        conn.execute(
+            "INSERT INTO albums (
+                 id, import_run_id, album_unique_id, album, album_artist_display,
+                 canonical_genre, genre_normalized, publisher, year, release_year,
+                 total_tracks, rated_tracks, rating_completeness, total_seconds,
+                 loved_tracks, tmoe_seconds, ae_ratio, album_rating,
+                 calculated_album_rating, effective_album_rating, album_score
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
+                       ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+            params![
+                &album.album_id,
+                import_run_id,
+                &album.album_unique_id,
+                &album.album,
+                &album.album_artist_display,
+                &album.canonical_genre,
+                &album.genre_normalized,
+                &album.publisher,
+                album.year,
+                album.release_year,
+                album.total_tracks,
+                album.rated_tracks,
+                album.rating_completeness,
+                album.total_seconds,
+                album.loved_tracks,
+                album.tmoe_seconds,
+                album.ae_ratio,
+                album.album_rating,
+                album.calculated_album_rating,
+                album.effective_album_rating,
+                album.album_score,
+            ],
+        )
+        .expect("seed fast-sync album");
+    }
+
+    fn fast_sync_database(track: &TrackRow) -> (Connection, i64, i64, String) {
+        let conn = Connection::open_in_memory().expect("fast-sync database");
+        crate::db::configure(&conn).expect("configure fast-sync database");
+        crate::db::migrate(&conn).expect("migrate fast-sync database");
+        conn.execute(
+            "INSERT INTO import_runs (
+                 source_path, started_at, completed_at, status, track_rows, album_count
+             ) VALUES ('initial.tsv', ?1, ?1, 'completed', 2, 2)",
+            params![Utc::now().to_rfc3339()],
+        )
+        .expect("seed fast-sync import run");
+        let old_run_id = conn.last_insert_rowid();
+        let target_id = seed_fast_sync_track(&conn, old_run_id, 1, track);
+        seed_fast_sync_album(&conn, old_run_id, std::slice::from_ref(track));
+
+        let outside = parse_fast_sync_record(vec![
+            "Other Artist".to_string(),
+            String::new(),
+            "1".to_string(),
+            "Other Album".to_string(),
+            "Rock".to_string(),
+            String::new(),
+            "Other Label".to_string(),
+            String::new(),
+            "Other Track".to_string(),
+            "1".to_string(),
+            "2020".to_string(),
+            "2020".to_string(),
+            "outside-album".to_string(),
+            r"D:\Music\Outside Album".to_string(),
+            "01.mp3".to_string(),
+            "Other Artist".to_string(),
+            "3:00".to_string(),
+        ]);
+        seed_fast_sync_track(&conn, old_run_id, 2, &outside);
+        seed_fast_sync_album(&conn, old_run_id, std::slice::from_ref(&outside));
+        (conn, old_run_id, target_id, outside.row_hash)
+    }
+
+    #[test]
+    fn fast_sync_tolerates_duration_rounding_without_rewriting_catalog_time() {
+        let values = |rating: &str, time: &str| {
+            vec![
+                "Track Artist",
+                "80",
+                "1",
+                "Fast Album",
+                "Score",
+                "",
+                "Label",
+                rating,
+                "Track Title",
+                "1",
+                "2008",
+                "2008",
+                "fast-album",
+                r"G:\Scores\Fast Album",
+                "01 - Track Title.mp3",
+                "Album Artist",
+                time,
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+        };
+        let current = parse_fast_sync_record(values("", "2:52"));
+        let scanned = parse_fast_sync_record(values("4", "2:53"));
+
+        assert!(fast_sync_track_changes_are_supported(&current, &scanned));
+        let desired = fast_sync_desired_track(&current, &scanned);
+
+        assert_eq!(desired.rating_raw, "4");
+        assert_eq!(desired.normalized_rating, Some(80));
+        assert_eq!(desired.time_raw, "2:52");
+        assert_eq!(desired.time_seconds, Some(172));
+        assert_ne!(desired.row_hash, current.row_hash);
+    }
+
+    fn scanned_fast_sync_track(folder: &Path, album_unique_id: &str) -> TrackRow {
+        scanned_fast_sync_tracks(folder, album_unique_id)
+            .into_iter()
+            .next()
+            .expect("one scanned track")
+    }
+
+    fn scanned_fast_sync_tracks(folder: &Path, album_unique_id: &str) -> Vec<TrackRow> {
+        let scan = crate::folder_sync::scan_existing_album(folder).expect("scan fast-sync album");
+        scan.records(Some(album_unique_id))
+            .into_iter()
+            .map(|values| parse_fast_sync_record(values.into_iter().collect()))
+            .collect()
+    }
+
+    #[test]
+    fn existing_album_fast_sync_updates_both_track_tables_history_and_global_snapshot() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).expect("album folder");
+        let folder = folder.canonicalize().expect("canonical album folder");
+        let mp3 = folder.join("01 - Track.mp3");
+        write_fast_sync_mp3(&mp3, "Track Title", None, "", 2008);
+        let initial = scanned_fast_sync_track(&folder, "fast-album");
+        let (mut conn, old_run_id, target_id, outside_hash) = fast_sync_database(&initial);
+
+        write_fast_sync_mp3(&mp3, "Track Title", Some(242), "L", 2009);
+        let candidate =
+            prepare_existing_album_fast_sync(&conn, &folder).expect("prepare targeted sync");
+        let outcome =
+            apply_existing_album_fast_sync(&mut conn, &candidate).expect("apply targeted sync");
+        let ExistingAlbumFastSyncOutcome::Updated {
+            import_run_id,
+            changed_tracks,
+            changed_albums,
+        } = outcome
+        else {
+            panic!("expected targeted update, got {outcome:?}");
+        };
+        assert_eq!(changed_tracks, 1);
+        assert_eq!(changed_albums, 1);
+
+        let normalized: (
+            Option<String>,
+            Option<i32>,
+            Option<String>,
+            Option<i32>,
+            String,
+            i64,
+        ) = conn
+            .query_row(
+                "SELECT rating_raw, normalized_rating, love, release_year, row_hash, import_run_id
+                 FROM tracks WHERE id = ?1",
+                params![target_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .expect("updated normalized track");
+        let raw: (Option<String>, Option<String>, Option<String>, String, i64) = conn
+            .query_row(
+                "SELECT rating, love, release_year, row_hash, import_run_id
+                 FROM raw_tracks WHERE id = ?1",
+                params![target_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .expect("updated raw track");
+        assert_eq!(normalized.0.as_deref(), Some("4.5"));
+        assert_eq!(normalized.1, Some(90));
+        assert_eq!(normalized.2.as_deref(), Some("L"));
+        assert_eq!(normalized.3, Some(2009));
+        assert_eq!(normalized.4, raw.3);
+        assert_eq!(normalized.5, import_run_id);
+        assert_eq!(raw.0.as_deref(), Some("4.5"));
+        assert_eq!(raw.1.as_deref(), Some("L"));
+        assert_eq!(raw.2.as_deref(), Some("2009"));
+        assert_eq!(raw.4, import_run_id);
+
+        let album: (i64, i64, Option<i32>, Option<i32>, Option<f64>, i64) = conn
+            .query_row(
+                "SELECT rated_tracks, loved_tracks, release_year,
+                        effective_album_rating, album_score, import_run_id
+                 FROM albums WHERE id = ?1",
+                params![initial.album_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .expect("updated album aggregate");
+        assert_eq!(album.0, 1);
+        assert_eq!(album.1, 1);
+        assert_eq!(album.2, Some(2009));
+        assert_eq!(album.3, Some(90));
+        assert_eq!(album.4, Some(104.5));
+        assert_eq!(album.5, import_run_id);
+
+        let run: (String, i64, i64, i64, i64, Option<String>) = conn
+            .query_row(
+                "SELECT status, track_rows, album_count, changed_tracks,
+                        changed_albums, backup_path
+                 FROM import_runs WHERE id = ?1",
+                params![import_run_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .expect("targeted import run");
+        assert_eq!(run, ("completed".to_string(), 2, 2, 1, 1, None));
+        let snapshot: (i64, i64, i64, i64) = conn
+            .query_row(
+                "SELECT track_count, album_count, rated_tracks,
+                        albums_with_effective_rating
+                 FROM rating_snapshots WHERE import_run_id = ?1",
+                params![import_run_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("global targeted rating snapshot");
+        assert_eq!(snapshot, (2, 2, 1, 1));
+        assert!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM library_updates WHERE import_run_id = ?1",
+                params![import_run_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("targeted updates")
+                > 0
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM rating_events WHERE import_run_id = ?1",
+                params![import_run_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("targeted rating event"),
+            1
+        );
+        let outside: (i64, String) = conn
+            .query_row(
+                "SELECT import_run_id, row_hash FROM tracks WHERE album_id = 'mb:outside-album'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("untouched outside track");
+        assert_eq!(outside, (old_run_id, outside_hash));
+
+        let retry = prepare_existing_album_fast_sync(&conn, &folder).expect("prepare retry");
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &retry).expect("idempotent retry"),
+            ExistingAlbumFastSyncOutcome::Unchanged
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM import_runs", [], |row| row
+                .get::<_, i64>(0))
+                .expect("import run count"),
+            2
+        );
+    }
+
+    #[test]
+    fn existing_file_fast_sync_reads_one_mp3_and_updates_album_history_and_snapshot() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).expect("album folder");
+        let folder = folder.canonicalize().expect("canonical album folder");
+        let target_mp3 = folder.join("01 - Target.mp3");
+        let sibling_mp3 = folder.join("02 - Sibling.mp3");
+        write_fast_sync_mp3(&target_mp3, "Target", None, "", 2008);
+        write_fast_sync_mp3(&sibling_mp3, "Sibling", Some(196), "", 2008);
+        let initial = scanned_fast_sync_tracks(&folder, "fast-album");
+
+        let mut conn = Connection::open_in_memory().expect("fast-sync database");
+        crate::db::configure(&conn).expect("configure fast-sync database");
+        crate::db::migrate(&conn).expect("migrate fast-sync database");
+        conn.execute(
+            "INSERT INTO import_runs (
+                 source_path, started_at, completed_at, status, track_rows, album_count
+             ) VALUES ('initial.tsv', ?1, ?1, 'completed', 2, 1)",
+            params![Utc::now().to_rfc3339()],
+        )
+        .expect("seed fast-sync import run");
+        let old_run_id = conn.last_insert_rowid();
+        let mut target_id = None;
+        let mut sibling_id = None;
+        let mut sibling_hash = String::new();
+        for (index, track) in initial.iter().enumerate() {
+            let id = seed_fast_sync_track(&conn, old_run_id, index as i64 + 1, track);
+            if track.filename == "01 - Target.mp3" {
+                target_id = Some(id);
+            } else {
+                sibling_id = Some(id);
+                sibling_hash = track.row_hash.clone();
+            }
+        }
+        seed_fast_sync_album(&conn, old_run_id, &initial);
+        let target_id = target_id.expect("target id");
+        let sibling_id = sibling_id.expect("sibling id");
+
+        write_fast_sync_mp3(&target_mp3, "Target", Some(255), "L", 2009);
+        let candidate = prepare_existing_file_fast_sync(&conn, &folder, &target_mp3)
+            .expect("prepare exact-file sync")
+            .expect("cataloged target candidate");
+        let outcome =
+            apply_existing_album_fast_sync(&mut conn, &candidate).expect("apply exact-file sync");
+        let ExistingAlbumFastSyncOutcome::Updated {
+            import_run_id,
+            changed_tracks: 1,
+            changed_albums: 1,
+        } = outcome
+        else {
+            panic!("expected exact-file update, got {outcome:?}");
+        };
+
+        let target: (Option<i32>, Option<i32>, Option<String>, Option<i32>) = conn
+            .query_row(
+                "SELECT normalized_rating, album_rating, love, release_year
+                 FROM tracks WHERE id = ?1",
+                params![target_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("updated target");
+        assert_eq!(
+            target,
+            (Some(100), Some(90), Some("L".to_owned()), Some(2009))
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT row_hash FROM tracks WHERE id = ?1",
+                params![sibling_id],
+                |row| row.get::<_, String>(0),
+            )
+            .expect("unchanged sibling"),
+            sibling_hash
+        );
+        let album: (i64, i64, Option<i32>, Option<i32>) = conn
+            .query_row(
+                "SELECT total_tracks, rated_tracks, album_rating, effective_album_rating
+                 FROM albums WHERE id = ?1",
+                params![&initial[0].album_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("updated aggregate");
+        assert_eq!(album, (2, 2, Some(90), Some(90)));
+        assert!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM library_updates
+                 WHERE import_run_id = ?1 AND category = 'ratings'
+                   AND source_path = ?2 AND album_id = ?3",
+                params![
+                    import_run_id,
+                    display_scoped_path(&folder),
+                    &initial[0].album_id
+                ],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("targeted rating history")
+                > 0
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT rated_tracks FROM rating_snapshots WHERE import_run_id = ?1",
+                params![import_run_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("targeted global snapshot"),
+            2
+        );
+
+        let retry = prepare_existing_file_fast_sync(&conn, &folder, &target_mp3)
+            .expect("prepare idempotent retry")
+            .expect("same target candidate");
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &retry).expect("idempotent exact-file retry"),
+            ExistingAlbumFastSyncOutcome::Unchanged
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM import_runs", [], |row| row
+                .get::<_, i64>(0))
+                .expect("no retry import run"),
+            2
+        );
+    }
+
+    #[test]
+    fn existing_album_fast_sync_records_a_scoped_track_diff_when_aggregate_is_unchanged() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).expect("album folder");
+        let folder = folder.canonicalize().expect("canonical album folder");
+        let mp3 = folder.join("01 - Track.mp3");
+        write_fast_sync_mp3(&mp3, "Track Title", None, "", 2008);
+        let initial = scanned_fast_sync_track(&folder, "fast-album");
+        let (mut conn, _, _, _) = fast_sync_database(&initial);
+
+        write_fast_sync_mp3(&mp3, "Track Title", None, "B", 2008);
+        let candidate =
+            prepare_existing_album_fast_sync(&conn, &folder).expect("prepare Love sync");
+        let outcome =
+            apply_existing_album_fast_sync(&mut conn, &candidate).expect("apply Love sync");
+        let ExistingAlbumFastSyncOutcome::Updated {
+            import_run_id,
+            changed_tracks: 1,
+            changed_albums: 0,
+        } = outcome
+        else {
+            panic!("expected scoped Love update, got {outcome:?}");
+        };
+        let (field, description): (String, String) = conn
+            .query_row(
+                "SELECT field, description FROM library_updates WHERE import_run_id = ?1",
+                params![import_run_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("visible scoped track update");
+        assert_eq!(field, "track_love");
+        assert_eq!(
+            description,
+            "Love changed for Track Title from neutral to banned"
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM rating_events WHERE import_run_id = ?1",
+                params![import_run_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("no aggregate rating event"),
+            0
+        );
+    }
+
+    #[test]
+    fn existing_file_fast_sync_falls_back_for_unsupported_metadata_edits() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).expect("album folder");
+        let folder = folder.canonicalize().expect("canonical album folder");
+        let mp3 = folder.join("01 - Track.mp3");
+        write_fast_sync_mp3(&mp3, "Track Title", None, "", 2008);
+        let initial = scanned_fast_sync_track(&folder, "fast-album");
+        let (mut conn, _, target_id, _) = fast_sync_database(&initial);
+
+        write_fast_sync_mp3(&mp3, "Changed Title", None, "", 2008);
+        let candidate = prepare_existing_file_fast_sync(&conn, &folder, &mp3)
+            .expect("prepare unsupported sync")
+            .expect("cataloged target candidate");
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &candidate)
+                .expect("unsupported edit routes to fallback"),
+            ExistingAlbumFastSyncOutcome::Fallback
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT title FROM tracks WHERE id = ?1",
+                params![target_id],
+                |row| row.get::<_, String>(0),
+            )
+            .expect("unchanged catalog title"),
+            "Track Title"
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM import_runs", [], |row| row
+                .get::<_, i64>(0))
+                .expect("no targeted run"),
+            1
+        );
+    }
+
+    #[test]
+    fn existing_file_fast_sync_cas_failure_rolls_back_every_targeted_write() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).expect("album folder");
+        let folder = folder.canonicalize().expect("canonical album folder");
+        let mp3 = folder.join("01 - Track.mp3");
+        write_fast_sync_mp3(&mp3, "Track Title", None, "", 2008);
+        let initial = scanned_fast_sync_track(&folder, "fast-album");
+        let (mut conn, old_run_id, target_id, _) = fast_sync_database(&initial);
+
+        write_fast_sync_mp3(&mp3, "Track Title", Some(242), "", 2008);
+        let candidate = prepare_existing_file_fast_sync(&conn, &folder, &mp3)
+            .expect("prepare CAS sync")
+            .expect("cataloged target candidate");
+        conn.execute_batch(&format!(
+            "CREATE TRIGGER mutate_fast_sync_target
+             AFTER INSERT ON import_runs
+             WHEN NEW.status = 'running'
+             BEGIN
+                 UPDATE tracks SET row_hash = 'concurrent-change' WHERE id = {target_id};
+             END;"
+        ))
+        .expect("install simulated concurrent-change trigger");
+        let error = apply_existing_album_fast_sync(&mut conn, &candidate)
+            .expect_err("CAS must reject stale catalog row");
+        assert!(error.to_string().contains("changed while Aurora tag sync"));
+        let raw: (Option<String>, i64) = conn
+            .query_row(
+                "SELECT rating, import_run_id FROM raw_tracks WHERE id = ?1",
+                params![target_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("rolled-back raw track");
+        assert_eq!(raw, (None, old_run_id));
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM import_runs", [], |row| row
+                .get::<_, i64>(0))
+                .expect("rolled-back import run"),
+            1
+        );
+    }
+
+    #[test]
+    fn existing_file_fast_sync_falls_back_when_target_tags_change_after_prepare() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).expect("album folder");
+        let folder = folder.canonicalize().expect("canonical album folder");
+        let mp3 = folder.join("01 - Track.mp3");
+        write_fast_sync_mp3(&mp3, "Track Title", None, "", 2008);
+        let initial = scanned_fast_sync_track(&folder, "fast-album");
+        let (mut conn, _, _, _) = fast_sync_database(&initial);
+
+        write_fast_sync_mp3(&mp3, "Track Title", Some(196), "", 2008);
+        let candidate = prepare_existing_file_fast_sync(&conn, &folder, &mp3)
+            .expect("prepare exact-file sync")
+            .expect("cataloged target candidate");
+        write_fast_sync_mp3(&mp3, "Track Title", Some(242), "", 2008);
+
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &candidate)
+                .expect("mutation routes to safe fallback"),
+            ExistingAlbumFastSyncOutcome::Fallback
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM import_runs", [], |row| row
+                .get::<_, i64>(0))
+                .expect("no stale targeted run"),
+            1
+        );
+    }
+
+    #[test]
+    fn existing_file_fast_sync_requires_one_catalog_identity() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).expect("album folder");
+        let folder = folder.canonicalize().expect("canonical album folder");
+        let target = folder.join("01 - Track.mp3");
+        let untracked = folder.join("02 - Untracked.mp3");
+        write_fast_sync_mp3(&target, "Track Title", None, "", 2008);
+        write_fast_sync_mp3(&untracked, "Untracked", None, "", 2008);
+        fs::remove_file(&untracked).expect("hide untracked file from initial album scan");
+        let initial = scanned_fast_sync_track(&folder, "fast-album");
+        let (conn, _, _, _) = fast_sync_database(&initial);
+        write_fast_sync_mp3(&untracked, "Untracked", None, "", 2008);
+
+        assert!(prepare_existing_file_fast_sync(&conn, &folder, &untracked)
+            .expect("untracked lookup")
+            .is_none());
+
+        conn.execute(
+            "UPDATE tracks
+             SET file_path = ?1, filename = ?2
+             WHERE album_id = 'mb:outside-album'",
+            params![display_scoped_path(&folder), "01 - Track.mp3"],
+        )
+        .expect("seed ambiguous catalog identity");
+        assert!(prepare_existing_file_fast_sync(&conn, &folder, &target)
+            .expect("ambiguous lookup")
+            .is_none());
+    }
 
     #[test]
     fn database_backup_copy_never_reuses_an_existing_filename() {

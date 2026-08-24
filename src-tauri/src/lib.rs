@@ -98,6 +98,15 @@ async fn list_import_runs(app: AppHandle, limit: Option<u32>) -> Result<Vec<Impo
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_catalog_revision(app: AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || db::catalog_revision_for_app(&app))
+        .await
+        .map_err(|error| format!("Catalog revision task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn list_database_backups(app: AppHandle) -> Result<Vec<DatabaseBackup>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_database_backups_for_app(&app))
         .await
@@ -1981,6 +1990,7 @@ pub fn run() {
             get_library_status,
             run_performance_probe,
             list_import_runs,
+            get_catalog_revision,
             list_database_backups,
             restore_database_backup,
             get_settings,

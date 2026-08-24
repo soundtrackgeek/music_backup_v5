@@ -1,7 +1,76 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 56;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 57;
+
+pub(super) fn migrate_half_star_ratings(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        DROP TABLE IF EXISTS temp.migration_57_half_star_albums;
+        CREATE TEMP TABLE migration_57_half_star_albums (
+            album_id TEXT PRIMARY KEY
+        ) WITHOUT ROWID;
+
+        INSERT OR IGNORE INTO migration_57_half_star_albums (album_id)
+        SELECT album_id
+        FROM tracks
+        WHERE normalized_rating IS NULL
+          AND TRIM(COALESCE(rating_raw, '')) IN ('0.5', '1.5', '2.5', '3.5', '4.5');
+
+        UPDATE tracks
+        SET normalized_rating = CASE TRIM(rating_raw)
+            WHEN '0.5' THEN 10
+            WHEN '1.5' THEN 30
+            WHEN '2.5' THEN 50
+            WHEN '3.5' THEN 70
+            WHEN '4.5' THEN 90
+        END
+        WHERE normalized_rating IS NULL
+          AND album_id IN (SELECT album_id FROM migration_57_half_star_albums)
+          AND TRIM(COALESCE(rating_raw, '')) IN ('0.5', '1.5', '2.5', '3.5', '4.5');
+
+        UPDATE albums
+        SET rated_tracks = (
+                SELECT COUNT(*) FROM tracks WHERE tracks.album_id = albums.id
+                  AND tracks.normalized_rating IS NOT NULL
+            ),
+            rating_completeness = CASE
+                WHEN total_tracks = 0 THEN 0.0
+                ELSE CAST((
+                    SELECT COUNT(*) FROM tracks WHERE tracks.album_id = albums.id
+                      AND tracks.normalized_rating IS NOT NULL
+                ) AS REAL) / CAST(total_tracks AS REAL)
+            END,
+            calculated_album_rating = CASE
+                WHEN total_tracks > 0 AND total_tracks = (
+                    SELECT COUNT(*) FROM tracks WHERE tracks.album_id = albums.id
+                      AND tracks.normalized_rating IS NOT NULL
+                ) THEN CAST(ROUND((
+                    SELECT AVG(normalized_rating) FROM tracks WHERE tracks.album_id = albums.id
+                )) AS INTEGER)
+                ELSE NULL
+            END
+        WHERE id IN (SELECT album_id FROM migration_57_half_star_albums);
+
+        UPDATE albums
+        SET effective_album_rating = COALESCE(album_rating, calculated_album_rating)
+        WHERE id IN (SELECT album_id FROM migration_57_half_star_albums);
+
+        UPDATE albums
+        SET album_score = CASE
+            WHEN effective_album_rating IS NULL THEN NULL
+            ELSE ((effective_album_rating * 0.5) + (ae_ratio * 100.0)
+                    + ((tmoe_seconds / 60.0) * 0.3)) / 10.0
+                 + (loved_tracks * 100.0)
+        END
+        WHERE id IN (SELECT album_id FROM migration_57_half_star_albums);
+
+        DROP TABLE migration_57_half_star_albums;
+        ",
+    )
+    .context("Could not migrate legacy half-star ratings")?;
+    Ok(())
+}
 
 pub(super) fn migrate_uk_origin_country_alias(conn: &Connection) -> Result<()> {
     if !super::schema_table_exists(conn, "musicbrainz_origin_countries")?
