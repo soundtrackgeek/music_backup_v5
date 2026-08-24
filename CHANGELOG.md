@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.143.1] - 2026-08-24
+### Fixed
+- Canonicalized the two folder-sync catalog fixtures before storing their paths, preventing GitHub's Windows short temp-path alias from producing false snapshot and non-MP3 safety-test failures.
+
+### Changed
+- Synchronized app metadata and provider user agents to `0.143.1`.
+
 ## [0.143.0] - 2026-08-24
 ### Added
 - Added the versioned Aurora album-intake bridge, invoked as `music-library.exe --aurora-bridge <request.json> <response.json>`, with JSON `capabilities`, `previewBatch`, and `applyBatch` operations.

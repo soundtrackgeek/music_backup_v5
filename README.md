@@ -339,6 +339,8 @@ Run the frontend unit/component tests:
 npm run test:run
 ```
 
+Windows folder-sync fixtures canonicalize their temporary album paths before inserting catalog rows, matching the production resolver and avoiding short-name/long-name alias differences on hosted runners.
+
 Use `npm test` for Vitest watch mode during frontend development.
 
 Run the Rust backend unit tests:

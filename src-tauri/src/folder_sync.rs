@@ -1565,6 +1565,7 @@ mod tests {
         let temp = tempdir().expect("tempdir");
         let album = temp.path().join("Album");
         fs::create_dir(&album).expect("album folder");
+        let album = album.canonicalize().expect("canonical album folder");
         let track = album.join("01 - Track.mp3");
         write_tagged_mp3(&track, "New Album");
         fs::write(album.join("cover.jpg"), [1, 2, 3]).expect("safe artwork sidecar");
@@ -1737,6 +1738,7 @@ mod tests {
         let temp = tempdir().expect("tempdir");
         let album = temp.path().join("Album");
         fs::create_dir(&album).expect("album folder");
+        let album = album.canonicalize().expect("canonical album folder");
         write_tagged_mp3(&album.join("01.mp3"), "Album");
         let conn = Connection::open_in_memory().expect("database");
         create_catalog(&conn);
