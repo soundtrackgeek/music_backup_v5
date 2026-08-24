@@ -1125,6 +1125,9 @@ fn is_safe_sidecar(path: &Path, extension: &str) -> bool {
     if SAFE_SIDECAR_EXTENSIONS.contains(&extension) {
         return true;
     }
+    if extension == "backup" && is_safe_aurora_original_backup(path) {
+        return true;
+    }
     path.file_name()
         .and_then(|value| value.to_str())
         .is_some_and(|value| {
@@ -1132,6 +1135,39 @@ fn is_safe_sidecar(path: &Path, extension: &str) -> bool {
                 .iter()
                 .any(|allowed| value.eq_ignore_ascii_case(allowed))
         })
+}
+
+fn is_safe_aurora_original_backup(path: &Path) -> bool {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(_) => return false,
+    };
+    if !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || is_reparse_point(path).unwrap_or(true)
+    {
+        return false;
+    }
+    let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    let Some(body) = name
+        .strip_prefix('.')
+        .and_then(|value| value.strip_suffix(".original.backup"))
+    else {
+        return false;
+    };
+    let Some((mp3_filename, operation_id)) = body.rsplit_once(".aurora-") else {
+        return false;
+    };
+    let is_mp3 = Path::new(mp3_filename)
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("mp3"));
+    let valid_operation_id = operation_id
+        .parse::<i64>()
+        .is_ok_and(|value| value > 0 && value.to_string() == operation_id);
+    is_mp3 && valid_operation_id
 }
 
 #[cfg(windows)]
@@ -1158,12 +1194,7 @@ fn read_track(path: &Path) -> Result<ScannedTrack> {
         .unwrap_or_else(|| artist.clone());
     let album = required_tag(path, "album", tag.album())?;
     let title = required_tag(path, "title", tag.title())?;
-    let album_artist = tag
-        .album_artist()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or(&artist)
-        .trim()
-        .to_owned();
+    let album_artist = joined_text_frame_values(&tag, "TPE2").unwrap_or_else(|| artist.clone());
     let publisher = tag
         .get("TPUB")
         .and_then(|frame| frame.content().text())
@@ -1226,6 +1257,17 @@ fn read_track(path: &Path) -> Result<ScannedTrack> {
         album_artist,
         time: duration_seconds.map(format_duration).unwrap_or_default(),
     })
+}
+
+fn joined_text_frame_values(tag: &Tag, id: &str) -> Option<String> {
+    let values = tag
+        .get(id)?
+        .content()
+        .text_values()?
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    (!values.is_empty()).then(|| values.join("; "))
 }
 
 fn required_tag(path: &Path, name: &str, value: Option<&str>) -> Result<String> {
@@ -1623,6 +1665,7 @@ mod tests {
         assert_eq!(&rows[1][7], "3.5");
         assert_eq!(&rows[1][11], "2026");
         assert_eq!(&rows[1][12], "77");
+        assert_eq!(&rows[1][15], "Album Artist");
         assert_eq!(&rows[1][16], "2:05");
         assert!(source_is_unchanged(&conn, &output).expect("source check"));
         conn.execute("UPDATE tracks SET title = 'Outside fixed' WHERE id = 1", [])
@@ -1638,6 +1681,47 @@ mod tests {
         .expect("rebuilt snapshot");
         fs::write(&track, [0xFF, 0xFB, 0x90, 0x64, 1, 2, 3, 4, 5]).expect("mutate source MP3");
         assert!(!source_is_unchanged(&conn, &output).expect("changed source check"));
+    }
+
+    #[test]
+    fn sync_snapshot_joins_multi_value_album_artist_credits() {
+        let temp = tempdir().expect("tempdir");
+        let album = temp.path().join("Album");
+        fs::create_dir(&album).expect("album folder");
+        let track = album.join("01.mp3");
+        write_tagged_mp3(&track, "Multi-value Album");
+        let mut tag = Tag::read_from_path(&track).expect("read fixture tag");
+        tag.set_text_values("TPE2", ["Primary Composer", "Score Collective"]);
+        tag.write_to_path(&track, Version::Id3v24)
+            .expect("write multi-value album artist");
+        let conn = Connection::open_in_memory().expect("database");
+        create_catalog(&conn);
+        let output = temp
+            .path()
+            .join(SNAPSHOT_DIRECTORY)
+            .join("album-folder-aurora-sync-0123456789abcdef01234567.tsv");
+
+        build_snapshot(
+            &conn,
+            &album,
+            &output,
+            &AtomicBool::new(false),
+            &mut |_, _, _| {},
+        )
+        .expect("sync snapshot");
+
+        let mut reader = csv::ReaderBuilder::new()
+            .delimiter(b'\t')
+            .quoting(false)
+            .from_path(output)
+            .expect("read sync snapshot");
+        let row = reader
+            .records()
+            .next()
+            .expect("snapshot row")
+            .expect("valid row");
+        assert_eq!(&row[15], "Primary Composer; Score Collective");
+        assert!(!row[15].contains('\0'));
     }
 
     #[test]
@@ -1782,6 +1866,71 @@ mod tests {
             .expect_err("unrecognized physical file should fail closed");
 
         assert!(error.to_string().contains("unsupported non-MP3 file"));
+    }
+
+    #[test]
+    fn bridge_snapshot_ignores_an_exact_retained_aurora_original_backup() {
+        let temp = tempdir().expect("tempdir");
+        let album = temp.path().join("Album");
+        fs::create_dir(&album).expect("album folder");
+        let track = album.join("01 - Track.mp3");
+        write_tagged_mp3(&track, "Album");
+        let retained = album.join(".01 - Track.mp3.aurora-42.original.backup");
+        fs::copy(&track, &retained).expect("retained Aurora backup");
+        let conn = Connection::open_in_memory().expect("database");
+        create_catalog(&conn);
+        let output = temp
+            .path()
+            .join(SNAPSHOT_DIRECTORY)
+            .join("album-folder-aurora-sync-0123456789abcdef01234567.tsv");
+
+        build_snapshot(
+            &conn,
+            &album,
+            &output,
+            &AtomicBool::new(false),
+            &mut |_, _, _| {},
+        )
+        .expect("bridge snapshot with retained Aurora backup");
+
+        assert!(output.is_file());
+        assert!(source_is_unchanged(&conn, &output).expect("apply guard fingerprint"));
+    }
+
+    #[test]
+    fn ordinary_backup_files_are_not_allowed_as_album_sidecars() {
+        let temp = tempdir().expect("tempdir");
+        let album = temp.path().join("Album");
+        fs::create_dir(&album).expect("album folder");
+        write_tagged_mp3(&album.join("01.mp3"), "Album");
+        fs::write(album.join("liner-notes.backup"), b"not Aurora owned").expect("ordinary backup");
+
+        let error = scan_folder(&album, &AtomicBool::new(false))
+            .expect_err("ordinary backup must fail closed");
+
+        assert!(error.to_string().contains("unsupported non-MP3 file"));
+    }
+
+    #[test]
+    fn aurora_backup_exception_requires_the_exact_owned_filename_grammar() {
+        let temp = tempdir().expect("tempdir");
+        let valid = temp.path().join(".01.mp3.aurora-42.original.backup");
+        fs::write(&valid, b"backup").expect("valid fixture");
+        assert!(is_safe_aurora_original_backup(&valid));
+
+        for name in [
+            "01.mp3.aurora-42.original.backup",
+            ".01.flac.aurora-42.original.backup",
+            ".01.mp3.aurora-0.original.backup",
+            ".01.mp3.aurora-042.original.backup",
+            ".01.mp3.aurora--1.original.backup",
+            ".01.mp3.aurora-42.undo-current.backup",
+            ".01.mp3.aurora-42.original.backup.extra",
+        ] {
+            let path = temp.path().join(name);
+            fs::write(&path, b"near miss").expect("near-miss fixture");
+            assert!(!is_safe_aurora_original_backup(&path), "{name}");
+        }
     }
 
     #[test]

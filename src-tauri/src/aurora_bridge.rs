@@ -1,7 +1,7 @@
 use crate::folder_sync::{self, BatchAlbumInput};
 use crate::{db, importer};
 use anyhow::{anyhow, bail, Context, Result};
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -19,6 +19,11 @@ const GENERAL_ROOT_OVERRIDE: &str = "MUSIC_LIBRARY_BRIDGE_GENERAL_ROOT";
 const SCORES_ROOT_OVERRIDE: &str = "MUSIC_LIBRARY_BRIDGE_SCORES_ROOT";
 const SYNTHWAVE_ROOT_OVERRIDE: &str = "MUSIC_LIBRARY_BRIDGE_SYNTHWAVE_ROOT";
 const MAX_TRANSFER_ENTRIES: usize = 50_000;
+const MAX_SYNC_FOLDERS: usize = 32;
+const MAX_SYNC_TRACKS: usize = 50_000;
+const SYNC_SNAPSHOT_PREFIX: &str = "album-folder-aurora-sync-";
+const SYNC_BACKUP_PREFIX: &str = "music-library-aurora-sync-";
+const SYNC_BACKUP_SUFFIX: &str = "-before-import.sqlite3";
 const STAGING_OWNER_FILE: &str = ".aurora-intake-owner.json";
 
 #[derive(Debug, Deserialize)]
@@ -42,6 +47,59 @@ struct PreviewBatchRequest {
 struct ApplyBatchRequest {
     plan_id: String,
     session_id: i64,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncExistingFoldersRequest {
+    folder_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct ExistingFolderScope {
+    folder: PathBuf,
+    album_id: String,
+    track_count: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SyncDeltaCounts {
+    added_tracks: i64,
+    changed_tracks: i64,
+    removed_tracks: i64,
+    added_albums: i64,
+    changed_albums: i64,
+    removed_albums: i64,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum SyncedFolderStatus {
+    Updated,
+    Unchanged,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncedFolderReceipt {
+    folder_path: String,
+    status: SyncedFolderStatus,
+    changed_tracks: i64,
+    changed_albums: i64,
+    import_run_id: Option<i64>,
+    backup_path: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncExistingFoldersResult {
+    synced_folder_count: usize,
+    updated_folder_count: usize,
+    changed_tracks: i64,
+    changed_albums: i64,
+    import_run_ids: Vec<i64>,
+    backup_paths: Vec<String>,
+    folders: Vec<SyncedFolderReceipt>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -194,6 +252,12 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
                 .context("applyBatch payload must contain planId and sessionId")?;
             apply_batch(&app_data_dir, payload)
         }
+        "syncExistingFolders" => {
+            let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
+            let payload: SyncExistingFoldersRequest = serde_json::from_value(request.payload)
+                .context("syncExistingFolders payload must contain folderPaths")?;
+            sync_existing_folders(&app_data_dir, payload)
+        }
         operation => bail!("Unknown Aurora bridge operation {operation:?}"),
     }
 }
@@ -216,6 +280,7 @@ impl BridgeProcessLock {
                 .read(true)
                 .write(true)
                 .create(true)
+                .truncate(false)
                 .share_mode(0)
                 .open(&path)
                 .with_context(|| "Another Aurora album intake is already running")?;
@@ -259,6 +324,7 @@ fn capabilities() -> Result<Value> {
             "batchFolders": true,
             "crossVolumeCopy": true,
             "previewRequired": true,
+            "syncExistingFolders": true,
         },
     }))
 }
@@ -404,6 +470,970 @@ fn preview_batch(app_data_dir: &Path, request: PreviewBatchRequest) -> Result<Va
         })).collect::<Vec<_>>(),
         "canApply": preview.status == "ready" && !preview.source_changed,
     }))
+}
+
+fn sync_existing_folders(
+    app_data_dir: &Path,
+    request: SyncExistingFoldersRequest,
+) -> Result<Value> {
+    if request.folder_paths.is_empty() {
+        bail!("syncExistingFolders requires at least one album folder");
+    }
+    if request.folder_paths.len() > MAX_SYNC_FOLDERS {
+        bail!("syncExistingFolders accepts at most {MAX_SYNC_FOLDERS} album folders per request");
+    }
+
+    let database_path = app_data_dir.join("music-library.sqlite3");
+    let mut conn = open_database(&database_path)?;
+    cleanup_abandoned_bridge_sync_sessions(&conn, app_data_dir)?;
+
+    let library_roots = canonical_available_library_roots()?;
+    let folders = canonicalize_sync_folder_paths(request.folder_paths, &library_roots)?;
+    let mut scopes = Vec::with_capacity(folders.len());
+    let mut seen_album_ids = BTreeSet::new();
+    let mut total_tracks = 0_usize;
+    for folder in folders {
+        let scope = catalog_scope_for_existing_folder(&conn, folder)?;
+        if !seen_album_ids.insert(scope.album_id.clone()) {
+            bail!(
+                "Two requested folders belong to the same catalog album {}",
+                scope.album_id
+            );
+        }
+        total_tracks = total_tracks.saturating_add(scope.track_count);
+        if total_tracks > MAX_SYNC_TRACKS {
+            bail!(
+                "syncExistingFolders accepts at most {MAX_SYNC_TRACKS} cataloged MP3 tracks per request"
+            );
+        }
+        scopes.push(scope);
+    }
+
+    let batch_backup = create_sync_batch_backup(&conn, &database_path)?;
+    let mut folders = Vec::with_capacity(scopes.len());
+    for scope in scopes {
+        let backup_exists = batch_backup.try_exists().with_context(|| {
+            format!(
+                "Could not verify the Aurora folder-sync backup {}",
+                batch_backup.display()
+            )
+        })?;
+        if !backup_exists {
+            bail!(
+                "The Aurora folder-sync backup disappeared before the catalog update: {}",
+                batch_backup.display()
+            );
+        }
+        let receipt = sync_existing_folder(&mut conn, &database_path, app_data_dir, &scope)
+            .with_context(|| {
+                format!(
+                    "The pre-sync database backup was retained at {}",
+                    batch_backup.display()
+                )
+            })?;
+        folders.push(receipt);
+    }
+
+    let updated_folder_count = folders
+        .iter()
+        .filter(|folder| matches!(folder.status, SyncedFolderStatus::Updated))
+        .count();
+    if updated_folder_count == 0 {
+        if let Err(error) = fs::remove_file(&batch_backup) {
+            eprintln!(
+                "Could not remove unused Aurora folder-sync backup {}: {error}",
+                batch_backup.display()
+            );
+        }
+    } else {
+        let batch_backup_text = display_path(&batch_backup);
+        for folder in &mut folders {
+            if matches!(folder.status, SyncedFolderStatus::Updated) {
+                folder.backup_path = Some(batch_backup_text.clone());
+            }
+        }
+        if let Err(error) = enforce_sync_backup_retention(&conn, &database_path, &batch_backup) {
+            eprintln!(
+                "Could not prune old Aurora folder-sync backups after a committed sync: {error:#}"
+            );
+        }
+    }
+
+    let result = SyncExistingFoldersResult {
+        synced_folder_count: folders.len(),
+        updated_folder_count,
+        changed_tracks: folders.iter().map(|folder| folder.changed_tracks).sum(),
+        changed_albums: folders.iter().map(|folder| folder.changed_albums).sum(),
+        import_run_ids: folders
+            .iter()
+            .filter_map(|folder| folder.import_run_id)
+            .collect(),
+        backup_paths: folders
+            .iter()
+            .filter_map(|folder| folder.backup_path.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect(),
+        folders,
+    };
+    serde_json::to_value(result).context("Could not encode syncExistingFolders result")
+}
+
+fn create_sync_batch_backup(conn: &Connection, database_path: &Path) -> Result<PathBuf> {
+    let backup_directory = database_path
+        .parent()
+        .ok_or_else(|| anyhow!("Music Library database path has no parent directory"))?
+        .join("backups");
+    fs::create_dir_all(&backup_directory).with_context(|| {
+        format!(
+            "Could not create database backup directory {}",
+            backup_directory.display()
+        )
+    })?;
+    for _ in 0..100 {
+        let backup_id = new_plan_id(database_path, "sync-existing-backup");
+        let backup_path = backup_directory.join(format!(
+            "{SYNC_BACKUP_PREFIX}{backup_id}{SYNC_BACKUP_SUFFIX}"
+        ));
+        if backup_path.try_exists()? {
+            continue;
+        }
+        let backup_path_text = display_path(&backup_path);
+        if let Err(error) = conn.execute("VACUUM INTO ?1", params![backup_path_text]) {
+            if is_bridge_sync_backup_path(database_path, &backup_path) {
+                let _ = fs::remove_file(&backup_path);
+            }
+            return Err(error).with_context(|| {
+                format!(
+                    "Could not create the pre-sync database backup {}",
+                    backup_path.display()
+                )
+            });
+        }
+        let metadata = fs::metadata(&backup_path).with_context(|| {
+            format!(
+                "Could not verify the pre-sync database backup {}",
+                backup_path.display()
+            )
+        })?;
+        if metadata.len() == 0 {
+            let _ = fs::remove_file(&backup_path);
+            bail!(
+                "The pre-sync database backup is empty: {}",
+                backup_path.display()
+            );
+        }
+        if let Err(error) = fs::OpenOptions::new()
+            .write(true)
+            .open(&backup_path)
+            .and_then(|file| file.sync_all())
+        {
+            let _ = fs::remove_file(&backup_path);
+            return Err(error).with_context(|| {
+                format!(
+                    "Could not synchronize the pre-sync database backup {}",
+                    backup_path.display()
+                )
+            });
+        }
+        return Ok(backup_path);
+    }
+    bail!("Could not reserve a unique Aurora folder-sync backup filename")
+}
+
+fn enforce_sync_backup_retention(
+    conn: &Connection,
+    database_path: &Path,
+    current_backup: &Path,
+) -> Result<()> {
+    if !is_bridge_sync_backup_path(database_path, current_backup) {
+        bail!("Refusing to retain an invalid Aurora folder-sync backup path");
+    }
+    let retention = db::settings_for_connection(conn)?.backup_retention.max(1) as usize;
+    let backup_directory = current_backup
+        .parent()
+        .ok_or_else(|| anyhow!("Aurora folder-sync backup has no parent directory"))?;
+    let mut previous = fs::read_dir(backup_directory)?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry.path() != current_backup
+                && entry.file_type().is_ok_and(|file_type| file_type.is_file())
+                && is_bridge_sync_backup_path(database_path, &entry.path())
+        })
+        .collect::<Vec<_>>();
+    previous.sort_by_key(|entry| {
+        std::cmp::Reverse(
+            entry
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .ok(),
+        )
+    });
+    for stale in previous.into_iter().skip(retention.saturating_sub(1)) {
+        fs::remove_file(stale.path()).with_context(|| {
+            format!(
+                "Could not remove old Aurora folder-sync backup {}",
+                stale.path().display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn is_bridge_sync_backup_path(database_path: &Path, path: &Path) -> bool {
+    path.parent().map(normalized_path)
+        == database_path
+            .parent()
+            .map(|parent| normalized_path(&parent.join("backups")))
+        && path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .is_some_and(is_bridge_sync_backup_name)
+}
+
+fn is_bridge_sync_backup_name(name: &str) -> bool {
+    name.strip_prefix(SYNC_BACKUP_PREFIX)
+        .and_then(|value| value.strip_suffix(SYNC_BACKUP_SUFFIX))
+        .is_some_and(|token| {
+            token.len() == 24 && token.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+}
+
+fn canonical_available_library_roots() -> Result<Vec<PathBuf>> {
+    let mut roots = Vec::new();
+    for category in category_definitions()? {
+        if !category.root.try_exists().with_context(|| {
+            format!(
+                "Could not inspect the {} library root {}",
+                category.label,
+                category.root.display()
+            )
+        })? {
+            continue;
+        }
+        if !fs::metadata(&category.root)?.is_dir() {
+            bail!(
+                "The {} library root is not a directory: {}",
+                category.label,
+                category.root.display()
+            );
+        }
+        folder_sync::ensure_source_root_is_not_linked(&category.root)?;
+        roots.push(category.root.canonicalize().with_context(|| {
+            format!(
+                "Could not resolve the {} library root {}",
+                category.label,
+                category.root.display()
+            )
+        })?);
+    }
+    if roots.is_empty() {
+        bail!("No configured Music Library destination is currently available");
+    }
+    Ok(roots)
+}
+
+fn canonicalize_sync_folder_paths(
+    folder_paths: Vec<String>,
+    library_roots: &[PathBuf],
+) -> Result<Vec<PathBuf>> {
+    let mut folders: Vec<PathBuf> = Vec::with_capacity(folder_paths.len());
+    let mut seen = BTreeSet::new();
+    for raw_path in folder_paths {
+        let raw_path = raw_path.trim();
+        if raw_path.is_empty() {
+            bail!("syncExistingFolders contains an empty album folder path");
+        }
+        let requested = PathBuf::from(raw_path);
+        if !requested.is_absolute() {
+            bail!(
+                "syncExistingFolders requires absolute album folder paths: {}",
+                requested.display()
+            );
+        }
+        if requested
+            .components()
+            .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
+        {
+            bail!(
+                "syncExistingFolders requires canonical album folder paths without . or .. components: {}",
+                requested.display()
+            );
+        }
+        folder_sync::ensure_source_root_is_not_linked(&requested)?;
+        let canonical = requested.canonicalize().with_context(|| {
+            format!(
+                "Could not resolve existing album folder {}",
+                requested.display()
+            )
+        })?;
+        if !fs::metadata(&canonical)?.is_dir() {
+            bail!(
+                "The requested existing album path is not a folder: {}",
+                canonical.display()
+            );
+        }
+        folder_sync::ensure_source_root_is_not_linked(&canonical)?;
+        if normalized_path(&requested) != normalized_path(&canonical) {
+            bail!(
+                "Use the canonical Music Library album folder path instead of {}",
+                requested.display()
+            );
+        }
+        if !library_roots
+            .iter()
+            .any(|root| path_is_strictly_within(&canonical, root))
+        {
+            bail!(
+                "The requested folder is outside every configured Music Library destination: {}",
+                canonical.display()
+            );
+        }
+
+        let key = normalized_path(&canonical);
+        if !seen.insert(key) {
+            continue;
+        }
+        if folders
+            .iter()
+            .any(|existing| paths_overlap(existing, &canonical))
+        {
+            bail!(
+                "syncExistingFolders cannot contain nested or overlapping album folders: {}",
+                canonical.display()
+            );
+        }
+        folders.push(canonical);
+    }
+    if folders.is_empty() {
+        bail!("syncExistingFolders contains no unique album folders");
+    }
+    Ok(folders)
+}
+
+fn catalog_scope_for_existing_folder(
+    conn: &Connection,
+    folder: PathBuf,
+) -> Result<ExistingFolderScope> {
+    let mut statement = conn.prepare(
+        "SELECT COALESCE(file_path, ''), COALESCE(filename, ''), COALESCE(album_id, '') FROM tracks",
+    )?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut album_ids = BTreeSet::new();
+    let mut track_count = 0_usize;
+    for (file_path, filename, album_id) in &rows {
+        if !path_text_is_within_folder(file_path, &folder) {
+            continue;
+        }
+        if !filename_has_mp3_extension(filename) {
+            bail!(
+                "The cataloged folder contains non-MP3 audio and cannot be synced through Aurora: {}",
+                folder.display()
+            );
+        }
+        let album_id = album_id.trim();
+        if album_id.is_empty() {
+            bail!(
+                "The cataloged folder has no stable album identity and cannot be synced safely: {}",
+                folder.display()
+            );
+        }
+        album_ids.insert(album_id.to_owned());
+        track_count += 1;
+    }
+    if track_count == 0 {
+        bail!(
+            "The requested folder is not represented in the active Music Library catalog: {}",
+            folder.display()
+        );
+    }
+    if album_ids.len() != 1 {
+        bail!(
+            "The requested folder belongs to more than one catalog album and cannot be synced safely: {}",
+            folder.display()
+        );
+    }
+    let album_id = album_ids.into_iter().next().expect("one album id");
+    if rows.iter().any(|(file_path, _, row_album_id)| {
+        row_album_id.trim() == album_id && !path_text_is_within_folder(file_path, &folder)
+    }) {
+        bail!(
+            "Catalog album {album_id} has tracks outside {}. Sync its complete album folder instead",
+            folder.display()
+        );
+    }
+    Ok(ExistingFolderScope {
+        folder,
+        album_id,
+        track_count,
+    })
+}
+
+fn sync_existing_folder(
+    conn: &mut Connection,
+    database_path: &Path,
+    app_data_dir: &Path,
+    scope: &ExistingFolderScope,
+) -> Result<SyncedFolderReceipt> {
+    let snapshot_id = new_plan_id(&scope.folder, "sync-existing");
+    let snapshot_path = app_data_dir
+        .join("album-folder-imports")
+        .join(format!("{SYNC_SNAPSHOT_PREFIX}{snapshot_id}.tsv"));
+    if let Err(error) = folder_sync::build_snapshot(
+        conn,
+        &scope.folder,
+        &snapshot_path,
+        &std::sync::atomic::AtomicBool::new(false),
+        &mut |_, _, _| {},
+    ) {
+        return Err(with_sync_cleanup_context(
+            error,
+            cleanup_sync_snapshot_artifacts(app_data_dir, &snapshot_path),
+        ));
+    }
+
+    let preview = match importer::prepare_bridge_import_preview(conn, &snapshot_path) {
+        Ok(preview) => preview,
+        Err(error) => {
+            let cleanup = cleanup_abandoned_bridge_sync_sessions(conn, app_data_dir)
+                .and_then(|_| cleanup_sync_snapshot_artifacts(app_data_dir, &snapshot_path));
+            return Err(with_sync_cleanup_context(error, cleanup));
+        }
+    };
+    if normalized_path(Path::new(&preview.source_path)) != normalized_path(&snapshot_path) {
+        let error = anyhow!("The prepared folder sync is bound to the wrong snapshot");
+        return Err(discard_invalid_sync_preview(
+            conn,
+            preview.session_id,
+            app_data_dir,
+            &snapshot_path,
+            error,
+        ));
+    }
+    if let Err(error) = validate_existing_folder_preview(conn, scope, &preview) {
+        return Err(discard_invalid_sync_preview(
+            conn,
+            preview.session_id,
+            app_data_dir,
+            &snapshot_path,
+            error,
+        ));
+    }
+
+    let changed_tracks = preview.changed_tracks;
+    let changed_albums = preview.changed_albums;
+    if changed_tracks == 0 && changed_albums == 0 {
+        importer::discard_bridge_import_preview(conn, preview.session_id)
+            .context("Could not discard an unchanged Aurora folder-sync preview")?;
+        cleanup_sync_snapshot_artifacts(app_data_dir, &snapshot_path)?;
+        return Ok(SyncedFolderReceipt {
+            folder_path: display_path(&scope.folder),
+            status: SyncedFolderStatus::Unchanged,
+            changed_tracks,
+            changed_albums,
+            import_run_id: None,
+            backup_path: None,
+        });
+    }
+
+    let summary = apply_existing_folder_preview(
+        conn,
+        database_path,
+        preview.session_id,
+        app_data_dir,
+        &snapshot_path,
+    )?;
+    if let Err(error) = cleanup_sync_snapshot_artifacts(app_data_dir, &snapshot_path) {
+        eprintln!(
+            "Could not remove completed Aurora folder-sync artifacts for {}: {error:#}",
+            scope.folder.display()
+        );
+    }
+    Ok(SyncedFolderReceipt {
+        folder_path: display_path(&scope.folder),
+        status: SyncedFolderStatus::Updated,
+        changed_tracks,
+        changed_albums,
+        import_run_id: Some(summary.import_run_id),
+        backup_path: summary.backup_path,
+    })
+}
+
+fn validate_existing_folder_preview(
+    conn: &Connection,
+    scope: &ExistingFolderScope,
+    preview: &crate::models::ImportPreview,
+) -> Result<()> {
+    if preview.session_id <= 0
+        || preview.status != "ready"
+        || preview.source_changed
+        || preview.suspicious_album_count != 0
+    {
+        bail!("The existing-folder sync preview is not safe to apply");
+    }
+    let counts = SyncDeltaCounts {
+        added_tracks: preview.added_tracks,
+        changed_tracks: preview.changed_tracks,
+        removed_tracks: preview.removed_tracks,
+        added_albums: preview.added_albums,
+        changed_albums: preview.changed_albums,
+        removed_albums: preview.removed_albums,
+    };
+    validate_sync_delta_counts(&counts, scope.track_count)?;
+    validate_staged_sync_scope(
+        conn,
+        preview.session_id,
+        scope,
+        counts.changed_tracks,
+        counts.changed_albums,
+    )
+}
+
+fn validate_sync_delta_counts(counts: &SyncDeltaCounts, scoped_track_count: usize) -> Result<()> {
+    if counts.added_tracks < 0
+        || counts.changed_tracks < 0
+        || counts.removed_tracks < 0
+        || counts.added_albums < 0
+        || counts.changed_albums < 0
+        || counts.removed_albums < 0
+    {
+        bail!("The existing-folder sync returned invalid negative delta counts");
+    }
+    if counts.added_tracks != 0
+        || counts.removed_tracks != 0
+        || counts.added_albums != 0
+        || counts.removed_albums != 0
+    {
+        bail!(
+            "Aurora existing-folder sync is metadata-only, but the prepared delta would add or remove catalog rows"
+        );
+    }
+    if counts.changed_tracks > scoped_track_count as i64 || counts.changed_albums > 1 {
+        bail!("The existing-folder sync delta exceeds its selected album scope");
+    }
+    Ok(())
+}
+
+fn validate_staged_sync_scope(
+    conn: &Connection,
+    session_id: i64,
+    scope: &ExistingFolderScope,
+    expected_changed_tracks: i64,
+    expected_changed_albums: i64,
+) -> Result<()> {
+    let mut staged_scope_count = 0_usize;
+    let mut staged = conn.prepare(
+        "SELECT COALESCE(file_path, ''), COALESCE(filename, ''), COALESCE(album_id, '') FROM import_stage_tracks WHERE session_id = ?1",
+    )?;
+    let staged_rows = staged.query_map(params![session_id], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+    for row in staged_rows {
+        let (file_path, filename, album_id) = row?;
+        if path_text_is_within_folder(&file_path, &scope.folder) {
+            if !filename_has_mp3_extension(&filename) || album_id.trim() != scope.album_id {
+                bail!(
+                    "The prepared folder sync changed the selected album identity or audio format"
+                );
+            }
+            staged_scope_count += 1;
+        } else if album_id.trim() == scope.album_id {
+            bail!("The prepared folder sync moved the selected album identity outside its folder");
+        }
+    }
+    if staged_scope_count != scope.track_count {
+        bail!("The prepared folder sync does not contain the exact cataloged album track set");
+    }
+
+    let (catalog_track_count, staged_track_count, matched_track_count): (i64, i64, i64) = conn
+        .query_row(
+            "
+            SELECT
+                (SELECT COUNT(*) FROM tracks),
+                (SELECT COUNT(*) FROM import_stage_tracks WHERE session_id = ?1),
+                (
+                    SELECT COUNT(*)
+                    FROM import_stage_tracks AS staged
+                    JOIN tracks AS current
+                      ON current.file_path IS NULLIF(staged.file_path, '')
+                     AND current.filename IS NULLIF(staged.filename, '')
+                    WHERE staged.session_id = ?1
+                )
+            ",
+            params![session_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+    if catalog_track_count != staged_track_count || matched_track_count != catalog_track_count {
+        bail!("The prepared folder sync does not preserve the complete catalog track identity set");
+    }
+
+    let changed_track_identities: i64 = conn.query_row(
+        "
+        SELECT COUNT(*)
+        FROM import_stage_tracks AS staged
+        JOIN tracks AS current
+          ON current.file_path IS NULLIF(staged.file_path, '')
+         AND current.filename IS NULLIF(staged.filename, '')
+        WHERE staged.session_id = ?1
+          AND (
+              current.album_id IS NOT staged.album_id
+              OR current.album_unique_id IS NOT NULLIF(staged.album_unique_id, '')
+          )
+        ",
+        params![session_id],
+        |row| row.get(0),
+    )?;
+    if changed_track_identities != 0 {
+        bail!("The prepared folder sync would change a catalog track or album identity");
+    }
+
+    let staged_album_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM import_stage_albums WHERE session_id = ?1 AND album_id = ?2",
+        params![session_id, &scope.album_id],
+        |row| row.get(0),
+    )?;
+    if staged_album_count != 1 {
+        bail!("The prepared folder sync did not preserve the selected catalog album identity");
+    }
+    validate_staged_album_scope(conn, session_id, scope, expected_changed_albums)?;
+
+    let mut changed_count = 0_i64;
+    let mut changed = conn.prepare(
+        "
+        SELECT COALESCE(current.file_path, ''), COALESCE(current.filename, ''),
+               COALESCE(current.album_id, ''), COALESCE(staged.file_path, ''),
+               COALESCE(staged.filename, ''), COALESCE(staged.album_id, '')
+        FROM import_stage_tracks AS staged
+        JOIN tracks AS current
+          ON current.file_path IS NULLIF(staged.file_path, '')
+         AND current.filename IS NULLIF(staged.filename, '')
+        WHERE staged.session_id = ?1 AND current.row_hash != staged.row_hash
+        ",
+    )?;
+    let changed_rows = changed.query_map(params![session_id], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, String>(5)?,
+        ))
+    })?;
+    for row in changed_rows {
+        let (
+            current_path,
+            current_filename,
+            current_album_id,
+            staged_path,
+            staged_filename,
+            staged_album_id,
+        ) = row?;
+        if !path_text_is_within_folder(&current_path, &scope.folder)
+            || !path_text_is_within_folder(&staged_path, &scope.folder)
+        {
+            bail!("The prepared folder sync would mutate a catalog track outside its folder");
+        }
+        if !filename_has_mp3_extension(&current_filename)
+            || !filename_has_mp3_extension(&staged_filename)
+            || current_album_id.trim() != scope.album_id
+            || staged_album_id.trim() != scope.album_id
+        {
+            bail!("The prepared folder sync would change the selected album identity");
+        }
+        changed_count += 1;
+    }
+    if changed_count != expected_changed_tracks {
+        bail!("The prepared folder sync changed-track count does not match its staged scope");
+    }
+    Ok(())
+}
+
+fn validate_staged_album_scope(
+    conn: &Connection,
+    session_id: i64,
+    scope: &ExistingFolderScope,
+    expected_changed_albums: i64,
+) -> Result<()> {
+    let (catalog_album_count, staged_album_count, matched_album_count): (i64, i64, i64) = conn
+        .query_row(
+            "
+            SELECT
+                (SELECT COUNT(*) FROM albums),
+                (SELECT COUNT(*) FROM import_stage_albums WHERE session_id = ?1),
+                (
+                    SELECT COUNT(*)
+                    FROM import_stage_albums AS staged
+                    JOIN albums AS current ON current.id = staged.album_id
+                    WHERE staged.session_id = ?1
+                )
+            ",
+            params![session_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+    if catalog_album_count != staged_album_count || matched_album_count != catalog_album_count {
+        bail!("The prepared folder sync does not preserve the complete catalog album identity set");
+    }
+
+    let selected_identity_changes: i64 = conn.query_row(
+        "
+        SELECT COUNT(*)
+        FROM import_stage_albums AS staged
+        JOIN albums AS current ON current.id = staged.album_id
+        WHERE staged.session_id = ?1
+          AND staged.album_id = ?2
+          AND current.album_unique_id IS NOT staged.album_unique_id
+        ",
+        params![session_id, &scope.album_id],
+        |row| row.get(0),
+    )?;
+    if selected_identity_changes != 0 {
+        bail!("The prepared folder sync would change the selected catalog album identity");
+    }
+
+    let outside_album_changes: i64 = conn.query_row(
+        "
+        SELECT COUNT(*)
+        FROM import_stage_albums AS staged
+        JOIN albums AS current ON current.id = staged.album_id
+        WHERE staged.session_id = ?1
+          AND staged.album_id != ?2
+          AND (
+              current.album_unique_id IS NOT staged.album_unique_id
+              OR current.album IS NOT staged.album
+              OR current.album_artist_display IS NOT staged.final_album_artist_display
+              OR current.canonical_genre IS NOT staged.canonical_genre
+              OR current.genre_normalized IS NOT staged.genre_normalized
+              OR current.publisher IS NOT staged.publisher
+              OR current.year IS NOT staged.year
+              OR current.release_year IS NOT staged.release_year
+              OR current.total_tracks IS NOT staged.total_tracks
+              OR current.rated_tracks IS NOT staged.rated_tracks
+              OR current.rating_completeness IS NOT staged.rating_completeness
+              OR current.total_seconds IS NOT staged.total_seconds
+              OR current.loved_tracks IS NOT staged.loved_tracks
+              OR current.tmoe_seconds IS NOT staged.tmoe_seconds
+              OR current.ae_ratio IS NOT staged.ae_ratio
+              OR current.album_rating IS NOT staged.album_rating
+              OR current.calculated_album_rating IS NOT staged.calculated_album_rating
+              OR current.effective_album_rating IS NOT staged.effective_album_rating
+              OR current.album_score IS NOT staged.album_score
+          )
+        ",
+        params![session_id, &scope.album_id],
+        |row| row.get(0),
+    )?;
+    if outside_album_changes != 0 {
+        bail!("The prepared folder sync would mutate a catalog album outside its folder");
+    }
+
+    let selected_changed_albums: i64 = conn.query_row(
+        "
+        SELECT COUNT(*)
+        FROM import_stage_albums AS staged
+        JOIN albums AS current ON current.id = staged.album_id
+        WHERE staged.session_id = ?1
+          AND staged.album_id = ?2
+          AND (
+              current.album IS NOT staged.album
+              OR current.album_artist_display IS NOT staged.final_album_artist_display
+              OR current.canonical_genre IS NOT staged.canonical_genre
+              OR current.publisher IS NOT staged.publisher
+              OR current.year IS NOT staged.year
+              OR current.release_year IS NOT staged.release_year
+              OR current.total_tracks IS NOT staged.total_tracks
+              OR current.rated_tracks IS NOT staged.rated_tracks
+              OR ABS(current.rating_completeness - staged.rating_completeness) > 0.000001
+              OR current.total_seconds IS NOT staged.total_seconds
+              OR current.loved_tracks IS NOT staged.loved_tracks
+              OR current.tmoe_seconds IS NOT staged.tmoe_seconds
+              OR ABS(current.ae_ratio - staged.ae_ratio) > 0.000001
+              OR current.album_rating IS NOT staged.album_rating
+              OR current.effective_album_rating IS NOT staged.effective_album_rating
+              OR (current.album_score IS NULL) != (staged.album_score IS NULL)
+              OR (
+                  current.album_score IS NOT NULL
+                  AND staged.album_score IS NOT NULL
+                  AND ABS(current.album_score - staged.album_score) > 0.000001
+              )
+          )
+        ",
+        params![session_id, &scope.album_id],
+        |row| row.get(0),
+    )?;
+    if selected_changed_albums != expected_changed_albums {
+        bail!("The prepared folder sync changed-album count is outside its selected scope");
+    }
+    Ok(())
+}
+
+fn apply_existing_folder_preview(
+    conn: &mut Connection,
+    database_path: &Path,
+    session_id: i64,
+    app_data_dir: &Path,
+    snapshot_path: &Path,
+) -> Result<importer::BridgeImportSummary> {
+    match importer::apply_bridge_import_preview(conn, database_path, session_id) {
+        Ok(summary) => Ok(summary),
+        Err(error) => match importer::bridge_session_state_optional(conn, session_id) {
+            Ok(Some(state)) if state.status == "completed" => {
+                let import_run_id = state.import_run_id.ok_or_else(|| {
+                    error.context(
+                        "The folder sync committed, but its completed session has no import run",
+                    )
+                })?;
+                Ok(importer::BridgeImportSummary {
+                    import_run_id,
+                    backup_path: state.backup_path,
+                })
+            }
+            Ok(Some(_)) => {
+                let cleanup = importer::discard_bridge_import_preview(conn, session_id)
+                    .and_then(|_| cleanup_sync_snapshot_artifacts(app_data_dir, snapshot_path));
+                Err(with_sync_cleanup_context(error, cleanup))
+            }
+            Ok(None) => Err(with_sync_cleanup_context(
+                error,
+                cleanup_sync_snapshot_artifacts(app_data_dir, snapshot_path),
+            )),
+            Err(verification_error) => Err(error.context(format!(
+                "Could not prove whether the existing-folder catalog commit completed; its session and snapshot were retained for retry: {verification_error:#}"
+            ))),
+        },
+    }
+}
+
+fn discard_invalid_sync_preview(
+    conn: &Connection,
+    session_id: i64,
+    app_data_dir: &Path,
+    snapshot_path: &Path,
+    error: anyhow::Error,
+) -> anyhow::Error {
+    let cleanup = importer::discard_bridge_import_preview(conn, session_id)
+        .and_then(|_| cleanup_sync_snapshot_artifacts(app_data_dir, snapshot_path));
+    with_sync_cleanup_context(error, cleanup)
+}
+
+fn with_sync_cleanup_context(error: anyhow::Error, cleanup: Result<()>) -> anyhow::Error {
+    match cleanup {
+        Ok(()) => error,
+        Err(cleanup_error) => error.context(format!(
+            "Aurora retained folder-sync recovery artifacts because cleanup failed: {cleanup_error:#}"
+        )),
+    }
+}
+
+fn cleanup_abandoned_bridge_sync_sessions(conn: &Connection, app_data_dir: &Path) -> Result<()> {
+    let snapshot_directory = app_data_dir.join("album-folder-imports");
+    for (session_id, source_path) in importer::noncompleted_bridge_sessions(conn)? {
+        if is_bridge_sync_snapshot_path(app_data_dir, Path::new(&source_path)) {
+            importer::discard_bridge_import_preview(conn, session_id).with_context(|| {
+                format!("Could not discard abandoned Aurora folder-sync session {session_id}")
+            })?;
+        }
+    }
+    if !snapshot_directory.try_exists()? {
+        return Ok(());
+    }
+    for entry in fs::read_dir(&snapshot_directory).with_context(|| {
+        format!(
+            "Could not inspect Aurora folder-sync snapshots {}",
+            snapshot_directory.display()
+        )
+    })? {
+        let entry = entry?;
+        if entry.file_type()?.is_file()
+            && entry
+                .file_name()
+                .to_str()
+                .is_some_and(is_bridge_sync_artifact_name)
+        {
+            fs::remove_file(entry.path()).with_context(|| {
+                format!(
+                    "Could not remove abandoned Aurora folder-sync artifact {}",
+                    entry.path().display()
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
+fn cleanup_sync_snapshot_artifacts(app_data_dir: &Path, snapshot_path: &Path) -> Result<()> {
+    if !is_bridge_sync_snapshot_path(app_data_dir, snapshot_path) {
+        bail!(
+            "Refusing to clean an invalid Aurora folder-sync snapshot path: {}",
+            snapshot_path.display()
+        );
+    }
+    for artifact in [
+        snapshot_path.to_path_buf(),
+        snapshot_path.with_extension("manifest.json"),
+        snapshot_path.with_extension("tsv.building"),
+    ] {
+        if artifact.try_exists()? {
+            fs::remove_file(&artifact).with_context(|| {
+                format!(
+                    "Could not remove Aurora folder-sync artifact {}",
+                    artifact.display()
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
+fn is_bridge_sync_snapshot_path(app_data_dir: &Path, path: &Path) -> bool {
+    path.parent().map(normalized_path)
+        == Some(normalized_path(&app_data_dir.join("album-folder-imports")))
+        && path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .is_some_and(|value| value.ends_with(".tsv") && is_bridge_sync_artifact_name(value))
+}
+
+fn is_bridge_sync_artifact_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix(SYNC_SNAPSHOT_PREFIX) else {
+        return false;
+    };
+    let token = [".tsv", ".manifest.json", ".tsv.building"]
+        .into_iter()
+        .find_map(|suffix| rest.strip_suffix(suffix));
+    token.is_some_and(|value| {
+        value.len() == 24 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+    })
+}
+
+fn path_is_strictly_within(path: &Path, root: &Path) -> bool {
+    normalized_path(path).starts_with(&(normalized_path(root) + "\\"))
+}
+
+fn path_text_is_within_folder(path: &str, folder: &Path) -> bool {
+    let path = normalized_path(Path::new(path));
+    let folder = normalized_path(folder);
+    path == folder || path.starts_with(&(folder + "\\"))
+}
+
+fn filename_has_mp3_extension(filename: &str) -> bool {
+    Path::new(filename)
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("mp3"))
 }
 
 fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value> {
@@ -1847,6 +2877,326 @@ mod tests {
             snapshot_path: "snapshot.tsv".to_owned(),
             albums,
         }
+    }
+
+    fn sync_scope_database() -> Connection {
+        let conn = Connection::open_in_memory().expect("sync scope database");
+        conn.execute_batch(
+            "
+            CREATE TABLE tracks (
+                file_path TEXT, filename TEXT, album_id TEXT,
+                album_unique_id TEXT, row_hash TEXT
+            );
+            CREATE TABLE import_stage_tracks (
+                session_id INTEGER, file_path TEXT, filename TEXT,
+                album_id TEXT, album_unique_id TEXT, row_hash TEXT
+            );
+            CREATE TABLE albums (
+                id TEXT PRIMARY KEY,
+                album_unique_id TEXT,
+                album TEXT,
+                album_artist_display TEXT,
+                canonical_genre TEXT,
+                genre_normalized TEXT,
+                publisher TEXT,
+                year INTEGER,
+                release_year INTEGER,
+                total_tracks INTEGER NOT NULL DEFAULT 1,
+                rated_tracks INTEGER NOT NULL DEFAULT 0,
+                rating_completeness REAL NOT NULL DEFAULT 0,
+                total_seconds INTEGER NOT NULL DEFAULT 0,
+                loved_tracks INTEGER NOT NULL DEFAULT 0,
+                tmoe_seconds INTEGER NOT NULL DEFAULT 0,
+                ae_ratio REAL NOT NULL DEFAULT 0,
+                album_rating INTEGER,
+                calculated_album_rating INTEGER,
+                effective_album_rating INTEGER,
+                album_score REAL
+            );
+            CREATE TABLE import_stage_albums (
+                session_id INTEGER,
+                album_id TEXT,
+                album_unique_id TEXT,
+                album TEXT,
+                final_album_artist_display TEXT,
+                canonical_genre TEXT,
+                genre_normalized TEXT,
+                publisher TEXT,
+                year INTEGER,
+                release_year INTEGER,
+                total_tracks INTEGER NOT NULL DEFAULT 1,
+                rated_tracks INTEGER NOT NULL DEFAULT 0,
+                rating_completeness REAL NOT NULL DEFAULT 0,
+                total_seconds INTEGER NOT NULL DEFAULT 0,
+                loved_tracks INTEGER NOT NULL DEFAULT 0,
+                tmoe_seconds INTEGER NOT NULL DEFAULT 0,
+                ae_ratio REAL NOT NULL DEFAULT 0,
+                album_rating INTEGER,
+                calculated_album_rating INTEGER,
+                effective_album_rating INTEGER,
+                album_score REAL
+            );
+            ",
+        )
+        .expect("sync scope schema");
+        conn
+    }
+
+    #[test]
+    fn sync_request_uses_bounded_deduplicated_absolute_library_folders() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path().join("library");
+        let album = root.join("Album");
+        let outside = temp.path().join("outside");
+        fs::create_dir_all(&album).expect("album folder");
+        fs::create_dir(&outside).expect("outside folder");
+        let root = root.canonicalize().expect("canonical root");
+        let album = album.canonicalize().expect("canonical album");
+
+        let request: SyncExistingFoldersRequest = serde_json::from_value(json!({
+            "folderPaths": [display_path(&album), display_path(&album)]
+        }))
+        .expect("sync request");
+        let folders = canonicalize_sync_folder_paths(request.folder_paths, &[root])
+            .expect("deduplicated folders");
+        assert_eq!(folders, vec![album]);
+
+        let relative = canonicalize_sync_folder_paths(vec!["Album".to_owned()], &folders)
+            .expect_err("relative path");
+        assert!(relative.to_string().contains("absolute"));
+        let outside = canonicalize_sync_folder_paths(
+            vec![display_path(
+                &outside.canonicalize().expect("canonical outside"),
+            )],
+            &folders,
+        )
+        .expect_err("outside path");
+        assert!(outside.to_string().contains("outside every configured"));
+    }
+
+    #[test]
+    fn sync_request_count_is_bounded_before_database_or_filesystem_work() {
+        let temp = tempdir().expect("tempdir");
+        let request = SyncExistingFoldersRequest {
+            folder_paths: vec!["C:\\Music\\Album".to_owned(); MAX_SYNC_FOLDERS + 1],
+        };
+
+        let error = sync_existing_folders(temp.path(), request).expect_err("bounded request");
+
+        assert!(error.to_string().contains("at most"));
+        assert!(!temp.path().join("music-library.sqlite3").exists());
+    }
+
+    #[test]
+    fn capabilities_advertise_existing_folder_sync() {
+        let result = capabilities().expect("capabilities");
+        assert_eq!(result["supports"]["syncExistingFolders"], true);
+    }
+
+    #[test]
+    fn sync_cleanup_ownership_is_bound_to_the_current_app_data_directory() {
+        let temp = tempdir().expect("tempdir");
+        let app_data = temp.path().join("current");
+        let external = temp.path().join("external");
+        let name = format!("{SYNC_SNAPSHOT_PREFIX}0123456789abcdef01234567.tsv");
+        let owned = app_data.join("album-folder-imports").join(&name);
+        let foreign = external.join("album-folder-imports").join(name);
+
+        assert!(is_bridge_sync_snapshot_path(&app_data, &owned));
+        assert!(!is_bridge_sync_snapshot_path(&app_data, &foreign));
+    }
+
+    #[test]
+    fn sync_batch_backup_is_valid_and_uses_separate_bounded_retention() {
+        let temp = tempdir().expect("tempdir");
+        let app_data = temp.path().join("app-data");
+        fs::create_dir(&app_data).expect("app data");
+        let database = app_data.join("music-library.sqlite3");
+        let conn = open_database(&database).expect("database");
+        conn.execute(
+            "UPDATE app_settings SET backup_retention = 1 WHERE id = 1",
+            [],
+        )
+        .expect("backup retention");
+
+        let current = create_sync_batch_backup(&conn, &database).expect("batch backup");
+        let backup_conn = Connection::open(&current).expect("read batch backup");
+        let schema_version: i64 = backup_conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("backup schema");
+        assert!(schema_version > 0);
+        drop(backup_conn);
+
+        let old = current.parent().expect("backup directory").join(format!(
+            "{SYNC_BACKUP_PREFIX}abcdef0123456789abcdef01{SYNC_BACKUP_SUFFIX}"
+        ));
+        fs::write(&old, b"older protected backup").expect("old backup");
+        enforce_sync_backup_retention(&conn, &database, &current).expect("sync retention");
+
+        assert!(current.is_file());
+        assert!(!old.exists());
+    }
+
+    #[test]
+    fn existing_folder_delta_changes_only_its_album_and_preserves_identity() {
+        let temp = tempdir().expect("tempdir");
+        let album = temp.path().join("library").join("Album");
+        let other = temp.path().join("library").join("Other");
+        fs::create_dir_all(&album).expect("album folder");
+        fs::create_dir_all(&other).expect("other folder");
+        let album = album.canonicalize().expect("canonical album");
+        let other = other.canonicalize().expect("canonical other");
+        let conn = sync_scope_database();
+        conn.execute(
+            "INSERT INTO tracks VALUES (?1, '01.mp3', 'album-1', 'uid-1', 'old-inside')",
+            [display_path(&album)],
+        )
+        .expect("inside track");
+        conn.execute(
+            "INSERT INTO tracks VALUES (?1, '01.mp3', 'album-2', 'uid-2', 'same-outside')",
+            [display_path(&other)],
+        )
+        .expect("outside track");
+        conn.execute(
+            "INSERT INTO import_stage_tracks VALUES (7, ?1, '01.mp3', 'album-1', 'uid-1', 'new-inside')",
+            [display_path(&album)],
+        )
+        .expect("staged inside track");
+        conn.execute(
+            "INSERT INTO import_stage_tracks VALUES (7, ?1, '01.mp3', 'album-2', 'uid-2', 'same-outside')",
+            [display_path(&other)],
+        )
+        .expect("staged outside track");
+        conn.execute(
+            "INSERT INTO albums (id, album_unique_id, album) VALUES ('album-1', 'uid-1', 'Original'), ('album-2', 'uid-2', 'Other')",
+            [],
+        )
+        .expect("catalog albums");
+        conn.execute(
+            "INSERT INTO import_stage_albums (session_id, album_id, album_unique_id, album) VALUES (7, 'album-1', 'uid-1', 'Updated'), (7, 'album-2', 'uid-2', 'Other')",
+            [],
+        )
+        .expect("staged albums");
+
+        let scope = catalog_scope_for_existing_folder(&conn, album).expect("catalog scope");
+        assert_eq!(scope.album_id, "album-1");
+        assert_eq!(scope.track_count, 1);
+        let counts = SyncDeltaCounts {
+            added_tracks: 0,
+            changed_tracks: 1,
+            removed_tracks: 0,
+            added_albums: 0,
+            changed_albums: 1,
+            removed_albums: 0,
+        };
+        validate_sync_delta_counts(&counts, scope.track_count).expect("metadata-only delta");
+        validate_staged_sync_scope(
+            &conn,
+            7,
+            &scope,
+            counts.changed_tracks,
+            counts.changed_albums,
+        )
+        .expect("scoped staged delta");
+    }
+
+    #[test]
+    fn existing_folder_delta_rejects_outside_changes_and_identity_churn() {
+        let temp = tempdir().expect("tempdir");
+        let album = temp.path().join("library").join("Album");
+        let other = temp.path().join("library").join("Other");
+        fs::create_dir_all(&album).expect("album folder");
+        fs::create_dir_all(&other).expect("other folder");
+        let album = album.canonicalize().expect("canonical album");
+        let other = other.canonicalize().expect("canonical other");
+        let conn = sync_scope_database();
+        conn.execute(
+            "INSERT INTO tracks VALUES (?1, '01.mp3', 'album-1', 'uid-1', 'old-inside')",
+            [display_path(&album)],
+        )
+        .expect("inside track");
+        conn.execute(
+            "INSERT INTO tracks VALUES (?1, '01.mp3', 'album-2', 'uid-2', 'old-outside')",
+            [display_path(&other)],
+        )
+        .expect("outside track");
+        conn.execute(
+            "INSERT INTO import_stage_tracks VALUES (8, ?1, '01.mp3', 'album-1', 'uid-1', 'new-inside')",
+            [display_path(&album)],
+        )
+        .expect("staged inside track");
+        conn.execute(
+            "INSERT INTO import_stage_tracks VALUES (8, ?1, '01.mp3', 'album-2', 'uid-2', 'new-outside')",
+            [display_path(&other)],
+        )
+        .expect("staged outside track");
+        conn.execute(
+            "INSERT INTO albums (id, album_unique_id, album) VALUES ('album-1', 'uid-1', 'Original'), ('album-2', 'uid-2', 'Other')",
+            [],
+        )
+        .expect("catalog albums");
+        conn.execute(
+            "INSERT INTO import_stage_albums (session_id, album_id, album_unique_id, album) VALUES (8, 'album-1', 'uid-1', 'Original'), (8, 'album-2', 'uid-2', 'Other')",
+            [],
+        )
+        .expect("staged albums");
+        let scope = catalog_scope_for_existing_folder(&conn, album).expect("catalog scope");
+
+        let outside_error =
+            validate_staged_sync_scope(&conn, 8, &scope, 2, 0).expect_err("outside catalog change");
+        assert!(outside_error.to_string().contains("outside its folder"));
+
+        conn.execute(
+            "UPDATE import_stage_tracks SET row_hash = 'old-outside' WHERE session_id = 8 AND album_id = 'album-2'",
+            [],
+        )
+        .expect("restore outside row");
+        conn.execute(
+            "UPDATE import_stage_albums SET album = 'Changed other' WHERE session_id = 8 AND album_id = 'album-2'",
+            [],
+        )
+        .expect("change outside album");
+        let outside_album_error =
+            validate_staged_sync_scope(&conn, 8, &scope, 1, 1).expect_err("outside album change");
+        assert!(outside_album_error
+            .to_string()
+            .contains("album outside its folder"));
+        conn.execute(
+            "UPDATE import_stage_albums SET album = 'Other' WHERE session_id = 8 AND album_id = 'album-2'",
+            [],
+        )
+        .expect("restore outside album");
+        conn.execute(
+            "UPDATE import_stage_tracks SET album_id = 'different-album' WHERE session_id = 8 AND file_path = ?1",
+            [display_path(&scope.folder)],
+        )
+        .expect("change identity");
+        let identity_error =
+            validate_staged_sync_scope(&conn, 8, &scope, 1, 0).expect_err("identity churn");
+        assert!(identity_error.to_string().contains("identity"));
+    }
+
+    #[test]
+    fn existing_folder_delta_rejects_added_or_removed_rows_but_allows_retry_noop() {
+        let invalid = SyncDeltaCounts {
+            added_tracks: 1,
+            changed_tracks: 0,
+            removed_tracks: 0,
+            added_albums: 0,
+            changed_albums: 0,
+            removed_albums: 0,
+        };
+        assert!(validate_sync_delta_counts(&invalid, 1).is_err());
+
+        let retry = SyncDeltaCounts {
+            added_tracks: 0,
+            changed_tracks: 0,
+            removed_tracks: 0,
+            added_albums: 0,
+            changed_albums: 0,
+            removed_albums: 0,
+        };
+        validate_sync_delta_counts(&retry, 1).expect("idempotent retry no-op");
     }
 
     #[test]

@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Mutex,
 };
 use std::time::Instant;
@@ -52,6 +52,7 @@ const REMOVED_TRACKS_SQL: &str = "
 ";
 static IMPORT_CANCEL_REQUESTED: AtomicBool = AtomicBool::new(false);
 static IMPORT_WORKFLOW_RUNNING: AtomicBool = AtomicBool::new(false);
+static BACKUP_FILENAME_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static IMPORT_INTERRUPT_HANDLE: Mutex<Option<InterruptHandle>> = Mutex::new(None);
 
 pub(crate) const REQUIRED_COLUMNS: [&str; 17] = [
@@ -3293,17 +3294,7 @@ fn create_backup(
         .join("backups");
     fs::create_dir_all(&backup_dir).context("Could not create backup directory")?;
 
-    let backup_path = backup_dir.join(format!(
-        "music-library-{}-before-import.sqlite3",
-        Utc::now().format("%Y%m%d-%H%M%S")
-    ));
-    fs::copy(db_path, &backup_path).with_context(|| {
-        format!(
-            "Could not create database backup from {} to {}",
-            db_path.display(),
-            backup_path.display()
-        )
-    })?;
+    let backup_path = copy_database_to_unique_backup(db_path, &backup_dir)?;
 
     conn.execute(
         "
@@ -3324,16 +3315,72 @@ fn create_backup(
     Ok(Some(backup_path))
 }
 
+fn copy_database_to_unique_backup(db_path: &Path, backup_dir: &Path) -> Result<PathBuf> {
+    for _ in 0..100 {
+        let now = Utc::now();
+        let sequence = BACKUP_FILENAME_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let backup_path = backup_dir.join(format!(
+            "music-library-{}-{:08x}-{sequence:016x}-before-import.sqlite3",
+            now.format("%Y%m%d-%H%M%S-%9f"),
+            std::process::id(),
+        ));
+        let mut backup = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&backup_path)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "Could not create database backup file {}",
+                        backup_path.display()
+                    )
+                });
+            }
+        };
+        let copy_result = (|| -> Result<()> {
+            let mut source = fs::File::open(db_path).with_context(|| {
+                format!(
+                    "Could not open database backup source {}",
+                    db_path.display()
+                )
+            })?;
+            std::io::copy(&mut source, &mut backup).with_context(|| {
+                format!(
+                    "Could not copy database backup from {} to {}",
+                    db_path.display(),
+                    backup_path.display()
+                )
+            })?;
+            backup.sync_all().with_context(|| {
+                format!(
+                    "Could not synchronize database backup {}",
+                    backup_path.display()
+                )
+            })?;
+            Ok(())
+        })();
+        if let Err(error) = copy_result {
+            drop(backup);
+            let _ = fs::remove_file(&backup_path);
+            return Err(error);
+        }
+        return Ok(backup_path);
+    }
+    bail!("Could not reserve a unique database backup filename after 100 attempts")
+}
+
 fn enforce_backup_retention(backup_dir: &Path, backup_retention: usize) -> Result<()> {
     let mut backups = fs::read_dir(backup_dir)
         .with_context(|| format!("Could not read backup directory {}", backup_dir.display()))?
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
-            entry
-                .path()
-                .extension()
-                .map(|extension| extension == "sqlite3")
-                .unwrap_or(false)
+            let path = entry.path();
+            path.extension()
+                .is_some_and(|extension| extension == "sqlite3")
+                && !is_aurora_sync_batch_backup(&path)
         })
         .collect::<Vec<_>>();
 
@@ -3351,6 +3398,16 @@ fn enforce_backup_retention(backup_dir: &Path, backup_retention: usize) -> Resul
     }
 
     Ok(())
+}
+
+fn is_aurora_sync_batch_backup(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .and_then(|name| name.strip_prefix("music-library-aurora-sync-"))
+        .and_then(|value| value.strip_suffix("-before-import.sqlite3"))
+        .is_some_and(|token| {
+            token.len() == 24 && token.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
 }
 
 pub(crate) fn resolve_source_path(source_path: &str) -> Result<PathBuf> {
@@ -3616,6 +3673,38 @@ fn emit_progress(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn database_backup_copy_never_reuses_an_existing_filename() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let database = temp.path().join("music-library.sqlite3");
+        let backups = temp.path().join("backups");
+        fs::create_dir(&backups).expect("backup directory");
+        fs::write(&database, b"database bytes").expect("database fixture");
+
+        let first = copy_database_to_unique_backup(&database, &backups).expect("first backup");
+        let second = copy_database_to_unique_backup(&database, &backups).expect("second backup");
+
+        assert_ne!(first, second);
+        assert_eq!(fs::read(first).expect("first bytes"), b"database bytes");
+        assert_eq!(fs::read(second).expect("second bytes"), b"database bytes");
+    }
+
+    #[test]
+    fn ordinary_import_retention_never_deletes_an_aurora_batch_backup() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let protected = temp
+            .path()
+            .join("music-library-aurora-sync-0123456789abcdef01234567-before-import.sqlite3");
+        let ordinary = temp.path().join("music-library-test-before-import.sqlite3");
+        fs::write(&protected, b"batch baseline").expect("protected backup");
+        fs::write(&ordinary, b"ordinary backup").expect("ordinary backup");
+
+        enforce_backup_retention(temp.path(), 0).expect("retention");
+
+        assert!(protected.is_file());
+        assert!(!ordinary.exists());
+    }
 
     fn sample_final_album() -> FinalAlbum {
         FinalAlbum {

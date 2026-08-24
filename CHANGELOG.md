@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.144.0] - 2026-08-24
+### Added
+- Added the Aurora `syncExistingFolders` bridge operation for synchronizing up to 32 already-cataloged album folders after verified MP3 tag edits, with one protected whole-request rollback baseline and per-folder import receipts.
+
+### Changed
+- Existing-folder bridge synchronization reuses the guarded folder scanner and atomic import path, requires a zero add/remove delta, preserves the complete track and album identity sets, and supports safe no-op or ambiguous-commit retries.
+- Synchronized app metadata and provider user agents to `0.144.0`.
+
+### Fixed
+- The folder scanner now ignores only exact regular, non-linked Aurora transaction backups named `.<MP3 filename>.aurora-<positive operation id>.original.backup`; ordinary backup files and near-miss names remain rejected.
+
 ## [0.143.1] - 2026-08-24
 ### Fixed
 - Canonicalized the two folder-sync catalog fixtures before storing their paths, preventing GitHub's Windows short temp-path alias from producing false snapshot and non-MP3 safety-test failures.
