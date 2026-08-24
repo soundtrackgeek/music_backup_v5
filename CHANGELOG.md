@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.144.2] - 2026-08-24
+
+### Fixed
+
+- Preserved verified legacy `Default`-owned POPM whole-star ratings during folder imports and Aurora fallback scans instead of interpreting those intact ratings as unrated tracks.
+- Made explicit MusicBee-owned POPM ratings take precedence while retaining fail-closed handling for duplicate or unsupported rating frames.
+
+### Changed
+
+- Added the `defaultPopmRatingFallback` Aurora bridge capability so Aurora can refuse unsafe older helpers before synchronizing edited albums.
+- Synchronized app metadata and provider user agents to `0.144.2`.
+
 ## [0.144.1] - 2026-08-24
 ### Fixed
 - Repaired canonical MusicBee half-star ratings that older catalogs retained only in `rating_raw`, including the affected album aggregates, before Aurora existing-folder sync compares a scoped edit.

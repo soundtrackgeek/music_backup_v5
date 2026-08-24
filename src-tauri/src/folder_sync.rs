@@ -22,6 +22,7 @@ const MAX_SCAN_ENTRIES: usize = 20_000;
 const MAX_BATCH_ALBUMS: usize = 100;
 const MAX_BATCH_TRACKS: usize = 50_000;
 const MUSICBEE_POPM_OWNER: &str = "MusicBee";
+const LEGACY_DEFAULT_POPM_OWNER: &str = "Default";
 const DISPLAY_ARTIST_DESCRIPTION: &str = "DISPLAY ARTIST";
 const LOVE_RATING_DESCRIPTION: &str = "LOVE RATING";
 const RELEASE_TIME_DESCRIPTION: &str = "TDRL";
@@ -37,6 +38,8 @@ const MUSICBEE_RATINGS: [(u8, f64); 10] = [
     (242, 4.5),
     (255, 5.0),
 ];
+const LEGACY_DEFAULT_RATINGS: [(u8, f64); 5] =
+    [(51, 1.0), (102, 2.0), (153, 3.0), (204, 4.0), (255, 5.0)];
 const SAFE_SIDECAR_EXTENSIONS: &[&str] = &[
     "accurip", "avif", "bmp", "cue", "db", "doc", "docx", "gif", "heic", "htm", "html", "ini",
     "jpeg", "jpg", "json", "log", "lrc", "m3u", "m3u8", "md", "md5", "nfo", "par2", "pdf", "pls",
@@ -1447,29 +1450,40 @@ fn unique_extended_text(tag: &Tag, description: &str) -> Result<Option<String>> 
 }
 
 fn musicbee_rating(tag: &Tag, path: &Path) -> Result<Option<f64>> {
-    let values = tag
-        .frames()
-        .filter(|frame| frame.id() == "POPM")
-        .filter_map(|frame| frame.content().popularimeter())
-        .filter(|value| value.user == MUSICBEE_POPM_OWNER)
-        .map(|value| value.rating)
-        .collect::<Vec<_>>();
-    if values.len() > 1 {
-        bail!("{} has duplicate MusicBee rating frames", path.display());
+    let ratings_for = |owner: &str| {
+        tag.frames()
+            .filter(|frame| frame.id() == "POPM")
+            .filter_map(|frame| frame.content().popularimeter())
+            .filter(|value| value.user == owner)
+            .map(|value| value.rating)
+            .collect::<Vec<_>>()
+    };
+    let musicbee = ratings_for(MUSICBEE_POPM_OWNER);
+    let legacy_default = ratings_for(LEGACY_DEFAULT_POPM_OWNER);
+    if musicbee.len() > 1 || legacy_default.len() > 1 {
+        bail!(
+            "{} has duplicate MusicBee-compatible rating frames",
+            path.display()
+        );
     }
-    let Some(value) = values.first().copied() else {
+
+    let (value, mapping, label) = if let Some(value) = musicbee.first().copied() {
+        (value, MUSICBEE_RATINGS.as_slice(), "MusicBee")
+    } else if let Some(value) = legacy_default.first().copied() {
+        (value, LEGACY_DEFAULT_RATINGS.as_slice(), "legacy Default")
+    } else {
         return Ok(None);
     };
     if value == 0 {
         return Ok(None);
     }
-    MUSICBEE_RATINGS
+    mapping
         .iter()
         .find(|(byte, _)| *byte == value)
         .map(|(_, rating)| Some(*rating))
         .ok_or_else(|| {
             anyhow!(
-                "{} has unsupported MusicBee rating byte {value}",
+                "{} has unsupported {label} rating byte {value}",
                 path.display()
             )
         })
@@ -1756,6 +1770,43 @@ mod tests {
         });
         tag.write_to_path(path, Version::Id3v24)
             .expect("write tags");
+    }
+
+    #[test]
+    fn scanner_reads_legacy_default_popm_and_prefers_an_explicit_musicbee_rating() {
+        let path = Path::new("legacy-default-rating.mp3");
+        let mut tag = Tag::new();
+        tag.add_frame(Popularimeter {
+            user: LEGACY_DEFAULT_POPM_OWNER.to_owned(),
+            rating: 204,
+            counter: 0,
+        });
+        assert_eq!(
+            musicbee_rating(&tag, path).expect("legacy Default rating"),
+            Some(4.0)
+        );
+
+        tag.add_frame(Popularimeter {
+            user: MUSICBEE_POPM_OWNER.to_owned(),
+            rating: 128,
+            counter: 0,
+        });
+        assert_eq!(
+            musicbee_rating(&tag, path).expect("preferred MusicBee rating"),
+            Some(3.0)
+        );
+    }
+
+    #[test]
+    fn scanner_rejects_an_unknown_legacy_default_rating_byte() {
+        let mut tag = Tag::new();
+        tag.add_frame(Popularimeter {
+            user: LEGACY_DEFAULT_POPM_OWNER.to_owned(),
+            rating: 77,
+            counter: 0,
+        });
+
+        assert!(musicbee_rating(&tag, Path::new("unknown-default-rating.mp3")).is_err());
     }
 
     #[test]

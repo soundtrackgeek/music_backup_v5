@@ -328,6 +328,7 @@ fn capabilities() -> Result<Value> {
             "previewRequired": true,
             "syncExistingFolders": true,
             "targetedExistingFileSync": true,
+            "defaultPopmRatingFallback": true,
         },
     }))
 }
@@ -3168,6 +3169,7 @@ mod tests {
         let result = capabilities().expect("capabilities");
         assert_eq!(result["supports"]["syncExistingFolders"], true);
         assert_eq!(result["supports"]["targetedExistingFileSync"], true);
+        assert_eq!(result["supports"]["defaultPopmRatingFallback"], true);
     }
 
     #[test]
