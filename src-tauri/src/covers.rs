@@ -23,7 +23,7 @@ const SUPPORTED_ARCHIVE_EXTENSIONS: [&str; 5] = ["jpg", "jpeg", "png", "gif", "b
 const COMPLETION_COVER_MAX_BYTES: usize = 5 * 1024 * 1024;
 const COMPLETION_COVER_REQUEST_INTERVAL: Duration = Duration::from_millis(1_200);
 const COMPLETION_COVER_USER_AGENT: &str =
-    "music-backup-v5/0.144.3 (local desktop cover enrichment)";
+    "music-backup-v5/0.144.4 (local desktop cover enrichment)";
 
 static COMPLETION_COVER_REQUEST_GATE: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 

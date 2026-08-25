@@ -72,7 +72,10 @@ const CATALOG_TRACK_SNAPSHOT_SQL: &str = r#"
       ON r.id = t.id
      AND COALESCE(r.file_path, '') = COALESCE(t.file_path, '')
      AND COALESCE(r.filename, '') = COALESCE(t.filename, '')
-    ORDER BY t.id
+    LEFT JOIN albums AS a ON a.id = t.album_id
+    ORDER BY t.album_id,
+             CASE WHEN t.album_rating IS a.album_rating THEN 0 ELSE 1 END,
+             t.id
 "#;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1741,6 +1744,7 @@ mod tests {
             INSERT INTO import_runs VALUES (1, 'completed');
             CREATE TABLE tracks (
                 id INTEGER PRIMARY KEY, display_artist TEXT,
+                album_id TEXT,
                 album_rating_raw TEXT, album_rating INTEGER, disc_number INTEGER,
                 album TEXT, genre TEXT, love TEXT, publisher TEXT, rating TEXT,
                 rating_raw TEXT, normalized_rating INTEGER, title TEXT,
@@ -1748,6 +1752,7 @@ mod tests {
                 album_unique_id TEXT, file_path TEXT, filename TEXT,
                 album_artist_display TEXT, time_seconds INTEGER
             );
+            CREATE TABLE albums (id TEXT PRIMARY KEY, album_rating INTEGER);
             CREATE TABLE raw_tracks (
                 id INTEGER PRIMARY KEY, album_rating TEXT, disc_number TEXT,
                 rating TEXT, track_number TEXT, year_value TEXT,
@@ -2059,6 +2064,35 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(&rows[0][13], display_path(&destination.join("Disc 2")));
         assert!(source_is_unchanged(&conn, &output).expect("batch guard"));
+    }
+
+    #[test]
+    fn catalog_snapshot_orders_the_authoritative_album_rating_first() {
+        let conn = Connection::open_in_memory().expect("database");
+        create_catalog(&conn);
+        conn.execute(
+            "INSERT INTO albums (id, album_rating) VALUES ('album-1', 87)",
+            [],
+        )
+        .expect("catalog album");
+        for (id, rating) in [(1, 88), (2, 87)] {
+            conn.execute(
+                "INSERT INTO tracks (id, album_id, album_rating_raw, album_rating, title, file_path, filename) VALUES (?1, 'album-1', ?2, ?2, ?3, 'D:\\Music\\Album', ?4)",
+                rusqlite::params![id, rating, format!("Track {id}"), format!("{id:02}.mp3")],
+            )
+            .expect("catalog track");
+        }
+
+        let mut statement = conn
+            .prepare(CATALOG_TRACK_SNAPSHOT_SQL)
+            .expect("catalog snapshot query");
+        let ratings = statement
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("catalog rating rows")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("catalog ratings");
+
+        assert_eq!(ratings, vec!["87", "88"]);
     }
 
     #[test]

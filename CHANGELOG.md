@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.144.4] - 2026-08-25
+
+### Fixed
+
+- Aurora add-only snapshots now preserve the catalog's authoritative album rating when historical track rows contain inconsistent Album Rating values. Existing albums no longer appear as unrelated changes merely because the complete snapshot traverses their tracks in a different order.
+
+### Changed
+
+- Synchronized app metadata and provider user agents to `0.144.4`.
+
 ## [0.144.3] - 2026-08-24
 
 ### Fixed
