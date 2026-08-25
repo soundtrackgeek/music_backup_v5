@@ -1,5 +1,5 @@
 use crate::folder_sync::{self, BatchAlbumInput};
-use crate::{db, importer};
+use crate::{covers, db, importer};
 use anyhow::{anyhow, bail, Context, Result};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -1662,6 +1662,19 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
         postcommit_warnings.push(format!(
             "The catalog committed, but Aurora could not update its recovery journal: {error:#}"
         ));
+    }
+    match db::settings_for_connection(&conn).and_then(|settings| {
+        covers::import_added_album_covers_for_bridge(
+            &mut conn,
+            app_data_dir,
+            &settings.cover_source_path,
+            import_summary.import_run_id,
+        )
+    }) {
+        Ok(_) => {}
+        Err(error) => postcommit_warnings.push(format!(
+            "The albums were cataloged, but their automatic cover import failed: {error:#}"
+        )),
     }
     Ok(finish_committed_plan(
         &plan,

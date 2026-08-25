@@ -23,7 +23,7 @@ const SUPPORTED_ARCHIVE_EXTENSIONS: [&str; 5] = ["jpg", "jpeg", "png", "gif", "b
 const COMPLETION_COVER_MAX_BYTES: usize = 5 * 1024 * 1024;
 const COMPLETION_COVER_REQUEST_INTERVAL: Duration = Duration::from_millis(1_200);
 const COMPLETION_COVER_USER_AGENT: &str =
-    "music-backup-v5/0.144.4 (local desktop cover enrichment)";
+    "music-backup-v5/0.144.5 (local desktop cover enrichment)";
 
 static COMPLETION_COVER_REQUEST_GATE: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 
@@ -95,6 +95,29 @@ struct CoverCounters {
     relinked_covers: u64,
     skipped_existing: u64,
     missing_covers: u64,
+}
+
+pub(crate) fn import_added_album_covers_for_bridge(
+    conn: &mut Connection,
+    app_data_dir: &Path,
+    source_path: &str,
+    import_run_id: i64,
+) -> Result<(u64, u64)> {
+    let source_dir = resolve_source_dir(source_path)?;
+    let cache_dir = app_data_dir.join("covers");
+    fs::create_dir_all(&cache_dir)
+        .with_context(|| format!("Could not create cover cache {}", cache_dir.display()))?;
+    let albums = load_added_album_cover_candidates(conn, import_run_id)?;
+    let counters = import_cover_candidates(
+        conn,
+        &source_dir,
+        &cache_dir,
+        albums,
+        false,
+        true,
+        &mut |_| {},
+    )?;
+    Ok((counters.imported_covers, counters.missing_covers))
 }
 
 pub fn import_album_covers(
@@ -550,16 +573,13 @@ fn run_cover_import(
     started: Instant,
 ) -> Result<CoverImportSummary> {
     let source_dir = resolve_source_dir(&request.source_path)?;
-    let archive_index = build_archive_index(&source_dir)?;
     let cache_dir = cover_cache_dir(app)?;
     fs::create_dir_all(&cache_dir)
         .with_context(|| format!("Could not create cover cache {}", cache_dir.display()))?;
 
     let (mut conn, _) = db::open(app)?;
     let albums = load_album_cover_candidates(&conn)?;
-    let existing_covers = load_existing_covers(&conn)?;
-
-    let mut counters = CoverCounters {
+    let initial_counters = CoverCounters {
         total_albums: albums.len() as u64,
         ..CoverCounters::default()
     };
@@ -567,10 +587,57 @@ fn run_cover_import(
     emit_progress(
         app,
         "running",
-        &counters,
+        &initial_counters,
         0.0,
         "Scanning album folders for cover art.",
     );
+
+    let counters = import_cover_candidates(
+        &mut conn,
+        &source_dir,
+        &cache_dir,
+        albums,
+        request.replace_existing,
+        request.extract_embedded_fallback,
+        &mut |counters| maybe_emit_running_progress(app, counters),
+    )?;
+
+    let duration_ms = started.elapsed().as_millis();
+    emit_progress(
+        app,
+        "completed",
+        &counters,
+        100.0,
+        "Cover import completed.",
+    );
+
+    Ok(CoverImportSummary {
+        total_albums: counters.total_albums,
+        scanned_albums: counters.scanned_albums,
+        new_covers_found: counters.new_covers_found,
+        imported_covers: counters.imported_covers,
+        relinked_covers: counters.relinked_covers,
+        skipped_existing: counters.skipped_existing,
+        missing_covers: counters.missing_covers,
+        duration_ms,
+    })
+}
+
+fn import_cover_candidates(
+    conn: &mut Connection,
+    source_dir: &Path,
+    cache_dir: &Path,
+    albums: Vec<AlbumCoverCandidate>,
+    replace_existing: bool,
+    extract_embedded_fallback: bool,
+    progress: &mut dyn FnMut(&CoverCounters),
+) -> Result<CoverCounters> {
+    let archive_index = build_archive_index(source_dir)?;
+    let existing_covers = load_existing_covers(conn)?;
+    let mut counters = CoverCounters {
+        total_albums: albums.len() as u64,
+        ..CoverCounters::default()
+    };
 
     let tx = conn
         .transaction()
@@ -601,15 +668,13 @@ fn run_cover_import(
             &album,
             &archive_index,
             &source_dir,
-            request.extract_embedded_fallback,
+            extract_embedded_fallback,
         )? {
             Some(payload) => {
                 let existing_cover = existing_covers.get(&album.album_id);
-                if !request.replace_existing
-                    && existing_cover_matches_payload(existing_cover, &payload)
-                {
+                if !replace_existing && existing_cover_matches_payload(existing_cover, &payload) {
                     counters.skipped_existing += 1;
-                    maybe_emit_running_progress(app, &counters);
+                    progress(&counters);
                     continue;
                 }
 
@@ -636,7 +701,7 @@ fn run_cover_import(
                 counters.imported_covers += 1;
             }
             None => {
-                if !request.replace_existing
+                if !replace_existing
                     && existing_covers
                         .get(&album.album_id)
                         .map(has_valid_existing_cover)
@@ -649,32 +714,14 @@ fn run_cover_import(
             }
         }
 
-        maybe_emit_running_progress(app, &counters);
+        progress(&counters);
     }
 
     drop(upsert_cover);
     tx.commit()
         .context("Could not commit cover import transaction")?;
 
-    let duration_ms = started.elapsed().as_millis();
-    emit_progress(
-        app,
-        "completed",
-        &counters,
-        100.0,
-        "Cover import completed.",
-    );
-
-    Ok(CoverImportSummary {
-        total_albums: counters.total_albums,
-        scanned_albums: counters.scanned_albums,
-        new_covers_found: counters.new_covers_found,
-        imported_covers: counters.imported_covers,
-        relinked_covers: counters.relinked_covers,
-        skipped_existing: counters.skipped_existing,
-        missing_covers: counters.missing_covers,
-        duration_ms,
-    })
+    Ok(counters)
 }
 
 fn cover_cache_dir(app: &AppHandle) -> Result<PathBuf> {
@@ -787,6 +834,48 @@ fn load_album_cover_candidates(conn: &Connection) -> Result<Vec<AlbumCoverCandid
 
     rows.collect::<rusqlite::Result<Vec<_>>>()
         .context("Could not load albums for cover import")
+}
+
+fn load_added_album_cover_candidates(
+    conn: &Connection,
+    import_run_id: i64,
+) -> Result<Vec<AlbumCoverCandidate>> {
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            a.id,
+            t.file_path,
+            t.filename
+        FROM albums a
+        LEFT JOIN tracks t ON t.id = (
+            SELECT tx.id
+            FROM tracks tx
+            WHERE tx.album_id = a.id
+            ORDER BY
+                COALESCE(tx.disc_number, 999999),
+                COALESCE(tx.track_number, 999999),
+                tx.id
+            LIMIT 1
+        )
+        WHERE EXISTS (
+            SELECT 1
+            FROM library_updates updates
+            WHERE updates.import_run_id = ?1
+              AND updates.change_kind = 'new'
+              AND updates.album_id = a.id
+        )
+        ORDER BY a.id
+        ",
+    )?;
+    let rows = stmt.query_map(params![import_run_id], |row| {
+        Ok(AlbumCoverCandidate {
+            album_id: row.get(0)?,
+            file_path: row.get(1)?,
+            filename: row.get(2)?,
+        })
+    })?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .context("Could not load newly added albums for automatic cover import")
 }
 
 fn load_existing_covers(conn: &Connection) -> Result<HashMap<String, ExistingCover>> {
@@ -1139,6 +1228,8 @@ fn emit_progress(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use id3::{TagLike, Version};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn completion_cover_urls_are_limited_to_provider_hosts() {
@@ -1161,5 +1252,97 @@ mod tests {
         assert!(!valid_musicbrainz_id(
             "48140466-cff6-3222-bd55-63c27e43190z"
         ));
+    }
+
+    #[test]
+    fn bridge_cover_import_targets_new_albums_and_archives_embedded_art() {
+        let token = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("music-library-bridge-cover-{token}"));
+        let album_folder = root.join("library").join("Artist - New Album (2026)");
+        let cover_archive = root.join("AlbumCovers");
+        let app_data = root.join("app-data");
+        fs::create_dir_all(&album_folder).expect("create album folder");
+        fs::create_dir_all(&cover_archive).expect("create cover archive");
+        let track_path = album_folder.join("01 - Track.mp3");
+        fs::write(&track_path, []).expect("create track");
+        let mut tag = Tag::new();
+        tag.add_frame(id3::frame::Picture {
+            mime_type: "image/jpeg".to_string(),
+            picture_type: PictureType::CoverFront,
+            description: String::new(),
+            data: vec![0xff, 0xd8, 0xff, 0xd9],
+        });
+        tag.write_to_path(&track_path, Version::Id3v24)
+            .expect("write embedded cover");
+
+        let mut conn = Connection::open_in_memory().expect("open database");
+        conn.execute_batch(
+            "
+            CREATE TABLE albums (id TEXT PRIMARY KEY);
+            CREATE TABLE tracks (
+                id INTEGER PRIMARY KEY,
+                album_id TEXT NOT NULL,
+                file_path TEXT,
+                filename TEXT,
+                disc_number INTEGER,
+                track_number INTEGER
+            );
+            CREATE TABLE library_updates (
+                import_run_id INTEGER NOT NULL,
+                change_kind TEXT NOT NULL,
+                album_id TEXT NOT NULL
+            );
+            CREATE TABLE album_covers (
+                album_id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                cache_path TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                extension TEXT NOT NULL,
+                file_size_bytes INTEGER NOT NULL,
+                imported_at TEXT NOT NULL
+            );
+            INSERT INTO albums (id) VALUES ('new-album'), ('old-album');
+            ",
+        )
+        .expect("create cover import schema");
+        conn.execute(
+            "INSERT INTO tracks (album_id, file_path, filename, disc_number, track_number) VALUES ('new-album', ?1, '01 - Track.mp3', 1, 1)",
+            params![album_folder.display().to_string()],
+        )
+        .expect("insert new track");
+        conn.execute(
+            "INSERT INTO tracks (album_id, file_path, filename, disc_number, track_number) VALUES ('old-album', 'C:\\Music\\Old Album', '01.mp3', 1, 1)",
+            [],
+        )
+        .expect("insert old track");
+        conn.execute(
+            "INSERT INTO library_updates (import_run_id, change_kind, album_id) VALUES (42, 'new', 'new-album'), (41, 'new', 'old-album')",
+            [],
+        )
+        .expect("insert updates");
+
+        let result = import_added_album_covers_for_bridge(
+            &mut conn,
+            &app_data,
+            cover_archive.to_string_lossy().as_ref(),
+            42,
+        )
+        .expect("import added cover");
+
+        assert_eq!(result, (1, 0));
+        assert!(cover_archive
+            .join("Artist - New Album (2026).jpg")
+            .is_file());
+        let imported: (String, String) = conn
+            .query_row("SELECT album_id, source FROM album_covers", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .expect("load imported cover");
+        assert_eq!(imported, ("new-album".to_string(), "embedded".to_string()));
+        fs::remove_dir_all(root).expect("clean test directory");
     }
 }

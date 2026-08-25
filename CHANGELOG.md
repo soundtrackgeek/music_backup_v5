@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.144.5] - 2026-08-25
+
+### Added
+
+- Successful Aurora album intake now runs the existing cover-archive/embedded-art workflow for only the newly added albums. Embedded front covers are written to the configured `AlbumCovers` folder and linked immediately, eliminating the separate manual full-library Cover add step.
+
+### Changed
+
+- Synchronized app metadata and provider user agents to `0.144.5`.
+
 ## [0.144.4] - 2026-08-25
 
 ### Fixed
