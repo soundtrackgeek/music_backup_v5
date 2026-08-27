@@ -1,7 +1,7 @@
 {
   "name": "music-library-app",
   "private": true,
-  "version": "0.144.7",
+  "version": "0.144.8",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",

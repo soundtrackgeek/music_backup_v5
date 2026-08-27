@@ -1144,7 +1144,7 @@ fn load_scoped_album(conn: &Connection, album_id: &str) -> Result<ScopedAlbumSta
 
 fn fast_sync_track_changes_are_supported(current: &TrackRow, desired: &TrackRow) -> bool {
     current.display_artist == desired.display_artist
-        && current.disc_number_raw == desired.disc_number_raw
+        && fast_sync_disc_numbers_are_equivalent(current.disc_number, desired.disc_number)
         && current.album == desired.album
         && current.genre == desired.genre
         && current.canonical_genre == desired.canonical_genre
@@ -1157,11 +1157,14 @@ fn fast_sync_track_changes_are_supported(current: &TrackRow, desired: &TrackRow)
         && current.file_path == desired.file_path
         && current.filename == desired.filename
         && current.album_artist_display == desired.album_artist_display
-        && current.disc_number == desired.disc_number
         && current.track_number == desired.track_number
         && current.year == desired.year
         && fast_sync_durations_are_equivalent(current.time_seconds, desired.time_seconds)
         && current.album_id == desired.album_id
+}
+
+fn fast_sync_disc_numbers_are_equivalent(current: Option<i32>, scanned: Option<i32>) -> bool {
+    current == scanned || matches!((current, scanned), (None, Some(0)) | (Some(0), None))
 }
 
 fn fast_sync_durations_are_equivalent(current: Option<i64>, scanned: Option<i64>) -> bool {
@@ -5194,6 +5197,42 @@ mod tests {
         assert_ne!(desired.row_hash, current.row_hash);
     }
 
+    #[test]
+    fn fast_sync_treats_blank_and_zero_disc_numbers_as_equivalent() {
+        let values = |disc_number: &str, rating: &str| {
+            vec![
+                "Track Artist",
+                "",
+                disc_number,
+                "Fast Album",
+                "Pop Rock",
+                "",
+                "Label",
+                rating,
+                "Track Title",
+                "1",
+                "2008",
+                "",
+                "fast-album",
+                r"D:\Music\Fast Album",
+                "01 - Track Title.mp3",
+                "Album Artist",
+                "2:05",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+        };
+        let current = parse_fast_sync_record(values("", ""));
+        let scanned = parse_fast_sync_record(values("0", "4"));
+
+        assert!(fast_sync_track_changes_are_supported(&current, &scanned));
+        let desired = fast_sync_desired_track(&current, &scanned);
+        assert_eq!(desired.disc_number_raw, "");
+        assert_eq!(desired.disc_number, None);
+        assert_eq!(desired.normalized_rating, Some(80));
+    }
+
     fn scanned_fast_sync_track(folder: &Path, album_unique_id: &str) -> TrackRow {
         scanned_fast_sync_tracks(folder, album_unique_id)
             .into_iter()
@@ -5503,6 +5542,51 @@ mod tests {
                 .expect("no retry import run"),
             2
         );
+    }
+
+    #[test]
+    fn existing_file_fast_sync_accepts_zero_disc_when_catalog_disc_is_blank() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).expect("album folder");
+        let folder = folder.canonicalize().expect("canonical album folder");
+        let mp3 = folder.join("01 - Track.mp3");
+        write_fast_sync_mp3(&mp3, "Track Title", None, "", 2008);
+        let mut initial = scanned_fast_sync_track(&folder, "fast-album");
+        initial.disc_number_raw.clear();
+        initial.disc_number = None;
+        refresh_fast_sync_row_hash(&mut initial);
+        let (mut conn, _, target_id, _) = fast_sync_database(&initial);
+
+        write_fast_sync_mp3(&mp3, "Track Title", Some(196), "", 2008);
+        let mut tag = Tag::read_from_path(&mp3).expect("read target MP3");
+        tag.set_disc(0);
+        tag.write_to_path(&mp3, Version::Id3v24)
+            .expect("write zero disc number");
+
+        let candidate = prepare_existing_file_fast_sync(&conn, &folder, &mp3)
+            .expect("prepare zero-disc sync")
+            .expect("cataloged target candidate");
+        let outcome =
+            apply_existing_album_fast_sync(&mut conn, &candidate).expect("apply zero-disc sync");
+        assert!(matches!(
+            outcome,
+            ExistingAlbumFastSyncOutcome::Updated {
+                changed_tracks: 1,
+                ..
+            }
+        ));
+
+        let updated: (Option<i32>, Option<i32>, Option<String>) = conn
+            .query_row(
+                "SELECT t.normalized_rating, t.disc_number, r.disc_number
+                 FROM tracks AS t JOIN raw_tracks AS r ON r.id = t.id
+                 WHERE t.id = ?1",
+                params![target_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("updated zero-disc row");
+        assert_eq!(updated, (Some(80), None, None));
     }
 
     #[test]

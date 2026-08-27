@@ -25,7 +25,7 @@ const LASTFM_SIMILAR_ARTIST_SOURCE_PREFIX: &str = "Last.fm Similar Artists";
 #[cfg(not(test))]
 const MUSICBRAINZ_SEARCH_LIMIT: usize = 8;
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.144.7 (local desktop app)";
+const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.144.8 (local desktop app)";
 #[cfg(not(test))]
 const MUSICBRAINZ_REQUEST_INTERVAL: Duration = Duration::from_millis(1_100);
 #[cfg(not(test))]

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.144.8] - 2026-08-27
+
+### Fixed
+
+- Treated a blank catalog disc number and a zero-valued MP3 disc tag as equivalent during targeted `syncExistingFolders` updates. Legacy `disc=0/0` albums now keep rating and Love edits on the one-track transaction instead of falling back to a full-catalog preview.
+- Included exact added/removed track and album counts when a metadata-only safety preview is rejected.
+
+### Changed
+
+- Synchronized app metadata and provider user agents to `0.144.8`.
+
 ## [0.144.7] - 2026-08-27
 
 ### Fixed

@@ -1113,7 +1113,11 @@ fn validate_sync_delta_counts(counts: &SyncDeltaCounts, scoped_track_count: usiz
         || counts.removed_albums != 0
     {
         bail!(
-            "Aurora existing-folder sync is metadata-only, but the prepared delta would add or remove catalog rows"
+            "Aurora existing-folder sync is metadata-only, but the prepared delta would add or remove catalog rows (added tracks: {}, removed tracks: {}, added albums: {}, removed albums: {})",
+            counts.added_tracks,
+            counts.removed_tracks,
+            counts.added_albums,
+            counts.removed_albums
         );
     }
     if counts.changed_tracks > scoped_track_count as i64 || counts.changed_albums > 1 {
@@ -3409,7 +3413,10 @@ mod tests {
             changed_albums: 0,
             removed_albums: 0,
         };
-        assert!(validate_sync_delta_counts(&invalid, 1).is_err());
+        let error = validate_sync_delta_counts(&invalid, 1).expect_err("added track rejected");
+        assert!(error
+            .to_string()
+            .contains("added tracks: 1, removed tracks: 0, added albums: 0, removed albums: 0"));
 
         let retry = SyncDeltaCounts {
             added_tracks: 0,
