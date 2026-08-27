@@ -329,6 +329,7 @@ fn capabilities() -> Result<Value> {
             "syncExistingFolders": true,
             "targetedExistingFileSync": true,
             "defaultPopmRatingFallback": true,
+            "serviceExistingFolderSync": true,
         },
     }))
 }
@@ -492,7 +493,7 @@ fn sync_existing_folders(
     let mut conn = open_database(&database_path)?;
     cleanup_abandoned_bridge_sync_sessions(&conn, app_data_dir)?;
 
-    let library_roots = canonical_available_library_roots_for_paths(&request.folder_paths)?;
+    let library_roots = configured_library_roots_for_paths(&request.folder_paths)?;
     let folders = canonicalize_sync_folder_paths(request.folder_paths, &library_roots)?;
     let changed_file_target =
         canonicalize_changed_file_target(request.changed_file_paths, &folders, &library_roots)?;
@@ -616,46 +617,43 @@ fn is_deprecated_sync_backup_name(name: &str) -> bool {
         })
 }
 
-fn canonical_available_library_roots_for_paths(requested_paths: &[String]) -> Result<Vec<PathBuf>> {
+fn configured_library_roots_for_paths(requested_paths: &[String]) -> Result<Vec<PathBuf>> {
+    let categories = category_definitions()?;
+    configured_library_roots_from_categories(requested_paths, &categories)
+}
+
+fn configured_library_roots_from_categories(
+    requested_paths: &[String],
+    categories: &[CategoryDefinition],
+) -> Result<Vec<PathBuf>> {
     let requested_volumes = requested_paths
         .iter()
         .filter_map(|path| path_volume_key(Path::new(path.trim())))
         .collect::<BTreeSet<_>>();
     let mut roots = Vec::new();
-    for category in category_definitions()? {
+    for category in categories {
         if !requested_volumes.is_empty()
             && path_volume_key(&category.root)
                 .is_some_and(|volume| !requested_volumes.contains(&volume))
         {
             continue;
         }
-        if !category.root.try_exists().with_context(|| {
-            format!(
-                "Could not inspect the {} library root {}",
-                category.label,
-                category.root.display()
-            )
-        })? {
-            continue;
-        }
-        if !fs::metadata(&category.root)?.is_dir() {
+        if !category.root.is_absolute()
+            || category
+                .root
+                .components()
+                .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
+        {
             bail!(
-                "The {} library root is not a directory: {}",
+                "The {} library root must be an absolute canonical path: {}",
                 category.label,
                 category.root.display()
             );
         }
-        folder_sync::ensure_source_root_is_not_linked(&category.root)?;
-        roots.push(category.root.canonicalize().with_context(|| {
-            format!(
-                "Could not resolve the {} library root {}",
-                category.label,
-                category.root.display()
-            )
-        })?);
+        roots.push(category.root.clone());
     }
     if roots.is_empty() {
-        bail!("No configured Music Library destination is currently available");
+        bail!("No configured Music Library destination matches the requested album folders");
     }
     Ok(roots)
 }
@@ -3183,6 +3181,25 @@ mod tests {
         assert_eq!(result["supports"]["syncExistingFolders"], true);
         assert_eq!(result["supports"]["targetedExistingFileSync"], true);
         assert_eq!(result["supports"]["defaultPopmRatingFallback"], true);
+        assert_eq!(result["supports"]["serviceExistingFolderSync"], true);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn existing_folder_sync_does_not_probe_the_configured_parent_root() {
+        let root = PathBuf::from(r"Z:\definitely-missing-music-library-root");
+        let categories = [CategoryDefinition {
+            id: "test",
+            label: "Test music",
+            root: root.clone(),
+        }];
+        let requested_paths =
+            vec![r"Z:\definitely-missing-music-library-root\Artist - Album".to_owned()];
+
+        let roots = configured_library_roots_from_categories(&requested_paths, &categories)
+            .expect("configured boundary should not require root enumeration");
+
+        assert_eq!(roots, vec![root]);
     }
 
     #[test]

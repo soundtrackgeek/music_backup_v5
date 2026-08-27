@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.144.6] - 2026-08-27
+
+### Fixed
+
+- Allowed `syncExistingFolders` to run under the Tonehavn Windows service without requiring a separate enumeration of the configured parent library root. The exact album folder and changed MP3 remain canonicalized, link-checked, type-checked, and constrained to the configured destination before any catalog update.
+
+### Changed
+
+- Added the `serviceExistingFolderSync` bridge capability so service callers can require this boundary behavior before editing an MP3.
+- Synchronized app metadata and provider user agents to `0.144.6`.
+
 ## [0.144.5] - 2026-08-25
 
 ### Added
