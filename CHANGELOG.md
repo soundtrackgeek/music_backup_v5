@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.144.7] - 2026-08-27
+
+### Fixed
+
+- Normalized ordinary and Windows verbatim drive prefixes when selecting a configured library boundary for `syncExistingFolders`. Canonical service paths such as `\\?\D:\MUSIC\...` now match the configured `D:\MUSIC` destination instead of being rejected as a different volume.
+
+### Changed
+
+- Synchronized app metadata and provider user agents to `0.144.7`.
+
 ## [0.144.6] - 2026-08-27
 
 ### Fixed

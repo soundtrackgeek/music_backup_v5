@@ -659,14 +659,34 @@ fn configured_library_roots_from_categories(
 }
 
 fn path_volume_key(path: &Path) -> Option<String> {
-    path.is_absolute().then(|| {
-        path.components()
-            .next()
-            .expect("an absolute path has a root component")
-            .as_os_str()
-            .to_string_lossy()
-            .to_lowercase()
-    })
+    if !path.is_absolute() {
+        return None;
+    }
+
+    #[cfg(windows)]
+    {
+        use std::path::Prefix;
+
+        let Component::Prefix(prefix) = path.components().next()? else {
+            return None;
+        };
+        return match prefix.kind() {
+            Prefix::Disk(drive) | Prefix::VerbatimDisk(drive) => {
+                Some(format!("drive:{}", char::from(drive).to_ascii_lowercase()))
+            }
+            Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => Some(format!(
+                "unc:{}\\{}",
+                server.to_string_lossy().to_lowercase(),
+                share.to_string_lossy().to_lowercase()
+            )),
+            _ => None,
+        };
+    }
+
+    #[cfg(not(windows))]
+    path.components()
+        .next()
+        .map(|component| component.as_os_str().to_string_lossy().to_lowercase())
 }
 
 fn canonicalize_sync_folder_paths(
@@ -3186,7 +3206,7 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn existing_folder_sync_does_not_probe_the_configured_parent_root() {
+    fn existing_folder_sync_matches_verbatim_paths_without_probing_the_parent_root() {
         let root = PathBuf::from(r"Z:\definitely-missing-music-library-root");
         let categories = [CategoryDefinition {
             id: "test",
@@ -3194,10 +3214,10 @@ mod tests {
             root: root.clone(),
         }];
         let requested_paths =
-            vec![r"Z:\definitely-missing-music-library-root\Artist - Album".to_owned()];
+            vec![r"\\?\Z:\definitely-missing-music-library-root\Artist - Album".to_owned()];
 
         let roots = configured_library_roots_from_categories(&requested_paths, &categories)
-            .expect("configured boundary should not require root enumeration");
+            .expect("verbatim drive paths should match without root enumeration");
 
         assert_eq!(roots, vec![root]);
     }
