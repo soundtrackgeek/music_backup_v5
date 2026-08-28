@@ -1,7 +1,7 @@
 {
   "name": "music-library-app",
   "private": true,
-  "version": "0.144.8",
+  "version": "0.145.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -9,6 +9,7 @@
     "test:run": "vitest run",
     "test:tools": "python -m unittest discover -s Tools/library_trimmer/tests -v",
     "build": "tsc && vite build",
+    "check:version": "node scripts/check-version.mjs",
     "security:check": "node scripts/security-check.mjs",
     "check": "npm run test:run && npm run test:tools && npm run security:check && npm run build && cd src-tauri && cargo test && cargo check",
     "preview": "vite preview --host 127.0.0.1",

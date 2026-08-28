@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.145.0] - 2026-08-28
+
+### Added
+
+- Added reviewed Aurora replacement plans for a same-named existing release. Album artist, album, and year must match; the existing album identity is preserved, rated/loved comparison counts are returned, and the verified original folder is retained as a hidden recovery copy after commit.
+- Added `previewMoveToInbox`, which resolves one catalog album by stable album ID, copies it to a configured Aurora Inbox destination, verifies every byte, removes it through the normal snapshot importer, and deletes the library source only after the catalog commit succeeds.
+
+### Changed
+
+- Generalized the durable Aurora batch snapshot and transfer plan from add-only intake to explicit add, replace, and remove actions with destination fingerprints and crash compensation.
+- Synchronized app metadata and provider user agents to `0.145.0`.
+
 ## [0.144.8] - 2026-08-27
 
 ### Fixed

@@ -1,4 +1,4 @@
-use crate::folder_sync::{self, BatchAlbumInput};
+use crate::folder_sync::{self, BatchAlbumAction, BatchAlbumInput};
 use crate::{covers, db, importer};
 use anyhow::{anyhow, bail, Context, Result};
 use rusqlite::{params, Connection};
@@ -12,7 +12,7 @@ use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const PROTOCOL_VERSION: u32 = 1;
-const PLAN_FORMAT_VERSION: u32 = 1;
+const PLAN_FORMAT_VERSION: u32 = 2;
 const BRIDGE_DIRECTORY: &str = "aurora-bridge";
 const APP_DATA_OVERRIDE: &str = "MUSIC_LIBRARY_BRIDGE_APP_DATA_DIR";
 const GENERAL_ROOT_OVERRIDE: &str = "MUSIC_LIBRARY_BRIDGE_GENERAL_ROOT";
@@ -40,6 +40,13 @@ struct BridgeRequest {
 struct PreviewBatchRequest {
     source_path: String,
     category: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewMoveToInboxRequest {
+    album_id: String,
+    inbox_path: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -131,7 +138,17 @@ struct StoredPlan {
     category_label: String,
     destination_root: String,
     snapshot_path: String,
+    #[serde(default)]
+    operation: PlanOperation,
     albums: Vec<StoredAlbum>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum PlanOperation {
+    #[default]
+    Intake,
+    MoveToInbox,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -143,7 +160,19 @@ struct StoredAlbum {
     album: String,
     year: String,
     track_count: usize,
+    #[serde(default)]
+    action: BatchAlbumAction,
+    #[serde(default)]
+    existing_track_count: usize,
+    #[serde(default)]
+    matched_track_count: usize,
+    #[serde(default)]
+    existing_rated_track_count: usize,
+    #[serde(default)]
+    existing_loved_track_count: usize,
     inventory: FolderInventory,
+    #[serde(default)]
+    existing_inventory: Option<FolderInventory>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -168,6 +197,9 @@ struct PublishedAlbum {
     inventory: FolderInventory,
     plan_id: String,
     index: usize,
+    action: BatchAlbumAction,
+    recovery: Option<PathBuf>,
+    existing_inventory: Option<FolderInventory>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -248,6 +280,12 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
                 .context("previewBatch payload must contain sourcePath and category")?;
             preview_batch(&app_data_dir, payload)
         }
+        "previewMoveToInbox" => {
+            let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
+            let payload: PreviewMoveToInboxRequest = serde_json::from_value(request.payload)
+                .context("previewMoveToInbox payload must contain albumId and inboxPath")?;
+            preview_move_to_inbox(&app_data_dir, payload)
+        }
         "applyBatch" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
             let payload: ApplyBatchRequest = serde_json::from_value(request.payload)
@@ -327,6 +365,8 @@ fn capabilities() -> Result<Value> {
             "crossVolumeCopy": true,
             "previewRequired": true,
             "syncExistingFolders": true,
+            "replaceExistingAlbums": true,
+            "moveAlbumsToInbox": true,
             "targetedExistingFileSync": true,
             "defaultPopmRatingFallback": true,
             "serviceExistingFolderSync": true,
@@ -383,18 +423,31 @@ fn preview_batch(app_data_dir: &Path, request: PreviewBatchRequest) -> Result<Va
             return Err(error);
         }
     };
-    if preview.added_tracks != snapshot.track_count as i64
-        || preview.changed_tracks != 0
-        || preview.removed_tracks != 0
-        || preview.added_albums != snapshot.albums.len() as i64
-        || preview.changed_albums != 0
+    let added_album_count = snapshot
+        .albums
+        .iter()
+        .filter(|album| album.action == BatchAlbumAction::Add)
+        .count() as i64;
+    let replaced_album_count = snapshot
+        .albums
+        .iter()
+        .filter(|album| album.action == BatchAlbumAction::Replace)
+        .count() as i64;
+    let expected_track_delta = snapshot
+        .albums
+        .iter()
+        .map(|album| album.track_count as i64 - album.existing_track_count as i64)
+        .sum::<i64>();
+    if preview.added_tracks - preview.removed_tracks != expected_track_delta
+        || preview.added_albums != added_album_count
+        || preview.changed_albums != replaced_album_count
         || preview.removed_albums != 0
     {
         let _ = importer::discard_bridge_import_preview(&conn, preview.session_id);
         folder_sync::cleanup_generated_snapshot(snapshot_path.to_string_lossy().as_ref());
         let _ = fs::remove_dir_all(&plan_directory);
         bail!(
-            "Aurora intake must be add-only, but the prepared delta was +{}/~{}/-{} tracks and +{}/~{}/-{} albums",
+            "The prepared intake delta did not match its add/replace plan: +{}/~{}/-{} tracks and +{}/~{}/-{} albums",
             preview.added_tracks,
             preview.changed_tracks,
             preview.removed_tracks,
@@ -415,6 +468,14 @@ fn preview_batch(app_data_dir: &Path, request: PreviewBatchRequest) -> Result<Va
                 year: metadata.year.clone(),
                 track_count: metadata.track_count,
                 inventory: inventory_folder(Path::new(&metadata.source_path))?,
+                action: metadata.action,
+                existing_track_count: metadata.existing_track_count,
+                matched_track_count: metadata.matched_track_count,
+                existing_rated_track_count: metadata.existing_rated_track_count,
+                existing_loved_track_count: metadata.existing_loved_track_count,
+                existing_inventory: (metadata.action == BatchAlbumAction::Replace)
+                    .then(|| inventory_folder(Path::new(&metadata.destination_path)))
+                    .transpose()?,
             });
         }
         Ok(albums)
@@ -437,6 +498,7 @@ fn preview_batch(app_data_dir: &Path, request: PreviewBatchRequest) -> Result<Va
         category_label: category.label.to_owned(),
         destination_root: display_path(&destination_root),
         snapshot_path: display_path(&snapshot_path),
+        operation: PlanOperation::Intake,
         albums: stored_albums,
     };
     if let Err(error) = atomic_write_json(&plan_directory.join("plan.json"), &plan) {
@@ -472,9 +534,202 @@ fn preview_batch(app_data_dir: &Path, request: PreviewBatchRequest) -> Result<Va
             "album": album.album,
             "year": album.year,
             "trackCount": album.track_count,
+            "action": album.action,
+            "existingTrackCount": album.existing_track_count,
+            "matchedTrackCount": album.matched_track_count,
+            "existingRatedTrackCount": album.existing_rated_track_count,
+            "existingLovedTrackCount": album.existing_loved_track_count,
         })).collect::<Vec<_>>(),
         "canApply": preview.status == "ready" && !preview.source_changed,
     }))
+}
+
+fn preview_move_to_inbox(app_data_dir: &Path, request: PreviewMoveToInboxRequest) -> Result<Value> {
+    if request.album_id.trim().is_empty() || request.inbox_path.trim().is_empty() {
+        bail!("Choose both a library album and the Aurora Inbox folder");
+    }
+    let database_path = app_data_dir.join("music-library.sqlite3");
+    let mut conn = open_database(&database_path)?;
+    cleanup_abandoned_bridge_plans(&conn, app_data_dir)?;
+    let (source, library_roots) = resolve_catalog_album_folder(&conn, request.album_id.trim())?;
+    let inbox = PathBuf::from(request.inbox_path.trim());
+    if !inbox.is_absolute() {
+        bail!("The Aurora Inbox path must be absolute");
+    }
+    folder_sync::ensure_source_root_is_not_linked(&inbox)?;
+    let inbox = inbox
+        .canonicalize()
+        .with_context(|| format!("Could not resolve Aurora Inbox {}", inbox.display()))?;
+    if !fs::metadata(&inbox)?.is_dir() {
+        bail!("The Aurora Inbox path is not a folder: {}", inbox.display());
+    }
+    if library_roots.iter().any(|root| paths_overlap(root, &inbox)) {
+        bail!("The Aurora Inbox must be outside every Music Library destination");
+    }
+    let folder_name = source
+        .file_name()
+        .ok_or_else(|| anyhow!("The library album folder has no folder name"))?;
+    let destination = inbox.join(folder_name);
+    ensure_destination_available(&inbox, &destination)?;
+
+    let plan_id = new_plan_id(&source, "move-to-inbox");
+    let plan_directory = plan_directory(app_data_dir, &plan_id)?;
+    fs::create_dir_all(&plan_directory)?;
+    let snapshot_path = app_data_dir
+        .join("album-folder-imports")
+        .join(format!("album-folder-batch-{plan_id}.tsv"));
+    let inputs = vec![BatchAlbumInput {
+        source: source.clone(),
+        destination: destination.clone(),
+        action: BatchAlbumAction::Remove,
+    }];
+    let snapshot = match folder_sync::build_batch_snapshot(
+        &conn,
+        &source,
+        &inputs,
+        &snapshot_path,
+        &std::sync::atomic::AtomicBool::new(false),
+        &mut |_, _, _| {},
+    ) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            remove_snapshot_artifacts(&snapshot_path);
+            let _ = fs::remove_dir_all(&plan_directory);
+            return Err(error);
+        }
+    };
+    let preview = match importer::prepare_bridge_import_preview(&mut conn, &snapshot_path) {
+        Ok(preview) => preview,
+        Err(error) => {
+            remove_snapshot_artifacts(&snapshot_path);
+            let _ = fs::remove_dir_all(&plan_directory);
+            return Err(error);
+        }
+    };
+    let metadata = snapshot
+        .albums
+        .first()
+        .ok_or_else(|| anyhow!("The move-back snapshot contains no album"))?;
+    if preview.added_tracks != 0
+        || preview.changed_tracks != 0
+        || preview.removed_tracks != metadata.track_count as i64
+        || preview.added_albums != 0
+        || preview.changed_albums != 0
+        || preview.removed_albums != 1
+    {
+        let _ = importer::discard_bridge_import_preview(&conn, preview.session_id);
+        remove_snapshot_artifacts(&snapshot_path);
+        let _ = fs::remove_dir_all(&plan_directory);
+        bail!("The prepared move-back delta did not exactly remove the selected album");
+    }
+    let inventory = inventory_folder(&source)?;
+    let album = StoredAlbum {
+        source_path: metadata.source_path.clone(),
+        destination_path: metadata.destination_path.clone(),
+        artist: metadata.artist.clone(),
+        album: metadata.album.clone(),
+        year: metadata.year.clone(),
+        track_count: metadata.track_count,
+        action: BatchAlbumAction::Remove,
+        existing_track_count: metadata.existing_track_count,
+        matched_track_count: metadata.matched_track_count,
+        existing_rated_track_count: metadata.existing_rated_track_count,
+        existing_loved_track_count: metadata.existing_loved_track_count,
+        inventory,
+        existing_inventory: None,
+    };
+    let plan = StoredPlan {
+        format_version: PLAN_FORMAT_VERSION,
+        plan_id: plan_id.clone(),
+        session_id: preview.session_id,
+        source_path: display_path(&source),
+        category: "inbox".to_owned(),
+        category_label: "Aurora Inbox".to_owned(),
+        destination_root: display_path(&inbox),
+        snapshot_path: display_path(&snapshot_path),
+        operation: PlanOperation::MoveToInbox,
+        albums: vec![album],
+    };
+    atomic_write_json(&plan_directory.join("plan.json"), &plan)?;
+    let album = &plan.albums[0];
+    Ok(json!({
+        "planId": plan.plan_id,
+        "sessionId": plan.session_id,
+        "sourcePath": plan.source_path,
+        "category": {
+            "id": plan.category,
+            "label": plan.category_label,
+            "destinationRoot": plan.destination_root,
+        },
+        "albumCount": 1,
+        "trackCount": album.track_count,
+        "delta": {
+            "addedTracks": 0,
+            "changedTracks": 0,
+            "removedTracks": preview.removed_tracks,
+            "addedAlbums": 0,
+            "changedAlbums": 0,
+            "removedAlbums": 1,
+        },
+        "albums": [{
+            "sourcePath": album.source_path,
+            "destinationPath": album.destination_path,
+            "artist": album.artist,
+            "album": album.album,
+            "year": album.year,
+            "trackCount": album.track_count,
+            "action": album.action,
+            "existingTrackCount": album.existing_track_count,
+            "matchedTrackCount": album.matched_track_count,
+            "existingRatedTrackCount": album.existing_rated_track_count,
+            "existingLovedTrackCount": album.existing_loved_track_count,
+        }],
+        "canApply": preview.status == "ready" && !preview.source_changed,
+    }))
+}
+
+fn resolve_catalog_album_folder(
+    conn: &Connection,
+    album_id: &str,
+) -> Result<(PathBuf, Vec<PathBuf>)> {
+    let file_paths = conn
+        .prepare("SELECT DISTINCT file_path FROM tracks WHERE album_id = ?1 ORDER BY file_path")?
+        .query_map([album_id], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if file_paths.is_empty() {
+        bail!("The selected album is no longer present in Music Library");
+    }
+    let library_roots = canonical_available_library_roots_for_paths(&file_paths)?;
+    let mut album_folder: Option<PathBuf> = None;
+    for file_path in &file_paths {
+        let directory = PathBuf::from(file_path);
+        let root = library_roots
+            .iter()
+            .find(|root| path_is_strictly_within(&directory, root))
+            .ok_or_else(|| {
+                anyhow!("Catalog album {album_id} is outside every configured library root")
+            })?;
+        let relative = directory.strip_prefix(root).with_context(|| {
+            format!("Could not resolve the catalog album folder for {file_path}")
+        })?;
+        let first = relative.components().next().ok_or_else(|| {
+            anyhow!("Catalog album {album_id} is stored directly in a library root")
+        })?;
+        let candidate = root.join(first.as_os_str());
+        if album_folder
+            .as_ref()
+            .is_some_and(|existing| normalized_path(existing) != normalized_path(&candidate))
+        {
+            bail!("Catalog album {album_id} spans more than one top-level album folder");
+        }
+        album_folder = Some(candidate);
+    }
+    let folder = album_folder.expect("nonempty catalog paths produce an album folder");
+    let verified = importer::prepare_existing_album_fast_sync(conn, &folder)?;
+    if verified.album_id() != album_id {
+        bail!("The selected catalog album does not exactly match its physical folder");
+    }
+    Ok((folder, library_roots))
 }
 
 fn sync_existing_folders(
@@ -620,6 +875,50 @@ fn is_deprecated_sync_backup_name(name: &str) -> bool {
 fn configured_library_roots_for_paths(requested_paths: &[String]) -> Result<Vec<PathBuf>> {
     let categories = category_definitions()?;
     configured_library_roots_from_categories(requested_paths, &categories)
+}
+
+fn canonical_available_library_roots_for_paths(requested_paths: &[String]) -> Result<Vec<PathBuf>> {
+    let requested_volumes = requested_paths
+        .iter()
+        .filter_map(|path| path_volume_key(Path::new(path.trim())))
+        .collect::<BTreeSet<_>>();
+    let mut roots = Vec::new();
+    for category in category_definitions()? {
+        if !requested_volumes.is_empty()
+            && path_volume_key(&category.root)
+                .is_some_and(|volume| !requested_volumes.contains(&volume))
+        {
+            continue;
+        }
+        if !category.root.try_exists().with_context(|| {
+            format!(
+                "Could not inspect the {} library root {}",
+                category.label,
+                category.root.display()
+            )
+        })? {
+            continue;
+        }
+        if !fs::metadata(&category.root)?.is_dir() {
+            bail!(
+                "The {} library root is not a directory: {}",
+                category.label,
+                category.root.display()
+            );
+        }
+        folder_sync::ensure_source_root_is_not_linked(&category.root)?;
+        roots.push(category.root.canonicalize().with_context(|| {
+            format!(
+                "Could not resolve the {} library root {}",
+                category.label,
+                category.root.display()
+            )
+        })?);
+    }
+    if roots.is_empty() {
+        bail!("No configured Music Library destination is currently available");
+    }
+    Ok(roots)
 }
 
 fn configured_library_roots_from_categories(
@@ -1574,11 +1873,22 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
     let plan: StoredPlan = serde_json::from_slice(&bytes)
         .with_context(|| format!("Could not parse Aurora intake plan {}", plan_path.display()))?;
     validate_stored_plan(&plan, &request)?;
-    let category = category_definition(&plan.category)?;
-    let destination_root = canonical_destination_root(&category)?;
-    if normalized_path(&destination_root) != normalized_path(Path::new(&plan.destination_root)) {
-        bail!("The category destination changed after preview. Prepare the batch again");
-    }
+    let destination_root = match plan.operation {
+        PlanOperation::Intake => {
+            let category = category_definition(&plan.category)?;
+            let root = canonical_destination_root(&category)?;
+            if normalized_path(&root) != normalized_path(Path::new(&plan.destination_root)) {
+                bail!("The category destination changed after preview. Prepare the batch again");
+            }
+            root
+        }
+        PlanOperation::MoveToInbox => {
+            let root = PathBuf::from(&plan.destination_root);
+            folder_sync::ensure_source_root_is_not_linked(&root)?;
+            root.canonicalize()
+                .with_context(|| format!("Could not resolve Aurora Inbox {}", root.display()))?
+        }
+    };
 
     let database_path = app_data_dir.join("music-library.sqlite3");
     let mut conn = open_database(&database_path)?;
@@ -1685,18 +1995,20 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
             "The catalog committed, but Aurora could not update its recovery journal: {error:#}"
         ));
     }
-    match db::settings_for_connection(&conn).and_then(|settings| {
-        covers::import_added_album_covers_for_bridge(
-            &mut conn,
-            app_data_dir,
-            &settings.cover_source_path,
-            import_summary.import_run_id,
-        )
-    }) {
-        Ok(_) => {}
-        Err(error) => postcommit_warnings.push(format!(
-            "The albums were cataloged, but their automatic cover import failed: {error:#}"
-        )),
+    if plan.operation == PlanOperation::Intake {
+        match db::settings_for_connection(&conn).and_then(|settings| {
+            covers::import_added_album_covers_for_bridge(
+                &mut conn,
+                app_data_dir,
+                &settings.cover_source_path,
+                import_summary.import_run_id,
+            )
+        }) {
+            Ok(_) => {}
+            Err(error) => postcommit_warnings.push(format!(
+                "The albums were cataloged, but their automatic cover import failed: {error:#}"
+            )),
+        }
     }
     Ok(finish_committed_plan(
         &plan,
@@ -1730,19 +2042,39 @@ fn validate_plan_session_binding(
     {
         bail!("The Aurora intake plan is bound to a different import session snapshot");
     }
-    let expected_tracks = plan
+    let added_album_count = plan
         .albums
         .iter()
-        .map(|album| album.track_count as i64)
+        .filter(|album| album.action == BatchAlbumAction::Add)
+        .count() as i64;
+    let replaced_album_count = plan
+        .albums
+        .iter()
+        .filter(|album| album.action == BatchAlbumAction::Replace)
+        .count() as i64;
+    let removed_album_count = plan
+        .albums
+        .iter()
+        .filter(|album| album.action == BatchAlbumAction::Remove)
+        .count() as i64;
+    let expected_track_delta = plan
+        .albums
+        .iter()
+        .map(|album| match album.action {
+            BatchAlbumAction::Add => album.track_count as i64,
+            BatchAlbumAction::Replace => {
+                album.track_count as i64 - album.existing_track_count as i64
+            }
+            BatchAlbumAction::Remove => -(album.track_count as i64),
+        })
         .sum::<i64>();
-    if state.added_tracks != expected_tracks
-        || state.changed_tracks != 0
-        || state.removed_tracks != 0
-        || state.added_albums != plan.albums.len() as i64
-        || state.changed_albums != 0
-        || state.removed_albums != 0
+    if state.added_tracks - state.removed_tracks != expected_track_delta
+        || state.changed_tracks < 0
+        || state.added_albums != added_album_count
+        || state.changed_albums != replaced_album_count
+        || state.removed_albums != removed_album_count
     {
-        bail!("The Aurora intake session is no longer an exact add-only match for its plan");
+        bail!("The Aurora session no longer matches its add, replace, and move-back plan");
     }
     let mappings = plan
         .albums
@@ -1750,6 +2082,7 @@ fn validate_plan_session_binding(
         .map(|album| BatchAlbumInput {
             source: PathBuf::from(&album.source_path),
             destination: PathBuf::from(&album.destination_path),
+            action: album.action,
         })
         .collect::<Vec<_>>();
     folder_sync::ensure_batch_snapshot_bindings(
@@ -1767,6 +2100,22 @@ fn validate_published_inventories(albums: &[PublishedAlbum]) -> Result<()> {
                 album.destination.display()
             );
         }
+        if album.action == BatchAlbumAction::Replace {
+            let recovery = album
+                .recovery
+                .as_ref()
+                .ok_or_else(|| anyhow!("A replacement lost its preserved original release path"))?;
+            let expected = album
+                .existing_inventory
+                .as_ref()
+                .ok_or_else(|| anyhow!("A replacement lost its original release inventory"))?;
+            if inventory_folder(recovery)? != *expected {
+                bail!(
+                    "The preserved original release changed before catalog commit: {}",
+                    recovery.display()
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -1775,24 +2124,81 @@ fn validate_apply_destinations(root: &Path, plan: &StoredPlan, can_reuse: bool) 
     for (index, album) in plan.albums.iter().enumerate() {
         let destination = Path::new(&album.destination_path);
         ensure_direct_child(root, destination)?;
-        if destination.try_exists().with_context(|| {
+        let exists = destination.try_exists().with_context(|| {
             format!(
                 "Could not determine whether destination exists: {}",
                 destination.display()
             )
-        })? {
-            if can_reuse {
-                verify_owned_destination(destination, &plan.plan_id, index, &album.inventory)?;
+        })?;
+        if can_reuse && exists {
+            verify_owned_destination(destination, &plan.plan_id, index, &album.inventory)?;
+            if album.action == BatchAlbumAction::Replace {
+                verify_replacement_recovery(plan, album, index, root)?;
             }
-            if !can_reuse {
-                bail!(
-                    "The destination album folder is already occupied: {}",
-                    destination.display()
-                );
-            }
-        } else {
-            ensure_destination_available(root, destination)?;
+            continue;
         }
+        match album.action {
+            BatchAlbumAction::Add | BatchAlbumAction::Remove if exists => bail!(
+                "The destination album folder is already occupied: {}",
+                destination.display()
+            ),
+            BatchAlbumAction::Add | BatchAlbumAction::Remove => {
+                ensure_destination_available(root, destination)?;
+            }
+            BatchAlbumAction::Replace if !exists => bail!(
+                "The existing release selected for replacement is missing: {}",
+                destination.display()
+            ),
+            BatchAlbumAction::Replace => {
+                let expected = album.existing_inventory.as_ref().ok_or_else(|| {
+                    anyhow!("The replacement plan is missing its original album inventory")
+                })?;
+                if inventory_folder(destination)? != *expected {
+                    bail!(
+                        "The existing release changed after preview: {}",
+                        destination.display()
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn replacement_recovery_path(
+    plan: &StoredPlan,
+    album: &StoredAlbum,
+    index: usize,
+    root: &Path,
+) -> Result<PathBuf> {
+    let name = Path::new(&album.destination_path)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| anyhow!("Replacement destination has no valid folder name"))?;
+    let recovery = root.join(format!(
+        ".aurora-replaced-{}-{index:03}-{name}",
+        plan.plan_id
+    ));
+    ensure_direct_child(root, &recovery)?;
+    Ok(recovery)
+}
+
+fn verify_replacement_recovery(
+    plan: &StoredPlan,
+    album: &StoredAlbum,
+    index: usize,
+    root: &Path,
+) -> Result<()> {
+    let recovery = replacement_recovery_path(plan, album, index, root)?;
+    let expected = album
+        .existing_inventory
+        .as_ref()
+        .ok_or_else(|| anyhow!("The replacement plan is missing its original album inventory"))?;
+    if !recovery.is_dir() || inventory_folder(&recovery)? != *expected {
+        bail!(
+            "The preserved original release is missing or changed: {}",
+            recovery.display()
+        );
     }
     Ok(())
 }
@@ -1853,9 +2259,18 @@ fn finish_committed_plan(
         } else {
             "retained"
         };
+        let recovery_path = if album.action == BatchAlbumAction::Replace {
+            replacement_recovery_path(plan, album, index, Path::new(&plan.destination_root))
+                .ok()
+                .map(|path| display_path(&path))
+        } else {
+            None
+        };
         album_results.push(json!({
             "sourcePath": album.source_path,
             "destinationPath": album.destination_path,
+            "action": album.action,
+            "recoveryPath": recovery_path,
             "cleanupStatus": cleanup_status,
         }));
     }
@@ -2057,7 +2472,11 @@ fn resolve_destination_mappings(
         if !names.insert(name.to_lowercase()) {
             bail!("Two source albums have the same destination folder name (case-insensitive): {name}");
         }
-        let destination = destination_root.join(name);
+        let requested_destination = destination_root.join(name);
+        let existing_destination = find_case_insensitive_child(destination_root, name)?;
+        let destination = existing_destination
+            .clone()
+            .unwrap_or(requested_destination);
         if paths_overlap(&source, &destination)
             || paths_overlap(selected_source, &destination)
             || paths_overlap(&source, destination_root)
@@ -2067,13 +2486,39 @@ fn resolve_destination_mappings(
                 source.display()
             );
         }
-        ensure_destination_available(destination_root, &destination)?;
         inputs.push(BatchAlbumInput {
             source,
             destination,
+            action: if existing_destination.is_some() {
+                BatchAlbumAction::Replace
+            } else {
+                BatchAlbumAction::Add
+            },
         });
     }
     Ok(inputs)
+}
+
+fn find_case_insensitive_child(root: &Path, wanted: &str) -> Result<Option<PathBuf>> {
+    for entry in fs::read_dir(root)
+        .with_context(|| format!("Could not inspect destination root {}", root.display()))?
+    {
+        let entry = entry?;
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .eq_ignore_ascii_case(wanted)
+        {
+            if !entry.file_type()?.is_dir() {
+                bail!(
+                    "The destination name is occupied by a non-folder entry: {}",
+                    entry.path().display()
+                );
+            }
+            return Ok(Some(entry.path()));
+        }
+    }
+    Ok(None)
 }
 
 fn ensure_destination_available(root: &Path, destination: &Path) -> Result<()> {
@@ -2287,13 +2732,24 @@ fn stage_and_publish(
                     "Could not determine whether destination exists: {}",
                     destination.display()
                 )
-            })? {
+            })? && has_staging_owner(&destination, &plan.plan_id, index)?
+            {
                 verify_owned_destination(&destination, &plan.plan_id, index, &album.inventory)?;
+                let recovery = if album.action == BatchAlbumAction::Replace {
+                    let recovery = replacement_recovery_path(plan, album, index, &root)?;
+                    verify_replacement_recovery(plan, album, index, &root)?;
+                    Some(recovery)
+                } else {
+                    None
+                };
                 published.push(PublishedAlbum {
                     destination,
                     inventory: album.inventory.clone(),
                     plan_id: plan.plan_id.clone(),
                     index,
+                    action: album.action,
+                    recovery,
+                    existing_inventory: album.existing_inventory.clone(),
                 });
                 continue;
             }
@@ -2325,18 +2781,52 @@ fn stage_and_publish(
             write_staging_owner(&staging, &plan.plan_id, index)?;
             set_hidden(&staging, true)?;
             copy_inventory(&source, &staging, &album.inventory)?;
-            fs::rename(&staging, &destination).with_context(|| {
-                format!(
+            let recovery = if album.action == BatchAlbumAction::Replace {
+                let recovery = replacement_recovery_path(plan, album, index, &root)?;
+                if recovery.try_exists()? {
+                    bail!(
+                        "The replacement recovery path is already occupied: {}",
+                        recovery.display()
+                    );
+                }
+                let expected = album.existing_inventory.as_ref().ok_or_else(|| {
+                    anyhow!("The replacement plan is missing its original album inventory")
+                })?;
+                if inventory_folder(&destination)? != *expected {
+                    bail!(
+                        "The existing release changed during replacement: {}",
+                        destination.display()
+                    );
+                }
+                fs::rename(&destination, &recovery).with_context(|| {
+                    format!(
+                        "Could not preserve the existing release at {}",
+                        recovery.display()
+                    )
+                })?;
+                set_hidden(&recovery, true)?;
+                Some(recovery)
+            } else {
+                None
+            };
+            if let Err(error) = fs::rename(&staging, &destination) {
+                if let Some(recovery) = &recovery {
+                    let _ = fs::rename(recovery, &destination);
+                }
+                return Err(anyhow!(error).context(format!(
                     "Could not publish copied album at {}",
                     destination.display()
-                )
-            })?;
+                )));
+            }
             staging_paths.pop();
             published.push(PublishedAlbum {
                 destination: destination.clone(),
                 inventory: album.inventory.clone(),
                 plan_id: plan.plan_id.clone(),
                 index,
+                action: album.action,
+                recovery,
+                existing_inventory: album.existing_inventory.clone(),
             });
             set_hidden(&destination, false)?;
             if !has_staging_owner(&destination, &plan.plan_id, index)? {
@@ -2461,6 +2951,47 @@ fn cleanup_published(albums: &[PublishedAlbum], root: &Path) -> Vec<String> {
         }
         if let Err(error) = remove_created_directory(&album.destination, root) {
             errors.push(format!("{}: {error:#}", album.destination.display()));
+            continue;
+        }
+        if album.action == BatchAlbumAction::Replace {
+            let Some(recovery) = &album.recovery else {
+                errors.push(format!(
+                    "{} has no preserved original release to restore",
+                    album.destination.display()
+                ));
+                continue;
+            };
+            let Some(expected) = &album.existing_inventory else {
+                errors.push(format!(
+                    "{} has no original inventory for recovery verification",
+                    recovery.display()
+                ));
+                continue;
+            };
+            match inventory_folder(recovery) {
+                Ok(actual) if actual == *expected => {
+                    if let Err(error) = fs::rename(recovery, &album.destination) {
+                        errors.push(format!(
+                            "Could not restore {} from {}: {error}",
+                            album.destination.display(),
+                            recovery.display()
+                        ));
+                    } else if let Err(error) = set_hidden(&album.destination, false) {
+                        errors.push(format!(
+                            "Restored original release but could not clear its hidden flag at {}: {error:#}",
+                            album.destination.display()
+                        ));
+                    }
+                }
+                Ok(_) => errors.push(format!(
+                    "{} changed and was not restored",
+                    recovery.display()
+                )),
+                Err(error) => errors.push(format!(
+                    "{} could not be verified for restoration: {error:#}",
+                    recovery.display()
+                )),
+            }
         }
     }
     errors
@@ -2519,7 +3050,7 @@ fn remove_created_directory(path: &Path, root: &Path) -> Result<()> {
 }
 
 fn validate_stored_plan(plan: &StoredPlan, request: &ApplyBatchRequest) -> Result<()> {
-    if plan.format_version != PLAN_FORMAT_VERSION
+    if !(1..=PLAN_FORMAT_VERSION).contains(&plan.format_version)
         || plan.plan_id != request.plan_id
         || plan.session_id != request.session_id
     {
@@ -2610,7 +3141,7 @@ fn load_apply_journal(plan_directory: &Path) -> Result<Option<ApplyJournal>> {
         .with_context(|| format!("Could not read Aurora apply journal {}", path.display()))?;
     let journal: ApplyJournal = serde_json::from_slice(&bytes)
         .with_context(|| format!("Could not parse Aurora apply journal {}", path.display()))?;
-    if journal.format_version != PLAN_FORMAT_VERSION {
+    if !(1..=PLAN_FORMAT_VERSION).contains(&journal.format_version) {
         bail!("Aurora apply journal version is unsupported");
     }
     Ok(Some(journal))
@@ -2713,13 +3244,39 @@ fn compensate_abandoned_plan_files(plan: &StoredPlan, plan_directory: &Path) -> 
                 "Could not determine whether prior destination exists: {}",
                 destination.display()
             )
-        })? {
+        })? && has_staging_owner(&destination, &plan.plan_id, index)?
+        {
             published.push(PublishedAlbum {
                 destination,
                 inventory: album.inventory.clone(),
                 plan_id: plan.plan_id.clone(),
                 index,
+                action: album.action,
+                recovery: (album.action == BatchAlbumAction::Replace)
+                    .then(|| replacement_recovery_path(plan, album, index, &root))
+                    .transpose()?,
+                existing_inventory: album.existing_inventory.clone(),
             });
+        } else if album.action == BatchAlbumAction::Replace {
+            let recovery = replacement_recovery_path(plan, album, index, &root)?;
+            if recovery.try_exists()? && !destination.try_exists()? {
+                let expected = album.existing_inventory.as_ref().ok_or_else(|| {
+                    anyhow!("A replacement recovery plan is missing its original inventory")
+                })?;
+                if inventory_folder(&recovery)? != *expected {
+                    bail!(
+                        "A prior replacement recovery folder changed: {}",
+                        recovery.display()
+                    );
+                }
+                fs::rename(&recovery, &destination).with_context(|| {
+                    format!(
+                        "Could not restore prior replacement at {}",
+                        destination.display()
+                    )
+                })?;
+                set_hidden(&destination, false)?;
+            }
         }
     }
     let cleanup_errors = cleanup_published(&published, &root);
@@ -3004,7 +3561,13 @@ mod tests {
                     album: format!("Album {index}"),
                     year: "2026".to_owned(),
                     track_count: 2,
+                    action: BatchAlbumAction::Add,
+                    existing_track_count: 0,
+                    matched_track_count: 0,
+                    existing_rated_track_count: 0,
+                    existing_loved_track_count: 0,
                     inventory: inventory_folder(&album_source).expect("inventory"),
+                    existing_inventory: None,
                 }
             })
             .collect();
@@ -3017,6 +3580,7 @@ mod tests {
             category_label: "Movie / TV / game music".to_owned(),
             destination_root: display_path(root),
             snapshot_path: "snapshot.tsv".to_owned(),
+            operation: PlanOperation::Intake,
             albums,
         }
     }
@@ -3460,6 +4024,42 @@ mod tests {
             Path::new(&plan.albums[0].source_path).is_dir(),
             "source stays until DB commit"
         );
+    }
+
+    #[test]
+    fn replacement_preserves_original_and_compensation_restores_it() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path().join("library");
+        let source = temp.path().join("inbox");
+        fs::create_dir_all(&root).expect("root");
+        fs::create_dir_all(&source).expect("source");
+        let destination = root.join("Final album");
+        fs::create_dir(&destination).expect("existing release");
+        fs::write(destination.join("old.mp3"), b"original release").expect("old track");
+        let original = inventory_folder(&destination).expect("original inventory");
+        let mut plan = test_plan(&root, &source, &["Final album"]);
+        plan.albums[0].action = BatchAlbumAction::Replace;
+        plan.albums[0].existing_inventory = Some(original.clone());
+
+        let published = stage_and_publish(&plan, None).expect("publish replacement");
+        let recovery =
+            replacement_recovery_path(&plan, &plan.albums[0], 0, &root).expect("recovery path");
+        assert_eq!(
+            inventory_folder(&recovery).expect("recovery inventory"),
+            original
+        );
+        assert_eq!(
+            inventory_without_owner_marker(&destination).expect("new release inventory"),
+            plan.albums[0].inventory
+        );
+
+        assert!(cleanup_published(&published, &root).is_empty());
+        assert_eq!(
+            inventory_folder(&destination).expect("restored original"),
+            original
+        );
+        assert!(!recovery.exists());
+        assert!(Path::new(&plan.albums[0].source_path).is_dir());
     }
 
     #[test]
