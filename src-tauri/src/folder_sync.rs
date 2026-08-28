@@ -215,6 +215,7 @@ struct FolderScan {
 #[derive(Clone, Debug)]
 struct PreparedBatchAlbum {
     scan: FolderScan,
+    requested_source: PathBuf,
     destination: PathBuf,
     action: BatchAlbumAction,
     destination_fingerprint: Option<FolderFingerprint>,
@@ -851,6 +852,7 @@ pub(crate) fn build_batch_snapshot(
         };
         scans.push(PreparedBatchAlbum {
             scan,
+            requested_source: input.source.clone(),
             destination: input.destination.clone(),
             action: input.action,
             destination_fingerprint,
@@ -913,9 +915,10 @@ pub(crate) fn build_batch_snapshot(
             let values = catalog_track_record(row)?;
             hash_record(&mut catalog_hasher, &values);
             catalog_track_count += 1;
-            let source_match = scans
-                .iter()
-                .position(|album| path_is_within_folder(&values[13], &album.scan.canonical_folder));
+            let source_match = scans.iter().position(|album| {
+                path_is_within_folder(&values[13], &album.scan.canonical_folder)
+                    || path_is_within_folder(&values[13], &album.requested_source)
+            });
             if let Some(index) = source_match {
                 if scans[index].action == BatchAlbumAction::Remove {
                     scans[index].existing_records.push(values);

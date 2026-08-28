@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.145.1] - 2026-08-28
+
+### Fixed
+
+- Matched move-back catalog folders against both the validated requested path and its canonical Windows path. This keeps ordinary `C:\...` catalog paths equivalent to `\\?\C:\...` paths produced by Windows runners and services.
+
+### Changed
+
+- Synchronized app metadata and provider user agents to `0.145.1`.
+
 ## [0.145.0] - 2026-08-28
 
 ### Added
