@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.145.2] - 2026-08-28
+
+### Fixed
+
+- Serialized Rust tests in the release gate so integration tests sharing the process-wide import workflow guard cannot race and fail with `Another library import workflow is already running`.
+
+### Changed
+
+- Synchronized app metadata and provider user agents to `0.145.2`.
+
 ## [0.145.1] - 2026-08-28
 
 ### Fixed
