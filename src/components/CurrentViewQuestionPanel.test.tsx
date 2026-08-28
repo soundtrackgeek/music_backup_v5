@@ -87,6 +87,54 @@ describe("CurrentViewQuestionPanel", () => {
     expect(screen.getByText("Luna · saved")).toBeInTheDocument();
   });
 
+  it("scopes chart questions to the ranked result limit", async () => {
+    const user = userEvent.setup();
+    const request = createRequest("albums");
+    request.limit = 20;
+    const answer = {
+      answer: "These are the first 20 albums in the active ranking.",
+      view: "albums",
+      matchingRows: 20,
+      analysisCount: 1,
+      namedRowsShared: 0,
+      model: "gpt-5.6-luna",
+      usage: { inputTokens: 500, cachedInputTokens: 0, outputTokens: 50 },
+    } satisfies AiCurrentViewAnswer;
+    backend.askCurrentView.mockResolvedValueOnce(answer);
+    backend.saveAiSnapshot.mockResolvedValueOnce({
+      id: 16,
+      title: "What does the top 20 tell about me?",
+      content: {
+        kind: "chartAnswer",
+        prompt: "What does the top 20 tell about me?",
+        request,
+        result: answer,
+      },
+      libraryImportRunId: 8,
+      libraryImportedAt: "2026-07-16T10:00:00Z",
+      libraryAlbumCount: 73_128,
+      libraryTrackCount: 1_111_666,
+      createdAt: "2026-07-16T10:05:00Z",
+    });
+
+    render(<CurrentViewQuestionPanel context="chart" request={request} />);
+    const question = "What does the top 20 tell about me?";
+    await user.type(
+      screen.getByRole("textbox", { name: "Question about the current view" }),
+      question,
+    );
+    await user.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(backend.askCurrentView).toHaveBeenCalledWith({
+      question,
+      request,
+      scopeLabel:
+        "Current chart: first 20 ranked albums in the active ordering (or all matches when fewer).",
+      scopeToResultLimit: true,
+    });
+    expect(screen.getByText(/20 matching albums/)).toBeInTheDocument();
+  });
+
   it("reports failures without inventing an answer", async () => {
     const user = userEvent.setup();
     backend.askCurrentView.mockRejectedValueOnce(

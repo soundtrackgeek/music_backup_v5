@@ -126,10 +126,17 @@ export function CurrentViewQuestionPanel({
     setIsLoading(true);
     setError(null);
     try {
+      const noun = request.view === "tracks" ? "tracks" : "albums";
+      const effectiveScopeLabel =
+        scopeLabel ??
+        (context === "chart"
+          ? `Current chart: first ${request.limit.toLocaleString()} ranked ${noun} in the active ordering (or all matches when fewer).`
+          : undefined);
       const answer = await askCurrentView({
         question: question.trim(),
         request,
-        ...(scopeLabel ? { scopeLabel } : {}),
+        ...(effectiveScopeLabel ? { scopeLabel: effectiveScopeLabel } : {}),
+        ...(context === "chart" ? { scopeToResultLimit: true } : {}),
       });
       setResult(answer);
       setResultQuestion(question.trim());

@@ -836,6 +836,7 @@ export type AiCurrentViewQuestion = {
   question: string;
   request: BrowseRequest;
   scopeLabel?: string;
+  scopeToResultLimit?: boolean;
 };
 
 export type AiCurrentViewAnswer = {

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.145.3] - 2026-08-28
+
+### Fixed
+
+- Scoped **Ask this chart** overviews, groups, lists, and the reported match count to the chart's displayed ranked rows instead of every filtered library match. Explicit top/first-N questions can narrow that cohort further without widening the active chart.
+
+### Changed
+
+- Synchronized app metadata and provider user agents to `0.145.3`.
+
 ## [0.145.2] - 2026-08-28
 
 ### Fixed

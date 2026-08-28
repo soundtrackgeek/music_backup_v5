@@ -10065,11 +10065,12 @@ const COMPLETE_SEARCH_RESULT_LIMIT: u32 = u32::MAX;
 pub fn inspect_current_view_for_app(
     app: &AppHandle,
     request: &BrowseRequest,
+    scope_limit: Option<u32>,
     inspection: &ViewInspectionRequest,
 ) -> Result<ViewInspectionResult> {
     let (conn, _) = open(app)?;
     ensure_search_indexes(&conn)?;
-    inspect_current_view(&conn, request, inspection)
+    inspect_current_view(&conn, request, scope_limit, inspection)
 }
 
 #[cfg(not(test))]
@@ -22826,6 +22827,7 @@ fn numeric_rating_condition(field: &str) -> String {
 fn inspect_current_view(
     conn: &Connection,
     request: &BrowseRequest,
+    scope_limit: Option<u32>,
     inspection: &ViewInspectionRequest,
 ) -> Result<ViewInspectionResult> {
     if inspection.requests.is_empty() || inspection.requests.len() > 3 {
@@ -22841,6 +22843,25 @@ fn inspect_current_view(
         bail!("Current-view inspection cannot request more than 50 named rows in total.")
     }
 
+    let scoped_request = if let Some(scope_limit) = scope_limit {
+        let scope_limit = scope_limit.clamp(1, 500);
+        let mut cohort_request = request.clone();
+        cohort_request.offset = 0;
+        cohort_request.limit = scope_limit;
+        let cohort = search_library(conn, cohort_request, scope_limit)
+            .context("Could not resolve the ranked chart scope for Luna")?;
+        let mut scoped = request.clone();
+        scoped.limit = scope_limit;
+        if normalize_view(&request.view) == "tracks" {
+            scoped.filters.track_ids = cohort.rows.iter().filter_map(|row| row.track_id).collect();
+        } else {
+            scoped.filters.album_ids = cohort.rows.iter().map(|row| row.album_id.clone()).collect();
+        }
+        Some(scoped)
+    } else {
+        None
+    };
+    let request = scoped_request.as_ref().unwrap_or(request);
     let view = normalize_view(&request.view);
     let is_tracks = view == "tracks";
     let from_sql = current_view_from_sql(is_tracks);
@@ -22873,6 +22894,8 @@ fn inspect_current_view(
             "scope": {
                 "view": view,
                 "matchingRows": matching_rows,
+                "mode": if scope_limit.is_some() { "rankedLimit" } else { "allMatches" },
+                "resultLimit": scope_limit,
                 "note": "All filters and SQLite queries remained local. This payload contains only the requested compact inspection."
             },
             "analyses": analyses
@@ -27454,6 +27477,7 @@ mod tests {
             );
         }
         let inspection = ViewInspectionRequest {
+            row_limit: None,
             requests: vec![ViewInspectionItem {
                 operation: "list".to_string(),
                 group_by: "artist".to_string(),
@@ -27463,7 +27487,7 @@ mod tests {
             }],
         };
 
-        let result = inspect_current_view(&conn, &BrowseRequest::default(), &inspection)
+        let result = inspect_current_view(&conn, &BrowseRequest::default(), None, &inspection)
             .expect("inspect a bounded named list");
 
         assert_eq!(result.matching_rows, 26);
@@ -27478,6 +27502,7 @@ mod tests {
         );
 
         let over_limit = ViewInspectionRequest {
+            row_limit: None,
             requests: vec![
                 ViewInspectionItem {
                     operation: "list".to_string(),
@@ -27495,7 +27520,7 @@ mod tests {
                 },
             ],
         };
-        assert!(inspect_current_view(&conn, &BrowseRequest::default(), &over_limit).is_err());
+        assert!(inspect_current_view(&conn, &BrowseRequest::default(), None, &over_limit).is_err());
     }
 
     #[test]
@@ -27518,6 +27543,7 @@ mod tests {
         )
         .expect("insert second album");
         let inspection = ViewInspectionRequest {
+            row_limit: None,
             requests: vec![
                 ViewInspectionItem {
                     operation: "overview".to_string(),
@@ -27543,7 +27569,7 @@ mod tests {
             ],
         };
 
-        let result = inspect_current_view(&conn, &BrowseRequest::default(), &inspection)
+        let result = inspect_current_view(&conn, &BrowseRequest::default(), None, &inspection)
             .expect("inspect current album view");
 
         assert_eq!(result.matching_rows, 2);
@@ -27567,6 +27593,7 @@ mod tests {
         empty_request.filters.year_from = Some(1900);
         empty_request.filters.year_to = Some(1900);
         let empty_inspection = ViewInspectionRequest {
+            row_limit: None,
             requests: vec![ViewInspectionItem {
                 operation: "overview".to_string(),
                 group_by: "artist".to_string(),
@@ -27575,11 +27602,76 @@ mod tests {
                 limit: 10,
             }],
         };
-        let empty = inspect_current_view(&conn, &empty_request, &empty_inspection)
+        let empty = inspect_current_view(&conn, &empty_request, None, &empty_inspection)
             .expect("inspect empty current view");
         assert_eq!(empty.matching_rows, 0);
         assert_eq!(empty.payload["analyses"][0]["unratedCount"], 0);
         assert_eq!(empty.payload["analyses"][0]["partiallyRatedAlbumCount"], 0);
+    }
+
+    #[test]
+    fn chart_current_view_inspection_stays_inside_the_ranked_result_limit() {
+        let conn = seeded_connection();
+        insert_test_album(
+            &conn,
+            "mb:chart-middle",
+            "Middle Artist",
+            "Middle Album",
+            2020,
+            10,
+        );
+        insert_test_album(
+            &conn,
+            "mb:chart-newest",
+            "Newest Artist",
+            "Newest Album",
+            2025,
+            10,
+        );
+        let mut request = BrowseRequest::default();
+        request.limit = 2;
+        request.sort = BrowseSort {
+            field: "year".to_string(),
+            direction: "desc".to_string(),
+        };
+        let inspection = ViewInspectionRequest {
+            row_limit: Some(2),
+            requests: vec![
+                ViewInspectionItem {
+                    operation: "overview".to_string(),
+                    group_by: "artist".to_string(),
+                    sort_by: "count".to_string(),
+                    direction: "desc".to_string(),
+                    limit: 10,
+                },
+                ViewInspectionItem {
+                    operation: "group".to_string(),
+                    group_by: "artist".to_string(),
+                    sort_by: "label".to_string(),
+                    direction: "asc".to_string(),
+                    limit: 10,
+                },
+                ViewInspectionItem {
+                    operation: "list".to_string(),
+                    group_by: "artist".to_string(),
+                    sort_by: "label".to_string(),
+                    direction: "asc".to_string(),
+                    limit: 10,
+                },
+            ],
+        };
+
+        let result = inspect_current_view(&conn, &request, Some(2), &inspection)
+            .expect("inspect the ranked chart cohort");
+
+        assert_eq!(result.matching_rows, 2);
+        assert_eq!(result.payload["scope"]["mode"], "rankedLimit");
+        assert_eq!(result.payload["scope"]["resultLimit"], 2);
+        assert_eq!(result.payload["analyses"][0]["entityCount"], 2);
+        let serialized = serde_json::to_string(&result.payload).unwrap();
+        assert!(serialized.contains("Middle Artist"));
+        assert!(serialized.contains("Newest Artist"));
+        assert!(!serialized.contains("Pet Shop Boys"));
     }
 
     #[test]

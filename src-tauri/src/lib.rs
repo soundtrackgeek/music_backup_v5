@@ -470,8 +470,8 @@ async fn ask_current_view(
     input: ai::AiCurrentViewQuestion,
 ) -> Result<ai::AiCurrentViewAnswer, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        ai::ask_current_view(input, |request, inspection| {
-            db::inspect_current_view_for_app(&app, request, inspection)
+        ai::ask_current_view(input, |request, scope_limit, inspection| {
+            db::inspect_current_view_for_app(&app, request, scope_limit, inspection)
         })
     })
     .await

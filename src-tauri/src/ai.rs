@@ -26,10 +26,11 @@ You answer a question about the user's currently filtered music-library view.
 The database and active filters remain inside the desktop app. You can inspect only the bounded local tool provided by the app.
 
 On the first turn, call inspect_current_view exactly once. Choose one to three complementary requests:
-- overview returns exact counts, ranges, totals, and averages across every matching row.
+- overview returns exact counts, ranges, totals, and averages across every row in the selected scope.
 - group returns at most 20 grouped values for artist, genre, year, decade, country, publisher, or rating status.
 - list returns at most 50 named albums or tracks, using either the view's current ordering or a validated sort.
 - Across all requested inspections, never request more than 50 named rows in total.
+- Set rowLimit to the user's explicit top/first N when they ask about only that many rows in the active ordering; otherwise set it to null. It scopes every requested inspection to the same leading cohort. A Chart may already impose a smaller displayed ranking limit, which the app will preserve.
 
 Use overview for questions such as how many, averages, oldest/newest, unrated, duration, or general summaries.
 Use group for most-common, distribution, comparison, or concentration questions.
@@ -236,6 +237,8 @@ pub struct AiCurrentViewQuestion {
     pub request: BrowseRequest,
     #[serde(default)]
     pub scope_label: Option<String>,
+    #[serde(default)]
+    pub scope_to_result_limit: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -609,6 +612,7 @@ struct LibraryAnalysisFindingDocument {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ViewInspectionRequest {
+    pub row_limit: Option<u32>,
     pub requests: Vec<ViewInspectionItem>,
 }
 
@@ -1242,7 +1246,7 @@ fn build_playlist_plan(
 
 pub fn ask_current_view<F>(input: AiCurrentViewQuestion, inspect: F) -> Result<AiCurrentViewAnswer>
 where
-    F: FnOnce(&BrowseRequest, &ViewInspectionRequest) -> Result<ViewInspectionResult>,
+    F: FnOnce(&BrowseRequest, Option<u32>, &ViewInspectionRequest) -> Result<ViewInspectionResult>,
 {
     let question = input.question.trim();
     if question.is_empty() {
@@ -1293,7 +1297,12 @@ where
     let function_call = extract_function_call(&first_payload)?;
     let inspection_request: ViewInspectionRequest = serde_json::from_str(&function_call.arguments)
         .context("Luna returned invalid current-view tool arguments")?;
-    let inspection = inspect(&input.request, &inspection_request)?;
+    let scope_limit = current_view_scope_limit(
+        input.request.limit,
+        input.scope_to_result_limit,
+        inspection_request.row_limit,
+    );
+    let inspection = inspect(&input.request, scope_limit, &inspection_request)?;
     let tool_output = serde_json::to_string(&inspection.payload)
         .context("Could not serialize the local current-view summary")?;
 
@@ -1338,6 +1347,19 @@ where
             usage_from_response(&final_payload),
         ),
     })
+}
+
+fn current_view_scope_limit(
+    request_limit: u32,
+    scope_to_result_limit: bool,
+    requested_limit: Option<u32>,
+) -> Option<u32> {
+    let requested_limit = requested_limit.map(|limit| limit.clamp(1, 500));
+    if scope_to_result_limit {
+        Some(requested_limit.unwrap_or(request_limit).min(request_limit))
+    } else {
+        requested_limit
+    }
 }
 
 pub fn research_music<F>(input: AiMusicResearchRequest, inspect: F) -> Result<AiMusicResearchAnswer>
@@ -1879,11 +1901,17 @@ fn current_view_tool() -> Value {
     json!({
         "type": "function",
         "name": "inspect_current_view",
-        "description": "Inspect only the active local album or track result set through exact aggregates, bounded groups, or a bounded list. The app executes this against SQLite and returns compact JSON.",
+        "description": "Inspect only the active local album or track result set through exact aggregates, bounded groups, or a bounded list. An explicit top/first N can scope every operation to the same leading rows in the active ordering. The app executes this against SQLite and returns compact JSON.",
         "strict": true,
         "parameters": {
             "type": "object",
             "properties": {
+                "rowLimit": {
+                    "type": ["integer", "null"],
+                    "minimum": 1,
+                    "maximum": 500,
+                    "description": "The user's explicit top/first N in the active ordering, or null when no narrower row cohort was requested."
+                },
                 "requests": {
                     "type": "array",
                     "minItems": 1,
@@ -1918,7 +1946,7 @@ fn current_view_tool() -> Value {
                     }
                 }
             },
-            "required": ["requests"],
+            "required": ["rowLimit", "requests"],
             "additionalProperties": false
         }
     })
@@ -4229,7 +4257,7 @@ mod tests {
                 "type": "function_call",
                 "call_id": "call_test",
                 "name": "inspect_current_view",
-                "arguments": "{\"requests\":[{\"operation\":\"overview\",\"groupBy\":\"artist\",\"sortBy\":\"count\",\"direction\":\"desc\",\"limit\":10}]}"
+                "arguments": "{\"rowLimit\":null,\"requests\":[{\"operation\":\"overview\",\"groupBy\":\"artist\",\"sortBy\":\"count\",\"direction\":\"desc\",\"limit\":10}]}"
             }]
         });
 
@@ -4245,6 +4273,11 @@ mod tests {
         let tool = current_view_tool();
         assert_eq!(tool["strict"], true);
         assert_eq!(tool["parameters"]["additionalProperties"], false);
+        assert_eq!(tool["parameters"]["properties"]["rowLimit"]["maximum"], 500);
+        assert!(tool["parameters"]["required"]
+            .as_array()
+            .expect("required arguments")
+            .contains(&json!("rowLimit")));
         assert_eq!(tool["parameters"]["properties"]["requests"]["maxItems"], 3);
         assert_eq!(
             tool["parameters"]["properties"]["requests"]["items"]["additionalProperties"],
@@ -4254,6 +4287,15 @@ mod tests {
             tool["parameters"]["properties"]["requests"]["items"]["properties"]["limit"]["maximum"],
             50
         );
+    }
+
+    #[test]
+    fn current_view_scope_uses_explicit_top_n_without_widening_a_chart() {
+        assert_eq!(current_view_scope_limit(50, true, Some(20)), Some(20));
+        assert_eq!(current_view_scope_limit(20, true, None), Some(20));
+        assert_eq!(current_view_scope_limit(20, true, Some(50)), Some(20));
+        assert_eq!(current_view_scope_limit(50, false, Some(20)), Some(20));
+        assert_eq!(current_view_scope_limit(50, false, None), None);
     }
 
     #[test]
@@ -4874,8 +4916,9 @@ mod tests {
                     .to_string(),
                 request: BrowseRequest::default(),
                 scope_label: None,
+                scope_to_result_limit: false,
             },
-            |_request, inspection| {
+            |_request, _scope_to_result_limit, inspection| {
                 assert!(!inspection.requests.is_empty());
                 assert!(inspection.requests.len() <= 3);
                 Ok(ViewInspectionResult {
@@ -4910,8 +4953,9 @@ mod tests {
                 question: "How many Billboard nr. 1 albums have I rated with 100% completedness? and how many do I have left to rate?".to_string(),
                 request: BrowseRequest::default(),
                 scope_label: None,
+                scope_to_result_limit: false,
             },
-            |_request, inspection| {
+            |_request, _scope_to_result_limit, inspection| {
                 assert!(inspection.requests.iter().any(|item| {
                     item.operation == "group" && item.group_by == "ratingStatus"
                 }));
@@ -4960,8 +5004,9 @@ mod tests {
                     .to_string(),
                 request: BrowseRequest::default(),
                 scope_label: None,
+                scope_to_result_limit: false,
             },
-            move |_request, inspection| {
+            move |_request, _scope_to_result_limit, inspection| {
                 let list = inspection
                     .requests
                     .iter()

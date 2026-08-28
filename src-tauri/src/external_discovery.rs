@@ -18,7 +18,7 @@ const MUSICBRAINZ_ARTIST_SEARCH_URL: &str = "https://musicbrainz.org/ws/2/artist
 const MUSICBRAINZ_RELEASE_GROUP_SEARCH_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 const MUSICBRAINZ_RECORDING_SEARCH_URL: &str = "https://musicbrainz.org/ws/2/recording";
 const MUSICBRAINZ_USER_AGENT: &str =
-    "music-backup-v5/0.145.2 (https://github.com/soundtrackgeek/music_backup_v5)";
+    "music-backup-v5/0.145.3 (https://github.com/soundtrackgeek/music_backup_v5)";
 const MAX_CATALOG_CANDIDATES: usize = 100;
 const MAX_SAVED_RESPONSE_BYTES: usize = 1_000_000;
 const MUSICBRAINZ_REQUEST_INTERVAL: Duration = Duration::from_millis(1_100);

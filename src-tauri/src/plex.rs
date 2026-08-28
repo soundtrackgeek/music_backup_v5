@@ -27,7 +27,7 @@ const MAX_AUTO_SYNC_MINUTES: u32 = 1_440;
 const TRACK_LOOKUP_BATCH_SIZE: usize = 25;
 const PLAYLIST_PAGE_SIZE: u32 = 1_000;
 const PLEX_PRODUCT: &str = "Music Library";
-const PLEX_VERSION: &str = "0.145.2";
+const PLEX_VERSION: &str = "0.145.3";
 
 static SYNC_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 
