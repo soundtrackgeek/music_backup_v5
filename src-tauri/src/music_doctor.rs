@@ -85,6 +85,158 @@ pub struct MusicDoctorSyncResult {
     pub completed_at: String,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct IntakeTrackQuality {
+    pub path: PathBuf,
+    pub source_path: PathBuf,
+    pub relative_path: PathBuf,
+    pub extension: String,
+    pub format: String,
+    pub size_bytes: i64,
+    pub modified_ns: i64,
+    pub bitrate_kbps: Option<i64>,
+    pub duration_ms: Option<i64>,
+    pub properties_checked_ns: i64,
+    pub scan_error: Option<String>,
+    pub updated_at: String,
+}
+
+pub(crate) fn cache_aurora_intake_quality(
+    local: &Connection,
+    records: &[IntakeTrackQuality],
+) -> Result<()> {
+    if records.is_empty() {
+        return Ok(());
+    }
+
+    let transaction = local
+        .unchecked_transaction()
+        .context("Could not start Aurora intake quality caching")?;
+    let mut resolved = Vec::with_capacity(records.len());
+    for record in records {
+        let input_key = normalized_file_key(&record.path);
+        let ordinary_input_key = input_key
+            .strip_prefix(r"\\?\")
+            .unwrap_or(&input_key)
+            .to_owned();
+        let track = transaction
+            .query_row(
+                "
+                SELECT album_id, file_path, filename
+                FROM tracks
+                WHERE unicode_lower(
+                    replace(rtrim(file_path, char(92) || '/'), '/', char(92))
+                    || char(92) || filename
+                ) IN (unicode_lower(?1), unicode_lower(?2))
+                LIMIT 1
+                ",
+                params![input_key, ordinary_input_key],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+            .ok_or_else(|| {
+                anyhow!(
+                    "The imported track was not found in the catalog: {}",
+                    record.path.display()
+                )
+            })?;
+        resolved.push((record, track.0, track.1, track.2));
+    }
+
+    let mut album_ids = resolved
+        .iter()
+        .map(|(_, album_id, _, _)| album_id.clone())
+        .collect::<Vec<_>>();
+    album_ids.sort();
+    album_ids.dedup();
+    for album_id in &album_ids {
+        transaction.execute(
+            "DELETE FROM music_doctor_track_quality WHERE album_id = ?1",
+            [album_id],
+        )?;
+        transaction.execute(
+            "DELETE FROM music_doctor_album_quality WHERE album_id = ?1",
+            [album_id],
+        )?;
+    }
+
+    for (record, album_id, file_path, filename) in resolved {
+        let file_key = normalized_file_key(Path::new(&file_path).join(&filename).as_path());
+        transaction.execute(
+            "
+            INSERT OR REPLACE INTO music_doctor_track_quality (
+                file_key, file_path, filename, album_id, source_path, relative_path,
+                extension, format, file_type, size_bytes, modified_ns, bitrate_kbps,
+                duration_ms, properties_checked_ns, scan_error, missing,
+                doctor_updated_at, sync_run_id
+            ) VALUES (
+                unicode_lower(?1), ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'Audio', ?9,
+                ?10, ?11, ?12, ?13, ?14, 0, ?15, 0
+            )
+            ",
+            params![
+                file_key,
+                file_path,
+                filename,
+                album_id,
+                record.source_path.to_string_lossy(),
+                record.relative_path.to_string_lossy(),
+                record.extension,
+                record.format,
+                record.size_bytes,
+                record.modified_ns,
+                record.bitrate_kbps,
+                record.duration_ms,
+                record.properties_checked_ns,
+                record.scan_error,
+                record.updated_at,
+            ],
+        )?;
+    }
+
+    for album_id in &album_ids {
+        transaction.execute(
+            "
+            INSERT INTO music_doctor_album_quality (
+                album_id, matched_tracks, total_size_bytes, min_bitrate_kbps,
+                avg_bitrate_kbps, max_bitrate_kbps, below_128_tracks,
+                below_192_tracks, below_320_tracks, at_least_320_tracks,
+                mixed_quality, formats, sync_run_id
+            )
+            SELECT
+                album_id, COUNT(*), COALESCE(SUM(size_bytes), 0), MIN(bitrate_kbps),
+                AVG(bitrate_kbps), MAX(bitrate_kbps),
+                SUM(CASE WHEN bitrate_kbps < 128 THEN 1 ELSE 0 END),
+                SUM(CASE WHEN bitrate_kbps < 192 THEN 1 ELSE 0 END),
+                SUM(CASE WHEN bitrate_kbps < 320 THEN 1 ELSE 0 END),
+                SUM(CASE WHEN bitrate_kbps >= 320 THEN 1 ELSE 0 END),
+                CASE WHEN MIN(bitrate_kbps) <> MAX(bitrate_kbps) THEN 1 ELSE 0 END,
+                COALESCE(GROUP_CONCAT(DISTINCT format), ''), 0
+            FROM music_doctor_track_quality
+            WHERE album_id = ?1
+            GROUP BY album_id
+            ",
+            [album_id],
+        )?;
+    }
+    transaction
+        .commit()
+        .context("Could not cache Aurora intake quality")
+}
+
+fn normalized_file_key(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('/', "\\")
+        .trim_end_matches('\\')
+        .to_string()
+}
+
 #[derive(Debug)]
 struct ExternalSnapshot {
     resolved_path: PathBuf,
@@ -350,7 +502,13 @@ pub fn sync_for_connection(
 
         transaction.execute_batch(
             "
-            DELETE FROM music_doctor_track_quality;
+            DELETE FROM music_doctor_track_quality
+            WHERE sync_run_id = 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM temp.music_doctor_local_tracks local
+                  WHERE local.file_key = music_doctor_track_quality.file_key
+              );
+            DELETE FROM music_doctor_track_quality WHERE sync_run_id <> 0;
             DELETE FROM music_doctor_album_quality;
             DELETE FROM music_doctor_unmatched_files;
             DELETE FROM music_doctor_file_issues;
@@ -362,7 +520,7 @@ pub fn sync_for_connection(
         transaction
             .execute(
                 "
-            INSERT INTO music_doctor_track_quality (
+            INSERT OR REPLACE INTO music_doctor_track_quality (
                 file_key, file_path, filename, album_id, source_path, relative_path,
                 extension, format, file_type, size_bytes, modified_ns, bitrate_kbps,
                 duration_ms, properties_checked_ns, scan_error, missing,
@@ -936,25 +1094,78 @@ mod tests {
                 [],
             )
             .expect("insert track");
+        local
+            .execute(
+                "INSERT INTO tracks (import_run_id, album_id, album, album_artist_display, title, file_path, filename, row_hash) VALUES (1, 'album-2', 'Future Album', 'Future Artist', 'Future Song', 'D:\\MUSIC\\Future Artist - Future Album (2026)', '01 - Future Song.mp3', 'future-hash')",
+                [],
+            )
+            .expect("insert future track");
+
+        cache_aurora_intake_quality(
+            &local,
+            &[
+                IntakeTrackQuality {
+                    path: PathBuf::from("D:\\MUSIC\\KoЯn - Album (2010)\\01. KOЯN - SONG.mp3"),
+                    source_path: PathBuf::from("D:\\MUSIC"),
+                    relative_path: PathBuf::from("KoЯn - Album (2010)\\01. KOЯN - SONG.mp3"),
+                    extension: "mp3".to_owned(),
+                    format: "MP3".to_owned(),
+                    size_bytes: 900,
+                    modified_ns: 2,
+                    bitrate_kbps: Some(192),
+                    duration_ms: Some(180_000),
+                    properties_checked_ns: 2,
+                    scan_error: None,
+                    updated_at: "2026-08-29T20:00:00Z".to_owned(),
+                },
+                IntakeTrackQuality {
+                    path: PathBuf::from(
+                        "D:\\MUSIC\\Future Artist - Future Album (2026)\\01 - Future Song.mp3",
+                    ),
+                    source_path: PathBuf::from("D:\\MUSIC"),
+                    relative_path: PathBuf::from(
+                        "Future Artist - Future Album (2026)\\01 - Future Song.mp3",
+                    ),
+                    extension: "mp3".to_owned(),
+                    format: "MP3".to_owned(),
+                    size_bytes: 1_200,
+                    modified_ns: 2,
+                    bitrate_kbps: Some(256),
+                    duration_ms: Some(190_000),
+                    properties_checked_ns: 2,
+                    scan_error: None,
+                    updated_at: "2026-08-29T20:00:00Z".to_owned(),
+                },
+            ],
+        )
+        .expect("cache Aurora intake quality");
 
         let result = sync_for_connection(&local, doctor_path.to_str().unwrap()).expect("sync");
-        assert_eq!(result.matched_tracks, 1);
+        assert_eq!(result.matched_tracks, 2);
         assert_eq!(result.unmatched_library_tracks, 0);
         assert_eq!(result.unmatched_doctor_audio, 1);
         assert_eq!(result.file_issue_count, 1);
 
         let bitrate = local
             .query_row(
-                "SELECT bitrate_kbps FROM music_doctor_track_quality",
+                "SELECT bitrate_kbps FROM music_doctor_track_quality WHERE album_id = 'album-1'",
                 [],
                 |row| row.get::<_, i64>(0),
             )
             .expect("cached bitrate");
         assert_eq!(bitrate, 320);
+        let future_quality = local
+            .query_row(
+                "SELECT bitrate_kbps, sync_run_id FROM music_doctor_track_quality WHERE album_id = 'album-2'",
+                [],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .expect("preserved Aurora quality");
+        assert_eq!(future_quality, (256, 0));
 
         let status = status_for_connection(&local, doctor_path.to_str().unwrap()).expect("status");
         assert!(!status.needs_sync);
         assert_eq!(status.state, "available");
-        assert_eq!(status.matched_tracks, 1);
+        assert_eq!(status.matched_tracks, 2);
     }
 }

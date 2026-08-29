@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.145.4] - 2026-08-29
+
+### Added
+
+- Aurora intake now validates each published MP3 before catalog commit and stores its format, size, bitrate, duration, and scan outcome in the existing Music Doctor quality tables after commit.
+
+### Changed
+
+- Aurora-owned quality rows use the existing `sync_run_id = 0` provenance marker, contribute to album aggregates immediately, and remain available without another Music Doctor run. A legacy Music Doctor sync still replaces exact matching rows and preserves newer Aurora-only tracks.
+- Synchronized app metadata and provider user agents to `0.145.4`.
+
 ## [0.145.3] - 2026-08-28
 
 ### Fixed

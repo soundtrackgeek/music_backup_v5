@@ -1,5 +1,6 @@
 use crate::folder_sync::{self, BatchAlbumAction, BatchAlbumInput};
-use crate::{covers, db, importer};
+use crate::soulseek::soundcheck::{self, SoundcheckStatus};
+use crate::{covers, db, importer, music_doctor};
 use anyhow::{anyhow, bail, Context, Result};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -1944,6 +1945,21 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
             &journal_path,
         ));
     }
+    let intake_quality = match plan.operation {
+        PlanOperation::Intake => inspect_published_mp3_quality(&published, &destination_root),
+        PlanOperation::MoveToInbox => Ok(Vec::new()),
+    };
+    let intake_quality = match intake_quality {
+        Ok(quality) => quality,
+        Err(error) => {
+            return Err(compensate_precommit(
+                error,
+                &published,
+                &destination_root,
+                &journal_path,
+            ));
+        }
+    };
     if let Err(error) = write_apply_journal(&journal_path, &plan.plan_id, "published") {
         return Err(compensate_precommit(
             error,
@@ -1964,14 +1980,22 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
                     let import_run_id = state.import_run_id.ok_or_else(|| {
                         anyhow!("Completed Aurora import session has no import run")
                     })?;
+                    let mut warnings = vec![format!(
+                        "The catalog commit completed, but post-commit reporting returned an error: {error:#}"
+                    )];
+                    if let Err(quality_error) =
+                        music_doctor::cache_aurora_intake_quality(&conn, &intake_quality)
+                    {
+                        warnings.push(format!(
+                            "The albums were cataloged, but their audio quality could not be cached: {quality_error:#}"
+                        ));
+                    }
                     return Ok(finish_committed_plan(
                         &plan,
                         &plan_directory,
                         import_run_id,
                         state.backup_path,
-                        vec![format!(
-                            "The catalog commit completed, but post-commit reporting returned an error: {error:#}"
-                        )],
+                        warnings,
                     ));
                 }
                 Ok(_) => {}
@@ -1990,6 +2014,11 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
         }
     };
     let mut postcommit_warnings = Vec::new();
+    if let Err(error) = music_doctor::cache_aurora_intake_quality(&conn, &intake_quality) {
+        postcommit_warnings.push(format!(
+            "The albums were cataloged, but their audio quality could not be cached: {error:#}"
+        ));
+    }
     if let Err(error) = write_apply_journal(&journal_path, &plan.plan_id, "committed") {
         postcommit_warnings.push(format!(
             "The catalog committed, but Aurora could not update its recovery journal: {error:#}"
@@ -2017,6 +2046,92 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
         import_summary.backup_path,
         postcommit_warnings,
     ))
+}
+
+fn inspect_published_mp3_quality(
+    published: &[PublishedAlbum],
+    destination_root: &Path,
+) -> Result<Vec<music_doctor::IntakeTrackQuality>> {
+    let checked_at_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u64::MAX as u128) as u64;
+    let checked_at_ns = checked_at_ms.saturating_mul(1_000_000).min(i64::MAX as u64) as i64;
+    let updated_at = chrono::Utc::now().to_rfc3339();
+    let mut quality = Vec::new();
+
+    for album in published {
+        for file in &album.inventory.files {
+            let relative = Path::new(&file.relative_path);
+            if !relative
+                .extension()
+                .and_then(|value| value.to_str())
+                .is_some_and(|value| value.eq_ignore_ascii_case("mp3"))
+            {
+                continue;
+            }
+            let path = album.destination.join(relative);
+            let metadata = fs::metadata(&path).with_context(|| {
+                format!(
+                    "Could not inspect incoming MP3 metadata: {}",
+                    path.display()
+                )
+            })?;
+            if metadata.len() == 0 {
+                bail!("The incoming MP3 is empty: {}", path.display());
+            }
+            let result =
+                soundcheck::inspect_file(&path, false, checked_at_ms).ok_or_else(|| {
+                    anyhow!("The incoming MP3 was not recognized: {}", path.display())
+                })?;
+            if matches!(
+                result.status,
+                SoundcheckStatus::Failed | SoundcheckStatus::Unsupported
+            ) {
+                bail!(
+                    "The incoming MP3 could not be read: {} ({})",
+                    path.display(),
+                    result.issues.join("; ")
+                );
+            }
+            let modified_ns = metadata
+                .modified()
+                .ok()
+                .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+                .map(|value| value.as_nanos().min(i64::MAX as u128) as i64)
+                .unwrap_or_default();
+            let root_relative = path
+                .strip_prefix(destination_root)
+                .with_context(|| {
+                    format!(
+                        "The published MP3 is outside its destination root: {}",
+                        path.display()
+                    )
+                })?
+                .to_path_buf();
+            quality.push(music_doctor::IntakeTrackQuality {
+                path,
+                source_path: destination_root.to_path_buf(),
+                relative_path: root_relative,
+                extension: "mp3".to_string(),
+                format: result
+                    .container
+                    .or(result.codec)
+                    .unwrap_or_else(|| "MP3".to_string()),
+                size_bytes: metadata.len().min(i64::MAX as u64) as i64,
+                modified_ns,
+                bitrate_kbps: result.bitrate_kbps.map(i64::from),
+                duration_ms: result
+                    .duration_seconds
+                    .map(|seconds| (seconds * 1_000.0).round().min(i64::MAX as f64) as i64),
+                properties_checked_ns: checked_at_ns,
+                scan_error: (!result.issues.is_empty()).then(|| result.issues.join("; ")),
+                updated_at: updated_at.clone(),
+            });
+        }
+    }
+    Ok(quality)
 }
 
 fn validate_source_inventories(plan: &StoredPlan) -> Result<()> {
