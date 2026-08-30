@@ -2101,15 +2101,8 @@ fn inspect_published_mp3_quality(
                 .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
                 .map(|value| value.as_nanos().min(i64::MAX as u128) as i64)
                 .unwrap_or_default();
-            let root_relative = path
-                .strip_prefix(destination_root)
-                .with_context(|| {
-                    format!(
-                        "The published MP3 is outside its destination root: {}",
-                        path.display()
-                    )
-                })?
-                .to_path_buf();
+            let root_relative =
+                published_track_root_relative_path(destination_root, &album.destination, relative)?;
             quality.push(music_doctor::IntakeTrackQuality {
                 path,
                 source_path: destination_root.to_path_buf(),
@@ -2132,6 +2125,22 @@ fn inspect_published_mp3_quality(
         }
     }
     Ok(quality)
+}
+
+fn published_track_root_relative_path(
+    destination_root: &Path,
+    album_destination: &Path,
+    track_relative: &Path,
+) -> Result<PathBuf> {
+    ensure_direct_child(destination_root, album_destination)?;
+    validate_relative_path(track_relative)?;
+    let album_name = album_destination.file_name().ok_or_else(|| {
+        anyhow!(
+            "The published album has no destination folder name: {}",
+            album_destination.display()
+        )
+    })?;
+    Ok(PathBuf::from(album_name).join(track_relative))
 }
 
 fn validate_source_inventories(plan: &StoredPlan) -> Result<()> {
@@ -4138,6 +4147,31 @@ mod tests {
         assert!(
             Path::new(&plan.albums[0].source_path).is_dir(),
             "source stays until DB commit"
+        );
+    }
+
+    #[test]
+    fn published_quality_path_accepts_equivalent_canonical_windows_root() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path().join("library");
+        fs::create_dir_all(&root).expect("root");
+        let canonical_root = root.canonicalize().expect("canonical root");
+        let planned_root = PathBuf::from(display_path(&canonical_root));
+        let destination = planned_root.join("Creed - The Sign of Victory (1990)");
+        let track = Path::new("1-01 - Creed - Sign of Victory.mp3");
+
+        #[cfg(windows)]
+        assert!(
+            destination
+                .join(track)
+                .strip_prefix(&canonical_root)
+                .is_err(),
+            "the previous lexical prefix check must reproduce the ordinary/verbatim mismatch"
+        );
+        assert_eq!(
+            published_track_root_relative_path(&canonical_root, &destination, track)
+                .expect("equivalent roots"),
+            PathBuf::from("Creed - The Sign of Victory (1990)").join(track)
         );
     }
 

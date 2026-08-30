@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.145.5] - 2026-08-30
+
+### Fixed
+
+- Aurora intake quality validation now treats ordinary and Windows verbatim forms of the same destination root as equivalent. Published MP3s remain inside the reviewed category root instead of being rolled back with a false `prefix not found` transfer failure.
+
+### Changed
+
+- Synchronized app metadata and provider user agents to `0.145.5`.
+
 ## [0.145.4] - 2026-08-29
 
 ### Added
