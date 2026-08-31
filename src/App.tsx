@@ -3418,8 +3418,9 @@ function MusicBrainzArtistInfoPanel({
   const originInputId = useId();
   const originNameInputId = useId();
   const originOptionsId = `${originInputId}-options`;
-  const musicBrainzMbid =
-    response?.musicbrainzMbid ?? artist?.musicBrainzMbid ?? null;
+  const musicBrainzMbid = response
+    ? response.musicbrainzMbid
+    : (artist?.musicBrainzMbid ?? null);
   const musicBrainzArtistLink = musicBrainzMbid
     ? musicBrainzArtistUrl(musicBrainzMbid)
     : null;
@@ -3454,8 +3455,7 @@ function MusicBrainzArtistInfoPanel({
   const canUnlink = Boolean(
     artist &&
       response &&
-      (response.artistLinkState === "verified" ||
-        response.artistLinkState === "ignored") &&
+      musicBrainzMbid &&
       !isLoading,
   );
   const manualMbidValue = manualMbid.trim();

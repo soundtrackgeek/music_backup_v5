@@ -3557,6 +3557,10 @@ fn find_artist_match(
         }
     }
 
+    if artist_link_is_unlinked(app_conn, artist_key)? {
+        return Ok(None);
+    }
+
     if let Some((matched_name, mbid)) = cache_conn
         .query_row(
             "
@@ -3648,6 +3652,26 @@ fn artist_link_record(app_conn: &Connection, artist_key: &str) -> Result<Option<
         )
         .optional()
         .context("Could not read MusicBrainz artist link")
+}
+
+fn artist_link_is_unlinked(app_conn: &Connection, artist_key: &str) -> Result<bool> {
+    if !table_exists(app_conn, "musicbrainz_artist_link_tombstones")? {
+        return Ok(false);
+    }
+
+    app_conn
+        .query_row(
+            "
+            SELECT EXISTS(
+                SELECT 1
+                FROM musicbrainz_artist_link_tombstones
+                WHERE local_artist_key = ?1
+            )
+            ",
+            params![artist_key],
+            |row| row.get::<_, bool>(0),
+        )
+        .context("Could not read MusicBrainz artist unlink marker")
 }
 
 fn artist_match_from_mbid(
@@ -5617,6 +5641,77 @@ mod tests {
     }
 
     #[test]
+    fn unlink_suppresses_an_unverified_cache_match_until_a_replacement_is_saved() {
+        let temp_dir = temp_cache_dir("discography-unlinked-cache-match");
+        let cache_path = temp_dir.join("musicbrainz_cache.db");
+        create_discography_cache(&cache_path, false);
+        let app_conn = create_artist_app_db();
+        create_decision_tables(&app_conn);
+        let request = MusicBrainzArtistDiscographyRequest {
+            artist_key: "pet shop boys".to_string(),
+            artist_name: "Pet Shop Boys".to_string(),
+        };
+
+        let initial = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            request.clone(),
+        )
+        .expect("load automatic cache match");
+        assert_eq!(initial.musicbrainz_mbid.as_deref(), Some("mbid-psb"));
+        assert_eq!(initial.artist_link_state, "unverified");
+
+        set_artist_link_for_connection(
+            &app_conn,
+            MusicBrainzArtistLinkRequest {
+                artist_key: request.artist_key.clone(),
+                artist_name: request.artist_name.clone(),
+                action: "unlink".to_string(),
+                musicbrainz_mbid: initial.musicbrainz_mbid,
+                canonical_name: initial.matched_cache_name,
+            },
+        )
+        .expect("unlink automatic cache match");
+
+        let unlinked = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            request.clone(),
+        )
+        .expect("reload unlinked artist");
+        assert_eq!(unlinked.musicbrainz_mbid, None);
+        assert_eq!(unlinked.artist_link_state, "none");
+        assert!(unlinked.releases.is_empty());
+
+        set_artist_link_for_connection(
+            &app_conn,
+            MusicBrainzArtistLinkRequest {
+                artist_key: request.artist_key.clone(),
+                artist_name: request.artist_name.clone(),
+                action: "set".to_string(),
+                musicbrainz_mbid: Some("b3b2dbfc-8f8f-4a40-b61a-983541c3eea3".to_string()),
+                canonical_name: Some("Pet Shop Boys".to_string()),
+            },
+        )
+        .expect("save replacement artist link");
+
+        let relinked = artist_discography_for_connection(
+            &app_conn,
+            Some(cache_path.display().to_string()),
+            request,
+        )
+        .expect("reload replacement artist link");
+        assert_eq!(
+            relinked.musicbrainz_mbid.as_deref(),
+            Some("b3b2dbfc-8f8f-4a40-b61a-983541c3eea3")
+        );
+        assert_eq!(relinked.artist_link_state, "verified");
+        assert_eq!(relinked.match_method, "manual-mbid");
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
     fn derives_origin_country_from_artist_country_and_preserves_raw_area() {
         let evidence = derive_origin_country(&MusicBrainzArtistLookupResponse {
             sort_name: Some("Bowie, David".to_string()),
@@ -6442,6 +6537,11 @@ mod tests {
                 PRIMARY KEY (local_artist_key, release_mbid),
                 FOREIGN KEY(local_artist_key) REFERENCES musicbrainz_artist_links(local_artist_key)
                     ON DELETE CASCADE
+            );
+            CREATE TABLE musicbrainz_artist_link_tombstones (
+                local_artist_key TEXT PRIMARY KEY,
+                display_artist TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             );
             CREATE TABLE musicbrainz_release_status_cache (
                 artist_mbid TEXT NOT NULL,

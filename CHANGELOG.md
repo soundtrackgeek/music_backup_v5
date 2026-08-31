@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.145.6] - 2026-08-31
+
+### Fixed
+
+- Enabled unlinking an unverified, cache-derived MusicBrainz artist match and persisted that decision so the same incorrect cache MBID does not immediately reappear. A replacement MBID can then be saved normally.
+
+### Changed
+
+- Synchronized app metadata and provider user agents to `0.145.6`.
+
 ## [0.145.5] - 2026-08-30
 
 ### Fixed

@@ -6089,14 +6089,15 @@ export async function setMusicBrainzArtistLink(input: {
     }
 
     if (input.action === "unlink") {
-      mockDiscography.artistLinkState = "unverified";
+      mockDiscography.musicbrainzMbid = null;
+      mockDiscography.matchedCacheName = null;
+      mockDiscography.artistLinkState = "none";
       mockDiscography.artistLinkIgnored = false;
-      mockDiscography.matchMethod = mockDiscography.musicbrainzMbid
-        ? "exact-name"
-        : "none";
-      mockDiscography.state = mockDiscography.musicbrainzMbid
-        ? "available"
-        : "notFound";
+      mockDiscography.matchMethod = "none";
+      mockDiscography.state = "notFound";
+      mockDiscography.message =
+        "The automatic MusicBrainz match was unlinked. Save a replacement MBID to link this artist again.";
+      mockDiscography.releases = [];
       recomputeMockMusicBrainzDiscographyCounts(mockDiscography);
       return;
     }
