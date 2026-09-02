@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.145.7] - 2026-09-02
+
+### Fixed
+
+- Fixed reviewed Aurora replacement batches rolling back after copying because the post-publish import guard compared the new destination against the original release fingerprint. Pre-copy validation still protects the original release, while commit-time validation now checks the unchanged source, published copy, preserved recovery folder, and catalog state.
+
+### Changed
+
+- Synchronized app metadata and provider user agents to `0.145.7`.
+
 ## [0.145.6] - 2026-08-31
 
 ### Fixed

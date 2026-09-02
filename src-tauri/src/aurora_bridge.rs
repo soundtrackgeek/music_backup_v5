@@ -1968,7 +1968,7 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
             &journal_path,
         ));
     }
-    let import_summary = match importer::apply_bridge_import_preview(
+    let import_summary = match importer::apply_published_bridge_import_preview(
         &mut conn,
         &database_path,
         request.session_id,

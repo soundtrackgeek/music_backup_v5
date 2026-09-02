@@ -529,6 +529,21 @@ pub(crate) fn prepare_source_apply_guard(
     conn: &Connection,
     snapshot_source: &str,
 ) -> Result<Option<SourceApplyGuard>> {
+    prepare_source_apply_guard_for_phase(conn, snapshot_source, false)
+}
+
+pub(crate) fn prepare_published_source_apply_guard(
+    conn: &Connection,
+    snapshot_source: &str,
+) -> Result<Option<SourceApplyGuard>> {
+    prepare_source_apply_guard_for_phase(conn, snapshot_source, true)
+}
+
+fn prepare_source_apply_guard_for_phase(
+    conn: &Connection,
+    snapshot_source: &str,
+    destinations_are_published: bool,
+) -> Result<Option<SourceApplyGuard>> {
     let snapshot = Path::new(snapshot_source);
     if !is_generated_snapshot(snapshot) {
         return Ok(None);
@@ -545,9 +560,13 @@ pub(crate) fn prepare_source_apply_guard(
                 .albums
                 .into_iter()
                 .flat_map(|album| {
-                    let mut folders = vec![(album.source_path, album.source_fingerprint)];
-                    if let Some(fingerprint) = album.destination_fingerprint {
-                        folders.push((album.destination_path, fingerprint));
+                    let mut folders = vec![(album.source_path, album.source_fingerprint.clone())];
+                    if destinations_are_published {
+                        folders.push((album.destination_path, album.source_fingerprint));
+                    } else {
+                        if let Some(fingerprint) = album.destination_fingerprint {
+                            folders.push((album.destination_path, fingerprint));
+                        }
                     }
                     folders
                 })
@@ -2361,6 +2380,75 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(&rows[0][12], "stable-id");
         assert_eq!(&rows[0][13], display_path(&destination));
+    }
+
+    #[test]
+    fn published_replacement_guard_does_not_expect_the_original_destination() {
+        let temp = tempdir().expect("tempdir");
+        let inbox = temp.path().join("Inbox");
+        let source = inbox.join("Album Artist - Score Album (2026)");
+        let destination = temp
+            .path()
+            .join("Library")
+            .join("Album Artist - Score Album (2026)");
+        fs::create_dir_all(&source).expect("source folder");
+        fs::create_dir_all(&destination).expect("destination folder");
+        write_tagged_mp3(&source.join("01.mp3"), "Score Album");
+        write_tagged_mp3(&source.join("02.mp3"), "Score Album");
+        write_tagged_mp3(&destination.join("01.mp3"), "Score Album");
+        let conn = Connection::open_in_memory().expect("database");
+        create_catalog(&conn);
+        conn.execute(
+            "INSERT INTO tracks (id, album, title, album_unique_id, file_path, filename, album_artist_display, year, release_year) VALUES (1, 'Score Album', 'Track Title', 'stable-id', ?1, '01.mp3', 'Album Artist', 2026, 2026)",
+            [display_path(&destination)],
+        )
+        .expect("catalog track");
+        let output = temp
+            .path()
+            .join(SNAPSHOT_DIRECTORY)
+            .join("album-folder-batch-published-replace.tsv");
+
+        build_batch_snapshot(
+            &conn,
+            &inbox,
+            &[BatchAlbumInput {
+                source: source.clone(),
+                destination: destination.clone(),
+                action: BatchAlbumAction::Replace,
+            }],
+            &output,
+            &AtomicBool::new(false),
+            &mut |_, _, _| {},
+        )
+        .expect("replacement snapshot");
+        prepare_source_apply_guard(&conn, output.to_string_lossy().as_ref())
+            .expect("reviewed replacement guard");
+
+        let recovery = temp.path().join("preserved-original");
+        fs::rename(&destination, &recovery).expect("preserve original destination");
+        fs::create_dir(&destination).expect("published destination");
+        fs::copy(source.join("01.mp3"), destination.join("01.mp3")).expect("publish first track");
+        fs::copy(source.join("02.mp3"), destination.join("02.mp3")).expect("publish second track");
+
+        assert!(!source_is_unchanged(&conn, &output).expect("reviewed guard after publish"));
+        assert!(
+            prepare_source_apply_guard(&conn, output.to_string_lossy().as_ref()).is_err(),
+            "the ordinary guard still protects the original replacement destination"
+        );
+        let published_guard =
+            prepare_published_source_apply_guard(&conn, output.to_string_lossy().as_ref())
+                .expect("published replacement guard")
+                .expect("generated snapshot guard");
+        ensure_source_apply_guard(&conn, Some(&published_guard))
+            .expect("published replacement remains safe to commit");
+
+        fs::write(destination.join("02.mp3"), [0xFF, 0xFB, 0x90, 0x64])
+            .expect("mutate published track");
+        let changed_destination = ensure_source_apply_guard(&conn, Some(&published_guard))
+            .expect_err("changed published replacement must not commit");
+        assert!(changed_destination
+            .to_string()
+            .contains("tagged album folder changed"));
     }
 
     #[test]

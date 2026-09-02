@@ -1801,14 +1801,34 @@ pub(crate) fn apply_bridge_import_preview(
     db_path: &Path,
     session_id: i64,
 ) -> Result<BridgeImportSummary> {
+    apply_bridge_import_preview_with_published_source(conn, db_path, session_id, false)
+}
+
+pub(crate) fn apply_published_bridge_import_preview(
+    conn: &mut Connection,
+    db_path: &Path,
+    session_id: i64,
+) -> Result<BridgeImportSummary> {
+    apply_bridge_import_preview_with_published_source(conn, db_path, session_id, true)
+}
+
+fn apply_bridge_import_preview_with_published_source(
+    conn: &mut Connection,
+    db_path: &Path,
+    session_id: i64,
+    source_is_published: bool,
+) -> Result<BridgeImportSummary> {
     let _workflow_guard = ImportWorkflowGuard::acquire()?;
     let started = Instant::now();
     let session = load_import_session(conn, session_id)?;
     if session.status != "ready" {
         bail!("Prepare the import delta before applying this import");
     }
-    let source_apply_guard =
-        crate::folder_sync::prepare_source_apply_guard(conn, &session.source_path)?;
+    let source_apply_guard = if source_is_published {
+        crate::folder_sync::prepare_published_source_apply_guard(conn, &session.source_path)?
+    } else {
+        crate::folder_sync::prepare_source_apply_guard(conn, &session.source_path)?
+    };
     let fingerprint = source_fingerprint(&session.source_path)?;
     ensure_session_source_matches(&session, &fingerprint)?;
     let reported_source_path = crate::folder_sync::original_folder_path(&session.source_path)
