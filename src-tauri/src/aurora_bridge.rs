@@ -27,6 +27,105 @@ const DEPRECATED_SYNC_BACKUP_PREFIX: &str = "music-library-aurora-sync-";
 const DEPRECATED_SYNC_BACKUP_SUFFIX: &str = "-before-import.sqlite3";
 const STAGING_OWNER_FILE: &str = ".aurora-intake-owner.json";
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeProgress {
+    operation: String,
+    stage: String,
+    message: String,
+    completed_albums: usize,
+    total_albums: usize,
+    processed_files: usize,
+    total_files: usize,
+    processed_bytes: u64,
+    total_bytes: u64,
+}
+
+struct BridgeProgressReporter {
+    path: PathBuf,
+    operation: String,
+    total_albums: usize,
+    total_files: usize,
+    total_bytes: u64,
+    processed_files: usize,
+    processed_bytes: u64,
+}
+
+impl BridgeProgressReporter {
+    fn new(request_path: &Path, operation: &str) -> Self {
+        Self {
+            path: request_path.with_extension("progress.json"),
+            operation: operation.to_owned(),
+            total_albums: 0,
+            total_files: 0,
+            total_bytes: 0,
+            processed_files: 0,
+            processed_bytes: 0,
+        }
+    }
+
+    fn configure_transfer(&mut self, plan: &StoredPlan) {
+        self.total_albums = plan.albums.len();
+        self.total_files = plan
+            .albums
+            .iter()
+            .map(|album| album.inventory.files.len())
+            .sum();
+        self.total_bytes = plan
+            .albums
+            .iter()
+            .flat_map(|album| &album.inventory.files)
+            .map(|file| file.size_bytes)
+            .sum();
+        self.processed_files = 0;
+        self.processed_bytes = 0;
+    }
+
+    #[cfg(test)]
+    fn disabled(operation: &str) -> Self {
+        Self {
+            path: PathBuf::new(),
+            operation: operation.to_owned(),
+            total_albums: 0,
+            total_files: 0,
+            total_bytes: 0,
+            processed_files: 0,
+            processed_bytes: 0,
+        }
+    }
+
+    fn report(&self, stage: &str, message: impl Into<String>, completed_albums: usize) {
+        if self.path.as_os_str().is_empty() {
+            return;
+        }
+        if let Ok(bytes) = serde_json::to_vec(&BridgeProgress {
+            operation: self.operation.clone(),
+            stage: stage.to_owned(),
+            message: message.into(),
+            completed_albums,
+            total_albums: self.total_albums,
+            processed_files: self.processed_files,
+            total_files: self.total_files,
+            processed_bytes: self.processed_bytes,
+            total_bytes: self.total_bytes,
+        }) {
+            // Progress is advisory and short-lived. Avoid a disk flush for every copied file;
+            // Aurora ignores a partially observed update and reads the next one.
+            let _ = fs::write(&self.path, bytes);
+        }
+    }
+
+    fn transferred_file(&mut self, size_bytes: u64, completed_albums: usize, name: &str) {
+        self.processed_files = self.processed_files.saturating_add(1);
+        self.processed_bytes = self.processed_bytes.saturating_add(size_bytes);
+        self.report(
+            "transferring",
+            format!("Copied and verified {name}"),
+            completed_albums,
+        );
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BridgeRequest {
@@ -273,13 +372,14 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
         );
     }
     let app_data_dir = bridge_app_data_dir()?;
+    let mut progress = BridgeProgressReporter::new(request_path, &request.operation);
     match request.operation.as_str() {
         "capabilities" => capabilities(),
         "previewBatch" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
             let payload: PreviewBatchRequest = serde_json::from_value(request.payload)
                 .context("previewBatch payload must contain sourcePath and category")?;
-            preview_batch(&app_data_dir, payload)
+            preview_batch(&app_data_dir, payload, &mut progress)
         }
         "previewMoveToInbox" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
@@ -291,7 +391,7 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
             let payload: ApplyBatchRequest = serde_json::from_value(request.payload)
                 .context("applyBatch payload must contain planId and sessionId")?;
-            apply_batch(&app_data_dir, payload)
+            apply_batch(&app_data_dir, payload, &mut progress)
         }
         "syncExistingFolders" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
@@ -375,7 +475,16 @@ fn capabilities() -> Result<Value> {
     }))
 }
 
-fn preview_batch(app_data_dir: &Path, request: PreviewBatchRequest) -> Result<Value> {
+fn preview_batch(
+    app_data_dir: &Path,
+    request: PreviewBatchRequest,
+    progress: &mut BridgeProgressReporter,
+) -> Result<Value> {
+    progress.report(
+        "scanning",
+        "Finding album folders and checking their destinations.",
+        0,
+    );
     let category = category_definition(&request.category)?;
     let destination_root = canonical_destination_root(&category)?;
     let source = PathBuf::from(request.source_path.trim());
@@ -390,6 +499,12 @@ fn preview_batch(app_data_dir: &Path, request: PreviewBatchRequest) -> Result<Va
     cleanup_abandoned_bridge_plans(&conn, app_data_dir)?;
     let album_sources = folder_sync::discover_batch_album_sources(&source)?;
     let inputs = resolve_destination_mappings(&source, &destination_root, album_sources)?;
+    progress.total_albums = inputs.len();
+    progress.report(
+        "analyzing",
+        "Reading tags and building the reviewable catalog change.",
+        0,
+    );
     let plan_id = new_plan_id(&source, category.id);
     let plan_directory = plan_directory(app_data_dir, &plan_id)?;
     fs::create_dir_all(&plan_directory).with_context(|| {
@@ -424,6 +539,11 @@ fn preview_batch(app_data_dir: &Path, request: PreviewBatchRequest) -> Result<Va
             return Err(error);
         }
     };
+    progress.report(
+        "fingerprinting",
+        "Fingerprinting album files for safe transfer verification.",
+        0,
+    );
     let added_album_count = snapshot
         .albums
         .iter()
@@ -460,7 +580,7 @@ fn preview_batch(app_data_dir: &Path, request: PreviewBatchRequest) -> Result<Va
 
     let stored_albums = (|| -> Result<Vec<StoredAlbum>> {
         let mut albums = Vec::with_capacity(snapshot.albums.len());
-        for metadata in &snapshot.albums {
+        for (index, metadata) in snapshot.albums.iter().enumerate() {
             albums.push(StoredAlbum {
                 source_path: metadata.source_path.clone(),
                 destination_path: metadata.destination_path.clone(),
@@ -478,6 +598,11 @@ fn preview_batch(app_data_dir: &Path, request: PreviewBatchRequest) -> Result<Va
                     .then(|| inventory_folder(Path::new(&metadata.destination_path)))
                     .transpose()?,
             });
+            progress.report(
+                "fingerprinting",
+                format!("Verified {}", metadata.album),
+                index + 1,
+            );
         }
         Ok(albums)
     })();
@@ -508,6 +633,12 @@ fn preview_batch(app_data_dir: &Path, request: PreviewBatchRequest) -> Result<Va
         let _ = fs::remove_dir_all(&plan_directory);
         return Err(error.context("Could not persist the prepared Aurora intake plan"));
     }
+
+    progress.report(
+        "completed",
+        "Preview ready. Review the destinations before moving anything.",
+        plan.albums.len(),
+    );
 
     Ok(json!({
         "planId": plan.plan_id,
@@ -1865,7 +1996,11 @@ fn filename_has_mp3_extension(filename: &str) -> bool {
         .is_some_and(|value| value.eq_ignore_ascii_case("mp3"))
 }
 
-fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value> {
+fn apply_batch(
+    app_data_dir: &Path,
+    request: ApplyBatchRequest,
+    progress: &mut BridgeProgressReporter,
+) -> Result<Value> {
     validate_plan_id(&request.plan_id)?;
     let plan_directory = plan_directory(app_data_dir, &request.plan_id)?;
     let plan_path = plan_directory.join("plan.json");
@@ -1874,6 +2009,12 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
     let plan: StoredPlan = serde_json::from_slice(&bytes)
         .with_context(|| format!("Could not parse Aurora intake plan {}", plan_path.display()))?;
     validate_stored_plan(&plan, &request)?;
+    progress.configure_transfer(&plan);
+    progress.report(
+        "validating",
+        "Confirming the reviewed albums and catalog are unchanged.",
+        0,
+    );
     let destination_root = match plan.operation {
         PlanOperation::Intake => {
             let category = category_definition(&plan.category)?;
@@ -1921,12 +2062,22 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
     let journal_path = plan_directory.join("apply-journal.json");
     write_apply_journal(&journal_path, &plan.plan_id, "copying")?;
 
-    let published = match stage_and_publish(&plan, None) {
+    progress.report(
+        "transferring",
+        "Copying albums into protected destination staging folders.",
+        0,
+    );
+    let published = match stage_and_publish_with_progress(&plan, None, progress) {
         Ok(published) => published,
         Err(error) => {
             return Err(error);
         }
     };
+    progress.report(
+        "verifying",
+        "Rechecking every source and published album before the catalog commit.",
+        plan.albums.len(),
+    );
     if let Err(error) = validate_source_inventories(&plan) {
         return Err(compensate_precommit(
             error.context(
@@ -1968,6 +2119,11 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
             &journal_path,
         ));
     }
+    progress.report(
+        "cataloging",
+        "Updating the catalog atomically and preserving its recovery backup.",
+        plan.albums.len(),
+    );
     let import_summary = match importer::apply_published_bridge_import_preview(
         &mut conn,
         &database_path,
@@ -2025,6 +2181,11 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
         ));
     }
     if plan.operation == PlanOperation::Intake {
+        progress.report(
+            "artwork",
+            "Archiving album covers and finalizing catalog artwork.",
+            plan.albums.len(),
+        );
         match db::settings_for_connection(&conn).and_then(|settings| {
             covers::import_added_album_covers_for_bridge(
                 &mut conn,
@@ -2039,13 +2200,24 @@ fn apply_batch(app_data_dir: &Path, request: ApplyBatchRequest) -> Result<Value>
             )),
         }
     }
-    Ok(finish_committed_plan(
+    progress.report(
+        "finalizing",
+        "Verifying the committed destinations before removing Inbox sources.",
+        plan.albums.len(),
+    );
+    let result = finish_committed_plan(
         &plan,
         &plan_directory,
         import_summary.import_run_id,
         import_summary.backup_path,
         postcommit_warnings,
-    ))
+    );
+    progress.report(
+        "completed",
+        "Albums moved, verified, and cataloged.",
+        plan.albums.len(),
+    );
+    Ok(result)
 }
 
 fn inspect_published_mp3_quality(
@@ -2830,18 +3002,23 @@ fn finalize_committed_destination(
             )
         })?;
     }
-    if inventory_folder(destination)? != *expected {
-        bail!(
-            "The committed destination changed after its ownership marker was removed: {}",
-            destination.display()
-        );
-    }
     Ok(())
 }
 
+#[cfg(test)]
 fn stage_and_publish(
     plan: &StoredPlan,
     fail_after_publish: Option<usize>,
+) -> Result<Vec<PublishedAlbum>> {
+    let mut progress = BridgeProgressReporter::disabled("applyBatch");
+    progress.configure_transfer(plan);
+    stage_and_publish_with_progress(plan, fail_after_publish, &mut progress)
+}
+
+fn stage_and_publish_with_progress(
+    plan: &StoredPlan,
+    fail_after_publish: Option<usize>,
+    progress: &mut BridgeProgressReporter,
 ) -> Result<Vec<PublishedAlbum>> {
     let root = PathBuf::from(&plan.destination_root);
     let mut staging_paths = Vec::new();
@@ -2904,7 +3081,12 @@ fn stage_and_publish(
             staging_paths.push((staging.clone(), index));
             write_staging_owner(&staging, &plan.plan_id, index)?;
             set_hidden(&staging, true)?;
-            copy_inventory(&source, &staging, &album.inventory)?;
+            copy_inventory(&source, &staging, &album.inventory, index, progress)?;
+            progress.report(
+                "transferring",
+                format!("Copied and verified {}", album.album),
+                index + 1,
+            );
             let recovery = if album.action == BatchAlbumAction::Replace {
                 let recovery = replacement_recovery_path(plan, album, index, &root)?;
                 if recovery.try_exists()? {
@@ -2959,9 +3141,9 @@ fn stage_and_publish(
                     destination.display()
                 );
             }
-            if inventory_without_owner_marker(&destination)? != album.inventory {
+            if !inventory_matches_shape_without_owner(&destination, &album.inventory)? {
                 bail!(
-                    "Published album verification failed: {}",
+                    "Published album structure changed after verification: {}",
                     destination.display()
                 );
             }
@@ -3006,7 +3188,13 @@ fn stage_and_publish(
     Ok(published)
 }
 
-fn copy_inventory(source: &Path, staging: &Path, inventory: &FolderInventory) -> Result<()> {
+fn copy_inventory(
+    source: &Path,
+    staging: &Path,
+    inventory: &FolderInventory,
+    album_index: usize,
+    progress: &mut BridgeProgressReporter,
+) -> Result<()> {
     for relative in &inventory.directories {
         let relative = Path::new(relative);
         validate_relative_path(relative)?;
@@ -3036,14 +3224,69 @@ fn copy_inventory(source: &Path, staging: &Path, inventory: &FolderInventory) ->
                 destination_file.display()
             );
         }
+        progress.transferred_file(file.size_bytes, album_index, &file.relative_path);
     }
-    if inventory_without_owner_marker(staging)? != *inventory {
+    if !inventory_matches_shape_without_owner(staging, inventory)? {
         bail!(
-            "Copied folder verification failed for {}",
+            "Copied folder structure verification failed for {}",
             staging.display()
         );
     }
     Ok(())
+}
+
+fn inventory_matches_shape_without_owner(
+    folder: &Path,
+    expected: &FolderInventory,
+) -> Result<bool> {
+    folder_sync::ensure_source_root_is_not_linked(folder)?;
+    let canonical = folder
+        .canonicalize()
+        .with_context(|| format!("Could not resolve album folder {}", folder.display()))?;
+    let mut pending = vec![(canonical.clone(), 0usize)];
+    let mut directories = Vec::new();
+    let mut files = Vec::new();
+    while let Some((current, depth)) = pending.pop() {
+        if depth > 16 {
+            bail!("Album folder nesting exceeds the transfer safety limit");
+        }
+        for entry in fs::read_dir(&current)
+            .with_context(|| format!("Could not read album folder {}", current.display()))?
+        {
+            if directories.len() + files.len() >= MAX_TRANSFER_ENTRIES {
+                bail!(
+                    "The intake batch contains more than {MAX_TRANSFER_ENTRIES} filesystem entries"
+                );
+            }
+            let entry = entry?;
+            folder_sync::ensure_path_entry_is_not_linked(&entry.path())?;
+            let relative = entry
+                .path()
+                .strip_prefix(&canonical)
+                .map(display_path)
+                .context("Could not create a safe relative transfer path")?;
+            validate_relative_path(Path::new(&relative))?;
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() {
+                directories.push(relative);
+                pending.push((entry.path(), depth + 1));
+            } else if file_type.is_file() {
+                if relative != STAGING_OWNER_FILE {
+                    files.push((relative, entry.metadata()?.len()));
+                }
+            } else {
+                return Ok(false);
+            }
+        }
+    }
+    directories.sort();
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    let expected_files = expected
+        .files
+        .iter()
+        .map(|file| (file.relative_path.clone(), file.size_bytes))
+        .collect::<Vec<_>>();
+    Ok(directories == expected.directories && files == expected_files)
 }
 
 fn cleanup_published(albums: &[PublishedAlbum], root: &Path) -> Vec<String> {
@@ -4279,10 +4522,14 @@ mod tests {
         let plan = test_plan(&root, &source, &["Final"]);
         let destination = root.join("Final");
         fs::create_dir(&destination).expect("external destination");
+        let mut progress = BridgeProgressReporter::disabled("applyBatch");
+        progress.configure_transfer(&plan);
         copy_inventory(
             Path::new(&plan.albums[0].source_path),
             &destination,
             &plan.albums[0].inventory,
+            0,
+            &mut progress,
         )
         .expect("identical external copy");
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.145.8] - 2026-09-04
+
+### Added
+
+- Published live Aurora bridge progress for intake scanning, fingerprinting, file/byte transfer, verification, catalog commit, artwork, and final cleanup through a request-scoped progress file that remains compatible with the version-1 protocol.
+
+### Changed
+
+- Reused freed SQLite staging pages after Aurora bridge intake instead of synchronously vacuuming and rewriting the multi-gigabyte catalog after every small batch.
+- Replaced immediate duplicate destination SHA-256 passes with exact directory, filename, and size checks while retaining the separate full-hash checks before catalog commit and before source cleanup.
+- Synchronized app metadata to `0.145.8`.
+
 ## [0.145.7] - 2026-09-02
 
 ### Fixed

@@ -1889,11 +1889,9 @@ fn apply_bridge_import_preview_with_published_source(
             if let Err(error) = cleanup_completed_stage(conn, session_id) {
                 eprintln!("Could not clean committed Aurora import staging rows: {error:#}");
             }
-            if completed_stage_storage_should_be_reclaimed(conn).unwrap_or(false) {
-                if let Err(error) = reclaim_completed_stage_storage(conn) {
-                    eprintln!("Could not reclaim completed import staging space: {error:#}");
-                }
-            }
+            // Keep the released staging pages in SQLite's freelist. The next Aurora preview
+            // reuses them, while vacuuming the multi-gigabyte catalog here made every small
+            // intake pay for a full database rewrite before it could report completion.
             debug_assert!(rating_events_count >= 0);
             crate::folder_sync::cleanup_generated_snapshot_file(&session.source_path);
             Ok(BridgeImportSummary {
