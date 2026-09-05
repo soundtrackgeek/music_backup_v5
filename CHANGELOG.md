@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.145.11] - 2026-09-05
+
+### Changed
+- Verified single-album removal and Move to Inbox preserve retained track IDs, ratings, and search rows instead of replacing the entire catalog.
+- Skip unrelated chart reconciliation while retaining alternative-release relinking when removed records have chart references.
+- Preserve the full recovery backup, stale-plan checks, atomic rollback, verified file transfer, and post-commit source cleanup.
+
 ## [0.145.10] - 2026-09-05
 
 ### Fixed

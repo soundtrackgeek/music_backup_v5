@@ -2277,7 +2277,7 @@ fn apply_batch(
     }
     progress.report(
         "finalizing",
-        "Verifying the committed destinations before removing Inbox sources.",
+        "Verifying the committed destinations before removing original source folders.",
         plan.albums.len(),
     );
     let result = finish_committed_plan(

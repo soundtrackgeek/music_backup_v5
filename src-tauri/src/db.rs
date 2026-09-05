@@ -2868,6 +2868,44 @@ fn ensure_chart_album_match_state_schema(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+// Capture references before ON DELETE SET NULL clears them. Unrelated chart
+// matches keep their stable track/album identities; affected charts use the full
+// reconciler so alternative releases and duplicate recordings are still relinked.
+pub(crate) fn album_removal_chart_impact(
+    conn: &Connection,
+    album_id: &str,
+) -> Result<(bool, bool)> {
+    let mut albums = false;
+    for table in [
+        "billboard_chart_entries",
+        "official_uk_album_chart_entries",
+        "vg_lista_album_chart_entries",
+    ] {
+        albums |= conn.query_row(
+            &format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE matched_album_id = ?1)"),
+            params![album_id],
+            |row| row.get::<_, bool>(0),
+        )?;
+    }
+    let mut tracks = false;
+    for table in [
+        "billboard_single_chart_entries",
+        "official_uk_single_chart_entries",
+        "vg_lista_single_chart_entries",
+        "ti_i_skuddet_chart_entries",
+        "norsktoppen_chart_entries",
+    ] {
+        tracks |= conn.query_row(&format!("SELECT EXISTS(SELECT 1 FROM {table} c JOIN tracks t ON t.id = c.matched_track_id WHERE t.album_id = ?1)"),
+            params![album_id], |row| row.get::<_, bool>(0))?;
+    }
+    // Do not mark an already-stale album chart cache as current.
+    let current_sources: i64 = conn.query_row("SELECT COUNT(*) FROM chart_album_match_state
+        WHERE source IN ('billboard', 'official-uk', 'vg-lista')
+        AND reconciled_import_run_id = (SELECT MAX(id) FROM import_runs WHERE status = 'completed')",
+        [], |row| row.get(0))?;
+    Ok((albums || current_sources != 3, tracks))
+}
+
 pub(crate) fn reconcile_album_chart_matches(conn: &Connection) -> Result<()> {
     ensure_chart_album_match_state_schema(conn)?;
     conn.execute_batch(
@@ -2931,6 +2969,10 @@ pub(crate) fn reconcile_album_chart_matches(conn: &Connection) -> Result<()> {
     )?;
     conn.execute_batch("DROP TABLE IF EXISTS temp_discovery_album_match_keys;")?;
 
+    record_album_chart_match_state(conn)
+}
+
+pub(crate) fn record_album_chart_match_state(conn: &Connection) -> Result<()> {
     // During an import this runs in the same transaction before that run is marked
     // completed, so retain the current run id rather than the previous snapshot's id.
     let import_run_id = conn.query_row("SELECT MAX(id) FROM import_runs", [], |row| {

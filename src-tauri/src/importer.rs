@@ -1875,6 +1875,7 @@ fn apply_bridge_import_preview_with_published_source(
         started,
         &reported_source_path,
         source_apply_guard.as_ref(),
+        source_is_published && source_apply_guard.is_some(),
     );
     match result {
         Ok((_track_rows, _album_count, rating_events_count)) => {
@@ -2014,6 +2015,7 @@ pub fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSum
         started,
         &reported_source_path,
         source_apply_guard.as_ref(),
+        false,
     );
     match result {
         Ok((track_rows, album_count, rating_events_count)) => {
@@ -3068,6 +3070,7 @@ fn apply_staged_import(
     started: Instant,
     reported_source_path: &str,
     source_apply_guard: Option<&crate::folder_sync::SourceApplyGuard>,
+    allow_removal_only: bool,
 ) -> Result<(u64, u64, i64)> {
     let tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -3102,110 +3105,177 @@ fn apply_staged_import(
         }
     }
 
-    tx.execute_batch(
-        "
-        DELETE FROM raw_tracks;
-        DELETE FROM tracks;
-        DELETE FROM albums;
-        ",
-    )
-    .context("Could not clear the previous import tables")?;
-    tx.execute(
-        "
-        INSERT INTO raw_tracks (
-            import_run_id, row_number, display_artist, album_rating, disc_number,
-            album, genre, love, publisher, rating, title, track_number,
-            year_value, release_year, album_unique_id, file_path, filename,
-            album_artist_display, time_value, row_hash
+    // A verified removal delta can preserve the identities, ratings and search rows of
+    // every retained track. Ordinary imports still replace the complete snapshot.
+    let removal_only = allow_removal_only
+        && session.added_tracks == 0
+        && session.changed_tracks == 0
+        && session.added_albums == 0
+        && session.changed_albums == 0
+        && session.removed_albums == 1
+        && session.removed_tracks > 0
+        && previous_albums.len() == 1;
+    let mut chart_impact = (true, true);
+    if removal_only {
+        let album_id = previous_albums.keys().next().expect("one removed album");
+        // Recheck the staged delta inside the write transaction before deleting anything.
+        for (sql, expected) in [
+            (ADDED_TRACKS_SQL, 0),
+            (CHANGED_TRACKS_SQL, 0),
+            (REMOVED_TRACKS_SQL, session.removed_tracks),
+        ] {
+            let actual: i64 = tx.query_row(sql, params![session.id], |row| row.get(0))?;
+            if actual != expected {
+                bail!("The prepared album removal no longer matches the catalog");
+            }
+        }
+        let removed_tracks: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM tracks WHERE album_id = ?1",
+            params![album_id],
+            |row| row.get(0),
+        )?;
+        let staged_removed_tracks: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM import_stage_tracks WHERE session_id = ?1 AND album_id = ?2",
+            params![session.id, album_id],
+            |row| row.get(0),
+        )?;
+        if removed_tracks != session.removed_tracks || staged_removed_tracks != 0 {
+            bail!("The prepared removal must remove exactly one complete album");
+        }
+        chart_impact = db::album_removal_chart_impact(&tx, album_id)?;
+        tx.execute(
+            "DELETE FROM raw_tracks WHERE EXISTS (
+            SELECT 1 FROM tracks WHERE tracks.album_id = ?1
+            AND tracks.file_path IS raw_tracks.file_path AND tracks.filename IS raw_tracks.filename
+        )",
+            params![album_id],
+        )?;
+        tx.execute(
+            "DELETE FROM track_search_fts WHERE album_id = ?1",
+            params![album_id],
+        )?;
+        tx.execute(
+            "DELETE FROM album_search_fts WHERE album_id = ?1",
+            params![album_id],
+        )?;
+        tx.execute("DELETE FROM tracks WHERE album_id = ?1", params![album_id])?;
+        tx.execute("DELETE FROM albums WHERE id = ?1", params![album_id])?;
+    } else {
+        tx.execute_batch(
+            "
+            DELETE FROM raw_tracks;
+            DELETE FROM tracks;
+            DELETE FROM albums;
+            ",
         )
-        SELECT ?1, row_number, NULLIF(display_artist, ''),
-               NULLIF(album_rating_raw, ''), NULLIF(disc_number_raw, ''),
-               NULLIF(album, ''), NULLIF(genre, ''), NULLIF(love, ''),
-               NULLIF(publisher, ''), NULLIF(rating_raw, ''), NULLIF(title, ''),
-               NULLIF(track_number_raw, ''), NULLIF(year_raw, ''),
-               NULLIF(release_year_raw, ''), NULLIF(album_unique_id, ''),
-               NULLIF(file_path, ''), NULLIF(filename, ''),
-               NULLIF(album_artist_display, ''), NULLIF(time_raw, ''), row_hash
-        FROM import_stage_tracks
-        WHERE session_id = ?2
-        ORDER BY row_number
-        ",
-        params![import_run_id, session.id],
-    )
-    .context("Could not copy staged raw tracks")?;
-    tx.execute(
-        "
-        INSERT INTO tracks (
-            import_run_id, album_id, album_unique_id, display_artist,
-            album_artist_display, album, title, genre, canonical_genre,
-            genre_normalized, publisher, love, rating_raw, normalized_rating,
-            album_rating_raw, album_rating, disc_number, track_number, year,
-            release_year, time_seconds, file_path, filename, row_hash
+        .context("Could not clear the previous import tables")?;
+        tx.execute(
+            "
+            INSERT INTO raw_tracks (
+                import_run_id, row_number, display_artist, album_rating, disc_number,
+                album, genre, love, publisher, rating, title, track_number,
+                year_value, release_year, album_unique_id, file_path, filename,
+                album_artist_display, time_value, row_hash
+            )
+            SELECT ?1, row_number, NULLIF(display_artist, ''),
+                   NULLIF(album_rating_raw, ''), NULLIF(disc_number_raw, ''),
+                   NULLIF(album, ''), NULLIF(genre, ''), NULLIF(love, ''),
+                   NULLIF(publisher, ''), NULLIF(rating_raw, ''), NULLIF(title, ''),
+                   NULLIF(track_number_raw, ''), NULLIF(year_raw, ''),
+                   NULLIF(release_year_raw, ''), NULLIF(album_unique_id, ''),
+                   NULLIF(file_path, ''), NULLIF(filename, ''),
+                   NULLIF(album_artist_display, ''), NULLIF(time_raw, ''), row_hash
+            FROM import_stage_tracks
+            WHERE session_id = ?2
+            ORDER BY row_number
+            ",
+            params![import_run_id, session.id],
         )
-        SELECT ?1, album_id, NULLIF(album_unique_id, ''),
-               NULLIF(display_artist, ''), NULLIF(album_artist_display, ''),
-               NULLIF(album, ''), NULLIF(title, ''), NULLIF(genre, ''),
-               NULLIF(canonical_genre, ''), NULLIF(genre_normalized, ''),
-               NULLIF(publisher, ''), NULLIF(love, ''), NULLIF(rating_raw, ''),
-               normalized_rating, NULLIF(album_rating_raw, ''), album_rating,
-               disc_number, track_number, year, release_year, time_seconds,
-               NULLIF(file_path, ''), NULLIF(filename, ''), row_hash
-        FROM import_stage_tracks
-        WHERE session_id = ?2
-        ORDER BY row_number
-        ",
-        params![import_run_id, session.id],
-    )
-    .context("Could not copy staged normalized tracks")?;
-    tx.execute(
-        "
-        UPDATE tracks
-        SET album_artist_display = (
-            SELECT staged.final_album_artist_display
-            FROM import_stage_albums staged
-            WHERE staged.session_id = ?1 AND staged.album_id = tracks.album_id
+        .context("Could not copy staged raw tracks")?;
+        tx.execute(
+            "
+            INSERT INTO tracks (
+                import_run_id, album_id, album_unique_id, display_artist,
+                album_artist_display, album, title, genre, canonical_genre,
+                genre_normalized, publisher, love, rating_raw, normalized_rating,
+                album_rating_raw, album_rating, disc_number, track_number, year,
+                release_year, time_seconds, file_path, filename, row_hash
+            )
+            SELECT ?1, album_id, NULLIF(album_unique_id, ''),
+                   NULLIF(display_artist, ''), NULLIF(album_artist_display, ''),
+                   NULLIF(album, ''), NULLIF(title, ''), NULLIF(genre, ''),
+                   NULLIF(canonical_genre, ''), NULLIF(genre_normalized, ''),
+                   NULLIF(publisher, ''), NULLIF(love, ''), NULLIF(rating_raw, ''),
+                   normalized_rating, NULLIF(album_rating_raw, ''), album_rating,
+                   disc_number, track_number, year, release_year, time_seconds,
+                   NULLIF(file_path, ''), NULLIF(filename, ''), row_hash
+            FROM import_stage_tracks
+            WHERE session_id = ?2
+            ORDER BY row_number
+            ",
+            params![import_run_id, session.id],
         )
-        WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NULL
-          AND EXISTS (
-              SELECT 1
-              FROM import_stage_albums staged
-              WHERE staged.session_id = ?1
-                AND staged.album_id = tracks.album_id
-                AND staged.album_artist_display_inferred = 1
-          )
-        ",
-        params![session.id],
-    )
-    .context("Could not apply inferred album artists to staged tracks")?;
-    tx.execute(
-        "
-        INSERT INTO albums (
-            id, import_run_id, album_unique_id, album, album_artist_display,
-            canonical_genre, genre_normalized, publisher, year, release_year,
-            total_tracks, rated_tracks, rating_completeness, total_seconds,
-            loved_tracks, tmoe_seconds, ae_ratio, album_rating,
-            calculated_album_rating, effective_album_rating, album_score
+        .context("Could not copy staged normalized tracks")?;
+        tx.execute(
+            "
+            UPDATE tracks
+            SET album_artist_display = (
+                SELECT staged.final_album_artist_display
+                FROM import_stage_albums staged
+                WHERE staged.session_id = ?1 AND staged.album_id = tracks.album_id
+            )
+            WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM import_stage_albums staged
+                  WHERE staged.session_id = ?1
+                    AND staged.album_id = tracks.album_id
+                    AND staged.album_artist_display_inferred = 1
+              )
+            ",
+            params![session.id],
         )
-        SELECT album_id, ?1, album_unique_id, album, final_album_artist_display,
-               canonical_genre, genre_normalized, publisher, year, release_year,
-               total_tracks, rated_tracks, rating_completeness, total_seconds,
-               loved_tracks, tmoe_seconds, ae_ratio, album_rating,
-               calculated_album_rating, effective_album_rating, album_score
-        FROM import_stage_albums
-        WHERE session_id = ?2
-        ",
-        params![import_run_id, session.id],
-    )
-    .context("Could not copy staged albums")?;
+        .context("Could not apply inferred album artists to staged tracks")?;
+        tx.execute(
+            "
+            INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, album_rating,
+                calculated_album_rating, effective_album_rating, album_score
+            )
+            SELECT album_id, ?1, album_unique_id, album, final_album_artist_display,
+                   canonical_genre, genre_normalized, publisher, year, release_year,
+                   total_tracks, rated_tracks, rating_completeness, total_seconds,
+                   loved_tracks, tmoe_seconds, ae_ratio, album_rating,
+                   calculated_album_rating, effective_album_rating, album_score
+            FROM import_stage_albums
+            WHERE session_id = ?2
+            ",
+            params![import_run_id, session.id],
+        )
+        .context("Could not copy staged albums")?;
+    }
 
     insert_rating_events(&tx, import_run_id, &rating_events)?;
     insert_library_updates(&tx, import_run_id, reported_source_path, &library_updates)?;
     insert_rating_snapshot(&tx, import_run_id, &final_albums)?;
-    db::rebuild_search_indexes(&tx)?;
-    db::reconcile_album_chart_matches(&tx)
-        .context("Could not relink imported album charts after applying the library snapshot")?;
-    db::reconcile_track_chart_matches(&tx)
-        .context("Could not relink imported singles charts after applying the library snapshot")?;
+    if !removal_only {
+        db::rebuild_search_indexes(&tx)?;
+    }
+    if chart_impact.0 {
+        db::reconcile_album_chart_matches(&tx).context(
+            "Could not relink imported album charts after applying the library snapshot",
+        )?;
+    } else {
+        db::record_album_chart_match_state(&tx)?;
+    }
+    if chart_impact.1 {
+        db::reconcile_track_chart_matches(&tx).context(
+            "Could not relink imported singles charts after applying the library snapshot",
+        )?;
+    }
     let completed_at = Utc::now().to_rfc3339();
     let duration_ms = started.elapsed().as_millis() as i64;
     tx.execute(
@@ -6641,6 +6711,7 @@ mod tests {
             Instant::now(),
             &session.source_path,
             None,
+            false,
         )
         .expect_err("atomic apply should fail");
         assert!(error.to_string().contains("Could not copy staged albums"));
@@ -6661,6 +6732,220 @@ mod tests {
         );
 
         fs::remove_dir_all(&test_dir).expect("remove atomic import test directory");
+    }
+
+    #[test]
+    fn removal_only_preserves_retained_rows_and_rolls_back_failures() {
+        exercise_removal_only(false);
+    }
+
+    #[test]
+    fn removal_only_relinks_affected_charts_to_retained_recordings() {
+        exercise_removal_only(true);
+    }
+
+    fn exercise_removal_only(chart_linked: bool) {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("library.tsv");
+        let row = |name: &str| {
+            [
+                "Artist",
+                "",
+                "1",
+                name,
+                "Rock",
+                "L",
+                "Label",
+                "4",
+                "Shared Song",
+                "1",
+                "2026",
+                "2026",
+                name,
+                name,
+                "01.mp3",
+                "Artist",
+                "3:00",
+            ]
+            .join("\t")
+        };
+        fs::write(
+            &source,
+            format!(
+                "{}\n{}\n{}\n",
+                REQUIRED_COLUMNS.join("\t"),
+                row("Keep"),
+                row("Remove")
+            ),
+        )
+        .unwrap();
+        let mut conn = Connection::open_in_memory().unwrap();
+        db::configure(&conn).unwrap();
+        db::migrate(&conn).unwrap();
+        let prepare = |conn: &mut Connection| {
+            let fingerprint = source_fingerprint(source.to_str().unwrap()).unwrap();
+            prepare_import_preview_for_connection(
+                conn,
+                &fingerprint,
+                &AtomicBool::new(false),
+                &|_, _, _, _, _, _| {},
+            )
+            .unwrap()
+        };
+        let first = prepare(&mut conn);
+        apply_bridge_import_preview(
+            &mut conn,
+            &temp.path().join("absent.sqlite3"),
+            first.session_id,
+        )
+        .unwrap();
+        let retained: (i64, i64, String, i64) = conn.query_row(
+            "SELECT id, import_run_id, row_hash, normalized_rating FROM tracks WHERE album = 'Keep'", [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).unwrap();
+        if chart_linked {
+            conn.execute_batch("INSERT INTO vg_lista_single_chart_entries
+                (source_file, year, week, rank, artist, title, artist_key, title_key, week_date, week_key, matched_track_id, imported_at)
+                SELECT 'test', 2026, 1, 1, 'Artist', 'Shared Song', 'artist', 'shared song', '2026-01-01', '2026-W01', id, 'now'
+                FROM tracks WHERE album = 'Remove';
+                INSERT INTO vg_lista_album_chart_entries
+                (source_file, year, week, rank, artist, title, artist_key, title_key, week_date, week_key, matched_album_id, imported_at)
+                SELECT 'test', 2026, 1, 1, 'Artist', 'Remove', 'artist', 'remove', '2026-01-01', '2026-W01', id, 'now'
+                FROM albums WHERE album = 'Remove';").unwrap();
+        }
+        fs::write(
+            &source,
+            format!("{}\n{}\n", REQUIRED_COLUMNS.join("\t"), row("Keep")),
+        )
+        .unwrap();
+        let ready = prepare(&mut conn);
+        let session = load_import_session(&conn, ready.session_id).unwrap();
+        assert_eq!(
+            (
+                session.removed_tracks,
+                session.removed_albums,
+                session.changed_tracks
+            ),
+            (1, 1, 0)
+        );
+        conn.execute("INSERT INTO import_runs (source_path, started_at, status) VALUES ('removal', 'now', 'running')", []).unwrap();
+        let run = conn.last_insert_rowid();
+        conn.execute(
+            "UPDATE tracks SET row_hash = 'concurrent-rating' WHERE album = 'Keep'",
+            [],
+        )
+        .unwrap();
+        let stale_error = apply_staged_import(
+            &mut conn,
+            &session,
+            run,
+            Instant::now(),
+            &session.source_path,
+            None,
+            true,
+        )
+        .unwrap_err();
+        assert!(stale_error.to_string().contains("no longer matches"));
+        conn.execute(
+            "UPDATE tracks SET row_hash = ?1 WHERE album = 'Keep'",
+            params![retained.2],
+        )
+        .unwrap();
+        conn.execute_batch("CREATE TRIGGER preserve_retained_delete BEFORE DELETE ON tracks WHEN OLD.album = 'Keep'
+            BEGIN SELECT RAISE(ABORT, 'retained track deleted'); END;
+            CREATE TRIGGER preserve_retained_update BEFORE UPDATE ON tracks WHEN OLD.album = 'Keep'
+            BEGIN SELECT RAISE(ABORT, 'retained track updated'); END;
+            CREATE TRIGGER fail_removal BEFORE DELETE ON albums WHEN OLD.album = 'Remove'
+            BEGIN SELECT RAISE(ABORT, 'injected failure'); END;").unwrap();
+        if chart_linked {
+            // The complete chart reconciler may update chart summary columns, while
+            // retained recording identity and rating still must remain unchanged.
+            conn.execute_batch("DROP TRIGGER preserve_retained_update;")
+                .unwrap();
+        }
+        assert!(apply_staged_import(
+            &mut conn,
+            &session,
+            run,
+            Instant::now(),
+            &session.source_path,
+            None,
+            true
+        )
+        .is_err());
+        for table in [
+            "tracks",
+            "raw_tracks",
+            "albums",
+            "track_search_fts",
+            "album_search_fts",
+        ] {
+            let count: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(count, 2, "rollback must restore {table}");
+        }
+        assert_eq!(
+            bridge_session_state(&conn, session.id).unwrap().status,
+            "ready"
+        );
+        conn.execute_batch("DROP TRIGGER fail_removal;").unwrap();
+        apply_staged_import(
+            &mut conn,
+            &session,
+            run,
+            Instant::now(),
+            &session.source_path,
+            None,
+            true,
+        )
+        .unwrap();
+        let after = conn.query_row("SELECT id, import_run_id, row_hash, normalized_rating FROM tracks WHERE album = 'Keep'", [],
+            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?))).unwrap();
+        assert_eq!(retained, after);
+        if chart_linked {
+            let matched: i64 = conn
+                .query_row(
+                    "SELECT matched_track_id FROM vg_lista_single_chart_entries",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(matched, retained.0);
+            assert_eq!(
+                conn.query_row(
+                    "SELECT matched_album_id FROM vg_lista_album_chart_entries",
+                    [],
+                    |r| r.get::<_, Option<String>>(0)
+                )
+                .unwrap(),
+                None
+            );
+        }
+
+        for table in [
+            "tracks",
+            "raw_tracks",
+            "albums",
+            "track_search_fts",
+            "album_search_fts",
+        ] {
+            let count: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(count, 1, "only the selected album is removed from {table}");
+        }
+        assert_eq!(
+            bridge_session_state(&conn, session.id).unwrap().status,
+            "completed"
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r
+                .get::<_, i64>(
+                0
+            ))
+            .unwrap(),
+            0
+        );
     }
 
     #[test]
@@ -6820,6 +7105,7 @@ mod tests {
             Instant::now(),
             &session.source_path,
             None,
+            false,
         )
         .expect("apply singles chart import");
 
