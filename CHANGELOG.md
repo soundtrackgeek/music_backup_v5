@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.145.10] - 2026-09-05
+
+### Fixed
+- Fix `prefix not found` when removing albums or moving them to Inbox: resolve equivalent ordinary, verbatim, case-varied, and UNC Windows catalog paths while preserving folder spelling and containment checks.
+
 ## [0.145.9] - 2026-09-05
 
 ### Added

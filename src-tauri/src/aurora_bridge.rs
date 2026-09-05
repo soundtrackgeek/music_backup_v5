@@ -887,13 +887,9 @@ fn resolve_catalog_album_folder(
             .ok_or_else(|| {
                 anyhow!("Catalog album {album_id} is outside every configured library root")
             })?;
-        let relative = directory.strip_prefix(root).with_context(|| {
+        let candidate = catalog_album_top_level_folder(&directory, root).with_context(|| {
             format!("Could not resolve the catalog album folder for {file_path}")
         })?;
-        let first = relative.components().next().ok_or_else(|| {
-            anyhow!("Catalog album {album_id} is stored directly in a library root")
-        })?;
-        let candidate = root.join(first.as_os_str());
         if album_folder
             .as_ref()
             .is_some_and(|existing| normalized_path(existing) != normalized_path(&candidate))
@@ -908,6 +904,30 @@ fn resolve_catalog_album_folder(
         bail!("The selected catalog album does not exactly match its physical folder");
     }
     Ok((folder, library_roots))
+}
+
+fn catalog_album_top_level_folder(directory: &Path, root: &Path) -> Result<PathBuf> {
+    if !directory.is_absolute() || !root.is_absolute() || !path_is_strictly_within(directory, root)
+    {
+        bail!("The catalog album directory must be strictly inside its library root");
+    }
+    // Containment above uses Windows-equivalent paths. Strip components from the same
+    // display representation, rather than lexically stripping a verbatim canonical root
+    // from an ordinary catalog path. Keep the original album folder spelling.
+    let directory = PathBuf::from(display_path(directory));
+    let display_root = PathBuf::from(display_path(root));
+    let relative: PathBuf = directory
+        .components()
+        .skip(display_root.components().count())
+        .collect();
+    validate_relative_path(&relative)?;
+    let first = relative
+        .components()
+        .next()
+        .ok_or_else(|| anyhow!("The album folder is missing"))?;
+    let candidate = root.join(first.as_os_str());
+    ensure_direct_child(root, &candidate)?;
+    Ok(candidate)
 }
 
 fn sync_existing_folders(
@@ -4470,6 +4490,57 @@ mod tests {
             published_track_root_relative_path(&canonical_root, &destination, track)
                 .expect("equivalent roots"),
             PathBuf::from("Creed - The Sign of Victory (1990)").join(track)
+        );
+    }
+
+    #[test]
+    fn album_move_resolves_ordinary_catalog_paths_under_canonical_roots() {
+        let temp = tempdir().unwrap();
+        let root = temp.path().join("MUSIC");
+        fs::create_dir_all(&root).unwrap();
+        let canonical = root.canonicalize().unwrap();
+        for name in [
+            "Alice Cooper - Brutally Live (2003)",
+            "West Street Mob - Break Dance - Electric Boogie (1983)",
+        ] {
+            let catalog = PathBuf::from(display_path(&canonical)).join(name);
+            #[cfg(windows)]
+            assert!(catalog.strip_prefix(&canonical).is_err());
+            assert_eq!(
+                catalog_album_top_level_folder(&catalog, &canonical).unwrap(),
+                canonical.join(name)
+            );
+            assert_eq!(
+                catalog_album_top_level_folder(&catalog.join("Disc 2"), &canonical).unwrap(),
+                canonical.join(name)
+            );
+        }
+        assert!(catalog_album_top_level_folder(&canonical, &canonical).is_err());
+        assert!(
+            catalog_album_top_level_folder(&temp.path().join("MUSIC-other/Album"), &canonical)
+                .is_err()
+        );
+        assert!(catalog_album_top_level_folder(&root.join("Album/../Other"), &canonical).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn album_move_preserves_spelling_with_case_and_unc_prefix_differences() {
+        assert_eq!(
+            catalog_album_top_level_folder(
+                Path::new(r"d:\music\Mixed Case Album\Disc 1"),
+                Path::new(r"\\?\D:\MUSIC")
+            )
+            .unwrap(),
+            PathBuf::from(r"\\?\D:\MUSIC\Mixed Case Album")
+        );
+        assert_eq!(
+            catalog_album_top_level_folder(
+                Path::new(r"\\server\share\Music\Album"),
+                Path::new(r"\\?\UNC\server\share\Music")
+            )
+            .unwrap(),
+            PathBuf::from(r"\\?\UNC\server\share\Music\Album")
         );
     }
 
