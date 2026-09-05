@@ -651,3 +651,5 @@ npm run security:check
 - Track ratings must be whole-number values from `0` to `5`, including whole-number decimals such as `5.0`.
 - Track ratings are normalized to the `0-100` album-rating scale.
 - If MusicBee `Album Rating` is missing or `-1`, fully rated albums get a calculated album rating from normalized track ratings.
+
+Albums sidebar **Remove Album** moves the complete album folder to `D:\MUSIC\_NOT\_ALBUMS\`, verifies the copy, removes the album through Music Library’s transactional importer, and cleans the source only after commit. The current Albums view immediately removes the row and refreshes. A confirmation shows the destination; collisions and changed sources are rejected, and cleanup warnings retain recovery information. Requires Aurora 0.24.29 and Music Library 0.145.9 or newer.

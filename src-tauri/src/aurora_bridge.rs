@@ -249,6 +249,7 @@ enum PlanOperation {
     #[default]
     Intake,
     MoveToInbox,
+    RemoveAlbum,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -380,6 +381,12 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
             let payload: PreviewBatchRequest = serde_json::from_value(request.payload)
                 .context("previewBatch payload must contain sourcePath and category")?;
             preview_batch(&app_data_dir, payload, &mut progress)
+        }
+        "previewRemoveAlbum" => {
+            let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
+            let payload: PreviewMoveToInboxRequest = serde_json::from_value(request.payload)
+                .context("previewRemoveAlbum payload must contain albumId and inboxPath")?;
+            preview_album_removal(&app_data_dir, payload, true)
         }
         "previewMoveToInbox" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
@@ -676,7 +683,27 @@ fn preview_batch(
     }))
 }
 
+const REMOVED_ALBUMS_ROOT: &str = r"D:\MUSIC\_NOT\_ALBUMS";
+
+fn validate_album_removal_paths(source: &Path, destination_root: &Path) -> Result<()> {
+    if normalized_path(destination_root) != normalized_path(Path::new(REMOVED_ALBUMS_ROOT)) {
+        bail!("The album removal destination changed after preview");
+    }
+    if paths_overlap(source, destination_root) {
+        bail!("The source album and removal destination must not overlap");
+    }
+    Ok(())
+}
+
 fn preview_move_to_inbox(app_data_dir: &Path, request: PreviewMoveToInboxRequest) -> Result<Value> {
+    preview_album_removal(app_data_dir, request, false)
+}
+
+fn preview_album_removal(
+    app_data_dir: &Path,
+    request: PreviewMoveToInboxRequest,
+    remove_album: bool,
+) -> Result<Value> {
     if request.album_id.trim().is_empty() || request.inbox_path.trim().is_empty() {
         bail!("Choose both a library album and the Aurora Inbox folder");
     }
@@ -684,7 +711,19 @@ fn preview_move_to_inbox(app_data_dir: &Path, request: PreviewMoveToInboxRequest
     let mut conn = open_database(&database_path)?;
     cleanup_abandoned_bridge_plans(&conn, app_data_dir)?;
     let (source, library_roots) = resolve_catalog_album_folder(&conn, request.album_id.trim())?;
-    let inbox = PathBuf::from(request.inbox_path.trim());
+    let inbox = if remove_album {
+        let root = PathBuf::from(REMOVED_ALBUMS_ROOT);
+        validate_album_removal_paths(&source, &root)?;
+        let existing = root
+            .ancestors()
+            .find(|path| path.exists())
+            .ok_or_else(|| anyhow!("The removal destination drive is unavailable"))?;
+        folder_sync::ensure_source_root_is_not_linked(existing)?;
+        fs::create_dir_all(&root).context("Could not create removed albums folder")?;
+        root
+    } else {
+        PathBuf::from(request.inbox_path.trim())
+    };
     if !inbox.is_absolute() {
         bail!("The Aurora Inbox path must be absolute");
     }
@@ -695,7 +734,10 @@ fn preview_move_to_inbox(app_data_dir: &Path, request: PreviewMoveToInboxRequest
     if !fs::metadata(&inbox)?.is_dir() {
         bail!("The Aurora Inbox path is not a folder: {}", inbox.display());
     }
-    if library_roots.iter().any(|root| paths_overlap(root, &inbox)) {
+    if paths_overlap(&source, &inbox) {
+        bail!("The source album and removal destination must not overlap");
+    }
+    if !remove_album && library_roots.iter().any(|root| paths_overlap(root, &inbox)) {
         bail!("The Aurora Inbox must be outside every Music Library destination");
     }
     let folder_name = source
@@ -779,7 +821,11 @@ fn preview_move_to_inbox(app_data_dir: &Path, request: PreviewMoveToInboxRequest
         category_label: "Aurora Inbox".to_owned(),
         destination_root: display_path(&inbox),
         snapshot_path: display_path(&snapshot_path),
-        operation: PlanOperation::MoveToInbox,
+        operation: if remove_album {
+            PlanOperation::RemoveAlbum
+        } else {
+            PlanOperation::MoveToInbox
+        },
         albums: vec![album],
     };
     atomic_write_json(&plan_directory.join("plan.json"), &plan)?;
@@ -2024,7 +2070,16 @@ fn apply_batch(
             }
             root
         }
-        PlanOperation::MoveToInbox => {
+        PlanOperation::MoveToInbox | PlanOperation::RemoveAlbum => {
+            if plan.operation == PlanOperation::RemoveAlbum {
+                if plan.albums.len() != 1 || plan.albums[0].action != BatchAlbumAction::Remove {
+                    bail!("An album removal plan must remove exactly one album");
+                }
+                validate_album_removal_paths(
+                    Path::new(&plan.albums[0].source_path),
+                    Path::new(&plan.destination_root),
+                )?;
+            }
             let root = PathBuf::from(&plan.destination_root);
             folder_sync::ensure_source_root_is_not_linked(&root)?;
             root.canonicalize()
@@ -2098,7 +2153,7 @@ fn apply_batch(
     }
     let intake_quality = match plan.operation {
         PlanOperation::Intake => inspect_published_mp3_quality(&published, &destination_root),
-        PlanOperation::MoveToInbox => Ok(Vec::new()),
+        PlanOperation::MoveToInbox | PlanOperation::RemoveAlbum => Ok(Vec::new()),
     };
     let intake_quality = match intake_quality {
         Ok(quality) => quality,
@@ -4653,6 +4708,50 @@ mod tests {
             plan_dir.is_dir(),
             "completed receipt remains durable for retry"
         );
+    }
+
+    #[test]
+    fn removal_only_accepts_the_fixed_destination_and_nonoverlapping_source() {
+        let destination = Path::new(REMOVED_ALBUMS_ROOT);
+        assert!(
+            validate_album_removal_paths(Path::new(r"D:\MUSIC\Artist - Album"), destination)
+                .is_ok()
+        );
+        assert!(
+            validate_album_removal_paths(Path::new(r"H:\Synthwave\Album"), destination).is_ok()
+        );
+        assert!(validate_album_removal_paths(Path::new(r"D:\MUSIC"), destination).is_err());
+        assert!(validate_album_removal_paths(destination, destination).is_err());
+        assert!(validate_album_removal_paths(&destination.join("Album"), destination).is_err());
+        assert!(
+            validate_album_removal_paths(Path::new(r"H:\Album"), Path::new(r"D:\Other")).is_err()
+        );
+    }
+
+    #[test]
+    fn removal_inside_library_preserves_all_files_until_commit_and_rejects_collisions() {
+        let temp = tempdir().expect("tempdir");
+        let library = temp.path().join("library");
+        let destination = library.join("_NOT").join("_ALBUMS");
+        let receipt = temp.path().join("receipt");
+        fs::create_dir_all(&destination).expect("destination");
+        fs::create_dir_all(&receipt).expect("receipt");
+        let mut plan = test_plan(&destination, &library, &["Removed Album"]);
+        plan.operation = PlanOperation::RemoveAlbum;
+        plan.albums[0].action = BatchAlbumAction::Remove;
+        validate_apply_destinations(&destination, &plan, false).expect("free destination");
+        stage_and_publish(&plan, None).expect("verified transfer");
+        assert!(Path::new(&plan.albums[0].source_path).is_dir());
+        assert!(validate_apply_destinations(&destination, &plan, false).is_err());
+        assert_eq!(
+            inventory_without_owner_marker(&destination.join("Removed Album")).unwrap(),
+            plan.albums[0].inventory
+        );
+        let response = finish_committed_plan(&plan, &receipt, 42, None, vec![]);
+        assert_eq!(response["status"], "completed");
+        assert!(!Path::new(&plan.albums[0].source_path).exists());
+        assert!(destination.join("Removed Album/Disc 2/02.mp3").is_file());
+        assert!(destination.join("Removed Album/cover.jpg").is_file());
     }
 
     #[test]

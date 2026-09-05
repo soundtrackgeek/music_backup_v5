@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.145.9] - 2026-09-05
+
+### Added
+- Aurora `previewRemoveAlbum` bridge operation with a fixed `D:\MUSIC\_NOT\_ALBUMS` destination, verified folder transfer, transactional catalog removal, and recoverable source cleanup.
+
 ## [0.145.8] - 2026-09-04
 
 ### Added
