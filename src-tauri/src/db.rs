@@ -2875,6 +2875,14 @@ pub(crate) fn album_removal_chart_impact(
     conn: &Connection,
     album_id: &str,
 ) -> Result<(bool, bool)> {
+    let (albums, tracks, current) = album_removal_chart_state(conn, album_id)?;
+    Ok((albums || !current, tracks))
+}
+
+pub(crate) fn album_removal_chart_state(
+    conn: &Connection,
+    album_id: &str,
+) -> Result<(bool, bool, bool)> {
     let mut albums = false;
     for table in [
         "billboard_chart_entries",
@@ -2903,7 +2911,7 @@ pub(crate) fn album_removal_chart_impact(
         WHERE source IN ('billboard', 'official-uk', 'vg-lista')
         AND reconciled_import_run_id = (SELECT MAX(id) FROM import_runs WHERE status = 'completed')",
         [], |row| row.get(0))?;
-    Ok((albums || current_sources != 3, tracks))
+    Ok((albums, tracks, current_sources == 3))
 }
 
 pub(crate) fn reconcile_album_chart_matches(conn: &Connection) -> Result<()> {

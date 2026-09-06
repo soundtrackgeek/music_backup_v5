@@ -1,8 +1,12 @@
 use crate::db;
+mod album_removal;
 #[cfg(not(test))]
 use crate::models::ImportProgress;
 use crate::models::{ImportPreview, ImportSummary, ImportSuspiciousAlbum};
 use crate::wishlist;
+pub(crate) use album_removal::{
+    apply_album_removal, prepare_album_removal, validate_album_removal, AlbumRemovalScope,
+};
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
 use csv::{Position, StringRecord};

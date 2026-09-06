@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.145.13] - 2026-09-06
+
+### Fixed
+- Prepare new Aurora album removals from the selected album's rows instead of staging and comparing the complete catalog. Recheck complete selected rows under the write lock while preserving unrelated concurrent catalog edits.
+- Preserve the full recovery backup under a verified WAL checkpoint and SQLite write lock, then remove only reviewed raw, track, album, and search rows. Use indexed search-entry lookup with a safe fallback, retain affected chart/history updates, verified file transfer, and recovery journals, and leave unrelated stale chart state unchanged.
+- Reject ordinary import application of removal-specific sessions and retain the original guarded apply path for existing previews.
+- Detect missing cataloged MP3s before an exact-file sync fallback attempts a whole-library snapshot. Publish separate backup and catalog phases. Defer smart-playlist reevaluation to the existing playlist-load and Plex-sync paths.
+
 ## [0.145.12] - 2026-09-06
 
 ### Fixed

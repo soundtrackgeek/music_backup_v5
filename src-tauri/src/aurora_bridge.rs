@@ -240,6 +240,8 @@ struct StoredPlan {
     snapshot_path: String,
     #[serde(default)]
     operation: PlanOperation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    removal_scope: Option<importer::AlbumRemovalScope>,
     albums: Vec<StoredAlbum>,
 }
 
@@ -624,6 +626,7 @@ fn preview_batch(
     };
     let plan = StoredPlan {
         format_version: PLAN_FORMAT_VERSION,
+        removal_scope: None,
         plan_id: plan_id.clone(),
         session_id: preview.session_id,
         source_path: display_path(&source),
@@ -746,6 +749,17 @@ fn preview_album_removal(
     let destination = inbox.join(folder_name);
     ensure_destination_available(&inbox, &destination)?;
 
+    if remove_album {
+        return preview_scoped_album_removal(
+            &mut conn,
+            app_data_dir,
+            request.album_id.trim(),
+            &source,
+            &inbox,
+            &destination,
+        );
+    }
+
     let plan_id = new_plan_id(&source, "move-to-inbox");
     let plan_directory = plan_directory(app_data_dir, &plan_id)?;
     fs::create_dir_all(&plan_directory)?;
@@ -814,6 +828,7 @@ fn preview_album_removal(
     };
     let plan = StoredPlan {
         format_version: PLAN_FORMAT_VERSION,
+        removal_scope: None,
         plan_id: plan_id.clone(),
         session_id: preview.session_id,
         source_path: display_path(&source),
@@ -863,6 +878,83 @@ fn preview_album_removal(
             "existingLovedTrackCount": album.existing_loved_track_count,
         }],
         "canApply": preview.status == "ready" && !preview.source_changed,
+    }))
+}
+
+fn preview_scoped_album_removal(
+    conn: &mut Connection,
+    app_data_dir: &Path,
+    album_id: &str,
+    source: &Path,
+    root: &Path,
+    destination: &Path,
+) -> Result<Value> {
+    let plan_id = new_plan_id(source, "remove-album");
+    let directory = plan_directory(app_data_dir, &plan_id)?;
+    fs::create_dir_all(&directory)?;
+    let marker = directory.join("album-removal.json");
+    let inventory = inventory_folder(source)?;
+    let prepared = importer::prepare_album_removal(
+        conn,
+        album_id,
+        &display_path(source),
+        &display_path(destination),
+        &marker,
+    );
+    let (session_id, scope) = match prepared {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&directory);
+            return Err(error);
+        }
+    };
+    let track_count = scope.track_ids.len();
+    let album = StoredAlbum {
+        source_path: scope.source_path.clone(),
+        destination_path: scope.destination_path.clone(),
+        artist: scope.artist.clone(),
+        album: scope.album.clone(),
+        year: scope.year.clone(),
+        track_count,
+        action: BatchAlbumAction::Remove,
+        existing_track_count: track_count,
+        matched_track_count: track_count,
+        existing_rated_track_count: scope.rated_tracks as usize,
+        existing_loved_track_count: scope.loved_tracks as usize,
+        inventory,
+        existing_inventory: None,
+    };
+    let plan = StoredPlan {
+        format_version: PLAN_FORMAT_VERSION,
+        plan_id,
+        session_id,
+        source_path: display_path(source),
+        category: "inbox".to_owned(),
+        category_label: "Aurora Inbox".to_owned(),
+        destination_root: display_path(root),
+        snapshot_path: display_path(&marker),
+        operation: PlanOperation::RemoveAlbum,
+        removal_scope: Some(scope),
+        albums: vec![album],
+    };
+    if let Err(error) = atomic_write_json(&directory.join("plan.json"), &plan) {
+        let _ = importer::discard_bridge_import_preview(conn, session_id);
+        let _ = fs::remove_dir_all(&directory);
+        return Err(error);
+    }
+    let album = &plan.albums[0];
+    Ok(json!({
+        "planId": plan.plan_id, "sessionId": session_id, "sourcePath": plan.source_path,
+        "category": { "id": plan.category, "label": plan.category_label, "destinationRoot": plan.destination_root },
+        "albumCount": 1, "trackCount": track_count,
+        "delta": { "addedTracks": 0, "changedTracks": 0, "removedTracks": track_count, "addedAlbums": 0, "changedAlbums": 0, "removedAlbums": 1 },
+        "albums": [{
+            "sourcePath": album.source_path, "destinationPath": album.destination_path,
+            "artist": album.artist, "album": album.album, "year": album.year,
+            "trackCount": track_count, "action": "remove", "existingTrackCount": track_count,
+            "matchedTrackCount": track_count, "existingRatedTrackCount": album.existing_rated_track_count,
+            "existingLovedTrackCount": album.existing_loved_track_count,
+        }], "canApply": true,
     }))
 }
 
@@ -1444,6 +1536,26 @@ fn catalog_scope_for_existing_folder(
     })
 }
 
+fn ensure_cataloged_sync_files_exist(conn: &Connection, album_id: &str) -> Result<()> {
+    // Reject structural mismatch before constructing a full fallback snapshot.
+    let catalog_files = conn
+        .prepare("SELECT file_path, filename FROM tracks WHERE album_id=?1")?
+        .query_map([album_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for (directory, filename) in catalog_files {
+        let file = Path::new(&directory).join(filename);
+        if !file
+            .try_exists()
+            .with_context(|| format!("Could not inspect cataloged MP3 {}", file.display()))?
+        {
+            bail!("Aurora existing-folder sync is metadata-only and cannot add or remove catalog rows: a cataloged MP3 is missing ({})", file.display());
+        }
+    }
+    Ok(())
+}
+
 fn sync_existing_folder(
     conn: &mut Connection,
     database_path: &Path,
@@ -1479,6 +1591,7 @@ fn sync_existing_folder(
         importer::ExistingAlbumFastSyncOutcome::Fallback => {}
     }
 
+    ensure_cataloged_sync_files_exist(conn, &scope.album_id)?;
     let snapshot_id = new_plan_id(&scope.folder, "sync-existing");
     let snapshot_path = app_data_dir
         .join("album-folder-imports")
@@ -2126,7 +2239,11 @@ fn apply_batch(
     }
 
     let snapshot_path = PathBuf::from(&plan.snapshot_path);
-    if !snapshot_path.try_exists()? || !folder_sync::source_is_unchanged(&conn, &snapshot_path)? {
+    if let Some(scope) = &plan.removal_scope {
+        importer::validate_album_removal(&conn, &snapshot_path, scope)?;
+    } else if !snapshot_path.try_exists()?
+        || !folder_sync::source_is_unchanged(&conn, &snapshot_path)?
+    {
         bail!("The source albums or active catalog changed after preview. Prepare the batch again");
     }
     validate_source_inventories(&plan)?;
@@ -2199,11 +2316,24 @@ fn apply_batch(
         "Updating the catalog atomically and preserving its recovery backup.",
         plan.albums.len(),
     );
-    let import_summary = match importer::apply_published_bridge_import_preview(
-        &mut conn,
-        &database_path,
-        request.session_id,
-    ) {
+    let import_result = if let Some(scope) = &plan.removal_scope {
+        importer::apply_album_removal(
+            &mut conn,
+            &database_path,
+            request.session_id,
+            scope,
+            &mut |stage, message| {
+                progress.report(stage, message, plan.albums.len());
+            },
+        )
+    } else {
+        importer::apply_published_bridge_import_preview(
+            &mut conn,
+            &database_path,
+            request.session_id,
+        )
+    };
+    let import_summary = match import_result {
         Ok(summary) => summary,
         Err(error) => {
             match importer::bridge_session_state(&conn, request.session_id) {
@@ -2446,6 +2576,22 @@ fn validate_plan_session_binding(
         || state.removed_albums != removed_album_count
     {
         bail!("The Aurora session no longer matches its add, replace, and move-back plan");
+    }
+    if let Some(scope) = &plan.removal_scope {
+        let stored: importer::AlbumRemovalScope =
+            serde_json::from_slice(&fs::read(&plan.snapshot_path)?)?;
+        if plan.operation != PlanOperation::RemoveAlbum
+            || plan.albums.len() != 1
+            || scope != &stored
+            || normalized_path(Path::new(&scope.source_path))
+                != normalized_path(Path::new(&plan.source_path))
+            || normalized_path(Path::new(&scope.destination_path))
+                != normalized_path(Path::new(&plan.albums[0].destination_path))
+            || scope.track_ids.len() != plan.albums[0].track_count
+        {
+            bail!("The album removal scope no longer matches its reviewed plan");
+        }
+        return Ok(());
     }
     let mappings = plan
         .albums
@@ -4015,6 +4161,7 @@ mod tests {
             .collect();
         StoredPlan {
             format_version: PLAN_FORMAT_VERSION,
+            removal_scope: None,
             plan_id: "0123456789abcdef01234567".to_owned(),
             session_id: 1,
             source_path: display_path(source),
@@ -4203,6 +4350,23 @@ mod tests {
 
         assert!(error.to_string().contains("at most"));
         assert!(!temp.path().join("music-library.sqlite3").exists());
+    }
+
+    #[test]
+    fn missing_cataloged_file_blocks_fallback_before_staging() {
+        let temp = tempdir().unwrap();
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE tracks (album_id TEXT, file_path TEXT, filename TEXT);")
+            .unwrap();
+        conn.execute("INSERT INTO tracks VALUES ('selected',?1,'present.mp3'),('selected',?1,'missing.mp3'),('unrelated',?1,'also-missing.mp3')", [temp.path().to_string_lossy()]).unwrap();
+        fs::write(temp.path().join("present.mp3"), b"fixture").unwrap();
+        let changes = conn.total_changes();
+        let error = ensure_cataloged_sync_files_exist(&conn, "selected").unwrap_err();
+        assert!(error.to_string().contains("metadata-only"));
+        assert!(error.to_string().contains("add or remove catalog rows"));
+        assert_eq!(conn.total_changes(), changes);
+        fs::write(temp.path().join("missing.mp3"), b"restored").unwrap();
+        ensure_cataloged_sync_files_exist(&conn, "selected").unwrap();
     }
 
     #[test]
