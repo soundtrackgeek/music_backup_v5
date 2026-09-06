@@ -1623,7 +1623,15 @@ fn unique_extended_text(tag: &Tag, description: &str) -> Result<Option<String>> 
     let values = tag
         .extended_texts()
         .filter(|value| value.description.eq_ignore_ascii_case(description))
-        .map(|value| value.value.trim().to_owned())
+        .map(|value| {
+            // MusicBee may terminate TXXX values with NUL. Strip only trailing
+            // terminators/whitespace; embedded NULs must still fail validation.
+            value
+                .value
+                .trim_start()
+                .trim_end_matches(|character: char| character == '\0' || character.is_whitespace())
+                .to_owned()
+        })
         .collect::<Vec<_>>();
     if values.len() > 1 {
         bail!("The MP3 has duplicate {description} text frames");
@@ -2050,6 +2058,100 @@ mod tests {
         });
         tag.write_to_path(path, Version::Id3v24)
             .expect("write tags");
+    }
+
+    #[test]
+    fn scanner_accepts_musicbee_terminated_love_values_without_rewriting_files() {
+        let temp = tempdir().unwrap();
+        let path = temp.path().join("track.mp3");
+        for version in [Version::Id3v23, Version::Id3v24] {
+            for (value, expected) in [("L\0", "L"), (" B\0 \0", "B"), ("\0 \0", "")] {
+                write_tagged_mp3(&path, "Album");
+                let mut tag = Tag::read_from_path(&path).unwrap();
+                tag.add_frame(ExtendedText {
+                    description: LOVE_RATING_DESCRIPTION.to_owned(),
+                    value: value.to_owned(),
+                });
+                tag.write_to_path(&path, version).unwrap();
+                let before = fs::read(&path).unwrap();
+                assert_eq!(read_track(&path).unwrap().love, expected);
+                assert_eq!(
+                    fs::read(&path).unwrap(),
+                    before,
+                    "scanning must not rewrite tags"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn scanner_still_rejects_malformed_and_duplicate_love_values() {
+        let temp = tempdir().unwrap();
+        let path = temp.path().join("track.mp3");
+        for value in ["L\0B", "\0L", "Loved\0"] {
+            write_tagged_mp3(&path, "Album");
+            let mut tag = Tag::read_from_path(&path).unwrap();
+            tag.add_frame(ExtendedText {
+                description: LOVE_RATING_DESCRIPTION.to_owned(),
+                value: value.to_owned(),
+            });
+            tag.write_to_path(&path, Version::Id3v24).unwrap();
+            assert!(read_track(&path)
+                .unwrap_err()
+                .to_string()
+                .contains("unsupported LOVE RATING"));
+        }
+        write_tagged_mp3(&path, "Album");
+        let mut tag = Tag::read_from_path(&path).unwrap();
+        tag.add_frame(ExtendedText {
+            description: "love rating".to_owned(),
+            value: "L\0".to_owned(),
+        });
+        tag.write_to_path(&path, Version::Id3v24).unwrap();
+        assert!(read_track(&path)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate LOVE RATING"));
+    }
+
+    #[test]
+    fn scanner_normalizes_other_musicbee_extended_text_terminators() {
+        let mut tag = Tag::new();
+        for description in [DISPLAY_ARTIST_DESCRIPTION, RELEASE_TIME_DESCRIPTION] {
+            tag.add_frame(ExtendedText {
+                description: description.to_owned(),
+                value: "  Value\0 \0".to_owned(),
+            });
+            assert_eq!(
+                unique_extended_text(&tag, description).unwrap().as_deref(),
+                Some("Value")
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "requires MUSIC_LIBRARY_TEST_ALBUM; scans MP3s without modifying them"]
+    fn scanner_reads_live_musicbee_album_without_modifying_it() {
+        let folder =
+            PathBuf::from(std::env::var_os("MUSIC_LIBRARY_TEST_ALBUM").expect("album path"));
+        let (_, paths) = fingerprint_folder(&folder).unwrap();
+        let before = paths
+            .iter()
+            .map(|path| Sha256::digest(fs::read(path).unwrap()))
+            .collect::<Vec<_>>();
+        let scan = scan_folder(&folder, &AtomicBool::new(false)).expect("scan real MusicBee album");
+        for (path, digest) in paths.iter().zip(before) {
+            assert_eq!(
+                Sha256::digest(fs::read(path).unwrap()),
+                digest,
+                "source MP3 changed: {}",
+                path.display()
+            );
+        }
+        println!(
+            "Read-only album scan succeeded: {} tracks",
+            scan.tracks.len()
+        );
     }
 
     #[test]

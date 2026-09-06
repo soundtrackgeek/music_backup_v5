@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.145.12] - 2026-09-06
+
+### Fixed
+- Accept MusicBee LOVE RATING values with trailing NUL terminators during album removal, Move to Inbox, and folder scanning. Preserve strict validation of malformed and duplicate values without changing source MP3s.
+
 ## [0.145.11] - 2026-09-05
 
 ### Changed
