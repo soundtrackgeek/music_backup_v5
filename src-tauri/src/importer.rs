@@ -1800,6 +1800,7 @@ fn scoped_path_is_within_folder(path: &str, folder: &Path) -> bool {
     path == folder || path.starts_with(&(folder + "\\"))
 }
 
+#[cfg(test)]
 pub(crate) fn apply_bridge_import_preview(
     conn: &mut Connection,
     db_path: &Path,
@@ -5729,7 +5730,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_file_fast_sync_falls_back_for_unsupported_metadata_edits() {
+    fn background_bridge_refuses_unsupported_file_and_folder_edits_without_staging() {
         let temp = tempfile::tempdir().expect("tempdir");
         let folder = temp.path().join("Fast Album");
         fs::create_dir(&folder).expect("album folder");
@@ -5748,6 +5749,34 @@ mod tests {
                 .expect("unsupported edit routes to fallback"),
             ExistingAlbumFastSyncOutcome::Fallback
         );
+        let before = conn.total_changes();
+        let error = crate::aurora_bridge::sync_existing_folder(&mut conn, &candidate)
+            .expect_err("background must not stage a full catalog");
+        assert!(error
+            .to_string()
+            .contains("background sync requires reviewed reconciliation"));
+        assert_eq!(conn.total_changes(), before, "no staging or catalog writes");
+        let folder_candidate = prepare_existing_album_fast_sync(&conn, &folder)
+            .expect("prepare unsupported whole-folder edit");
+        assert!(crate::aurora_bridge::sync_existing_folder(&mut conn, &folder_candidate).is_err());
+        assert_eq!(
+            conn.total_changes(),
+            before,
+            "whole-folder refusal also has no writes"
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM import_sessions", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM import_stage_tracks", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+
         assert_eq!(
             conn.query_row(
                 "SELECT title FROM tracks WHERE id = ?1",
@@ -5763,6 +5792,15 @@ mod tests {
                 .expect("no targeted run"),
             1
         );
+        // Retrying after reconciliation can still apply a supported edit through the same bridge.
+        write_fast_sync_mp3(&mp3, "Track Title", Some(196), "", 2008);
+        let retry = prepare_existing_album_fast_sync(&conn, &folder).unwrap();
+        let receipt = crate::aurora_bridge::sync_existing_folder(&mut conn, &retry)
+            .expect("supported edit resumes normally");
+        let receipt = serde_json::to_value(receipt).unwrap();
+        assert_eq!(receipt["status"], "updated");
+        assert!(receipt["backupPath"].is_null());
+        assert!(mp3.is_file(), "source audio retained");
     }
 
     #[test]

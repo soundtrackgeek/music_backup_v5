@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.145.14] - 2026-09-06
+
+### Fixed
+- Remove whole-catalog snapshot preparation and import application from Aurora automatic folder sync. Unsupported or stale album metadata now returns a reviewed-reconciliation error without creating a staged import or recovery backup, allowing waiting foreground requests to proceed.
+- Preserve supported album-sized metadata updates and legacy abandoned-session cleanup. Aurora 0.24.35 retains reconciliation failures as blocked edits without repeated per-track fallback attempts; broader reconciliation remains available through the reviewed import flow.
+
+- Advertise boundedExistingFolderSync so Aurora can defer background work safely until the companion update is installed.
+
 ## [0.145.13] - 2026-09-06
 
 ### Fixed
