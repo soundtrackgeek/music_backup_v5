@@ -296,13 +296,15 @@ This first MusicBee-free bridge is deliberately a whole-catalog operation, not a
 
 ### Aurora batch intake bridge
 
+Automatic existing-folder synchronization accepts genre, rating, Love, and release-year edits without a whole-catalog import. Genre changes update the affected album and track search entries in the same transaction. Equivalent track-number formatting (`01` versus `1`) and blank/zero versus first-disc tags do not block sync; a conflicting embedded duration is checked against the audio stream. Changed file identities and unsupported metadata still require reviewed reconciliation.
+
 Aurora can invoke the same executable without opening the Music Library window:
 
 ```powershell
 music-library.exe --aurora-bridge <request.json> <response.json>
 ```
 
-Protocol version 1 uses file-based JSON operations: `capabilities`, `previewBatch`, `previewMoveToInbox`, `applyBatch`, and `syncExistingFolders`. An intake preview receives one already-tagged album folder or a parent whose immediate children are album folders, plus one category id. `general` resolves to `D:\MUSIC`, `scores` resolves to `G:\_BACKUP\SCORES` and is labeled **Movie / TV / game music**, and `synthwave` resolves to `H:\Synthwave`. The bridge never looks up metadata, changes genre or ratings, edits tags, or renames album folders. A single nested `Disc 1`/`CD1`-style child is treated as part of the selected album; a non-disc child beneath an inbox is treated as the album folder, so its actual album-folder name becomes the destination name.
+Protocol version 1 uses file-based JSON operations: `capabilities`, `previewBatch`, `previewMoveToInbox`, `applyBatch`, and `syncExistingFolders`. An intake preview receives one already-tagged album folder or a parent whose immediate children are album folders, plus one category id. `general` resolves to `D:\MUSIC`, `scores` resolves to `G:\_BACKUP\SCORES` and is labeled **Movie / TV / game music**, and `synthwave` resolves to `H:\Synthwave`. The bridge never looks up metadata, edits source MP3 tags, or renames album folders. A single nested `Disc 1`/`CD1`-style child is treated as part of the selected album; a non-disc child beneath an inbox is treated as the album folder, so its actual album-folder name becomes the destination name.
 
 Preview validates every album and produces one scoped whole-catalog delta. An unoccupied canonical destination is an add. A same-named occupied destination becomes a replacement only when normalized Album Artist, Album, and Year match the Inbox tags; the preview reports old/new track counts, matched tracks, and existing rated/loved counts. `previewMoveToInbox` resolves one stable catalog album ID to its exact top-level library folder and requires an unoccupied monitored Inbox destination. Empty batches, unsupported files, linked/reparse paths, unrelated catalog changes, ambiguous identities, and source/destination overlap fail closed.
 

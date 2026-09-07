@@ -781,7 +781,7 @@ pub(crate) fn prepare_existing_album_fast_sync(
             || stored_unique_id != &current_album.album_unique_id
             || current.album_unique_id != scanned.album_unique_id
             || current.row_hash != previous_row_hash
-            || !fast_sync_track_changes_are_supported(&current, &scanned)
+            || !fast_sync_scanned_track_changes_are_supported(&current, &scanned)
             || raw_id.is_none()
             || raw_row_hash.as_deref() != Some(previous_row_hash.as_str())
         {
@@ -934,7 +934,7 @@ pub(crate) fn prepare_existing_file_fast_sync(
             if current.file_path != scanned.file_path
                 || current.filename != scanned.filename
                 || scanned.album_id != album_id
-                || !fast_sync_track_changes_are_supported(&current, &scanned)
+                || !fast_sync_scanned_track_changes_are_supported(&current, &scanned)
             {
                 fast_supported = false;
             }
@@ -1146,16 +1146,43 @@ fn load_scoped_album(conn: &Connection, album_id: &str) -> Result<ScopedAlbumSta
     .with_context(|| format!("Could not load catalog album {album_id} for Aurora tag sync"))
 }
 
+fn fast_sync_scanned_track_changes_are_supported(current: &TrackRow, scanned: &TrackRow) -> bool {
+    fast_sync_with_duration_probe(current, scanned, || {
+        let path = Path::new(&scanned.file_path).join(&scanned.filename);
+        crate::soulseek::soundcheck::inspect_file(&path, false, 0)
+            .and_then(|result| result.duration_seconds)
+    })
+}
+
+fn fast_sync_with_duration_probe(
+    current: &TrackRow,
+    scanned: &TrackRow,
+    probe: impl FnOnce() -> Option<f64>,
+) -> bool {
+    // TLEN is editable metadata and can disagree with the MPEG stream. Only read the
+    // audio header when it differs from the catalog; preserve the catalog duration.
+    if fast_sync_durations_are_equivalent(current.time_seconds, scanned.time_seconds) {
+        return fast_sync_track_changes_are_supported(current, scanned);
+    }
+    let Some(seconds) = probe().filter(|seconds| seconds.is_finite() && *seconds > 0.0) else {
+        return false;
+    };
+    if !fast_sync_durations_are_equivalent(current.time_seconds, Some(seconds.round() as i64)) {
+        return false;
+    }
+    let mut verified = scanned.clone();
+    verified.time_seconds = current.time_seconds;
+    fast_sync_track_changes_are_supported(current, &verified)
+}
+
 fn fast_sync_track_changes_are_supported(current: &TrackRow, desired: &TrackRow) -> bool {
     current.display_artist == desired.display_artist
         && fast_sync_disc_numbers_are_equivalent(current.disc_number, desired.disc_number)
         && current.album == desired.album
-        && current.genre == desired.genre
-        && current.canonical_genre == desired.canonical_genre
-        && current.genre_normalized == desired.genre_normalized
         && current.publisher == desired.publisher
         && current.title == desired.title
-        && current.track_number_raw == desired.track_number_raw
+        && (current.track_number_raw == desired.track_number_raw
+            || (current.track_number.is_some() && current.track_number == desired.track_number))
         && current.year_raw == desired.year_raw
         && current.album_unique_id == desired.album_unique_id
         && current.file_path == desired.file_path
@@ -1168,7 +1195,12 @@ fn fast_sync_track_changes_are_supported(current: &TrackRow, desired: &TrackRow)
 }
 
 fn fast_sync_disc_numbers_are_equivalent(current: Option<i32>, scanned: Option<i32>) -> bool {
-    current == scanned || matches!((current, scanned), (None, Some(0)) | (Some(0), None))
+    // Missing/zero disc tags conventionally denote the first (usually only) disc.
+    let normalize = |value| match value {
+        None | Some(0) => Some(1),
+        other => other,
+    };
+    normalize(current) == normalize(scanned)
 }
 
 fn fast_sync_durations_are_equivalent(current: Option<i64>, scanned: Option<i64>) -> bool {
@@ -1181,6 +1213,9 @@ fn fast_sync_durations_are_equivalent(current: Option<i64>, scanned: Option<i64>
 
 fn fast_sync_desired_track(current: &TrackRow, scanned: &TrackRow) -> TrackRow {
     let mut desired = current.clone();
+    desired.genre = scanned.genre.clone();
+    desired.canonical_genre = scanned.canonical_genre.clone();
+    desired.genre_normalized = scanned.genre_normalized.clone();
     desired.album_rating_raw = scanned.album_rating_raw.clone();
     desired.album_rating = scanned.album_rating;
     desired.love = scanned.love.clone();
@@ -1227,8 +1262,6 @@ fn fast_sync_album_changes_are_supported(current: &ScopedAlbumState, desired: &F
     current.album_unique_id == desired.album_unique_id
         && current.previous.album == desired.album
         && current.previous.album_artist_display == desired.album_artist_display
-        && current.previous.canonical_genre == desired.canonical_genre
-        && current.genre_normalized == desired.genre_normalized
         && current.previous.publisher == desired.publisher
         && current.previous.year == desired.year
         && current.previous.total_tracks == desired.total_tracks
@@ -1317,6 +1350,14 @@ pub(crate) fn apply_existing_album_fast_sync(
         &prepared.desired_album,
     )?;
 
+    if prepared
+        .tracks
+        .iter()
+        .any(|track| track.current.genre != track.desired.genre)
+    {
+        refresh_scoped_search_indexes(&tx, candidate.album_id(), &prepared.tracks)?;
+    }
+
     let mut library_updates = library_updates_for_changed_album(
         &prepared.current_album.previous,
         &prepared.desired_album,
@@ -1363,6 +1404,33 @@ pub(crate) fn apply_existing_album_fast_sync(
         changed_tracks: prepared.changed_tracks,
         changed_albums: prepared.changed_albums,
     })
+}
+
+// Refresh only this album's search rows when a supported tag changes searchable text.
+fn refresh_scoped_search_indexes(
+    conn: &Connection,
+    album_id: &str,
+    tracks: &[ScopedTrackUpdate],
+) -> Result<()> {
+    let ids = tracks.iter().map(|track| track.id).collect::<Vec<_>>();
+    album_removal::remove_track_search_rows(conn, album_id, &ids)?;
+    conn.execute("DELETE FROM album_search_fts WHERE album_id=?1", [album_id])?;
+    conn.execute(
+        "INSERT INTO album_search_fts (album_id, album, album_artist_display, canonical_genre, publisher)
+         SELECT id, COALESCE(album,''), COALESCE(album_artist_display,''),
+                COALESCE(canonical_genre,''), COALESCE(publisher,'') FROM albums WHERE id=?1",
+        [album_id],
+    )?;
+    conn.execute(
+        "INSERT INTO track_search_fts (track_id, album_id, title, display_artist, album,
+             album_artist_display, canonical_genre, publisher, file_path, filename)
+         SELECT id, album_id, COALESCE(title,''), COALESCE(display_artist,''), COALESCE(album,''),
+                COALESCE(album_artist_display,''), COALESCE(canonical_genre,''),
+                COALESCE(publisher,''), COALESCE(file_path,''), COALESCE(filename,'')
+         FROM tracks WHERE album_id=?1",
+        [album_id],
+    )?;
+    Ok(())
 }
 
 fn scoped_album_catalog_is_unchanged(
@@ -5291,6 +5359,50 @@ mod tests {
     }
 
     #[test]
+    fn fast_sync_checks_audio_duration_when_tlen_is_stale() {
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).unwrap();
+        write_fast_sync_mp3(&folder.join("01.mp3"), "Track Title", None, "", 2008);
+        let mut current = scanned_fast_sync_track(&folder, "fast-album");
+        current.time_seconds = Some(240);
+        current.time_raw = "4:00".into();
+        let mut scanned = current.clone();
+        scanned.time_seconds = Some(231);
+        scanned.time_raw = "3:51".into();
+        scanned.rating_raw = "5".into();
+        scanned.normalized_rating = Some(100);
+        assert!(fast_sync_with_duration_probe(&current, &scanned, || Some(
+            240.614
+        )));
+        assert!(!fast_sync_with_duration_probe(&current, &scanned, || Some(
+            231.0
+        )));
+        assert!(!fast_sync_with_duration_probe(&current, &scanned, || None));
+        scanned.title = "Different recording".into();
+        assert!(!fast_sync_with_duration_probe(&current, &scanned, || Some(
+            240.614
+        )));
+        let desired = fast_sync_desired_track(&current, &scanned);
+        assert_eq!(desired.time_seconds, Some(240));
+        assert_eq!(desired.time_raw, "4:00");
+        assert!(fast_sync_with_duration_probe(
+            &current,
+            &current,
+            || panic!("matching duration needs no probe")
+        ));
+    }
+
+    #[test]
+    fn fast_sync_accepts_implicit_first_disc_but_rejects_other_discs() {
+        for missing in [None, Some(0), Some(1)] {
+            assert!(fast_sync_disc_numbers_are_equivalent(missing, Some(1)));
+            assert!(fast_sync_disc_numbers_are_equivalent(Some(1), missing));
+            assert!(!fast_sync_disc_numbers_are_equivalent(missing, Some(2)));
+        }
+    }
+
+    #[test]
     fn fast_sync_treats_blank_and_zero_disc_numbers_as_equivalent() {
         let values = |disc_number: &str, rating: &str| {
             vec![
@@ -5339,6 +5451,99 @@ mod tests {
             .into_iter()
             .map(|values| parse_fast_sync_record(values.into_iter().collect()))
             .collect()
+    }
+
+    #[test]
+    fn fast_sync_accepts_genre_edits_and_zero_padded_track_numbers() {
+        for exact_file in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let folder = temp.path().join("Fast Album");
+            fs::create_dir(&folder).unwrap();
+            let folder = folder.canonicalize().unwrap();
+            let mp3 = folder.join("01 - Track.mp3");
+            write_fast_sync_mp3(&mp3, "Track Title", None, "", 2008);
+            let mut initial = scanned_fast_sync_track(&folder, "fast-album");
+            initial.genre = "Rock".into();
+            initial.canonical_genre = "Rock".into();
+            initial.genre_normalized = "rock".into();
+            initial.disc_number_raw.clear();
+            initial.disc_number = None;
+            initial.track_number_raw = "01".into();
+            let mut renumbered = initial.clone();
+            renumbered.track_number = Some(2);
+            assert!(!fast_sync_track_changes_are_supported(
+                &initial,
+                &renumbered
+            ));
+            refresh_fast_sync_row_hash(&mut initial);
+            let (mut conn, _, target_id, outside_hash) = fast_sync_database(&initial);
+            db::rebuild_search_indexes(&conn).unwrap();
+            write_fast_sync_mp3(&mp3, "Track Title", Some(255), "L", 2008);
+            let mut tags = id3::Tag::read_from_path(&mp3).unwrap();
+            tags.set_genre("Pop Rock");
+            tags.write_to_path(&mp3, id3::Version::Id3v24).unwrap();
+            let candidate = if exact_file {
+                prepare_existing_file_fast_sync(&conn, &folder, &mp3)
+                    .unwrap()
+                    .unwrap()
+            } else {
+                prepare_existing_album_fast_sync(&conn, &folder).unwrap()
+            };
+            let receipt = crate::aurora_bridge::sync_existing_folder(&mut conn, &candidate)
+                .expect("genre edit followed by rating must synchronize");
+            let receipt = serde_json::to_value(receipt).unwrap();
+            let run = receipt["importRunId"].as_i64().unwrap();
+            assert_eq!(receipt["status"], "updated");
+            let actual: (String, i32, String) = conn
+                .query_row(
+                    "SELECT genre, normalized_rating, love FROM tracks WHERE id=?1",
+                    [target_id],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .unwrap();
+            assert_eq!(actual, ("Pop Rock".into(), 100, "L".into()));
+            let raw: (String, String) = conn
+                .query_row(
+                    "SELECT genre,track_number FROM raw_tracks WHERE id=?1",
+                    [target_id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .unwrap();
+            assert_eq!(raw, ("Pop Rock".into(), "01".into()));
+            let album: (String, f64) = conn
+                .query_row(
+                    "SELECT canonical_genre,rating_completeness FROM albums WHERE id=?1",
+                    [candidate.album_id()],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .unwrap();
+            assert_eq!(album, ("Pop Rock".into(), 1.0));
+            for table in ["track_search_fts", "album_search_fts"] {
+                let count: i64 = conn.query_row(&format!("SELECT count(*) FROM {table} WHERE {table} MATCH 'canonical_genre : pop' AND album_id=?1"), [candidate.album_id()], |r|r.get(0)).unwrap();
+                assert_eq!(count, 1, "updated searchable genre in {table}");
+            }
+            let updates: i64 = conn
+                .query_row(
+                    "SELECT count(*) FROM library_updates WHERE import_run_id=?1",
+                    [run],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert!(updates > 0);
+            let outside: String = conn
+                .query_row(
+                    "SELECT row_hash FROM tracks WHERE album_id='mb:outside-album'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(outside, outside_hash);
+            let repeated = prepare_existing_album_fast_sync(&conn, &folder).unwrap();
+            assert_eq!(
+                apply_existing_album_fast_sync(&mut conn, &repeated).unwrap(),
+                ExistingAlbumFastSyncOutcome::Unchanged
+            );
+        }
     }
 
     #[test]

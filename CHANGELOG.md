@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.145.15] - 2026-09-07
+
+### Fixed
+- Synchronize Aurora genre edits together with subsequent ratings and Love changes using the guarded album-sized transaction. Refresh only the affected album and track search entries so genre searches agree with the catalog.
+- Treat zero-padded track numbers such as `01` and `1` as equivalent during metadata sync and recognize implicit first-disc tags while preserving the catalog representation and rejecting actual renumbering.
+- Verify the audio stream duration when an embedded TLEN value disagrees with the catalog, preserving the catalog duration when the audio confirms it and rejecting genuine duration mismatches.
+
 ## [0.145.14] - 2026-09-06
 
 ### Fixed

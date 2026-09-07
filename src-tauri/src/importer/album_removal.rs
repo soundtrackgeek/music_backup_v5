@@ -255,7 +255,7 @@ pub(crate) fn apply_album_removal(
             bail!("A reviewed raw track disappeared before removal");
         }
     }
-    remove_track_search_rows(&tx, scope)?;
+    remove_track_search_rows(&tx, &scope.album_id, &scope.track_ids)?;
     tx.execute(
         "DELETE FROM album_search_fts WHERE album_id=?1",
         [&scope.album_id],
@@ -357,10 +357,14 @@ fn create_removal_backup(
     Ok(Some(path))
 }
 
-fn remove_track_search_rows(conn: &Connection, scope: &AlbumRemovalScope) -> Result<()> {
+pub(super) fn remove_track_search_rows(
+    conn: &Connection,
+    album_id: &str,
+    track_ids: &[i64],
+) -> Result<()> {
     let titles = conn
         .prepare("SELECT DISTINCT COALESCE(album,'') FROM tracks WHERE album_id=?1")?
-        .query_map([&scope.album_id], |row| row.get::<_, String>(0))?
+        .query_map([album_id], |row| row.get::<_, String>(0))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut found = std::collections::BTreeMap::new();
     let mut indexed = !titles.is_empty();
@@ -371,12 +375,12 @@ fn remove_track_search_rows(conn: &Connection, scope: &AlbumRemovalScope) -> Res
         }
         let query = format!("album : \"{}\"", title.replace('"', "\"\""));
         let rows = conn.prepare("SELECT rowid,track_id FROM track_search_fts WHERE track_search_fts MATCH ?1 AND album_id=?2")?
-            .query_map(params![query,scope.album_id], |row| Ok((row.get::<_,i64>(0)?,row.get::<_,i64>(1)?)))?
+            .query_map(params![query,album_id], |row| Ok((row.get::<_,i64>(0)?,row.get::<_,i64>(1)?)))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         found.extend(rows);
     }
     let ids = found.values().copied().collect::<HashSet<_>>();
-    let expected = scope.track_ids.iter().copied().collect::<HashSet<_>>();
+    let expected = track_ids.iter().copied().collect::<HashSet<_>>();
     if indexed && ids == expected {
         for rowid in found.keys() {
             conn.execute("DELETE FROM track_search_fts WHERE rowid=?1", [rowid])?;
@@ -384,10 +388,7 @@ fn remove_track_search_rows(conn: &Connection, scope: &AlbumRemovalScope) -> Res
     } else {
         // Older or stale indexes (including names without searchable tokens) retain the
         // exhaustive path. Never assume that an FTS rowid equals its catalog track id.
-        conn.execute(
-            "DELETE FROM track_search_fts WHERE album_id=?1",
-            [&scope.album_id],
-        )?;
+        conn.execute("DELETE FROM track_search_fts WHERE album_id=?1", [album_id])?;
     }
     Ok(())
 }
