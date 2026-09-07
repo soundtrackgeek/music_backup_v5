@@ -361,6 +361,7 @@ impl ExistingAlbumSyncCandidate {
 #[derive(Debug)]
 struct PreparedExistingAlbumSync {
     source_guard: ExistingSyncSourceGuard,
+    quality_refresh: Vec<ScopedQualityRefresh>,
     data_version: i64,
     tracks: Vec<ScopedTrackUpdate>,
     current_album: ScopedAlbumState,
@@ -813,13 +814,20 @@ pub(crate) fn prepare_existing_album_fast_sync(
     {
         fast_supported = false;
     }
+    let quality_refresh = prepare_scoped_quality_refresh(conn, &tracks)?;
     let changed_tracks = tracks
         .iter()
-        .filter(|track| track.previous_row_hash != track.desired.row_hash)
+        .filter(|track| {
+            track.previous_row_hash != track.desired.row_hash
+                || quality_refresh.iter().any(|q| {
+                    q.file_path == track.desired.file_path && q.filename == track.desired.filename
+                })
+        })
         .count() as i64;
     let changed_albums = i64::from(scoped_album_changed(&current_album, &desired_album));
     let prepared = fast_supported.then_some(PreparedExistingAlbumSync {
         source_guard: ExistingSyncSourceGuard::Album(scan),
+        quality_refresh,
         data_version,
         tracks,
         current_album,
@@ -995,13 +1003,22 @@ pub(crate) fn prepare_existing_file_fast_sync(
     {
         fast_supported = false;
     }
+    // Only the target file is covered by the exact-file source guard.
+    let quality_refresh =
+        prepare_scoped_quality_refresh(conn, &tracks[target_index..=target_index])?;
     let changed_tracks = tracks
         .iter()
-        .filter(|track| track.previous_row_hash != track.desired.row_hash)
+        .filter(|track| {
+            track.previous_row_hash != track.desired.row_hash
+                || quality_refresh.iter().any(|q| {
+                    q.file_path == track.desired.file_path && q.filename == track.desired.filename
+                })
+        })
         .count() as i64;
     let changed_albums = i64::from(scoped_album_changed(&current_album, &desired_album));
     let prepared = fast_supported.then_some(PreparedExistingAlbumSync {
         source_guard: ExistingSyncSourceGuard::Track(scan),
+        quality_refresh,
         data_version,
         tracks,
         current_album,
@@ -1015,6 +1032,71 @@ pub(crate) fn prepare_existing_file_fast_sync(
         track_count,
         prepared,
     }))
+}
+
+#[derive(Debug)]
+struct ScopedQualityRefresh {
+    scan_error: Option<String>,
+    file_path: String,
+    filename: String,
+    size_bytes: i64,
+    modified_ns: i64,
+    bitrate_kbps: Option<i64>,
+    duration_ms: Option<i64>,
+}
+
+// Fast tag sync must publish the fingerprint of the same guarded file whose
+// metadata it commits; downstream streaming rejects stale quality fingerprints.
+fn prepare_scoped_quality_refresh(
+    conn: &Connection,
+    tracks: &[ScopedTrackUpdate],
+) -> Result<Vec<ScopedQualityRefresh>> {
+    let mut result = Vec::new();
+    for track in tracks {
+        let row = &track.desired;
+        let prior: Option<(i64, i64)> = conn.query_row(
+            "SELECT size_bytes, modified_ns FROM music_doctor_track_quality WHERE file_path=?1 AND filename=?2",
+            params![row.file_path, row.filename],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ).optional()?;
+        let Some(prior) = prior else { continue };
+        let path = Path::new(&row.file_path).join(&row.filename);
+        let metadata = fs::metadata(&path)?;
+        let size_bytes = i64::try_from(metadata.len())?;
+        let modified_ns = i64::try_from(
+            metadata
+                .modified()?
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos(),
+        )?;
+        if prior == (size_bytes, modified_ns) {
+            continue;
+        }
+        let inspected = crate::soulseek::soundcheck::inspect_file(&path, false, 0)
+            .context("Could not inspect changed tag-sync audio")?;
+        if matches!(
+            inspected.status,
+            crate::soulseek::soundcheck::SoundcheckStatus::Failed
+                | crate::soulseek::soundcheck::SoundcheckStatus::Unsupported
+        ) {
+            bail!(
+                "Changed tag-sync audio could not be verified: {}",
+                path.display()
+            );
+        }
+        result.push(ScopedQualityRefresh {
+            scan_error: (!inspected.issues.is_empty()).then(|| inspected.issues.join("; ")),
+            file_path: row.file_path.clone(),
+            filename: row.filename.clone(),
+            size_bytes,
+            modified_ns,
+            bitrate_kbps: inspected.bitrate_kbps.map(i64::from),
+            duration_ms: inspected
+                .duration_seconds
+                .map(|s| (s * 1000.0).round() as i64),
+        });
+    }
+    Ok(result)
 }
 
 fn scoped_sync_data_version(conn: &Connection) -> Result<i64> {
@@ -1342,6 +1424,41 @@ pub(crate) fn apply_existing_album_fast_sync(
     for track in &prepared.tracks {
         update_scoped_raw_track(&tx, import_run_id, track)?;
         update_scoped_track(&tx, import_run_id, candidate.album_id(), track)?;
+    }
+    for quality in &prepared.quality_refresh {
+        tx.execute(
+            "UPDATE music_doctor_track_quality SET size_bytes=?1, modified_ns=?2,
+             bitrate_kbps=?3, duration_ms=?4, properties_checked_ns=?5,
+             scan_error=?9, missing=0, doctor_updated_at=?6, sync_run_id=0
+             WHERE file_path=?7 AND filename=?8",
+            params![
+                quality.size_bytes,
+                quality.modified_ns,
+                quality.bitrate_kbps,
+                quality.duration_ms,
+                Utc::now().timestamp_nanos_opt(),
+                Utc::now().to_rfc3339(),
+                quality.file_path,
+                quality.filename,
+                quality.scan_error
+            ],
+        )?;
+    }
+    if !prepared.quality_refresh.is_empty() {
+        tx.execute(
+            "UPDATE music_doctor_album_quality SET
+             (total_size_bytes,min_bitrate_kbps,avg_bitrate_kbps,max_bitrate_kbps,
+              below_128_tracks,below_192_tracks,below_320_tracks,at_least_320_tracks,mixed_quality,sync_run_id) = (
+                SELECT SUM(size_bytes),MIN(bitrate_kbps),AVG(bitrate_kbps),MAX(bitrate_kbps),
+                SUM(CASE WHEN bitrate_kbps<128 THEN 1 ELSE 0 END),
+                SUM(CASE WHEN bitrate_kbps<192 THEN 1 ELSE 0 END),
+                SUM(CASE WHEN bitrate_kbps<320 THEN 1 ELSE 0 END),
+                SUM(CASE WHEN bitrate_kbps>=320 THEN 1 ELSE 0 END),
+                CASE WHEN MIN(bitrate_kbps)<>MAX(bitrate_kbps) THEN 1 ELSE 0 END,0
+                FROM music_doctor_track_quality WHERE album_id=?1)
+             WHERE album_id=?1",
+            [candidate.album_id()],
+        )?;
     }
     update_scoped_album(
         &tx,
@@ -5547,6 +5664,65 @@ mod tests {
     }
 
     #[test]
+    fn existing_tag_sync_repairs_stale_quality_even_when_tags_already_match() {
+        for exact_file in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let folder = temp.path().join("Quality Album");
+            fs::create_dir(&folder).unwrap();
+            let folder = folder.canonicalize().unwrap();
+            let mp3 = folder.join("01 - Track.mp3");
+            write_fast_sync_mp3(&mp3, "Track Title", None, "", 2008);
+            let tags = Tag::read_from_path(&mp3).unwrap();
+            let mut frame = vec![0_u8; 417];
+            frame[..4].copy_from_slice(&[0xFF, 0xFB, 0x90, 0x64]);
+            fs::write(&mp3, frame.repeat(200)).unwrap();
+            tags.write_to_path(&mp3, Version::Id3v24).unwrap();
+            let initial = scanned_fast_sync_track(&folder, "quality-album");
+            let (mut conn, old_run, _, _) = fast_sync_database(&initial);
+            conn.execute(
+                "INSERT INTO music_doctor_track_quality (file_key,file_path,filename,album_id,
+                 source_path,relative_path,extension,format,file_type,size_bytes,modified_ns,
+                 doctor_updated_at,sync_run_id) VALUES ('quality-test',?1,?2,?3,'root','track.mp3',
+                 'mp3','MP3','Audio',1,1,'old',1)",
+                params![initial.file_path, initial.filename, initial.album_id],
+            )
+            .unwrap();
+            let candidate = if exact_file {
+                prepare_existing_file_fast_sync(&conn, &folder, &mp3)
+                    .unwrap()
+                    .unwrap()
+            } else {
+                prepare_existing_album_fast_sync(&conn, &folder).unwrap()
+            };
+            let outcome = apply_existing_album_fast_sync(&mut conn, &candidate).unwrap();
+            assert!(
+                matches!(outcome, ExistingAlbumFastSyncOutcome::Updated { import_run_id, .. } if import_run_id > old_run)
+            );
+            let (size, modified, sync_run): (i64,i64,i64) = conn.query_row(
+                "SELECT size_bytes,modified_ns,sync_run_id FROM music_doctor_track_quality WHERE file_key='quality-test'",
+                [], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?)),
+            ).unwrap();
+            let metadata = fs::metadata(&mp3).unwrap();
+            assert_eq!(size, metadata.len() as i64);
+            assert_eq!(
+                modified,
+                metadata
+                    .modified()
+                    .unwrap()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos() as i64
+            );
+            assert_eq!(sync_run, 0);
+            let retry = prepare_existing_album_fast_sync(&conn, &folder).unwrap();
+            assert_eq!(
+                apply_existing_album_fast_sync(&mut conn, &retry).unwrap(),
+                ExistingAlbumFastSyncOutcome::Unchanged
+            );
+        }
+    }
+
+    #[test]
     fn existing_album_fast_sync_updates_both_track_tables_history_and_global_snapshot() {
         let temp = tempfile::tempdir().expect("tempdir");
         let folder = temp.path().join("Fast Album");
@@ -5756,6 +5932,18 @@ mod tests {
         seed_fast_sync_album(&conn, old_run_id, &initial);
         let target_id = target_id.expect("target id");
         let sibling_id = sibling_id.expect("sibling id");
+        // A stale sibling must not be probed or refreshed by a one-file sync.
+        let sibling = initial
+            .iter()
+            .find(|track| track.filename == "02 - Sibling.mp3")
+            .unwrap();
+        conn.execute(
+            "INSERT INTO music_doctor_track_quality (file_key,file_path,filename,album_id,
+             source_path,relative_path,extension,format,file_type,size_bytes,modified_ns,
+             doctor_updated_at,sync_run_id) VALUES ('untouched-sibling',?1,?2,?3,'root','sibling.mp3',
+             'mp3','MP3','Audio',1,1,'old',1)",
+            params![sibling.file_path, sibling.filename, sibling.album_id],
+        ).unwrap();
 
         write_fast_sync_mp3(&target_mp3, "Target", Some(255), "L", 2009);
         let candidate = prepare_existing_file_fast_sync(&conn, &folder, &target_mp3)
@@ -5827,6 +6015,11 @@ mod tests {
             2
         );
 
+        let sibling_quality: (i64, i64) = conn.query_row(
+            "SELECT size_bytes,modified_ns FROM music_doctor_track_quality WHERE file_key='untouched-sibling'",
+            [], |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap();
+        assert_eq!(sibling_quality, (1, 1));
         let retry = prepare_existing_file_fast_sync(&conn, &folder, &target_mp3)
             .expect("prepare idempotent retry")
             .expect("same target candidate");

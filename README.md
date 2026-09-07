@@ -296,6 +296,8 @@ This first MusicBee-free bridge is deliberately a whole-catalog operation, not a
 
 ### Aurora batch intake bridge
 
+Version `0.145.16` also refreshes audio-file fingerprints during guarded album or exact-file sync. Repeating sync repairs older stale fingerprints even when the tags already match, allowing Tonehavn to import the corrected file identity without relaxing its media checks.
+
 Automatic existing-folder synchronization accepts genre, rating, Love, and release-year edits without a whole-catalog import. Genre changes update the affected album and track search entries in the same transaction. Equivalent track-number formatting (`01` versus `1`) and blank/zero versus first-disc tags do not block sync; a conflicting embedded duration is checked against the audio stream. Changed file identities and unsupported metadata still require reviewed reconciliation.
 
 Aurora can invoke the same executable without opening the Music Library window:

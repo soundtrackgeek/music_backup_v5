@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.145.16] - 2026-09-07
+
+### Fixed
+
+- Aurora existing-album and exact-file tag sync now refreshes changed audio-quality fingerprints inside the same guarded transaction as metadata. Updated fingerprints receive local provenance so later external Music Doctor sync cannot restore stale scan data.
+- Repeating sync repairs stale file records even when tags already match and publishes a completed import revision for Tonehavn. MP3 files are inspected, not rewritten. Added regression coverage for album and exact-file repair and idempotent retries.
+
 ## [0.145.15] - 2026-09-07
 
 ### Fixed
