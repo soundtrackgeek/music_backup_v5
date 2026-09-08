@@ -138,6 +138,23 @@ pub fn import_album_covers(
     result
 }
 
+// Imported Windows catalog paths remain unchanged. Mac readers can use the
+// configured archive root without reimporting the million-track catalog.
+#[cfg(any(target_os = "macos", test))]
+fn mounted_archive_cover(root: &str, stored: &str) -> Option<PathBuf> {
+    let root = Path::new(root);
+    if !root.is_absolute() {
+        return None;
+    }
+    let filename = stored.rsplit(['\\', '/']).next()?;
+    if filename.is_empty() || filename == "." || filename == ".." {
+        return None;
+    }
+    let root = root.canonicalize().ok()?;
+    let candidate = root.join(filename).canonicalize().ok()?;
+    (candidate.starts_with(&root) && candidate.is_file()).then_some(candidate)
+}
+
 pub fn album_cover_data_url(app: AppHandle, album_id: String) -> Result<Option<String>> {
     let (conn, _) = db::open(&app)?;
     let cover = conn
@@ -158,6 +175,17 @@ pub fn album_cover_data_url(app: AppHandle, album_id: String) -> Result<Option<S
     };
 
     let path = PathBuf::from(&cover_path);
+    #[cfg(target_os = "macos")]
+    let path = if !path.is_file() {
+        let root: String = conn.query_row(
+            "SELECT cover_source_path FROM app_settings WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        mounted_archive_cover(&root, &cover_path).unwrap_or(path)
+    } else {
+        path
+    };
     if !path.is_file() {
         return Ok(None);
     }
@@ -1344,5 +1372,27 @@ mod tests {
             .expect("load imported cover");
         assert_eq!(imported, ("new-album".to_string(), "embedded".to_string()));
         fs::remove_dir_all(root).expect("clean test directory");
+    }
+}
+
+#[cfg(test)]
+mod mac_archive_tests {
+    use super::*;
+    #[test]
+    fn resolves_windows_archive_names_under_the_selected_native_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let cover = dir.path().join("Björk.jpg");
+        fs::write(&cover, b"cover").unwrap();
+        assert_eq!(
+            mounted_archive_cover(
+                dir.path().to_str().unwrap(),
+                r"\\?\C:\AlbumCovers\Björk.jpg"
+            ),
+            Some(cover.canonicalize().unwrap())
+        );
+        assert!(
+            mounted_archive_cover(dir.path().to_str().unwrap(), r"C:\AlbumCovers\..").is_none()
+        );
+        assert!(mounted_archive_cover("relative", "Björk.jpg").is_none());
     }
 }

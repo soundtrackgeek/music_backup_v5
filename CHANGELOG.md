@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.145.18] - 2026-09-08
+
+### Fixed
+
+- Read imported Windows artwork names from the configured native AlbumCovers folder on Mac, without rewriting catalog identities.
+
+- Resolve the Aurora companion bridge data directory in macOS Application Support, matching the GUI. Add a macOS bundle override for local app/DMG builds without Windows updater signing.
+
+
 ## [0.145.17] - 2026-09-08
 
 ### Fixed

@@ -3084,6 +3084,12 @@ fn bridge_app_data_dir() -> Result<PathBuf> {
         }
         value
     } else {
+        #[cfg(target_os = "macos")]
+        let app_data = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .map(|path| path.join("Library/Application Support"))
+            .ok_or_else(|| anyhow!("HOME is unavailable"))?;
+        #[cfg(not(target_os = "macos"))]
         let app_data = std::env::var_os("APPDATA")
             .map(PathBuf::from)
             .ok_or_else(|| anyhow!("APPDATA is unavailable"))?;
