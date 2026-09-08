@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.145.17] - 2026-09-08
+
+### Fixed
+
+- Delete completed import staging inside the same transaction as the catalog update, so interruptions or later reconciliation failures cannot strand full-library copies. Cleanup failures roll back the import and preserve its resumable preview.
+- Reclaim legacy completed staging rows on desktop startup while preserving incomplete sessions and import history. Released pages remain available for reuse without vacuuming the catalog on each startup or Aurora edit.
+
 ## [0.145.16] - 2026-09-07
 
 ### Fixed

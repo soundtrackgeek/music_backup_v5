@@ -3493,6 +3493,10 @@ fn apply_staged_import(
         ",
         params![&completed_at, import_run_id, session.id],
     )?;
+    // A completed session must never retain a second copy of the catalog. Keep
+    // this in the catalog transaction so a crash or a later reconciliation error
+    // cannot skip cleanup, and a cleanup failure preserves the resumable preview.
+    cleanup_completed_stage(&tx, session.id)?;
     tx.commit()
         .context("Could not commit the atomic staged import")?;
     Ok((
@@ -3504,13 +3508,36 @@ fn apply_staged_import(
 
 fn cleanup_completed_stage(conn: &Connection, session_id: i64) -> Result<()> {
     conn.execute(
-        "DELETE FROM import_stage_tracks WHERE session_id = ?1",
+        "DELETE FROM import_stage_tracks WHERE session_id = ?1
+         AND EXISTS (SELECT 1 FROM import_sessions WHERE id = ?1 AND status = 'completed')",
         params![session_id],
     )?;
     conn.execute(
-        "DELETE FROM import_stage_albums WHERE session_id = ?1",
+        "DELETE FROM import_stage_albums WHERE session_id = ?1
+         AND EXISTS (SELECT 1 FROM import_sessions WHERE id = ?1 AND status = 'completed')",
         params![session_id],
     )?;
+    Ok(())
+}
+
+pub fn cleanup_legacy_completed_staging(conn: &Connection) -> Result<()> {
+    // Run once at desktop startup, not on each read or Aurora tag-sync request.
+    // Incomplete sessions are recovery state and must remain available to resume.
+    let sessions = conn
+        .prepare(
+            "SELECT id FROM import_sessions WHERE status = 'completed' AND (
+            EXISTS (SELECT 1 FROM import_stage_tracks WHERE session_id = import_sessions.id)
+            OR EXISTS (SELECT 1 FROM import_stage_albums WHERE session_id = import_sessions.id))",
+        )?
+        .query_map([], |row| row.get::<_, i64>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for session_id in sessions {
+        let tx = conn.unchecked_transaction()?;
+        cleanup_completed_stage(&tx, session_id)?;
+        tx.commit()?;
+    }
+    // Leave freed pages available for reuse. Rewriting the complete catalog on
+    // every launch or small Aurora edit would make normal operations much slower.
     Ok(())
 }
 
@@ -7050,6 +7077,99 @@ mod tests {
     }
 
     #[test]
+    fn legacy_staging_cleanup_preserves_recovery_sessions_and_is_atomic() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut conn = Connection::open_in_memory().unwrap();
+        db::configure(&conn).unwrap();
+        db::migrate(&conn).unwrap();
+        let mut sessions = Vec::new();
+        for status in [
+            "completed",
+            "ready",
+            "cancelled",
+            "failed",
+            "preparing",
+            "applying",
+        ] {
+            let source = temp.path().join(format!("{status}.tsv"));
+            let values = [
+                "Artist",
+                "",
+                "1",
+                "Album",
+                "Rock",
+                "",
+                "Label",
+                "4",
+                "Track",
+                "1",
+                "2026",
+                "2026",
+                "album",
+                "D:\\Music\\Album",
+                "01.mp3",
+                "Artist",
+                "3:00",
+            ];
+            fs::write(
+                &source,
+                format!("{}\n{}\n", REQUIRED_COLUMNS.join("\t"), values.join("\t")),
+            )
+            .unwrap();
+            let fingerprint = source_fingerprint(source.to_str().unwrap()).unwrap();
+            let preview = prepare_import_preview_for_connection_scoped(
+                &mut conn,
+                &fingerprint,
+                &AtomicBool::new(false),
+                &|_, _, _, _, _, _| {},
+                false,
+            )
+            .unwrap();
+            conn.execute(
+                "UPDATE import_sessions SET status = ?1 WHERE id = ?2",
+                params![status, preview.session_id],
+            )
+            .unwrap();
+            sessions.push((preview.session_id, status));
+        }
+        // Failure after track deletion must roll back both staging tables.
+        conn.execute_batch(
+            "CREATE TRIGGER fail_stage_cleanup BEFORE DELETE ON import_stage_albums
+            BEGIN SELECT RAISE(ABORT, 'simulated cleanup failure'); END;",
+        )
+        .unwrap();
+        assert!(cleanup_legacy_completed_staging(&conn).is_err());
+        for table in ["import_stage_tracks", "import_stage_albums"] {
+            assert_eq!(
+                conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                6
+            );
+        }
+        conn.execute_batch("DROP TRIGGER fail_stage_cleanup;")
+            .unwrap();
+        cleanup_legacy_completed_staging(&conn).unwrap();
+        cleanup_legacy_completed_staging(&conn).unwrap();
+        for (id, status) in sessions {
+            // Even direct cleanup refuses a resumable/non-completed session.
+            cleanup_completed_stage(&conn, id).unwrap();
+            assert_eq!(load_import_session(&conn, id).unwrap().status, status);
+            for table in ["import_stage_tracks", "import_stage_albums"] {
+                assert_eq!(
+                    conn.query_row(
+                        &format!("SELECT COUNT(*) FROM {table} WHERE session_id = ?1"),
+                        [id],
+                        |r| r.get::<_, i64>(0)
+                    )
+                    .unwrap(),
+                    i64::from(status != "completed")
+                );
+            }
+        }
+    }
+
+    #[test]
     fn failed_atomic_apply_keeps_the_active_library_unchanged() {
         let test_id = format!(
             "music-library-import-atomic-{}-{}",
@@ -7170,6 +7290,76 @@ mod tests {
             .expect("load active album after failed apply"),
             "Old Album"
         );
+
+        conn.execute_batch(
+            "DROP TRIGGER reject_new_album;
+            CREATE TRIGGER fail_stage_cleanup BEFORE DELETE ON import_stage_albums
+            BEGIN SELECT RAISE(ABORT, 'simulated cleanup failure'); END;",
+        )
+        .unwrap();
+        let error = apply_staged_import(
+            &mut conn,
+            &session,
+            applying_run_id,
+            Instant::now(),
+            &session.source_path,
+            None,
+            false,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("simulated cleanup failure"));
+        assert_eq!(
+            load_import_session(&conn, session.id).unwrap().status,
+            "ready"
+        );
+        assert_eq!(
+            conn.query_row("SELECT title FROM tracks", [], |r| r.get::<_, String>(0))
+                .unwrap(),
+            "Old Track"
+        );
+        for table in ["import_stage_tracks", "import_stage_albums"] {
+            assert_eq!(
+                conn.query_row(
+                    &format!("SELECT COUNT(*) FROM {table} WHERE session_id = ?1"),
+                    [session.id],
+                    |r| r.get::<_, i64>(0)
+                )
+                .unwrap(),
+                1
+            );
+        }
+        conn.execute_batch("DROP TRIGGER fail_stage_cleanup;")
+            .unwrap();
+        apply_staged_import(
+            &mut conn,
+            &session,
+            applying_run_id,
+            Instant::now(),
+            &session.source_path,
+            None,
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            load_import_session(&conn, session.id).unwrap().status,
+            "completed"
+        );
+        assert_eq!(
+            conn.query_row("SELECT title FROM tracks", [], |r| r.get::<_, String>(0))
+                .unwrap(),
+            "New Track"
+        );
+        for table in ["import_stage_tracks", "import_stage_albums"] {
+            assert_eq!(
+                conn.query_row(
+                    &format!("SELECT COUNT(*) FROM {table} WHERE session_id = ?1"),
+                    [session.id],
+                    |r| r.get::<_, i64>(0)
+                )
+                .unwrap(),
+                0
+            );
+        }
 
         fs::remove_dir_all(&test_dir).expect("remove atomic import test directory");
     }

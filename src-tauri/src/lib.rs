@@ -1979,6 +1979,11 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            let (conn, _) = db::open(app.handle())?;
+            if let Err(error) = importer::cleanup_legacy_completed_staging(&conn) {
+                eprintln!("Could not clean legacy completed import staging: {error:#}");
+            }
+            drop(conn);
             app.manage(soulseek::initialize(app.handle())?);
             app.manage(usenet::initialize(app.handle())?);
             library_completion::resume_verification_worker(app.handle().clone());
