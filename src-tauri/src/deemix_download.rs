@@ -2224,7 +2224,7 @@ mod tests {
         assert_eq!(
             destination_path(Path::new(r"D:\Downloads"), &album, "flat_artist_album_year")
                 .expect("flat"),
-            PathBuf::from(r"D:\Downloads\Helmet - Meantime (1992)")
+            Path::new(r"D:\Downloads").join("Helmet - Meantime (1992)")
         );
         assert_eq!(
             destination_path(
@@ -2233,7 +2233,7 @@ mod tests {
                 "artist_album_year_folders"
             )
             .expect("nested"),
-            PathBuf::from(r"D:\Downloads\Helmet\Meantime (1992)")
+            Path::new(r"D:\Downloads").join("Helmet").join("Meantime (1992)")
         );
     }
 

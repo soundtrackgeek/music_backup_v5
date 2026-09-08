@@ -1,7 +1,7 @@
 {
   "name": "music-library-app",
   "private": true,
-  "version": "0.145.18",
+  "version": "0.145.19",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -11,12 +11,13 @@
     "build": "tsc && vite build",
     "check:version": "node scripts/check-version.mjs",
     "security:check": "node scripts/security-check.mjs",
-    "check": "npm run test:run && npm run test:tools && npm run security:check && npm run build && cd src-tauri && cargo test -- --test-threads=1 && cargo check",
+    "check": "npm run check:version && npm run test:release && npm run test:run && npm run test:tools && npm run security:check && npm run build && cd src-tauri && cargo test -- --test-threads=1 && cargo check",
     "preview": "vite preview --host 127.0.0.1",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "release:check": "npm run check && npm run tauri:build"
+    "release:check": "npm run check && npm run tauri:build",
+    "test:release": "node --test scripts/release-assets-checks.mjs"
   },
   "dependencies": {
     "@fontsource/cormorant-garamond": "^5.3.0",

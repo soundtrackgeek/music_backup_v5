@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.145.19] - 2026-09-08
+
+### Added
+
+- Universal macOS DMG installers and signed updater archives in each version-bump release, with Apple signing/notarization verification and a combined Windows/Apple Silicon/Intel updater manifest. Publish only after all platform assets pass validation.
+- Private interactive helper for configuring Apple signing credentials in GitHub secrets.
+
+### Fixed
+- Cross-platform release tests use real macOS temporary paths and native path separators while retaining linked-folder protection.
+
 ## [0.145.18] - 2026-09-08
 
 ### Fixed

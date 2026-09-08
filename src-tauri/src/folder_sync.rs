@@ -2000,7 +2000,18 @@ mod tests {
     use id3::frame::{ExtendedText, Popularimeter};
     use id3::Version;
     use std::sync::atomic::AtomicBool;
-    use tempfile::tempdir;
+    // macOS's default /var temporary directory is a symlink. These tests
+    // exercise deliberate rejection of linked parents, so use its real path.
+    fn tempdir() -> std::io::Result<tempfile::TempDir> {
+        #[cfg(target_os = "macos")]
+        {
+            tempfile::tempdir_in(std::env::temp_dir().canonicalize()?)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            tempfile::tempdir()
+        }
+    }
 
     fn create_catalog(conn: &Connection) {
         conn.execute_batch(

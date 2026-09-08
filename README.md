@@ -1,8 +1,28 @@
 # Music Library
 
+## macOS installers and in-app updates (0.145.19)
+
+Every version bump on `master` builds Windows installers and a **universal macOS DMG** (Apple Silicon and Intel). Release publication waits for both platforms, Apple signature/notarization checks, updater signatures, and a combined `latest.json`. The Mac updater uses the signed `.app.tar.gz` archive; the DMG is for first installation. Download the DMG from GitHub Releases, open it, and drag the app into Applications before launching it.
+
+Use **Settings → Updates** to check from inside the app. Available updates download, install, and restart the app. Automatic checks remain enabled according to the app’s existing settings. App data and the music catalog remain outside the application bundle.
+
+The repositories already have their Tauri updater signing keys. Standard Mac distribution additionally needs a **Developer ID Application** certificate and Apple notarization credentials. These are different from an App Store Apple Distribution certificate. Release builds fail rather than publish an unsigned or unnotarized Mac app.
+
+To configure both repositories from a local `.p12` export, run this helper in either repository:
+
+```sh
+python3 scripts/configure-macos-signing.py /absolute/path/DeveloperID.p12 --repo soundtrackgeek/aurora --repo soundtrackgeek/music_backup_v5
+```
+
+It prompts privately for the export password and an Apple app-specific password, validates the certificate type, and sends values directly to GitHub secrets. It does not print secret values. Required secrets: `APPLE_CERTIFICATE` (base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` (app-specific), and `APPLE_TEAM_ID`. Alternatively, notarization can use `APPLE_API_KEY`, `APPLE_API_ISSUER`, and `APPLE_API_PRIVATE_KEY` (the `.p8` contents), with the same certificate secrets. Keep signing files outside the repository.
+
+Reference: [Tauri macOS signing](https://v2.tauri.app/distribute/sign/macos/) and [Tauri updater artifacts](https://v2.tauri.app/plugin/updater/). First deployment still requires configuring those Apple secrets and verifying the published release on a Mac. Do not rotate the existing Tauri updater keys: installed apps trust their current public keys.
+
+For an unsigned local development build only, use `npm run tauri -- build --debug --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'`. This is not a distributable notarized release.
+
 ## macOS local build (0.145.18)
 
-Run `npm ci` and `npm run tauri -- build --debug --bundles app` to create a local Mac app (omit `--debug` for a release build). The macOS configuration disables updater artifacts for local builds; signed/notarized distribution is separate.
+For local Mac builds, use the development build command in the macOS installation section above; production releases require the signing credentials described there.
 
 On Mac, archived artwork can be read from the **Imports → AlbumCovers** folder even when the imported cover index contains Windows paths. Set that folder to your mounted archive.
 

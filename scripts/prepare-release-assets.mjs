@@ -1,92 +1,55 @@
-import fs from "node:fs";
-import path from "node:path";
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-const [, , version, tag, repository, notesPath = "release-notes.md"] = process.argv;
-
-if (!version || !tag || !repository) {
-  throw new Error(
-    "Usage: node scripts/prepare-release-assets.mjs <version> <tag> <owner/repo> [notes-path]",
-  );
-}
-
-const bundleRoot = path.join("src-tauri", "target", "release", "bundle");
-const outputDir = "release-assets";
-
-function listFiles(root) {
-  const entries = fs.readdirSync(root, { withFileTypes: true });
-  return entries.flatMap((entry) => {
-    const fullPath = path.join(root, entry.name);
-    return entry.isDirectory() ? listFiles(fullPath) : [fullPath];
+export function prepareAssets({ version, tag, repository, platform, bundleRoot, outputDir = 'release-assets', notes = '' }) {
+  if (!/^\d+\.\d+\.\d+$/.test(version) || tag !== `v${version}` || !/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error('Invalid release identity');
+  if (!['windows', 'macos'].includes(platform)) throw new Error('Unsupported release platform');
+  const list = root => fs.readdirSync(root, { withFileTypes: true }).flatMap(entry => {
+    const file = path.join(root, entry.name);
+    return entry.isDirectory() && !entry.name.endsWith('.app') ? list(file) : entry.isFile() ? [file] : [];
   });
+  const files = list(bundleRoot);
+  fs.mkdirSync(outputDir, { recursive: true });
+  const copy = (file, name = path.basename(file).replace(/\s+/g, '.')) => {
+    if (fs.existsSync(path.join(outputDir, name))) throw new Error(`Duplicate asset: ${name}`);
+    fs.copyFileSync(file, path.join(outputDir, name));
+    return name;
+  };
+  let updater;
+  let updaterName;
+  let keys;
+  if (platform === 'windows') {
+    const installers = files.filter(file => file.includes(version) && /\.(exe|msi)$/.test(file));
+    const nsis = installers.filter(file => file.endsWith('.exe'));
+    if (nsis.length !== 1) throw new Error('Expected exactly one signed NSIS installer');
+    updater = nsis[0];
+    for (const file of installers) {
+      const name = copy(file);
+      if (file === updater) updaterName = name;
+      if (fs.existsSync(`${file}.sig`)) copy(`${file}.sig`);
+    }
+    keys = ['windows-x86_64', 'windows-x86_64-nsis'];
+  } else {
+    const dmgs = files.filter(file => file.includes(version) && file.endsWith('.dmg'));
+    const archives = files.filter(file => file.endsWith('.app.tar.gz'));
+    if (dmgs.length !== 1 || archives.length !== 1) throw new Error('Expected one universal DMG and one updater archive');
+    copy(dmgs[0]);
+    updater = archives[0];
+    updaterName = path.basename(updater).replace(/\.app\.tar\.gz$/, `_${version}_universal.app.tar.gz`).replace(/\s+/g, '.');
+    copy(updater, updaterName);
+    copy(`${updater}.sig`, `${updaterName}.sig`);
+    keys = ['darwin-aarch64', 'darwin-aarch64-app', 'darwin-x86_64', 'darwin-x86_64-app'];
+  }
+  const signature = fs.readFileSync(`${updater}.sig`, 'utf8').trim();
+  if (!signature) throw new Error('Missing updater signature');
+  const url = `https://github.com/${repository}/releases/download/${tag}/${encodeURIComponent(updaterName)}`;
+  const manifest = { version, notes, platforms: Object.fromEntries(keys.map(key => [key, { signature, url }])) };
+  fs.writeFileSync(path.join(outputDir, `manifest-${platform}.json`), `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifest;
 }
 
-function copyAsset(sourcePath) {
-  const targetPath = path.join(outputDir, releaseAssetName(sourcePath));
-  fs.copyFileSync(sourcePath, targetPath);
-  return targetPath;
-}
-
-function releaseAssetName(sourcePath) {
-  return path.basename(sourcePath).replace(/\s+/g, ".");
-}
-
-function releaseAssetUrl(fileName) {
-  return `https://github.com/${repository}/releases/download/${tag}/${encodeURIComponent(fileName)}`;
-}
-
-if (!fs.existsSync(bundleRoot)) {
-  throw new Error(`Bundle output directory does not exist: ${bundleRoot}`);
-}
-
-fs.rmSync(outputDir, { recursive: true, force: true });
-fs.mkdirSync(outputDir, { recursive: true });
-
-const files = listFiles(bundleRoot);
-const versionedFiles = files.filter((file) => path.basename(file).includes(version));
-const installerAssets = versionedFiles.filter((file) => [".exe", ".msi"].includes(path.extname(file)));
-
-if (installerAssets.length === 0) {
-  throw new Error(`No Windows installer assets for version ${version} were found under ${bundleRoot}.`);
-}
-
-for (const asset of installerAssets) {
-  copyAsset(asset);
-}
-
-const updaterAsset =
-  installerAssets.find((file) => path.basename(file).toLowerCase().includes("setup.exe")) ??
-  installerAssets.find((file) => path.extname(file).toLowerCase() === ".msi") ??
-  installerAssets[0];
-
-if (!updaterAsset) {
-  throw new Error(`No updater installer for version ${version} was found under ${bundleRoot}.`);
-}
-
-const signatureAssets = installerAssets.map((asset) => `${asset}.sig`).filter((asset) => fs.existsSync(asset));
-for (const signature of signatureAssets) {
-  copyAsset(signature);
-}
-
-const signaturePath = `${updaterAsset}.sig`;
-if (!fs.existsSync(signaturePath)) {
-  throw new Error(`No updater signature was found for ${updaterAsset}.`);
-}
-
-const notes = fs.existsSync(notesPath) ? fs.readFileSync(notesPath, "utf8").trim() : "";
-const manifest = {
-  version,
-  notes,
-  pub_date: new Date().toISOString(),
-  platforms: {
-    "windows-x86_64": {
-      signature: fs.readFileSync(signaturePath, "utf8").trim(),
-      url: releaseAssetUrl(releaseAssetName(updaterAsset)),
-    },
-  },
-};
-
-fs.writeFileSync(path.join(outputDir, "latest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-
-for (const asset of fs.readdirSync(outputDir).sort()) {
-  console.log(`Prepared release asset: ${asset}`);
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  const [, , version, tag, repository, platform, bundleRoot, notesPath = 'release-notes.md'] = process.argv;
+  prepareAssets({ version, tag, repository, platform, bundleRoot, notes: fs.readFileSync(notesPath, 'utf8').trim() });
 }

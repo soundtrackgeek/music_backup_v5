@@ -3532,7 +3532,18 @@ fn set_hidden(_path: &Path, _hidden: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
+    // macOS's default /var temporary directory is a symlink. These tests
+    // exercise deliberate rejection of linked parents, so use its real path.
+    fn tempdir() -> std::io::Result<tempfile::TempDir> {
+        #[cfg(target_os = "macos")]
+        {
+            tempfile::tempdir_in(std::env::temp_dir().canonicalize()?)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            tempfile::tempdir()
+        }
+    }
 
     fn test_plan(root: &Path, source: &Path, destinations: &[&str]) -> StoredPlan {
         let albums = destinations
