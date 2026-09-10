@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.145.21] - 2026-09-10
+
+### Fixed
+
+- Correct the macOS universal-binary verification command so signed and notarized installers can proceed to release publication.
+
 ## [0.145.20] - 2026-09-10
 
 ### Fixed
