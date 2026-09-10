@@ -693,3 +693,5 @@ Album moves now retain their preview, confirmation, progress, and errors when na
 Aurora automatic folder sync never falls back to a whole-catalog import. If the bounded metadata update cannot safely apply, it returns a reviewed-reconciliation error. Aurora 0.24.35 retains the edits as blocked work; use Music Library’s reviewed import flow to reconcile broader changes before retrying. Supported metadata sync continues normally, without generating whole-library snapshots or backups.
 
 The macOS release gate verifies both architectures with `xcrun lipo "$executable" -verify_arch arm64` and `xcrun lipo "$executable" -verify_arch x86_64`, followed by signature and notarization validation.
+
+Release-note comparisons normalize Windows and Unix line endings; version, note content, artifact and signature checks remain required.

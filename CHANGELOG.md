@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.145.22] - 2026-09-10
+
+### Fixed
+
+- Normalize Windows and Unix release-note line endings before combining signed platform assets.
+
 ## [0.145.21] - 2026-09-10
 
 ### Fixed
