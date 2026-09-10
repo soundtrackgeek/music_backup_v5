@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.145.23] - 2026-09-10
+
+### Fixed
+
+- Normalize repeated matching MP3 release years (including year/date pairs) before import, preventing successful syncs from leaving release years blank and Aurora edits permanently pending. Conflicting repeated years remain rejected. Corrected track display credits, including featured artists, synchronize with ratings and search while album identity remains guarded. Regression coverage verifies per-file rating updates preserve missing bonus-track catalog rows.
+
 ## [0.145.22] - 2026-09-10
 
 ### Fixed

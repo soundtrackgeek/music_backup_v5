@@ -1558,6 +1558,7 @@ fn read_track(path: &Path) -> Result<ScannedTrack> {
         .map(str::to_owned)
         .or(unique_extended_text(&tag, RELEASE_TIME_DESCRIPTION)?)
         .unwrap_or_default();
+    let release_year = normalize_repeated_release_year(&release_year)?;
     let rating = musicbee_rating(&tag, path)?;
     let love = unique_extended_text(&tag, LOVE_RATING_DESCRIPTION)?.unwrap_or_default();
     if !matches!(love.as_str(), "" | "L" | "B") {
@@ -1609,6 +1610,30 @@ fn joined_text_frame_values(tag: &Tag, id: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
         .collect::<Vec<_>>();
     (!values.is_empty()).then(|| values.join("; "))
+}
+
+fn normalize_repeated_release_year(value: &str) -> Result<String> {
+    // Older ID3 writers emitted the same year more than once in TDRL.
+    // Do not let the importer silently turn that valid year into NULL.
+    if !value.contains(['\0', ',']) {
+        return Ok(value.to_owned());
+    }
+    let years = value
+        .split(['\0', ','])
+        .map(str::trim)
+        .map(|part| {
+            part.parse::<id3::frame::Timestamp>()
+                .map(|timestamp| timestamp.year)
+        })
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|_| {
+            anyhow!("The MP3 has invalid repeated release-year values; review its TDRL tag")
+        })?;
+    let first = years[0];
+    if !(1000..=9999).contains(&first) || years.iter().any(|year| *year != first) {
+        bail!("The MP3 has conflicting repeated release-year values; review its TDRL tag");
+    }
+    Ok(first.to_string())
 }
 
 fn required_tag(path: &Path, name: &str, value: Option<&str>) -> Result<String> {
@@ -2200,6 +2225,33 @@ mod tests {
         });
 
         assert!(musicbee_rating(&tag, Path::new("unknown-default-rating.mp3")).is_err());
+    }
+
+    #[test]
+    fn scanner_normalizes_identical_release_years_without_changing_mp3() {
+        for value in ["2012\02012", "2012,2012", "2012, 2012", "2012\02012-09-08"] {
+            let temp = tempdir().unwrap();
+            let album = temp.path().join("Album");
+            fs::create_dir(&album).unwrap();
+            let track = album.join("01.mp3");
+            write_tagged_mp3(&track, "Album");
+            let mut tag = Tag::read_from_path(&track).unwrap();
+            tag.set_text("TDRL", value);
+            tag.write_to_path(&track, Version::Id3v24).unwrap();
+            let before = fs::read(&track).unwrap();
+            let scan = scan_folder(&album, &AtomicBool::new(false)).unwrap();
+            assert_eq!(scan.tracks[0].release_year, "2012");
+            assert_eq!(fs::read(&track).unwrap(), before);
+        }
+        for invalid in [
+            "2012,2013",
+            "2012\02013",
+            "2012,bad",
+            ",2012",
+            "2012,2013-09-08",
+        ] {
+            assert!(normalize_repeated_release_year(invalid).is_err());
+        }
     }
 
     #[test]

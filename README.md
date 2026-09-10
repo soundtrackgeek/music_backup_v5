@@ -1,5 +1,7 @@
 # Music Library
 
+Normalize repeated matching MP3 release years (including year/date pairs) before import, preventing successful syncs from leaving release years blank and Aurora edits permanently pending. Conflicting repeated years remain rejected. Corrected track display credits, including featured artists, synchronize with ratings and search while album identity remains guarded. Regression coverage verifies per-file rating updates preserve missing bonus-track catalog rows. Use Aurora 0.25.12 with Music Library 0.145.23 or newer for this recovery.
+
 Title corrections made in Aurora are saved and verified in the MP3 files themselves. Music Library 0.145.20 or later imports these titles and subsequent ratings automatically, including title search updates. Previously exhausted sync entries need a retry after updating Music Library.
 
 ## macOS installers and in-app updates (0.145.19)

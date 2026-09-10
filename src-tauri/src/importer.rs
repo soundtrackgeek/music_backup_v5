@@ -1258,8 +1258,7 @@ fn fast_sync_with_duration_probe(
 }
 
 fn fast_sync_track_changes_are_supported(current: &TrackRow, desired: &TrackRow) -> bool {
-    current.display_artist == desired.display_artist
-        && fast_sync_disc_numbers_are_equivalent(current.disc_number, desired.disc_number)
+    fast_sync_disc_numbers_are_equivalent(current.disc_number, desired.disc_number)
         && current.album == desired.album
         && current.publisher == desired.publisher
         && (current.track_number_raw == desired.track_number_raw
@@ -1294,6 +1293,7 @@ fn fast_sync_durations_are_equivalent(current: Option<i64>, scanned: Option<i64>
 
 fn fast_sync_desired_track(current: &TrackRow, scanned: &TrackRow) -> TrackRow {
     let mut desired = current.clone();
+    desired.display_artist = scanned.display_artist.clone();
     desired.title = scanned.title.clone();
     desired.genre = scanned.genre.clone();
     desired.canonical_genre = scanned.canonical_genre.clone();
@@ -1468,7 +1468,9 @@ pub(crate) fn apply_existing_album_fast_sync(
     )?;
 
     if prepared.tracks.iter().any(|track| {
-        track.current.genre != track.desired.genre || track.current.title != track.desired.title
+        track.current.genre != track.desired.genre
+            || track.current.title != track.desired.title
+            || track.current.display_artist != track.desired.display_artist
     }) {
         refresh_scoped_search_indexes(&tx, candidate.album_id(), &prepared.tracks)?;
     }
@@ -5521,7 +5523,7 @@ mod tests {
             231.0
         )));
         assert!(!fast_sync_with_duration_probe(&current, &scanned, || None));
-        scanned.display_artist = "Different artist".into();
+        scanned.album_artist_display = "Different album artist".into();
         assert!(!fast_sync_with_duration_probe(&current, &scanned, || Some(
             240.614
         )));
@@ -5982,7 +5984,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_file_fast_sync_reads_one_mp3_and_updates_album_history_and_snapshot() {
+    fn existing_file_fast_sync_preserves_missing_bonus_tracks_and_updates_present_track() {
         let temp = tempfile::tempdir().expect("tempdir");
         let folder = temp.path().join("Fast Album");
         fs::create_dir(&folder).expect("album folder");
@@ -6033,6 +6035,8 @@ mod tests {
         ).unwrap();
 
         write_fast_sync_mp3(&target_mp3, "Target", Some(255), "L", 2009);
+        fs::remove_file(&sibling_mp3).unwrap();
+        assert!(prepare_existing_album_fast_sync(&conn, &folder).is_err());
         let candidate = prepare_existing_file_fast_sync(&conn, &folder, &target_mp3)
             .expect("prepare exact-file sync")
             .expect("cataloged target candidate");
@@ -6119,6 +6123,101 @@ mod tests {
                 .get::<_, i64>(0))
                 .expect("no retry import run"),
             2
+        );
+    }
+
+    #[test]
+    fn fast_sync_imports_display_credits_and_ratings_with_stable_album_identity() {
+        for exact_file in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let folder = temp.path().join("Fast Album");
+            fs::create_dir(&folder).unwrap();
+            let folder = folder.canonicalize().unwrap();
+            let mp3 = folder.join("01.mp3");
+            write_fast_sync_mp3(&mp3, "Track", None, "", 2008);
+            let initial = scanned_fast_sync_track(&folder, "fast-album");
+            let (mut conn, _, target_id, _) = fast_sync_database(&initial);
+            db::rebuild_search_indexes(&conn).unwrap();
+            write_fast_sync_mp3(&mp3, "Track", Some(255), "L", 2008);
+            let mut tag = Tag::read_from_path(&mp3).unwrap();
+            tag.add_frame(id3::frame::ExtendedText {
+                description: "DISPLAY ARTIST".into(),
+                value: "Singer & Guest".into(),
+            });
+            tag.write_to_path(&mp3, Version::Id3v24).unwrap();
+            let before = fs::read(&mp3).unwrap();
+            let candidate = if exact_file {
+                prepare_existing_file_fast_sync(&conn, &folder, &mp3)
+                    .unwrap()
+                    .unwrap()
+            } else {
+                prepare_existing_album_fast_sync(&conn, &folder).unwrap()
+            };
+            crate::aurora_bridge::sync_existing_folder(&mut conn, &candidate).unwrap();
+            let values: (String, String, i32) = conn.query_row(
+                "SELECT display_artist, album_artist_display, normalized_rating FROM tracks WHERE id=?1",
+                [target_id], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?)),
+            ).unwrap();
+            assert_eq!(
+                values,
+                (
+                    "Singer & Guest".into(),
+                    initial.album_artist_display.clone(),
+                    100
+                )
+            );
+            let raw: String = conn
+                .query_row(
+                    "SELECT display_artist FROM raw_tracks WHERE id=?1",
+                    [target_id],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(raw, "Singer & Guest");
+            let found: i64 = conn.query_row("SELECT count(*) FROM track_search_fts WHERE track_search_fts MATCH 'display_artist : Guest' AND track_id=?1", [target_id], |r| r.get(0)).unwrap();
+            assert_eq!(found, 1);
+            assert_eq!(fs::read(&mp3).unwrap(), before);
+            let mut unsupported = initial.clone();
+            unsupported.album_artist_display = "Unrelated Album Artist".into();
+            assert!(!fast_sync_track_changes_are_supported(
+                &initial,
+                &unsupported
+            ));
+        }
+    }
+
+    #[test]
+    fn fast_sync_repairs_null_catalog_year_from_repeated_mp3_release_year() {
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).unwrap();
+        let folder = folder.canonicalize().unwrap();
+        let mp3 = folder.join("01.mp3");
+        write_fast_sync_mp3(&mp3, "Track", Some(196), "", 2008);
+        let mut initial = scanned_fast_sync_track(&folder, "fast-album");
+        initial.release_year_raw.clear();
+        initial.release_year = None;
+        refresh_fast_sync_row_hash(&mut initial);
+        let (mut conn, _, target_id, _) = fast_sync_database(&initial);
+        let mut tag = Tag::read_from_path(&mp3).unwrap();
+        tag.set_text("TDRL", "2008\02008");
+        tag.write_to_path(&mp3, Version::Id3v24).unwrap();
+        let before = fs::read(&mp3).unwrap();
+        let candidate = prepare_existing_album_fast_sync(&conn, &folder).unwrap();
+        crate::aurora_bridge::sync_existing_folder(&mut conn, &candidate).unwrap();
+        let year: i32 = conn
+            .query_row(
+                "SELECT release_year FROM tracks WHERE id=?1",
+                [target_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(year, 2008);
+        assert_eq!(fs::read(&mp3).unwrap(), before);
+        let candidate = prepare_existing_album_fast_sync(&conn, &folder).unwrap();
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &candidate).unwrap(),
+            ExistingAlbumFastSyncOutcome::Unchanged
         );
     }
 
@@ -6227,7 +6326,7 @@ mod tests {
 
         write_fast_sync_mp3(&mp3, "Changed Title", None, "", 2008);
         let mut tags = Tag::read_from_path(&mp3).unwrap();
-        tags.set_artist("Different Artist");
+        tags.set_album_artist("Different Album Artist");
         tags.write_to_path(&mp3, Version::Id3v24).unwrap();
         let candidate = prepare_existing_file_fast_sync(&conn, &folder, &mp3)
             .expect("prepare unsupported sync")
