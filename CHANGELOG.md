@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.145.20] - 2026-09-10
+
+### Fixed
+
+- Automatic Aurora album and exact-file sync now imports corrected MP3 titles alongside ratings, refreshes title search results, and preserves file identity and audio-duration guards.
+
 ## [0.145.19] - 2026-09-08
 
 ### Added
