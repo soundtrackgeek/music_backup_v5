@@ -697,3 +697,18 @@ Aurora automatic folder sync never falls back to a whole-catalog import. If the 
 The macOS release gate verifies both architectures with `xcrun lipo "$executable" -verify_arch arm64` and `xcrun lipo "$executable" -verify_arch x86_64`, followed by signature and notarization validation.
 
 Release-note comparisons normalize Windows and Unix line endings; version, note content, artifact and signature checks remain required.
+
+
+## Report-only library baseline inventory
+
+Run the standard-library Python checker with a new output directory outside your music roots:
+
+```powershell
+python Tools/library_inventory/library_inventory.py --database "$env:APPDATA/com.local.musiclibrary/music-library.sqlite3" --root D:/MUSIC --root G:/_BACKUP/SCORES --root H:/Synthwave --output C:/LibraryReports/baseline-2026-09-11
+```
+
+The catalog is opened read-only in a consistent read transaction, released before the directory walk. All regular files are inventoried sequentially; audio extensions determine the uncataloged-audio report. The output contains `REPORT.md`, `summary.json`, detailed CSVs, and a separate `inventory.sqlite3` with paths, sizes and timestamps. Existing output directories are refused. A default 2 ms pause per directory reduces pressure; adjust with `--pause-ms`. SQLite caches and row processing are bounded; no media contents are read.
+
+`catalog_not_observed.csv` lists candidates, not confirmed deletions. Unavailable roots, permission errors and skipped reparse points make coverage incomplete. Filesystem changes during the walk can also create transient differences. No tags, hashes, decoding, timestamp comparison, repairs or scheduling are performed. Interrupted runs leave a partial evidence database without a completed summary; use a new output directory to retry. Reports contain local paths and remain local unless explicitly shared.
+
+Verify the checker with `python -m unittest discover -s Tools/library_inventory -v`.

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.145.24] - 2026-09-11
+
+### Added
+
+- Report-only filesystem baseline inventory tool: compares catalog paths with all configured roots, exports missing candidates, uncataloged audio, duplicate paths and coverage errors, and stores bounded-memory file evidence without editing the library.
+
 ## [0.145.23] - 2026-09-10
 
 ### Fixed
