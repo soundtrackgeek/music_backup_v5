@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.145.25] - 2026-09-11
+
+### Fixed
+- Synchronize explicitly verified track deletions from Aurora into Music Library, including album metrics, search records, and deletion history. Retain pending work when file or catalog validation fails.
+
 ## [0.145.24] - 2026-09-11
 
 ### Added

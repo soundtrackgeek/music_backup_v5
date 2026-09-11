@@ -364,6 +364,7 @@ struct PreparedExistingAlbumSync {
     quality_refresh: Vec<ScopedQualityRefresh>,
     data_version: i64,
     tracks: Vec<ScopedTrackUpdate>,
+    deleted_tracks: Vec<ScopedTrackUpdate>,
     current_album: ScopedAlbumState,
     desired_album: FinalAlbum,
     changed_tracks: i64,
@@ -677,6 +678,14 @@ pub(crate) fn prepare_existing_album_fast_sync(
     conn: &Connection,
     folder: &Path,
 ) -> Result<ExistingAlbumSyncCandidate> {
+    prepare_existing_album_deletion_sync(conn, folder, &[])
+}
+
+pub(crate) fn prepare_existing_album_deletion_sync(
+    conn: &Connection,
+    folder: &Path,
+    deleted_paths: &[String],
+) -> Result<ExistingAlbumSyncCandidate> {
     let scan = crate::folder_sync::scan_existing_album(folder)?;
     let folder = scan.folder().to_path_buf();
     let track_count = scan.track_count();
@@ -751,14 +760,81 @@ pub(crate) fn prepare_existing_album_fast_sync(
         .iter()
         .map(|track| track.0)
         .collect::<HashSet<_>>();
-    if catalog_album_tracks.len() != track_count
-        || matched_ids.len() != track_count
-        || catalog_ids != matched_ids
-    {
-        bail!(
-            "Catalog album {album_id} does not have the exact MP3 identity set in {}. Sync its complete album folder instead",
-            folder.display()
-        );
+    let requested = deleted_paths
+        .iter()
+        .map(|p| {
+            p.replace('/', "\\")
+                .trim_start_matches("\\\\?\\")
+                .to_lowercase()
+        })
+        .collect::<HashSet<_>>();
+    if requested.len() != deleted_paths.len() || requested.len() > 100 {
+        bail!("Deletion sync requires at most 100 distinct MP3 paths");
+    }
+    let headers = StringRecord::from(REQUIRED_COLUMNS.to_vec());
+    let header_map = HeaderMap::from_headers(&headers)?;
+    let mut deleted_tracks = Vec::new();
+    for (id, directory, filename) in &catalog_album_tracks {
+        if matched_ids.contains(id) {
+            continue;
+        }
+        let path = Path::new(directory).join(filename);
+        let key = display_scoped_path(&path).replace('/', "\\").to_lowercase();
+        if !requested.contains(&key)
+            || !scoped_path_is_within_folder(directory, &folder)
+            || Path::new(filename).components().count() != 1
+            || !path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("mp3"))
+            || path.try_exists()?
+        {
+            bail!("Catalog album {album_id} does not have the exact MP3 identity set; missing rows require explicit verified deletion paths");
+        }
+        crate::folder_sync::ensure_source_root_is_not_linked(Path::new(directory))?;
+        // A vanished/unreadable subfolder is not proof that its tracks were deleted.
+        fs::read_dir(directory)?.collect::<std::io::Result<Vec<_>>>()?;
+        let (raw_id, raw_hash, previous_row_hash, current) =
+            load_scoped_track(conn, *id, &header_map)?;
+        let identity_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM tracks WHERE file_path=?1 AND filename=?2",
+            params![directory, filename],
+            |r| r.get(0),
+        )?;
+        if raw_id.is_none()
+            || current.row_hash != previous_row_hash
+            || raw_hash.as_deref() != Some(previous_row_hash.as_str())
+            || identity_count != 1
+        {
+            bail!("Deleted track has inconsistent raw or duplicate catalog identity");
+        }
+        deleted_tracks.push(ScopedTrackUpdate {
+            id: *id,
+            raw_id,
+            previous_row_hash,
+            desired: current.clone(),
+            current,
+        });
+    }
+    // Already-applied tombstones are harmless on retry, but present/foreign paths are not.
+    for path in deleted_paths {
+        let path = Path::new(path);
+        if !path.is_absolute()
+            || path
+                .components()
+                .any(|part| matches!(part, std::path::Component::ParentDir))
+            || path.parent().is_none_or(|parent| {
+                !scoped_path_is_within_folder(&display_scoped_path(parent), &folder)
+            })
+            || !path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("mp3"))
+            || path.try_exists()?
+        {
+            bail!("Deletion sync path is present or outside the selected album folder");
+        }
+    }
+    if matched_ids.len() != track_count || catalog_ids.len() != track_count + deleted_tracks.len() {
+        bail!("Deletion sync catalog identities are inconsistent");
     }
 
     let current_album = load_scoped_album(conn, &album_id)?;
@@ -809,8 +885,11 @@ pub(crate) fn prepare_existing_album_fast_sync(
         aggregate.apply(&track.desired);
     }
     let desired_album = aggregate.finalize();
-    if !fast_sync_album_changes_are_supported(&current_album, &desired_album)
-        || scoped_sync_data_version(conn)? != data_version
+    if !(if deleted_tracks.is_empty() {
+        fast_sync_album_changes_are_supported(&current_album, &desired_album)
+    } else {
+        fast_sync_album_identity_is_supported(&current_album, &desired_album)
+    }) || scoped_sync_data_version(conn)? != data_version
     {
         fast_supported = false;
     }
@@ -826,6 +905,7 @@ pub(crate) fn prepare_existing_album_fast_sync(
         .count() as i64;
     let changed_albums = i64::from(scoped_album_changed(&current_album, &desired_album));
     let prepared = fast_supported.then_some(PreparedExistingAlbumSync {
+        deleted_tracks,
         source_guard: ExistingSyncSourceGuard::Album(scan),
         quality_refresh,
         data_version,
@@ -1017,6 +1097,7 @@ pub(crate) fn prepare_existing_file_fast_sync(
         .count() as i64;
     let changed_albums = i64::from(scoped_album_changed(&current_album, &desired_album));
     let prepared = fast_supported.then_some(PreparedExistingAlbumSync {
+        deleted_tracks: Vec::new(),
         source_guard: ExistingSyncSourceGuard::Track(scan),
         quality_refresh,
         data_version,
@@ -1341,13 +1422,17 @@ fn refresh_fast_sync_row_hash(desired: &mut TrackRow) {
 }
 
 fn fast_sync_album_changes_are_supported(current: &ScopedAlbumState, desired: &FinalAlbum) -> bool {
+    fast_sync_album_identity_is_supported(current, desired)
+        && current.previous.total_tracks == desired.total_tracks
+        && current.previous.total_seconds == desired.total_seconds
+}
+
+fn fast_sync_album_identity_is_supported(current: &ScopedAlbumState, desired: &FinalAlbum) -> bool {
     current.album_unique_id == desired.album_unique_id
         && current.previous.album == desired.album
         && current.previous.album_artist_display == desired.album_artist_display
         && current.previous.publisher == desired.publisher
         && current.previous.year == desired.year
-        && current.previous.total_tracks == desired.total_tracks
-        && current.previous.total_seconds == desired.total_seconds
 }
 
 fn scoped_album_changed(current: &ScopedAlbumState, desired: &FinalAlbum) -> bool {
@@ -1384,7 +1469,10 @@ pub(crate) fn apply_existing_album_fast_sync(
     {
         return Ok(ExistingAlbumFastSyncOutcome::Fallback);
     }
-    if prepared.changed_tracks == 0 && prepared.changed_albums == 0 {
+    if prepared.changed_tracks == 0
+        && prepared.changed_albums == 0
+        && prepared.deleted_tracks.is_empty()
+    {
         return Ok(ExistingAlbumFastSyncOutcome::Unchanged);
     }
 
@@ -1409,18 +1497,42 @@ pub(crate) fn apply_existing_album_fast_sync(
              source_path, source_size_bytes, started_at, status, backup_path,
              added_tracks, changed_tracks, removed_tracks,
              added_albums, changed_albums, removed_albums
-         ) VALUES (?1, ?2, ?3, 'running', NULL, 0, ?4, 0, 0, ?5, 0)",
+         ) VALUES (?1, ?2, ?3, 'running', NULL, 0, ?4, ?6, 0, ?5, 0)",
         params![
             &source_path,
             source_size_bytes,
             &started_at,
             prepared.changed_tracks,
             prepared.changed_albums,
+            prepared.deleted_tracks.len() as i64,
         ],
     )
     .context("Could not create the targeted Aurora tag-sync import run")?;
     let import_run_id = tx.last_insert_rowid();
 
+    for track in &prepared.deleted_tracks {
+        if tx.execute(
+            "DELETE FROM raw_tracks WHERE id=?1 AND row_hash=?2",
+            params![track.raw_id, track.previous_row_hash],
+        )? != 1
+            || tx.execute(
+                "DELETE FROM tracks WHERE id=?1 AND row_hash=?2",
+                params![track.id, track.previous_row_hash],
+            )? != 1
+        {
+            bail!("Deleted catalog track changed during synchronization");
+        }
+        tx.execute(
+            "DELETE FROM music_doctor_track_quality WHERE file_path=?1 AND filename=?2",
+            params![track.current.file_path, track.current.filename],
+        )?;
+    }
+    if !prepared.deleted_tracks.is_empty() {
+        tx.execute(
+            "DELETE FROM music_doctor_album_quality WHERE album_id=?1",
+            [candidate.album_id()],
+        )?;
+    }
     for track in &prepared.tracks {
         update_scoped_raw_track(&tx, import_run_id, track)?;
         update_scoped_track(&tx, import_run_id, candidate.album_id(), track)?;
@@ -1467,11 +1579,13 @@ pub(crate) fn apply_existing_album_fast_sync(
         &prepared.desired_album,
     )?;
 
-    if prepared.tracks.iter().any(|track| {
-        track.current.genre != track.desired.genre
-            || track.current.title != track.desired.title
-            || track.current.display_artist != track.desired.display_artist
-    }) {
+    if !prepared.deleted_tracks.is_empty()
+        || prepared.tracks.iter().any(|track| {
+            track.current.genre != track.desired.genre
+                || track.current.title != track.desired.title
+                || track.current.display_artist != track.desired.display_artist
+        })
+    {
         refresh_scoped_search_indexes(&tx, candidate.album_id(), &prepared.tracks)?;
     }
 
@@ -1560,7 +1674,7 @@ fn scoped_album_catalog_is_unchanged(
         params![candidate.album_id()],
         |row| row.get::<_, i64>(0),
     )?;
-    if album_track_count != prepared.tracks.len() as i64
+    if album_track_count != (prepared.tracks.len() + prepared.deleted_tracks.len()) as i64
         || load_scoped_album(conn, candidate.album_id())? != prepared.current_album
     {
         return Ok(false);
@@ -1568,7 +1682,7 @@ fn scoped_album_catalog_is_unchanged(
 
     let headers = StringRecord::from(REQUIRED_COLUMNS.to_vec());
     let header_map = HeaderMap::from_headers(&headers)?;
-    for expected in &prepared.tracks {
+    for expected in prepared.tracks.iter().chain(&prepared.deleted_tracks) {
         let (raw_id, raw_row_hash, row_hash, current) =
             load_scoped_track(conn, expected.id, &header_map)?;
         if raw_id != expected.raw_id
@@ -5461,6 +5575,87 @@ mod tests {
         seed_fast_sync_track(&conn, old_run_id, 2, &outside);
         seed_fast_sync_album(&conn, old_run_id, std::slice::from_ref(&outside));
         (conn, old_run_id, target_id, outside.row_hash)
+    }
+
+    #[test]
+    fn verified_deletion_sync_updates_catalog_history_and_is_idempotent() {
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().canonicalize().unwrap();
+        let survivor = folder.join("01.mp3");
+        let bonus = folder.join("02.mp3");
+        write_fast_sync_mp3(&survivor, "Survivor", None, "", 2008);
+        write_fast_sync_mp3(&bonus, "Bonus", Some(255), "L", 2008);
+        let scan = crate::folder_sync::scan_existing_album(&folder).unwrap();
+        let rows = scan
+            .records(None)
+            .into_iter()
+            .map(|r| parse_fast_sync_record(r.into_iter().collect()))
+            .collect::<Vec<_>>();
+        let (mut conn, old_run, _, outside_hash) = fast_sync_database(&rows[0]);
+        seed_fast_sync_track(&conn, old_run, 3, &rows[1]);
+        conn.execute("DELETE FROM albums WHERE id=?1", [&rows[0].album_id])
+            .unwrap();
+        seed_fast_sync_album(&conn, old_run, &rows);
+        db::rebuild_search_indexes(&conn).unwrap();
+        fs::remove_file(&bonus).unwrap();
+        let paths = vec![display_scoped_path(&bonus)];
+        assert!(prepare_existing_album_fast_sync(&conn, &folder).is_err());
+        let candidate = prepare_existing_album_deletion_sync(&conn, &folder, &paths).unwrap();
+        assert!(candidate.prepared.is_some());
+        // Restoring a file after preparation must cancel the entire transaction.
+        write_fast_sync_mp3(&bonus, "Bonus", Some(255), "L", 2008);
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &candidate).unwrap(),
+            ExistingAlbumFastSyncOutcome::Fallback
+        );
+        assert!(prepare_existing_album_deletion_sync(&conn, &folder, &paths).is_err());
+        fs::remove_file(&bonus).unwrap();
+        let candidate = prepare_existing_album_deletion_sync(&conn, &folder, &paths).unwrap();
+        let outcome = apply_existing_album_fast_sync(&mut conn, &candidate).unwrap();
+        let ExistingAlbumFastSyncOutcome::Updated { import_run_id, .. } = outcome else {
+            panic!("deletion must update")
+        };
+        let actual: (i64,i64,i64,i64) = conn.query_row("SELECT total_tracks,total_seconds,rated_tracks,loved_tracks FROM albums WHERE id=?1", [&rows[0].album_id], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).unwrap();
+        assert_eq!(actual, (1, 125, 0, 0));
+        for table in ["tracks", "raw_tracks", "track_search_fts"] {
+            let count: i64 = conn
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM {table} WHERE filename='02.mp3'"),
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(count, 0, "{table}");
+        }
+        let removed: i64 = conn
+            .query_row(
+                "SELECT removed_tracks FROM import_runs WHERE id=?1",
+                [import_run_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(removed, 1);
+        let history: i64 = conn.query_row("SELECT COUNT(*) FROM library_updates WHERE import_run_id=?1 AND category='tracks' AND previous_value='2' AND current_value='1'", [import_run_id], |r| r.get(0)).unwrap();
+        assert_eq!(history, 1);
+        let outside: String = conn
+            .query_row(
+                "SELECT row_hash FROM tracks WHERE album='Other Album'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(outside, outside_hash);
+        let retry = prepare_existing_album_deletion_sync(&conn, &folder, &paths).unwrap();
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &retry).unwrap(),
+            ExistingAlbumFastSyncOutcome::Unchanged
+        );
+        assert!(prepare_existing_album_deletion_sync(
+            &conn,
+            &folder,
+            &[display_scoped_path(&folder.join("..").join("foreign.mp3"))]
+        )
+        .is_err());
     }
 
     #[test]

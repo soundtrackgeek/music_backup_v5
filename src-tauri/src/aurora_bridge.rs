@@ -162,6 +162,8 @@ struct SyncExistingFoldersRequest {
     folder_paths: Vec<String>,
     #[serde(default)]
     changed_file_paths: Vec<String>,
+    #[serde(default)]
+    deleted_file_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -471,6 +473,7 @@ fn capabilities() -> Result<Value> {
             "defaultPopmRatingFallback": true,
             "serviceExistingFolderSync": true,
             "boundedExistingFolderSync": true,
+            "verifiedTrackDeletionSync": true,
         },
     }))
 }
@@ -1024,6 +1027,11 @@ fn sync_existing_folders(
         bail!("syncExistingFolders accepts at most {MAX_SYNC_FOLDERS} album folders per request");
     }
 
+    if !request.deleted_file_paths.is_empty()
+        && (request.folder_paths.len() != 1 || request.deleted_file_paths.len() > 100)
+    {
+        bail!("Verified deletion sync accepts one album and at most 100 deleted tracks");
+    }
     let database_path = app_data_dir.join("music-library.sqlite3");
     prune_deprecated_sync_backups(&database_path, 1)?;
     let mut conn = open_database(&database_path)?;
@@ -1037,7 +1045,13 @@ fn sync_existing_folders(
     let mut seen_album_ids = BTreeSet::new();
     let mut total_tracks = 0_usize;
     for (folder_index, folder) in folders.into_iter().enumerate() {
-        let candidate = if let Some((target_folder_index, target_path)) = &changed_file_target {
+        let candidate = if !request.deleted_file_paths.is_empty() {
+            importer::prepare_existing_album_deletion_sync(
+                &conn,
+                &folder,
+                &request.deleted_file_paths,
+            )?
+        } else if let Some((target_folder_index, target_path)) = &changed_file_target {
             if *target_folder_index == folder_index {
                 match importer::prepare_existing_file_fast_sync(&conn, &folder, target_path)? {
                     Some(candidate) => candidate,
@@ -3695,6 +3709,7 @@ mod tests {
         let request = SyncExistingFoldersRequest {
             folder_paths: vec!["C:\\Music\\Album".to_owned(); MAX_SYNC_FOLDERS + 1],
             changed_file_paths: Vec::new(),
+            deleted_file_paths: Vec::new(),
         };
 
         let error = sync_existing_folders(temp.path(), request).expect_err("bounded request");

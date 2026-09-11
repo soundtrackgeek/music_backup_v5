@@ -712,3 +712,7 @@ The catalog is opened read-only in a consistent read transaction, released befor
 `catalog_not_observed.csv` lists candidates, not confirmed deletions. Unavailable roots, permission errors and skipped reparse points make coverage incomplete. Filesystem changes during the walk can also create transient differences. No tags, hashes, decoding, timestamp comparison, repairs or scheduling are performed. Interrupted runs leave a partial evidence database without a completed summary; use a new output directory to retry. Reports contain local paths and remain local unless explicitly shared.
 
 Verify the checker with `python -m unittest discover -s Tools/library_inventory -v`.
+
+### Verified Aurora track deletions
+
+Aurora sends saved, still-missing MP3 identities to Music Library. Music Library verifies the complete surviving album and commits catalog removals, album metrics, search cleanup, and Updates history atomically. Restored files, unavailable folders, unknown tracks, and changed catalog data prevent deletion sync. Older identity-set failures receive a fresh guarded retry after upgrading Aurora; Music Library must also support verified deletion sync. Empty albums still require the reviewed album-removal workflow.
