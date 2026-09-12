@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.147.1] - 2026-09-12
+
+### Added
+- Double-click `Sync Music Library.cmd` launcher with the main PC source, local destination, and username prefilled, a hidden-password prompt when needed, and a window that stays open to show success or failure.
+
+### Fixed
+- Prompt securely through Windows SMB sign-in and retry the database source once when credentials are missing or rejected. Support an alternate username and unattended runs, and distinguish authentication/permission failures, missing paths, conflicting SMB accounts, and databases that are actually in use.
+
 ## [0.147.0] - 2026-09-12
 
 ### Added

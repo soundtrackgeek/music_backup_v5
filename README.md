@@ -6,7 +6,9 @@ Title corrections made in Aurora are saved and verified in the MP3 files themsel
 
 ## Copy the main PC database to another Windows PC
 
-Close **Music Library and Aurora on both PCs**, including tray apps and companion bridge processes, and connect both PCs to Tailscale. On the receiving PC, run:
+Close **Music Library and Aurora on both PCs**, including tray apps and companion bridge processes, and connect both PCs to Tailscale. On the receiving PC, **double-click `Sync Music Library.cmd` in the repository folder**. It supplies the source, destination, and username to the PowerShell script, prompts for the SMB password if needed, and keeps the window open so you can read the result. It works regardless of the current directory; keep it alongside the `scripts` folder. Its three `LIBRARY_*` settings can be edited if your existing SMB share/account differs.
+
+Alternatively, run the PowerShell script directly:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\sync-library-from-main-pc.ps1
@@ -14,7 +16,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\sync-library-f
 
 The default source is `\\jorncomputer.tail5ef358.ts.net\C$\Users\jtill\AppData\Roaming\com.local.musiclibrary\music-library.sqlite3`. This assumes the main PC stores its catalog under the `jtill` profile and exposes its standard administrative `C$` share. The destination is `%APPDATA%\com.local.musiclibrary\music-library.sqlite3`, which is `C:\Users\jtill\AppData\Roaming\com.local.musiclibrary\music-library.sqlite3` for jtill. The main PC remains the source of truth: the script only reads it and refuses to run on JornComputer itself.
 
-SMB requires permission to the share in addition to Tailscale connectivity. If access is denied, authenticate to the main PC from File Explorer or use the following command, which prompts for the main PC account password without putting it in the command or script:
+SMB requires its own sign-in and share permissions in addition to Tailscale connectivity. If Windows rejects the current credentials, the script invokes Windows' native hidden-password prompt for `Jorncomputer\jtill` and retries once. Enter the main PC account password using the same credentials as the Mac SMB connection. The password is not placed in script arguments or saved by the script. The authenticated Windows session remains available for later copies. To use a different account, add `-UserName 'Jorncomputer\your-account'`. Use `-NoCredentialPrompt` for unattended runs that should fail immediately when authentication is needed.
+
+You can also authenticate separately from File Explorer or use:
 
 ```powershell
 net use \\jorncomputer.tail5ef358.ts.net\C$ /user:Jorncomputer\jtill *
@@ -25,6 +29,8 @@ net use \\jorncomputer.tail5ef358.ts.net\C$ /user:Jorncomputer\jtill *
 ```powershell
 .\scripts\sync-library-from-main-pc.ps1 -SourcePath '\\100.105.78.85\YOUR_SHARE\music-library.sqlite3'
 ```
+
+Authentication errors, permission errors, missing paths/shares, and busy databases have separate messages. If Windows reports an existing connection with different credentials (error 1219), inspect `net use` and resolve the connection to that server, or use its current account; the script does not disconnect other SMB sessions. [Microsoft documents the SMB password prompt and connection options here](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/gg651155(v=ws.11)).
 
 The script locks the source against writes, downloads to a temporary local file with progress, checks the SQLite header and copied byte count, and atomically replaces the destination. The previous local database is retained beside it as `music-library.before-sync-<timestamp>-<id>.sqlite3`. Allow room for the incoming database alongside the old one; each successful replacement retains another backup. It stops if either database is busy or has a nonempty SQLite WAL/rollback journal. In that case, open and cleanly exit Music Library on the affected PC before retrying; do not manually delete pending journals. Empty local journals and stale shared-memory files are removed only after copying succeeds. A failed download leaves the existing database in place. These transfer checks do not perform a full SQLite integrity scan.
 

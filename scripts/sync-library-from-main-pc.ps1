@@ -3,8 +3,8 @@
 .SYNOPSIS
 Copies a closed Music Library database from the main PC over SMB.
 .DESCRIPTION
-Close Music Library and Aurora on both PCs first. Sign into the source share
-in File Explorer if needed. The source is read-only; the previous local database
+Close Music Library and Aurora on both PCs first. If SMB sign-in is needed,
+Windows prompts for the main PC account password. The source is read-only; the previous local database
 is kept in a dated backup beside the destination. Requires no SQLite tools.
 .EXAMPLE
 .\scripts\sync-library-from-main-pc.ps1
@@ -17,11 +17,23 @@ param(
     [string] $SourcePath = '\\jorncomputer.tail5ef358.ts.net\C$\Users\jtill\AppData\Roaming\com.local.musiclibrary\music-library.sqlite3',
 
     [ValidateNotNullOrEmpty()]
-    [string] $DestinationPath = (Join-Path $env:APPDATA 'com.local.musiclibrary\music-library.sqlite3')
+    [string] $DestinationPath = (Join-Path $env:APPDATA 'com.local.musiclibrary\music-library.sqlite3'),
+
+    [ValidateNotNullOrEmpty()]
+    [string] $UserName = 'Jorncomputer\jtill',
+
+    [switch] $NoCredentialPrompt
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+function Get-WindowsErrorCode {
+    param([Exception] $Exception)
+    $cause = $Exception.GetBaseException()
+    if ($cause -is [ComponentModel.Win32Exception]) { return $cause.NativeErrorCode }
+    return ($cause.HResult -band 0xFFFF)
+}
 
 function Open-DatabaseFile {
     param([string] $Path, [System.IO.FileAccess] $Access, [System.IO.FileShare] $Share)
@@ -29,7 +41,49 @@ function Open-DatabaseFile {
         return [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, $Access, $Share)
     }
     catch {
-        throw "Cannot lock '$Path'. Close Music Library and Aurora on both PCs and check access to the SMB share. $($_.Exception.Message)"
+        $cause = $_.Exception.GetBaseException()
+        $code = Get-WindowsErrorCode $cause
+        $detail = switch ($code) {
+            { $_ -in 86, 1326 } { 'SMB sign-in failed. Use the main PC account password and the same account used by the Mac SMB connection; set -UserName if needed.'; break }
+            5 { 'Access denied. Check account, share, and file permissions. C$ requires administrative-share access; use -SourcePath for an existing share that your account can read.'; break }
+            { $_ -in 32, 33 } { 'Database is in use. Close Music Library and Aurora on both PCs, including tray apps and companion processes.'; break }
+            { $_ -in 2, 3 } { 'Database path was not found. Check the share and the database path supplied with -SourcePath.'; break }
+            { $_ -in 53, 67 } { 'SMB server or share was not found. Check Tailscale connectivity and the share name in -SourcePath.'; break }
+            1219 { 'Windows already has an SMB connection to this server using another account. Inspect net use and resolve that connection, or use the same account. No connections were disconnected by this script.'; break }
+            default { $cause.Message }
+        }
+        throw [System.IO.IOException]::new("Cannot open '$Path'. $detail (Windows error $code)", $cause)
+    }
+}
+
+function Connect-SourceShare {
+    param([string] $ShareRoot, [string] $Account)
+    Write-Host "SMB sign-in required for $ShareRoot as $Account."
+    Write-Host 'Enter the main PC account password at the Windows prompt. To use another account, cancel and rerun with -UserName.'
+    # '*' makes net.exe read the password privately; it is never a script argument.
+    # Keep the authenticated Windows session available for subsequent copies.
+    # Inherit the console so the password prompt is visible immediately and no
+    # native output is accidentally returned as part of the database file handle.
+    $arguments = @('use', ('"{0}"' -f $ShareRoot), '*', ('"/user:{0}"' -f $Account))
+    $signIn = Start-Process -FilePath "$env:SystemRoot\System32\net.exe" -ArgumentList $arguments -NoNewWindow -Wait -PassThru
+    if ($signIn.ExitCode -ne 0) {
+        throw 'SMB sign-in did not succeed. Check the Windows message above and use the same account/password and share as on the Mac. The local database has not been changed.'
+    }
+}
+
+function Open-SourceDatabase {
+    param([string] $Path, [string] $Account, [switch] $NoPrompt)
+    try {
+        return Open-DatabaseFile $Path Read Read
+    }
+    catch {
+        $code = Get-WindowsErrorCode $_.Exception
+        if ($NoPrompt -or $code -notin 5, 86, 1326 -or $Path -notmatch '^\\\\[^\\]+\\[^\\]+') {
+            throw
+        }
+        Connect-SourceShare $Matches[0] $Account
+        # Only one sign-in attempt. A second failure retains its precise diagnosis.
+        return Open-DatabaseFile $Path Read Read
     }
 }
 
@@ -58,7 +112,7 @@ $backupPath = $null
 try {
     # FileShare.Read denies existing and new write handles throughout the copy.
     # SQLite must have closed/checkpointed the source before a raw file copy.
-    $source = Open-DatabaseFile $SourcePath Read Read
+    $source = Open-SourceDatabase $SourcePath $UserName -NoPrompt:$NoCredentialPrompt
     $handles.Add($source)
     foreach ($suffix in @('-wal', '-journal')) {
         $sidecarPath = $SourcePath + $suffix

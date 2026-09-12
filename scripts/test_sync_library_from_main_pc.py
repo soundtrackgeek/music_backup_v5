@@ -1,5 +1,6 @@
 """Windows integration checks using disposable SQLite databases, never app data."""
 
+import base64
 import os
 from pathlib import Path
 import sqlite3
@@ -123,6 +124,105 @@ class DatabaseCopyTests(unittest.TestCase):
                         self.assert_originals_unchanged()
                     finally:
                         journal.unlink()
+
+
+@unittest.skipUnless(os.name == "nt", "Windows PowerShell script")
+class AuthenticationTests(unittest.TestCase):
+    def run_powershell(self, body):
+        # Load helper functions without touching a share or the real database.
+        setup = r"""
+            $ErrorActionPreference = 'Stop'
+            . $env:MUSIC_LIBRARY_SYNC_SCRIPT -WhatIf
+            $script:opens = 0
+            $script:signIns = 0
+            function Connect-SourceShare {
+                param($ShareRoot, $Account)
+                if ($ShareRoot -cne '\\test-server\Library' -or $Account -cne 'MAIN\reader') {
+                    throw 'Wrong share root or account passed to SMB sign-in'
+                }
+                $script:signIns++
+            }
+        """
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand",
+             base64.b64encode((setup + body + "\nexit 0\n").encode("utf-16-le")).decode("ascii")],
+            env={**os.environ, "MUSIC_LIBRARY_SYNC_SCRIPT": str(SCRIPT)},
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_authentication_failure_prompts_once_then_retries(self):
+        self.run_powershell(r"""
+            function Open-DatabaseFile {
+                $script:opens++
+                if ($script:opens -eq 1) {
+                    throw [IO.IOException]::new('wrapped', [ComponentModel.Win32Exception]::new(1326))
+                }
+                return 'opened'
+            }
+            $result = Open-SourceDatabase '\\test-server\Library\folder\music-library.sqlite3' 'MAIN\reader'
+            if ($result -ne 'opened' -or $script:opens -ne 2 -or $script:signIns -ne 1) {
+                throw 'Authentication did not retry once after successful sign-in'
+            }
+        """)
+
+    def test_rejected_retry_does_not_prompt_again(self):
+        self.run_powershell(r"""
+            function Open-DatabaseFile {
+                $script:opens++
+                throw [ComponentModel.Win32Exception]::new(1326)
+            }
+            $failed = $false
+            try { Open-SourceDatabase '\\test-server\Library\db' 'MAIN\reader' }
+            catch { $failed = $true }
+            if (-not $failed -or $script:opens -ne 2 -or $script:signIns -ne 1) {
+                throw 'Rejected credentials caused an unexpected retry'
+            }
+        """)
+
+    def test_unattended_authentication_and_non_auth_errors_never_prompt(self):
+        self.run_powershell(r"""
+            function Open-DatabaseFile { throw [ComponentModel.Win32Exception]::new($script:code) }
+            foreach ($script:code in @(1326, 86, 5)) {
+                $failed = $false
+                try { Open-SourceDatabase '\\test-server\Library\db' 'MAIN\reader' -NoPrompt }
+                catch { $failed = $true }
+                if (-not $failed) { throw 'Unattended authentication did not stop' }
+            }
+            foreach ($script:code in @(2, 3, 32, 33, 53, 67, 1219, 1909)) {
+                $failed = $false
+                try { Open-SourceDatabase '\\test-server\Library\db' 'MAIN\reader' }
+                catch { $failed = $true }
+                if (-not $failed) { throw 'Non-authentication error did not stop' }
+            }
+            $script:code = 5
+            try { Open-SourceDatabase 'C:\local.sqlite3' 'MAIN\reader' } catch {}
+            if ($script:signIns -ne 0) { throw 'Unexpected SMB password prompt' }
+        """)
+
+    def test_signin_failure_stops_before_retry(self):
+        self.run_powershell(r"""
+            function Open-DatabaseFile {
+                $script:opens++
+                throw [ComponentModel.Win32Exception]::new(1326)
+            }
+            function Connect-SourceShare { $script:signIns++; throw 'Sign-in failed or cancelled' }
+            $failed = $false
+            try { Open-SourceDatabase '\\test-server\Library\db' 'MAIN\reader' }
+            catch { $failed = $true }
+            if (-not $failed -or $script:opens -ne 1 -or $script:signIns -ne 1) {
+                throw 'Failed sign-in still attempted to open the source'
+            }
+        """)
+
+    def test_existing_authentication_needs_no_prompt(self):
+        self.run_powershell(r"""
+            function Open-DatabaseFile { return 'opened' }
+            $result = Open-SourceDatabase '\\test-server\Library\db' 'MAIN\reader'
+            if ($result -ne 'opened' -or $script:signIns -ne 0) {
+                throw 'Existing authentication was not reused'
+            }
+        """)
 
 
 if __name__ == "__main__":
