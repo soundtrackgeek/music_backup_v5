@@ -16,13 +16,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\sync-library-f
 
 The default source is `\\jorncomputer.tail5ef358.ts.net\C$\Users\jtill\AppData\Roaming\com.local.musiclibrary\music-library.sqlite3`. This assumes the main PC stores its catalog under the `jtill` profile and exposes its standard administrative `C$` share. The destination is `%APPDATA%\com.local.musiclibrary\music-library.sqlite3`, which is `C:\Users\jtill\AppData\Roaming\com.local.musiclibrary\music-library.sqlite3` for jtill. The main PC remains the source of truth: the script only reads it and refuses to run on JornComputer itself.
 
-SMB requires its own sign-in and share permissions in addition to Tailscale connectivity. If Windows rejects the current credentials, the script invokes Windows' native hidden-password prompt for `Jorncomputer\jtill` and retries once. Enter the main PC account password using the same credentials as the Mac SMB connection. The password is not placed in script arguments or saved by the script. The authenticated Windows session remains available for later copies. To use a different account, add `-UserName 'Jorncomputer\your-account'`. Use `-NoCredentialPrompt` for unattended runs that should fail immediately when authentication is needed.
+SMB requires its own sign-in and share permissions in addition to Tailscale connectivity. The launcher and script default to the main PC's Microsoft account, `MicrosoftAccount\jtillnes@yahoo.com`. If Windows needs credentials, the script opens Windows' native hidden-password prompt, saves the credential in **Windows Credential Manager**, and retries the database once. Enter the Microsoft account password. Subsequent runs reuse the saved credential, including after restarting Windows, while that password remains valid. The password is never written into the `.cmd`/`.ps1` files or process arguments. To use another account, set `LIBRARY_USER` in the launcher or add `-UserName` when running the PowerShell script. Use `-NoCredentialPrompt` for unattended runs that should fail immediately when authentication is needed.
 
-You can also authenticate separately from File Explorer or use:
+You can also save the credential separately with the following command, which prompts privately for the password:
 
 ```powershell
-net use \\jorncomputer.tail5ef358.ts.net\C$ /user:Jorncomputer\jtill *
+cmdkey /add:jorncomputer.tail5ef358.ts.net /user:MicrosoftAccount\jtillnes@yahoo.com /pass
 ```
+
+The saved entry belongs to the current Windows user and the server name used in `-SourcePath`; keep using the same hostname to reuse it. To update or forget it, open **Control Panel → Credential Manager → Windows Credentials** and edit/remove the entry for `jorncomputer.tail5ef358.ts.net`. If a saved password is rejected, an interactive run prompts again so it can be updated. [Microsoft documents the credential storage command here](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmdkey).
 
 `C$` requires an account allowed to access administrative shares. If the Mac script uses a different existing share, provide its Windows UNC path instead; `Jorncomputer`, `100.105.78.85`, and `jorncomputer.tail5ef358.ts.net` can be used as the server name. For example, replacing `YOUR_SHARE` with the actual share:
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.147.2] - 2026-09-12
+
+### Fixed
+- Use `MicrosoftAccount\jtillnes@yahoo.com` for main PC SMB sign-in in both Windows launchers. Save the interactively entered password through Windows Credential Manager so later runs and Windows restarts can reuse it without storing passwords in scripts or command-line arguments.
+
 ## [0.147.1] - 2026-09-12
 
 ### Added

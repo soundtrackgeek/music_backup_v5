@@ -133,6 +133,7 @@ class AuthenticationTests(unittest.TestCase):
         setup = r"""
             $ErrorActionPreference = 'Stop'
             . $env:MUSIC_LIBRARY_SYNC_SCRIPT -WhatIf
+            $script:realConnectSourceShare = ${function:Connect-SourceShare}
             $script:opens = 0
             $script:signIns = 0
             function Connect-SourceShare {
@@ -221,6 +222,35 @@ class AuthenticationTests(unittest.TestCase):
             $result = Open-SourceDatabase '\\test-server\Library\db' 'MAIN\reader'
             if ($result -ne 'opened' -or $script:signIns -ne 0) {
                 throw 'Existing authentication was not reused'
+            }
+        """)
+
+    def test_stores_server_credential_with_private_prompt_and_reuses_it(self):
+        self.run_powershell(r"""
+            Set-Item Function:Connect-SourceShare $script:realConnectSourceShare
+            $script:storedCredential = $false
+            function Start-Process {
+                param($FilePath, $ArgumentList, [switch]$NoNewWindow, [switch]$Wait, [switch]$PassThru)
+                if ($FilePath -ne "$env:SystemRoot\System32\cmdkey.exe" -or
+                    $ArgumentList.Count -ne 3 -or
+                    $ArgumentList[0] -cne '"/add:test-server"' -or
+                    $ArgumentList[1] -cne '"/user:MicrosoftAccount\jtillnes@yahoo.com"' -or
+                    $ArgumentList[2] -cne '/pass' -or
+                    -not $NoNewWindow -or -not $Wait -or -not $PassThru) {
+                    throw 'Credential storage must target only the server and prompt without an inline password'
+                }
+                $script:signIns++
+                $script:storedCredential = $true
+                return [pscustomobject]@{ExitCode = 0}
+            }
+            function Open-DatabaseFile {
+                if (-not $script:storedCredential) { throw [ComponentModel.Win32Exception]::new(1326) }
+                return 'opened'
+            }
+            $first = Open-SourceDatabase '\\test-server\Library\db' $UserName
+            $second = Open-SourceDatabase '\\test-server\Library\db' $UserName -NoPrompt
+            if ($first -ne 'opened' -or $second -ne 'opened' -or $script:signIns -ne 1) {
+                throw 'Saved authentication was not reused without a second prompt'
             }
         """)
 

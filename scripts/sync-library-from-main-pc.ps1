@@ -4,7 +4,8 @@
 Copies a closed Music Library database from the main PC over SMB.
 .DESCRIPTION
 Close Music Library and Aurora on both PCs first. If SMB sign-in is needed,
-Windows prompts for the main PC account password. The source is read-only; the previous local database
+Windows prompts once and saves the password in Windows Credential Manager for
+future runs. The source is read-only; the previous local database
 is kept in a dated backup beside the destination. Requires no SQLite tools.
 .EXAMPLE
 .\scripts\sync-library-from-main-pc.ps1
@@ -20,7 +21,7 @@ param(
     [string] $DestinationPath = (Join-Path $env:APPDATA 'com.local.musiclibrary\music-library.sqlite3'),
 
     [ValidateNotNullOrEmpty()]
-    [string] $UserName = 'Jorncomputer\jtill',
+    [string] $UserName = 'MicrosoftAccount\jtillnes@yahoo.com',
 
     [switch] $NoCredentialPrompt
 )
@@ -58,17 +59,22 @@ function Open-DatabaseFile {
 
 function Connect-SourceShare {
     param([string] $ShareRoot, [string] $Account)
+    if ($ShareRoot -notmatch '^\\\\([^\\]+)\\[^\\]+$') {
+        throw 'SMB sign-in requires a UNC share root such as \\server\share.'
+    }
+    $serverName = $Matches[1]
     Write-Host "SMB sign-in required for $ShareRoot as $Account."
-    Write-Host 'Enter the main PC account password at the Windows prompt. To use another account, cancel and rerun with -UserName.'
-    # '*' makes net.exe read the password privately; it is never a script argument.
-    # Keep the authenticated Windows session available for subsequent copies.
+    Write-Host 'Enter the account password once. Windows Credential Manager will remember it for future runs, including after restarting Windows.'
+    # /pass without a value prompts privately. The password never enters this
+    # script or its process arguments. /add saves an SMB credential for this server.
     # Inherit the console so the password prompt is visible immediately and no
     # native output is accidentally returned as part of the database file handle.
-    $arguments = @('use', ('"{0}"' -f $ShareRoot), '*', ('"/user:{0}"' -f $Account))
-    $signIn = Start-Process -FilePath "$env:SystemRoot\System32\net.exe" -ArgumentList $arguments -NoNewWindow -Wait -PassThru
+    $arguments = @(('"/add:{0}"' -f $serverName), ('"/user:{0}"' -f $Account), '/pass')
+    $signIn = Start-Process -FilePath "$env:SystemRoot\System32\cmdkey.exe" -ArgumentList $arguments -NoNewWindow -Wait -PassThru
     if ($signIn.ExitCode -ne 0) {
-        throw 'SMB sign-in did not succeed. Check the Windows message above and use the same account/password and share as on the Mac. The local database has not been changed.'
+        throw 'Windows could not save the SMB credential. Check the Windows message above. The local database has not been changed.'
     }
+    Write-Host "Credential saved for $serverName. Checking access to the database..."
 }
 
 function Open-SourceDatabase {
