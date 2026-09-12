@@ -24,7 +24,7 @@ You can also save the credential separately with the following command, which pr
 cmdkey /add:jorncomputer.tail5ef358.ts.net /user:MicrosoftAccount\jtillnes@yahoo.com /pass
 ```
 
-The saved entry belongs to the current Windows user and the server name used in `-SourcePath`; keep using the same hostname to reuse it. To update or forget it, open **Control Panel → Credential Manager → Windows Credentials** and edit/remove the entry for `jorncomputer.tail5ef358.ts.net`. If a saved password is rejected, an interactive run prompts again so it can be updated. [Microsoft documents the credential storage command here](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmdkey).
+The script verifies that Windows lists a credential for the intended server/account before retrying the database; the credential tool's exit code alone does not establish success. The saved entry belongs to the current Windows user and the server name used in `-SourcePath`; keep using the same hostname to reuse it. To update or forget it, open **Control Panel → Credential Manager → Windows Credentials** and edit/remove the entry for `jorncomputer.tail5ef358.ts.net`. If a saved password is rejected, an interactive run prompts again so it can be updated. [Microsoft documents the credential storage command here](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmdkey).
 
 `C$` requires an account allowed to access administrative shares. If the Mac script uses a different existing share, provide its Windows UNC path instead; `Jorncomputer`, `100.105.78.85`, and `jorncomputer.tail5ef358.ts.net` can be used as the server name. For example, replacing `YOUR_SHARE` with the actual share:
 

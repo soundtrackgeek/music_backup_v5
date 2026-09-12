@@ -57,6 +57,15 @@ function Open-DatabaseFile {
     }
 }
 
+function Test-SavedSmbCredential {
+    param([string] $ServerName, [string] $Account)
+    # Query only this server's entry. cmdkey lists account metadata, not passwords.
+    # Its exit code alone is unreliable: even invalid syntax can return zero.
+    $listing = (& "$env:SystemRoot\System32\cmdkey.exe" "/list:$ServerName") -join "`n"
+    $accountPattern = '(?m)^\s*[^:\r\n]+:\s*' + [regex]::Escape($Account) + '\s*$'
+    return ($LASTEXITCODE -eq 0 -and $listing -match $accountPattern)
+}
+
 function Connect-SourceShare {
     param([string] $ShareRoot, [string] $Account)
     if ($ShareRoot -notmatch '^\\\\([^\\]+)\\[^\\]+$') {
@@ -69,12 +78,13 @@ function Connect-SourceShare {
     # script or its process arguments. /add saves an SMB credential for this server.
     # Inherit the console so the password prompt is visible immediately and no
     # native output is accidentally returned as part of the database file handle.
-    $arguments = @(('"/add:{0}"' -f $serverName), ('"/user:{0}"' -f $Account), '/pass')
+    # cmdkey parses the raw command line: quote the values, never the /switch.
+    $arguments = @(('/add:"{0}"' -f $serverName), ('/user:"{0}"' -f $Account), '/pass')
     $signIn = Start-Process -FilePath "$env:SystemRoot\System32\cmdkey.exe" -ArgumentList $arguments -NoNewWindow -Wait -PassThru
-    if ($signIn.ExitCode -ne 0) {
+    if ($signIn.ExitCode -ne 0 -or -not (Test-SavedSmbCredential $serverName $Account)) {
         throw 'Windows could not save the SMB credential. Check the Windows message above. The local database has not been changed.'
     }
-    Write-Host "Credential saved for $serverName. Checking access to the database..."
+    Write-Host "Windows has a credential entry for $Account on $serverName. Checking access to the database..."
 }
 
 function Open-SourceDatabase {

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.147.3] - 2026-09-12
+
+### Fixed
+- Correct Windows credential command quoting so the SMB password prompt opens. Verify the intended server/account entry before proceeding instead of treating `cmdkey` exit code zero as proof of success. Cover the native Windows executable with a disposable credential regression and reject missing credentials even after a zero exit code.
+
 ## [0.147.2] - 2026-09-12
 
 ### Fixed

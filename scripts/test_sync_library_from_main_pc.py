@@ -233,8 +233,8 @@ class AuthenticationTests(unittest.TestCase):
                 param($FilePath, $ArgumentList, [switch]$NoNewWindow, [switch]$Wait, [switch]$PassThru)
                 if ($FilePath -ne "$env:SystemRoot\System32\cmdkey.exe" -or
                     $ArgumentList.Count -ne 3 -or
-                    $ArgumentList[0] -cne '"/add:test-server"' -or
-                    $ArgumentList[1] -cne '"/user:MicrosoftAccount\jtillnes@yahoo.com"' -or
+                    $ArgumentList[0] -cne '/add:"test-server"' -or
+                    $ArgumentList[1] -cne '/user:"MicrosoftAccount\jtillnes@yahoo.com"' -or
                     $ArgumentList[2] -cne '/pass' -or
                     -not $NoNewWindow -or -not $Wait -or -not $PassThru) {
                     throw 'Credential storage must target only the server and prompt without an inline password'
@@ -243,6 +243,7 @@ class AuthenticationTests(unittest.TestCase):
                 $script:storedCredential = $true
                 return [pscustomobject]@{ExitCode = 0}
             }
+            function Test-SavedSmbCredential { return $script:storedCredential }
             function Open-DatabaseFile {
                 if (-not $script:storedCredential) { throw [ComponentModel.Win32Exception]::new(1326) }
                 return 'opened'
@@ -252,6 +253,45 @@ class AuthenticationTests(unittest.TestCase):
             if ($first -ne 'opened' -or $second -ne 'opened' -or $script:signIns -ne 1) {
                 throw 'Saved authentication was not reused without a second prompt'
             }
+        """)
+
+    def test_zero_exit_code_without_stored_credential_is_rejected(self):
+        self.run_powershell(r"""
+            Set-Item Function:Connect-SourceShare $script:realConnectSourceShare
+            function Start-Process { return [pscustomobject]@{ExitCode = 0} }
+            function Test-SavedSmbCredential { return $false }
+            $failed = $false
+            try { Connect-SourceShare '\\test-server\Library' 'MAIN\reader' }
+            catch {
+                if ($_.Exception.Message -notlike 'Windows could not save*') { throw }
+                $failed = $true
+            }
+            if (-not $failed) { throw 'Zero exit code incorrectly reported credential storage success' }
+        """)
+
+    def test_real_cmdkey_stores_and_finds_disposable_credential(self):
+        self.run_powershell(r"""
+            Set-Item Function:Connect-SourceShare $script:realConnectSourceShare
+            $script:testServer = 'music-library-test-' + [Guid]::NewGuid().ToString('N') + '.invalid'
+            $testAccount = 'MicrosoftAccount\codex-sync-test@example.invalid'
+            function Start-Process {
+                param($FilePath, $ArgumentList, [switch]$NoNewWindow, [switch]$Wait, [switch]$PassThru)
+                if ($ArgumentList[-1] -ne '/pass') { throw 'Production must prompt for the password' }
+                # Use only a synthetic password for this disposable, non-networked
+                # credential. Exercise the real executable and production quoting.
+                $ArgumentList[-1] = '/pass:not-a-real-password'
+                return Microsoft.PowerShell.Management\Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -NoNewWindow -Wait -PassThru
+            }
+            try {
+                if (Test-SavedSmbCredential $script:testServer $testAccount) { throw 'Test target already exists' }
+                Connect-SourceShare "\\$script:testServer\Library" $testAccount
+                if (-not (Test-SavedSmbCredential $script:testServer $testAccount)) { throw 'Native credential was not saved' }
+                if (Test-SavedSmbCredential $script:testServer 'wrong-account') { throw 'Accepted another account' }
+            }
+            finally {
+                & "$env:SystemRoot\System32\cmdkey.exe" "/delete:$script:testServer" | Out-Null
+            }
+            if (Test-SavedSmbCredential $script:testServer $testAccount) { throw 'Disposable credential was not removed' }
         """)
 
 
