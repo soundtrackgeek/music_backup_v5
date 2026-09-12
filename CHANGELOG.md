@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.147.5] - 2026-09-12
+
+### Changed
+- Show Year Ledger unrated bar segments and matching legend/summary markers in red.
+
 ## [0.147.4] - 2026-09-12
 
 ### Fixed

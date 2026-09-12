@@ -33,6 +33,7 @@
 .year-ledger .fully-rated { color: var(--ledger-green); }
 .year-ledger .partial { color: var(--ledger-amber); }
 .year-ledger .unrated { color: var(--ledger-slate); }
+.year-ledger .ledger-bar .unrated, .year-ledger i.unrated { color: #f43f46; }
 .ledger-legend { display: flex; flex-direction: column; gap: 10px; justify-content: center; font-size: 11px; }
 .ledger-legend > span { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
 .year-ledger i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
