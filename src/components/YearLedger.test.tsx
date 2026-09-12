@@ -8,6 +8,31 @@ import type { YearProgressStats } from "../types";
 const row: YearProgressStats = { year: 1984, albumCount: 50, ratedAlbumCount: 30, partialAlbumCount: 12, unratedAlbumCount: 8, trackCount: 500, totalSeconds: 10000, lovedTracks: 0, averageAlbumScore: null };
 
 describe("Year Ledger", () => {
+  it("shows each year's rating shares on a fixed 0–100% scale regardless of other years' totals", () => {
+    const rows = completeYearProgressRows([
+      { ...row, year: 1986, albumCount: 45, ratedAlbumCount: 28, partialAlbumCount: 2, unratedAlbumCount: 15 },
+      { ...row, year: 1987, albumCount: 305, ratedAlbumCount: 305, partialAlbumCount: 0, unratedAlbumCount: 0 },
+    ], 1986, 1988);
+    render(<YearLedger rows={rows} genres={[]} excludedGenres={[]} onOpen={vi.fn()} />);
+    const progressHeader = screen.getByRole("columnheader", { name: /^Progress/ });
+    expect(within(progressHeader).getAllByText(/^\d+%$/).map(tick => tick.textContent))
+      .toEqual(["0%", "20%", "40%", "60%", "80%", "100%"]);
+    const segments = within(screen.getByLabelText("1986: 45 albums")).getAllByRole("button");
+    const widths = segments.map(segment => Number.parseFloat(segment.style.width));
+    expect(widths[0]).toBeCloseTo(62.2222, 3);
+    expect(widths[1]).toBeCloseTo(4.4444, 3);
+    expect(widths[2]).toBeCloseTo(33.3333, 3);
+    expect(widths.reduce((sum, width) => sum + width, 0)).toBeCloseTo(100);
+    expect(segments[0]).toHaveAttribute("title", "1986: 28 fully rated albums (62%)");
+    const yearRow = screen.getByLabelText("Select 1986").closest("tr")!;
+    expect(within(yearRow).getByText("62%")).toBeInTheDocument();
+    expect(screen.getByLabelText("1987: 305 fully rated albums")).toHaveStyle({ width: "100%" });
+    for (const segment of within(screen.getByLabelText("1988: 0 albums")).getAllByRole("button")) {
+      expect(segment).toHaveStyle({ width: "0%" });
+      expect(segment).toBeDisabled();
+    }
+  });
+
   it("renders every year of 1955–2021, including empty years, without changing totals", () => {
     const rows = completeYearProgressRows([row], 1955, 2021);
     expect(rows).toHaveLength(67);

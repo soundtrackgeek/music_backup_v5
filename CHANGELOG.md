@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.146.4] - 2026-09-12
+
+### Fixed
+- Use a fixed 0–100% scale for Year Ledger bars, with each segment showing its share of that year’s albums. The green segment now matches Complete %, independent of other years’ album totals; retain album counts in the columns and add percentages to segment tooltips.
+
 ## [0.146.3] - 2026-09-12
 
 ### Fixed

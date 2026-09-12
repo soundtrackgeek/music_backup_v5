@@ -33,8 +33,6 @@ export function YearLedger({ rows, genres, excludedGenres, onOpen, busy = false,
     partial: sum.partial + row.partialAlbumCount,
     unrated: sum.unrated + row.unratedAlbumCount,
   }), { albums: 0, rated: 0, partial: 0, unrated: 0 });
-  const largest = rows.reduce((max, row) => Math.max(max, row.albumCount), 1);
-  const scale = Math.max(5, Math.ceil(largest / 5) * 5);
   const best = rows.reduce<YearProgressStats | undefined>((winner, row) =>
     row.albumCount > 0 && (!winner || fullyRatedAlbumRatio(row) > fullyRatedAlbumRatio(winner)) ? row : winner, undefined);
   const completion = totals.albums ? totals.rated / totals.albums : 0;
@@ -62,14 +60,14 @@ export function YearLedger({ rows, genres, excludedGenres, onOpen, busy = false,
     {!selected ? <div className="ledger-empty" role="status">{error ? "Year progress is unavailable. Adjust the filters or refresh Statistics to retry." : busy ? "Updating year progress…" : "No albums with a known year match these filters."}</div> : <>
       <div className="ledger-body">
         <section className="ledger-table-panel" aria-label="Year ledger">
-          <div className="ledger-panel-title">Year ledger <small>Album counts · oldest first</small></div>
+          <div className="ledger-panel-title">Year ledger <small>Rating distribution · oldest first</small></div>
           <div className="ledger-table-scroll">
             <table className="ledger-table">
-              <thead><tr><th scope="col">Year</th><th scope="col">Progress <span className="ledger-axis">{Array.from({ length: 6 }, (_, i) => <span key={i}>{number(scale * i / 5)}</span>)}</span></th><th scope="col">Fully rated</th><th scope="col">Partial</th><th scope="col">Unrated</th><th scope="col">Complete %</th></tr></thead>
+              <thead><tr><th scope="col">Year</th><th scope="col">Progress <span className="ledger-axis">{[0, 20, 40, 60, 80, 100].map(value => <span key={value}>{value}%</span>)}</span></th><th scope="col">Fully rated</th><th scope="col">Partial</th><th scope="col">Unrated</th><th scope="col">Complete %</th></tr></thead>
               <tbody>{rows.map(row => <tr key={row.year} className={selected.year === row.year ? "selected" : ""}>
                 <th scope="row"><button type="button" aria-pressed={selected.year === row.year} onClick={() => setSelectedYear(row.year)} aria-label={`Select ${row.year}`}>{row.year}</button></th>
                 <td><div className="ledger-bar" aria-label={`${row.year}: ${row.albumCount} albums`}>
-                  {statuses.map(status => <button type="button" key={status} className={status} style={{ width: `${countFor(row, status) / scale * 100}%` }} disabled={busy || countFor(row, status) === 0} onClick={() => open(row, status)} title={`${row.year}: ${number(countFor(row, status))} ${labels[status].toLowerCase()} albums`} aria-label={`${row.year}: ${number(countFor(row, status))} ${labels[status].toLowerCase()} albums`} />)}
+                  {statuses.map(status => <button type="button" key={status} className={status} style={{ width: `${countFor(row, status) / Math.max(1, row.albumCount) * 100}%` }} disabled={busy || countFor(row, status) === 0} onClick={() => open(row, status)} title={`${row.year}: ${number(countFor(row, status))} ${labels[status].toLowerCase()} albums (${percent(countFor(row, status) / Math.max(1, row.albumCount))})`} aria-label={`${row.year}: ${number(countFor(row, status))} ${labels[status].toLowerCase()} albums`} />)}
                 </div></td>
                 {statuses.map(status => <td key={status}><button type="button" className={`ledger-count ${status}`} disabled={busy || countFor(row, status) === 0} onClick={() => open(row, status)} aria-label={`Browse ${row.year} ${labels[status].toLowerCase()} albums`}>{number(countFor(row, status))}</button></td>)}
                 <td>{percent(fullyRatedAlbumRatio(row))}</td>
