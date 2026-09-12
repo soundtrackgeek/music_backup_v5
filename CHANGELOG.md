@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.146.3] - 2026-09-12
+
+### Fixed
+- Stabilize the Year Ledger navigation regression on Windows CI with focused label queries, controlled genre-response loading checks, and a scoped ten-second integration-test budget. Verify every year from 1955 through 2021 in order, both range bounds, genre requests, and selected-year restoration after browsing.
+
 ## [0.146.2] - 2026-09-12
 
 ### Fixed
