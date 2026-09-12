@@ -65,3 +65,7 @@
 - In-app Browser life-event review: switched between five Birthdays and five Memorials, verified death-date wording, activated **Because You Played**, and confirmed the target received focus, scrolled into view, and flashed without console errors.
 
 final result: passed
+
+## Year Ledger — 2026-09-12
+See docs/design/year-ledger-qa.md for the current scoped comparison and verification boundaries.
+final result: passed

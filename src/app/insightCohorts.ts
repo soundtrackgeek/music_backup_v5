@@ -188,6 +188,34 @@ export function yearCohort(
   });
 }
 
+export type YearRatingStatus = "fully-rated" | "partial" | "unrated" | "remaining";
+
+export function yearRatingCohort(
+  row: YearProgressStats,
+  genres: string[],
+  excludedGenres: string[],
+  status: YearRatingStatus,
+) {
+  const result = yearCohort(row, genres, excludedGenres);
+  const counts = {
+    "fully-rated": row.ratedAlbumCount,
+    partial: row.partialAlbumCount,
+    unrated: row.unratedAlbumCount,
+    remaining: row.partialAlbumCount + row.unratedAlbumCount,
+  };
+  result.id += `:${status}`;
+  result.count = counts[status];
+  result.title = `${row.year} ${status === "fully-rated" ? "fully rated" : status} albums`;
+  result.description = `${counts[status].toLocaleString()} ${status} albums in the selected genre and album-year scope.`;
+  Object.assign(result.request.filters, status === "fully-rated"
+    ? { ratingCompletenessMin: 100 }
+    : status === "unrated"
+      ? { ratingCompletenessMax: 0 }
+      : { notFullyRated: true, ...(status === "partial" ? { ratingCompletenessMin: Number.EPSILON } : {}) });
+  result.playlistPrompt = `Build a varied playlist using only tracks from ${result.title}. ${result.description}`;
+  return result;
+}
+
 export function genreCohort(
   row: GenreProgressStats,
   yearFrom: number | null = null,

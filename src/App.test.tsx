@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -29,6 +29,30 @@ describe("App startup", () => {
 
     expect(await within(summary).findByText("1,130,882")).toBeVisible();
     expect(within(summary).getByText("76,789")).toBeVisible();
+  });
+
+  it("keeps every selected year and restores Year Ledger filters after browsing", async () => {
+    const actual = await vi.importActual<typeof import("./backend")>("./backend");
+    getStatisticsMock.mockImplementation(actual.getStatistics);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Statistics" }));
+    await user.click(screen.getByRole("tab", { name: "Rating progress" }));
+    const from = await screen.findByRole("spinbutton", { name: "Year progress year from" });
+    await waitFor(() => expect(from).not.toBeDisabled());
+    fireEvent.change(from, { target: { value: "1955" } });
+    fireEvent.blur(from);
+    expect(screen.getAllByRole("button", { name: /^Select \d/ })).toHaveLength(67);
+    fireEvent.change(screen.getByRole("textbox", { name: "Genres" }), { target: { value: "Synthpop, New Wave" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Select 1987" })).toBeVisible());
+    await user.click(screen.getByRole("button", { name: "Select 1987" }));
+    await user.click(screen.getByRole("button", { name: "Browse 1987 fully rated albums" }));
+    expect(await screen.findByRole("heading", { name: "Search" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Statistics" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Select 1987" })).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.getByRole("spinbutton", { name: "Year progress year from" })).toHaveValue(1955);
+    expect(screen.getByRole("textbox", { name: "Genres" })).toHaveValue("Synthpop, New Wave");
+    expect(screen.getAllByRole("button", { name: /^Select \d/ })).toHaveLength(67);
   });
 
   it("opens album, artist, and genre pages from Search table cells", async () => {

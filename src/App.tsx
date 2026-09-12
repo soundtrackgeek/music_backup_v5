@@ -1,3 +1,4 @@
+import { YearLedger } from "./components/YearLedger";
 import {
   Fragment,
   useCallback,
@@ -9,6 +10,8 @@ import {
 } from "react";
 import type {
   CSSProperties,
+  Dispatch,
+  SetStateAction,
   FormEvent,
   KeyboardEvent,
   MouseEvent,
@@ -368,8 +371,7 @@ import {
   type GenreProgressSort,
 } from "./app/genreProgress";
 import {
-  fullyRatedAlbumRatio,
-  selectYearProgressRows,
+  completeYearProgressRows,
   yearProgressExtent,
 } from "./app/yearProgress";
 import { clampBackupRetention, numberValue } from "./app/input";
@@ -7668,12 +7670,24 @@ function ArtistConstellation({
   );
 }
 
+type YearLedgerSelection = {
+  yearFrom: number | null;
+  yearTo: number | null;
+  includedGenres: string[];
+  excludedGenres: string[];
+  selectedYear: number | null;
+};
+
 function YearProgressExplorer({
   rows,
   genreOptions,
   onRequestGenreOptions,
   onSelect,
+  selection,
+  onSelectionChange,
 }: {
+  selection: YearLedgerSelection;
+  onSelectionChange: Dispatch<SetStateAction<YearLedgerSelection>>;
   rows: YearProgressStats[];
   genreOptions: string[];
   onRequestGenreOptions?: () => void;
@@ -7682,22 +7696,25 @@ function YearProgressExplorer({
   const extent = useMemo(() => yearProgressExtent(rows), [rows]);
   const minYear = extent?.min ?? 0;
   const maxYear = extent?.max ?? 0;
-  const [yearFrom, setYearFrom] = useState<number | null>(null);
-  const [yearTo, setYearTo] = useState<number | null>(null);
-  const [includedGenres, setIncludedGenres] = useState<string[]>([]);
-  const [excludedGenres, setExcludedGenres] = useState<string[]>([]);
+  const { yearFrom, yearTo, includedGenres, excludedGenres } = selection;
+  const setYearFrom = (yearFrom: number | null) => onSelectionChange(current => ({ ...current, yearFrom }));
+  const setYearTo = (yearTo: number | null) => onSelectionChange(current => ({ ...current, yearTo }));
+  const setIncludedGenres = (includedGenres: string[]) => onSelectionChange(current => ({ ...current, includedGenres }));
+  const setExcludedGenres = (excludedGenres: string[]) => onSelectionChange(current => ({ ...current, excludedGenres }));
+  const genreKey = JSON.stringify([includedGenres, excludedGenres]);
+  const [resolvedGenreKey, setResolvedGenreKey] = useState<string | null>(null);
   const [genreRows, setGenreRows] = useState<YearProgressStats[]>(rows);
   const [isGenreLoading, setIsGenreLoading] = useState(false);
   const [genreError, setGenreError] = useState<string | null>(null);
   const effectiveYearFrom = clampHeatmapYear(
     yearFrom ?? minYear,
-    minYear,
-    maxYear,
+    1,
+    9999,
   );
   const effectiveYearTo = clampHeatmapYear(
     yearTo ?? maxYear,
     effectiveYearFrom,
-    maxYear,
+    9999,
   );
   const decades = useMemo(
     () => (extent ? completionHeatmapDecades(minYear, maxYear) : []),
@@ -7709,19 +7726,19 @@ function YearProgressExplorer({
     }
     const matchingDecade = decades.find(
       (decade) =>
-        effectiveYearFrom === Math.max(minYear, decade) &&
-        effectiveYearTo === Math.min(maxYear, decade + 9),
+        effectiveYearFrom === decade &&
+        effectiveYearTo === decade + 9,
     );
     return matchingDecade == null ? "custom" : String(matchingDecade);
   }, [decades, effectiveYearFrom, effectiveYearTo, maxYear, minYear]);
   const visibleRows = useMemo(
     () =>
-      selectYearProgressRows(
-        genreRows,
+      completeYearProgressRows(
+        includedGenres.length || excludedGenres.length ? genreRows : rows,
         effectiveYearFrom,
         effectiveYearTo,
       ),
-    [effectiveYearFrom, effectiveYearTo, genreRows],
+    [effectiveYearFrom, effectiveYearTo, genreRows, rows, includedGenres, excludedGenres],
   );
   const hasGenreFilters =
     includedGenres.length > 0 || excludedGenres.length > 0;
@@ -7741,15 +7758,15 @@ function YearProgressExplorer({
       };
     }
 
+    setIsGenreLoading(true);
+    setGenreError(null);
     const timeoutId = window.setTimeout(() => {
-      setIsGenreLoading(true);
-      setGenreError(null);
       void getYearProgress({
         genres: includedGenres,
         excludedGenres,
       })
         .then((nextRows) => {
-          if (!cancelled) setGenreRows(nextRows);
+          if (!cancelled) { setGenreRows(nextRows); setResolvedGenreKey(genreKey); }
         })
         .catch((error) => {
           if (!cancelled) {
@@ -7769,102 +7786,44 @@ function YearProgressExplorer({
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [excludedGenres, hasGenreFilters, includedGenres, rows]);
+  }, [excludedGenres, hasGenreFilters, includedGenres, rows, genreKey]);
+
+  const isPending = !genreError && (isGenreLoading || (hasGenreFilters && resolvedGenreKey !== genreKey));
 
   function selectDecade(value: string) {
     if (value === "all") {
-      setYearFrom(null);
-      setYearTo(null);
+      onSelectionChange(current => ({ ...current, yearFrom: null, yearTo: null }));
       return;
     }
     if (value === "custom") return;
     const decade = Number(value);
-    setYearFrom(Math.max(minYear, decade));
-    setYearTo(Math.min(maxYear, decade + 9));
+    onSelectionChange(current => ({ ...current, yearFrom: decade, yearTo: decade + 9 }));
   }
 
   function resetFilters() {
-    setYearFrom(null);
-    setYearTo(null);
-    setIncludedGenres([]);
-    setExcludedGenres([]);
-  }
-
-  if (!extent) {
-    return (
-      <YearProgressTable
-        rows={[]}
-        genres={[]}
-        excludedGenres={[]}
-        onSelect={onSelect}
-      />
-    );
+    onSelectionChange({ yearFrom: null, yearTo: null, includedGenres: [], excludedGenres: [], selectedYear: null });
   }
 
   return (
     <div className="year-progress-explorer">
-      <div className="heatmap-controls year-progress-controls">
-        <div className="heatmap-filter-grid year-progress-filter-grid">
-          <SelectField
-            label="Jump to decade"
-            value={selectedDecade}
-            onChange={selectDecade}
-            options={[
-              ...(selectedDecade === "custom"
-                ? [
-                    {
-                      value: "custom",
-                      label: `${effectiveYearFrom}–${effectiveYearTo}`,
-                    },
-                  ]
-                : []),
-              { value: "all", label: "All years" },
-              ...decades.map((decade) => ({
-                value: String(decade),
-                label: `${decade}s`,
-              })),
-            ]}
-          />
-          <GenreListCriterion
-            label="Include genres"
-            values={includedGenres}
-            onChange={setIncludedGenres}
-            genreOptions={genreOptions}
-            onRequestOptions={onRequestGenreOptions}
-            placeholder="Synthpop, scores"
-          />
-          <GenreListCriterion
-            label="Exclude genres"
-            values={excludedGenres}
-            onChange={setExcludedGenres}
-            genreOptions={genreOptions}
-            onRequestOptions={onRequestGenreOptions}
-            placeholder="Comedy, TV"
-          />
-          <button
-            className="secondary-button heatmap-reset-button"
-            type="button"
-            disabled={!hasActiveFilters}
-            onClick={resetFilters}
-          >
-            <RotateCcw size={15} />
-            <span>Reset</span>
-          </button>
+      <div className="year-progress-controls ledger-controls">
+        <div className="ledger-filter-row">
+          <GenreListCriterion label="Genres" values={includedGenres} onChange={setIncludedGenres} genreOptions={genreOptions} onRequestOptions={onRequestGenreOptions} placeholder="Add genres…" />
+          <div className="ledger-year-inputs" aria-label="Album year range">
+            <label>From<input type="number" aria-label="Year progress year from" min={1} max={effectiveYearTo} key={`from-${effectiveYearFrom}`} defaultValue={extent ? effectiveYearFrom : ""} disabled={!extent} onBlur={event => { const value = clampHeatmapYear(Number(event.target.value), 1, effectiveYearTo); event.target.value = String(value); setYearFrom(value); }} onKeyDown={event => { if (event.key === "Enter") event.currentTarget.blur(); }} /></label>
+            <label>To<input type="number" aria-label="Year progress year to" min={effectiveYearFrom} max={9999} key={`to-${effectiveYearTo}`} defaultValue={extent ? effectiveYearTo : ""} disabled={!extent} onBlur={event => { const value = clampHeatmapYear(Number(event.target.value), effectiveYearFrom, 9999); event.target.value = String(value); setYearTo(value); }} onKeyDown={event => { if (event.key === "Enter") event.currentTarget.blur(); }} /></label>
+          </div>
+          <button className="secondary-button" type="button" disabled={!hasActiveFilters} onClick={resetFilters}><RotateCcw size={15} />Reset</button>
         </div>
-        <YearRangeSlider
-          minYear={minYear}
-          maxYear={maxYear}
-          yearFrom={effectiveYearFrom}
-          yearTo={effectiveYearTo}
-          scopeLabel="Year progress"
-          onChange={(range) => {
-            setYearFrom(range.from);
-            setYearTo(range.to);
-          }}
-        />
+        <div className="ledger-secondary-filters">
+          <div className="ledger-decades" aria-label="Decade shortcuts">
+            {["all", ...decades.map(String)].map(value => <button type="button" key={value} aria-pressed={selectedDecade === value} onClick={() => selectDecade(value)}>{value === "all" ? "All years" : `${value}s`}</button>)}
+          </div>
+          <details className="ledger-exclusions"><summary>Exclude genres{excludedGenres.length ? ` (${excludedGenres.length})` : ""}</summary><GenreListCriterion label="Exclude genres" values={excludedGenres} onChange={setExcludedGenres} genreOptions={genreOptions} onRequestOptions={onRequestGenreOptions} placeholder="Comedy, TV" /></details>
+        </div>
         <div className="heatmap-selection-summary" aria-live="polite">
           <span>
-            {isGenreLoading
+            {isPending
               ? "Updating genre totals…"
               : `Showing ${formatNumber(visibleRows.length)} years · oldest first`}
           </span>
@@ -7880,73 +7839,19 @@ function YearProgressExplorer({
           </p>
         ) : null}
       </div>
-      <YearProgressTable
-        rows={visibleRows}
+      <YearLedger
+        selectedYear={selection.selectedYear}
+        onSelectedYearChange={selectedYear => onSelectionChange(current => ({ ...current, selectedYear }))}
+        busy={isPending}
+        error={genreError}
+        rows={!extent || isPending || genreError ? [] : visibleRows}
         genres={includedGenres}
         excludedGenres={excludedGenres}
-        onSelect={onSelect}
+        onOpen={onSelect}
       />
     </div>
   );
 }
-
-function YearProgressTable({
-  rows,
-  genres,
-  excludedGenres,
-  onSelect,
-}: {
-  rows: YearProgressStats[];
-  genres: string[];
-  excludedGenres: string[];
-  onSelect: (cohort: InsightCohort) => void;
-}) {
-  if (rows.length === 0) {
-    return (
-      <div className="empty-state">
-        <Activity size={20} />
-        <span>No year statistics yet.</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="stats-table year-stats-table" role="table">
-      <div className="stats-table-head" role="row">
-        <span role="columnheader">Year</span>
-        <span role="columnheader">Albums</span>
-        <span role="columnheader">Rated</span>
-        <span role="columnheader">Fully rated %</span>
-        <span role="columnheader">Partial</span>
-        <span role="columnheader">Hours</span>
-        <span role="columnheader">Score</span>
-      </div>
-      {rows.map((row) => (
-        <div
-          className="stats-table-row actionable-cohort"
-          role="row"
-          tabIndex={0}
-          key={row.year}
-          onClick={() => onSelect(yearCohort(row, genres, excludedGenres))}
-          onKeyDown={(event) =>
-            discoveryKeyOpen(event, () =>
-              onSelect(yearCohort(row, genres, excludedGenres)),
-            )
-          }
-        >
-          <span role="cell">{row.year}</span>
-          <span role="cell">{formatNumber(row.albumCount)}</span>
-          <span role="cell">{formatNumber(row.ratedAlbumCount)}</span>
-          <span role="cell">{formatPercent(fullyRatedAlbumRatio(row))}</span>
-          <span role="cell">{formatNumber(row.partialAlbumCount)}</span>
-          <span role="cell">{formatHours(row.totalSeconds)}</span>
-          <span role="cell">{formatAverage(row.averageAlbumScore, 1)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function GenreProgressExplorer({
   rows,
   yearRows,
@@ -8350,6 +8255,8 @@ export default function App() {
     useState<SavedPlaylist | null>(null);
   const [savedDiscoveryToOpen, setSavedDiscoveryToOpen] =
     useState<SavedExternalDiscovery | null>(null);
+  const [yearLedgerSelection, setYearLedgerSelection] = useState<YearLedgerSelection>({ yearFrom: null, yearTo: null, includedGenres: [], excludedGenres: [], selectedYear: null });
+  const [statisticsView, setStatisticsView] = useState<"overview" | "rating">("overview");
   const [statisticsCohort, setStatisticsCohort] =
     useState<InsightCohort | null>(null);
   const [discoveryCohort, setDiscoveryCohort] =
@@ -13841,7 +13748,7 @@ export default function App() {
     hasSelectedArtist: selectedArtist != null,
     hasSelectedGenre: selectedGenre != null,
     hasSelectedTool: selectedTool != null,
-    hasStatistics: statistics != null,
+    hasStatistics: statistics != null && statisticsView === "overview",
   });
   const {
     isDrawerLayout: isDetailsDrawerLayout,
@@ -17667,7 +17574,7 @@ export default function App() {
             </section>
           </section>
         ) : activeSection === "Statistics" ? (
-          <section className="workspace statistics-workspace">
+          <section className={`workspace statistics-workspace ${statisticsView === "rating" ? "rating-ledger-active" : ""}`}>
             <header className="topbar">
               <div>
                 <h1>Statistics</h1>
@@ -17676,6 +17583,10 @@ export default function App() {
                   shape, duration, and outlier signals.
                 </p>
               </div>
+            <div className="statistics-view-tabs" role="tablist" aria-label="Statistics views">
+              <button type="button" role="tab" id="statistics-overview-tab" aria-controls="statistics-overview" aria-selected={statisticsView === "overview"} onClick={() => setStatisticsView("overview")}><BarChart3 size={16} />Overview</button>
+              <button type="button" role="tab" id="statistics-rating-tab" aria-controls="statistics-rating" aria-selected={statisticsView === "rating"} onClick={() => setStatisticsView("rating")}><Activity size={16} />Rating progress</button>
+            </div>
               <div className="topbar-actions">
                 <button
                   className="icon-button"
@@ -17688,6 +17599,12 @@ export default function App() {
               </div>
             </header>
 
+            <section id="statistics-rating" role="tabpanel" aria-labelledby="statistics-rating-tab" hidden={statisticsView !== "rating"} className="rating-progress-page">
+              <header className="rating-progress-heading"><h2>Rating progress</h2><p>Album year · selected genres combined</p></header>
+              {statsError ? <p className="error-message" role="alert">{statsError}</p> : null}
+              <YearProgressExplorer selection={yearLedgerSelection} onSelectionChange={setYearLedgerSelection} rows={statistics?.yearProgress ?? []} genreOptions={genreSuggestionOptions} onRequestGenreOptions={requestGenreSuggestionRefresh} onSelect={openInsightInSearch} />
+            </section>
+            <div id="statistics-overview" role="tabpanel" aria-labelledby="statistics-overview-tab" hidden={statisticsView !== "overview"}>
             <section className="metric-grid" aria-label="Statistics summary">
               <Metric
                 label="Tracks"
@@ -18169,22 +18086,7 @@ export default function App() {
               </section>
 
               <section className="stats-panel wide">
-                <div className="panel-heading compact">
-                  <div>
-                    <h2>Year progress</h2>
-                    <p>
-                      {formatNumber(statistics?.overview.yearCount)} years with
-                      albums
-                    </p>
-                  </div>
-                  <Clock3 size={18} />
-                </div>
-                <YearProgressExplorer
-                  rows={statistics?.yearProgress ?? []}
-                  genreOptions={genreSuggestionOptions}
-                  onRequestGenreOptions={requestGenreSuggestionRefresh}
-                  onSelect={setStatisticsCohort}
-                />
+                <div className="panel-heading compact"><div><h2>Year progress</h2><p>Explore fully rated, partial, and unrated albums by album year and genre.</p></div><button type="button" className="secondary-button" onClick={() => setStatisticsView("rating")}>Open Year Ledger<ChevronRight size={16} /></button></div>
               </section>
 
               <section className="stats-panel wide">
@@ -18328,6 +18230,7 @@ export default function App() {
                 />
               </section>
             </section>
+            </div>
           </section>
         ) : activeSection === "Settings" ? (
           <SettingsWorkspace

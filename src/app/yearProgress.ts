@@ -29,3 +29,17 @@ export function selectYearProgressRows(
 export function fullyRatedAlbumRatio(row: YearProgressStats) {
   return row.albumCount > 0 ? row.ratedAlbumCount / row.albumCount : 0;
 }
+
+/** Retain empty years so genre filters never create gaps in the chronology. */
+export function completeYearProgressRows(rows: YearProgressStats[], from: number, to: number): YearProgressStats[] {
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from > to) return [];
+  const byYear = new Map(rows.map(row => [row.year, row]));
+  return Array.from({ length: to - from + 1 }, (_, index) => {
+    const year = from + index;
+    return byYear.get(year) ?? {
+      year, albumCount: 0, ratedAlbumCount: 0, partialAlbumCount: 0,
+      unratedAlbumCount: 0, trackCount: 0, totalSeconds: 0,
+      lovedTracks: 0, averageAlbumScore: null,
+    };
+  });
+}

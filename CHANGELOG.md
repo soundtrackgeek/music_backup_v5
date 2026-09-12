@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.146.0] - 2026-09-12
+
+### Added
+- Statistics Rating progress tab with the Year Ledger: combined genre filtering, exact album-year ranges and decade shortcuts, shared-scale progress bars, completion totals, and a selected-year inspector with direct album browsing. Every year in the selected range remains visible, including zero-count years; long ranges scroll without dropping years. Filters and the selected year survive navigation to Search and back.
+
 ## [0.145.25] - 2026-09-11
 
 ### Fixed
