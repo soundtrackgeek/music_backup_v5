@@ -34,25 +34,27 @@ describe("App startup", () => {
   it("keeps every selected year and restores Year Ledger filters after browsing", async () => {
     const actual = await vi.importActual<typeof import("./backend")>("./backend");
     getStatisticsMock.mockImplementation(actual.getStatistics);
-    const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Statistics" }));
-    await user.click(screen.getByRole("tab", { name: "Rating progress" }));
-    const from = await screen.findByRole("spinbutton", { name: "Year progress year from" });
-    await waitFor(() => expect(from).not.toBeDisabled());
+    const navigation = within(screen.getByRole("complementary", { name: "Main navigation" }));
+    fireEvent.click(navigation.getByRole("button", { name: "Statistics" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Rating progress" }));
+    const ledger = () => within(screen.getByRole("tabpanel", { name: "Rating progress" }));
+    // Loading replaces this keyed input; resolve the current node on every retry.
+    await waitFor(() => expect(ledger().getByRole("spinbutton", { name: "Year progress year from" })).not.toBeDisabled());
+    const from = ledger().getByRole("spinbutton", { name: "Year progress year from" });
     fireEvent.change(from, { target: { value: "1955" } });
     fireEvent.blur(from);
-    expect(screen.getAllByRole("button", { name: /^Select \d/ })).toHaveLength(67);
-    fireEvent.change(screen.getByRole("textbox", { name: "Genres" }), { target: { value: "Synthpop, New Wave" } });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Select 1987" })).toBeVisible());
-    await user.click(screen.getByRole("button", { name: "Select 1987" }));
-    await user.click(screen.getByRole("button", { name: "Browse 1987 fully rated albums" }));
+    expect(ledger().getAllByRole("button", { name: /^Select \d/ })).toHaveLength(67);
+    fireEvent.change(ledger().getByRole("textbox", { name: "Genres" }), { target: { value: "Synthpop, New Wave" } });
+    const year = await ledger().findByRole("button", { name: "Select 1987" });
+    fireEvent.click(year);
+    fireEvent.click(ledger().getByRole("button", { name: "Browse 1987 fully rated albums" }));
     expect(await screen.findByRole("heading", { name: "Search" })).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Statistics" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Select 1987" })).toHaveAttribute("aria-pressed", "true"));
-    expect(screen.getByRole("spinbutton", { name: "Year progress year from" })).toHaveValue(1955);
-    expect(screen.getByRole("textbox", { name: "Genres" })).toHaveValue("Synthpop, New Wave");
-    expect(screen.getAllByRole("button", { name: /^Select \d/ })).toHaveLength(67);
+    fireEvent.click(navigation.getByRole("button", { name: "Statistics" }));
+    expect(await ledger().findByRole("button", { name: "Select 1987" })).toHaveAttribute("aria-pressed", "true");
+    expect(ledger().getByRole("spinbutton", { name: "Year progress year from" })).toHaveValue(1955);
+    expect(ledger().getByRole("textbox", { name: "Genres" })).toHaveValue("Synthpop, New Wave");
+    expect(ledger().getAllByRole("button", { name: /^Select \d/ })).toHaveLength(67);
   });
 
   it("opens album, artist, and genre pages from Search table cells", async () => {

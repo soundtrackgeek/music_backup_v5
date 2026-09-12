@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.146.1] - 2026-09-12
+
+### Fixed
+- Fix the Year Ledger navigation regression test holding a replaced loading input; scope queries to the active view and dispatch direct interaction events to reduce CI overhead. Preserve the five-second timeout and all range/filter restoration assertions.
+
 ## [0.146.0] - 2026-09-12
 
 ### Added
