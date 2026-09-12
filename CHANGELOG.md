@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.147.0] - 2026-09-12
+
+### Added
+- Windows PowerShell script to pull the main PC's Music Library database over Tailscale/SMB, with configurable paths, copy progress, source/local file locks, pending-journal protection, temporary-file staging, and an atomic replacement that retains the previous local database as a dated backup. Document SMB authentication and add disposable SQLite regression checks.
+
 ## [0.146.4] - 2026-09-12
 
 ### Fixed

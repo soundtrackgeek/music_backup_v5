@@ -4,6 +4,32 @@ Normalize repeated matching MP3 release years (including year/date pairs) before
 
 Title corrections made in Aurora are saved and verified in the MP3 files themselves. Music Library 0.145.20 or later imports these titles and subsequent ratings automatically, including title search updates. Previously exhausted sync entries need a retry after updating Music Library.
 
+## Copy the main PC database to another Windows PC
+
+Close **Music Library and Aurora on both PCs**, including tray apps and companion bridge processes, and connect both PCs to Tailscale. On the receiving PC, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\sync-library-from-main-pc.ps1
+```
+
+The default source is `\\jorncomputer.tail5ef358.ts.net\C$\Users\jtill\AppData\Roaming\com.local.musiclibrary\music-library.sqlite3`. This assumes the main PC stores its catalog under the `jtill` profile and exposes its standard administrative `C$` share. The destination is `%APPDATA%\com.local.musiclibrary\music-library.sqlite3`, which is `C:\Users\jtill\AppData\Roaming\com.local.musiclibrary\music-library.sqlite3` for jtill. The main PC remains the source of truth: the script only reads it and refuses to run on JornComputer itself.
+
+SMB requires permission to the share in addition to Tailscale connectivity. If access is denied, authenticate to the main PC from File Explorer or use the following command, which prompts for the main PC account password without putting it in the command or script:
+
+```powershell
+net use \\jorncomputer.tail5ef358.ts.net\C$ /user:Jorncomputer\jtill *
+```
+
+`C$` requires an account allowed to access administrative shares. If the Mac script uses a different existing share, provide its Windows UNC path instead; `Jorncomputer`, `100.105.78.85`, and `jorncomputer.tail5ef358.ts.net` can be used as the server name. For example, replacing `YOUR_SHARE` with the actual share:
+
+```powershell
+.\scripts\sync-library-from-main-pc.ps1 -SourcePath '\\100.105.78.85\YOUR_SHARE\music-library.sqlite3'
+```
+
+The script locks the source against writes, downloads to a temporary local file with progress, checks the SQLite header and copied byte count, and atomically replaces the destination. The previous local database is retained beside it as `music-library.before-sync-<timestamp>-<id>.sqlite3`. Allow room for the incoming database alongside the old one; each successful replacement retains another backup. It stops if either database is busy or has a nonempty SQLite WAL/rollback journal. In that case, open and cleanly exit Music Library on the affected PC before retrying; do not manually delete pending journals. Empty local journals and stale shared-memory files are removed only after copying succeeds. A failed download leaves the existing database in place. These transfer checks do not perform a full SQLite integrity scan.
+
+Use `-WhatIf` to preview the source/destination without connecting or copying, or `-DestinationPath 'C:\other\music-library.sqlite3'` to select another local destination. Windows PowerShell 5.1 or newer is sufficient; no Python or SQLite installation is needed to run the copy. Run the disposable-database regression checks with `npm run test:database-sync` (Python is needed only for these tests).
+
 ## macOS installers and in-app updates (0.145.19)
 
 Every version bump on `master` builds Windows installers and a **universal macOS DMG** (Apple Silicon and Intel). Release publication waits for both platforms, Apple signature/notarization checks, updater signatures, and a combined `latest.json`. The Mac updater uses the signed `.app.tar.gz` archive; the DMG is for first installation. Download the DMG from GitHub Releases, open it, and drag the app into Applications before launching it.
