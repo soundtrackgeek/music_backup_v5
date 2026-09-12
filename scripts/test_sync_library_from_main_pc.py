@@ -136,6 +136,13 @@ class AuthenticationTests(unittest.TestCase):
             $script:realConnectSourceShare = ${function:Connect-SourceShare}
             $script:opens = 0
             $script:signIns = 0
+            $script:connections = 0
+            $script:connectionReady = $false
+            function Connect-SavedSmbShare {
+                $script:connections++
+                $script:connectionReady = $true
+                return [pscustomobject]@{Success = $true; Message = 'Connected'}
+            }
             function Connect-SourceShare {
                 param($ShareRoot, $Account)
                 if ($ShareRoot -cne '\\test-server\Library' -or $Account -cne 'MAIN\reader') {
@@ -245,13 +252,45 @@ class AuthenticationTests(unittest.TestCase):
             }
             function Test-SavedSmbCredential { return $script:storedCredential }
             function Open-DatabaseFile {
-                if (-not $script:storedCredential) { throw [ComponentModel.Win32Exception]::new(1326) }
+                if (-not $script:storedCredential -or -not $script:connectionReady) {
+                    throw [ComponentModel.Win32Exception]::new(1326)
+                }
                 return 'opened'
             }
             $first = Open-SourceDatabase '\\test-server\Library\db' $UserName
+            $script:connectionReady = $false
             $second = Open-SourceDatabase '\\test-server\Library\db' $UserName -NoPrompt
-            if ($first -ne 'opened' -or $second -ne 'opened' -or $script:signIns -ne 1) {
-                throw 'Saved authentication was not reused without a second prompt'
+            if ($first -ne 'opened' -or $second -ne 'opened' -or $script:signIns -ne 1 -or $script:connections -ne 2) {
+                throw 'SMB must connect after saving and again on later runs without a second prompt'
+            }
+        """)
+
+    def test_saved_credential_does_not_imply_successful_network_login(self):
+        self.run_powershell(r"""
+            Set-Item Function:Connect-SourceShare $script:realConnectSourceShare
+            function Start-Process { return [pscustomobject]@{ExitCode = 0} }
+            function Test-SavedSmbCredential { return $true }
+            function Connect-SavedSmbShare {
+                return [pscustomobject]@{Success = $false; Message = 'System error 1326'}
+            }
+            $failed = $false
+            try { Connect-SourceShare '\\test-server\Library' 'MAIN\reader' }
+            catch {
+                if ($_.Exception.Message -notlike '*could not sign into*System error 1326*') { throw }
+                $failed = $true
+            }
+            if (-not $failed) { throw 'Saved credential was mistaken for successful network authentication' }
+        """)
+
+    def test_share_permission_failure_after_connect_does_not_prompt_again(self):
+        self.run_powershell(r"""
+            function Test-SavedSmbCredential { return $true }
+            function Open-DatabaseFile { throw [ComponentModel.Win32Exception]::new(5) }
+            $failed = $false
+            try { Open-SourceDatabase '\\test-server\Library\db' 'MAIN\reader' }
+            catch { $failed = $true }
+            if (-not $failed -or $script:connections -ne 1 -or $script:signIns -ne 0) {
+                throw 'A file permission failure after successful login must not request another password'
             }
         """)
 

@@ -66,6 +66,38 @@ function Test-SavedSmbCredential {
     return ($LASTEXITCODE -eq 0 -and $listing -match $accountPattern)
 }
 
+function Connect-SavedSmbShare {
+    param([string] $ShareRoot)
+    # Establish an SMB session explicitly. Saving with cmdkey alone does not
+    # replace the identity used by an earlier failed FileStream connection.
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = "$env:SystemRoot\System32\net.exe"
+    $startInfo.Arguments = 'use "{0}"' -f $ShareRoot
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardInput = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $connectionProcess = [Diagnostics.Process]::Start($startInfo)
+    try {
+        # This step may use saved credentials, but must never ask for another
+        # password or expose one in process arguments. cmdkey handles prompting.
+        $connectionProcess.StandardInput.Close()
+        $standardOutput = $connectionProcess.StandardOutput.ReadToEndAsync()
+        $standardError = $connectionProcess.StandardError.ReadToEndAsync()
+        if (-not $connectionProcess.WaitForExit(15000)) {
+            $connectionProcess.Kill()
+            $connectionProcess.WaitForExit()
+            return [pscustomobject]@{Success = $false; Message = 'SMB connection timed out. Check that Tailscale and the main PC are online.'}
+        }
+        return [pscustomobject]@{
+            Success = ($connectionProcess.ExitCode -eq 0)
+            Message = ($standardOutput.Result + $standardError.Result).Trim()
+        }
+    }
+    finally { $connectionProcess.Dispose() }
+}
+
 function Connect-SourceShare {
     param([string] $ShareRoot, [string] $Account)
     if ($ShareRoot -notmatch '^\\\\([^\\]+)\\[^\\]+$') {
@@ -84,20 +116,35 @@ function Connect-SourceShare {
     if ($signIn.ExitCode -ne 0 -or -not (Test-SavedSmbCredential $serverName $Account)) {
         throw 'Windows could not save the SMB credential. Check the Windows message above. The local database has not been changed.'
     }
-    Write-Host "Windows has a credential entry for $Account on $serverName. Checking access to the database..."
+    Write-Host "Windows has a credential entry for $Account on $serverName. Connecting to the SMB share..."
+    $connection = Connect-SavedSmbShare $ShareRoot
+    if (-not $connection.Success) {
+        throw "Windows saved the credential but could not sign into '$ShareRoot'. $($connection.Message) The local database has not been changed."
+    }
 }
 
 function Open-SourceDatabase {
     param([string] $Path, [string] $Account, [switch] $NoPrompt)
+    $shareRoot = $null
+    $connected = $false
+    if ($Path -match '^\\\\([^\\]+)\\[^\\]+') {
+        $shareRoot = $Matches[0]
+        $serverName = $Matches[1]
+        if (Test-SavedSmbCredential $serverName $Account) {
+            Write-Host "Connecting to $shareRoot with the saved Windows credential..."
+            $connection = Connect-SavedSmbShare $shareRoot
+            $connected = $connection.Success
+        }
+    }
     try {
         return Open-DatabaseFile $Path Read Read
     }
     catch {
         $code = Get-WindowsErrorCode $_.Exception
-        if ($NoPrompt -or $code -notin 5, 86, 1326 -or $Path -notmatch '^\\\\[^\\]+\\[^\\]+') {
+        if ($NoPrompt -or $connected -or $code -notin 5, 86, 1326 -or -not $shareRoot) {
             throw
         }
-        Connect-SourceShare $Matches[0] $Account
+        Connect-SourceShare $shareRoot $Account
         # Only one sign-in attempt. A second failure retains its precise diagnosis.
         return Open-DatabaseFile $Path Read Read
     }

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.147.4] - 2026-09-12
+
+### Fixed
+- Explicitly establish the SMB session using the saved Windows credential before opening the remote database, both on later runs and immediately after saving a password. Distinguish saved credentials from successful network sign-in, and retain file-permission errors after a successful connection without asking for another password.
+
 ## [0.147.3] - 2026-09-12
 
 ### Fixed
