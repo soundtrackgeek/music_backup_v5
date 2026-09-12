@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -97,7 +97,8 @@ describe("MusicResearchPanel", () => {
     expect(screen.getByText("album · Def Leppard · 1999")).toBeInTheDocument();
 
     const textbox = screen.getByRole("textbox");
-    await user.type(textbox, "Why did the band revisit this sound?");
+    await user.click(textbox);
+    await user.paste("Why did the band revisit this sound?");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(backend.researchMusic).toHaveBeenNthCalledWith(1, {
@@ -105,7 +106,8 @@ describe("MusicResearchPanel", () => {
       context: albumContext,
       conversation: [],
     });
-    expect(await screen.findByText(answer.answer)).toBeInTheDocument();
+    // Suspense may replace the fallback node between discovery and assertion.
+    await waitFor(() => expect(screen.getByText(answer.answer)).toBeInTheDocument());
     expect(screen.getByText("Web researched")).toBeInTheDocument();
     expect(screen.getByText("13 local items")).toBeInTheDocument();
     expect(screen.getByText(/620 in · 100 cached · 180 out/)).toBeInTheDocument();
@@ -124,7 +126,8 @@ describe("MusicResearchPanel", () => {
       },
     });
 
-    await user.type(screen.getByRole("textbox"), "What should I compare it with?");
+    await user.click(screen.getByRole("textbox"));
+    await user.paste("What should I compare it with?");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(backend.researchMusic).toHaveBeenNthCalledWith(2, {

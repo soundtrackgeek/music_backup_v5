@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.146.2] - 2026-09-12
+
+### Fixed
+- Stabilize the research-panel conversation test across lazy Markdown loading by checking the current answer node during retries, and paste complete prompts instead of simulating unrelated per-character input. Keep existing assertions and timeouts.
+
 ## [0.146.1] - 2026-09-12
 
 ### Fixed
