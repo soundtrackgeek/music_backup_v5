@@ -1,0 +1,62 @@
+.result-table.resizable-table > .result-table-head,
+.result-table.resizable-table > .result-table-row {
+  grid-template-columns: var(--result-table-columns) !important;
+  min-width: var(--result-table-min-width) !important;
+}
+
+.result-table.resizable-table > .result-table-head > [role="columnheader"] {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-right: 12px;
+  overflow: visible;
+}
+
+.result-table.resizable-table > .result-table-row > [role="cell"] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.column-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -4px;
+  z-index: 2;
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.column-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 4px;
+  width: 1px;
+  background: currentColor;
+  opacity: 0.25;
+}
+
+.column-resize-handle:hover::after,
+.column-resize-handle:focus-visible::after,
+.column-resize-handle.active::after {
+  width: 2px;
+  opacity: 1;
+}
+
+.column-resize-handle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+body:has(.resizable-table.is-resizing),
+body:has(.resizable-table.is-resizing) * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}

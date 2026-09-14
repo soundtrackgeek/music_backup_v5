@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.148.0] - 2026-09-14
+
+### Added
+- Draggable column dividers in Search, Charts, Albums, Artists, and Genres tables, including their album/track detail tables. Save widths per table and column on this device, preserve neighboring widths and sorting during resizing, and support horizontal scrolling, double-click reset, keyboard resizing, and drag cancellation.
+
+### Fixed
+- Align chart columns with the visible fields instead of reserving unused grid columns, including track charts and optional chart columns.
+
 ## [0.147.5] - 2026-09-12
 
 ### Changed

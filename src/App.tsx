@@ -1,3 +1,4 @@
+import { ResizableTable, ResizableColumnHeader } from "./components/ResizableTable";
 import { YearLedger } from "./components/YearLedger";
 import {
   Fragment,
@@ -2109,8 +2110,9 @@ function SortableColumnHeader({
     isActive && sort.direction === "asc" ? "descending" : "ascending";
 
   return (
-    <span
-      role="columnheader"
+    <ResizableColumnHeader
+      columnId={field}
+      label={label}
       aria-sort={
         isActive
           ? sort.direction === "asc"
@@ -2128,7 +2130,7 @@ function SortableColumnHeader({
         <span>{label}</span>
         <Icon size={13} strokeWidth={2.2} aria-hidden="true" />
       </button>
-    </span>
+    </ResizableColumnHeader>
   );
 }
 
@@ -2188,70 +2190,50 @@ function ResultTable({
     response.view === "tracks" && visibleColumnSet.has("norsktoppen");
   const showNorsktoppenDebutColumn =
     response.view === "tracks" && visibleColumnSet.has("norsktoppenDebut");
-  const albumTableColumns = [
-    "minmax(220px, 2fr)",
-    "minmax(140px, 1.35fr)",
-    "minmax(96px, 0.9fr)",
-    "64px",
-    "minmax(104px, 1fr)",
-    ...(showBillboardColumn ? ["82px"] : []),
-    ...(showDebutColumn ? ["minmax(104px, 0.9fr)"] : []),
-    ...(showVgListaColumn ? ["88px"] : []),
-    ...(showVgListaDebutColumn ? ["minmax(132px, 1fr)"] : []),
-    ...(showOfficialUkColumn ? ["88px"] : []),
-    ...(showOfficialUkDebutColumn ? ["minmax(132px, 1fr)"] : []),
-    ...(showQualityColumn ? ["minmax(126px, 1fr)"] : []),
-    "64px",
-    "84px",
-    "72px",
-  ].join(" ");
-  const trackTableColumns = [
-    "minmax(190px, 2fr)",
-    "minmax(210px, 1.5fr)",
-    "minmax(132px, 1.1fr)",
-    "minmax(96px, 0.8fr)",
-    "64px",
-    ...(showBillboardColumn ? ["96px"] : []),
-    ...(showDebutColumn ? ["minmax(104px, 0.9fr)"] : []),
-    ...(showBillboardSingleColumn ? ["96px"] : []),
-    ...(showSingleDebutColumn ? ["minmax(132px, 1fr)"] : []),
-    ...(showVgListaColumn ? ["88px"] : []),
-    ...(showVgListaDebutColumn ? ["minmax(132px, 1fr)"] : []),
-    ...(showOfficialUkColumn ? ["88px"] : []),
-    ...(showOfficialUkDebutColumn ? ["minmax(132px, 1fr)"] : []),
-    ...(showTiISkuddetColumn ? ["104px"] : []),
-    ...(showTiISkuddetDebutColumn ? ["minmax(144px, 1fr)"] : []),
-    ...(showNorsktoppenColumn ? ["104px"] : []),
-    ...(showNorsktoppenDebutColumn ? ["minmax(144px, 1fr)"] : []),
-    ...(showQualityColumn ? ["minmax(118px, 0.9fr)"] : []),
-    "64px",
-    "minmax(140px, 1.1fr)",
-  ].join(" ");
-  const optionalTableWidth =
-    (showBillboardColumn ? 96 : 0) +
-    (showDebutColumn ? 104 : 0) +
-    (showBillboardSingleColumn ? 96 : 0) +
-    (showSingleDebutColumn ? 132 : 0) +
-    (showVgListaColumn ? 88 : 0) +
-    (showVgListaDebutColumn ? 132 : 0) +
-    (showOfficialUkColumn ? 88 : 0) +
-    (showOfficialUkDebutColumn ? 132 : 0) +
-    (showTiISkuddetColumn ? 104 : 0) +
-    (showTiISkuddetDebutColumn ? 144 : 0) +
-    (showNorsktoppenColumn ? 104 : 0) +
-    (showNorsktoppenDebutColumn ? 144 : 0) +
-    (showQualityColumn ? 126 : 0);
-
+  const albumTableColumns = {
+    album: "minmax(220px, 2fr)",
+    artist: "minmax(140px, 1.35fr)",
+    originCountry: "minmax(96px, 0.9fr)",
+    year: "64px",
+    genre: "minmax(104px, 1fr)",
+    ...(showBillboardColumn ? { billboardRank: "82px" } : {}),
+    ...(showDebutColumn ? { billboardDebut: "minmax(104px, 0.9fr)" } : {}),
+    ...(showVgListaColumn ? { vgListaRank: "88px" } : {}),
+    ...(showVgListaDebutColumn ? { vgListaDebut: "minmax(132px, 1fr)" } : {}),
+    ...(showOfficialUkColumn ? { officialUkRank: "88px" } : {}),
+    ...(showOfficialUkDebutColumn ? { officialUkDebut: "minmax(132px, 1fr)" } : {}),
+    ...(showQualityColumn ? { bitrate: "minmax(126px, 1fr)" } : {}),
+    trackCount: "64px",
+    ratingCompleteness: "84px",
+    albumScore: "72px",
+  };
+  const trackTableColumns = {
+    title: "minmax(190px, 2fr)",
+    album: "minmax(210px, 1.5fr)",
+    displayArtist: "minmax(132px, 1.1fr)",
+    originCountry: "minmax(96px, 0.8fr)",
+    year: "64px",
+    ...(showBillboardColumn ? { billboardRank: "96px" } : {}),
+    ...(showDebutColumn ? { billboardDebut: "minmax(104px, 0.9fr)" } : {}),
+    ...(showBillboardSingleColumn ? { billboardSingleRank: "96px" } : {}),
+    ...(showSingleDebutColumn ? { billboardSingleDebut: "minmax(132px, 1fr)" } : {}),
+    ...(showVgListaColumn ? { vgListaRank: "88px" } : {}),
+    ...(showVgListaDebutColumn ? { vgListaDebut: "minmax(132px, 1fr)" } : {}),
+    ...(showOfficialUkColumn ? { officialUkRank: "88px" } : {}),
+    ...(showOfficialUkDebutColumn ? { officialUkDebut: "minmax(132px, 1fr)" } : {}),
+    ...(showTiISkuddetColumn ? { tiISkuddetRank: "104px" } : {}),
+    ...(showTiISkuddetDebutColumn ? { tiISkuddetDebut: "minmax(144px, 1fr)" } : {}),
+    ...(showNorsktoppenColumn ? { norsktoppenRank: "104px" } : {}),
+    ...(showNorsktoppenDebutColumn ? { norsktoppenDebut: "minmax(144px, 1fr)" } : {}),
+    ...(showQualityColumn ? { bitrate: "minmax(118px, 0.9fr)" } : {}),
+    trackRating: "64px",
+    File: "minmax(140px, 1.1fr)",
+  };
   return response.view === "tracks" ? (
-    <div
+    <ResizableTable
+      tableId="search-tracks"
+      columns={trackTableColumns}
       className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showBillboardSingleColumn ? " with-billboard-single" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}${showTiISkuddetColumn ? " with-ti-i-skuddet" : ""}${showTiISkuddetDebutColumn ? " with-ti-i-skuddet-debut" : ""}${showNorsktoppenColumn ? " with-norsktoppen" : ""}${showNorsktoppenDebutColumn ? " with-norsktoppen-debut" : ""}`}
-      role="table"
-      style={
-        {
-          "--result-table-columns": trackTableColumns,
-          "--result-table-min-width": `${968 + optionalTableWidth}px`,
-        } as CSSProperties
-      }
     >
       <div className="result-table-head" role="row">
         <SortableColumnHeader
@@ -2394,7 +2376,7 @@ function ResultTable({
           sort={sort}
           onSort={onSort}
         />
-        <span role="columnheader">File</span>
+        <ResizableColumnHeader columnId="File" label="File" />
       </div>
       {response.rows.map((row) => {
         const singleLabel = formatBillboardSingleRank(row);
@@ -2503,17 +2485,12 @@ function ResultTable({
           </div>
         );
       })}
-    </div>
+    </ResizableTable>
   ) : (
-    <div
+    <ResizableTable
+      tableId="search-albums"
+      columns={albumTableColumns}
       className={`result-table album-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}`}
-      role="table"
-      style={
-        {
-          "--result-table-columns": albumTableColumns,
-          "--result-table-min-width": `${940 + optionalTableWidth - (showSingleDebutColumn ? 132 : 0)}px`,
-        } as CSSProperties
-      }
     >
       <div className="result-table-head" role="row">
         <SortableColumnHeader
@@ -2703,7 +2680,7 @@ function ResultTable({
           </div>
         );
       })}
-    </div>
+    </ResizableTable>
   );
 }
 
@@ -2808,7 +2785,21 @@ function AlbumIndexTable({
   }
 
   return (
-    <div className="result-table album-index-results" role="table">
+    <ResizableTable
+      tableId="album-index-results"
+      className="result-table album-index-results"
+      columns={{
+        "album": "minmax(240px, 2.2fr)",
+        "artist": "minmax(150px, 1.3fr)",
+        "originCountry": "minmax(96px, 0.85fr)",
+        "year": "64px",
+        "genre": "minmax(104px, 1fr)",
+        "trackCount": "64px",
+        "bitrate": "minmax(126px, 1fr)",
+        "ratingCompleteness": "84px",
+        "albumScore": "72px",
+      }}
+    >
       <div className="result-table-head" role="row">
         <SortableColumnHeader
           label="Album"
@@ -2900,7 +2891,7 @@ function AlbumIndexTable({
           </div>
         );
       })}
-    </div>
+    </ResizableTable>
   );
 }
 
@@ -2937,15 +2928,27 @@ function AlbumTrackTable({
   }
 
   return (
-    <div className="result-table album-track-results" role="table">
+    <ResizableTable
+      tableId="album-track-results"
+      className="result-table album-track-results"
+      columns={{
+        "#": "58px",
+        "Track": "minmax(220px, 2fr)",
+        "Artist": "minmax(150px, 1.25fr)",
+        "Time": "72px",
+        "Rating": "72px",
+        "Quality": "minmax(118px, 0.9fr)",
+        "File": "minmax(170px, 1.2fr)",
+      }}
+    >
       <div className="result-table-head" role="row">
-        <span role="columnheader">#</span>
-        <span role="columnheader">Track</span>
-        <span role="columnheader">Artist</span>
-        <span role="columnheader">Time</span>
-        <span role="columnheader">Rating</span>
-        <span role="columnheader">Quality</span>
-        <span role="columnheader">File</span>
+        <ResizableColumnHeader columnId="#" label="#" />
+        <ResizableColumnHeader columnId="Track" label="Track" />
+        <ResizableColumnHeader columnId="Artist" label="Artist" />
+        <ResizableColumnHeader columnId="Time" label="Time" />
+        <ResizableColumnHeader columnId="Rating" label="Rating" />
+        <ResizableColumnHeader columnId="Quality" label="Quality" />
+        <ResizableColumnHeader columnId="File" label="File" />
       </div>
       {response.rows.map((row) => {
         const trackPopularity = row.trackId == null
@@ -2975,7 +2978,7 @@ function AlbumTrackTable({
           </div>
         );
       })}
-    </div>
+    </ResizableTable>
   );
 }
 
@@ -3242,16 +3245,29 @@ function ArtistIndexTable({
   }
 
   return (
-    <div className="result-table artist-index-results" role="table">
+    <ResizableTable
+      tableId="artist-index-results"
+      className="result-table artist-index-results"
+      columns={{
+        "Artist": "minmax(240px, 2.2fr)",
+        "Origin": "minmax(96px, 0.9fr)",
+        "Albums": "72px",
+        "Years": "88px",
+        "Top genre": "minmax(112px, 1fr)",
+        "Complete": "88px",
+        "Avg score": "88px",
+        "Loved": "72px",
+      }}
+    >
       <div className="result-table-head" role="row">
-        <span role="columnheader">Artist</span>
-        <span role="columnheader">Origin</span>
-        <span role="columnheader">Albums</span>
-        <span role="columnheader">Years</span>
-        <span role="columnheader">Top genre</span>
-        <span role="columnheader">Complete</span>
-        <span role="columnheader">Avg score</span>
-        <span role="columnheader">Loved</span>
+        <ResizableColumnHeader columnId="Artist" label="Artist" />
+        <ResizableColumnHeader columnId="Origin" label="Origin" />
+        <ResizableColumnHeader columnId="Albums" label="Albums" />
+        <ResizableColumnHeader columnId="Years" label="Years" />
+        <ResizableColumnHeader columnId="Top genre" label="Top genre" />
+        <ResizableColumnHeader columnId="Complete" label="Complete" />
+        <ResizableColumnHeader columnId="Avg score" label="Avg score" />
+        <ResizableColumnHeader columnId="Loved" label="Loved" />
       </div>
       {response.rows.map((artist) => {
         const isSelected = artist.id === selectedArtistId;
@@ -3303,7 +3319,7 @@ function ArtistIndexTable({
           </div>
         );
       })}
-    </div>
+    </ResizableTable>
   );
 }
 
@@ -3335,15 +3351,27 @@ function ArtistAlbumTable({
   }
 
   return (
-    <div className="result-table artist-album-results" role="table">
+    <ResizableTable
+      tableId="artist-album-results"
+      className="result-table artist-album-results"
+      columns={{
+        "Album": "minmax(260px, 2.2fr)",
+        "Year": "72px",
+        "Genre": "minmax(116px, 1fr)",
+        "Tracks": "72px",
+        "Complete": "88px",
+        "Rating": "72px",
+        "Score": "80px",
+      }}
+    >
       <div className="result-table-head" role="row">
-        <span role="columnheader">Album</span>
-        <span role="columnheader">Year</span>
-        <span role="columnheader">Genre</span>
-        <span role="columnheader">Tracks</span>
-        <span role="columnheader">Complete</span>
-        <span role="columnheader">Rating</span>
-        <span role="columnheader">Score</span>
+        <ResizableColumnHeader columnId="Album" label="Album" />
+        <ResizableColumnHeader columnId="Year" label="Year" />
+        <ResizableColumnHeader columnId="Genre" label="Genre" />
+        <ResizableColumnHeader columnId="Tracks" label="Tracks" />
+        <ResizableColumnHeader columnId="Complete" label="Complete" />
+        <ResizableColumnHeader columnId="Rating" label="Rating" />
+        <ResizableColumnHeader columnId="Score" label="Score" />
       </div>
       {response.rows.map((row) => {
         const isSelected = row.albumId === selectedAlbumId;
@@ -3374,7 +3402,7 @@ function ArtistAlbumTable({
           </div>
         );
       })}
-    </div>
+    </ResizableTable>
   );
 }
 
@@ -4696,15 +4724,27 @@ function GenreIndexTable({
   }
 
   return (
-    <div className="result-table genre-index-results" role="table">
+    <ResizableTable
+      tableId="genre-index-results"
+      className="result-table genre-index-results"
+      columns={{
+        "Genre": "minmax(220px, 2fr)",
+        "Albums": "72px",
+        "Years": "88px",
+        "Top artist": "minmax(144px, 1.25fr)",
+        "Complete": "88px",
+        "Avg score": "88px",
+        "Loved": "72px",
+      }}
+    >
       <div className="result-table-head" role="row">
-        <span role="columnheader">Genre</span>
-        <span role="columnheader">Albums</span>
-        <span role="columnheader">Years</span>
-        <span role="columnheader">Top artist</span>
-        <span role="columnheader">Complete</span>
-        <span role="columnheader">Avg score</span>
-        <span role="columnheader">Loved</span>
+        <ResizableColumnHeader columnId="Genre" label="Genre" />
+        <ResizableColumnHeader columnId="Albums" label="Albums" />
+        <ResizableColumnHeader columnId="Years" label="Years" />
+        <ResizableColumnHeader columnId="Top artist" label="Top artist" />
+        <ResizableColumnHeader columnId="Complete" label="Complete" />
+        <ResizableColumnHeader columnId="Avg score" label="Avg score" />
+        <ResizableColumnHeader columnId="Loved" label="Loved" />
       </div>
       {response.rows.map((genre) => {
         const isSelected = genre.id === selectedGenreId;
@@ -4748,7 +4788,7 @@ function GenreIndexTable({
           </div>
         );
       })}
-    </div>
+    </ResizableTable>
   );
 }
 
@@ -4772,15 +4812,27 @@ function GenreAlbumTable({ response }: { response: BrowseResponse | null }) {
   }
 
   return (
-    <div className="result-table genre-album-results" role="table">
+    <ResizableTable
+      tableId="genre-album-results"
+      className="result-table genre-album-results"
+      columns={{
+        "Album": "minmax(240px, 2fr)",
+        "Artist": "minmax(150px, 1.25fr)",
+        "Year": "72px",
+        "Tracks": "72px",
+        "Complete": "88px",
+        "Rating": "72px",
+        "Score": "80px",
+      }}
+    >
       <div className="result-table-head" role="row">
-        <span role="columnheader">Album</span>
-        <span role="columnheader">Artist</span>
-        <span role="columnheader">Year</span>
-        <span role="columnheader">Tracks</span>
-        <span role="columnheader">Complete</span>
-        <span role="columnheader">Rating</span>
-        <span role="columnheader">Score</span>
+        <ResizableColumnHeader columnId="Album" label="Album" />
+        <ResizableColumnHeader columnId="Artist" label="Artist" />
+        <ResizableColumnHeader columnId="Year" label="Year" />
+        <ResizableColumnHeader columnId="Tracks" label="Tracks" />
+        <ResizableColumnHeader columnId="Complete" label="Complete" />
+        <ResizableColumnHeader columnId="Rating" label="Rating" />
+        <ResizableColumnHeader columnId="Score" label="Score" />
       </div>
       {response.rows.map((row) => (
         <div className="result-table-row" role="row" key={row.id}>
@@ -4795,7 +4847,7 @@ function GenreAlbumTable({ response }: { response: BrowseResponse | null }) {
           <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
         </div>
       ))}
-    </div>
+    </ResizableTable>
   );
 }
 
@@ -5882,7 +5934,19 @@ function ChartResults({
   }
 
   return (
-    <div className="result-table chart-results" role="table">
+    <ResizableTable
+      tableId={isTracks ? "chart-tracks" : "chart-albums"}
+      className="result-table chart-results"
+      columns={Object.fromEntries(columns.map((column) => [
+        column.sortField ?? column.key,
+        column.key === "rank" ? "48px"
+          : ["album", "track"].includes(column.key) ? "minmax(220px, 2fr)"
+          : column.key === "artist" ? "minmax(140px, 1.35fr)"
+          : column.key === "year" ? "64px"
+          : column.key === "genre" ? "minmax(104px, 1fr)"
+          : "minmax(88px, 0.8fr)",
+      ]))}
+    >
       <div className="result-table-head" role="row">
         {columns.map((column) =>
           column.sortField ? (
@@ -5894,9 +5958,7 @@ function ChartResults({
               key={column.key}
             />
           ) : (
-            <span role="columnheader" key={column.key}>
-              {column.label}
-            </span>
+            <ResizableColumnHeader columnId={column.key} label={column.label} key={column.key} />
           ),
         )}
       </div>
@@ -5909,7 +5971,7 @@ function ChartResults({
           ))}
         </div>
       ))}
-    </div>
+    </ResizableTable>
   );
 }
 

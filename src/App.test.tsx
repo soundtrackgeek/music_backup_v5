@@ -114,6 +114,33 @@ describe("App startup", () => {
     expect(await screen.findByRole("heading", { name: "Genres" })).toBeVisible();
   });
 
+  it("resizes Search and Charts columns independently without changing the chart sort", async () => {
+    const searchKey = "music-library.table-widths.v1.search-albums";
+    const chartKey = "music-library.table-widths.v1.chart-albums";
+    localStorage.removeItem(searchKey);
+    localStorage.removeItem(chartKey);
+    const user = userEvent.setup();
+    render(<App />);
+
+    const searchHandle = await screen.findByRole("separator", { name: "Resize Album column" });
+    fireEvent.keyDown(searchHandle, { key: "ArrowRight" });
+    expect(searchHandle).toHaveAttribute("aria-valuenow", "230");
+
+    await user.click(screen.getByRole("button", { name: "Charts" }));
+    const chartHandle = await screen.findByRole("separator", { name: "Resize Album column" });
+    expect(chartHandle).not.toHaveAttribute("aria-valuenow");
+    const scoreHeader = screen.getByRole("button", { name: /Sort by Score/ }).closest("[role='columnheader']")!;
+    const priorSort = scoreHeader.getAttribute("aria-sort");
+    fireEvent.keyDown(chartHandle, { key: "ArrowRight", shiftKey: true });
+    expect(chartHandle).toHaveAttribute("aria-valuenow", "260");
+    expect(scoreHeader).toHaveAttribute("aria-sort", priorSort);
+
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    expect(await screen.findByRole("separator", { name: "Resize Album column" })).toHaveAttribute("aria-valuenow", "230");
+    localStorage.removeItem(searchKey);
+    localStorage.removeItem(chartKey);
+  });
+
   it("offers display-artist exclusion in Search and Charts", async () => {
     const user = userEvent.setup();
     render(<App />);
