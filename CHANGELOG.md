@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.148.1] - 2026-09-17
+
+### Changed
+- Upgrade React and React DOM from 18.3.1 to 19.3.0 with matching TypeScript types, preparing the frontend for stable React 19.3 APIs such as ViewTransition. Existing navigation and loading flows remain unchanged.
+
 ## [0.148.0] - 2026-09-14
 
 ### Added
