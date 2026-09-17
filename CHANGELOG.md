@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.149.0] - 2026-09-17
+
+### Added
+- Animate Artist detail tab changes with React 19 `<ViewTransition>`, sliding the panel forward or backward to match the tab order using `addTransitionType`, with a reduced-motion opt-out.
+- Render each Artist detail tab inside its own `<Suspense>` boundary with a skeleton fallback, and lazy-load the Overview and Loved Tracks/Chart Busters panels so those tabs load independently.
+
 ## [0.148.2] - 2026-09-17
 
 ### Fixed

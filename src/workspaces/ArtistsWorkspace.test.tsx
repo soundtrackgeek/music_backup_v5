@@ -3,6 +3,7 @@ import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import {
   ArtistDetailTabs,
+  artistDetailTabDirection,
   artistDetailTabNeedsHighlights,
   artistDetailTabNeedsMusicBrainz,
   artistDetailTabNeedsPopularity,
@@ -85,5 +86,14 @@ describe("artist detail tabs", () => {
     expect(artistDetailTabNeedsHighlights("loved-tracks")).toBe(true);
     expect(artistDetailTabNeedsHighlights("chart-busters")).toBe(true);
     expect(artistDetailTabNeedsHighlights("cover-view")).toBe(false);
+  });
+
+  it("reports the slide direction when moving between tabs", () => {
+    expect(artistDetailTabDirection("overview", "loved-tracks")).toBe("forward");
+    expect(artistDetailTabDirection("discography", "cover-view")).toBe(
+      "forward",
+    );
+    expect(artistDetailTabDirection("cover-view", "overview")).toBe("backward");
+    expect(artistDetailTabDirection("overview", "overview")).toBeNull();
   });
 });

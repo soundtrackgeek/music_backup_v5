@@ -2,6 +2,7 @@ import { ResizableTable, ResizableColumnHeader } from "./components/ResizableTab
 import { YearLedger } from "./components/YearLedger";
 import {
   Fragment,
+  lazy,
   useCallback,
   useEffect,
   useId,
@@ -417,15 +418,8 @@ import { DiscoveryMixer } from "./components/DiscoveryMixer";
 import { GenreTimeline } from "./components/GenreTimeline";
 import { ArtistTimeline } from "./components/ArtistTimeline";
 import { ArtistPortrait } from "./components/ArtistPortrait";
-import { ArtistBiographyPanel } from "./components/ArtistBiographyPanel";
 import { AlbumReviewPanel } from "./components/AlbumReviewPanel";
 import { AlbumRelatedAlbumsPanel } from "./components/AlbumRelatedAlbumsPanel";
-import { ArtistPopularTracksPanel } from "./components/ArtistPopularTracksPanel";
-import { ArtistSimilarArtistsPanel } from "./components/ArtistSimilarArtistsPanel";
-import {
-  ArtistChartBustersPanel,
-  ArtistLovedTracksPanel,
-} from "./components/ArtistTrackHighlightsPanels";
 import {
   TrackPopularityAttribution,
   TrackPopularityFire,
@@ -541,6 +535,32 @@ import {
   type InsightCohort,
 } from "./app/insightCohorts";
 import { createLocalSearchPlaylist } from "./app/searchPlaylist";
+
+const ArtistBiographyPanel = lazy(() =>
+  import("./components/ArtistBiographyPanel").then((module) => ({
+    default: module.ArtistBiographyPanel,
+  })),
+);
+const ArtistPopularTracksPanel = lazy(() =>
+  import("./components/ArtistPopularTracksPanel").then((module) => ({
+    default: module.ArtistPopularTracksPanel,
+  })),
+);
+const ArtistSimilarArtistsPanel = lazy(() =>
+  import("./components/ArtistSimilarArtistsPanel").then((module) => ({
+    default: module.ArtistSimilarArtistsPanel,
+  })),
+);
+const ArtistLovedTracksPanel = lazy(() =>
+  import("./components/ArtistTrackHighlightsPanels").then((module) => ({
+    default: module.ArtistLovedTracksPanel,
+  })),
+);
+const ArtistChartBustersPanel = lazy(() =>
+  import("./components/ArtistTrackHighlightsPanels").then((module) => ({
+    default: module.ArtistChartBustersPanel,
+  })),
+);
 
 type AppUpdateStatus =
   | "idle"

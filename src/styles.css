@@ -2597,11 +2597,115 @@ button {
 .artist-detail-tab-panel {
   min-width: 0;
   padding: 18px;
-  animation: artist-detail-panel-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .artist-detail-tab-panel:focus {
   outline: none;
+}
+
+.artist-detail-tab-panel-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.artist-detail-tab-panel-pending-bar {
+  display: block;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #eef3f1 0%, #e2eae7 50%, #eef3f1 100%);
+  background-size: 200% 100%;
+  animation: artist-detail-tab-pending 1200ms ease-in-out infinite;
+}
+
+.artist-detail-tab-panel-pending-bar:nth-child(2) {
+  width: 82%;
+}
+
+.artist-detail-tab-panel-pending-bar:nth-child(3) {
+  width: 64%;
+}
+
+@keyframes artist-detail-tab-pending {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+::view-transition-old(.artist-tab-exit) {
+  animation: artist-tab-exit-forward 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+::view-transition-new(.artist-tab-enter) {
+  animation: artist-tab-enter-forward 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+::view-transition-old(.artist-tab-exit-forward) {
+  animation: artist-tab-exit-forward 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+::view-transition-new(.artist-tab-enter-forward) {
+  animation: artist-tab-enter-forward 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+::view-transition-old(.artist-tab-exit-backward) {
+  animation: artist-tab-exit-backward 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+::view-transition-new(.artist-tab-enter-backward) {
+  animation: artist-tab-enter-backward 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes artist-tab-enter-forward {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes artist-tab-exit-forward {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+
+@keyframes artist-tab-enter-backward {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes artist-tab-exit-backward {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(16px);
+  }
 }
 
 .artist-detail-tab-panel > .table-panel {
@@ -2613,18 +2717,6 @@ button {
 
 .artist-detail-tab-panel .artist-album-board-heading {
   margin-top: 0;
-}
-
-@keyframes artist-detail-panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(3px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .panel-heading {
@@ -12004,6 +12096,11 @@ button {
   box-shadow: inset 0 -2px 0 #55b8ab;
 }
 
+:root[data-theme="dark"] .artist-detail-tab-panel-pending-bar {
+  background: linear-gradient(90deg, #1c2624 0%, #25322e 50%, #1c2624 100%);
+  background-size: 200% 100%;
+}
+
 :root[data-theme="dark"] .sidebar,
 :root[data-theme="dark"] .detail-panel {
   background: #141b18;
@@ -17284,8 +17381,14 @@ button {
   .album-cover-preview,
   .album-cover-preview-art,
   .artist-detail-tab-panel,
+  .artist-detail-tab-panel-pending-bar,
   .details-drawer-layout .detail-column {
     transition: none;
+    animation: none;
+  }
+
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
     animation: none;
   }
 }

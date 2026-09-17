@@ -423,6 +423,8 @@ Use `npm test` for Vitest watch mode during frontend development.
 
 Search and Charts table navigation tests cover each album, artist, and genre destination independently, including returning to the source results, under Vitest's default per-test timeout.
 
+Artist detail tab coverage includes the ViewTransition slide-direction helper alongside the existing selection and keyboard-navigation checks.
+
 Run the Rust backend unit tests:
 
 ```powershell
@@ -655,7 +657,7 @@ npm run security:check
 - Artist Overview with five initially visible Last.fm Popular Tracks, Show more/Show less expansion to as many as ten locally owned matches, and a Similar Artists shelf split between locally owned artists and missing artists to explore, all with cached provider attribution and explicit refresh. The shelf also offers a bounded, keyboard-accessible one- or two-hop artist constellation with an equivalent list fallback and direct local or Last.fm navigation.
 - Artist-level summary stats for album counts, rating progress, year span, top genre, track totals, loved tracks, TMOE, average completeness, average album rating, and average Album Score.
 - Selected artist album lists backed by normalized artist-key filtering so casing differences do not split album lists.
-- Selected-artist details are grouped into Overview, Local albums, Artist info, MusicBrainz discography, and Cover view tabs; Overview opens automatically, while MusicBrainz and cover/track data wait until their relevant tab is selected.
+- Selected-artist details are grouped into Overview, Loved Tracks, Chart Busters, Local albums, Artist info, MusicBrainz discography, and Cover view tabs; Overview opens automatically, while MusicBrainz and cover/track data wait until their relevant tab is selected. Switching tabs animates the panel with React 19 `<ViewTransition>`, sliding forward or backward to match the tab order, and each tab renders inside its own `<Suspense>` boundary so the heavier Overview and track-highlight panels load independently with a skeleton fallback.
 - The Cover view tab provides a clickable artist album cover board with inline track detail showing ratings, loved status, clock time, and Last.fm-backed 🔥 markers for the album's three most-listened tracks when evidence is available.
 - Artist album-list export to CSV, TSV, XLSX, JSON, and TXT with optional calculated columns.
 - Web-only preview mock data covers Artists alongside Search, Charts, Statistics, Albums, and Imports.

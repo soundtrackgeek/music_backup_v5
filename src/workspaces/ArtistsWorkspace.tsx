@@ -1,4 +1,11 @@
-import type { KeyboardEvent, ReactNode } from "react";
+import {
+  Suspense,
+  ViewTransition,
+  addTransitionType,
+  startTransition,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 
 export type ArtistDetailTab =
   | "overview"
@@ -38,6 +45,45 @@ export function artistDetailTabNeedsHighlights(tab: ArtistDetailTab) {
   return tab === "loved-tracks" || tab === "chart-busters";
 }
 
+export type ArtistDetailTabDirection = "forward" | "backward";
+
+export function artistDetailTabDirection(
+  from: ArtistDetailTab,
+  to: ArtistDetailTab,
+): ArtistDetailTabDirection | null {
+  const fromIndex = artistDetailTabs.findIndex((tab) => tab.id === from);
+  const toIndex = artistDetailTabs.findIndex((tab) => tab.id === to);
+
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+    return null;
+  }
+
+  return toIndex > fromIndex ? "forward" : "backward";
+}
+
+function ArtistDetailPanelFallback() {
+  return (
+    <div
+      className="artist-detail-tab-panel artist-detail-tab-panel-pending"
+      role="status"
+      aria-label="Loading artist view"
+    >
+      <span
+        className="artist-detail-tab-panel-pending-bar"
+        aria-hidden="true"
+      />
+      <span
+        className="artist-detail-tab-panel-pending-bar"
+        aria-hidden="true"
+      />
+      <span
+        className="artist-detail-tab-panel-pending-bar"
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
+
 export function ArtistDetailTabs({
   activeTab,
   onChange,
@@ -48,6 +94,20 @@ export function ArtistDetailTabs({
   children: ReactNode;
 }) {
   const activeIndex = artistDetailTabs.findIndex((tab) => tab.id === activeTab);
+
+  function selectTab(nextTab: ArtistDetailTab) {
+    const direction = artistDetailTabDirection(activeTab, nextTab);
+
+    if (!direction) {
+      onChange(nextTab);
+      return;
+    }
+
+    startTransition(() => {
+      addTransitionType(direction);
+      onChange(nextTab);
+    });
+  }
 
   function handleKeyDown(
     event: KeyboardEvent<HTMLButtonElement>,
@@ -72,7 +132,7 @@ export function ArtistDetailTabs({
 
     event.preventDefault();
     const nextTab = artistDetailTabs[nextIndex];
-    onChange(nextTab.id);
+    selectTab(nextTab.id);
     event.currentTarget.parentElement
       ?.querySelector<HTMLButtonElement>(`#artist-detail-tab-${nextTab.id}`)
       ?.focus();
@@ -98,22 +158,39 @@ export function ArtistDetailTabs({
             aria-controls={`artist-detail-panel-${tab.id}`}
             aria-selected={tab.id === activeTab}
             tabIndex={index === activeIndex ? 0 : -1}
-            onClick={() => onChange(tab.id)}
+            onClick={() => selectTab(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
           >
             {tab.label}
           </button>
         ))}
       </div>
-      <div
-        className="artist-detail-tab-panel"
-        id={`artist-detail-panel-${activeTab}`}
-        role="tabpanel"
-        aria-labelledby={`artist-detail-tab-${activeTab}`}
-        tabIndex={0}
+      <ViewTransition
+        key={activeTab}
+        default="none"
+        enter={{
+          default: "artist-tab-enter",
+          forward: "artist-tab-enter-forward",
+          backward: "artist-tab-enter-backward",
+        }}
+        exit={{
+          default: "artist-tab-exit",
+          forward: "artist-tab-exit-forward",
+          backward: "artist-tab-exit-backward",
+        }}
       >
-        {children}
-      </div>
+        <Suspense fallback={<ArtistDetailPanelFallback />}>
+          <div
+            className="artist-detail-tab-panel"
+            id={`artist-detail-panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`artist-detail-tab-${activeTab}`}
+            tabIndex={0}
+          >
+            {children}
+          </div>
+        </Suspense>
+      </ViewTransition>
     </section>
   );
 }
