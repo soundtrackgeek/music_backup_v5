@@ -421,6 +421,8 @@ Windows folder-sync fixtures canonicalize their temporary album paths before ins
 
 Use `npm test` for Vitest watch mode during frontend development.
 
+Search and Charts table navigation tests cover each album, artist, and genre destination independently, including returning to the source results, under Vitest's default per-test timeout.
+
 Run the Rust backend unit tests:
 
 ```powershell

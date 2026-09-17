@@ -81,37 +81,33 @@ describe("App startup", () => {
     // Allow CI headroom for full App startup, two Statistics mounts and debounced requests.
   }, 10_000);
 
-  it("opens album, artist, and genre pages from Search table cells", async () => {
-    const user = userEvent.setup();
-    render(<App />);
+  // Each destination gets the default timeout instead of sharing it across three page visits.
+  describe.each([
+    ["Search", "Search results"],
+    ["Charts", "Chart results"],
+  ])("%s table cells", (workspace, resultsLabel) => {
+    it.each([
+      ["album", "Open album Actually", "Albums"],
+      ["artist", "Open artist Pet Shop Boys", "Artists"],
+      ["genre", "Open genre Synthpop", "Genres"],
+    ])("opens the %s page and returns to the results", async (_entity, buttonName, destination) => {
+      const user = userEvent.setup();
+      render(<App />);
+      const navigation = within(screen.getByRole("complementary", { name: "Main navigation" }));
+      if (workspace !== "Search") {
+        await user.click(navigation.getByRole("button", { name: workspace }));
+      }
 
-    await user.click((await screen.findAllByRole("button", { name: /^Open album / }))[0]);
-    expect(await screen.findByRole("heading", { name: "Albums" })).toBeVisible();
+      const results = within(await screen.findByRole("region", { name: resultsLabel }));
+      await user.click(await results.findByRole("button", { name: buttonName }));
+      expect(await screen.findByRole("heading", { name: destination, level: 1 })).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Search" }));
-    await user.click((await screen.findAllByRole("button", { name: /^Open artist / }))[0]);
-    expect(await screen.findByRole("heading", { name: "Artists" })).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "Search" }));
-    await user.click((await screen.findAllByRole("button", { name: /^Open genre / }))[0]);
-    expect(await screen.findByRole("heading", { name: "Genres" })).toBeVisible();
-  });
-
-  it("opens album, artist, and genre pages from Charts table cells", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getByRole("button", { name: "Charts" }));
-    await user.click((await screen.findAllByRole("button", { name: /^Open album / }))[0]);
-    expect(await screen.findByRole("heading", { name: "Albums" })).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "Charts" }));
-    await user.click((await screen.findAllByRole("button", { name: /^Open artist / }))[0]);
-    expect(await screen.findByRole("heading", { name: "Artists" })).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "Charts" }));
-    await user.click((await screen.findAllByRole("button", { name: /^Open genre / }))[0]);
-    expect(await screen.findByRole("heading", { name: "Genres" })).toBeVisible();
+      await user.click(navigation.getByRole("button", { name: workspace }));
+      expect(await screen.findByRole("heading", { name: workspace, level: 1 })).toBeVisible();
+      // Returning remounts the table; query the new result region instead of retaining detached nodes.
+      const restoredResults = within(await screen.findByRole("region", { name: resultsLabel }));
+      expect(await restoredResults.findByRole("button", { name: buttonName })).toBeVisible();
+    });
   });
 
   it("resizes Search and Charts columns independently without changing the chart sort", async () => {

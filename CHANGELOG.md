@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.148.2] - 2026-09-17
+
+### Fixed
+- Prevent Windows CI timeouts in Search and Charts navigation coverage by testing each album, artist, and genre destination independently with scoped queries. Retain the default test timeout and verify returning to the source results.
+
 ## [0.148.1] - 2026-09-17
 
 ### Changed
