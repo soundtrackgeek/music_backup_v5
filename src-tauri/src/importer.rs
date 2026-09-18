@@ -587,7 +587,7 @@ pub(crate) fn prepare_bridge_import_preview(
         &fingerprint,
         &cancel_requested,
         &|_, _, _, _, _, _| {},
-        false,
+        ImportPreviewScope::Bridge,
     )
 }
 
@@ -2615,8 +2615,14 @@ fn prepare_import_preview_for_connection(
         fingerprint,
         cancel_requested,
         progress,
-        true,
+        ImportPreviewScope::FullLibrary,
     )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ImportPreviewScope {
+    FullLibrary,
+    Bridge,
 }
 
 fn prepare_import_preview_for_connection_scoped(
@@ -2624,15 +2630,9 @@ fn prepare_import_preview_for_connection_scoped(
     fingerprint: &SourceFingerprint,
     cancel_requested: &AtomicBool,
     progress: &ImportProgressCallback<'_>,
-    cleanup_other_sessions: bool,
+    scope: ImportPreviewScope,
 ) -> Result<ImportPreview> {
-    match prepare_import_preview_inner(
-        conn,
-        fingerprint,
-        cancel_requested,
-        progress,
-        cleanup_other_sessions,
-    ) {
+    match prepare_import_preview_inner(conn, fingerprint, cancel_requested, progress, scope) {
         Ok(preview) => Ok(preview),
         Err(error) => {
             if cancel_requested.load(Ordering::SeqCst) {
@@ -2692,7 +2692,7 @@ fn prepare_import_preview_inner(
     fingerprint: &SourceFingerprint,
     cancel_requested: &AtomicBool,
     progress: &ImportProgressCallback<'_>,
-    cleanup_other_sessions: bool,
+    scope: ImportPreviewScope,
 ) -> Result<ImportPreview> {
     let existing = latest_import_session(conn, &fingerprint.path_text)?;
     if let Some(session) = existing.as_ref() {
@@ -2723,7 +2723,7 @@ fn prepare_import_preview_inner(
         session.id
     } else {
         let cleanup = conn.transaction()?;
-        if cleanup_other_sessions {
+        if scope == ImportPreviewScope::FullLibrary {
             cleanup.execute(
                 "DELETE FROM import_sessions WHERE status != 'completed'",
                 [],
@@ -2844,6 +2844,9 @@ fn prepare_import_preview_inner(
         "Comparing the staged snapshot with the active library.",
     );
     ensure_preparation_not_cancelled(cancel_requested)?;
+    if scope == ImportPreviewScope::Bridge {
+        preserve_unchanged_bridge_album_ratings(conn, session_id, &mut albums, cancel_requested)?;
+    }
     let final_albums = albums
         .values()
         .map(AlbumAggregate::finalize)
@@ -3085,6 +3088,50 @@ fn persist_stage_chunk(
     Ok(())
 }
 
+fn preserve_unchanged_bridge_album_ratings(
+    conn: &Connection,
+    session_id: i64,
+    albums: &mut HashMap<String, AlbumAggregate>,
+    cancel_requested: &AtomicBool,
+) -> Result<()> {
+    let mut ratings = conn.prepare("SELECT id, album_rating FROM albums")?;
+    let mut rows = ratings.query([])?;
+    // Read only the candidate album's tracks, using the existing album and staged
+    // file indexes. A matching count alone would miss changed or replaced files.
+    let mut unchanged = conn.prepare(
+        "SELECT COUNT(*), COALESCE(SUM(EXISTS (
+            SELECT 1 FROM import_stage_tracks staged
+            WHERE staged.session_id = ?1
+              AND staged.file_path = COALESCE(current.file_path, '')
+              AND staged.filename = COALESCE(current.filename, '')
+              AND staged.album_id = current.album_id
+              AND staged.row_hash = current.row_hash
+        )), 0)
+        FROM tracks current WHERE current.album_id = ?2",
+    )?;
+    while let Some(row) = rows.next()? {
+        ensure_preparation_not_cancelled(cancel_requested)?;
+        let id: String = row.get(0)?;
+        let rating: Option<i32> = row.get(1)?;
+        let Some(album) = albums.get_mut(&id) else {
+            continue;
+        };
+        if album.album_rating == rating {
+            continue;
+        }
+        let (current_count, matching_count): (u32, u32) = unchanged
+            .query_row(params![session_id, id], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?;
+        if current_count == album.total_tracks && matching_count == current_count {
+            // Per-file sync can clear the authoritative album rating while sibling
+            // rows retain older values. An unrelated intake must not revive them.
+            album.album_rating = rating;
+        }
+    }
+    Ok(())
+}
+
 fn persist_stage_final_albums(
     conn: &mut Connection,
     session_id: i64,
@@ -3104,7 +3151,8 @@ fn persist_stage_final_albums(
                 calculated_album_rating = ?4,
                 effective_album_rating = ?5,
                 album_score = ?6,
-                album_artist_display_inferred = ?7
+                album_artist_display_inferred = ?7,
+                album_rating = ?10
             WHERE session_id = ?8 AND album_id = ?9
             ",
         )?;
@@ -3120,6 +3168,7 @@ fn persist_stage_final_albums(
                 album.album_artist_display_inferred,
                 session_id,
                 &album.album_id,
+                album.album_rating,
             ])?;
         }
     }
@@ -6721,6 +6770,192 @@ mod tests {
         assert!(!ordinary.exists());
     }
 
+    fn intake_rating_fixture(
+        directory: &Path,
+        authoritative_rating: Option<i32>,
+        change: &str,
+    ) -> (Connection, PathBuf, String) {
+        let values = |filename: &str, rating: &str| {
+            [
+                "Artist",
+                rating,
+                "1",
+                "Existing",
+                "Rock",
+                "",
+                "Label",
+                "",
+                "Track",
+                "1",
+                "2026",
+                "2026",
+                "existing",
+                r"D:\Music\Existing",
+                filename,
+                "Artist",
+                "3:00",
+            ]
+            .map(str::to_owned)
+            .to_vec()
+        };
+        let records = vec![values("01.mp3", ""), values("02.mp3", "100")];
+        let tracks = records
+            .iter()
+            .cloned()
+            .map(parse_fast_sync_record)
+            .collect::<Vec<_>>();
+        let conn = Connection::open_in_memory().unwrap();
+        db::configure(&conn).unwrap();
+        db::migrate(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO import_runs (source_path, started_at, completed_at, status, track_rows, album_count)
+             VALUES ('initial.tsv', '2026-09-18', '2026-09-18', 'completed', 2, 1)", [],
+        ).unwrap();
+        let run_id = conn.last_insert_rowid();
+        for (index, track) in tracks.iter().enumerate() {
+            seed_fast_sync_track(&conn, run_id, index as i64 + 1, track);
+        }
+        seed_fast_sync_album(&conn, run_id, &tracks);
+        let album_id = tracks[0].album_id.clone();
+        conn.execute(
+            "UPDATE albums SET album_rating = ?1, effective_album_rating = ?1,
+             album_score = ?2 WHERE id = ?3",
+            params![
+                authoritative_rating,
+                authoritative_rating.map(|rating| rating as f64 / 20.0),
+                album_id
+            ],
+        )
+        .unwrap();
+        let mut snapshot = records;
+        match change {
+            "title" => snapshot[0][8] = "Changed title".into(),
+            "replace" => snapshot[1][14] = "replacement.mp3".into(),
+            "add" => snapshot.push(values("03.mp3", "100")),
+            "remove" => {
+                snapshot.remove(0);
+            }
+            "none" => {}
+            _ => panic!("unknown fixture change"),
+        }
+        let mut added = values("01.mp3", "80");
+        added[3] = "New Album".into();
+        added[12] = "new".into();
+        added[13] = r"D:\Music\New Album".into();
+        snapshot.push(added);
+        let source = directory.join("intake.tsv");
+        fs::write(
+            &source,
+            format!(
+                "{}\n{}\n",
+                REQUIRED_COLUMNS.join("\t"),
+                snapshot
+                    .iter()
+                    .map(|record| record.join("\t"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+        )
+        .unwrap();
+        (conn, source, album_id)
+    }
+
+    #[test]
+    fn bridge_intake_preserves_authoritative_ratings_of_unchanged_albums_through_apply() {
+        for rating in [None, Some(65)] {
+            let temp = tempfile::tempdir().unwrap();
+            let (mut conn, source, album_id) = intake_rating_fixture(temp.path(), rating, "none");
+            let before = load_previous_albums(&conn)
+                .unwrap()
+                .remove(&album_id)
+                .unwrap();
+            let preview = prepare_bridge_import_preview(&mut conn, &source).unwrap();
+            assert_eq!(
+                (
+                    preview.added_tracks,
+                    preview.changed_tracks,
+                    preview.removed_tracks
+                ),
+                (1, 0, 0)
+            );
+            assert_eq!(
+                (
+                    preview.added_albums,
+                    preview.changed_albums,
+                    preview.removed_albums
+                ),
+                (1, 0, 0)
+            );
+            let staged = load_stage_final_albums(&conn, preview.session_id).unwrap();
+            assert_eq!(
+                staged
+                    .iter()
+                    .find(|album| album.album_id == album_id)
+                    .unwrap()
+                    .album_rating,
+                rating
+            );
+            apply_bridge_import_preview(
+                &mut conn,
+                &temp.path().join("unused.sqlite3"),
+                preview.session_id,
+            )
+            .unwrap();
+            let after = load_previous_albums(&conn)
+                .unwrap()
+                .remove(&album_id)
+                .unwrap();
+            assert_eq!(
+                after, before,
+                "intake must preserve the existing album's rating and score"
+            );
+            let raw_rating: String = conn.query_row(
+                "SELECT album_rating_raw FROM tracks WHERE album_id = ?1 AND filename = '02.mp3'",
+                [&album_id], |row| row.get(0),
+            ).unwrap();
+            assert_eq!(
+                raw_rating, "100",
+                "retained track metadata is not rewritten to hide the mismatch"
+            );
+        }
+    }
+
+    #[test]
+    fn bridge_intake_recalculates_ratings_when_an_album_track_set_changes() {
+        for change in ["title", "replace", "add", "remove"] {
+            let temp = tempfile::tempdir().unwrap();
+            let (mut conn, source, album_id) = intake_rating_fixture(temp.path(), None, change);
+            let preview = prepare_bridge_import_preview(&mut conn, &source).unwrap();
+            assert_eq!(preview.changed_albums, 1, "{change}");
+            let staged = load_stage_final_albums(&conn, preview.session_id).unwrap();
+            assert_eq!(
+                staged
+                    .iter()
+                    .find(|album| album.album_id == album_id)
+                    .unwrap()
+                    .album_rating,
+                Some(100),
+                "{change}"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_tsv_import_still_recalculates_album_ratings() {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut conn, source, _) = intake_rating_fixture(temp.path(), None, "none");
+        let fingerprint = source_fingerprint(source.to_str().unwrap()).unwrap();
+        let preview = prepare_import_preview_for_connection(
+            &mut conn,
+            &fingerprint,
+            &AtomicBool::new(false),
+            &|_, _, _, _, _, _| {},
+        )
+        .unwrap();
+        assert_eq!(preview.changed_tracks, 0);
+        assert_eq!(preview.changed_albums, 1);
+    }
+
     fn sample_final_album() -> FinalAlbum {
         FinalAlbum {
             album_id: "mb:head-east".to_string(),
@@ -7479,7 +7714,7 @@ mod tests {
                 &fingerprint,
                 &AtomicBool::new(false),
                 &|_, _, _, _, _, _| {},
-                false,
+                ImportPreviewScope::Bridge,
             )
             .unwrap();
             conn.execute(

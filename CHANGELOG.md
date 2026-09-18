@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.149.1] - 2026-09-18
+
+### Fixed
+- Fix Aurora Inbox `previewBatch` falsely reporting `stalePlan` when rebuilding unchanged albums revives older album ratings from their track records. Preserve the authoritative catalog album rating, including a cleared rating, only when every current track matches the staged file identity and metadata hash and the track counts agree. Persist the resulting rating and score through apply, while retaining normal recalculation for changed/replaced albums and ordinary TSV imports.
+- Add regression coverage for cleared and updated ratings through preview and apply, changed metadata, added/removed/replaced tracks, and ordinary import behavior.
+
 ## [0.149.0] - 2026-09-17
 
 ### Added
