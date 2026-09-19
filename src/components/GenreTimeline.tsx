@@ -1,3 +1,4 @@
+import { useTransitionState } from "../app/useTransitionState";
 import "@fontsource/manrope/latin-400.css";
 import "@fontsource/manrope/latin-500.css";
 import "@fontsource/manrope/latin-600.css";
@@ -141,17 +142,17 @@ export function GenreTimeline({
   onOpenAlbum,
   onRequestGenreOptions,
 }: GenreTimelineProps) {
-  const [response, setResponse] = useState<GenreTimelineResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [response, setResponse] = useTransitionState<GenreTimelineResponse | null>(null);
+  const [error, setError] = useTransitionState<string | null>(null);
+  const [isLoading, setIsLoading] = useTransitionState(true);
   const [yearFromInput, setYearFromInput] = useState<string | null>(null);
   const [yearToInput, setYearToInput] = useState<string | null>(null);
   const [includedGenres, setIncludedGenres] = useState<string[]>([]);
   const [excludedGenres, setExcludedGenres] = useState<string[]>([]);
-  const [genreLimit, setGenreLimit] = useState<GenreConstellationLimit>(7);
-  const [focusedGenreId, setFocusedGenreId] = useState<string | null>(null);
+  const [genreLimit, setGenreLimit] = useTransitionState<GenreConstellationLimit>(7);
+  const [focusedGenreId, setFocusedGenreId] = useTransitionState<string | null>(null);
   const [hoveredGenreId, setHoveredGenreId] = useState<string | null>(null);
-  const [displayMode, setDisplayMode] = useState<"dots" | "density">("dots");
+  const [displayMode, setDisplayMode] = useTransitionState<"dots" | "density">("dots");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [genreSearch, setGenreSearch] = useState("");

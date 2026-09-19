@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getStatisticsMock = vi.hoisted(() => vi.fn());
 const getYearProgressMock = vi.hoisted(() => vi.fn());
+const getAlbumReviewMock = vi.hoisted(() => vi.fn());
 
 vi.mock("./backend", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./backend")>();
@@ -11,6 +12,8 @@ vi.mock("./backend", async (importOriginal) => {
     ...actual,
     getStatistics: getStatisticsMock,
     getYearProgress: getYearProgressMock,
+    getAlbumReview: (...args: Parameters<typeof actual.getAlbumReview>) =>
+      getAlbumReviewMock(...args) ?? actual.getAlbumReview(...args),
   };
 });
 
@@ -21,6 +24,7 @@ describe("App startup", () => {
     getStatisticsMock.mockReset();
     getStatisticsMock.mockReturnValue(new Promise(() => undefined));
     getYearProgressMock.mockReset();
+    getAlbumReviewMock.mockReset();
   });
 
   it("shows library counts while statistics are still loading", async () => {
@@ -108,6 +112,26 @@ describe("App startup", () => {
       const restoredResults = within(await screen.findByRole("region", { name: resultsLabel }));
       expect(await restoredResults.findByRole("button", { name: buttonName })).toBeVisible();
     });
+  });
+
+  it("reveals album panels independently and ignores a previous album's late review", async () => {
+    const actual = await vi.importActual<typeof import("./backend")>("./backend");
+    let resolveReview!: (review: Awaited<ReturnType<typeof actual.getAlbumReview>>) => void;
+    getAlbumReviewMock.mockReturnValueOnce(new Promise(resolve => { resolveReview = resolve; }));
+    render(<App />);
+    const navigation = within(screen.getByRole("complementary", { name: "Main navigation" }));
+    fireEvent.click(navigation.getByRole("button", { name: "Albums" }));
+    const tracks = within(await screen.findByRole("region", { name: "Selected album tracks" }));
+    expect(await tracks.findByText("What Have I Done to Deserve This?")).toBeVisible();
+    expect(await tracks.findByText("Album popularity loaded from Last.fm.")).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Open Holy Diver by Dio in Albums" })).toBeVisible();
+    expect(screen.getByText("Loading album review.")).toBeVisible();
+    const firstAlbumId = getAlbumReviewMock.mock.calls[0][0];
+    fireEvent.click(screen.getByRole("button", { name: "Open Holy Diver by Dio in Albums" }));
+    expect(await screen.findByText(/^Holy Diver balances immediate hooks/)).toBeVisible();
+    await act(async () => resolveReview(await actual.getAlbumReview(firstAlbumId)));
+    expect(screen.queryByText(/^Actually balances immediate hooks/)).not.toBeInTheDocument();
+    expect(tracks.getByRole("heading", { name: "Holy Diver" })).toBeVisible();
   });
 
   it("resizes Search and Charts columns independently without changing the chart sort", async () => {

@@ -2636,6 +2636,30 @@ button {
   }
 }
 
+/* Snapshot overlays must not swallow the next tab/selection click. */
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-group(.content-crossfade) {
+  animation-duration: 180ms;
+  animation-timing-function: ease-out;
+}
+
+::view-transition-old(.content-crossfade),
+::view-transition-new(.content-crossfade) {
+  animation-duration: 180ms;
+  animation-timing-function: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(.content-crossfade),
+  ::view-transition-old(.content-crossfade),
+  ::view-transition-new(.content-crossfade) {
+    animation: none;
+  }
+}
+
 ::view-transition-old(.artist-tab-exit) {
   animation: artist-tab-exit-forward 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -17387,6 +17411,7 @@ button {
     animation: none;
   }
 
+  ::view-transition-group(*),
   ::view-transition-old(*),
   ::view-transition-new(*) {
     animation: none;

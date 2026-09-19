@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.150.0] - 2026-09-19
+
+### Added
+- Smooth selected-album details and independent track, review, popularity, and related-album reveals with React ViewTransition. Existing independent requests and stale-response cancellation remain intact.
+- Cross-fade Timeline tabs and discrete selections, chart configurations and completed results, Statistics tabs and selected statistical details. Keep chart inputs, pointer hover, and drag updates immediate.
+- Preserve component state, focus, and scroll across content updates, and disable content animations for reduced-motion preferences.
+- Cover independent album loading, late-review cancellation, and detail-state preservation with regression tests.
+
 ## [0.149.1] - 2026-09-18
 
 ### Fixed

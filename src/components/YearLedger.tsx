@@ -1,3 +1,4 @@
+import { TransitionRegion } from "./TransitionRegion";
 import { useState } from "react";
 import { ArrowRight, BarChart3, ChevronLeft, ChevronRight, Database, Gauge, Grid2X2 } from "lucide-react";
 import type { YearProgressStats } from "../types";
@@ -75,14 +76,14 @@ export function YearLedger({ rows, genres, excludedGenres, onOpen, busy = false,
             </table>
           </div>
         </section>
-        <aside className="ledger-inspector" aria-label="Selected year summary">
+        <TransitionRegion><aside className="ledger-inspector" aria-label="Selected year summary">
           <header><h3>{selected.year}</h3><div className="ledger-year-buttons"><button className="icon-button" type="button" aria-label="Previous year" disabled={selectedIndex <= 0} onClick={() => setSelectedYear(rows[selectedIndex - 1].year)}><ChevronLeft size={16} /></button><button className="icon-button" type="button" aria-label="Next year" disabled={selectedIndex >= rows.length - 1} onClick={() => setSelectedYear(rows[selectedIndex + 1].year)}><ChevronRight size={16} /></button></div></header>
           <div className="ledger-selected-total"><span><strong>{number(selected.albumCount)}</strong> albums total</span><small>{percent(fullyRatedAlbumRatio(selected))} complete</small></div>
           <progress max={selected.albumCount || 1} value={selected.ratedAlbumCount} aria-label={`${selected.year} fully rated albums`} />
           <div className="ledger-breakdown">{statuses.map(status => <button type="button" key={status} disabled={busy || countFor(selected, status) === 0} onClick={() => open(selected, status)}><i className={status} /><strong>{number(countFor(selected, status))}</strong><span>{labels[status]}</span><small>{percent(countFor(selected, status) / Math.max(1, selected.albumCount))}</small></button>)}</div>
           <div className="ledger-remaining"><strong>{number(selected.partialAlbumCount + selected.unratedAlbumCount)}</strong><span>albums left</span><small>partial + unrated</small></div>
           <button type="button" className="ledger-browse" disabled={busy || selected.partialAlbumCount + selected.unratedAlbumCount === 0} onClick={() => open(selected, "remaining")}>Browse remaining albums <ArrowRight size={17} /></button>
-        </aside>
+        </aside></TransitionRegion>
       </div>
       <section className="ledger-footer" aria-label="Year ledger insights">
         <article><Database size={27} /><div><strong>{number(totals.albums)}</strong><span>Total albums</span><small>{rows[0].year}–{rows[rows.length - 1].year} · {genres.length ? `${genres.length} selected genres` : "all genres"}</small></div></article>

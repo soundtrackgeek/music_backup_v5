@@ -1,3 +1,4 @@
+import { useTransitionState } from "../app/useTransitionState";
 import {
   ArrowCounterClockwise,
   CalendarBlank,
@@ -135,18 +136,18 @@ export function ArtistTimeline({
   onOpenAlbum,
   onOpenArtist,
 }: ArtistTimelineProps) {
-  const [response, setResponse] = useState<ArtistTimelineResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [metric, setMetric] = useState<ArtistTimelineMetric>("charts");
+  const [response, setResponse] = useTransitionState<ArtistTimelineResponse | null>(null);
+  const [error, setError] = useTransitionState<string | null>(null);
+  const [isLoading, setIsLoading] = useTransitionState(true);
+  const [metric, setMetric] = useTransitionState<ArtistTimelineMetric>("charts");
   const [yearFromInput, setYearFromInput] = useState<string | null>(null);
   const [yearToInput, setYearToInput] = useState<string | null>(null);
   const [includedGenres, setIncludedGenres] = useState<string[]>([]);
   const [excludedGenres, setExcludedGenres] = useState<string[]>([]);
   const [artists, setArtists] = useState<string[]>([]);
   const [artistOptions, setArtistOptions] = useState<string[]>([]);
-  const [artistLimit, setArtistLimit] = useState<ArtistTimelineLimit>(7);
-  const [selectedArtistId, setSelectedArtistId] = useState<string | null>(null);
+  const [artistLimit, setArtistLimit] = useTransitionState<ArtistTimelineLimit>(7);
+  const [selectedArtistId, setSelectedArtistId] = useTransitionState<string | null>(null);
   const [hoveredArtistId, setHoveredArtistId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);

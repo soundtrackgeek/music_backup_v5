@@ -1,3 +1,4 @@
+import { TransitionRegion } from "./TransitionRegion";
 import {
   ChartLineUp,
   UsersThree,
@@ -52,7 +53,7 @@ export function TimelinesWorkspace({
           })}
         </nav>
       </header>
-      <div className="timelines-content">{children}</div>
+      <TransitionRegion><div className="timelines-content">{children}</div></TransitionRegion>
     </section>
   );
 }

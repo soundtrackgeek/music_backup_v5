@@ -1,3 +1,4 @@
+import { useTransitionState } from "../app/useTransitionState";
 import "@fontsource/cormorant-garamond/latin-600.css";
 import "@fontsource/manrope/latin-400.css";
 import "@fontsource/manrope/latin-500.css";
@@ -656,20 +657,20 @@ export function AlbumTimeRibbon({
 }: AlbumTimeRibbonProps) {
   const rootRef = useRef<HTMLElement | null>(null);
   const periodMenuRef = useRef<HTMLDivElement | null>(null);
-  const [periodId, setPeriodId] = useState<PeriodId>("summer");
+  const [periodId, setPeriodId] = useTransitionState<PeriodId>("summer");
   const [customStartMonth, setCustomStartMonth] = useState(1);
   const [customEndMonth, setCustomEndMonth] = useState(1);
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
   const [albumOrderMode, setAlbumOrderMode] =
-    useState<AlbumOrderMode>("debut");
+    useTransitionState<AlbumOrderMode>("debut");
   const [albumOrderDirection, setAlbumOrderDirection] =
-    useState<AlbumOrderDirection>("ascending");
+    useTransitionState<AlbumOrderDirection>("ascending");
   const [customAlbumOrders, setCustomAlbumOrders] = useState<
     Record<string, string[]>
   >({});
-  const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
+  const [selectedAlbumId, setSelectedAlbumId] = useTransitionState<string | null>(null);
   const [selectedWeekSelection, setSelectedWeekSelection] =
-    useState<TimelineWeekSelection | null>(null);
+    useTransitionState<TimelineWeekSelection | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const normalizedData = useMemo(

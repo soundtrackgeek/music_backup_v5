@@ -1,3 +1,4 @@
+import { TransitionRegion } from "./components/TransitionRegion";
 import { ResizableTable, ResizableColumnHeader } from "./components/ResizableTable";
 import { YearLedger } from "./components/YearLedger";
 import {
@@ -7921,7 +7922,7 @@ function YearProgressExplorer({
           </p>
         ) : null}
       </div>
-      <YearLedger
+      <TransitionRegion><YearLedger
         selectedYear={selection.selectedYear}
         onSelectedYearChange={selectedYear => onSelectionChange(current => ({ ...current, selectedYear }))}
         busy={isPending}
@@ -7930,7 +7931,7 @@ function YearProgressExplorer({
         genres={includedGenres}
         excludedGenres={excludedGenres}
         onOpen={onSelect}
-      />
+      /></TransitionRegion>
     </div>
   );
 }
@@ -8173,14 +8174,14 @@ function GenreProgressExplorer({
           ) : null}
         </div>
       ) : null}
-      <GenreProgressTable
+      <TransitionRegion><GenreProgressTable
         rows={visibleRows}
         filtered={hasAggregationFilters}
         yearFrom={hasYearFilter ? effectiveYearFrom : null}
         yearTo={hasYearFilter ? effectiveYearTo : null}
         excludedGenres={excludedGenres}
         onSelect={onSelect}
-      />
+      /></TransitionRegion>
     </div>
   );
 }
@@ -16002,7 +16003,7 @@ export default function App() {
               </ChartAdvancedControls>
             </section>
 
-            <section className="table-panel" aria-label="Chart results">
+            <TransitionRegion><section className="table-panel" aria-label="Chart results">
               <div className="panel-heading compact">
                 <div>
                   <h2>{rankingLabel(chartConfig.rankingMetric)} chart</h2>
@@ -16035,7 +16036,7 @@ export default function App() {
                 onOpenArtist={openArtistFromMusicMap}
                 onOpenGenre={openGenreFromBrowse}
               />
-            </section>
+            </section></TransitionRegion>
           </section>
         ) : activeSection === "Playlists" ? (
           <PlaylistBuilderWorkspace
@@ -17607,24 +17608,24 @@ export default function App() {
               />
             </section>
 
-            <AlbumReviewPanel
+            <TransitionRegion><AlbumReviewPanel
               review={albumReview}
               isLoading={isAlbumReviewLoading}
               error={albumReviewError}
               onRefresh={() => void refreshAlbumReview()}
               onOpenSource={(url) => void openAlbumReviewSource(url)}
-            />
+            /></TransitionRegion>
 
-            <AlbumRelatedAlbumsPanel
+            <TransitionRegion><AlbumRelatedAlbumsPanel
               related={relatedAlbums}
               isLoading={isRelatedAlbumsLoading}
               error={relatedAlbumsError}
               onRefresh={() => void refreshRelatedAlbums()}
               onOpenAlbum={openTimelineAlbum}
               onOpenSource={(url) => void openLastFmSource(url)}
-            />
+            /></TransitionRegion>
 
-            <section className="table-panel" aria-label="Selected album tracks">
+            <TransitionRegion><section className="table-panel" aria-label="Selected album tracks">
               <div className="panel-heading compact">
                 <div>
                   <h2>{selectedAlbum?.album ?? "Track list"}</h2>
@@ -17647,13 +17648,13 @@ export default function App() {
                 isLoading={isAlbumTracksLoading}
                 popularity={albumPopularity}
               />
-              <TrackPopularityAttribution
+              <TransitionRegion><TrackPopularityAttribution
                 popularity={albumPopularity}
                 isLoading={isAlbumPopularityLoading}
                 error={albumPopularityError}
                 onOpenSource={(url) => void openLastFmSource(url)}
-              />
-            </section>
+              /></TransitionRegion>
+            </section></TransitionRegion>
           </section>
         ) : activeSection === "Statistics" ? (
           <section className={`workspace statistics-workspace ${statisticsView === "rating" ? "rating-ledger-active" : ""}`}>
@@ -17681,12 +17682,12 @@ export default function App() {
               </div>
             </header>
 
-            <section id="statistics-rating" role="tabpanel" aria-labelledby="statistics-rating-tab" hidden={statisticsView !== "rating"} className="rating-progress-page">
+            <TransitionRegion><section id="statistics-rating" role="tabpanel" aria-labelledby="statistics-rating-tab" hidden={statisticsView !== "rating"} className="rating-progress-page">
               <header className="rating-progress-heading"><h2>Rating progress</h2><p>Album year · selected genres combined</p></header>
               {statsError ? <p className="error-message" role="alert">{statsError}</p> : null}
               <YearProgressExplorer selection={yearLedgerSelection} onSelectionChange={setYearLedgerSelection} rows={statistics?.yearProgress ?? []} genreOptions={genreSuggestionOptions} onRequestGenreOptions={requestGenreSuggestionRefresh} onSelect={openInsightInSearch} />
-            </section>
-            <div id="statistics-overview" role="tabpanel" aria-labelledby="statistics-overview-tab" hidden={statisticsView !== "overview"}>
+            </section></TransitionRegion>
+            <TransitionRegion><div id="statistics-overview" role="tabpanel" aria-labelledby="statistics-overview-tab" hidden={statisticsView !== "overview"}>
             <section className="metric-grid" aria-label="Statistics summary">
               <Metric
                 label="Tracks"
@@ -18312,7 +18313,7 @@ export default function App() {
                 />
               </section>
             </section>
-            </div>
+            </div></TransitionRegion>
           </section>
         ) : activeSection === "Settings" ? (
           <SettingsWorkspace
@@ -21484,7 +21485,7 @@ export default function App() {
             onExport={runToolExport}
           />
         ) : activeSection === "Albums" ? (
-          <AlbumDetailPanel
+          <TransitionRegion><AlbumDetailPanel
             album={selectedAlbum}
             tracks={albumTracksResponse}
             isLoading={isAlbumTracksLoading}
@@ -21495,9 +21496,9 @@ export default function App() {
             exportResult={albumExportResult}
             onExport={runAlbumExport}
             countryFlagDisplay={settings.countryFlagDisplay}
-          />
+          /></TransitionRegion>
         ) : activeSection === "Statistics" ? (
-          <aside
+          <TransitionRegion><aside
             className="detail-panel statistics-detail"
             aria-label="Statistics details"
           >
@@ -21623,7 +21624,7 @@ export default function App() {
                 onSelect={setStatisticsCohort}
               />
             </section>
-          </aside>
+          </aside></TransitionRegion>
         ) : activeSection === "Settings" ? (
           <aside
             className="detail-panel settings-detail"

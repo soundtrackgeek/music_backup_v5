@@ -454,7 +454,7 @@ npm run security:check
 
 ## Architecture Safety Net
 
-- The frontend uses React 19.3 and React DOM 19.3 with matching TypeScript types and the modern JSX transform. Stable React 19.3 APIs, including `ViewTransition`, are available for future feature work; this dependency upgrade does not add animations or change existing loading flows.
+- The frontend uses React 19.3 and React DOM 19.3 with matching TypeScript types and the modern JSX transform. React `ViewTransition` animates Artist detail tabs, selected Album details and independent tracks/reviews/popularity/related albums, Timeline tabs and discrete selections, Charts configurations/results, and Statistics tabs/selected details. Content cross-fades last 180 ms and respect reduced-motion preferences. Effect-based data requests retain their independent loading/error handling; `useDeferredValue` transitions their rendered content without remounting it or delaying chart inputs. Artist lazy tabs retain their own Suspense boundaries.
 - Vitest, React Testing Library, jest-dom, and jsdom cover browse request serialization, saved search/chart compatibility normalization, settings defaults, workspace shortcuts/top reset, and MusicBrainz review-state rendering.
 - Search, Artists, and Settings have focused workspace presentation boundaries; shared state remains in `App.tsx`, with no global state library.
 - `backend.ts` dispatches through separate Tauri-client, web-preview, and normalization modules.
