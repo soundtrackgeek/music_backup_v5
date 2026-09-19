@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.150.1] - 2026-09-19
+
+### Fixed
+
+- Music Library 0.150.1 adds a combined Aurora intake preview for selected albums and monitored folders across General, Scores, and Synthwave roots. With Aurora 0.26.1 or newer, one batch creates one database recovery backup and one atomic catalog import. A catalog failure rolls back every album and retains the sources; replacement recovery folders and per-destination file verification remain enforced. Completed retries reuse the committed receipt without another backup.
+
 ## [0.150.0] - 2026-09-19
 
 ### Added

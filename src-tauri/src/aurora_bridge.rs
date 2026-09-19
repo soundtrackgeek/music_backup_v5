@@ -13,7 +13,7 @@ use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const PROTOCOL_VERSION: u32 = 1;
-const PLAN_FORMAT_VERSION: u32 = 2;
+const PLAN_FORMAT_VERSION: u32 = 3;
 const BRIDGE_DIRECTORY: &str = "aurora-bridge";
 const APP_DATA_OVERRIDE: &str = "MUSIC_LIBRARY_BRIDGE_APP_DATA_DIR";
 const GENERAL_ROOT_OVERRIDE: &str = "MUSIC_LIBRARY_BRIDGE_GENERAL_ROOT";
@@ -144,6 +144,20 @@ struct PreviewBatchRequest {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SelectionTarget {
+    source_path: String,
+    category: String,
+    #[serde(default)]
+    album_only: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct PreviewSelectionRequest {
+    targets: Vec<SelectionTarget>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PreviewMoveToInboxRequest {
     album_id: String,
     inbox_path: String,
@@ -231,6 +245,8 @@ struct StoredPlan {
     destination_root: String,
     snapshot_path: String,
     #[serde(default)]
+    destination_roots: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
     operation: PlanOperation,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     removal_scope: Option<importer::AlbumRemovalScope>,
@@ -288,6 +304,7 @@ struct InventoryFile {
 
 #[derive(Clone, Debug)]
 struct PublishedAlbum {
+    root: PathBuf,
     destination: PathBuf,
     inventory: FolderInventory,
     plan_id: String,
@@ -376,6 +393,12 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
                 .context("previewBatch payload must contain sourcePath and category")?;
             preview_batch(&app_data_dir, payload, &mut progress)
         }
+        "previewSelection" => {
+            let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
+            let payload: PreviewSelectionRequest = serde_json::from_value(request.payload)
+                .context("previewSelection payload must contain targets")?;
+            preview_selection(&app_data_dir, payload, &mut progress)
+        }
         "previewRemoveAlbum" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
             let payload: PreviewMoveToInboxRequest = serde_json::from_value(request.payload)
@@ -462,6 +485,7 @@ fn capabilities() -> Result<Value> {
         "bridgeVersion": PROTOCOL_VERSION,
         "categories": categories,
         "supports": {
+            "selectedAlbumBatch": true,
             "singleAlbum": true,
             "batchFolders": true,
             "crossVolumeCopy": true,
@@ -483,25 +507,84 @@ fn preview_batch(
     request: PreviewBatchRequest,
     progress: &mut BridgeProgressReporter,
 ) -> Result<Value> {
+    preview_selection(
+        app_data_dir,
+        PreviewSelectionRequest {
+            targets: vec![SelectionTarget {
+                source_path: request.source_path,
+                category: request.category,
+                album_only: false,
+            }],
+        },
+        progress,
+    )
+}
+
+fn resolve_selection_inputs(
+    targets: &[SelectionTarget],
+) -> Result<(
+    PathBuf,
+    Vec<BatchAlbumInput>,
+    std::collections::BTreeMap<String, String>,
+)> {
+    if targets.is_empty() || targets.len() > 1000 {
+        bail!("Choose between 1 and 1000 album or parent folders");
+    }
+    let mut inputs: Vec<BatchAlbumInput> = Vec::new();
+    let mut roots = std::collections::BTreeMap::new();
+    let mut first_source = None;
+    for target in targets {
+        let category = category_definition(&target.category)?;
+        let root = canonical_destination_root(&category)?;
+        if target.source_path.trim().is_empty() || !Path::new(&target.source_path).is_absolute() {
+            bail!("Choose an absolute album or parent folder path");
+        }
+        let source = Path::new(&target.source_path).canonicalize()?;
+        let albums = folder_sync::discover_batch_album_sources(&source)?;
+        if target.album_only
+            && (albums.len() != 1 || normalized_path(&albums[0]) != normalized_path(&source))
+        {
+            bail!("The selected album includes nested album folders; select only complete individual albums");
+        }
+        for input in resolve_destination_mappings(&source, &root, albums)? {
+            if inputs.iter().any(|prior| {
+                paths_overlap(&prior.source, &input.source)
+                    || normalized_path(&prior.destination) == normalized_path(&input.destination)
+            }) {
+                bail!("The selected batch contains overlapping sources or duplicate destination folders");
+            }
+            inputs.push(input);
+        }
+        first_source.get_or_insert(source);
+        roots.insert(category.id.to_owned(), display_path(&root));
+    }
+    for input in &inputs {
+        if roots
+            .values()
+            .any(|root| paths_overlap(&input.source, Path::new(root)))
+        {
+            bail!("Selected source folders must be outside every batch destination root");
+        }
+    }
+    Ok((first_source.expect("nonempty targets"), inputs, roots))
+}
+
+fn preview_selection(
+    app_data_dir: &Path,
+    request: PreviewSelectionRequest,
+    progress: &mut BridgeProgressReporter,
+) -> Result<Value> {
     progress.report(
         "scanning",
-        "Finding album folders and checking their destinations.",
+        "Finding selected albums and checking their destinations.",
         0,
     );
-    let category = category_definition(&request.category)?;
+    let (source, inputs, destination_roots) = resolve_selection_inputs(&request.targets)?;
+    let category = category_definition(&request.targets[0].category)?;
     let destination_root = canonical_destination_root(&category)?;
-    let source = PathBuf::from(request.source_path.trim());
-    if request.source_path.trim().is_empty() {
-        bail!("Choose an album folder or a parent batch folder");
-    }
-    let source = source
-        .canonicalize()
-        .with_context(|| format!("Could not resolve intake folder {}", source.display()))?;
     let database_path = app_data_dir.join("music-library.sqlite3");
     let mut conn = open_database(&database_path)?;
     cleanup_abandoned_bridge_plans(&conn, app_data_dir)?;
-    let album_sources = folder_sync::discover_batch_album_sources(&source)?;
-    let inputs = resolve_destination_mappings(&source, &destination_root, album_sources)?;
     progress.total_albums = inputs.len();
     progress.report(
         "analyzing",
@@ -624,10 +707,19 @@ fn preview_batch(
         plan_id: plan_id.clone(),
         session_id: preview.session_id,
         source_path: display_path(&source),
-        category: category.id.to_owned(),
-        category_label: category.label.to_owned(),
+        category: if destination_roots.len() > 1 {
+            "mixed".to_owned()
+        } else {
+            category.id.to_owned()
+        },
+        category_label: if destination_roots.len() > 1 {
+            "Multiple music roots".to_owned()
+        } else {
+            category.label.to_owned()
+        },
         destination_root: display_path(&destination_root),
         snapshot_path: display_path(&snapshot_path),
+        destination_roots,
         operation: PlanOperation::Intake,
         albums: stored_albums,
     };
@@ -830,6 +922,7 @@ fn preview_album_removal(
         category_label: "Aurora Inbox".to_owned(),
         destination_root: display_path(&inbox),
         snapshot_path: display_path(&snapshot_path),
+        destination_roots: Default::default(),
         operation: if remove_album {
             PlanOperation::RemoveAlbum
         } else {
@@ -927,6 +1020,7 @@ fn preview_scoped_album_removal(
         category_label: "Aurora Inbox".to_owned(),
         destination_root: display_path(root),
         snapshot_path: display_path(&marker),
+        destination_roots: Default::default(),
         operation: PlanOperation::RemoveAlbum,
         removal_scope: Some(scope),
         albums: vec![album],
@@ -1607,9 +1701,25 @@ fn apply_batch(
     );
     let destination_root = match plan.operation {
         PlanOperation::Intake => {
-            let category = category_definition(&plan.category)?;
+            let roots = if plan.destination_roots.is_empty() {
+                std::collections::BTreeMap::from([(
+                    plan.category.clone(),
+                    plan.destination_root.clone(),
+                )])
+            } else {
+                plan.destination_roots.clone()
+            };
+            for (category, reviewed_root) in &roots {
+                let current = canonical_destination_root(&category_definition(category)?)?;
+                if normalized_path(&current) != normalized_path(Path::new(reviewed_root)) {
+                    bail!("A category destination changed after preview. Prepare the batch again");
+                }
+            }
+            let category = category_definition(roots.keys().next().expect("nonempty roots"))?;
             let root = canonical_destination_root(&category)?;
-            if normalized_path(&root) != normalized_path(Path::new(&plan.destination_root)) {
+            if plan.destination_roots.is_empty()
+                && normalized_path(&root) != normalized_path(Path::new(&plan.destination_root))
+            {
                 bail!("The category destination changed after preview. Prepare the batch again");
             }
             root
@@ -1700,7 +1810,7 @@ fn apply_batch(
         ));
     }
     let intake_quality = match plan.operation {
-        PlanOperation::Intake => inspect_published_mp3_quality(&published, &destination_root),
+        PlanOperation::Intake => inspect_published_mp3_quality(&published),
         PlanOperation::MoveToInbox | PlanOperation::RemoveAlbum => Ok(Vec::new()),
     };
     let intake_quality = match intake_quality {
@@ -1724,7 +1834,7 @@ fn apply_batch(
     }
     progress.report(
         "cataloging",
-        "Updating the catalog atomically and preserving its recovery backup.",
+        "Creating one recovery backup and updating the entire batch atomically.",
         plan.albums.len(),
     );
     let import_result = if let Some(scope) = &plan.removal_scope {
@@ -1838,7 +1948,6 @@ fn apply_batch(
 
 fn inspect_published_mp3_quality(
     published: &[PublishedAlbum],
-    destination_root: &Path,
 ) -> Result<Vec<music_doctor::IntakeTrackQuality>> {
     let checked_at_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1850,6 +1959,7 @@ fn inspect_published_mp3_quality(
     let mut quality = Vec::new();
 
     for album in published {
+        let destination_root = album.root.as_path();
         for file in &album.inventory.files {
             let relative = Path::new(&file.relative_path);
             if !relative
@@ -2048,9 +2158,29 @@ fn validate_published_inventories(albums: &[PublishedAlbum]) -> Result<()> {
     Ok(())
 }
 
-fn validate_apply_destinations(root: &Path, plan: &StoredPlan, can_reuse: bool) -> Result<()> {
+fn plan_album_root(plan: &StoredPlan, destination: &Path) -> Result<PathBuf> {
+    let roots = if plan.destination_roots.is_empty() {
+        vec![plan.destination_root.as_str()]
+    } else {
+        plan.destination_roots
+            .values()
+            .map(String::as_str)
+            .collect()
+    };
+    roots
+        .into_iter()
+        .find(|root| {
+            destination.parent().map(normalized_path) == Some(normalized_path(Path::new(root)))
+        })
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("The album destination is outside its reviewed category roots"))
+}
+
+fn validate_apply_destinations(_root: &Path, plan: &StoredPlan, can_reuse: bool) -> Result<()> {
     for (index, album) in plan.albums.iter().enumerate() {
         let destination = Path::new(&album.destination_path);
+        let album_root = plan_album_root(plan, destination)?;
+        let root = album_root.as_path();
         ensure_direct_child(root, destination)?;
         let exists = destination.try_exists().with_context(|| {
             format!(
@@ -2134,10 +2264,10 @@ fn verify_replacement_recovery(
 fn compensate_precommit(
     error: anyhow::Error,
     published: &[PublishedAlbum],
-    root: &Path,
+    _root: &Path,
     journal_path: &Path,
 ) -> anyhow::Error {
-    let cleanup_errors = cleanup_published(published, root);
+    let cleanup_errors = cleanup_published(published);
     if cleanup_errors.is_empty() {
         let _ = fs::remove_file(journal_path);
         error.context(
@@ -2188,7 +2318,8 @@ fn finish_committed_plan(
             "retained"
         };
         let recovery_path = if album.action == BatchAlbumAction::Replace {
-            replacement_recovery_path(plan, album, index, Path::new(&plan.destination_root))
+            plan_album_root(plan, &destination)
+                .and_then(|root| replacement_recovery_path(plan, album, index, &root))
                 .ok()
                 .map(|path| display_path(&path))
         } else {
@@ -2652,13 +2783,13 @@ fn stage_and_publish_with_progress(
     fail_after_publish: Option<usize>,
     progress: &mut BridgeProgressReporter,
 ) -> Result<Vec<PublishedAlbum>> {
-    let root = PathBuf::from(&plan.destination_root);
     let mut staging_paths = Vec::new();
     let mut published = Vec::new();
     let result = (|| -> Result<()> {
         for (index, album) in plan.albums.iter().enumerate() {
             let source = PathBuf::from(&album.source_path);
             let destination = PathBuf::from(&album.destination_path);
+            let root = plan_album_root(plan, &destination)?;
             ensure_direct_child(&root, &destination)?;
             if destination.try_exists().with_context(|| {
                 format!(
@@ -2676,6 +2807,7 @@ fn stage_and_publish_with_progress(
                     None
                 };
                 published.push(PublishedAlbum {
+                    root: root.clone(),
                     destination,
                     inventory: album.inventory.clone(),
                     plan_id: plan.plan_id.clone(),
@@ -2758,6 +2890,7 @@ fn stage_and_publish_with_progress(
             }
             staging_paths.pop();
             published.push(PublishedAlbum {
+                root: root.clone(),
                 destination: destination.clone(),
                 inventory: album.inventory.clone(),
                 plan_id: plan.plan_id.clone(),
@@ -2786,9 +2919,10 @@ fn stage_and_publish_with_progress(
         Ok(())
     })();
     if let Err(error) = result {
-        let cleanup_errors = cleanup_published(&published, &root);
+        let cleanup_errors = cleanup_published(&published);
         for (staging, index) in staging_paths.iter().rev() {
             let album = &plan.albums[*index];
+            let root = plan_album_root(plan, Path::new(&album.destination_path))?;
             let safe = has_staging_owner(staging, &plan.plan_id, *index)
                 .and_then(|owned| {
                     if owned {
@@ -2921,9 +3055,10 @@ fn inventory_matches_shape_without_owner(
     Ok(directories == expected.directories && files == expected_files)
 }
 
-fn cleanup_published(albums: &[PublishedAlbum], root: &Path) -> Vec<String> {
+fn cleanup_published(albums: &[PublishedAlbum]) -> Vec<String> {
     let mut errors = Vec::new();
     for album in albums.iter().rev() {
+        let root = album.root.as_path();
         match published_album_is_owned_and_unchanged(album) {
             Ok(true) => {}
             Ok(false) => {
@@ -3240,10 +3375,10 @@ fn compensate_abandoned_plan_files(plan: &StoredPlan, plan_directory: &Path) -> 
     if load_apply_journal(plan_directory)?.is_none() {
         return Ok(());
     }
-    let root = PathBuf::from(&plan.destination_root);
     let mut published = Vec::new();
     for (index, album) in plan.albums.iter().enumerate() {
         let destination = PathBuf::from(&album.destination_path);
+        let root = plan_album_root(plan, &destination)?;
         if destination.try_exists().with_context(|| {
             format!(
                 "Could not determine whether prior destination exists: {}",
@@ -3252,6 +3387,7 @@ fn compensate_abandoned_plan_files(plan: &StoredPlan, plan_directory: &Path) -> 
         })? && has_staging_owner(&destination, &plan.plan_id, index)?
         {
             published.push(PublishedAlbum {
+                root: root.clone(),
                 destination,
                 inventory: album.inventory.clone(),
                 plan_id: plan.plan_id.clone(),
@@ -3284,7 +3420,7 @@ fn compensate_abandoned_plan_files(plan: &StoredPlan, plan_directory: &Path) -> 
             }
         }
     }
-    let cleanup_errors = cleanup_published(&published, &root);
+    let cleanup_errors = cleanup_published(&published);
     if !cleanup_errors.is_empty() {
         bail!(
             "A prior Aurora intake has changed destination files and cannot be discarded safely: {}",
@@ -3292,6 +3428,7 @@ fn compensate_abandoned_plan_files(plan: &StoredPlan, plan_directory: &Path) -> 
         );
     }
     for (index, album) in plan.albums.iter().enumerate() {
+        let root = plan_album_root(plan, Path::new(&album.destination_path))?;
         let staging = root.join(format!(".aurora-intake-{}-{index:03}", plan.plan_id));
         if staging.try_exists().with_context(|| {
             format!(
@@ -3546,6 +3683,299 @@ fn set_hidden(_path: &Path, _hidden: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct SelectionFixture {
+        temp: tempfile::TempDir,
+        targets: Vec<SelectionTarget>,
+        previous_roots: Vec<(&'static str, Option<std::ffi::OsString>)>,
+    }
+
+    impl SelectionFixture {
+        fn new() -> Self {
+            use id3::TagLike;
+            let temp = tempdir().unwrap();
+            let mut previous_roots = vec![(APP_DATA_OVERRIDE, std::env::var_os(APP_DATA_OVERRIDE))];
+            std::env::set_var(APP_DATA_OVERRIDE, temp.path());
+            for (index, variable) in [
+                GENERAL_ROOT_OVERRIDE,
+                SCORES_ROOT_OVERRIDE,
+                SYNTHWAVE_ROOT_OVERRIDE,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let root = temp.path().join(format!("library-{index}"));
+                fs::create_dir(&root).unwrap();
+                previous_roots.push((variable, std::env::var_os(variable)));
+                std::env::set_var(variable, root);
+            }
+            let targets = (0..6)
+                .map(|index| {
+                    let source = temp.path().join(format!("inbox-{index}/Album {index}"));
+                    fs::create_dir_all(&source).unwrap();
+                    let path = source.join("01.mp3");
+                    let mut audio = Vec::new();
+                    for _ in 0..40 {
+                        let mut frame = vec![0; 417];
+                        frame[..4].copy_from_slice(&[0xff, 0xfb, 0x90, 0x64]);
+                        audio.extend(frame);
+                    }
+                    fs::write(&path, audio).unwrap();
+                    let mut tags = id3::Tag::new();
+                    tags.set_artist("Batch Artist");
+                    tags.set_album_artist("Batch Artist");
+                    tags.set_album(format!("Album {index}"));
+                    tags.set_title("Track");
+                    tags.set_genre("Score");
+                    tags.set_year(2026);
+                    tags.set_track(1);
+                    tags.set_duration(1000);
+                    tags.write_to_path(&path, id3::Version::Id3v24).unwrap();
+                    SelectionTarget {
+                        source_path: display_path(&source),
+                        category: ["general", "scores", "synthwave"][index % 3].to_owned(),
+                        album_only: true,
+                    }
+                })
+                .collect();
+            Self {
+                temp,
+                targets,
+                previous_roots,
+            }
+        }
+
+        fn preview(&self) -> Value {
+            preview_selection(
+                self.temp.path(),
+                PreviewSelectionRequest {
+                    targets: self.targets.clone(),
+                },
+                &mut BridgeProgressReporter::disabled("previewSelection"),
+            )
+            .unwrap()
+        }
+
+        fn apply(&self, preview: &Value) -> Result<Value> {
+            apply_batch(
+                self.temp.path(),
+                ApplyBatchRequest {
+                    plan_id: preview["planId"].as_str().unwrap().to_owned(),
+                    session_id: preview["sessionId"].as_i64().unwrap(),
+                },
+                &mut BridgeProgressReporter::disabled("applyBatch"),
+            )
+        }
+    }
+
+    impl Drop for SelectionFixture {
+        fn drop(&mut self) {
+            for (variable, value) in &self.previous_roots {
+                match value {
+                    Some(value) => std::env::set_var(variable, value),
+                    None => std::env::remove_var(variable),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn selected_batch_six_albums_use_one_backup_and_one_commit_across_roots() {
+        let fixture = SelectionFixture::new();
+        let preview = fixture.preview();
+        assert_eq!(preview["albumCount"], 6);
+        assert_eq!(preview["category"]["id"], "mixed");
+        let receipt = fixture.apply(&preview).expect("whole batch apply");
+        assert_eq!(receipt["albumCount"], 6);
+        assert_eq!(receipt["movedAlbumCount"], 6);
+        let conn = open_database(&fixture.temp.path().join("music-library.sqlite3")).unwrap();
+        for (sql, expected) in [
+            ("SELECT COUNT(*) FROM database_backups", 1),
+            (
+                "SELECT COUNT(*) FROM import_runs WHERE status='completed'",
+                1,
+            ),
+            ("SELECT COUNT(*) FROM albums", 6),
+            ("SELECT COUNT(*) FROM tracks", 6),
+        ] {
+            assert_eq!(
+                conn.query_row(sql, [], |row| row.get::<_, i64>(0)).unwrap(),
+                expected,
+                "{sql}"
+            );
+        }
+        assert_eq!(
+            fs::read_dir(fixture.temp.path().join("backups"))
+                .unwrap()
+                .count(),
+            1
+        );
+        let backup = open_database(Path::new(receipt["backupPath"].as_str().unwrap())).unwrap();
+        assert_eq!(
+            backup
+                .query_row("SELECT COUNT(*) FROM albums", [], |row| row
+                    .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        for target in &fixture.targets {
+            assert!(!Path::new(&target.source_path).exists());
+        }
+        for album in receipt["albums"].as_array().unwrap() {
+            assert!(Path::new(album["destinationPath"].as_str().unwrap())
+                .join("01.mp3")
+                .is_file());
+        }
+        let replay = fixture
+            .apply(&preview)
+            .expect("idempotent committed replay");
+        assert_eq!(replay["importRunId"], receipt["importRunId"]);
+        drop(backup);
+        assert_eq!(
+            fs::read_dir(fixture.temp.path().join("backups"))
+                .unwrap()
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn selected_batch_database_failure_rolls_back_every_album_and_preserves_sources() {
+        let fixture = SelectionFixture::new();
+        let preview = fixture.preview();
+        let conn = open_database(&fixture.temp.path().join("music-library.sqlite3")).unwrap();
+        conn.execute_batch("CREATE TRIGGER reject_batch_album BEFORE INSERT ON tracks WHEN NEW.album = 'Album 4' BEGIN SELECT RAISE(ABORT, 'injected batch failure'); END;").unwrap();
+        let error = fixture
+            .apply(&preview)
+            .expect_err("injected catalog failure");
+        assert!(
+            format!("{error:#}").contains("injected batch failure"),
+            "{error:#}"
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM tracks", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM albums", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM import_runs WHERE status='completed'",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
+        assert_eq!(
+            fs::read_dir(fixture.temp.path().join("backups"))
+                .unwrap()
+                .count(),
+            1
+        );
+        for target in &fixture.targets {
+            assert!(Path::new(&target.source_path).join("01.mp3").is_file());
+        }
+        for album in preview["albums"].as_array().unwrap() {
+            assert!(!Path::new(album["destinationPath"].as_str().unwrap()).exists());
+        }
+    }
+
+    #[test]
+    fn selected_batch_rejects_duplicate_sources_destinations_and_nested_selections() {
+        let fixture = SelectionFixture::new();
+        let first = fixture.targets[0].clone();
+        assert!(resolve_selection_inputs(&[first.clone(), first.clone()]).is_err());
+        let duplicate = fixture.temp.path().join("elsewhere/Album 0");
+        fs::create_dir_all(&duplicate).unwrap();
+        fs::copy(
+            Path::new(&first.source_path).join("01.mp3"),
+            duplicate.join("01.mp3"),
+        )
+        .unwrap();
+        let second = SelectionTarget {
+            source_path: display_path(&duplicate),
+            ..first.clone()
+        };
+        assert!(resolve_selection_inputs(&[first.clone(), second]).is_err());
+        let parent = SelectionTarget {
+            source_path: display_path(Path::new(&first.source_path).parent().unwrap()),
+            ..first.clone()
+        };
+        assert!(resolve_selection_inputs(&[parent.clone()]).is_err());
+        assert!(resolve_selection_inputs(&[
+            first,
+            SelectionTarget {
+                album_only: false,
+                ..parent
+            }
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn selected_batch_replacements_preserve_originals_in_each_destination_root() {
+        use id3::TagLike;
+        let fixture = SelectionFixture::new();
+        let first = fixture.apply(&fixture.preview()).unwrap();
+        let albums = first["albums"].as_array().unwrap();
+        let mut originals = Vec::new();
+        for album in albums {
+            let source = Path::new(album["sourcePath"].as_str().unwrap());
+            let destination = Path::new(album["destinationPath"].as_str().unwrap());
+            let old = fs::read(destination.join("01.mp3")).unwrap();
+            originals.push(old.clone());
+            fs::create_dir_all(source).unwrap();
+            fs::write(source.join("01.mp3"), old).unwrap();
+            let mut tags = id3::Tag::read_from_path(source.join("01.mp3")).unwrap();
+            tags.set_title("Replacement track");
+            tags.write_to_path(source.join("01.mp3"), id3::Version::Id3v24)
+                .unwrap();
+            fs::copy(source.join("01.mp3"), source.join("02.mp3")).unwrap();
+            tags.set_title("Bonus track");
+            tags.set_track(2);
+            tags.write_to_path(source.join("02.mp3"), id3::Version::Id3v24)
+                .unwrap();
+        }
+        let preview = fixture.preview();
+        assert!(preview["albums"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|album| album["action"] == "replace"));
+        let receipt = fixture.apply(&preview).unwrap();
+        for (index, album) in receipt["albums"].as_array().unwrap().iter().enumerate() {
+            let recovery = Path::new(album["recoveryPath"].as_str().unwrap());
+            let destination = Path::new(album["destinationPath"].as_str().unwrap());
+            assert_eq!(recovery.parent(), destination.parent());
+            assert_eq!(fs::read(recovery.join("01.mp3")).unwrap(), originals[index]);
+            assert_eq!(
+                id3::Tag::read_from_path(destination.join("01.mp3"))
+                    .unwrap()
+                    .title(),
+                Some("Replacement track")
+            );
+        }
+        let conn = open_database(&fixture.temp.path().join("music-library.sqlite3")).unwrap();
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM database_backups", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM albums", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            6
+        );
+    }
     // macOS's default /var temporary directory is a symlink. These tests
     // exercise deliberate rejection of linked parents, so use its real path.
     fn tempdir() -> std::io::Result<tempfile::TempDir> {
@@ -3597,6 +4027,7 @@ mod tests {
             category_label: "Movie / TV / game music".to_owned(),
             destination_root: display_path(root),
             snapshot_path: "snapshot.tsv".to_owned(),
+            destination_roots: Default::default(),
             operation: PlanOperation::Intake,
             albums,
         }
@@ -3920,7 +4351,7 @@ mod tests {
             plan.albums[0].inventory
         );
 
-        assert!(cleanup_published(&published, &root).is_empty());
+        assert!(cleanup_published(&published).is_empty());
         assert_eq!(
             inventory_folder(&destination).expect("restored original"),
             original
@@ -3963,7 +4394,7 @@ mod tests {
         .expect("mutate source");
 
         assert!(validate_source_inventories(&plan).is_err());
-        assert!(cleanup_published(&published, &root).is_empty());
+        assert!(cleanup_published(&published).is_empty());
         assert!(!root.join("Final").exists());
         assert!(Path::new(&plan.albums[0].source_path).is_dir());
     }
@@ -3980,7 +4411,7 @@ mod tests {
         fs::write(root.join("Final").join("external.txt"), b"do not delete")
             .expect("external destination change");
 
-        let errors = cleanup_published(&published, &root);
+        let errors = cleanup_published(&published);
 
         assert_eq!(errors.len(), 1);
         assert!(root.join("Final").join("external.txt").is_file());
