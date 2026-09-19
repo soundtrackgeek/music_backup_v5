@@ -3746,8 +3746,11 @@ mod tests {
         }
 
         fn preview(&self) -> Value {
+            // Match the bridge entry point: Windows temp paths can contain 8.3 aliases,
+            // while the importer records the canonical snapshot path.
+            let app_data_dir = bridge_app_data_dir().unwrap();
             preview_selection(
-                self.temp.path(),
+                &app_data_dir,
                 PreviewSelectionRequest {
                     targets: self.targets.clone(),
                 },
@@ -3757,8 +3760,9 @@ mod tests {
         }
 
         fn apply(&self, preview: &Value) -> Result<Value> {
+            let app_data_dir = bridge_app_data_dir()?;
             apply_batch(
-                self.temp.path(),
+                &app_data_dir,
                 ApplyBatchRequest {
                     plan_id: preview["planId"].as_str().unwrap().to_owned(),
                     session_id: preview["sessionId"].as_i64().unwrap(),

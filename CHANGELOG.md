@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.150.2] - 2026-09-19
+
+### Fixed
+
+- Fix three Windows batch-intake regression tests rejecting their own snapshot when the temporary directory uses an 8.3 short-path alias. Resolve the test app-data directory through the production bridge helper for both preview and apply; retain all snapshot-binding, rollback, replacement recovery, and one-backup assertions.
+
 ## [0.150.1] - 2026-09-19
 
 ### Fixed

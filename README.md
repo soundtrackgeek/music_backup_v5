@@ -1,5 +1,7 @@
 # Music Library
 
+Music Library 0.150.2 fixes the Windows release verification failure in the combined Aurora intake tests. Their temporary app-data directory now uses the same canonical path resolution as the production bridge, including Windows short-path aliases. The one-backup, atomic batch import and snapshot safety checks are unchanged.
+
 Music Library 0.150.1 adds a combined Aurora intake preview for selected albums and monitored folders across General, Scores, and Synthwave roots. With Aurora 0.26.1 or newer, one batch creates one database recovery backup and one atomic catalog import. A catalog failure rolls back every album and retains the sources; replacement recovery folders and per-destination file verification remain enforced. Completed retries reuse the committed receipt without another backup.
 
 Music Library 0.149.1 fixes Aurora Inbox previews failing with “The prepared intake delta did not match its add/replace plan” when unrelated albums have cleared or updated album ratings but retain older values in their track records. Intake preserves the current album rating only after verifying the complete track set is unchanged, including file identity and metadata hashes. New and replacement albums still recalculate normally; source/catalog validation and add/replace delta checks remain required. Update Music Library to receive this bridge fix; no Aurora update is required.
