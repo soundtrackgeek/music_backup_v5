@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.150.4] - 2026-09-20
+
+### Fixed
+
+- Stabilize the Windows release verification test for independent album-panel loading and stale review cancellation. Explicitly control both review responses and flush deferred React updates before asserting their contents; retain the existing timeouts and verify that a late previous-album response cannot replace the current review.
+
 ## [0.150.3] - 2026-09-20
 
 ### Fixed

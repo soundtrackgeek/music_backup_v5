@@ -116,8 +116,12 @@ describe("App startup", () => {
 
   it("reveals album panels independently and ignores a previous album's late review", async () => {
     const actual = await vi.importActual<typeof import("./backend")>("./backend");
-    let resolveReview!: (review: Awaited<ReturnType<typeof actual.getAlbumReview>>) => void;
-    getAlbumReviewMock.mockReturnValueOnce(new Promise(resolve => { resolveReview = resolve; }));
+    type Review = Awaited<ReturnType<typeof actual.getAlbumReview>>;
+    let resolvePreviousReview!: (review: Review) => void;
+    let resolveCurrentReview!: (review: Review) => void;
+    getAlbumReviewMock
+      .mockReturnValueOnce(new Promise<Review>(resolve => { resolvePreviousReview = resolve; }))
+      .mockReturnValueOnce(new Promise<Review>(resolve => { resolveCurrentReview = resolve; }));
     render(<App />);
     const navigation = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(navigation.getByRole("button", { name: "Albums" }));
@@ -126,12 +130,27 @@ describe("App startup", () => {
     expect(await tracks.findByText("Album popularity loaded from Last.fm.")).toBeVisible();
     expect(await screen.findByRole("button", { name: "Open Holy Diver by Dio in Albums" })).toBeVisible();
     expect(screen.getByText("Loading album review.")).toBeVisible();
+    expect(getAlbumReviewMock).toHaveBeenCalledTimes(1);
     const firstAlbumId = getAlbumReviewMock.mock.calls[0][0];
-    fireEvent.click(screen.getByRole("button", { name: "Open Holy Diver by Dio in Albums" }));
-    expect(await screen.findByText(/^Holy Diver balances immediate hooks/)).toBeVisible();
-    await act(async () => resolveReview(await actual.getAlbumReview(firstAlbumId)));
-    expect(screen.queryByText(/^Actually balances immediate hooks/)).not.toBeInTheDocument();
-    expect(tracks.getByRole("heading", { name: "Holy Diver" })).toBeVisible();
+    // Flush the transition and its effects before completing either request.
+    // A wall-clock findBy query can otherwise expire while React defers the panel.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open Holy Diver by Dio in Albums" }));
+    });
+    expect(getAlbumReviewMock).toHaveBeenCalledTimes(2);
+    const currentAlbumId = getAlbumReviewMock.mock.calls[1][0];
+    expect(currentAlbumId).not.toBe(firstAlbumId);
+    expect(screen.getByText("Loading album review.")).toBeVisible();
+
+    await act(async () => resolveCurrentReview(await actual.getAlbumReview(currentAlbumId)));
+    const currentReview = within(screen.getByRole("region", { name: "Album Review" }));
+    expect(currentReview.getByText(/^Holy Diver balances immediate hooks/)).toBeVisible();
+    await act(async () => resolvePreviousReview(await actual.getAlbumReview(firstAlbumId)));
+    const settledReview = within(screen.getByRole("region", { name: "Album Review" }));
+    expect(settledReview.queryByText(/^Actually balances immediate hooks/)).not.toBeInTheDocument();
+    expect(settledReview.getByText(/^Holy Diver balances immediate hooks/)).toBeVisible();
+    const currentTracks = within(screen.getByRole("region", { name: "Selected album tracks" }));
+    expect(await currentTracks.findByRole("heading", { name: "Holy Diver" })).toBeVisible();
   });
 
   it("resizes Search and Charts columns independently without changing the chart sort", async () => {
