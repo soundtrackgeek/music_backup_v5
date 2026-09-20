@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.150.3] - 2026-09-20
+
+### Fixed
+
+- Retry temporary SQLite lock failures when saving refreshed MusicBrainz artist data, reusing the downloaded response with at most three local save attempts. Open the catalog after fetching, and save artist information, origin country, and discography together so a failed update preserves the previous snapshot.
+- Replace the opaque artist-update error with the underlying database error and actionable guidance when the library remains busy. Add regression coverage for competing SQLite writers, bounded retries, permanent failures, and atomic rollback.
+
 ## [0.150.2] - 2026-09-19
 
 ### Fixed

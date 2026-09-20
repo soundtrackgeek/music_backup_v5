@@ -1169,7 +1169,7 @@ async fn refresh_musicbrainz_artist_releases(
     })
     .await
     .map_err(|error| format!("MusicBrainz artist refresh task failed: {error}"))?
-    .map_err(|error| error.to_string())
+    .map_err(musicbrainz::artist_refresh_error)
 }
 
 #[cfg(not(test))]

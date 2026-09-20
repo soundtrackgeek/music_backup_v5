@@ -18,7 +18,7 @@ use crate::models::{
 use crate::musicbrainz_sync;
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
-use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
+use rusqlite::{params, Connection, ErrorCode, OpenFlags, OptionalExtension, TransactionBehavior};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -222,7 +222,6 @@ pub fn refresh_artist_release_groups_for_app(
     app: &AppHandle,
     request: MusicBrainzArtistRefreshRequest,
 ) -> Result<MusicBrainzArtistRefreshResult> {
-    let (mut conn, _) = db::open(app)?;
     let artist_name = normalize_display_name(&request.artist_name, &request.artist_key);
     let artist_key = normalize_local_artist_key(&request.artist_key, &artist_name);
     let mbid = required_mbid(request.musicbrainz_mbid.as_deref())?;
@@ -230,22 +229,14 @@ pub fn refresh_artist_release_groups_for_app(
     thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
     let origin_payload = fetch_artist_origin(&mbid)?;
     let fetched_at = Utc::now().to_rfc3339();
-    let stored_count = save_refreshed_artist_release_groups(&mut conn, &mbid, &rows, &fetched_at)?;
-    db::ensure_musicbrainz_artist_info_tables(&conn)?;
-    let artist_info = derive_artist_info(&origin_payload);
-    save_artist_info_evidence(
-        &conn,
+    // Open the current catalog only after the network work has finished.
+    let (mut conn, _) = db::open(app)?;
+    let origin = save_refreshed_artist_snapshot(
+        &mut conn,
         &artist_key,
         &artist_name,
         &mbid,
-        &artist_info,
-        &fetched_at,
-    )?;
-    let origin = save_refreshed_artist_origin_country(
-        &conn,
-        &artist_key,
-        &artist_name,
-        &mbid,
+        &rows,
         &origin_payload,
         &fetched_at,
     )?;
@@ -256,7 +247,7 @@ pub fn refresh_artist_release_groups_for_app(
         artist_name,
         musicbrainz_mbid: mbid,
         fetched_count: rows.len(),
-        stored_count,
+        stored_count: rows.len(),
         fetched_at,
         origin,
     })
@@ -271,30 +262,114 @@ pub fn set_artist_origin_country_for_app(
     set_artist_origin_country_for_connection(&conn, request)
 }
 
+fn musicbrainz_database_is_busy(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<rusqlite::Error>(),
+        Some(rusqlite::Error::SqliteFailure(failure, _))
+            if matches!(failure.code, ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
+    )
+}
+
+pub(crate) fn artist_refresh_error(error: anyhow::Error) -> String {
+    if musicbrainz_database_is_busy(&error) {
+        format!(
+            "MusicBrainz update could not be saved because the library database is busy. \
+             Wait for the current import or sync to finish, then try Update again. Details: {error:#}"
+        )
+    } else {
+        format!("Could not update MusicBrainz artist information: {error:#}")
+    }
+}
+
+fn retry_musicbrainz_write<T>(mut save: impl FnMut() -> Result<T>) -> Result<T> {
+    // Each attempt retains the connection's busy timeout. Retry only a rolled-back
+    // local write; never repeat the MusicBrainz requests or retry permanent errors.
+    for attempt in 0..3 {
+        match save() {
+            Err(error) if attempt < 2 && musicbrainz_database_is_busy(&error) => {
+                thread::sleep(Duration::from_millis(250));
+            }
+            result => return result,
+        }
+    }
+    unreachable!("the last write attempt always returns")
+}
+
+fn save_refreshed_artist_snapshot(
+    conn: &mut Connection,
+    artist_key: &str,
+    artist_name: &str,
+    mbid: &str,
+    rows: &[RefreshedReleaseGroup],
+    payload: &MusicBrainzArtistLookupResponse,
+    fetched_at: &str,
+) -> Result<Option<MusicBrainzArtistOriginCountryUpdate>> {
+    retry_musicbrainz_write(|| {
+        let tx = conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .context("Could not start MusicBrainz artist update transaction")?;
+        db::ensure_musicbrainz_artist_info_tables(&tx)?;
+        replace_refreshed_artist_release_groups(&tx, mbid, rows, fetched_at)?;
+        save_artist_info_evidence(
+            &tx,
+            artist_key,
+            artist_name,
+            mbid,
+            &derive_artist_info(payload),
+            fetched_at,
+        )?;
+        let origin = save_refreshed_artist_origin_country(
+            &tx,
+            artist_key,
+            artist_name,
+            mbid,
+            payload,
+            fetched_at,
+        )?;
+        tx.commit()
+            .context("Could not commit MusicBrainz artist update")?;
+        Ok(origin)
+    })
+}
+
 fn save_refreshed_artist_release_groups(
     conn: &mut Connection,
     artist_mbid: &str,
     rows: &[RefreshedReleaseGroup],
     fetched_at: &str,
 ) -> Result<usize> {
+    retry_musicbrainz_write(|| {
+        let tx = conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .context("Could not start MusicBrainz release-group refresh transaction")?;
+        replace_refreshed_artist_release_groups(&tx, artist_mbid, rows, fetched_at)?;
+        tx.commit()
+            .context("Could not commit MusicBrainz release-group refresh")?;
+        Ok(rows.len())
+    })
+}
+
+fn replace_refreshed_artist_release_groups(
+    conn: &Connection,
+    artist_mbid: &str,
+    rows: &[RefreshedReleaseGroup],
+    fetched_at: &str,
+) -> Result<()> {
     if !table_exists(conn, "musicbrainz_artist_release_groups")? {
         bail!("MusicBrainz refreshed release-group table is unavailable");
     }
 
-    let tx = conn
-        .transaction()
-        .context("Could not start MusicBrainz release-group refresh transaction")?;
-    tx.execute(
+    conn.execute(
         "
         DELETE FROM musicbrainz_artist_release_groups
         WHERE artist_mbid = ?1
         ",
         params![artist_mbid],
     )
-    .context("Could not clear old refreshed MusicBrainz release groups")?;
+    .context("Could not replace previously saved MusicBrainz discography")?;
 
     for row in rows {
-        tx.execute(
+        conn.execute(
             "
             INSERT INTO musicbrainz_artist_release_groups (
                 artist_mbid, release_mbid, title, year, type, secondary_types,
@@ -318,9 +393,7 @@ fn save_refreshed_artist_release_groups(
         .context("Could not save refreshed MusicBrainz release group")?;
     }
 
-    tx.commit()
-        .context("Could not commit MusicBrainz release-group refresh")?;
-    Ok(rows.len())
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -5278,6 +5351,209 @@ mod tests {
             .any(|release| release.title == "Please" && release.status == "missing"));
 
         fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn artist_refresh_retries_a_temporary_database_writer() {
+        let directory = tempfile::tempdir().expect("temporary database directory");
+        let path = directory.path().join("library.sqlite3");
+        let mut conn = Connection::open(&path).expect("open refresh connection");
+        db::configure(&conn).expect("configure refresh connection");
+        create_decision_tables(&conn);
+        conn.busy_timeout(Duration::from_millis(10))
+            .expect("short test busy timeout");
+        let writer = Connection::open(&path).expect("open competing writer");
+        writer
+            .execute_batch("BEGIN IMMEDIATE")
+            .expect("hold write lock");
+
+        // Reproduce the failing DELETE using a real second SQLite connection.
+        let error = conn
+            .execute("DELETE FROM musicbrainz_artist_release_groups", [])
+            .context("Could not clear old refreshed MusicBrainz release groups")
+            .expect_err("the original write fails while another writer holds the lock");
+        assert!(musicbrainz_database_is_busy(&error));
+        assert!(artist_refresh_error(error).contains("database is locked"));
+
+        let release_writer = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(100));
+            writer
+                .execute_batch("ROLLBACK")
+                .expect("release write lock");
+        });
+        let result = save_refreshed_artist_snapshot(
+            &mut conn,
+            "åge aleksandersen",
+            "Åge Aleksandersen",
+            "012c856b-d7d6-4eca-b6c7-e81586dc164c",
+            &[refresh_test_release("Levva livet!")],
+            &refresh_test_artist("NO"),
+            "2026-09-20T08:00:00Z",
+        );
+        release_writer.join().expect("join competing writer");
+        let origin = result
+            .expect("retry saves the fetched snapshot")
+            .expect("origin");
+        assert_eq!(origin.origin_country_code.as_deref(), Some("NO"));
+        let saved: (String, String, String) = conn
+            .query_row(
+                "SELECT info.artist_type, info.life_begin_date, releases.title
+             FROM musicbrainz_artist_infos info
+             JOIN musicbrainz_artist_release_groups releases ON releases.artist_mbid = info.mbid
+             WHERE info.local_artist_key = 'åge aleksandersen'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("read committed artist info and discography");
+        assert_eq!(
+            saved,
+            ("Person".into(), "1949-03-21".into(), "Levva livet!".into())
+        );
+    }
+
+    #[test]
+    fn artist_refresh_rolls_back_discography_and_info_when_origin_save_fails() {
+        let mut conn = create_artist_app_db();
+        create_decision_tables(&conn);
+        let old_time = "2026-08-20T08:00:00Z";
+        save_refreshed_artist_snapshot(
+            &mut conn,
+            "åge aleksandersen",
+            "Åge Aleksandersen",
+            "mbid-aage",
+            &[refresh_test_release("Old discography")],
+            &refresh_test_artist("NO"),
+            old_time,
+        )
+        .expect("save original snapshot");
+        save_refreshed_artist_release_groups(
+            &mut conn,
+            "mbid-other",
+            &[refresh_test_release("Other artist")],
+            old_time,
+        )
+        .expect("save unrelated artist");
+        conn.execute_batch(
+            "CREATE TRIGGER fail_artist_origin BEFORE INSERT ON musicbrainz_artist_origin_countries
+             BEGIN SELECT RAISE(ABORT, 'simulated origin save failure'); END;",
+        )
+        .expect("inject failure after discography and info writes");
+        let error = save_refreshed_artist_snapshot(
+            &mut conn,
+            "åge aleksandersen",
+            "Åge Aleksandersen",
+            "mbid-aage",
+            &[refresh_test_release("New discography")],
+            &refresh_test_artist("SE"),
+            "2026-09-20T08:00:00Z",
+        )
+        .expect_err("origin failure aborts the entire refresh");
+        let message = artist_refresh_error(error);
+        assert!(message.contains("Could not save MusicBrainz artist origin-country row"));
+        assert!(message.contains("simulated origin save failure"));
+        let saved: (String, String, String, String) = conn
+            .query_row(
+                "SELECT releases.title, info.fetched_at, origin.country_code, origin.fetched_at
+             FROM musicbrainz_artist_infos info
+             JOIN musicbrainz_artist_release_groups releases ON releases.artist_mbid = info.mbid
+             JOIN musicbrainz_artist_origin_countries origin USING (local_artist_key)
+             WHERE info.local_artist_key = 'åge aleksandersen'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("read original snapshot after rollback");
+        assert_eq!(
+            saved,
+            (
+                "Old discography".into(),
+                old_time.into(),
+                "NO".into(),
+                old_time.into()
+            )
+        );
+        let other: String = conn.query_row(
+            "SELECT title FROM musicbrainz_artist_release_groups WHERE artist_mbid = 'mbid-other'",
+            [], |row| row.get(0),
+        ).expect("read unrelated artist");
+        assert_eq!(other, "Other artist");
+        let new_country_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM musicbrainz_origin_countries WHERE country_code = 'SE'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("check country reference rollback");
+        assert_eq!(new_country_count, 0);
+    }
+
+    #[test]
+    fn artist_refresh_bounds_busy_retries_and_preserves_the_underlying_error() {
+        for code in [
+            rusqlite::ffi::SQLITE_BUSY,
+            rusqlite::ffi::SQLITE_BUSY_SNAPSHOT,
+            rusqlite::ffi::SQLITE_LOCKED,
+        ] {
+            let mut attempts = 0;
+            let result: Result<()> = retry_musicbrainz_write(|| {
+                attempts += 1;
+                Err(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(code),
+                    Some("database is locked".into()),
+                ))
+                .context("Could not start MusicBrainz artist update transaction")
+            });
+            assert_eq!(attempts, 3);
+            let error = result.expect_err("persistent lock is reported after bounded retries");
+            let message = artist_refresh_error(error);
+            assert!(message.contains("library database is busy"));
+            assert!(message.contains("try Update again"));
+            assert!(message.contains("Could not start MusicBrainz artist update transaction"));
+            assert!(message.contains("database is locked"));
+        }
+    }
+
+    #[test]
+    fn artist_refresh_does_not_retry_permanent_database_errors() {
+        for code in [
+            rusqlite::ffi::SQLITE_READONLY,
+            rusqlite::ffi::SQLITE_CONSTRAINT,
+            rusqlite::ffi::SQLITE_CORRUPT,
+        ] {
+            let mut attempts = 0;
+            let result: Result<()> = retry_musicbrainz_write(|| {
+                attempts += 1;
+                Err(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(code),
+                    Some("underlying SQLite failure".into()),
+                ))
+                .context("Could not replace previously saved MusicBrainz discography")
+            });
+            assert_eq!(attempts, 1);
+            let message = artist_refresh_error(result.expect_err("permanent failure"));
+            assert!(message.contains("underlying SQLite failure"));
+            assert!(!message.contains("database is busy"));
+        }
+    }
+
+    fn refresh_test_release(title: &str) -> RefreshedReleaseGroup {
+        RefreshedReleaseGroup {
+            release_mbid: "release-test".into(),
+            title: title.into(),
+            year: Some(1984),
+            primary_type: "Album".into(),
+            secondary_types: String::new(),
+            track_count: None,
+            status: "Official".into(),
+        }
+    }
+
+    fn refresh_test_artist(country: &str) -> MusicBrainzArtistLookupResponse {
+        serde_json::from_value(serde_json::json!({
+            "type": "Person", "gender": "Male", "country": country,
+            "sort-name": "Aleksandersen, Åge",
+            "life-span": { "begin": "1949-03-21", "ended": false }
+        }))
+        .expect("artist refresh payload")
     }
 
     #[test]
