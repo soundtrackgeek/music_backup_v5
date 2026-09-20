@@ -1529,13 +1529,16 @@ fn is_reparse_point(_path: &Path) -> Result<bool> {
 fn read_track(path: &Path) -> Result<ScannedTrack> {
     let tag = Tag::read_from_path(path)
         .with_context(|| format!("Could not read ID3 tags from {}", path.display()))?;
-    let artist = required_tag(path, "artist", tag.artist())?;
+    // Aurora edits DISPLAY ARTIST independently of the underlying TPE1 credits.
+    // Validate the effective artist, since that override can be the only credit.
+    let artist = tag.artist().and_then(nonempty);
     let display_artist = unique_extended_text(&tag, DISPLAY_ARTIST_DESCRIPTION)?
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| artist.clone());
+        .filter(|value| !value.trim().is_empty());
+    let display_artist = required_tag(path, "artist", display_artist.as_deref().or(artist))?;
     let album = required_tag(path, "album", tag.album())?;
     let title = required_tag(path, "title", tag.title())?;
-    let album_artist = joined_text_frame_values(&tag, "TPE2").unwrap_or_else(|| artist.clone());
+    let album_artist = joined_text_frame_values(&tag, "TPE2")
+        .unwrap_or_else(|| artist.unwrap_or(&display_artist).to_owned());
     let publisher = tag
         .get("TPUB")
         .and_then(|frame| frame.content().text())
@@ -2094,6 +2097,102 @@ mod tests {
         });
         tag.write_to_path(path, Version::Id3v24)
             .expect("write tags");
+    }
+
+    #[test]
+    fn scanner_artist_prefers_display_override_and_preserves_fallbacks() {
+        let temp = tempdir().unwrap();
+        let path = temp.path().join("track.mp3");
+        for version in [Version::Id3v23, Version::Id3v24] {
+            for (artist, display, album_artist, expected_display, expected_album_artist) in [
+                (
+                    None,
+                    Some("[dialogue]"),
+                    Some("Various Artists"),
+                    "[dialogue]",
+                    "Various Artists",
+                ),
+                (
+                    Some("  "),
+                    Some(" [dialogue]\0 "),
+                    Some("Various Artists"),
+                    "[dialogue]",
+                    "Various Artists",
+                ),
+                (None, Some("[dialogue]"), None, "[dialogue]", "[dialogue]"),
+                (
+                    Some("Performer"),
+                    Some("Display credit"),
+                    None,
+                    "Display credit",
+                    "Performer",
+                ),
+                (Some("Performer"), None, None, "Performer", "Performer"),
+                (
+                    Some(" Performer "),
+                    Some(" \0 "),
+                    Some("Album Artist"),
+                    "Performer",
+                    "Album Artist",
+                ),
+            ] {
+                write_tagged_mp3(&path, "Album");
+                let mut tag = Tag::read_from_path(&path).unwrap();
+                tag.remove("TPE1");
+                tag.remove("TPE2");
+                tag.remove_extended_text(Some(DISPLAY_ARTIST_DESCRIPTION), None);
+                if let Some(artist) = artist {
+                    tag.set_artist(artist);
+                }
+                if let Some(display) = display {
+                    tag.add_frame(ExtendedText {
+                        description: DISPLAY_ARTIST_DESCRIPTION.to_owned(),
+                        value: display.to_owned(),
+                    });
+                }
+                if let Some(album_artist) = album_artist {
+                    tag.set_album_artist(album_artist);
+                }
+                tag.write_to_path(&path, version).unwrap();
+                let before = fs::read(&path).unwrap();
+                let track = read_track(&path).unwrap();
+                assert_eq!(track.display_artist, expected_display);
+                assert_eq!(track.album_artist, expected_album_artist);
+                assert_eq!(
+                    fs::read(&path).unwrap(),
+                    before,
+                    "scanning must not rewrite tags"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn scanner_artist_rejects_missing_or_blank_artist_despite_album_artist() {
+        let temp = tempdir().unwrap();
+        let path = temp.path().join("track.mp3");
+        for version in [Version::Id3v23, Version::Id3v24] {
+            for artist in [None, Some("  ")] {
+                for display in [None, Some(" \0 ")] {
+                    write_tagged_mp3(&path, "Album");
+                    let mut tag = Tag::read_from_path(&path).unwrap();
+                    tag.remove("TPE1");
+                    tag.remove_extended_text(Some(DISPLAY_ARTIST_DESCRIPTION), None);
+                    if let Some(artist) = artist {
+                        tag.set_artist(artist);
+                    }
+                    if let Some(display) = display {
+                        tag.add_frame(ExtendedText {
+                            description: DISPLAY_ARTIST_DESCRIPTION.to_owned(),
+                            value: display.to_owned(),
+                        });
+                    }
+                    tag.write_to_path(&path, version).unwrap();
+                    let error = read_track(&path).expect_err("a track artist is still required");
+                    assert!(error.to_string().contains("is missing its artist tag"));
+                }
+            }
+        }
     }
 
     #[test]

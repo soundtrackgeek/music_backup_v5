@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.150.5] - 2026-09-20
+
+### Fixed
+
+- Accept a populated MusicBee `DISPLAY ARTIST` when an MP3 has no standard `TPE1` artist tag, matching Aurora's Artist editor and Inbox readiness. Folder imports, Aurora intake, and existing-folder sync use the same scanner. Preserve standard-artist and album-artist fallbacks, reject tracks with neither artist value, and leave source tags unchanged.
+- Add ID3v2.3/v2.4 regression coverage for missing and blank performer tags, artist precedence, album-artist fallback, and missing artists, plus a complete folder-wide Aurora preview/apply test that verifies the catalog credit and unchanged MP3 bytes.
+
 ## [0.150.4] - 2026-09-20
 
 ### Fixed

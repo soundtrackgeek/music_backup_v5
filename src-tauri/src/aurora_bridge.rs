@@ -3784,6 +3784,59 @@ mod tests {
     }
 
     #[test]
+    fn batch_intake_accepts_display_artist_without_performer_tag() {
+        use id3::TagLike;
+        let fixture = SelectionFixture::new();
+        let target = &fixture.targets[0];
+        let source = Path::new(&target.source_path);
+        let path = source.join("01.mp3");
+        let mut tags = id3::Tag::read_from_path(&path).unwrap();
+        tags.remove("TPE1");
+        tags.set_album_artist("Various Artists");
+        tags.set_title("Pig Vomit");
+        tags.add_frame(id3::frame::ExtendedText {
+            description: "DISPLAY ARTIST".to_owned(),
+            value: "[dialogue]".to_owned(),
+        });
+        tags.write_to_path(&path, id3::Version::Id3v24).unwrap();
+        let original = fs::read(&path).unwrap();
+        let preview = preview_batch(
+            &bridge_app_data_dir().unwrap(),
+            PreviewBatchRequest {
+                source_path: display_path(source.parent().unwrap()),
+                category: target.category.clone(),
+            },
+            &mut BridgeProgressReporter::disabled("previewBatch"),
+        )
+        .expect("folder-wide preview accepts the Aurora display artist");
+        assert_eq!(preview["albumCount"], 1);
+        assert_eq!(fs::read(&path).unwrap(), original);
+
+        let receipt = fixture
+            .apply(&preview)
+            .expect("apply display-artist intake");
+        let conn = open_database(&fixture.temp.path().join("music-library.sqlite3")).unwrap();
+        let credit: (String, String, String) = conn
+            .query_row(
+                "SELECT display_artist, album_artist_display, title FROM tracks",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            credit,
+            (
+                "[dialogue]".to_owned(),
+                "Various Artists".to_owned(),
+                "Pig Vomit".to_owned()
+            )
+        );
+        let destination = Path::new(receipt["albums"][0]["destinationPath"].as_str().unwrap());
+        assert_eq!(fs::read(destination.join("01.mp3")).unwrap(), original);
+        assert!(!source.exists());
+    }
+
+    #[test]
     fn selected_batch_six_albums_use_one_backup_and_one_commit_across_roots() {
         let fixture = SelectionFixture::new();
         let preview = fixture.preview();
