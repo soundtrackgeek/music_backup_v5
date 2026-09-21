@@ -71,6 +71,36 @@ class DatabaseCopyTests(unittest.TestCase):
             self.assertEqual(database.execute("SELECT value FROM marker").fetchone(), ("main",))
         database.close()
 
+    def test_checkpoints_local_wal_and_preserves_data_in_backup(self):
+        subprocess.run(
+            [
+                "python", "-c",
+                f"""
+import sqlite3, os
+c = sqlite3.connect(r"{self.destination}")
+c.execute("PRAGMA journal_mode = WAL")
+c.execute("INSERT INTO marker VALUES ('wal-local')")
+c.commit()
+os._exit(0)
+""",
+            ],
+            check=True,
+        )
+        wal_path = Path(str(self.destination) + "-wal")
+        self.assertTrue(wal_path.exists())
+        self.assertGreater(wal_path.stat().st_size, 0)
+
+        self.run_copy()
+
+        self.assertEqual(self.destination.read_bytes(), self.source_bytes)
+        self.assertFalse(wal_path.exists())
+        backups = list(self.destination.parent.glob("*.before-sync-*.sqlite3"))
+        self.assertEqual(len(backups), 1)
+        with sqlite3.connect(backups[0]) as backup_db:
+            values = [row[0] for row in backup_db.execute("SELECT value FROM marker").fetchall()]
+            self.assertIn("wal-local", values)
+        backup_db.close()
+
     def test_first_copy_creates_directory_and_database(self):
         self.destination.unlink()
         self.destination.parent.rmdir()

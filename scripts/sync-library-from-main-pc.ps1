@@ -57,6 +57,79 @@ function Open-DatabaseFile {
     }
 }
 
+function Checkpoint-DatabaseFile {
+    param([string] $DatabasePath)
+
+    $walPath = $DatabasePath + '-wal'
+    if (-not (Test-Path -LiteralPath $walPath)) { return }
+
+    # Only attempt checkpoint if the DB is a valid SQLite db and WAL has valid header.
+    $dbHeader = New-Object byte[] 16
+    try {
+        $dbStream = [System.IO.File]::Open($DatabasePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        $read = $dbStream.Read($dbHeader, 0, 16)
+        $dbStream.Dispose()
+        if ($read -ne 16 -or [Text.Encoding]::ASCII.GetString($dbHeader) -cne "SQLite format 3`0") {
+            return
+        }
+    }
+    catch {
+        return
+    }
+
+    $walHeader = New-Object byte[] 4
+    try {
+        $walStream = [System.IO.File]::Open($walPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        $read = $walStream.Read($walHeader, 0, 4)
+        $walStream.Dispose()
+        if ($read -ne 4 -or $walHeader[0] -ne 0x37 -or $walHeader[1] -ne 0x7f -or $walHeader[2] -ne 0x06 -or ($walHeader[3] -notin 0x82, 0x83)) {
+            return
+        }
+    }
+    catch {
+        return
+    }
+
+    # Use Windows built-in winsqlite3.dll to checkpoint and truncate the WAL safely.
+    $winsqlite = Join-Path $env:SystemRoot 'System32\winsqlite3.dll'
+    if (Test-Path -LiteralPath $winsqlite) {
+        if (-not ('WinSqlite' -as [type])) {
+            $definition = @"
+using System;
+using System.Runtime.InteropServices;
+
+public class WinSqlite {
+    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_open16", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int Open16(string filename, out IntPtr db);
+
+    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_exec", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int Exec(IntPtr db, string sql, IntPtr callback, IntPtr arg, out IntPtr errmsg);
+
+    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_close_v2", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int Close(IntPtr db);
+}
+"@
+            try {
+                Add-Type -TypeDefinition $definition
+            }
+            catch {
+                return
+            }
+        }
+
+        $db = [IntPtr]::Zero
+        try {
+            $openRes = [WinSqlite]::Open16($DatabasePath, [ref]$db)
+            if ($openRes -eq 0 -and $db -ne [IntPtr]::Zero) {
+                $errmsg = [IntPtr]::Zero
+                $null = [WinSqlite]::Exec($db, 'PRAGMA busy_timeout = 5000; PRAGMA wal_checkpoint(TRUNCATE);', [IntPtr]::Zero, [IntPtr]::Zero, [ref]$errmsg)
+                $null = [WinSqlite]::Close($db)
+            }
+        }
+        catch {}
+    }
+}
+
 function Test-SavedSmbCredential {
     param([string] $ServerName, [string] $Account)
     # Query only this server's entry. cmdkey lists account metadata, not passwords.
@@ -198,6 +271,7 @@ try {
     $null = [System.IO.Directory]::CreateDirectory($directory)
     $destinationExists = Test-Path -LiteralPath $DestinationPath
     if ($destinationExists) {
+        Checkpoint-DatabaseFile $DestinationPath
         # Deny readers/writers but allow the final atomic replacement while locked.
         $destination = Open-DatabaseFile $DestinationPath ReadWrite Delete
         $handles.Add($destination)

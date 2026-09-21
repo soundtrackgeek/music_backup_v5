@@ -580,6 +580,64 @@ pub fn database_path(app: &AppHandle) -> Result<PathBuf> {
     Ok(app_data_dir.join(DB_FILE_NAME))
 }
 
+pub fn default_database_path() -> Result<PathBuf> {
+    if let Some(value) = std::env::var_os("MUSIC_LIBRARY_BRIDGE_APP_DATA_DIR") {
+        let value = PathBuf::from(value);
+        if !value.is_absolute() {
+            bail!("MUSIC_LIBRARY_BRIDGE_APP_DATA_DIR must be an absolute directory path");
+        }
+        fs::create_dir_all(&value)?;
+        return Ok(value.join(DB_FILE_NAME));
+    }
+    #[cfg(target_os = "macos")]
+    let app_data = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|path| path.join("Library/Application Support"))
+        .ok_or_else(|| anyhow!("HOME is unavailable"))?;
+    #[cfg(not(target_os = "macos"))]
+    let app_data = std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("APPDATA is unavailable"))?;
+    let dir = app_data.join("com.local.musiclibrary");
+    fs::create_dir_all(&dir)
+        .with_context(|| format!("Could not create app data directory {}", dir.display()))?;
+    Ok(dir.join(DB_FILE_NAME))
+}
+
+pub fn checkpoint_truncate_path(db_path: &Path) -> Result<()> {
+    if !db_path.exists() {
+        return Ok(());
+    }
+    let conn = Connection::open(db_path)
+        .with_context(|| format!("Could not open SQLite database at {}", db_path.display()))?;
+    conn.execute_batch("PRAGMA busy_timeout = 5000;")
+        .context("Could not configure SQLite busy timeout for checkpoint")?;
+    let (busy, _log, _checkpointed): (i64, i64, i64) = conn
+        .query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
+        .with_context(|| format!("Could not checkpoint SQLite WAL at {}", db_path.display()))?;
+    if busy != 0 {
+        bail!(
+            "Could not truncate WAL at {}: database is busy",
+            db_path.display()
+        );
+    }
+    drop(conn);
+    Ok(())
+}
+
+pub fn checkpoint_truncate_for_app(app: &AppHandle) {
+    if let Ok(db_path) = database_path(app) {
+        if let Err(error) = checkpoint_truncate_path(&db_path) {
+            eprintln!(
+                "Could not checkpoint SQLite WAL on exit for {}: {error:#}",
+                db_path.display()
+            );
+        }
+    }
+}
+
 pub fn open(app: &AppHandle) -> Result<(Connection, PathBuf)> {
     let db_path = database_path(app)?;
     let conn = Connection::open(&db_path)
@@ -32883,5 +32941,37 @@ mod tests {
         let metadata = fs::metadata(&path).expect("xlsx metadata");
         assert!(metadata.len() > 0);
         fs::remove_file(path).expect("remove xlsx");
+    }
+
+    #[test]
+    fn checkpoints_and_truncates_wal() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let db_path = temp_dir.path().join("test-wal.sqlite3");
+        let conn = Connection::open(&db_path).expect("open db");
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             CREATE TABLE t (val INT);
+             INSERT INTO t VALUES (1);",
+        )
+        .expect("insert in wal mode");
+        // Simulate abrupt process exit where rusqlite destructor was not run
+        std::mem::forget(conn);
+
+        let wal_path = temp_dir.path().join("test-wal.sqlite3-wal");
+        assert!(
+            wal_path.exists(),
+            "wal file should exist before checkpoint"
+        );
+
+        checkpoint_truncate_path(&db_path).expect("checkpoint truncate");
+
+        let wal_empty_or_removed = !wal_path.exists()
+            || fs::metadata(&wal_path)
+                .map(|m| m.len() == 0)
+                .unwrap_or(true);
+        assert!(
+            wal_empty_or_removed,
+            "wal file should be truncated to 0 or removed"
+        );
     }
 }

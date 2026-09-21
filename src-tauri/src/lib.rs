@@ -30,6 +30,40 @@ pub fn run_aurora_bridge_from_args() -> bool {
     aurora_bridge::run_from_process_args()
 }
 
+pub fn run_cli_from_args() -> bool {
+    let args = std::env::args_os().collect::<Vec<_>>();
+    let Some(first) = args.get(1).and_then(|value| value.to_str()) else {
+        return false;
+    };
+    if first == "--checkpoint" || first == "--wal-checkpoint" {
+        let target_path = args.get(2).map(std::path::PathBuf::from);
+        let db_path = match target_path {
+            Some(path) => path,
+            None => match db::default_database_path() {
+                Ok(path) => path,
+                Err(error) => {
+                    eprintln!("Could not determine default database path: {error:#}");
+                    std::process::exit(1);
+                }
+            },
+        };
+        match db::checkpoint_truncate_path(&db_path) {
+            Ok(()) => {
+                println!(
+                    "Successfully checkpointed SQLite WAL at {}",
+                    db_path.display()
+                );
+                std::process::exit(0);
+            }
+            Err(error) => {
+                eprintln!("Checkpoint error for {}: {error:#}", db_path.display());
+                std::process::exit(1);
+            }
+        }
+    }
+    false
+}
+
 #[cfg(not(test))]
 use models::{
     AlbumDebutTimelineResponse, AppSettings, ArtistListRequest, ArtistListResponse,
@@ -2187,6 +2221,16 @@ pub fn run() {
             export_search,
             export_music_tool_issues
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to run Music Library app");
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                db::checkpoint_truncate_for_app(window.app_handle());
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("failed to build Music Library app")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                db::checkpoint_truncate_for_app(app_handle);
+            }
+        });
 }

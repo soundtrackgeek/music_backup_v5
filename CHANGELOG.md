@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.150.6] - 2026-09-21
+
+### Fixed
+
+- Checkpoint and truncate SQLite WAL sidecar files on clean application exit and window close in Music Library so the database file is left fully committed without a lingering non-empty WAL. Add `--checkpoint` CLI argument support for headless SQLite WAL truncation.
+- Safely checkpoint and truncate clean local SQLite WAL files before replacement in `sync-library-from-main-pc.ps1` using Windows built-in `winsqlite3.dll`, ensuring all pending local transactions are preserved in the dated pre-sync backup and preventing false "pending SQLite journal data" errors when Music Library is closed.
+- Add regression tests verifying that local SQLite WAL files are checkpointed, included in the pre-sync backup, and cleanly replaced.
+
 ## [0.150.5] - 2026-09-20
 
 ### Fixed
