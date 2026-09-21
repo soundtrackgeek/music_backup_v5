@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.150.7] - 2026-09-21
+
+### Changed
+
+- Aurora **Remove Album** now uses `D:\MUSIC_NOT_ALBUMS\`, outside `D:\MUSIC`. Reject pending removal plans targeting the old folder and retain verified transfer, collision protection, catalog commit, and recovery behavior.
+
 ## [0.150.6] - 2026-09-21
 
 ### Fixed

@@ -738,7 +738,7 @@ npm run security:check
 - Track ratings are normalized to the `0-100` album-rating scale.
 - If MusicBee `Album Rating` is missing or `-1`, fully rated albums get a calculated album rating from normalized track ratings.
 
-Albums sidebar **Remove Album** moves the complete album folder to `D:\MUSIC\_NOT\_ALBUMS\`, verifies the copy, removes the album through Music Library’s transactional importer, and cleans the source only after commit. The current Albums view immediately removes the row and refreshes. A confirmation shows the destination; collisions and changed sources are rejected, and cleanup warnings retain recovery information. Requires Aurora 0.24.29 and Music Library 0.145.9 or newer.
+Albums sidebar **Remove Album** moves the complete album folder to `D:\MUSIC_NOT_ALBUMS\`, verifies the copy, removes the album through Music Library’s transactional importer, and cleans the source only after commit. The current Albums view immediately removes the row and refreshes. A confirmation shows the destination; collisions and changed sources are rejected, and cleanup warnings retain recovery information. The destination outside D:\MUSIC requires Music Library 0.150.7 or newer. Aurora 0.26.7 also exposes Remove Album in expanded album details and rejects old-destination previews.
 
 Album moves now retain their preview, confirmation, progress, and errors when navigating away. Music Library 0.145.10 fixes ordinary/verbatim Windows path resolution for both Remove Album and Move to Inbox. Aurora 0.24.30 keeps the original target and preserves any newly selected album when the move completes.
 

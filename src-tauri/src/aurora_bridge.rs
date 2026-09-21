@@ -772,7 +772,7 @@ fn preview_selection(
     }))
 }
 
-const REMOVED_ALBUMS_ROOT: &str = r"D:\MUSIC\_NOT\_ALBUMS";
+const REMOVED_ALBUMS_ROOT: &str = r"D:\MUSIC_NOT_ALBUMS";
 
 fn validate_album_removal_paths(source: &Path, destination_root: &Path) -> Result<()> {
     if normalized_path(destination_root) != normalized_path(Path::new(REMOVED_ALBUMS_ROOT)) {
@@ -4620,7 +4620,13 @@ mod tests {
 
     #[test]
     fn removal_only_accepts_the_fixed_destination_and_nonoverlapping_source() {
+        assert_eq!(REMOVED_ALBUMS_ROOT, r"D:\MUSIC_NOT_ALBUMS");
         let destination = Path::new(REMOVED_ALBUMS_ROOT);
+        assert!(validate_album_removal_paths(
+            Path::new(r"D:\MUSIC\Album"),
+            Path::new(r"D:\MUSIC\_NOT\_ALBUMS")
+        )
+        .is_err());
         assert!(
             validate_album_removal_paths(Path::new(r"D:\MUSIC\Artist - Album"), destination)
                 .is_ok()
@@ -4628,7 +4634,7 @@ mod tests {
         assert!(
             validate_album_removal_paths(Path::new(r"H:\Synthwave\Album"), destination).is_ok()
         );
-        assert!(validate_album_removal_paths(Path::new(r"D:\MUSIC"), destination).is_err());
+        assert!(validate_album_removal_paths(Path::new(r"D:\"), destination).is_err());
         assert!(validate_album_removal_paths(destination, destination).is_err());
         assert!(validate_album_removal_paths(&destination.join("Album"), destination).is_err());
         assert!(
@@ -4637,10 +4643,10 @@ mod tests {
     }
 
     #[test]
-    fn removal_inside_library_preserves_all_files_until_commit_and_rejects_collisions() {
+    fn removal_outside_library_preserves_all_files_until_commit_and_rejects_collisions() {
         let temp = tempdir().expect("tempdir");
         let library = temp.path().join("library");
-        let destination = library.join("_NOT").join("_ALBUMS");
+        let destination = temp.path().join("MUSIC_NOT_ALBUMS");
         let receipt = temp.path().join("receipt");
         fs::create_dir_all(&destination).expect("destination");
         fs::create_dir_all(&receipt).expect("receipt");
