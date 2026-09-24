@@ -454,7 +454,7 @@ export function playlistMarkdown(
     "",
     quote(playlist.prompt),
     "",
-    "## Luna plan",
+    playlist.mixtape ? "## Two-sided mixtape" : "## Luna plan",
     "",
     playlist.description,
     "",
@@ -468,6 +468,17 @@ export function playlistMarkdown(
     `- Max tracks per album: ${playlist.maxTracksPerAlbum}`,
     `- Model: ${playlist.model}`,
     usageLines(playlist.usage),
+    ...(playlist.mixtape ? [
+      "", "## Side arrangement", "",
+      ...playlist.mixtape.sides.flatMap((slots, side) => [
+        `### Side ${side === 0 ? "A" : "B"} · ${playlist.mixtape!.config.minutes[side]} minutes maximum`,
+        quote(playlist.mixtape!.config.briefs[side]), "",
+        ...slots.map((slot, index) => {
+          const track = playlist.mixtape!.pool.find((entry) => entry.trackId === slot.trackId);
+          return `${index + 1}. ${tableCell(track?.title)} — ${slot.role}${slot.locked ? " · selection locked" : ""}${slot.transitionToNext ? " · transition locked" : ""}`;
+        }), "",
+      ]),
+    ] : []),
     "",
     "## Tracks",
     "",

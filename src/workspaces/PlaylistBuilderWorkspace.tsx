@@ -37,6 +37,7 @@ import { aiMarkdownTitle, playlistMarkdown } from "../aiMarkdownExport";
 import { AiMarkdownExportButton } from "../components/AiMarkdownExportButton";
 import { ExportResultStatus } from "../components/ExportResultStatus";
 import { PageLunaCommandArea } from "../components/SearchProgressiveDisclosure";
+import { MixtapeBuilder, MixtapeReview } from "../components/MixtapeBuilder";
 
 export type PlaylistBuilderLaunch = {
   id: number;
@@ -92,6 +93,8 @@ export function PlaylistBuilderWorkspace({
   savedPlaylistToOpen = null,
 }: PlaylistBuilderWorkspaceProps) {
   const [prompt, setPrompt] = useState("");
+  const [mode, setMode] = useState<"luna" | "mixtape">("luna");
+  const [mixtapeRevision, setMixtapeRevision] = useState(0);
   const [playlist, setPlaylist] = useState<AiPlaylist | null>(null);
   const [name, setName] = useState("");
   const [activeSavedId, setActiveSavedId] = useState<number | null>(null);
@@ -117,6 +120,8 @@ export function PlaylistBuilderWorkspace({
     if (!launch) return;
     setPrompt(launch.draft?.prompt ?? launch.prompt);
     setPlaylist(launch.draft ?? null);
+    setMode(launch.draft?.mixtape ? "mixtape" : "luna");
+    setMixtapeRevision((revision) => revision + 1);
     setName(launch.draft?.name ?? "");
     setActiveSavedId(null);
     setError(null);
@@ -234,6 +239,8 @@ export function PlaylistBuilderWorkspace({
   }
 
   function openSaved(saved: SavedPlaylist) {
+    setMode(saved.playlist.mixtape ? "mixtape" : "luna");
+    setMixtapeRevision((revision) => revision + 1);
     setPlaylist(saved.playlist);
     setVisibleTrackCount(playlistReviewBatchSize);
     setPrompt(saved.playlist.prompt);
@@ -396,7 +403,7 @@ export function PlaylistBuilderWorkspace({
           <p>
             {directSearchTitle
               ? "Your Search results are ready to review, save, and export."
-              : "Describe a moment. Luna plans it; your local library supplies it."}
+              : "Shape a playlist with Luna, or make a two-sided mixtape with Jev."}
           </p>
         </div>
         <span className="playlist-local-badge">
@@ -404,7 +411,24 @@ export function PlaylistBuilderWorkspace({
         </span>
       </header>
 
-      {directSearchTitle && playlist ? (
+      <div className="playlist-builder-modes" aria-label="Playlist builder mode">
+        <button className="secondary-button" type="button" aria-pressed={mode === "luna"} disabled={isBuilding || isSaving} onClick={() => setMode("luna")}>Luna playlist</button>
+        <button className="secondary-button" type="button" aria-pressed={mode === "mixtape"} disabled={isBuilding || isSaving} onClick={() => setMode("mixtape")}>Two-sided mixtape</button>
+      </div>
+
+      {mode === "mixtape" ? <MixtapeBuilder
+        key={mixtapeRevision}
+        playlist={playlist}
+        sourceRequest={sourceRequest}
+        sourceTitle={sourceCohortTitle}
+        isAvailable={isAvailable && !isSaving}
+        onBusyChange={setIsBuilding}
+        onBuilt={(result) => {
+          setPlaylist(result); setName(playlist?.mixtape ? name : result.name);
+          if (!playlist?.mixtape) setActiveSavedId(null);
+          setDirectSearchTitle(null); setError(null); setSavedError(null); setExportResult(null);
+        }}
+      /> : directSearchTitle && playlist ? (
         <section
           className="playlist-direct-source"
           aria-label="Search playlist created locally"
@@ -520,7 +544,7 @@ export function PlaylistBuilderWorkspace({
                   <span>
                     {isLocalSearchPlaylist
                       ? "Local Search order · no Luna"
-                      : `${playlist.strategy} recipe`}
+                      : playlist.mixtape ? "Two-sided mixtape · A → B" : `${playlist.strategy} recipe`}
                   </span>
                   <input
                     aria-label="Playlist name"
@@ -534,7 +558,7 @@ export function PlaylistBuilderWorkspace({
                   <button
                     className="secondary-button"
                     type="button"
-                    disabled={isSaving || playlist.tracks.length === 0}
+                    disabled={isSaving || isBuilding || playlist.tracks.length === 0}
                     onClick={() => void persistPlaylist()}
                   >
                     <Save size={16} />
@@ -549,7 +573,7 @@ export function PlaylistBuilderWorkspace({
                   <button
                     className="primary-button"
                     type="button"
-                    disabled={playlist.tracks.length === 0}
+                    disabled={isBuilding || playlist.tracks.length === 0}
                     onClick={() => void exportCurrentPlaylist()}
                   >
                     <Download size={16} />
@@ -560,7 +584,7 @@ export function PlaylistBuilderWorkspace({
 
               <AiMarkdownExportButton
                 title={aiMarkdownTitle(
-                  isLocalSearchPlaylist ? "Search playlist" : "Luna playlist",
+                  isLocalSearchPlaylist ? "Search playlist" : playlist.mixtape ? "Two-sided mixtape" : "Luna playlist",
                   name,
                 )}
                 markdown={playlistMarkdown(
@@ -593,7 +617,7 @@ export function PlaylistBuilderWorkspace({
                 </div>
               </dl>
 
-              {activeSavedPlaylist ? (
+              {activeSavedPlaylist && !playlist.mixtape ? (
                 <section
                   className="playlist-automation-panel"
                   aria-label="Smart playlist and Plex synchronization"
@@ -704,7 +728,7 @@ export function PlaylistBuilderWorkspace({
                 </section>
               ) : null}
 
-              <div className="playlist-track-list">
+              {playlist.mixtape ? <MixtapeReview playlist={playlist} disabled={isBuilding || isSaving} onChange={(next) => { setPlaylist(next); setExportResult(null); }} /> : <div className="playlist-track-list">
                 {playlist.tracks.length === 0 ? (
                   <div className="playlist-empty-state">
                     <ListMusic size={24} />
@@ -786,9 +810,9 @@ export function PlaylistBuilderWorkspace({
                     </article>
                   ))
                 )}
-              </div>
+              </div>}
 
-              {playlist.tracks.length > visibleTrackCount ? (
+              {!playlist.mixtape && playlist.tracks.length > visibleTrackCount ? (
                 <div className="playlist-track-load-more">
                   <button
                     className="secondary-button"
@@ -816,7 +840,9 @@ export function PlaylistBuilderWorkspace({
                 <span>
                   {isLocalSearchPlaylist
                     ? `${playlist.candidateCount.toLocaleString()} local Search tracks loaded directly · no Luna request`
-                    : `Luna inspected your request only · ${playlist.candidateCount} local candidates reviewed`}
+                    : playlist.mixtape
+                      ? `${playlist.candidateCount} reviewed candidates · ${playlist.mixtape.assessments.length ? "Jev scored metadata and notes" : "built locally without Jev"}`
+                      : `Luna inspected your request only · ${playlist.candidateCount} local candidates reviewed`}
                 </span>
                 <span>{playlist.model}</span>
               </footer>
@@ -842,7 +868,7 @@ export function PlaylistBuilderWorkspace({
             <strong>{savedPlaylists.length}</strong>
           </header>
           <p>
-            Reopen the exact track order without calling Luna or spending tokens.
+            Reopen the exact track order and mixtape locks without spending tokens.
           </p>
           {savedError ? <p className="error-message">{savedError}</p> : null}
           <div className="playlist-saved-list">
@@ -858,7 +884,7 @@ export function PlaylistBuilderWorkspace({
                   className={saved.id === activeSavedId ? "active" : ""}
                   key={saved.id}
                 >
-                  <button type="button" onClick={() => openSaved(saved)}>
+                  <button type="button" disabled={isBuilding || isSaving} onClick={() => openSaved(saved)}>
                     <strong>{saved.name}</strong>
                     <span>
                       {saved.automation.smart

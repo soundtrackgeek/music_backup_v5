@@ -975,6 +975,7 @@ export type AiPlaylistTrack = {
 };
 
 export type AiPlaylist = {
+  mixtape?: import("./mixtape").MixtapeDraft | null;
   prompt: string;
   name: string;
   description: string;

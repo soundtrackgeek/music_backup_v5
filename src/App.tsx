@@ -18339,6 +18339,7 @@ export default function App() {
             >
               <SettingsSection id="ai">
                 <AiSettingsPanel />
+                <AiSettingsPanel provider="OpenRouter" />
               </SettingsSection>
 
               <SettingsSection id="providers">

@@ -49,7 +49,7 @@ const settingsSections: SettingsSectionDefinition[] = [
   {
     id: "ai",
     label: "AI",
-    description: "Luna access and secure credentials",
+    description: "Luna, Jev and secure credentials",
     icon: Sparkles,
   },
   {

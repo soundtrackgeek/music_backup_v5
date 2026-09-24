@@ -1,0 +1,66 @@
+.mixtape-builder { border: 1px solid #c9d7d1; border-radius: 10px; padding: 22px; background: #f4f7f2; color: #233b34; }
+.mixtape-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+.mixtape-heading > div { flex: 1; }
+.mixtape-heading span { font-size: 10px; font-weight: 800; letter-spacing: .13em; color: #567766; }
+.mixtape-heading h2 { font-family: Georgia, serif; font-size: 29px; font-weight: 500; margin: 5px 0; }
+.mixtape-heading p { margin: 0; font-size: 12px; }
+.mixtape-heading > strong { border: 1px solid #bbccbe; padding: 10px 14px; border-radius: 5px; font-size: 20px; font-family: monospace; }
+.mixtape-builder fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.mixtape-briefs, .mixtape-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.mixtape-brief { display: flex; align-items: flex-end; gap: 12px; padding: 15px; border: 1px solid #c6d9ce; border-top: 4px solid #397564; border-radius: 6px; background: #fff; }
+.mixtape-brief.side-1 { border-top-color: #bc8154; }
+.mixtape-builder label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; font-weight: 650; min-width: 0; }
+.mixtape-brief > label:first-child { flex: 1; }
+.mixtape-builder input:not([type=range]), .mixtape-builder textarea { width: 100%; border: 1px solid #cbd7d0; border-radius: 4px; padding: 8px; background: white; color: #243b32; font: inherit; font-size: 12px; }
+.mixtape-builder textarea { resize: vertical; line-height: 1.5; min-height: 68px; }
+.mixtape-limit { flex: 0 0 70px; }
+.mixtape-controls { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 18px; margin: 20px 0; align-items: center; }
+.mixtape-controls input[type=range] { width: 100%; accent-color: #367562; }
+.mixtape-source { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; }
+.mixtape-source > label { flex: 1; min-width: 220px; }
+.mixtape-source > p { flex: 1; }
+.mixtape-candidates { margin-top: 18px; border-top: 1px solid #d1ded3; padding-top: 13px; }
+.mixtape-candidates summary { cursor: pointer; font-size: 12px; font-weight: 750; }
+.mixtape-candidates p, .mixtape-hint, .mixtape-builder [role=status] { font-size: 11px; line-height: 1.6; color: #557062; }
+.mixtape-candidate-list { max-height: 310px; overflow-y: auto; padding-right: 6px; }
+.mixtape-candidate-list article { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 1.15fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid #dce4db; }
+.mixtape-candidate-list article > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mixtape-candidate-list strong { font-size: 12px; }
+.mixtape-candidate-list span, .mixtape-candidate-list small { font-size: 10px; overflow-wrap: anywhere; }
+.mixtape-build-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.mixtape-review { padding: 18px; container-type: inline-size; }
+.mixtape-review > p { font-size: 11px; line-height: 1.6; color: #60766b; }
+.mixtape-review > p svg { vertical-align: middle; margin-right: 4px; }
+.mixtape-side { min-width: 0; border: 1px solid #d1ddd5; border-radius: 7px; overflow: hidden; --side-color: #397564; }
+.mixtape-side.side-1 { --side-color: #a56c43; }
+.mixtape-side > header { border-top: 4px solid var(--side-color); background: #f4f7f3; padding: 15px 13px 10px; display: flex; flex-direction: column; gap: 12px; }
+.mixtape-side header span { letter-spacing: .12em; font-size: 11px; font-weight: 850; color: var(--side-color); }
+.mixtape-side h3 { font-size: 13px; line-height: 1.5; margin: 5px 0 0; overflow-wrap: anywhere; }
+.mixtape-side header > strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.mixtape-side header small { font-size: 12px; color: #718178; font-weight: 500; }
+.mixtape-side progress { display: block; width: 100%; height: 5px; border: 0; border-radius: 0; accent-color: var(--side-color); }
+.mixtape-side progress::-webkit-progress-bar { background: #e1e8e0; }
+.mixtape-side progress::-webkit-progress-value { background: var(--side-color); }
+.mixtape-side progress::-moz-progress-bar { background: var(--side-color); }
+.mixtape-space { font-size: 10px; margin: 8px 13px; color: #63796d; }
+.mixtape-side ol { list-style: none; padding: 0; margin: 0; }
+.mixtape-side li { padding: 12px; border-top: 1px solid #e2e8e3; }
+.mixtape-side li.is-locked { background: #f4f7ef; }
+.mixtape-track-title { display: flex; align-items: flex-start; gap: 9px; }
+.mixtape-track-title > b { font-size: 10px; font-variant-numeric: tabular-nums; padding-top: 2px; color: var(--side-color); }
+.mixtape-track-title > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mixtape-track-title strong { font-size: 12px; overflow-wrap: anywhere; }
+.mixtape-track-title span, .mixtape-track-title time { font-size: 10px; line-height: 1.4; color: #67796e; overflow-wrap: anywhere; }
+.mixtape-track-title time { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.mixtape-track-edit { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0 6px 20px; }
+.mixtape-track-edit button, .mixtape-track-edit select { border: 1px solid #ccd8cf; border-radius: 4px; padding: 5px 7px; font-size: 10px; background: #fff; color: #315141; }
+.mixtape-track-edit button[aria-pressed=true] { background: #e1ebdf; }
+.mixtape-track-edit button:disabled { opacity: .4; cursor: default; }
+.mixtape-fit { display: block; font-size: 9px; line-height: 1.5; color: #687e6e; margin-left: 20px; }
+.mixtape-transition { display: block; font-size: 9px; color: #718374; background: transparent; padding: 9px 0 0; margin: auto; }
+.mixtape-transition[aria-pressed=true] { color: #296646; font-weight: 800; }
+.playlist-builder-modes { display: flex; gap: 8px; }
+.playlist-builder-modes button[aria-pressed=true] { background: #e1eee5; border-color: #9ebbaa; color: #255d43; }
+@container (max-width: 590px) { .mixtape-sides { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .mixtape-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); } .mixtape-brief { flex-direction: column; align-items: stretch; } .mixtape-limit { flex-basis: auto; } }
+@media (max-width: 700px) { .mixtape-briefs { grid-template-columns: 1fr; } .mixtape-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mixtape-heading > strong { display: none; } .mixtape-candidate-list article { grid-template-columns: minmax(0, 1fr) auto; } .mixtape-candidate-list input { grid-column: 1 / -1; } }

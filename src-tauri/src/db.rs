@@ -13286,6 +13286,7 @@ fn build_playlist(conn: &Connection, plan: AiPlaylistPlan) -> Result<AiPlaylist>
     let total_seconds = tracks.iter().map(|track| track.seconds.max(0)).sum::<i64>();
 
     Ok(AiPlaylist {
+        mixtape: None,
         prompt: plan.prompt,
         name: plan.name,
         description: plan.description,
@@ -13305,6 +13306,7 @@ fn build_playlist(conn: &Connection, plan: AiPlaylistPlan) -> Result<AiPlaylist>
 }
 
 fn normalize_playlist(mut playlist: AiPlaylist) -> Result<AiPlaylist> {
+    crate::jev::validate_playlist(&playlist)?;
     if playlist.prompt.trim().is_empty() || playlist.prompt.chars().count() > 2_000 {
         bail!("A saved playlist requires its original prompt")
     }
@@ -13431,11 +13433,28 @@ fn list_saved_playlists(conn: &Connection) -> Result<Vec<SavedPlaylist>> {
 }
 
 fn save_playlist(conn: &Connection, input: SavePlaylistRequest) -> Result<SavedPlaylist> {
+    // Keep the mixtape catalog checks and saved snapshot in one SQLite transaction.
+    let transaction = if input.playlist.mixtape.is_some() { Some(conn.unchecked_transaction()?) } else { None };
     let name = input.name.trim();
     if name.is_empty() || name.chars().count() > 120 {
         bail!("Name the playlist with no more than 120 characters")
     }
     let playlist = normalize_playlist(input.playlist)?;
+    if playlist.mixtape.is_some() {
+        if let Some(id) = input.id {
+            if load_saved_playlist(conn, id)?.automation.smart {
+                bail!("Save the mixtape as a new playlist so Smart refresh cannot replace its side order")
+            }
+        }
+        for track in &playlist.tracks {
+            let current: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM tracks WHERE id = ?1 AND album_id = ?2 AND file_path IS ?3 AND filename IS ?4 AND time_seconds = ?5)",
+                params![track.track_id, track.album_id, track.file_path, track.filename, track.seconds],
+                |row| row.get(0),
+            )?;
+            if !current { bail!("A selected mixtape track changed in the library. Reload candidates before saving so Aurora and Tonehavn receive current track identities and durations.") }
+        }
+    }
     if playlist.tracks.is_empty() {
         bail!("Add at least one track before saving the playlist")
     }
@@ -13490,7 +13509,9 @@ fn save_playlist(conn: &Connection, input: SavePlaylistRequest) -> Result<SavedP
         )?;
         conn.last_insert_rowid()
     };
-    load_saved_playlist(conn, id)
+    let saved = load_saved_playlist(conn, id)?;
+    if let Some(transaction) = transaction { transaction.commit()?; }
+    Ok(saved)
 }
 
 fn delete_saved_playlist(conn: &Connection, id: i64) -> Result<()> {
@@ -13507,6 +13528,7 @@ pub(crate) struct SmartPlaylistEvaluation {
 
 fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SmartPlaylistEvaluation> {
     let mut saved = load_saved_playlist(conn, id)?;
+    if saved.playlist.mixtape.is_some() { bail!("A mixtape cannot be refreshed as a Smart playlist") }
     if !saved.automation.smart {
         bail!("Enable Smart playlist before refreshing its rules")
     }
@@ -13614,6 +13636,9 @@ fn set_playlist_automation(
     request: SetPlaylistAutomationRequest,
 ) -> Result<SavedPlaylist> {
     let saved = load_saved_playlist(conn, request.id)?;
+    if request.smart && saved.playlist.mixtape.is_some() {
+        bail!("Mixtapes preserve an exact side order and locks; Smart refresh is not available for them")
+    }
     if request.plex_sync_enabled && !request.smart {
         bail!("Plex auto-sync requires a Smart playlist")
     }
@@ -13711,7 +13736,11 @@ fn write_playlist_m3u8(path: &Path, playlist: &AiPlaylist) -> Result<usize> {
     let mut file = fs::File::create(path)?;
     file.write_all(b"#EXTM3U\r\n")?;
     let mut row_count = 0;
-    for track in &playlist.tracks {
+    for (index, track) in playlist.tracks.iter().enumerate() {
+        if let Some(tape) = &playlist.mixtape {
+            if index == 0 { writeln!(file, "# Side A\r")?; }
+            if index == tape.sides[0].len() { writeln!(file, "# Side B\r")?; }
+        }
         let Some(track_path) = playlist_track_file(track) else {
             continue;
         };
@@ -31904,6 +31933,67 @@ mod tests {
 
         delete_saved_playlist(&conn, saved.id).expect("delete playlist");
         assert!(list_saved_playlists(&conn).unwrap().is_empty());
+    }
+
+    fn test_mixtape(conn: &Connection) -> AiPlaylist {
+        let mut playlist = build_playlist(conn, test_playlist_plan()).unwrap();
+        let original = playlist.tracks[0].clone();
+        for id in 2..=3 {
+            let mut track = original.clone(); track.track_id = id; track.filename = Some(format!("track-{id}.mp3")); track.title = Some(format!("Track {id}"));
+            conn.execute("INSERT INTO tracks (id, import_run_id, album_id, title, display_artist, time_seconds, file_path, filename, row_hash) VALUES (?1, 1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![id, track.album_id, track.title, track.display_artist, track.seconds, track.file_path, track.filename, format!("hash-{id}")]).unwrap();
+            playlist.tracks.push(track);
+        }
+        playlist.mixtape = Some(serde_json::from_value(serde_json::json!({
+            "version": 1, "config": { "briefs": ["Friday night", "Drive home"], "minutes": [45,45], "maxArtist": 3, "maxAlbum": 3, "weights": { "atmosphere": 60, "role": 30, "rating": 10 } },
+            "pool": playlist.tracks, "notes": { "1": "Bright synths" }, "assessments": [], "scoredBriefs": null,
+            "sides": [[{"trackId":1,"role":"opener","locked":false,"transitionToNext":true},{"trackId":2,"role":"builder","locked":false,"transitionToNext":false}],[{"trackId":3,"role":"closer","locked":true,"transitionToNext":false}]]
+        })).unwrap());
+        playlist
+    }
+
+    #[test]
+    fn mixtape_roundtrip_export_and_consumer_order_preserve_locks() {
+        let conn = seeded_connection(); let playlist = test_mixtape(&conn);
+        let saved = save_playlist(&conn, SavePlaylistRequest { id: None, name: "Two sides".into(), playlist }).unwrap();
+        let reopened = load_saved_playlist(&conn, saved.id).unwrap();
+        let tape = reopened.playlist.mixtape.as_ref().unwrap();
+        assert!(tape.sides[0][0].transition_to_next); assert!(tape.sides[1][0].locked);
+        assert_eq!(tape.notes.get("1").unwrap(), "Bright synths");
+        // Aurora resolves by file identity; Tonehavn resolves by current catalog ID.
+        for sql in [
+            "SELECT t.id FROM saved_playlists p JOIN json_each(p.playlist_json, '$.tracks') item JOIN tracks t ON t.file_path=json_extract(item.value,'$.filePath') AND t.filename=json_extract(item.value,'$.filename') WHERE p.id=?1 ORDER BY CAST(item.key AS INTEGER)",
+            "SELECT t.id FROM saved_playlists p JOIN json_each(p.playlist_json, '$.tracks') item JOIN tracks t ON t.id=CAST(json_extract(item.value,'$.trackId') AS INTEGER) WHERE p.id=?1 ORDER BY CAST(item.key AS INTEGER)",
+        ] {
+            let ids = conn.prepare(sql).unwrap().query_map(params![saved.id], |row| row.get::<_,i64>(0)).unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap();
+            assert_eq!(ids, vec![1,2,3]);
+        }
+        let dir = tempfile::tempdir().unwrap(); let path = dir.path().join("tape.m3u8");
+        assert_eq!(write_playlist_m3u8(&path, &reopened.playlist).unwrap(), 3);
+        let exported = fs::read_to_string(path).unwrap();
+        assert!(exported.find("# Side A").unwrap() < exported.find("track-2.mp3").unwrap());
+        assert!(exported.find("track-2.mp3").unwrap() < exported.find("# Side B").unwrap());
+        assert!(exported.find("# Side B").unwrap() < exported.find("track-3.mp3").unwrap());
+        assert!(set_playlist_automation(&conn, SetPlaylistAutomationRequest { id: saved.id, smart: true, plex_sync_enabled: false }).unwrap_err().to_string().contains("Mixtapes"));
+    }
+
+    #[test]
+    fn mixtape_rejects_stale_catalog_identity_and_duration_before_saving() {
+        let conn = seeded_connection(); let playlist = test_mixtape(&conn);
+        conn.execute("UPDATE tracks SET time_seconds=400 WHERE id=2", []).unwrap();
+        assert!(save_playlist(&conn, SavePlaylistRequest { id: None, name: "Two sides".into(), playlist }).unwrap_err().to_string().contains("changed in the library"));
+        assert!(list_saved_playlists(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn mixtape_rejects_overlong_sides_repeat_violations_and_wrong_flat_order() {
+        let conn = seeded_connection(); let original = test_mixtape(&conn);
+        let mut playlist = original.clone(); playlist.mixtape.as_mut().unwrap().config.minutes[0] = 1;
+        assert!(normalize_playlist(playlist).unwrap_err().to_string().contains("duration limit"));
+        let mut playlist = original.clone(); playlist.mixtape.as_mut().unwrap().config.max_artist = 1;
+        assert!(normalize_playlist(playlist).unwrap_err().to_string().contains("repeat caps"));
+        let mut playlist = original; playlist.tracks.swap(0,2);
+        assert!(normalize_playlist(playlist).unwrap_err().to_string().contains("Side A followed by Side B"));
     }
 
     #[test]

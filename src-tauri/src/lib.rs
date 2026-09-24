@@ -13,6 +13,7 @@ mod discogs;
 mod external_discovery;
 mod folder_sync;
 mod importer;
+mod jev;
 mod lastfm;
 mod library_completion;
 mod models;
@@ -589,6 +590,36 @@ async fn build_playlist(
     .await
     .map_err(|error| format!("Playlist builder task failed: {error}"))?
     .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_jev_key_status() -> Result<ai::AiKeyStatus, String> {
+    tauri::async_runtime::spawn_blocking(jev::key_status).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn save_openrouter_api_key(api_key: String) -> Result<ai::AiKeyStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || jev::save_api_key(api_key)).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn delete_openrouter_api_key() -> Result<ai::AiKeyStatus, String> {
+    tauri::async_runtime::spawn_blocking(jev::delete_api_key).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn test_jev_connection() -> Result<ai::AiConnectionTest, String> {
+    tauri::async_runtime::spawn_blocking(jev::test_connection).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn score_mixtape_candidates(input: jev::ScoreRequest) -> Result<jev::ScoreResult, String> {
+    tauri::async_runtime::spawn_blocking(move || jev::score_candidates(input)).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
 }
 
 #[cfg(not(test))]
@@ -2104,6 +2135,11 @@ pub fn run() {
             delete_ai_snapshot,
             export_ai_markdown,
             build_playlist,
+            get_jev_key_status,
+            save_openrouter_api_key,
+            delete_openrouter_api_key,
+            test_jev_connection,
+            score_mixtape_candidates,
             list_saved_playlists,
             save_playlist,
             delete_saved_playlist,

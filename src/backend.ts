@@ -4064,6 +4064,35 @@ export async function deleteSavedPlaylist(id: number) {
   return invoke<void>("delete_saved_playlist", { id });
 }
 
+export async function getJevKeyStatus(): Promise<AiKeyStatus> {
+  if (!isTauriRuntime()) return { configured: false, source: "none", model: "typesafe/jev-1.13" };
+  return invoke<AiKeyStatus>("get_jev_key_status");
+}
+
+export async function saveOpenRouterApiKey(apiKey: string) {
+  if (!isTauriRuntime()) throw new Error("Secure key storage requires the desktop app.");
+  return invoke<AiKeyStatus>("save_openrouter_api_key", { apiKey });
+}
+
+export async function deleteOpenRouterApiKey() {
+  if (!isTauriRuntime()) throw new Error("Secure key storage requires the desktop app.");
+  return invoke<AiKeyStatus>("delete_openrouter_api_key");
+}
+
+export async function testJevConnection() {
+  if (!isTauriRuntime()) throw new Error("Jev connection testing requires the desktop app.");
+  return invoke<AiConnectionTest>("test_jev_connection");
+}
+
+export async function scoreMixtapeCandidates(input: {
+  tracks: import("./types").AiPlaylistTrack[];
+  briefs: [string, string];
+  notes: Record<string, string>;
+}) {
+  if (!isTauriRuntime()) throw new Error("Jev scoring requires the desktop app and an OpenRouter key in Settings → AI. Build locally to preview this workflow.");
+  return invoke<import("./mixtape").JevResult>("score_mixtape_candidates", { input });
+}
+
 export async function setPlaylistAutomation(
   input: SetPlaylistAutomationRequest,
 ) {

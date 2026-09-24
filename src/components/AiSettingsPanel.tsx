@@ -7,17 +7,21 @@ import {
   isTauriRuntime,
   saveOpenAiApiKey,
   testOpenAiConnection,
+  getJevKeyStatus,
+  saveOpenRouterApiKey,
+  deleteOpenRouterApiKey,
+  testJevConnection,
 } from "../backend";
 import type { AiKeyStatus, AiUsage } from "../types";
 
-function sourceLabel(status: AiKeyStatus | null) {
+function sourceLabel(status: AiKeyStatus | null, provider: string) {
   switch (status?.source) {
     case "windowsCredentialManager":
       return "Stored securely in Windows Credential Manager";
     case "environment":
-      return "Using the development OPENAI_API_KEY fallback";
+      return `Using the development ${provider === "OpenRouter" ? "OPENROUTER" : "OPENAI"}_API_KEY fallback`;
     default:
-      return "No OpenAI key configured";
+      return `No ${provider} key configured`;
   }
 }
 
@@ -27,7 +31,8 @@ function usageLabel(usage: AiUsage) {
   return `${input.toLocaleString()} input / ${output.toLocaleString()} output tokens`;
 }
 
-export function AiSettingsPanel() {
+export function AiSettingsPanel({ provider = "OpenAI" }: { provider?: "OpenAI" | "OpenRouter" }) {
+  const isJev = provider === "OpenRouter";
   const desktopRuntime = isTauriRuntime();
   const [status, setStatus] = useState<AiKeyStatus | null>(null);
   const [apiKey, setApiKey] = useState("");
@@ -37,7 +42,7 @@ export function AiSettingsPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    void getAiKeyStatus()
+    void (isJev ? getJevKeyStatus() : getAiKeyStatus())
       .then((nextStatus) => {
         if (!cancelled) setStatus(nextStatus);
       })
@@ -53,17 +58,17 @@ export function AiSettingsPanel() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isJev]);
 
   async function saveKey() {
     setIsBusy(true);
     setError(null);
     setMessage(null);
     try {
-      const nextStatus = await saveOpenAiApiKey(apiKey);
+      const nextStatus = await (isJev ? saveOpenRouterApiKey(apiKey) : saveOpenAiApiKey(apiKey));
       setStatus(nextStatus);
       setApiKey("");
-      setMessage("OpenAI key saved securely.");
+      setMessage(`${provider} key saved securely.`);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : String(saveError));
     } finally {
@@ -76,13 +81,13 @@ export function AiSettingsPanel() {
     setError(null);
     setMessage(null);
     try {
-      const nextStatus = await deleteOpenAiApiKey();
+      const nextStatus = await (isJev ? deleteOpenRouterApiKey() : deleteOpenAiApiKey());
       setStatus(nextStatus);
       setApiKey("");
       setMessage(
         nextStatus.source === "environment"
           ? "Stored key removed; the development environment fallback is still active."
-          : "Stored OpenAI key removed.",
+          : `Stored ${provider} key removed.`,
       );
     } catch (removeError) {
       setError(
@@ -98,8 +103,8 @@ export function AiSettingsPanel() {
     setError(null);
     setMessage(null);
     try {
-      const result = await testOpenAiConnection();
-      setMessage(`${result.message} ${usageLabel(result.usage)}.`);
+      const result = await (isJev ? testJevConnection() : testOpenAiConnection());
+      setMessage(`${result.message} ${result.model} · ${usageLabel(result.usage)}.`);
     } catch (testError) {
       setError(testError instanceof Error ? testError.message : String(testError));
     } finally {
@@ -111,15 +116,15 @@ export function AiSettingsPanel() {
     <section className="settings-panel ai-settings-panel">
       <div className="panel-heading compact">
         <div>
-          <h2>Luna &amp; OpenAI</h2>
-          <p>{sourceLabel(status)}</p>
+          <h2>{isJev ? "Jev & OpenRouter" : "Luna & OpenAI"}</h2>
+          <p>{sourceLabel(status, provider)}</p>
         </div>
         <ShieldCheck size={18} />
       </div>
 
       <div className="ai-settings-toolbar">
         <label className="criterion ai-key-field">
-          <span>OpenAI API key</span>
+          <span>{provider} API key</span>
           <div className="ai-key-input">
             <KeyRound size={16} />
             <input
@@ -132,7 +137,7 @@ export function AiSettingsPanel() {
               placeholder={
                 status?.configured
                   ? "Enter a replacement key"
-                  : "Enter an OpenAI API key"
+                  : `Enter an ${provider} API key`
               }
             />
           </div>
@@ -172,10 +177,11 @@ export function AiSettingsPanel() {
 
       <div className="ai-settings-notes">
         <span>
-          Model: <strong>{status?.model ?? "gpt-5.6-luna"}</strong>
+          Model: <strong>{status?.model ?? (isJev ? "typesafe/jev-1.13" : "gpt-5.6-luna")}</strong>
         </span>
         <span>The key is never written to SQLite, browser storage, logs, or backups.</span>
         <span>Test makes one small paid API request.</span>
+        {isJev ? <span>Two-Sided Mixtape sends only the candidate metadata, briefs and notes you review. Jev judges musical fit; the app handles durations and order.</span> : null}
         {status?.source === "environment" ? (
           <span>
             The environment fallback is intended for local development only. Save a

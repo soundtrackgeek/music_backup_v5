@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.151.0] - 2026-09-24
+
+### Added
+
+- **Playlist Builder → Two-sided mixtape**: separate Side A/B briefs and duration limits, opener/builder/breather/closer roles, adjustable atmosphere/role/rating weights, whole-tape artist/album repeat caps, exact selection and transition locks, and constraint-aware swaps from a reviewed candidate pool.
+- **Settings → AI → Jev & OpenRouter**: secure OpenRouter key storage, removal and connection testing, with a debug `.env` fallback. Pinned Jev 1.13 uses OpenRouter's typed Decisions API to score reviewed metadata and optional notes; paths and listening history stay local.
+- Explicit local-only building and free resequencing from cached scores. Saved mixtapes retain both sides, notes, roles, locks, weights and scores, while preserving the existing Side A → Side B track array for Aurora and Tonehavn. M3U8 and Markdown exports retain the side arrangement.
+
+### Changed
+
+- Mixtapes reject Smart refresh and stale catalog identities/durations when saved. Jev failures retain the existing draft. Thematic fit is presented as model judgment, without claiming audio analysis or beat-matching.
+
 ## [0.150.7] - 2026-09-21
 
 ### Changed

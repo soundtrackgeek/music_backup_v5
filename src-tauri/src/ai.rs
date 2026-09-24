@@ -399,6 +399,8 @@ pub struct AiPlaylistTrack {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiPlaylist {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mixtape: Option<crate::jev::MixtapeDraft>,
     pub prompt: String,
     pub name: String,
     pub description: String,
