@@ -1,5 +1,7 @@
 # Music Library
 
+Music Library 0.151.2 accepts an Aurora album title edit when every MP3 in the cataloged album has the same new title and the album's stable identity is unchanged. Its guarded sync updates album cards, tracks, and search together. After installing this version, open the affected album's Tags in Aurora 0.26.21 or later to requeue a previously blocked title edit without rewriting the MP3s.
+
 Music Library 0.150.2 fixes the Windows release verification failure in the combined Aurora intake tests. Their temporary app-data directory now uses the same canonical path resolution as the production bridge, including Windows short-path aliases. The one-backup, atomic batch import and snapshot safety checks are unchanged.
 
 Music Library 0.150.1 adds a combined Aurora intake preview for selected albums and monitored folders across General, Scores, and Synthwave roots. With Aurora 0.26.1 or newer, one batch creates one database recovery backup and one atomic catalog import. A catalog failure rolls back every album and retains the sources; replacement recovery folders and per-destination file verification remain enforced. Completed retries reuse the committed receipt without another backup.

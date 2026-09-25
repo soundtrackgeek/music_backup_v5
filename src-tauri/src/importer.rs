@@ -885,6 +885,14 @@ pub(crate) fn prepare_existing_album_deletion_sync(
         aggregate.apply(&track.desired);
     }
     let desired_album = aggregate.finalize();
+    // An album rename is safe only when every cataloged track agrees on the
+    // new title. A partly edited album must wait for the remaining MP3s.
+    if tracks
+        .iter()
+        .any(|track| track.desired.album != desired_album.album.as_deref().unwrap_or_default())
+    {
+        fast_supported = false;
+    }
     if !(if deleted_tracks.is_empty() {
         fast_sync_album_changes_are_supported(&current_album, &desired_album)
     } else {
@@ -1077,6 +1085,12 @@ pub(crate) fn prepare_existing_file_fast_sync(
         aggregate.apply(track);
     }
     let desired_album = aggregate.finalize();
+    if tracks
+        .iter()
+        .any(|track| track.desired.album != desired_album.album.as_deref().unwrap_or_default())
+    {
+        fast_supported = false;
+    }
     if !fast_sync_album_changes_are_supported(&current_album, &desired_album)
         || scoped_sync_data_version(conn)? != data_version
         || !crate::folder_sync::existing_track_scan_is_unchanged(&scan).unwrap_or(false)
@@ -1340,7 +1354,10 @@ fn fast_sync_with_duration_probe(
 
 fn fast_sync_track_changes_are_supported(current: &TrackRow, desired: &TrackRow) -> bool {
     fast_sync_disc_numbers_are_equivalent(current.disc_number, desired.disc_number)
-        && current.album == desired.album
+        && (current.album == desired.album
+            || (!current.album_unique_id.is_empty()
+                && current.album_unique_id == desired.album_unique_id
+                && !desired.album.is_empty()))
         && current.publisher == desired.publisher
         && (current.track_number_raw == desired.track_number_raw
             || (current.track_number.is_some() && current.track_number == desired.track_number))
@@ -1375,6 +1392,7 @@ fn fast_sync_durations_are_equivalent(current: Option<i64>, scanned: Option<i64>
 fn fast_sync_desired_track(current: &TrackRow, scanned: &TrackRow) -> TrackRow {
     let mut desired = current.clone();
     desired.display_artist = scanned.display_artist.clone();
+    desired.album = scanned.album.clone();
     desired.title = scanned.title.clone();
     desired.genre = scanned.genre.clone();
     desired.canonical_genre = scanned.canonical_genre.clone();
@@ -1429,7 +1447,12 @@ fn fast_sync_album_changes_are_supported(current: &ScopedAlbumState, desired: &F
 
 fn fast_sync_album_identity_is_supported(current: &ScopedAlbumState, desired: &FinalAlbum) -> bool {
     current.album_unique_id == desired.album_unique_id
-        && current.previous.album == desired.album
+        && (current.previous.album == desired.album
+            || (current.album_unique_id.is_some()
+                && desired
+                    .album
+                    .as_deref()
+                    .is_some_and(|album| !album.is_empty())))
         && current.previous.album_artist_display == desired.album_artist_display
         && current.previous.publisher == desired.publisher
         && current.previous.year == desired.year
@@ -1582,6 +1605,7 @@ pub(crate) fn apply_existing_album_fast_sync(
     if !prepared.deleted_tracks.is_empty()
         || prepared.tracks.iter().any(|track| {
             track.current.genre != track.desired.genre
+                || track.current.album != track.desired.album
                 || track.current.title != track.desired.title
                 || track.current.display_artist != track.desired.display_artist
         })
@@ -5994,6 +6018,133 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn fast_sync_renames_complete_album_and_rebuilds_both_search_indexes() {
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().join("Lio (2026)");
+        fs::create_dir(&folder).unwrap();
+        let folder = folder.canonicalize().unwrap();
+        let files = [folder.join("01.mp3"), folder.join("02.mp3")];
+        for (index, path) in files.iter().enumerate() {
+            write_fast_sync_mp3(path, &format!("Track {index}"), None, "", 2026);
+            let mut tag = Tag::read_from_path(path).unwrap();
+            tag.set_album("Lio");
+            tag.set_genre("TV");
+            tag.set_year(2026);
+            tag.set_track(index as u32 + 1);
+            tag.write_to_path(path, Version::Id3v24).unwrap();
+        }
+        let initial = scanned_fast_sync_tracks(&folder, "3654017912283170873");
+        let mut conn = Connection::open_in_memory().unwrap();
+        db::configure(&conn).unwrap();
+        db::migrate(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO import_runs (source_path, started_at, completed_at, status, track_rows, album_count) VALUES ('initial.tsv', ?1, ?1, 'completed', 2, 1)",
+            params![Utc::now().to_rfc3339()],
+        )
+        .unwrap();
+        let old_run = conn.last_insert_rowid();
+        for (index, track) in initial.iter().enumerate() {
+            seed_fast_sync_track(&conn, old_run, index as i64 + 1, track);
+        }
+        seed_fast_sync_album(&conn, old_run, &initial);
+        db::rebuild_search_indexes(&conn).unwrap();
+        let album_id = initial[0].album_id.clone();
+        let original_files = files
+            .iter()
+            .map(|path| fs::read(path).unwrap())
+            .collect::<Vec<_>>();
+
+        let mut first_tag = Tag::read_from_path(&files[0]).unwrap();
+        first_tag.set_album("Lion");
+        first_tag.write_to_path(&files[0], Version::Id3v24).unwrap();
+        assert!(prepare_existing_album_fast_sync(&conn, &folder).is_err());
+        let partial_file = prepare_existing_file_fast_sync(&conn, &folder, &files[0])
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &partial_file).unwrap(),
+            ExistingAlbumFastSyncOutcome::Fallback
+        );
+        assert_eq!(
+            conn.query_row("SELECT album FROM albums WHERE id=?1", [&album_id], |row| {
+                row.get::<_, String>(0)
+            })
+            .unwrap(),
+            "Lio"
+        );
+
+        let mut second_tag = Tag::read_from_path(&files[1]).unwrap();
+        second_tag.set_album("Lion");
+        second_tag
+            .write_to_path(&files[1], Version::Id3v24)
+            .unwrap();
+        let saved_files = files
+            .iter()
+            .map(|path| fs::read(path).unwrap())
+            .collect::<Vec<_>>();
+        assert_ne!(saved_files, original_files);
+        let candidate = prepare_existing_album_fast_sync(&conn, &folder).unwrap();
+        let receipt = crate::aurora_bridge::sync_existing_folder(&mut conn, &candidate).unwrap();
+        let receipt = serde_json::to_value(receipt).unwrap();
+        assert_eq!(receipt["changedTracks"], 2);
+        assert_eq!(receipt["changedAlbums"], 1);
+        assert_eq!(
+            conn.query_row("SELECT album FROM albums WHERE id=?1", [&album_id], |row| {
+                row.get::<_, String>(0)
+            })
+            .unwrap(),
+            "Lion"
+        );
+        for table in ["tracks", "raw_tracks"] {
+            let sql = format!("SELECT COUNT(*) FROM {table} WHERE album='Lion'");
+            assert_eq!(
+                conn.query_row(&sql, [], |row| row.get::<_, i64>(0))
+                    .unwrap(),
+                2
+            );
+        }
+        for table in ["track_search_fts", "album_search_fts"] {
+            let sql = format!(
+                "SELECT COUNT(*) FROM {table} WHERE {table} MATCH 'album : lion' AND album_id=?1"
+            );
+            assert_eq!(
+                conn.query_row(&sql, [&album_id], |row| row.get::<_, i64>(0))
+                    .unwrap(),
+                if table == "track_search_fts" { 2 } else { 1 }
+            );
+            let sql = format!(
+                "SELECT COUNT(*) FROM {table} WHERE {table} MATCH 'album : lio' AND album_id=?1"
+            );
+            assert_eq!(
+                conn.query_row(&sql, [&album_id], |row| row.get::<_, i64>(0))
+                    .unwrap(),
+                0
+            );
+        }
+        let exact_search: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM albums AS a WHERE a.id=?1 AND a.canonical_genre='TV' AND a.year=2026 AND a.rating_completeness=0 AND a.id IN (SELECT album_id FROM album_search_fts WHERE album_search_fts MATCH 'album : lion')",
+            [&album_id],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(
+            exact_search, 1,
+            "genre:scores AND year:2026 AND cr:0 AND album:lion"
+        );
+        assert_eq!(
+            files
+                .iter()
+                .map(|path| fs::read(path).unwrap())
+                .collect::<Vec<_>>(),
+            saved_files
+        );
+        let retry = prepare_existing_album_fast_sync(&conn, &folder).unwrap();
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &retry).unwrap(),
+            ExistingAlbumFastSyncOutcome::Unchanged
+        );
     }
 
     #[test]

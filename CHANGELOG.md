@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.151.2] - 2026-09-25
+
+### Fixed
+
+- Synchronize a complete, consistent album title edit from Aurora into the existing album and track catalog rows and both search indexes. Preserve the album identity and atomically reject partial renames or changed catalog/file identities.
+
 ## [0.151.1] - 2026-09-25
 
 ### Fixed
