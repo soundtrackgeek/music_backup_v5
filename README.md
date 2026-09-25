@@ -94,6 +94,8 @@ Settings is split into **General**, **Providers**, **AI**, **Data & Backups**, *
 
 ## Two-sided mixtapes with Jev
 
+The mixtape editor and side previews follow the app's **Settings → General → Dark mode** preference, including notes, role controls and locked selections.
+
 Open **Playlist Builder → Two-sided mixtape** to make a C90-style mix. Give Side A and Side B separate musical briefs and minute limits (45 each by default). Load a local candidate search, use a launched Search/cohort source, or choose **Use current draft**. The shortlist spreads up to 60 tracks across artists from at most 500 local results; tracks without a known positive duration are excluded. Review the candidates, exclude any you do not want, and optionally add musical notes before scoring. Use Search's filters and handoff for a more specific source.
 
 Configure an OpenRouter key under **Settings → AI → Jev & OpenRouter**. The desktop backend stores it in Windows Credential Manager, independently of the OpenAI key, and supports replacement, removal and a small paid connection test. Debug builds also support `OPENROUTER_API_KEY=...` in the gitignored repo-root `.env`; secure storage takes precedence. Keys are never returned to the UI after saving or included in catalog data, exports or logs. Production builds do not load project `.env` files.

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.151.1] - 2026-09-25
+
+### Fixed
+
+- Make the two-sided mixtape editor and previews follow the app theme, including brief and note inputs, side headings, roles, selection/transition locks, progress bars and the selected builder mode. Improve secondary text contrast in both themes.
+
 ## [0.151.0] - 2026-09-24
 
 ### Added
