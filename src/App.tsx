@@ -454,6 +454,7 @@ import {
   type ArtistDetailTab,
 } from "./workspaces/ArtistsWorkspace";
 import { SearchWorkspace } from "./workspaces/SearchWorkspace";
+import { PublishedChartsWorkspace } from "./workspaces/PublishedChartsWorkspace";
 import {
   SettingsSection,
   SettingsWorkspace,
@@ -15125,6 +15126,8 @@ export default function App() {
               </div>
             </section>
           </section>
+        ) : activeSection === "Published Charts" ? (
+          <PublishedChartsWorkspace />
         ) : activeSection === "Charts" ? (
           <section className="workspace charts-workspace">
             <header className="topbar">

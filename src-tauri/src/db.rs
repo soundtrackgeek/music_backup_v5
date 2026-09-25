@@ -675,11 +675,23 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     let _migration_guard = MIGRATION_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let user_version = conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))?;
+    if user_version >= LATEST_SCHEMA_VERSION && crate::published_charts::schema_exists(conn)? {
+        return migrate_through_57(conn);
+    }
+    migrate_through_57(conn)?;
+    crate::published_charts::ensure_schema(conn)?;
+    conn.execute_batch("PRAGMA user_version = 58;")
+        .context("Could not mark the Published Charts schema complete")?;
+    Ok(())
+}
+
+fn migrate_through_57(conn: &Connection) -> Result<()> {
     let mut user_version = conn
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
         .context("Could not read SQLite schema version")?;
 
-    if user_version >= LATEST_SCHEMA_VERSION && migrations::phase_fifty_six_schema_exists(conn)? {
+    if user_version >= 57 && migrations::phase_fifty_six_schema_exists(conn)? {
         let transaction = conn
             .unchecked_transaction()
             .context("Could not start the UK origin-country migration transaction")?;

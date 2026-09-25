@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 57;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 58;
 
 pub(super) fn migrate_half_star_ratings(conn: &Connection) -> Result<()> {
     conn.execute_batch(

@@ -28,6 +28,7 @@ export default defineConfig({
         "**/CSV_SINGLES_NO/**",
         "**/CSV_TIISKUDDET_NO/**",
         "**/CSV_NORSKTOPPEN_NO/**",
+        "**/Charts/**",
         "**/MusicBrainz/**",
         "**/musicbee-library.tsv",
         "**/dist/**",

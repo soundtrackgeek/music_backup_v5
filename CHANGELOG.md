@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.152.0] - 2026-09-25
+
+### Added
+
+- Add a Published Charts workspace for browsing weekly US singles chart rankings across the local `Charts` collection, with chart/year/week selection, paged rows, source details, and import progress.
+- Add a year-atomic import of `all_charts.csv` files checked against `chart_inventory.csv` and validation summaries. Preserve historical chart names, printed rank ties, and raw source fields without changing existing Billboard year-end rankings or matching library tracks.
+
 ## [0.151.2] - 2026-09-25
 
 ### Fixed

@@ -22,6 +22,7 @@ mod music_map;
 mod musicbrainz;
 mod musicbrainz_sync;
 mod plex;
+mod published_charts;
 mod soulseek;
 mod updates;
 mod usenet;
@@ -97,6 +98,10 @@ use models::{
 };
 #[cfg(not(test))]
 use models::{ImportPreview, ImportRun, ImportSummary, LibraryStatus};
+#[cfg(not(test))]
+use published_charts::{
+    PublishedChartCatalog, PublishedChartEntries, PublishedChartWeek, PublishedChartsImportSummary,
+};
 #[cfg(not(test))]
 use tauri::{AppHandle, Manager};
 #[cfg(not(test))]
@@ -1737,6 +1742,60 @@ async fn import_billboard_singles(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn import_published_charts(
+    app: AppHandle,
+    source_path: String,
+) -> Result<PublishedChartsImportSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        published_charts::import_for_app(&app, source_path)
+    })
+    .await
+    .map_err(|error| format!("Published Charts import task failed: {error}"))?
+    .map_err(|error| format!("{error:#}"))
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_published_chart_catalog(app: AppHandle) -> Result<PublishedChartCatalog, String> {
+    tauri::async_runtime::spawn_blocking(move || published_charts::catalog_for_app(&app))
+        .await
+        .map_err(|error| format!("Published Charts catalog task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn list_published_chart_weeks(
+    app: AppHandle,
+    chart: String,
+    year: i32,
+) -> Result<Vec<PublishedChartWeek>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        published_charts::weeks_for_app(&app, &chart, year)
+    })
+    .await
+    .map_err(|error| format!("Published Charts weeks task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_published_chart_entries(
+    app: AppHandle,
+    chart: String,
+    week: String,
+    offset: u32,
+) -> Result<PublishedChartEntries, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        published_charts::entries_for_app(&app, &chart, &week, offset)
+    })
+    .await
+    .map_err(|error| format!("Published Charts entries task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn import_vg_lista_albums(
     app: AppHandle,
     source_path: String,
@@ -2227,6 +2286,10 @@ pub fn run() {
             import_album_covers,
             import_billboard_charts,
             import_billboard_singles,
+            import_published_charts,
+            get_published_chart_catalog,
+            list_published_chart_weeks,
+            get_published_chart_entries,
             import_vg_lista_albums,
             import_vg_lista_singles,
             import_official_uk_albums,
