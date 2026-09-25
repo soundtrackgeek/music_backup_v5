@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.152.1] - 2026-09-25
+
+### Changed
+
+- Populate the Published Charts series picker directly from the US `chart_inventory.csv` before import and automatically import local weekly rows when the source is available. Remove the folder Browse button.
+- Replace single-year browsing as the primary view with from/to year and week controls. Rank every published artist credit in the selected chart range by distinct number-one weeks, then chart weeks, appearances, and name; retain printed song positions and source details for exact-week selections.
+
 ## [0.152.0] - 2026-09-25
 
 ### Added

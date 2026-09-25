@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -119,6 +119,8 @@ pub struct PublishedChartsImportSummary {
 #[serde(rename_all = "camelCase")]
 pub struct PublishedChartCatalog {
     pub imported_years: usize,
+    pub inventory_years: usize,
+    pub needs_import: bool,
     pub total_rows: i64,
     pub series: Vec<PublishedChartSeries>,
 }
@@ -145,6 +147,26 @@ pub struct PublishedChartWeek {
 pub struct PublishedChartEntries {
     pub total_rows: i64,
     pub entries: Vec<PublishedChartEntry>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishedArtistRanking {
+    pub total_artists: i64,
+    pub chart_weeks: i64,
+    pub total_entries: i64,
+    pub artists: Vec<PublishedArtistRow>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishedArtistRow {
+    pub rank: i64,
+    pub artist: String,
+    pub number_one_weeks: i64,
+    pub chart_weeks: i64,
+    pub appearances: i64,
+    pub best_position: i32,
 }
 
 #[derive(Debug, Serialize)]
@@ -254,6 +276,11 @@ fn source_folder(source_path: &str) -> Result<PathBuf> {
         if let Some(parent) = cwd.parent() {
             candidates.push(parent.join(&provided));
         }
+        candidates.push(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join(&provided),
+        );
         candidates
     };
     candidates
@@ -520,8 +547,155 @@ pub fn catalog(conn: &Connection) -> Result<PublishedChartCatalog> {
     }
     Ok(PublishedChartCatalog {
         imported_years,
+        inventory_years: imported_years,
+        needs_import: false,
         total_rows,
         series,
+    })
+}
+
+pub fn catalog_with_inventory(
+    conn: &Connection,
+    source_path: &str,
+) -> Result<PublishedChartCatalog> {
+    let mut result = catalog(conn)?;
+    let Ok(folder) = source_folder(source_path) else {
+        return Ok(result);
+    };
+    let inventory = read_inventory(&folder)?;
+    result.inventory_years = inventory.len();
+    let mut by_chart: BTreeMap<String, PublishedChartSeries> = BTreeMap::new();
+    let mut expected_books = HashSet::new();
+    for (year, rows) in inventory {
+        for row in rows {
+            expected_books.insert((
+                row.book.clone(),
+                row.chart.clone(),
+                row.rows as i64,
+                row.first_week.clone(),
+                row.last_week.clone(),
+                row.weekly_charts as i64,
+            ));
+            let item = by_chart
+                .entry(row.chart.clone())
+                .or_insert_with(|| PublishedChartSeries {
+                    chart: row.chart.clone(),
+                    years: Vec::new(),
+                    first_week: row.first_week.clone(),
+                    last_week: row.last_week.clone(),
+                    rows: 0,
+                });
+            item.years.push(year);
+            if row.first_week < item.first_week {
+                item.first_week = row.first_week;
+            }
+            if row.last_week > item.last_week {
+                item.last_week = row.last_week;
+            }
+            item.rows += row.rows as i64;
+        }
+    }
+    let mut statement = conn.prepare(
+        "SELECT book, chart, row_count, first_week, last_week, weekly_charts FROM published_chart_books",
+    )?;
+    let imported_books = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, i64>(5)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<HashSet<_>>>()?;
+    result.needs_import = expected_books != imported_books;
+    result.series = by_chart.into_values().collect();
+    Ok(result)
+}
+
+pub fn artists(
+    conn: &Connection,
+    chart: &str,
+    from_year: i32,
+    to_year: i32,
+    from_week: Option<&str>,
+    to_week: Option<&str>,
+    offset: u32,
+) -> Result<PublishedArtistRanking> {
+    if !(1900..=2100).contains(&from_year)
+        || !(1900..=2100).contains(&to_year)
+        || from_year > to_year
+    {
+        bail!("Choose a valid ascending year range");
+    }
+    let start = match from_week.filter(|value| !value.is_empty()) {
+        Some(value) => NaiveDate::parse_from_str(value, "%Y-%m-%d")
+            .context("Choose a valid first chart week")?,
+        None => NaiveDate::from_ymd_opt(from_year, 1, 1).unwrap(),
+    };
+    let end = match to_week.filter(|value| !value.is_empty()) {
+        Some(value) => NaiveDate::parse_from_str(value, "%Y-%m-%d")
+            .context("Choose a valid last chart week")?,
+        None => NaiveDate::from_ymd_opt(to_year, 12, 31).unwrap(),
+    };
+    if start.year() != from_year || end.year() != to_year || start > end {
+        bail!("Chart weeks must fall within the selected years and run in date order");
+    }
+    let start = start.format("%Y-%m-%d").to_string();
+    let end = end.format("%Y-%m-%d").to_string();
+    let filter = "FROM published_chart_books b
+                  JOIN published_chart_entries e ON e.book_id = b.id
+                  WHERE b.chart = ?1 AND b.book BETWEEN ?2 AND ?3
+                    AND e.week_ending BETWEEN ?4 AND ?5";
+    let from_book = format!("{from_year}_us_singles");
+    let to_book = format!("{to_year}_us_singles");
+    let summary_sql = format!("SELECT COUNT(DISTINCT e.week_ending), COUNT(*) {filter}");
+    let (chart_weeks, total_entries) = conn.query_row(
+        &summary_sql,
+        params![chart, from_book, to_book, start, end],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    let ranking_sql = format!(
+        "WITH artist_totals AS (
+            SELECT e.artist AS artist,
+                   COUNT(DISTINCT CASE WHEN e.position = 1 THEN e.week_ending END) AS number_one_weeks,
+                   COUNT(DISTINCT e.week_ending) AS chart_weeks,
+                   COUNT(*) AS appearances,
+                   MIN(e.position) AS best_position
+            {filter} GROUP BY e.artist
+         )
+         SELECT ROW_NUMBER() OVER (ORDER BY number_one_weeks DESC, chart_weeks DESC,
+                   appearances DESC, artist COLLATE NOCASE, artist) AS rank,
+                COUNT(*) OVER () AS total_artists,
+                artist, number_one_weeks, chart_weeks, appearances, best_position
+         FROM artist_totals
+         ORDER BY rank LIMIT 100 OFFSET ?6"
+    );
+    let mut statement = conn.prepare(&ranking_sql)?;
+    let mut total_artists = 0;
+    let artists = statement
+        .query_map(
+            params![chart, from_book, to_book, start, end, offset],
+            |row| {
+                total_artists = row.get(1)?;
+                Ok(PublishedArtistRow {
+                    rank: row.get(0)?,
+                    artist: row.get(2)?,
+                    number_one_weeks: row.get(3)?,
+                    chart_weeks: row.get(4)?,
+                    appearances: row.get(5)?,
+                    best_position: row.get(6)?,
+                })
+            },
+        )?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(PublishedArtistRanking {
+        total_artists,
+        chart_weeks,
+        total_entries,
+        artists,
     })
 }
 
@@ -611,9 +785,23 @@ pub fn entries(
 }
 
 #[cfg(not(test))]
-pub fn catalog_for_app(app: &AppHandle) -> Result<PublishedChartCatalog> {
+pub fn catalog_for_app(app: &AppHandle, source_path: &str) -> Result<PublishedChartCatalog> {
     let (conn, _) = crate::db::open(app)?;
-    catalog(&conn)
+    catalog_with_inventory(&conn, source_path)
+}
+
+#[cfg(not(test))]
+pub fn artists_for_app(
+    app: &AppHandle,
+    chart: &str,
+    from_year: i32,
+    to_year: i32,
+    from_week: Option<&str>,
+    to_week: Option<&str>,
+    offset: u32,
+) -> Result<PublishedArtistRanking> {
+    let (conn, _) = crate::db::open(app)?;
+    artists(&conn, chart, from_year, to_year, from_week, to_week, offset)
 }
 
 #[cfg(not(test))]
@@ -676,8 +864,18 @@ mod tests {
         let mut conn = Connection::open_in_memory().unwrap();
         conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
         ensure_schema(&conn).unwrap();
+        let available = catalog_with_inventory(&conn, temp.path().to_str().unwrap()).unwrap();
+        assert_eq!(available.imported_years, 0);
+        assert_eq!(available.inventory_years, 1);
+        assert!(available.needs_import);
+        assert_eq!(available.series.len(), 2);
         let summary = import_folder(&mut conn, temp.path(), |_| {}).unwrap();
         assert_eq!(summary.rows_imported, 3);
+        assert!(
+            !catalog_with_inventory(&conn, temp.path().to_str().unwrap())
+                .unwrap()
+                .needs_import
+        );
         assert_eq!(catalog(&conn).unwrap().series.len(), 2);
         assert_eq!(weeks(&conn, "Billboard Hot 100", 2019).unwrap()[0].rows, 2);
         let chart = entries(&conn, "Billboard Hot 100", "2019-01-05", 0).unwrap();
@@ -687,6 +885,11 @@ mod tests {
         assert_eq!(chart.entries[0].source_page, "137");
 
         fixture(temp.path(), 3);
+        assert!(
+            catalog_with_inventory(&conn, temp.path().to_str().unwrap())
+                .unwrap()
+                .needs_import
+        );
         assert!(import_folder(&mut conn, temp.path(), |_| {}).is_err());
         assert_eq!(catalog(&conn).unwrap().total_rows, 3);
         assert_eq!(
@@ -695,6 +898,80 @@ mod tests {
                 .total_rows,
             2
         );
+    }
+
+    #[test]
+    fn ranks_all_artist_credits_over_years_and_week_boundaries() {
+        let conn = Connection::open_in_memory().unwrap();
+        ensure_schema(&conn).unwrap();
+        for (id, year) in [(1, 2018), (2, 2019)] {
+            conn.execute(
+                "INSERT INTO published_chart_books
+                 (id, book, chart, first_week, last_week, weekly_charts, row_count, first_page, last_page)
+                 VALUES (?1, ?2, 'Billboard Hot 100', ?3, ?3, 1, 1, '1', '1')",
+                params![id, format!("{year}_us_singles"), format!("{year}-01-06")],
+            ).unwrap();
+        }
+        for (book_id, source_row, week, position, artist) in [
+            (1, 1, "2018-01-06", 1, "Artist A"),
+            (1, 2, "2018-01-06", 1, "Artist A"),
+            (1, 3, "2018-01-06", 2, "Artist B"),
+            (2, 1, "2019-01-05", 1, "Artist A"),
+            (2, 2, "2019-01-05", 2, "Artist B"),
+            (2, 3, "2019-01-12", 1, "Artist B"),
+            (2, 4, "2019-01-12", 3, "Artist C"),
+        ] {
+            conn.execute(
+                "INSERT INTO published_chart_entries
+                 (book_id, source_row, week_ending, position, last_week, weeks_on_chart,
+                  entry_status, movement, title, artist, number_one_marker, label, format,
+                  catalogue_number, release_type, duration, peak_position, entry_date,
+                  peak_date, bpi_award, source_page)
+                 VALUES (?1, ?2, ?3, ?4, '', '', '', '', 'Song', ?5,
+                         '', '', '', '', '', '', '', '', '', '', '')",
+                params![book_id, source_row, week, position, artist],
+            )
+            .unwrap();
+        }
+        let all = artists(&conn, "Billboard Hot 100", 2018, 2019, None, None, 0).unwrap();
+        assert_eq!(all.total_artists, 3);
+        assert_eq!(all.chart_weeks, 3);
+        assert_eq!(all.total_entries, 7);
+        assert_eq!(
+            all.artists
+                .iter()
+                .map(|item| item.artist.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Artist A", "Artist B", "Artist C"]
+        );
+        assert_eq!(all.artists[0].number_one_weeks, 2);
+        assert_eq!(all.artists[0].chart_weeks, 2);
+        assert_eq!(all.artists[0].appearances, 3);
+        let last_week = artists(
+            &conn,
+            "Billboard Hot 100",
+            2019,
+            2019,
+            Some("2019-01-12"),
+            Some("2019-01-12"),
+            0,
+        )
+        .unwrap();
+        assert_eq!(last_week.chart_weeks, 1);
+        assert_eq!(last_week.total_artists, 2);
+        assert_eq!(last_week.artists[0].artist, "Artist B");
+        assert_eq!(last_week.artists[0].number_one_weeks, 1);
+        assert!(artists(&conn, "Billboard Hot 100", 2019, 2018, None, None, 0).is_err());
+        assert!(artists(
+            &conn,
+            "Billboard Hot 100",
+            2019,
+            2019,
+            Some("2019-01-12"),
+            Some("2019-01-05"),
+            0
+        )
+        .is_err());
     }
 
     #[test]
@@ -742,5 +1019,11 @@ mod tests {
                 .total_rows,
             100
         );
+        let started = Instant::now();
+        let ranking = artists(&conn, "Billboard Hot 100", 2019, 2019, None, None, 0).unwrap();
+        assert_eq!(ranking.chart_weeks, 52);
+        assert_eq!(ranking.total_entries, 5_200);
+        assert!(ranking.total_artists > 100);
+        eprintln!("2019 Hot 100 artist ranking: {:?}", started.elapsed());
     }
 }

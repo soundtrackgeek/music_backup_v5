@@ -1,4 +1,4 @@
-import { invoke, isTauriRuntime, listen, selectDirectory } from "./tauriClient";
+import { invoke, isTauriRuntime, listen } from "./tauriClient";
 
 export type PublishedChartSeries = {
   chart: string;
@@ -10,8 +10,26 @@ export type PublishedChartSeries = {
 
 export type PublishedChartCatalog = {
   importedYears: number;
+  inventoryYears: number;
+  needsImport: boolean;
   totalRows: number;
   series: PublishedChartSeries[];
+};
+
+export type PublishedArtistRow = {
+  rank: number;
+  artist: string;
+  numberOneWeeks: number;
+  chartWeeks: number;
+  appearances: number;
+  bestPosition: number;
+};
+
+export type PublishedArtistRanking = {
+  totalArtists: number;
+  chartWeeks: number;
+  totalEntries: number;
+  artists: PublishedArtistRow[];
 };
 
 export type PublishedChartWeek = {
@@ -62,11 +80,25 @@ export type PublishedChartsImportSummary = {
   durationMs: number;
 };
 
-export function getPublishedChartCatalog(): Promise<PublishedChartCatalog> {
+let ongoingImport: Promise<PublishedChartsImportSummary> | null = null;
+
+export function getPublishedChartCatalog(sourcePath: string): Promise<PublishedChartCatalog> {
   if (!isTauriRuntime()) {
-    return Promise.resolve({ importedYears: 0, totalRows: 0, series: [] });
+    return Promise.resolve({ importedYears: 0, inventoryYears: 0, needsImport: false, totalRows: 0, series: [] });
   }
-  return invoke("get_published_chart_catalog");
+  return invoke("get_published_chart_catalog", { sourcePath });
+}
+
+export function getPublishedArtistRankings(
+  chart: string,
+  fromYear: number,
+  toYear: number,
+  fromWeek: string | null,
+  toWeek: string | null,
+  offset: number,
+): Promise<PublishedArtistRanking> {
+  if (!isTauriRuntime()) return Promise.resolve({ totalArtists: 0, chartWeeks: 0, totalEntries: 0, artists: [] });
+  return invoke("get_published_artist_rankings", { chart, fromYear, toYear, fromWeek, toWeek, offset });
 }
 
 export function listPublishedChartWeeks(chart: string, year: number): Promise<PublishedChartWeek[]> {
@@ -87,7 +119,11 @@ export function importPublishedCharts(sourcePath: string): Promise<PublishedChar
   if (!isTauriRuntime()) {
     return Promise.reject(new Error("Published Charts import is available in the desktop app."));
   }
-  return invoke("import_published_charts", { sourcePath });
+  if (!ongoingImport) {
+    ongoingImport = invoke<PublishedChartsImportSummary>("import_published_charts", { sourcePath })
+      .finally(() => { ongoingImport = null; });
+  }
+  return ongoingImport;
 }
 
 export function subscribePublishedChartsImportProgress(
@@ -98,9 +134,4 @@ export function subscribePublishedChartsImportProgress(
     "published-charts-import-progress",
     (event) => callback(event.payload),
   );
-}
-
-export function selectPublishedChartsFolder(defaultPath?: string) {
-  if (!isTauriRuntime()) return Promise.resolve(null);
-  return selectDirectory(defaultPath, "Choose Charts folder");
 }

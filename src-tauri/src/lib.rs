@@ -100,7 +100,8 @@ use models::{
 use models::{ImportPreview, ImportRun, ImportSummary, LibraryStatus};
 #[cfg(not(test))]
 use published_charts::{
-    PublishedChartCatalog, PublishedChartEntries, PublishedChartWeek, PublishedChartsImportSummary,
+    PublishedArtistRanking, PublishedChartCatalog, PublishedChartEntries, PublishedChartWeek,
+    PublishedChartsImportSummary,
 };
 #[cfg(not(test))]
 use tauri::{AppHandle, Manager};
@@ -1756,11 +1757,35 @@ async fn import_published_charts(
 
 #[cfg(not(test))]
 #[tauri::command]
-async fn get_published_chart_catalog(app: AppHandle) -> Result<PublishedChartCatalog, String> {
-    tauri::async_runtime::spawn_blocking(move || published_charts::catalog_for_app(&app))
+async fn get_published_chart_catalog(
+    app: AppHandle,
+    source_path: String,
+) -> Result<PublishedChartCatalog, String> {
+    tauri::async_runtime::spawn_blocking(move || published_charts::catalog_for_app(&app, &source_path))
         .await
         .map_err(|error| format!("Published Charts catalog task failed: {error}"))?
         .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_published_artist_rankings(
+    app: AppHandle,
+    chart: String,
+    from_year: i32,
+    to_year: i32,
+    from_week: Option<String>,
+    to_week: Option<String>,
+    offset: u32,
+) -> Result<PublishedArtistRanking, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        published_charts::artists_for_app(
+            &app, &chart, from_year, to_year, from_week.as_deref(), to_week.as_deref(), offset,
+        )
+    })
+    .await
+    .map_err(|error| format!("Published Charts ranking task failed: {error}"))?
+    .map_err(|error| format!("{error:#}"))
 }
 
 #[cfg(not(test))]
@@ -2288,6 +2313,7 @@ pub fn run() {
             import_billboard_singles,
             import_published_charts,
             get_published_chart_catalog,
+            get_published_artist_rankings,
             list_published_chart_weeks,
             get_published_chart_entries,
             import_vg_lista_albums,
