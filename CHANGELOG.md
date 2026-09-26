@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.155.1] - 2026-09-26
+
+### Fixed
+
+- Aurora can now synchronize a consistent Album Artist edit across a complete album with a stable catalog identity. The guarded transaction updates album and track metadata plus both search indexes, preserves the track Artist, and leaves MP3 bytes unchanged. Partial, mixed, missing-file, and unstable-identity edits remain guarded. With Aurora 0.28.1 or newer, reopen the affected album’s Tags to retry a previously blocked edit.
+
 ## [0.155.0] - 2026-09-26
 
 ### Added
