@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.154.0] - 2026-09-26
+
+### Changed
+
+- Revamp Published Charts around individual Artist – Song entries instead of combined artist rankings, with peak, weeks at number one, chart weeks, and first/last dates in the selected range.
+- Add selectable full-archive song history with first appearance and entry position, peak date, last appearance, and weekly positions with printed entry dates and statuses. Clearly distinguish archive coverage from a confirmed original debut.
+- Keep original weekly positions and source details available for exact-week selections.
+
 ## [0.153.0] - 2026-09-26
 
 ### Added

@@ -135,3 +135,15 @@ export function subscribePublishedChartsImportProgress(
     (event) => callback(event.payload),
   );
 }
+
+export type PublishedSongRow = PublishedArtistRow & { title: string; firstWeek: string; lastWeek: string };
+export type PublishedSongRanking = { totalSongs: number; chartWeeks: number; totalEntries: number; songs: PublishedSongRow[] };
+export type PublishedSongWeek = { weekEnding: string; position: number; entryStatus: string; entryDate: string };
+export function getPublishedSongRankings(chart: string, fromYear: number, toYear: number, fromWeek: string | null, toWeek: string | null, offset: number): Promise<PublishedSongRanking> {
+  if (!isTauriRuntime()) return Promise.resolve({ totalSongs: 0, chartWeeks: 0, totalEntries: 0, songs: [] });
+  return invoke("get_published_song_rankings", { chart, fromYear, toYear, fromWeek, toWeek, offset });
+}
+export function getPublishedSongHistory(chart: string, artist: string, title: string): Promise<PublishedSongWeek[]> {
+  if (!isTauriRuntime()) return Promise.resolve([]);
+  return invoke("get_published_song_history", { chart, artist, title });
+}

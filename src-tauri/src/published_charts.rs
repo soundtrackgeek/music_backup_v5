@@ -807,6 +807,93 @@ pub fn artists(
     })
 }
 
+pub fn songs(
+    conn: &Connection,
+    chart: &str,
+    from_year: i32,
+    to_year: i32,
+    from_week: Option<&str>,
+    to_week: Option<&str>,
+    offset: u32,
+) -> Result<PublishedSongRanking> {
+    if !(1900..=2100).contains(&from_year)
+        || !(1900..=2100).contains(&to_year)
+        || from_year > to_year
+    {
+        bail!("Choose a valid ascending year range");
+    }
+    let start = match from_week.filter(|value| !value.is_empty()) {
+        Some(value) => NaiveDate::parse_from_str(value, "%Y-%m-%d")
+            .context("Choose a valid first chart week")?,
+        None => NaiveDate::from_ymd_opt(from_year, 1, 1).unwrap(),
+    };
+    let end = match to_week.filter(|value| !value.is_empty()) {
+        Some(value) => NaiveDate::parse_from_str(value, "%Y-%m-%d")
+            .context("Choose a valid last chart week")?,
+        None => NaiveDate::from_ymd_opt(to_year, 12, 31).unwrap(),
+    };
+    if start.year() != from_year || end.year() != to_year || start > end {
+        bail!("Chart weeks must fall within the selected years and run in date order");
+    }
+    let start = start.format("%Y-%m-%d").to_string();
+    let end = end.format("%Y-%m-%d").to_string();
+    let filter = "FROM published_chart_books b
+                  JOIN published_chart_entries e ON e.book_id = b.id
+                  WHERE b.chart = ?1 AND b.book BETWEEN ?2 AND ?3
+                    AND e.week_ending BETWEEN ?4 AND ?5";
+    let from_book = format!("{from_year}_us_singles");
+    let to_book = format!("{to_year}_us_singles");
+    let summary_sql = format!("SELECT COUNT(DISTINCT e.week_ending), COUNT(*) {filter}");
+    let (chart_weeks, total_entries) = conn.query_row(
+        &summary_sql,
+        params![chart, from_book, to_book, start, end],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    let ranking_sql = format!(
+        "WITH song_totals AS (
+            SELECT e.artist AS artist, e.title AS title, MIN(e.week_ending) AS first_week, MAX(e.week_ending) AS last_week,
+                   COUNT(DISTINCT CASE WHEN e.position = 1 THEN e.week_ending END) AS number_one_weeks,
+                   COUNT(DISTINCT e.week_ending) AS chart_weeks,
+                   COUNT(*) AS appearances,
+                   MIN(e.position) AS best_position
+            {filter} GROUP BY e.artist, e.title
+         )
+         SELECT ROW_NUMBER() OVER (ORDER BY number_one_weeks DESC, chart_weeks DESC,
+                   best_position ASC, artist COLLATE NOCASE, artist, title COLLATE NOCASE, title) AS rank,
+                COUNT(*) OVER () AS total_songs,
+                artist, number_one_weeks, chart_weeks, appearances, best_position, title, first_week, last_week
+         FROM song_totals
+         ORDER BY rank LIMIT 100 OFFSET ?6"
+    );
+    let mut statement = conn.prepare(&ranking_sql)?;
+    let mut total_songs = 0;
+    let songs = statement
+        .query_map(
+            params![chart, from_book, to_book, start, end, offset],
+            |row| {
+                total_songs = row.get(1)?;
+                Ok(PublishedSongRow {
+                    rank: row.get(0)?,
+                    artist: row.get(2)?,
+                    number_one_weeks: row.get(3)?,
+                    chart_weeks: row.get(4)?,
+                    appearances: row.get(5)?,
+                    best_position: row.get(6)?,
+                    title: row.get(7)?,
+                    first_week: row.get(8)?,
+                    last_week: row.get(9)?,
+                })
+            },
+        )?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(PublishedSongRanking {
+        total_songs,
+        chart_weeks,
+        total_entries,
+        songs,
+    })
+}
+
 pub fn weeks(conn: &Connection, chart: &str, year: i32) -> Result<Vec<PublishedChartWeek>> {
     let book = format!("{year}_us_singles");
     let mut statement = conn.prepare(
@@ -1192,6 +1279,20 @@ mod tests {
             )
             .unwrap();
         }
+        let song_rows = songs(&conn, "Billboard Hot 100", 2019, 2019, None, None, 0).unwrap();
+        assert_eq!(song_rows.total_songs, 3);
+        assert_eq!(song_rows.songs[0].artist, "Artist B");
+        assert_eq!(song_rows.songs[0].first_week, "2019-01-05");
+        assert_eq!(song_rows.songs[0].last_week, "2019-01-12");
+        let history = song_history(&conn, "Billboard Hot 100", "Artist A", "Song").unwrap();
+        assert_eq!(history.len(), 2); // duplicate source rows do not inflate weeks
+        assert_eq!(history[0].week_ending, "2018-01-06"); // outside selected range
+        assert!(song_history(&conn, "Another chart", "Artist A", "Song").unwrap().is_empty());
+        conn.execute("UPDATE published_chart_entries SET title = 'Second song' WHERE book_id = 1 AND source_row = 2", []).unwrap();
+        let separate = songs(&conn, "Billboard Hot 100", 2018, 2019, None, None, 0).unwrap();
+        assert_eq!(separate.total_songs, 4); // same artist, different songs remain separate
+        assert_eq!(separate.songs.iter().filter(|song| song.artist == "Artist A").count(), 2);
+        assert!(songs(&conn, "Billboard Hot 100", 2019, 2018, None, None, 0).is_err());
         let all = artists(&conn, "Billboard Hot 100", 2018, 2019, None, None, 0).unwrap();
         assert_eq!(all.total_artists, 3);
         assert_eq!(all.chart_weeks, 3);
@@ -1278,4 +1379,56 @@ mod tests {
         assert!(ranking.total_artists > 100);
         eprintln!("2019 Hot 100 artist ranking: {:?}", started.elapsed());
     }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishedSongRanking {
+    pub total_songs: i64,
+    pub chart_weeks: i64,
+    pub total_entries: i64,
+    pub songs: Vec<PublishedSongRow>,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishedSongRow {
+    pub rank: i64,
+    pub artist: String,
+    pub title: String,
+    pub number_one_weeks: i64,
+    pub chart_weeks: i64,
+    pub appearances: i64,
+    pub best_position: i32,
+    pub first_week: String,
+    pub last_week: String,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishedSongWeek {
+    pub week_ending: String,
+    pub position: i32,
+    pub entry_status: String,
+    pub entry_date: String,
+}
+pub fn song_history(conn: &Connection, chart: &str, artist: &str, title: &str) -> Result<Vec<PublishedSongWeek>> {
+    let mut statement = conn.prepare(
+        "SELECT e.week_ending, MIN(e.position), MAX(e.entry_status), MAX(e.entry_date)
+         FROM published_chart_entries e JOIN published_chart_books b ON b.id = e.book_id
+         WHERE b.chart = ?1 AND e.artist = ?2 AND e.title = ?3
+         GROUP BY e.week_ending ORDER BY e.week_ending"
+    )?;
+    let rows = statement.query_map(params![chart, artist, title], |row| Ok(PublishedSongWeek {
+        week_ending: row.get(0)?, position: row.get(1)?, entry_status: row.get(2)?, entry_date: row.get(3)?,
+    }))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+#[cfg(not(test))]
+pub fn songs_for_app(app: &AppHandle, chart: &str, from_year: i32, to_year: i32, from_week: Option<&str>, to_week: Option<&str>, offset: u32) -> Result<PublishedSongRanking> {
+    let (conn, _) = crate::db::open(app)?;
+    songs(&conn, chart, from_year, to_year, from_week, to_week, offset)
+}
+#[cfg(not(test))]
+pub fn song_history_for_app(app: &AppHandle, chart: &str, artist: &str, title: &str) -> Result<Vec<PublishedSongWeek>> {
+    let (conn, _) = crate::db::open(app)?;
+    song_history(&conn, chart, artist, title)
 }

@@ -26787,3 +26787,16 @@ button {
 :root[data-theme="dark"] .published-chart-table tr.selected { background: #173c36; }
 :root[data-theme="dark"] .published-rank,
 :root[data-theme="dark"] .published-detail-kicker { color: #8ee4d8; }
+
+/* Published songs: range summary and full-archive history */
+.published-song-table { min-width: 900px; }
+.published-song-table td:nth-child(2) { width: 42%; min-width: 260px; }
+.published-history { padding: 20px; margin-bottom: 24px; border: 1px solid #72998b66; border-radius: 12px; background: #72998b0a; }
+.published-history h3 { margin: 8px 0; font-size: 20px; }
+.published-song-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; margin: 22px 0; }
+.published-song-stats dt { font-size: 12px; opacity: .75; }
+.published-song-stats dd { margin: 8px 0 0; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.published-song-stats small { display: block; font-size: 12px; font-weight: 400; margin-top: 6px; }
+.published-history-weeks { max-height: 320px; overflow: auto; }
+.published-history-weeks .published-chart-table td:first-child { width: auto; white-space: nowrap; }
+@media (max-width: 900px) { .published-song-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -1782,6 +1782,34 @@ async fn get_published_artist_rankings(
 
 #[cfg(not(test))]
 #[tauri::command]
+async fn get_published_song_rankings(
+    app: AppHandle,
+    chart: String,
+    from_year: i32,
+    to_year: i32,
+    from_week: Option<String>,
+    to_week: Option<String>,
+    offset: u32,
+) -> Result<published_charts::PublishedSongRanking, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        published_charts::songs_for_app(
+            &app, &chart, from_year, to_year, from_week.as_deref(), to_week.as_deref(), offset,
+        )
+    })
+    .await
+    .map_err(|error| format!("Published Charts ranking task failed: {error}"))?
+    .map_err(|error| format!("{error:#}"))
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_published_song_history(app: AppHandle, chart: String, artist: String, title: String) -> Result<Vec<published_charts::PublishedSongWeek>, String> {
+    tauri::async_runtime::spawn_blocking(move || published_charts::song_history_for_app(&app, &chart, &artist, &title))
+        .await.map_err(|error| error.to_string())?.map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 async fn list_published_chart_weeks(
     app: AppHandle,
     chart: String,
@@ -2306,6 +2334,8 @@ pub fn run() {
             import_published_charts,
             get_published_chart_catalog,
             get_published_artist_rankings,
+            get_published_song_rankings,
+            get_published_song_history,
             list_published_chart_weeks,
             get_published_chart_entries,
             import_vg_lista_albums,

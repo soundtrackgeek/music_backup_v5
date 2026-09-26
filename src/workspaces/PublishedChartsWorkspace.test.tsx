@@ -13,7 +13,8 @@ vi.mock("../backend/publishedCharts", () => ({
   getPublishedChartCatalog: (...args: unknown[]) => getCatalog(...args),
   listPublishedChartWeeks: (...args: unknown[]) => listWeeks(...args),
   getPublishedChartEntries: (...args: unknown[]) => getEntries(...args),
-  getPublishedArtistRankings: (...args: unknown[]) => getRankings(...args),
+  getPublishedSongHistory: vi.fn().mockResolvedValue([{ weekEnding: "2018-12-29", position: 8, entryStatus: "NEW", entryDate: "2018-12-29" }, { weekEnding: "2019-01-05", position: 1, entryStatus: "", entryDate: "2018-12-29" }]),
+  getPublishedSongRankings: (...args: unknown[]) => getRankings(...args),
   importPublishedCharts: (...args: unknown[]) => importCharts(...args),
   subscribePublishedChartsImportProgress: (...args: unknown[]) => subscribeProgress(...args),
 }));
@@ -40,21 +41,31 @@ describe("PublishedChartsWorkspace", () => {
       ? [{ weekEnding: "2019-01-05", rows: 2 }, { weekEnding: "2019-01-12", rows: 1 }]
       : [{ weekEnding: "2018-01-06", rows: 3 }]));
     getRankings.mockResolvedValue({
-      totalArtists: 2, chartWeeks: 2, totalEntries: 3,
-      artists: [
-        { rank: 1, artist: "First artist", numberOneWeeks: 2, chartWeeks: 2, appearances: 2, bestPosition: 1 },
-        { rank: 2, artist: "Second artist", numberOneWeeks: 0, chartWeeks: 1, appearances: 1, bestPosition: 2 },
+      totalSongs: 2, chartWeeks: 2, totalEntries: 3,
+      songs: [
+        { rank: 1, artist: "First artist", title: "First song", firstWeek: "2019-01-05", lastWeek: "2019-01-12", numberOneWeeks: 2, chartWeeks: 2, appearances: 2, bestPosition: 1 },
+        { rank: 2, artist: "First artist", title: "Second song", firstWeek: "2019-01-05", lastWeek: "2019-01-05", numberOneWeeks: 0, chartWeeks: 1, appearances: 1, bestPosition: 2 },
       ],
     });
     getEntries.mockResolvedValue({ totalRows: 2, entries: [baseEntry, { ...baseEntry, id: 2, title: "Second song" }] });
   });
 
-  it("ranks all artists for a chosen year without a week selection", async () => {
+  it("ranks individual songs for a chosen year without a week selection", async () => {
     render(<PublishedChartsWorkspace />);
-    expect(await screen.findByText("First artist")).toBeInTheDocument();
-    expect(screen.getByText("Second artist")).toBeInTheDocument();
+    expect(await screen.findByText("First artist – First song")).toBeInTheDocument();
+    expect(screen.getByText("First artist – Second song")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Browse" })).not.toBeInTheDocument();
     await waitFor(() => expect(getRankings).toHaveBeenCalledWith("Billboard Hot 100", 2019, 2019, null, null, 0));
+  });
+
+  it("opens full song history beyond the selected range", async () => {
+    render(<PublishedChartsWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: /First artist – First song/ }));
+    const history = await screen.findByRole("region", { name: "Song chart history" });
+    expect(await within(history).findByText("Entered at #8")).toBeInTheDocument();
+    expect(within(history).getByText("First reached 2019-01-05")).toBeInTheDocument();
+    fireEvent.click(within(history).getByRole("button", { name: "Close history" }));
+    expect(screen.queryByRole("region", { name: "Song chart history" })).not.toBeInTheDocument();
   });
 
   it("shows bundled chart choices immediately and prepares missing rows automatically", async () => {
@@ -73,7 +84,7 @@ describe("PublishedChartsWorkspace", () => {
 
   it("supports a range across years and an exact week with source positions", async () => {
     render(<PublishedChartsWorkspace />);
-    await screen.findByText("First artist");
+    await screen.findByText("First artist – First song");
     fireEvent.change(screen.getByLabelText("From year"), { target: { value: "2018" } });
     await waitFor(() => expect(getRankings).toHaveBeenCalledWith("Billboard Hot 100", 2018, 2019, null, null, 0));
     fireEvent.change(screen.getByLabelText("From year"), { target: { value: "2019" } });
@@ -81,7 +92,7 @@ describe("PublishedChartsWorkspace", () => {
     fireEvent.change(screen.getByLabelText("From week"), { target: { value: "2019-01-05" } });
     fireEvent.change(screen.getByLabelText("To week"), { target: { value: "2019-01-05" } });
     await waitFor(() => expect(getRankings).toHaveBeenCalledWith("Billboard Hot 100", 2019, 2019, "2019-01-05", "2019-01-05", 0));
-    expect(await screen.findByText("First song")).toBeInTheDocument();
+    await waitFor(() => expect(getEntries).toHaveBeenCalled());
     const weekly = screen.getByRole("region", { name: "Weekly published chart" });
     const rows = within(weekly).getAllByRole("row").slice(1);
     expect(rows.map((row) => within(row).getAllByRole("cell")[0].textContent)).toEqual(["1", "1"]);

@@ -1,13 +1,15 @@
+import { PublishedSongHistory } from "./PublishedSongHistory";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import {
-  getPublishedArtistRankings,
+  getPublishedSongRankings,
   getPublishedChartCatalog,
   getPublishedChartEntries,
   importPublishedCharts,
   listPublishedChartWeeks,
   subscribePublishedChartsImportProgress,
-  type PublishedArtistRanking,
+  type PublishedSongRanking,
+  type PublishedSongRow,
   type PublishedChartCatalog,
   type PublishedChartEntry,
   type PublishedChartEntries,
@@ -16,7 +18,7 @@ import {
 } from "../backend/publishedCharts";
 
 const pageSize = 100;
-const emptyRanking: PublishedArtistRanking = { totalArtists: 0, chartWeeks: 0, totalEntries: 0, artists: [] };
+const emptyRanking: PublishedSongRanking = { totalSongs: 0, chartWeeks: 0, totalEntries: 0, songs: [] };
 const emptyEntries: PublishedChartEntries = { totalRows: 0, entries: [] };
 
 function savedValue(key: string, fallback: string) {
@@ -37,6 +39,8 @@ function detail(label: string, value: string | undefined) {
 }
 
 export function PublishedChartsWorkspace() {
+  const songTrigger = useRef<HTMLButtonElement | null>(null);
+  const [song, setSong] = useState<PublishedSongRow | null>(null);
   const [catalog, setCatalog] = useState<PublishedChartCatalog | null>(null);
   const [chart, setChart] = useState(() => savedValue("publishedCharts.chart", "Billboard Hot 100"));
   const [fromYear, setFromYear] = useState(() => Number(savedValue("publishedCharts.fromYear", "0")));
@@ -45,7 +49,7 @@ export function PublishedChartsWorkspace() {
   const [toWeek, setToWeek] = useState(() => savedValue("publishedCharts.toWeek", ""));
   const [fromWeeks, setFromWeeks] = useState<PublishedChartWeek[]>([]);
   const [toWeeks, setToWeeks] = useState<PublishedChartWeek[]>([]);
-  const [ranking, setRanking] = useState<PublishedArtistRanking>(emptyRanking);
+  const [ranking, setRanking] = useState<PublishedSongRanking>(emptyRanking);
   const [entries, setEntries] = useState<PublishedChartEntries>(emptyEntries);
   const [offset, setOffset] = useState(0);
   const [entryOffset, setEntryOffset] = useState(0);
@@ -139,7 +143,9 @@ export function PublishedChartsWorkspace() {
     }
     let active = true;
     setIsLoading(true);
-    void getPublishedArtistRankings(chart, fromYear, toYear, effectiveFromWeek || null, effectiveToWeek || null, offset)
+    setRanking(emptyRanking);
+    setSong(null);
+    void getPublishedSongRankings(chart, fromYear, toYear, effectiveFromWeek || null, effectiveToWeek || null, offset)
       .then((result) => { if (active) { setRanking(result); setError(""); } })
       .catch((cause) => { if (active) setError(String(cause)); })
       .finally(() => { if (active) setIsLoading(false); });
@@ -186,13 +192,13 @@ export function PublishedChartsWorkspace() {
     }
   }, [catalog]);
 
-  const pageCount = Math.max(1, Math.ceil(ranking.totalArtists / pageSize));
+  const pageCount = Math.max(1, Math.ceil(ranking.totalSongs / pageSize));
   const entryPageCount = Math.max(1, Math.ceil(entries.totalRows / pageSize));
   const dateLabel = fromYear === toYear ? String(fromYear) : `${fromYear}–${toYear}`;
 
   return <section className="workspace published-charts-workspace">
     <header className="topbar">
-      <div><h1>Published Charts</h1><p>US chart history, ranked by published artist credit.</p></div>
+      <div><h1>Published Charts</h1><p>Explore the songs behind the charts. Follow their first appearances, peaks, and weekly history.</p></div>
       <button className="icon-button" type="button" aria-label="Refresh published charts" onClick={() => { autoImportAttempted.current = false; setError(""); void refreshCatalog(); }}><RotateCcw size={18} /></button>
     </header>
 
@@ -222,26 +228,27 @@ export function PublishedChartsWorkspace() {
     {importError ? <p className="published-error" role="alert">{importError}</p> : null}
     {error ? <p className="published-error" role="alert">{error}</p> : null}
 
-    {series ? <section className="published-chart-panel" aria-label="Published artist ranking">
+    {series ? <section className="published-chart-panel" aria-label="Published song ranking">
       <div className="published-chart-heading"><div><h2>{chart}</h2><p>{dateLabel}{effectiveFromWeek || effectiveToWeek ? ` · ${effectiveFromWeek ? formatWeek(effectiveFromWeek) : "first week"} to ${effectiveToWeek ? formatWeek(effectiveToWeek) : "last week"}` : " · all weeks"}</p></div>
-        {catalog && !catalog.needsImport && !isImporting ? <span className="published-count">{formatCount(ranking.totalArtists)} artists · {formatCount(ranking.chartWeeks)} chart weeks · {formatCount(ranking.totalEntries)} entries</span> : null}
+        {catalog && !catalog.needsImport && !isImporting ? <span className="published-count">{formatCount(ranking.totalSongs)} songs · {formatCount(ranking.chartWeeks)} chart weeks · {formatCount(ranking.totalEntries)} entries</span> : null}
       </div>
-      <p className="published-source-note">Artists are credited exactly as printed. Each distinct week at position 1 counts once per credit; ties use chart weeks, then appearances, then name.</p>
+      <p className="published-source-note">Songs are grouped by their printed artist and title. Ranked by weeks at #1, then weeks charted, then peak. All table statistics and dates refer to the selected range. Select a song for its full archived history.</p>
       {!validRange ? <p className="published-error">Choose a last week on or after the first week.</p> : null}
       {validRange && catalog?.importedYears && !catalog.needsImport && !isImporting ? <div className="published-table-wrap">
-        <table className="published-chart-table published-artist-table"><thead><tr><th scope="col">#</th><th scope="col">Artist credit</th><th scope="col">#1 weeks</th><th scope="col">Chart weeks</th><th scope="col">Entries</th><th scope="col">Best</th></tr></thead>
-          <tbody>{ranking.artists.map((item) => <tr key={item.artist}><td className="published-rank">{item.rank}</td><td>{item.artist}</td><td>{item.numberOneWeeks}</td><td>{item.chartWeeks}</td><td>{item.appearances}</td><td>{item.bestPosition}</td></tr>)}</tbody>
+        {song ? <PublishedSongHistory key={`${chart}:${song.artist}:${song.title}`} chart={chart} song={song} onClose={() => { setSong(null); songTrigger.current?.focus(); }} /> : null}
+        <table className="published-chart-table published-song-table"><thead><tr><th scope="col">Rank</th><th scope="col">Artist – Song</th><th scope="col">Peak</th><th scope="col">#1 weeks</th><th scope="col">Weeks charted</th><th scope="col">First in range</th><th scope="col">Last in range</th></tr></thead>
+          <tbody>{ranking.songs.map((item) => <tr key={JSON.stringify([item.artist, item.title])} className={song?.artist === item.artist && song?.title === item.title ? "selected" : ""}><td className="published-rank">{item.rank}</td><td><button className="published-song" type="button" aria-pressed={song?.artist === item.artist && song?.title === item.title} onClick={(event) => { songTrigger.current = event.currentTarget; setSong(item); }}><strong>{item.artist} – {item.title}</strong><span>View chart history</span></button></td><td>#{item.bestPosition}</td><td>{item.numberOneWeeks || "—"}</td><td>{item.chartWeeks}</td><td>{formatWeek(item.firstWeek)}</td><td>{formatWeek(item.lastWeek)}</td></tr>)}</tbody>
         </table>
-        {isLoading ? <p className="published-table-message">Calculating artist ranks…</p> : !ranking.artists.length ? <p className="published-table-message">No chart entries in this range.</p> : null}
-        {ranking.totalArtists > pageSize ? <div className="published-pager"><button className="secondary-button" type="button" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Previous</button><span>Page {Math.floor(offset / pageSize) + 1} of {pageCount}</span><button className="secondary-button" type="button" disabled={Math.floor(offset / pageSize) + 1 >= pageCount} onClick={() => setOffset(offset + pageSize)}>Next</button></div> : null}
+        {isLoading ? <p className="published-table-message">Calculating artist ranks…</p> : !ranking.songs.length ? <p className="published-table-message">No chart entries in this range.</p> : null}
+        {ranking.totalSongs > pageSize ? <div className="published-pager"><button className="secondary-button" type="button" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Previous</button><span>Page {Math.floor(offset / pageSize) + 1} of {pageCount}</span><button className="secondary-button" type="button" disabled={Math.floor(offset / pageSize) + 1 >= pageCount} onClick={() => setOffset(offset + pageSize)}>Next</button></div> : null}
       </div> : <p className="published-table-message">{isImporting || catalog?.needsImport ? "Preparing the bundled weekly chart data…" : "Bundled chart data is unavailable in this installation."}</p>}
     </section> : <section className="published-empty"><h2>Bundled chart data unavailable</h2><p>The US chart collection was not found in this installation. Refresh after updating the app.</p></section>}
 
     {exactWeek && catalog?.importedYears && !catalog.needsImport && !isImporting ? <section className="published-chart-panel" aria-label="Weekly published chart">
       <div className="published-chart-heading"><div><h2>Published positions</h2><p>Week ending {formatWeek(exactWeek)} · {formatCount(entries.totalRows)} entries</p></div></div>
       <div className="published-chart-layout"><div className="published-table-wrap">
-        <table className="published-chart-table"><thead><tr><th scope="col">#</th><th scope="col">Song / artist</th><th scope="col">Last</th><th scope="col">Weeks</th><th scope="col">Peak*</th></tr></thead>
-          <tbody>{entries.entries.map((entry) => <tr key={entry.id} className={selected?.id === entry.id ? "selected" : ""}><td className="published-rank">{entry.position}</td><td><button type="button" className="published-song" aria-pressed={selected?.id === entry.id} onClick={() => setSelected(entry)}><strong>{entry.title}</strong><span>{entry.artist}</span></button></td><td>{entry.entryStatus || entry.lastWeek || "—"}</td><td>{entry.weeksOnChart || "—"}</td><td>{entry.peakPosition || "—"}</td></tr>)}</tbody>
+        <table className="published-chart-table"><thead><tr><th scope="col">#</th><th scope="col">Artist – Song</th><th scope="col">Last</th><th scope="col">Weeks</th><th scope="col">Peak*</th></tr></thead>
+          <tbody>{entries.entries.map((entry) => <tr key={entry.id} className={selected?.id === entry.id ? "selected" : ""}><td className="published-rank">{entry.position}</td><td><button type="button" className="published-song" aria-pressed={selected?.id === entry.id} onClick={() => setSelected(entry)}><strong>{entry.artist} – {entry.title}</strong></button></td><td>{entry.entryStatus || entry.lastWeek || "—"}</td><td>{entry.weeksOnChart || "—"}</td><td>{entry.peakPosition || "—"}</td></tr>)}</tbody>
         </table>
         <p className="published-source-note">* Source peak fields can refer to a later week.</p>
         {entries.totalRows > pageSize ? <div className="published-pager"><button className="secondary-button" type="button" disabled={!entryOffset} onClick={() => setEntryOffset(Math.max(0, entryOffset - pageSize))}>Previous</button><span>Page {Math.floor(entryOffset / pageSize) + 1} of {entryPageCount}</span><button className="secondary-button" type="button" disabled={Math.floor(entryOffset / pageSize) + 1 >= entryPageCount} onClick={() => setEntryOffset(entryOffset + pageSize)}>Next</button></div> : null}
