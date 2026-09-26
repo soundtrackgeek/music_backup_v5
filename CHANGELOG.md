@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.152.2] - 2026-09-26
+
+### Fixed
+
+- Make the Windows disposable SMB credential integration test retain the native `cmdkey` process handle, avoiding a `Start-Process -Wait -PassThru` race when the synthetic test process exits immediately on CI.
+
 ## [0.152.1] - 2026-09-25
 
 ### Changed

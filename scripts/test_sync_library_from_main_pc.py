@@ -345,11 +345,29 @@ class AuthenticationTests(unittest.TestCase):
             $testAccount = 'MicrosoftAccount\codex-sync-test@example.invalid'
             function Start-Process {
                 param($FilePath, $ArgumentList, [switch]$NoNewWindow, [switch]$Wait, [switch]$PassThru)
-                if ($ArgumentList[-1] -ne '/pass') { throw 'Production must prompt for the password' }
+                if ($FilePath -ne "$env:SystemRoot\System32\cmdkey.exe" -or
+                    $ArgumentList[-1] -ne '/pass' -or -not $NoNewWindow -or -not $Wait -or -not $PassThru) {
+                    throw 'Production must run cmdkey with a private password prompt'
+                }
                 # Use only a synthetic password for this disposable, non-networked
-                # credential. Exercise the real executable and production quoting.
+                # credential. Use the same raw argument string as Start-Process,
+                # but retain the native process handle: Start-Process -Wait -PassThru
+                # can race with a cmdkey process that exits immediately on CI.
                 $ArgumentList[-1] = '/pass:not-a-real-password'
-                return Microsoft.PowerShell.Management\Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -NoNewWindow -Wait -PassThru
+                $startInfo = [Diagnostics.ProcessStartInfo]::new()
+                $startInfo.FileName = $FilePath
+                $startInfo.Arguments = $ArgumentList -join ' '
+                $startInfo.UseShellExecute = $false
+                $startInfo.CreateNoWindow = $true
+                $process = [Diagnostics.Process]::Start($startInfo)
+                try {
+                    if (-not $process.WaitForExit(10000)) {
+                        $process.Kill()
+                        throw 'Synthetic cmdkey test timed out'
+                    }
+                    return [pscustomobject]@{ExitCode = $process.ExitCode}
+                }
+                finally { $process.Dispose() }
             }
             try {
                 if (Test-SavedSmbCredential $script:testServer $testAccount) { throw 'Test target already exists' }
