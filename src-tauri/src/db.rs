@@ -14520,6 +14520,77 @@ fn merge_artist_chart_history(
     histories.push(next);
 }
 
+// Match complete artist/song identities using the established singles aliases.
+// Only matching printed credits need weekly row reads, using the artist index.
+fn append_published_artist_histories(
+    conn: &Connection,
+    artist_id: &str,
+    chart_tracks: &mut Vec<ArtistChartTrack>,
+) -> Result<()> {
+    let artist_key = artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
+    let mut stmt = conn.prepare(&format!(
+        "SELECT t.id, t.title, COALESCE(NULLIF(TRIM(t.display_artist), ''), t.album_artist_display, a.album_artist_display),
+                COALESCE(t.album, a.album), COALESCE(t.release_year, t.year, a.release_year, a.year)
+         FROM tracks t LEFT JOIN albums a ON a.id = t.album_id
+         WHERE {artist_key} = ?1 AND NULLIF(TRIM(t.title), '') IS NOT NULL ORDER BY t.id"
+    ))?;
+    let local = stmt.query_map([artist_id], |row| Ok(ArtistChartTrack {
+        track_id: row.get(0)?, title: row.get(1)?, display_artist: row.get(2)?,
+        album: row.get(3)?, year: row.get(4)?, charts: Vec::new(),
+    }))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    if local.is_empty() { return Ok(()); }
+    let mut song_matches = HashMap::<String, usize>::new();
+    let mut artist_keys = HashSet::<String>::new();
+    for (index, track) in local.iter().enumerate() {
+        let artist = billboard_text_key(&track.display_artist);
+        artist_keys.extend(billboard_single_artist_key_variants(&artist));
+        for key in billboard_single_match_keys(&artist, &billboard_text_key(&track.title)) {
+            song_matches.entry(key).or_insert(index);
+        }
+    }
+    let mut credits = conn.prepare("SELECT DISTINCT artist FROM published_chart_entries")?;
+    let credits = credits.query_map([], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    // Do not inflate weeks for duplicate books, source rows, or printed aliases.
+    let mut histories = HashMap::<(usize, String), (String, String, HashSet<String>, i32)>::new();
+    let mut entries = conn.prepare(
+        "SELECT b.chart, e.title, e.week_ending, e.position
+         FROM published_chart_entries e JOIN published_chart_books b ON b.id = e.book_id
+         WHERE e.artist = ?1 AND e.position > 0"
+    )?;
+    for credit in credits {
+        let artist = billboard_text_key(&credit);
+        if !billboard_single_artist_key_variants(&artist).iter().any(|key| artist_keys.contains(key)) { continue; }
+        let rows = entries.query_map([&credit], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, i32>(3)?)))?;
+        for row in rows {
+            let (chart, title, week, peak) = row?;
+            let matched = billboard_single_match_keys(&artist, &billboard_text_key(&title))
+                .iter().filter_map(|key| song_matches.get(key).copied()).min();
+            let Some(index) = matched else { continue; };
+            let history = histories.entry((index, chart)).or_insert_with(|| (week.clone(), week.clone(), HashSet::new(), peak));
+            history.0 = history.0.clone().min(week.clone());
+            history.1 = history.1.clone().max(week.clone());
+            history.2.insert(week);
+            history.3 = history.3.min(peak);
+        }
+    }
+    for ((index, chart), (first, last, weeks, peak)) in histories {
+        let local_track = &local[index];
+        let identity = billboard_match_key(&billboard_text_key(&local_track.display_artist), &billboard_text_key(&local_track.title));
+        let target = chart_tracks.iter().position(|track|
+            billboard_match_key(&billboard_text_key(&track.display_artist), &billboard_text_key(&track.title)) == identity
+        ).unwrap_or_else(|| {
+            chart_tracks.push(local_track.clone());
+            chart_tracks.len() - 1
+        });
+        chart_tracks[target].charts.push(ArtistTrackChartHistory {
+            chart: format!("published:{chart}"), entry_date: Some(first), end_date: Some(last),
+            weeks_on_chart: Some(weeks.len() as i64), peak,
+        });
+    }
+    Ok(())
+}
+
 fn artist_track_highlights(conn: &Connection, artist_id: &str) -> Result<ArtistTrackHighlights> {
     let artist_id = normalize_artist_key(artist_id);
     let album_artist_key = artist_key_sql("album_artist_display");
@@ -14747,6 +14818,8 @@ fn artist_track_highlights(conn: &Connection, artist_id: &str) -> Result<ArtistT
             },
         );
     }
+
+    append_published_artist_histories(conn, &artist_id, &mut chart_tracks)?;
 
     for track in &mut chart_tracks {
         track
@@ -29786,6 +29859,36 @@ mod tests {
             response.rows[0].album_artist_display.as_deref(),
             Some("Pet Shop Boys")
         );
+    }
+
+    #[test]
+    fn artist_highlights_include_all_published_series_without_duplicate_weeks() {
+        let conn = seeded_connection();
+        let title: String = conn.query_row("SELECT title FROM tracks LIMIT 1", [], |row| row.get(0)).unwrap();
+        for (book, chart) in [(1, "Billboard Hot 100"), (2, "Hot Dance Club Play"), (3, "Billboard Hot 100")] {
+            conn.execute("INSERT INTO published_chart_books (id, book, chart, first_week, last_week, weekly_charts, row_count, first_page, last_page) VALUES (?1, ?2, ?3, '1987-01-03', '1987-01-10', 2, 4, '', '')", params![book, format!("book{book}"), chart]).unwrap();
+            for (row, week, position, artist, song) in [
+                (1, "1987-01-03", 8, "PET SHOP BOYS", title.clone()),
+                (2, "1987-01-10", 2, "Pet Shop Boys", format!("{title} (LP Version)")),
+                (3, "1987-01-10", 2, "Pet Shop Boys", title.clone()),
+                (4, "1987-01-17", 1, "Other Artist", title.clone()),
+                (5, "1987-01-24", 1, "Pet Shop Boys", format!("{title} (Live)")),
+            ] {
+                conn.execute("INSERT INTO published_chart_entries (book_id, source_row, week_ending, position, artist, title, last_week, weeks_on_chart, entry_status, movement, number_one_marker, label, format, catalogue_number, release_type, duration, peak_position, entry_date, peak_date, bpi_award, source_page) VALUES (?1, ?2, ?3, ?4, ?5, ?6, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '')", params![book, row, week, position, artist, song]).unwrap();
+            }
+        }
+        let result = artist_track_highlights(&conn, "pet shop boys").unwrap();
+        assert_eq!(result.chart_tracks.len(), 1);
+        let charts = &result.chart_tracks[0].charts;
+        assert_eq!(charts.len(), 2);
+        assert!(charts.iter().any(|chart| chart.chart == "published:Hot Dance Club Play"));
+        for chart in charts {
+            assert_eq!(chart.weeks_on_chart, Some(2));
+            assert_eq!(chart.peak, 2);
+            assert_eq!(chart.entry_date.as_deref(), Some("1987-01-03"));
+            assert_eq!(chart.end_date.as_deref(), Some("1987-01-10"));
+        }
+        assert!(artist_track_highlights(&conn, "missing artist").unwrap().chart_tracks.is_empty());
     }
 
     #[test]

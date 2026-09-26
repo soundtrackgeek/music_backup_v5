@@ -1,4 +1,5 @@
 import { TransitionRegion } from "./components/TransitionRegion";
+import { getPublishedChartCatalog, importPublishedCharts } from "./backend/publishedCharts";
 import { ResizableTable, ResizableColumnHeader } from "./components/ResizableTable";
 import { YearLedger } from "./components/YearLedger";
 import {
@@ -8530,6 +8531,7 @@ export default function App() {
   >(null);
   const [isArtistTrackHighlightsLoading, setIsArtistTrackHighlightsLoading] =
     useState(false);
+  const [isPreparingArtistCharts, setIsPreparingArtistCharts] = useState(false);
   const [artistAlbumsResponse, setArtistAlbumsResponse] =
     useState<BrowseResponse | null>(null);
   const [artistAlbumsError, setArtistAlbumsError] = useState<string | null>(
@@ -9661,7 +9663,20 @@ export default function App() {
     let cancelled = false;
     setIsArtistTrackHighlightsLoading(true);
     setArtistTrackHighlightsError(null);
-    void getArtistTrackHighlights(selectedArtist.id)
+    setArtistTrackHighlights(null);
+    setIsPreparingArtistCharts(false);
+    void (async () => {
+      if (artistDetailTab === "chart-busters") {
+        const catalog = await getPublishedChartCatalog();
+        if (cancelled) return null;
+        if (catalog.needsImport) {
+          setIsPreparingArtistCharts(true);
+          await importPublishedCharts();
+        }
+      }
+      if (cancelled) return null;
+      return getArtistTrackHighlights(selectedArtist.id);
+    })()
       .then((result) => {
         if (!cancelled) setArtistTrackHighlights(result);
       })
@@ -9674,7 +9689,10 @@ export default function App() {
         }
       })
       .finally(() => {
-        if (!cancelled) setIsArtistTrackHighlightsLoading(false);
+        if (!cancelled) {
+          setIsArtistTrackHighlightsLoading(false);
+          setIsPreparingArtistCharts(false);
+        }
       });
 
     return () => {
@@ -9685,6 +9703,7 @@ export default function App() {
     catalogRefreshKey,
     selectedArtist,
     shouldLoadArtistTrackHighlights,
+    artistDetailTab,
   ]);
 
   useEffect(() => {
@@ -16610,6 +16629,8 @@ export default function App() {
 
               {artistDetailTab === "chart-busters" ? (
                 <ArtistChartBustersPanel
+                  key={selectedArtist?.id}
+                  isPreparingCharts={isPreparingArtistCharts}
                   highlights={artistTrackHighlights}
                   isLoading={isArtistTrackHighlightsLoading}
                   error={artistTrackHighlightsError}

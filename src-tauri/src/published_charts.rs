@@ -250,6 +250,8 @@ pub(crate) fn ensure_schema(conn: &Connection) -> Result<()> {
             source_page TEXT NOT NULL,
             UNIQUE(book_id, source_row)
         );
+        CREATE INDEX IF NOT EXISTS idx_published_chart_entries_artist
+            ON published_chart_entries(artist);
         CREATE INDEX IF NOT EXISTS idx_published_chart_entries_week
             ON published_chart_entries(book_id, week_ending, position, source_row);
 
@@ -266,13 +268,14 @@ pub(crate) fn ensure_schema(conn: &Connection) -> Result<()> {
 
 pub(crate) fn schema_exists(conn: &Connection) -> Result<bool> {
     let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN (
-            'published_chart_books', 'published_chart_entries', 'published_chart_import_years'
+        "SELECT COUNT(*) FROM sqlite_master WHERE name IN (
+            'published_chart_books', 'published_chart_entries', 'published_chart_import_years',
+            'idx_published_chart_entries_artist'
         )",
         [],
         |row| row.get(0),
     )?;
-    Ok(count == 3)
+    Ok(count == 4)
 }
 
 #[cfg(not(test))]

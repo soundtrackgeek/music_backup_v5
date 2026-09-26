@@ -102,6 +102,14 @@ const highlights: ArtistTrackHighlights = {
 };
 
 describe("artist track highlight panels", () => {
+  it("shows archive preparation, errors, and empty results clearly", () => {
+    const { rerender } = render(<ArtistChartBustersPanel highlights={null} isLoading isPreparingCharts error={null} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Preparing US charts");
+    rerender(<ArtistChartBustersPanel highlights={null} isLoading={false} error="Archive unavailable" />);
+    expect(screen.getByText("Archive unavailable")).toBeInTheDocument();
+    rerender(<ArtistChartBustersPanel highlights={{ ...highlights, chartTracks: [] }} isLoading={false} error={null} />);
+    expect(screen.getByText("No local tracks by this artist are matched to an imported singles chart.")).toBeInTheDocument();
+  });
   it("sorts loved tracks oldest first by default and supports rating order", () => {
     render(
       <ArtistLovedTracksPanel
@@ -121,31 +129,29 @@ describe("artist track highlight panels", () => {
     expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("Go West");
   });
 
-  it("prioritizes Billboard, expands the other charts, and falls back to UK", () => {
+  it("groups every chart by name, filters countries, and sorts within each chart", () => {
     render(
       <ArtistChartBustersPanel
-        highlights={highlights}
+        highlights={{ ...highlights, chartTracks: highlights.chartTracks.map((track) => ({
+          ...track,
+          charts: [...track.charts, { chart: "published:Hot Dance Club Play", entryDate: "1994-01-01", endDate: "1994-02-01", weeksOnChart: 5, peak: 1 }],
+        })) }}
         isLoading={false}
         error={null}
       />,
     );
 
-    const westEndGirls = screen.getByText("West End Girls").closest("article");
-    expect(westEndGirls).not.toBeNull();
-    expect(within(westEndGirls!).getByText("Billboard Hot 100")).toBeInTheDocument();
-    expect(
-      within(westEndGirls!).queryByText("Official UK Singles"),
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(within(westEndGirls!).getByRole("button", { name: /Show 4 more charts/ }));
-    expect(within(westEndGirls!).getByText("Official UK Singles")).toBeInTheDocument();
-    expect(within(westEndGirls!).getByText("VG-lista")).toBeInTheDocument();
-    expect(within(westEndGirls!).getByText("Ti i Skuddet")).toBeInTheDocument();
-    expect(within(westEndGirls!).getByText("Norsktoppen")).toBeInTheDocument();
-
-    const goWest = screen.getByText("Go West").closest("article");
-    expect(goWest).not.toBeNull();
-    expect(within(goWest!).getByText("Official UK Singles")).toBeInTheDocument();
-    expect(within(goWest!).queryByText("VG-lista")).not.toBeInTheDocument();
+    const uk = screen.getByRole("region", { name: "Official UK Singles" });
+    expect(within(uk).getAllByRole("article")[0]).toHaveTextContent("West End Girls");
+    fireEvent.change(screen.getByLabelText("Sort charted tracks"), { target: { value: "date-desc" } });
+    expect(within(uk).getAllByRole("article")[0]).toHaveTextContent("Go West");
+    expect(screen.getByRole("region", { name: "Hot Dance Club Play" })).toHaveTextContent("First seen");
+    expect(screen.getByRole("region", { name: "Billboard · Annual singles ranking" })).toHaveTextContent("Best rank");
+    fireEvent.click(screen.getByRole("button", { name: /^US / }));
+    expect(screen.queryByRole("region", { name: "Official UK Singles" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Hot Dance Club Play" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^NO / }));
+    expect(screen.getByRole("region", { name: "VG-lista" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Hot Dance Club Play" })).not.toBeInTheDocument();
   });
 });

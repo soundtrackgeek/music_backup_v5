@@ -1,4 +1,4 @@
-import { ChevronDown, Heart } from "lucide-react";
+import { Heart, Trophy } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type {
@@ -8,24 +8,20 @@ import type {
 } from "../types";
 
 const chartLabels: Record<ArtistTrackChartHistory["chart"], string> = {
-  billboard: "Billboard Hot 100",
+  billboard: "Billboard · Annual singles ranking",
   officialUk: "Official UK Singles",
   vgLista: "VG-lista",
   tiISkuddet: "Ti i Skuddet",
   norsktoppen: "Norsktoppen",
 };
 
-const chartOrder: ArtistTrackChartHistory["chart"][] = [
-  "billboard",
-  "officialUk",
-  "vgLista",
-  "tiISkuddet",
-  "norsktoppen",
-];
+function chartLabel(chart: ArtistTrackChartHistory["chart"]) {
+  return chart.startsWith("published:") ? chart.slice("published:".length) : chartLabels[chart];
+}
 
-const chartPriority = new Map(
-  chartOrder.map((chart, index) => [chart, index]),
-);
+function chartCountry(chart: ArtistTrackChartHistory["chart"]) {
+  return chart.startsWith("published:") || chart === "billboard" ? "US" : chart === "officialUk" ? "UK" : "NO";
+}
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -95,13 +91,15 @@ function HighlightState({
   isLoading,
   error,
   empty,
+  loadingText = "Loading artist tracks…",
 }: {
   isLoading: boolean;
   error: string | null;
   empty: string;
+  loadingText?: string;
 }) {
   if (isLoading) {
-    return <div className="artist-highlight-state">Loading artist tracks…</div>;
+    return <div className="artist-highlight-state" role="status">{loadingText}</div>;
   }
   if (error) {
     return <p className="error-message">{error}</p>;
@@ -232,14 +230,13 @@ function ChartHistorySummary({
 }) {
   return (
     <div className={`artist-chart-history${compact ? " compact" : ""}`}>
-      <strong className="artist-chart-source">{chartLabels[history.chart]}</strong>
       <dl>
         <div>
-          <dt>Entry</dt>
+          <dt>{history.chart.startsWith("published:") ? "First seen" : "Entry"}</dt>
           <dd>{formatChartDate(history.entryDate)}</dd>
         </div>
         <div>
-          <dt>End</dt>
+          <dt>Last seen</dt>
           <dd>{formatChartDate(history.endDate)}</dd>
         </div>
         <div>
@@ -247,7 +244,7 @@ function ChartHistorySummary({
           <dd>{history.weeksOnChart ?? "—"}</dd>
         </div>
         <div>
-          <dt>Peak</dt>
+          <dt>{history.chart === "billboard" ? "Best rank" : "Peak"}</dt>
           <dd>#{history.peak}</dd>
         </div>
       </dl>
@@ -259,17 +256,17 @@ export function ArtistChartBustersPanel({
   highlights,
   isLoading,
   error,
+  isPreparingCharts = false,
 }: {
   highlights: ArtistTrackHighlights | null;
   isLoading: boolean;
   error: string | null;
+  isPreparingCharts?: boolean;
 }) {
   const [sort, setSort] = useState("date-asc");
-  const [expandedTracks, setExpandedTracks] = useState<Set<number>>(
-    () => new Set(),
-  );
+  const [country, setCountry] = useState("all");
   const tracks = useMemo(() => {
-    const sorted = [...(highlights?.chartTracks ?? [])];
+    const sorted = (highlights?.chartTracks ?? []).flatMap((track) => track.charts.map((chart) => ({ ...track, charts: [chart] })));
     sorted.sort((left, right) => {
       if (sort === "date-desc") {
         return (
@@ -309,24 +306,23 @@ export function ArtistChartBustersPanel({
     return sorted;
   }, [highlights, sort]);
 
-  function toggleTrack(trackId: number) {
-    setExpandedTracks((current) => {
-      const next = new Set(current);
-      if (next.has(trackId)) next.delete(trackId);
-      else next.add(trackId);
-      return next;
+  const allCharts = new Set(tracks.map((track) => track.charts[0].chart));
+  const sections = [...allCharts]
+    .filter((chart) => country === "all" || chartCountry(chart) === country)
+    .sort((left, right) => {
+      const order = { US: 0, UK: 1, NO: 2 };
+      return order[chartCountry(left)] - order[chartCountry(right)] || chartLabel(left).localeCompare(chartLabel(right));
     });
-  }
 
   return (
     <section className="artist-highlight-panel" aria-label="Chart Busters">
       <header className="artist-highlight-heading">
         <div>
-          <span className="eyebrow">Imported singles charts</span>
+          <span className="eyebrow">Chart history · US / UK / NO</span>
           <h2>Chart Busters</h2>
           <p>
             {highlights
-              ? `${tracks.length.toLocaleString()} charted ${tracks.length === 1 ? "track" : "tracks"} across five sources`
+              ? `${highlights.chartTracks.length.toLocaleString()} charted ${highlights.chartTracks.length === 1 ? "track" : "tracks"} across ${allCharts.size} ${allCharts.size === 1 ? "chart" : "charts"}`
               : "Every locally owned track matched to an imported singles chart"}
           </p>
         </div>
@@ -344,65 +340,47 @@ export function ArtistChartBustersPanel({
         />
       </header>
 
+      <div className="artist-chart-toolbar" role="group" aria-label="Filter charts by country">
+        {["all", "US", "UK", "NO"].map((value) => (
+          <button type="button" key={value} aria-pressed={country === value} onClick={() => setCountry(value)}>
+            {value === "all" ? "All countries" : value} <span>{[...allCharts].filter((chart) => value === "all" || chartCountry(chart) === value).length}</span>
+          </button>
+        ))}
+      </div>
+      <p className="artist-chart-coverage">Weekly figures reflect the available archive. Annual rankings are shown separately.</p>
       {tracks.length > 0 ? (
-        <div className="artist-chart-track-list">
-          {tracks.map((track) => {
-            const charts = [...track.charts].sort(
-              (left, right) =>
-                (chartPriority.get(left.chart) ?? Number.MAX_SAFE_INTEGER) -
-                (chartPriority.get(right.chart) ?? Number.MAX_SAFE_INTEGER),
-            );
-            const primary = charts[0];
-            const additional = charts.slice(1);
-            const isExpanded = expandedTracks.has(track.trackId);
-            const detailsId = `artist-chart-details-${track.trackId}`;
+        <div className="artist-chart-sections">
+          {sections.map((chart) => {
+            const rows = tracks.filter((track) => track.charts[0].chart === chart);
             return (
-              <article className="artist-chart-track-row" key={track.trackId}>
-                <div className="artist-chart-track-main">
-                  <div className="artist-highlight-track-copy">
-                    <strong>{track.title}</strong>
-                    <span>
-                      {[track.album, track.year]
-                        .filter((value) => value != null)
-                        .join(" · ") || track.displayArtist}
-                    </span>
-                  </div>
-                  <ChartHistorySummary history={primary} compact />
-                  {additional.length > 0 ? (
-                    <button
-                      className="artist-chart-expand"
-                      type="button"
-                      aria-expanded={isExpanded}
-                      aria-controls={detailsId}
-                      onClick={() => toggleTrack(track.trackId)}
-                    >
-                      <span>
-                        {isExpanded
-                          ? "Hide other charts"
-                          : `Show ${additional.length} more ${additional.length === 1 ? "chart" : "charts"}`}
-                      </span>
-                      <ChevronDown size={15} aria-hidden="true" />
-                    </button>
-                  ) : (
-                    <span className="artist-chart-only-source">Only chart</span>
-                  )}
-                </div>
-                {isExpanded ? (
-                  <div className="artist-chart-track-details" id={detailsId}>
-                    {additional.map((history) => (
-                      <ChartHistorySummary key={history.chart} history={history} />
-                    ))}
-                  </div>
-                ) : null}
-              </article>
+              <section className="artist-chart-section" key={chart} aria-label={chartLabel(chart)}>
+                <header className="artist-chart-section-heading">
+                  <span className="artist-chart-country">{chartCountry(chart)}</span>
+                  <div><h3>{chartLabel(chart)}</h3><p>{rows.length} {rows.length === 1 ? "song" : "songs"} · {chart === "billboard" ? "Annual ranking" : "Weekly chart"}</p></div>
+                  <Trophy size={20} aria-hidden="true" />
+                </header>
+                {rows.map((track) => (
+                  <article className="artist-chart-track-row" key={track.trackId}>
+                    <div className="artist-chart-track-main">
+                      <div className="artist-highlight-track-copy">
+                        <strong>{track.title}</strong>
+                        <span>{[track.album, track.year].filter((value) => value != null).join(" · ") || track.displayArtist}</span>
+                      </div>
+                      <ChartHistorySummary history={track.charts[0]} compact />
+                    </div>
+                  </article>
+                ))}
+              </section>
             );
           })}
+          {sections.length === 0 && <div className="artist-highlight-state">No matched songs for this country.</div>}
         </div>
       ) : (
         <HighlightState
           isLoading={isLoading || (highlights == null && error == null)}
           error={error}
           empty="No local tracks by this artist are matched to an imported singles chart."
+          loadingText={isPreparingCharts ? "Preparing US charts… The bundled archive only needs preparation on first use or when it changes." : "Loading artist chart history…"}
         />
       )}
     </section>

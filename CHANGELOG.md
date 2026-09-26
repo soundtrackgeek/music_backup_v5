@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.156.0] - 2026-09-26
+
+### Added
+
+- Artist Chart Busters includes matched local songs from every US Published Charts series, alongside the existing UK and Norwegian charts. Prepare the bundled archive automatically when opening the tab, and use indexed artist lookups with the established singles matching aliases.
+
+### Changed
+
+- Organize Chart Busters into named chart sections with country badges, song counts, US/UK/NO filters, and chart-specific date, peak, weeks, and title sorting. Keep annual Billboard rankings separate from weekly peaks and label archived US dates as first/last seen.
+- Count distinct archived weeks across duplicate rows and books without inflating a song's chart run.
+
 ## [0.155.1] - 2026-09-26
 
 ### Fixed

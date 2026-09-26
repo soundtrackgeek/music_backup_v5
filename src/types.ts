@@ -2173,7 +2173,7 @@ export type ArtistLovedTrack = {
 };
 
 export type ArtistTrackChartHistory = {
-  chart: TimelineChartSource;
+  chart: TimelineChartSource | `published:${string}`;
   entryDate: string | null;
   endDate: string | null;
   weeksOnChart: number | null;

@@ -26800,3 +26800,46 @@ button {
 .published-history-weeks { max-height: 320px; overflow: auto; }
 .published-history-weeks .published-chart-table td:first-child { width: auto; white-space: nowrap; }
 @media (max-width: 900px) { .published-song-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.artist-chart-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.artist-chart-toolbar button {
+  border: 1px solid var(--border-color, #d3dfda);
+  border-radius: 20px;
+  padding: 7px 13px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.artist-chart-toolbar button[aria-pressed="true"] {
+  background: #176e66;
+  border-color: #176e66;
+  color: white;
+}
+.artist-chart-toolbar button span { margin-left: 8px; opacity: .7; }
+.artist-chart-coverage { font-size: .75rem; color: #75827e; margin: 10px 0 20px; }
+.artist-chart-sections { display: grid; gap: 24px; }
+.artist-chart-section { border: 1px solid #dce5e1; border-radius: 14px; overflow: hidden; min-width: 0; }
+.artist-chart-section-heading { display: flex; align-items: center; gap: 14px; padding: 18px 20px; background: #eff5f2; }
+.artist-chart-section-heading > div { flex: 1; min-width: 0; }
+.artist-chart-section-heading h3 { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+.artist-chart-section-heading p { margin: 4px 0 0; font-size: .7rem; color: #75827e; }
+.artist-chart-section-heading > svg { color: #8d9e89; flex-shrink: 0; }
+.artist-chart-country { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px; background: #dcebe4; color: #176e66; font-size: .7rem; font-weight: 800; }
+.artist-chart-section .artist-chart-track-main { grid-template-columns: minmax(180px, 1fr) minmax(320px, 1fr); padding: 12px 20px; }
+.artist-chart-section .artist-chart-history { display: block; }
+:root[data-theme="dark"] .artist-chart-section { border-color: #304740; }
+:root[data-theme="dark"] .artist-chart-section-heading { background: #1c302a; }
+:root[data-theme="dark"] .artist-chart-country { background: #2b4940; color: #a4dbca; }
+@media (max-width: 850px) {
+  .artist-chart-section .artist-chart-track-main { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .artist-chart-section .artist-chart-history dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .artist-chart-section .artist-chart-history dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+  .artist-chart-section .artist-highlight-track-copy strong { white-space: normal; overflow-wrap: anywhere; }
+  .artist-chart-section .artist-chart-history dd { white-space: normal; }
+}
