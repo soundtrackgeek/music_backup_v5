@@ -1,0 +1,4 @@
+1941_us_singles: 2596 rows, 0 problems, 2 notes
+
+note: Best Sellers In Stores - East Coast 1941-12-13 #9: no catalogue_number in book (A Sinner Kissed An Angel)
+note: Best Sellers In Stores - South 1941-02-15: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 10]

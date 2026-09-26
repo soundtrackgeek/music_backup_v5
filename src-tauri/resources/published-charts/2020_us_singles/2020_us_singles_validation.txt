@@ -1,0 +1,157 @@
+2020_us_singles: 73615 rows, 0 problems, 155 notes
+
+note: Country Singles Chart 2020-07-11 #59: no duration in book (Drift Away (iHeart Live))
+note: Country Singles Chart 2020-07-11 #59: no format in book (Drift Away (iHeart Live))
+note: Country Singles Chart 2020-07-11 #59: no catalogue_number in book (Drift Away (iHeart Live))
+note: Rhythm And Blues Singles Chart 2020-10-10 #44: no duration in book (Pussy Talk)
+note: Digital Song Sales 2020-12-12 #42: no catalogue_number in book (The Holiday Spirit Carries On)
+note: Hot Rock Songs 2020-07-18 #46: no format in book (Maybe It's Time (Demo))
+note: Hot Rock Songs 2020-07-18 #46: no catalogue_number in book (Maybe It's Time (Demo))
+note: Hot Rock Songs 2020-08-22 #33: no duration in book (Tokyo Drifting)
+note: Hot Rock Songs 2020-08-29 #49: no duration in book (Tokyo Drifting)
+note: Hot Rock Songs 2020-09-12 #44: no duration in book (Tokyo Drifting)
+note: Disco Singles 2020-01-25 #51: no format in book (Anthem)
+note: Disco Singles 2020-01-25 #51: no catalogue_number in book (Anthem)
+note: Disco Singles 2020-02-01 #50: no format in book (Anthem)
+note: Disco Singles 2020-02-01 #50: no catalogue_number in book (Anthem)
+note: Disco Singles 2020-02-08 #39: no format in book (Anthem)
+note: Disco Singles 2020-02-08 #39: no catalogue_number in book (Anthem)
+note: Disco Singles 2020-02-15 #34: no format in book (Anthem)
+note: Disco Singles 2020-02-15 #34: no catalogue_number in book (Anthem)
+note: Disco Singles 2020-02-22 #29: no format in book (Anthem)
+note: Disco Singles 2020-02-22 #29: no catalogue_number in book (Anthem)
+note: Disco Singles 2020-02-29 #24: no format in book (Anthem)
+note: Disco Singles 2020-02-29 #24: no catalogue_number in book (Anthem)
+note: Disco Singles 2020-03-07 #18: no format in book (Anthem)
+note: Disco Singles 2020-03-07 #18: no catalogue_number in book (Anthem)
+note: Disco Singles 2020-03-14 #14: no format in book (Anthem)
+note: Disco Singles 2020-03-14 #14: no catalogue_number in book (Anthem)
+note: Disco Singles 2020-03-21 #10: no format in book (Anthem)
+note: Disco Singles 2020-03-21 #10: no catalogue_number in book (Anthem)
+note: Disco Singles 2020-03-28 #6: no format in book (Anthem)
+note: Disco Singles 2020-03-28 #6: no catalogue_number in book (Anthem)
+note: Holiday Digital Song Sales 2020-01-11 #5: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2020-10-10 #19: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2020-10-17 #30: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2020-10-24 #20: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2020-10-31 #22: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2020-11-07 #29: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2020-12-12 #15: no format in book (The Holiday Spirit Carries On)
+note: Holiday Digital Song Sales 2020-12-12 #15: no catalogue_number in book (The Holiday Spirit Carries On)
+note: Holiday Digital Song Sales: 273-day gap between charts 2020-01-11 and 2020-10-10
+note: R&B Hip-Hop Digital Sales 2020-09-19 #14: wrapped line joined: 'USUM72016354'
+note: Rap Digital Sales 2020-07-18 #13: wrapped line joined: 'DL: USAT21502644'
+note: Rap Digital Sales 2020-07-18 #15: wrapped line joined: 'Of Hamilton Hamilton Uptown/Atlantic/AG DL: USAT21502642'
+note: Rap Digital Sales 2020-09-19 #11: wrapped line joined: 'USUM72016354'
+note: Rock Digital Sales 2020-02-22 #23: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2020-02-22 #23: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2020-02-29 #23: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2020-02-29 #23: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2020-12-12 #4: no format in book (The Holiday Spirit Carries On)
+note: Rock Digital Sales 2020-12-12 #4: no catalogue_number in book (The Holiday Spirit Carries On)
+note: Hard Rock Digital Song Sales 2020-12-12 #2: no format in book (The Holiday Spirit Carries On)
+note: Hard Rock Digital Song Sales 2020-12-12 #2: no catalogue_number in book (The Holiday Spirit Carries On)
+note: Hard Rock Digital Song Sales 2020-12-19 #19: no format in book (The Holiday Spirit Carries On)
+note: Hard Rock Digital Song Sales 2020-12-19 #19: no catalogue_number in book (The Holiday Spirit Carries On)
+note: Alternative Digital Song Sales 2020-02-22 #21: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2020-02-22 #21: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2020-02-29 #24: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2020-02-29 #24: no duration in book (You're Somebody Else)
+note: Hot Hard Rock Songs 2020-12-12 #10: no format in book (The Holiday Spirit Carries On)
+note: Hot Hard Rock Songs 2020-12-12 #10: no catalogue_number in book (The Holiday Spirit Carries On)
+note: R&B Airplay 2020-09-19 #47: no duration in book (Pussy Talk)
+note: R&B Airplay 2020-09-26 #33: no duration in book (Pussy Talk)
+note: R&B Airplay 2020-10-03 #31: no duration in book (Pussy Talk)
+note: R&B Airplay 2020-10-10 #24: no duration in book (Pussy Talk)
+note: R&B Airplay 2020-10-17 #23: no duration in book (Pussy Talk)
+note: R&B Airplay 2020-10-24 #26: no duration in book (Pussy Talk)
+note: R&B Airplay 2020-10-31 #26: no duration in book (Pussy Talk)
+note: R&B Airplay 2020-11-07 #31: no duration in book (Pussy Talk)
+note: R&B Airplay 2020-11-14 #36: no duration in book (Pussy Talk)
+note: R&B Airplay 2020-11-21 #49: no duration in book (Pussy Talk)
+note: R&B Airplay 2020-11-28 #48: no duration in book (Pussy Talk)
+note: R&B Airplay 2020-12-05 #46: no duration in book (Pussy Talk)
+note: Top 40 Radio - Rhythmic 2020-10-17 #39: no duration in book (Pussy Talk)
+note: Top 40 Radio - Rhythmic 2020-10-24 #38: no duration in book (Pussy Talk)
+note: Top 40 Radio - Rhythmic 2020-10-31 #39: no duration in book (Pussy Talk)
+note: Mainstream R&B Hip-Hop Airplay 2020-09-26 #29: no duration in book (Pussy Talk)
+note: Mainstream R&B Hip-Hop Airplay 2020-10-03 #28: no duration in book (Pussy Talk)
+note: Mainstream R&B Hip-Hop Airplay 2020-10-10 #23: no duration in book (Pussy Talk)
+note: Mainstream R&B Hip-Hop Airplay 2020-10-17 #22: no duration in book (Pussy Talk)
+note: Mainstream R&B Hip-Hop Airplay 2020-10-24 #21: no duration in book (Pussy Talk)
+note: Mainstream R&B Hip-Hop Airplay 2020-10-31 #23: no duration in book (Pussy Talk)
+note: Mainstream R&B Hip-Hop Airplay 2020-11-07 #22: no duration in book (Pussy Talk)
+note: Mainstream R&B Hip-Hop Airplay 2020-11-14 #29: no duration in book (Pussy Talk)
+note: Mainstream R&B Hip-Hop Airplay 2020-11-21 #39: no duration in book (Pussy Talk)
+note: Rap Airplay 2020-10-03 #22: no duration in book (Pussy Talk)
+note: Rap Airplay 2020-10-10 #21: no duration in book (Pussy Talk)
+note: Rap Airplay 2020-10-17 #20: no duration in book (Pussy Talk)
+note: Rap Airplay 2020-10-24 #22: no duration in book (Pussy Talk)
+note: Rap Airplay 2020-10-31 #23: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-09-19 #110: wrapped line joined: 'USUM72016354'
+note: Bubbling Under The Hot 100 2020-01-04: chart starts at #101
+note: Bubbling Under The Hot 100 2020-01-11: chart starts at #101
+note: Bubbling Under The Hot 100 2020-01-18: chart starts at #101
+note: Bubbling Under The Hot 100 2020-01-25: chart starts at #101
+note: Bubbling Under The Hot 100 2020-02-01: chart starts at #101
+note: Bubbling Under The Hot 100 2020-02-08: chart starts at #101
+note: Bubbling Under The Hot 100 2020-02-15: chart starts at #101
+note: Bubbling Under The Hot 100 2020-02-22: chart starts at #101
+note: Bubbling Under The Hot 100 2020-02-29: chart starts at #101
+note: Bubbling Under The Hot 100 2020-03-07: chart starts at #101
+note: Bubbling Under The Hot 100 2020-03-14: chart starts at #101
+note: Bubbling Under The Hot 100 2020-03-21: chart starts at #101
+note: Bubbling Under The Hot 100 2020-03-28: chart starts at #101
+note: Bubbling Under The Hot 100 2020-04-04: chart starts at #101
+note: Bubbling Under The Hot 100 2020-04-11: chart starts at #101
+note: Bubbling Under The Hot 100 2020-04-18: chart starts at #101
+note: Bubbling Under The Hot 100 2020-04-25: chart starts at #101
+note: Bubbling Under The Hot 100 2020-05-02: chart starts at #101
+note: Bubbling Under The Hot 100 2020-05-09: chart starts at #101
+note: Bubbling Under The Hot 100 2020-05-16: chart starts at #101
+note: Bubbling Under The Hot 100 2020-05-23: chart starts at #101
+note: Bubbling Under The Hot 100 2020-05-30: chart starts at #101
+note: Bubbling Under The Hot 100 2020-06-06: chart starts at #101
+note: Bubbling Under The Hot 100 2020-06-13: chart starts at #101
+note: Bubbling Under The Hot 100 2020-06-20: chart starts at #101
+note: Bubbling Under The Hot 100 2020-06-27: chart starts at #101
+note: Bubbling Under The Hot 100 2020-07-04: chart starts at #101
+note: Bubbling Under The Hot 100 2020-07-11: chart starts at #101
+note: Bubbling Under The Hot 100 2020-07-18: chart starts at #101
+note: Bubbling Under The Hot 100 2020-07-25: chart starts at #101
+note: Bubbling Under The Hot 100 2020-08-01: chart starts at #101
+note: Bubbling Under The Hot 100 2020-08-08: chart starts at #101
+note: Bubbling Under The Hot 100 2020-08-15: chart starts at #101
+note: Bubbling Under The Hot 100 2020-08-22: chart starts at #101
+note: Bubbling Under The Hot 100 2020-08-29: chart starts at #101
+note: Bubbling Under The Hot 100 2020-08-29 #123: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-09-05: chart starts at #101
+note: Bubbling Under The Hot 100 2020-09-05 #124: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-09-12: chart starts at #101
+note: Bubbling Under The Hot 100 2020-09-12 #123: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-09-19: chart starts at #101
+note: Bubbling Under The Hot 100 2020-09-19 #125: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-09-26: chart starts at #101
+note: Bubbling Under The Hot 100 2020-09-26 #125: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-10-03: chart starts at #101
+note: Bubbling Under The Hot 100 2020-10-03 #118: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-10-10: chart starts at #101
+note: Bubbling Under The Hot 100 2020-10-10 #110: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-10-17: chart starts at #101
+note: Bubbling Under The Hot 100 2020-10-17 #120: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-10-24: chart starts at #101
+note: Bubbling Under The Hot 100 2020-10-24 #114: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-10-31: chart starts at #101
+note: Bubbling Under The Hot 100 2020-10-31 #114: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-11-07: chart starts at #101
+note: Bubbling Under The Hot 100 2020-11-07 #114: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-11-14: chart starts at #101
+note: Bubbling Under The Hot 100 2020-11-21: chart starts at #101
+note: Bubbling Under The Hot 100 2020-11-28: chart starts at #101
+note: Bubbling Under The Hot 100 2020-11-28 #110: no duration in book (Pussy Talk)
+note: Bubbling Under The Hot 100 2020-12-05: chart starts at #101
+note: Bubbling Under The Hot 100 2020-12-12: chart starts at #101
+note: Bubbling Under The Hot 100 2020-12-19: chart starts at #101
+note: Bubbling Under The Hot 100 2020-12-26: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2020-01-04: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2020-01-11: chart starts at #101

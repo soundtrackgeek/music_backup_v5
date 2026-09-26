@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Music Library",
-  "version": "0.152.2",
+  "version": "0.153.0",
   "identifier": "com.local.musiclibrary",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -30,6 +30,7 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
+    "resources": ["resources/published-charts/"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

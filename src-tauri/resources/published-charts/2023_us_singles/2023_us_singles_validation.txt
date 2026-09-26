@@ -1,0 +1,80 @@
+2023_us_singles: 72545 rows, 0 problems, 78 notes
+
+note: Hot Rock & Alternative Songs 2023-12-02 #28: wrapped line joined: 'USSM12305450'
+note: Modern Rock Tracks 2023-01-07 #34: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2023-01-14 #32: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2023-01-21 #34: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2023-01-28 #35: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2023-02-04 #39: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2023-02-11 #33: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2023-02-18 #30: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2023-02-25 #36: no duration in book (More Than Machines)
+note: Holiday Digital Song Sales: 329-day gap between charts 2023-01-07 and 2023-12-02
+note: Hot Alternative Songs 2023-12-02 #16: wrapped line joined: 'USSM12305450'
+note: Adult R&B Airplay 2023-03-18 #29: wrapped line joined: 'QZS7J2290832  S'
+note: Adult R&B Airplay 2023-03-25 #28: wrapped line joined: 'QZS7J2290832  S'
+note: Adult R&B Airplay 2023-04-01 #28: wrapped line joined: 'QZS7J2290832  S'
+note: Adult R&B Airplay 2023-04-08 #29: wrapped line joined: 'QZS7J2290832  S'
+note: Adult R&B Airplay 2023-04-15 #28: wrapped line joined: 'QZS7J2290832  S'
+note: Adult R&B Airplay 2023-04-22 #30: wrapped line joined: 'QZS7J2290832  S'
+note: Adult R&B Airplay 2023-03-18 #29: no catalogue_number in book (Why Oh Why QZS7J2290832)
+note: Adult R&B Airplay 2023-03-25 #28: no catalogue_number in book (Why Oh Why QZS7J2290832)
+note: Adult R&B Airplay 2023-04-01 #28: no catalogue_number in book (Why Oh Why QZS7J2290832)
+note: Adult R&B Airplay 2023-04-08 #29: no catalogue_number in book (Why Oh Why QZS7J2290832)
+note: Adult R&B Airplay 2023-04-15 #28: no catalogue_number in book (Why Oh Why QZS7J2290832)
+note: Adult R&B Airplay 2023-04-22 #30: no catalogue_number in book (Why Oh Why QZS7J2290832)
+note: Rock Airplay 2023-01-07 #17: no duration in book (More Than Machines)
+note: Rock Airplay 2023-01-14 #19: no duration in book (More Than Machines)
+note: Rock Airplay 2023-01-21 #20: no duration in book (More Than Machines)
+note: Bubbling Under The Hot 100 2023-01-07: chart starts at #101
+note: Bubbling Under The Hot 100 2023-01-14: chart starts at #101
+note: Bubbling Under The Hot 100 2023-01-21: chart starts at #101
+note: Bubbling Under The Hot 100 2023-01-28: chart starts at #101
+note: Bubbling Under The Hot 100 2023-02-04: chart starts at #101
+note: Bubbling Under The Hot 100 2023-02-11: chart starts at #101
+note: Bubbling Under The Hot 100 2023-02-18: chart starts at #101
+note: Bubbling Under The Hot 100 2023-02-25: chart starts at #101
+note: Bubbling Under The Hot 100 2023-03-04: chart starts at #101
+note: Bubbling Under The Hot 100 2023-03-11: chart starts at #101
+note: Bubbling Under The Hot 100 2023-03-18: chart starts at #101
+note: Bubbling Under The Hot 100 2023-03-25: chart starts at #101
+note: Bubbling Under The Hot 100 2023-04-01: chart starts at #101
+note: Bubbling Under The Hot 100 2023-04-08: chart starts at #101
+note: Bubbling Under The Hot 100 2023-04-15: chart starts at #101
+note: Bubbling Under The Hot 100 2023-04-22: chart starts at #101
+note: Bubbling Under The Hot 100 2023-04-29: chart starts at #101
+note: Bubbling Under The Hot 100 2023-05-06: chart starts at #101
+note: Bubbling Under The Hot 100 2023-05-13: chart starts at #101
+note: Bubbling Under The Hot 100 2023-05-20: chart starts at #101
+note: Bubbling Under The Hot 100 2023-05-27: chart starts at #101
+note: Bubbling Under The Hot 100 2023-06-03: chart starts at #101
+note: Bubbling Under The Hot 100 2023-06-10: chart starts at #101
+note: Bubbling Under The Hot 100 2023-06-17: chart starts at #101
+note: Bubbling Under The Hot 100 2023-06-24: chart starts at #101
+note: Bubbling Under The Hot 100 2023-07-01: chart starts at #101
+note: Bubbling Under The Hot 100 2023-07-08: chart starts at #101
+note: Bubbling Under The Hot 100 2023-07-15: chart starts at #101
+note: Bubbling Under The Hot 100 2023-07-22: chart starts at #101
+note: Bubbling Under The Hot 100 2023-07-29: chart starts at #101
+note: Bubbling Under The Hot 100 2023-08-05: chart starts at #101
+note: Bubbling Under The Hot 100 2023-08-12: chart starts at #101
+note: Bubbling Under The Hot 100 2023-08-19: chart starts at #101
+note: Bubbling Under The Hot 100 2023-08-26: chart starts at #101
+note: Bubbling Under The Hot 100 2023-09-02: chart starts at #101
+note: Bubbling Under The Hot 100 2023-09-09: chart starts at #101
+note: Bubbling Under The Hot 100 2023-09-16: chart starts at #101
+note: Bubbling Under The Hot 100 2023-09-23: chart starts at #101
+note: Bubbling Under The Hot 100 2023-09-30: chart starts at #101
+note: Bubbling Under The Hot 100 2023-10-07: chart starts at #101
+note: Bubbling Under The Hot 100 2023-10-14: chart starts at #101
+note: Bubbling Under The Hot 100 2023-10-21: chart starts at #101
+note: Bubbling Under The Hot 100 2023-10-28: chart starts at #101
+note: Bubbling Under The Hot 100 2023-11-04: chart starts at #101
+note: Bubbling Under The Hot 100 2023-11-11: chart starts at #101
+note: Bubbling Under The Hot 100 2023-11-18: chart starts at #101
+note: Bubbling Under The Hot 100 2023-11-25: chart starts at #101
+note: Bubbling Under The Hot 100 2023-12-02: chart starts at #101
+note: Bubbling Under The Hot 100 2023-12-09: chart starts at #101
+note: Bubbling Under The Hot 100 2023-12-16: chart starts at #101
+note: Bubbling Under The Hot 100 2023-12-23: chart starts at #101
+note: Bubbling Under The Hot 100 2023-12-30: chart starts at #101

@@ -1,0 +1,100 @@
+1974_us_singles: 18865 rows, 0 problems, 98 notes
+
+note: Adult Contemporary 1974-09-28: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 50]
+note: Adult Contemporary 1974-10-26 #50: no duration in book (You Foxy Thing, I Love You)
+note: Adult Contemporary 1974-11-02 #48: no duration in book (You Foxy Thing, I Love You)
+note: Adult Contemporary 1974-11-09 #45: no duration in book (You Foxy Thing, I Love You)
+note: Adult Contemporary 1974-11-16 #43: no duration in book (You Foxy Thing, I Love You)
+note: Adult Contemporary 1974-11-23 #39: no duration in book (You Foxy Thing, I Love You)
+note: Adult Contemporary 1974-11-30 #39: no duration in book (You Foxy Thing, I Love You)
+note: Adult Contemporary 1974-12-07 #35: no duration in book (You Foxy Thing, I Love You)
+note: Adult Contemporary 1974-12-14 #31: no duration in book (You Foxy Thing, I Love You)
+note: Adult Contemporary 1974-12-21 #24: no duration in book (You Foxy Thing, I Love You)
+note: Adult Contemporary 1974-12-28 #23: no duration in book (You Foxy Thing, I Love You)
+note: Disco Singles 1974-10-26 #9: no format in book (Gut Level)
+note: Disco Singles 1974-10-26 #9: no catalogue_number in book (Gut Level)
+note: Disco Singles 1974-11-16 #15: no format in book (Where There Is Love)
+note: Disco Singles 1974-11-16 #15: no catalogue_number in book (Where There Is Love)
+note: Disco Singles 1974-11-30 #12: no format in book (E-Man Boogie)
+note: Disco Singles 1974-11-30 #12: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1974-12-07 #7: no format in book (E-Man Boogie)
+note: Disco Singles 1974-12-07 #7: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1974-12-07 #12: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1974-12-07 #12: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1974-12-14 #6: no format in book (E-Man Boogie)
+note: Disco Singles 1974-12-14 #6: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1974-12-14 #9: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1974-12-14 #9: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1974-12-14 #13: no format in book (That's What I Want For You Baby)
+note: Disco Singles 1974-12-14 #13: no catalogue_number in book (That's What I Want For You Baby)
+note: Disco Singles 1974-12-14 #15: no format in book (African Symphony)
+note: Disco Singles 1974-12-14 #15: no catalogue_number in book (African Symphony)
+note: Disco Singles 1974-12-21 #6: no format in book (E-Man Boogie)
+note: Disco Singles 1974-12-21 #6: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1974-12-21 #7: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1974-12-21 #7: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1974-12-21 #11: no format in book (That's What I Want For You Baby)
+note: Disco Singles 1974-12-21 #11: no catalogue_number in book (That's What I Want For You Baby)
+note: Disco Singles 1974-12-21 #15: no format in book (African Symphony)
+note: Disco Singles 1974-12-21 #15: no catalogue_number in book (African Symphony)
+note: Disco Singles 1974-12-28: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 12, 13, 14, 15]
+note: Disco Singles 1974-12-28 #3: no format in book (E-Man Boogie)
+note: Disco Singles 1974-12-28 #3: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1974-12-28 #8: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1974-12-28 #8: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1974-12-28 #11: no format in book (That's What I Want For You Baby)
+note: Disco Singles 1974-12-28 #11: no catalogue_number in book (That's What I Want For You Baby)
+note: Disco Singles 1974-12-28 #12: no format in book (African Symphony)
+note: Disco Singles 1974-12-28 #12: no catalogue_number in book (African Symphony)
+note: Bubbling Under The Hot 100 1974-01-05: chart starts at #101
+note: Bubbling Under The Hot 100 1974-01-19: chart starts at #101
+note: Bubbling Under The Hot 100 1974-01-26: chart starts at #101
+note: Bubbling Under The Hot 100 1974-02-02: chart starts at #101
+note: Bubbling Under The Hot 100 1974-02-09: chart starts at #101
+note: Bubbling Under The Hot 100 1974-02-16: chart starts at #101
+note: Bubbling Under The Hot 100 1974-02-23: chart starts at #101
+note: Bubbling Under The Hot 100 1974-03-02: chart starts at #101
+note: Bubbling Under The Hot 100 1974-03-09: chart starts at #101
+note: Bubbling Under The Hot 100 1974-03-16: chart starts at #101
+note: Bubbling Under The Hot 100 1974-03-23: chart starts at #101
+note: Bubbling Under The Hot 100 1974-03-30: chart starts at #101
+note: Bubbling Under The Hot 100 1974-04-06: chart starts at #101
+note: Bubbling Under The Hot 100 1974-04-20: chart starts at #101
+note: Bubbling Under The Hot 100 1974-04-27: chart starts at #101
+note: Bubbling Under The Hot 100 1974-05-04: chart starts at #101
+note: Bubbling Under The Hot 100 1974-05-11: chart starts at #101
+note: Bubbling Under The Hot 100 1974-05-18: chart starts at #101
+note: Bubbling Under The Hot 100 1974-05-25: chart starts at #101
+note: Bubbling Under The Hot 100 1974-06-01: chart starts at #101
+note: Bubbling Under The Hot 100 1974-06-08: chart starts at #101
+note: Bubbling Under The Hot 100 1974-06-15: chart starts at #101
+note: Bubbling Under The Hot 100 1974-06-22: chart starts at #101
+note: Bubbling Under The Hot 100 1974-06-29: chart starts at #101
+note: Bubbling Under The Hot 100 1974-07-06: chart starts at #101
+note: Bubbling Under The Hot 100 1974-07-13: chart starts at #101
+note: Bubbling Under The Hot 100 1974-07-20: chart starts at #101
+note: Bubbling Under The Hot 100 1974-08-03: chart starts at #101
+note: Bubbling Under The Hot 100 1974-08-10: chart starts at #101
+note: Bubbling Under The Hot 100 1974-08-17: chart starts at #101
+note: Bubbling Under The Hot 100 1974-08-24: chart starts at #101
+note: Bubbling Under The Hot 100 1974-08-31: chart starts at #101
+note: Bubbling Under The Hot 100 1974-09-07: chart starts at #101
+note: Bubbling Under The Hot 100 1974-09-14: chart starts at #101
+note: Bubbling Under The Hot 100 1974-09-21: chart starts at #101
+note: Bubbling Under The Hot 100 1974-09-28: chart starts at #101
+note: Bubbling Under The Hot 100 1974-10-05: chart starts at #101
+note: Bubbling Under The Hot 100 1974-10-12: chart starts at #101
+note: Bubbling Under The Hot 100 1974-10-19: chart starts at #101
+note: Bubbling Under The Hot 100 1974-10-26: chart starts at #101
+note: Bubbling Under The Hot 100 1974-11-02: chart starts at #101
+note: Bubbling Under The Hot 100 1974-11-09: chart starts at #101
+note: Bubbling Under The Hot 100 1974-11-16: chart starts at #101
+note: Bubbling Under The Hot 100 1974-11-23: chart starts at #101
+note: Bubbling Under The Hot 100 1974-11-30: chart starts at #101
+note: Bubbling Under The Hot 100 1974-12-07: chart starts at #101
+note: Bubbling Under The Hot 100 1974-12-14: chart starts at #101
+note: Bubbling Under The Hot 100 1974-12-21: chart starts at #101
+note: Bubbling Under The Hot 100 1974-12-28: chart starts at #101
+note: Bubbling Under The Hot 100: 14-day gap between charts 1974-01-05 and 1974-01-19
+note: Bubbling Under The Hot 100: 14-day gap between charts 1974-04-06 and 1974-04-20
+note: Bubbling Under The Hot 100: 14-day gap between charts 1974-07-20 and 1974-08-03

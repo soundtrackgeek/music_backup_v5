@@ -1,0 +1,90 @@
+1973_us_singles: 17104 rows, 0 problems, 88 notes
+
+note: Billboard Hot 100 1973-04-14 #80: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Billboard Hot 100 1973-04-21 #60: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Billboard Hot 100 1973-04-28 #44: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Billboard Hot 100 1973-05-05 #30: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Billboard Hot 100 1973-05-12 #26: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Billboard Hot 100 1973-05-19 #23: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Billboard Hot 100 1973-05-26 #19: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Billboard Hot 100 1973-06-02 #17: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Billboard Hot 100 1973-06-09 #21: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Billboard Hot 100 1973-06-16 #28: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Billboard Hot 100 1973-06-23 #50: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Billboard Hot 100 1973-06-30 #53: wrapped line joined: "J.D. Sumner & The Stamps  RCA Victor 7'': 74-0910"
+note: Country Singles Chart 1973-04-28 #66: wrapped line joined: "and The Sweet Inspirations  RCA Victor 7'': 74-0910"
+note: Country Singles Chart 1973-05-05 #55: wrapped line joined: "and The Sweet Inspirations  RCA Victor 7'': 74-0910"
+note: Country Singles Chart 1973-05-12 #49: wrapped line joined: "and The Sweet Inspirations  RCA Victor 7'': 74-0910"
+note: Country Singles Chart 1973-05-19 #44: wrapped line joined: "and The Sweet Inspirations  RCA Victor 7'': 74-0910"
+note: Country Singles Chart 1973-05-26 #42: wrapped line joined: "and The Sweet Inspirations  RCA Victor 7'': 74-0910"
+note: Country Singles Chart 1973-06-02 #37: wrapped line joined: "and The Sweet Inspirations  RCA Victor 7'': 74-0910"
+note: Country Singles Chart 1973-06-09 #34: wrapped line joined: "and The Sweet Inspirations  RCA Victor 7'': 74-0910"
+note: Country Singles Chart 1973-06-16 #32: wrapped line joined: "and The Sweet Inspirations  RCA Victor 7'': 74-0910"
+note: Country Singles Chart 1973-06-23 #31: wrapped line joined: "and The Sweet Inspirations  RCA Victor 7'': 74-0910"
+note: Country Singles Chart 1973-06-30 #34: wrapped line joined: "and The Sweet Inspirations  RCA Victor 7'': 74-0910"
+note: Country Singles Chart 1973-06-30 #67: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-07-07 #62: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-07-14 #55: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-07-21 #53: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-07-28 #42: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-08-04 #34: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-08-11 #30: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-08-18 #21: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-08-25 #17: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-09-01 #13: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-09-08 #11: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-09-15 #10: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-09-22 #15: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Country Singles Chart 1973-09-29 #34: wrapped line joined: "Edition  RCA Victor 7'': 74-0969"
+note: Bubbling Under The Hot 100 1973-01-06: chart starts at #101
+note: Bubbling Under The Hot 100 1973-01-13: chart starts at #101
+note: Bubbling Under The Hot 100 1973-01-20: chart starts at #101
+note: Bubbling Under The Hot 100 1973-01-27: chart starts at #101
+note: Bubbling Under The Hot 100 1973-02-03: chart starts at #101
+note: Bubbling Under The Hot 100 1973-02-10: chart starts at #101
+note: Bubbling Under The Hot 100 1973-02-17: chart starts at #101
+note: Bubbling Under The Hot 100 1973-02-24: chart starts at #101
+note: Bubbling Under The Hot 100 1973-03-03: chart starts at #101
+note: Bubbling Under The Hot 100 1973-03-10: chart starts at #101
+note: Bubbling Under The Hot 100 1973-03-17: chart starts at #101
+note: Bubbling Under The Hot 100 1973-03-24: chart starts at #101
+note: Bubbling Under The Hot 100 1973-03-31: chart starts at #101
+note: Bubbling Under The Hot 100 1973-04-07: chart starts at #101
+note: Bubbling Under The Hot 100 1973-04-14: chart starts at #101
+note: Bubbling Under The Hot 100 1973-04-21: chart starts at #101
+note: Bubbling Under The Hot 100 1973-04-28: chart starts at #101
+note: Bubbling Under The Hot 100 1973-05-05: chart starts at #101
+note: Bubbling Under The Hot 100 1973-05-12: chart starts at #101
+note: Bubbling Under The Hot 100 1973-05-19: chart starts at #101
+note: Bubbling Under The Hot 100 1973-05-26: chart starts at #101
+note: Bubbling Under The Hot 100 1973-06-02: chart starts at #101
+note: Bubbling Under The Hot 100 1973-06-09: chart starts at #101
+note: Bubbling Under The Hot 100 1973-06-16: chart starts at #101
+note: Bubbling Under The Hot 100 1973-06-23: chart starts at #101
+note: Bubbling Under The Hot 100 1973-06-30: chart starts at #101
+note: Bubbling Under The Hot 100 1973-07-07: chart starts at #101
+note: Bubbling Under The Hot 100 1973-07-14: chart starts at #101
+note: Bubbling Under The Hot 100 1973-07-21: chart starts at #101
+note: Bubbling Under The Hot 100 1973-07-28: chart starts at #101
+note: Bubbling Under The Hot 100 1973-08-04: chart starts at #101
+note: Bubbling Under The Hot 100 1973-08-11: chart starts at #101
+note: Bubbling Under The Hot 100 1973-08-18: chart starts at #101
+note: Bubbling Under The Hot 100 1973-08-25: chart starts at #101
+note: Bubbling Under The Hot 100 1973-09-01: chart starts at #101
+note: Bubbling Under The Hot 100 1973-09-08: chart starts at #101
+note: Bubbling Under The Hot 100 1973-09-15: chart starts at #101
+note: Bubbling Under The Hot 100 1973-09-22: chart starts at #101
+note: Bubbling Under The Hot 100 1973-09-29: chart starts at #101
+note: Bubbling Under The Hot 100 1973-10-06: chart starts at #101
+note: Bubbling Under The Hot 100 1973-10-13: chart starts at #101
+note: Bubbling Under The Hot 100 1973-10-20: chart starts at #101
+note: Bubbling Under The Hot 100 1973-10-27: chart starts at #101
+note: Bubbling Under The Hot 100 1973-11-03: chart starts at #101
+note: Bubbling Under The Hot 100 1973-11-10: chart starts at #101
+note: Bubbling Under The Hot 100 1973-11-17: chart starts at #101
+note: Bubbling Under The Hot 100 1973-11-24: chart starts at #101
+note: Bubbling Under The Hot 100 1973-12-01: chart starts at #101
+note: Bubbling Under The Hot 100 1973-12-08: chart starts at #101
+note: Bubbling Under The Hot 100 1973-12-15: chart starts at #101
+note: Bubbling Under The Hot 100 1973-12-22: chart starts at #101
+note: Bubbling Under The Hot 100 1973-12-29: chart starts at #101

@@ -1,0 +1,71 @@
+1956_us_singles: 13001 rows, 0 problems, 69 notes
+
+note: Billboard Best Sellers In Stores 1956-04-28 #20: no format in book (Elvis Presley)
+note: Billboard Best Sellers In Stores 1956-04-28 #20: no catalogue_number in book (Elvis Presley)
+note: Billboard Best Sellers In Stores 1956-11-24 #24: no format in book (Elvis, Volume I)
+note: Billboard Best Sellers In Stores 1956-11-24 #24: no catalogue_number in book (Elvis, Volume I)
+note: Billboard Best Sellers In Stores 1956-12-01 #21: no format in book (Elvis, Volume I)
+note: Billboard Best Sellers In Stores 1956-12-01 #21: no catalogue_number in book (Elvis, Volume I)
+note: Billboard Best Sellers In Stores 1956-12-08 #13: no format in book (Elvis, Volume I)
+note: Billboard Best Sellers In Stores 1956-12-08 #13: no catalogue_number in book (Elvis, Volume I)
+note: Billboard Best Sellers In Stores 1956-12-15 #9: no format in book (Elvis, Volume I)
+note: Billboard Best Sellers In Stores 1956-12-15 #9: no catalogue_number in book (Elvis, Volume I)
+note: Billboard Best Sellers In Stores 1956-12-22 #8: no format in book (Elvis, Volume I)
+note: Billboard Best Sellers In Stores 1956-12-22 #8: no catalogue_number in book (Elvis, Volume I)
+note: Billboard Best Sellers In Stores 1956-12-29 #7: no format in book (Elvis, Volume I)
+note: Billboard Best Sellers In Stores 1956-12-29 #7: no catalogue_number in book (Elvis, Volume I)
+note: Juke Box Chart 1956-03-03: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 14, 16, 17, 18, 19, 20]
+note: Juke Box Chart 1956-04-28: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 17, 19, 19]
+note: Juke Box Chart 1956-05-19: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 17, 17, 20]
+note: Juke Box Chart 1956-05-26: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 11, 13, 14, 15, 16, 17, 17, 19, 19]
+note: Juke Box Chart 1956-12-01: ties ranked densely, as printed: [1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+note: Juke Box Chart 1956-12-08: ties ranked densely, as printed: [1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+note: Juke Box Chart 1956-12-15: irregular numbering, as printed: [1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 17, 19, 20]
+note: Juke Box Chart 1956-12-22: irregular numbering, as printed: [1, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 15, 17, 17, 19, 20]
+note: Top 100 1956-04-07 #88: no format in book (Elvis Presley)
+note: Top 100 1956-04-07 #88: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-04-14 #57: no format in book (Elvis Presley)
+note: Top 100 1956-04-14 #57: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-04-21 #54: no format in book (Elvis Presley)
+note: Top 100 1956-04-21 #54: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-04-28 #25: no format in book (Elvis Presley)
+note: Top 100 1956-04-28 #25: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-05-05 #24: no format in book (Elvis Presley)
+note: Top 100 1956-05-05 #24: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-05-12 #27: no format in book (Elvis Presley)
+note: Top 100 1956-05-12 #27: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-05-12 #84: no format in book (Heartbreak Hotel)
+note: Top 100 1956-05-12 #84: no catalogue_number in book (Heartbreak Hotel)
+note: Top 100 1956-05-19 #37: no format in book (Elvis Presley)
+note: Top 100 1956-05-19 #37: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-05-19 #80: no format in book (Heartbreak Hotel)
+note: Top 100 1956-05-19 #80: no catalogue_number in book (Heartbreak Hotel)
+note: Top 100 1956-05-26 #41: no format in book (Elvis Presley)
+note: Top 100 1956-05-26 #41: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-05-26 #76: no format in book (Heartbreak Hotel)
+note: Top 100 1956-05-26 #76: no catalogue_number in book (Heartbreak Hotel)
+note: Top 100 1956-06-02 #38: no format in book (Elvis Presley)
+note: Top 100 1956-06-02 #38: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-06-02 #95: no format in book (Heartbreak Hotel)
+note: Top 100 1956-06-02 #95: no catalogue_number in book (Heartbreak Hotel)
+note: Top 100 1956-06-09 #68: no format in book (Elvis Presley)
+note: Top 100 1956-06-09 #68: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-06-16 #66: no format in book (Elvis Presley)
+note: Top 100 1956-06-16 #66: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-06-16 #93: no format in book (Heartbreak Hotel)
+note: Top 100 1956-06-16 #93: no catalogue_number in book (Heartbreak Hotel)
+note: Top 100 1956-07-07: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 31, 31, 34, 35, 36, 37, 38, 39, 40, 40, 42, 42, 43, 44, 45, 46, 47, 47, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 61, 63, 64, 65, 65, 67, 67, 69, 70, 70, 70, 73, 73, 75, 76, 77, 77, 79, 80, 80, 82, 83, 84, 85, 86, 87, 88, 89, 89, 91, 92, 93, 93, 95, 96, 96, 98, 99, 99]
+note: Top 100 1956-07-07 #88: no format in book (Elvis Presley)
+note: Top 100 1956-07-07 #88: no catalogue_number in book (Elvis Presley)
+note: Top 100 1956-12-01: irregular numbering, as printed: [1, 2, 3, 4, 5, 5, 7, 8, 9, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 24, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 38, 40, 41, 42, 43, 43, 45, 46, 47, 47, 49, 49, 51, 52, 53, 53, 55, 55, 57, 57, 59, 59, 61, 62, 63, 64, 65, 66, 66, 68, 68, 68, 71, 72, 73, 74, 75, 76, 77, 77, 79, 79, 81, 82, 82, 85, 86, 86, 86, 89, 89, 91, 92, 93, 94, 94, 94, 94, 94, 99, 99, 99]
+note: Top 100 1956-12-29 #47: no format in book (Elvis, Volume II)
+note: Top 100 1956-12-29 #47: no catalogue_number in book (Elvis, Volume II)
+note: Top 100 1956-12-29 #54: no format in book (Love Me Tender (OST))
+note: Top 100 1956-12-29 #54: no catalogue_number in book (Love Me Tender (OST))
+note: Disk Jockey Chart 1956-04-28 #24: no format in book (Elvis Presley)
+note: Disk Jockey Chart 1956-04-28 #24: no catalogue_number in book (Elvis Presley)
+note: Disk Jockey Chart 1956-05-05: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 16, 18, 19, 20, 21, 22, 23, 24, 25]
+note: Disk Jockey Chart 1956-05-05 #25: no format in book (Elvis Presley)
+note: Disk Jockey Chart 1956-05-05 #25: no catalogue_number in book (Elvis Presley)
+note: Disk Jockey Chart 1956-05-12 #25: no format in book (Elvis Presley)
+note: Disk Jockey Chart 1956-05-12 #25: no catalogue_number in book (Elvis Presley)

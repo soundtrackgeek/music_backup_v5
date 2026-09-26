@@ -1,0 +1,131 @@
+2025_us_singles: 68030 rows, 0 problems, 129 notes
+
+note: Billboard Hot 100 2025-11-29 #60: no format in book (Go Girl)
+note: Billboard Hot 100 2025-11-29 #60: no catalogue_number in book (Go Girl)
+note: Rhythm And Blues Singles Chart 2025-11-29 #11: no format in book (Go Girl)
+note: Rhythm And Blues Singles Chart 2025-11-29 #11: no catalogue_number in book (Go Girl)
+note: Rhythm And Blues Singles Chart 2025-12-06 #17: no format in book (Go Girl)
+note: Rhythm And Blues Singles Chart 2025-12-06 #17: no catalogue_number in book (Go Girl)
+note: Rhythm And Blues Singles Chart 2025-12-13 #24: no format in book (Go Girl)
+note: Rhythm And Blues Singles Chart 2025-12-13 #24: no catalogue_number in book (Go Girl)
+note: Rhythm And Blues Singles Chart 2025-12-20 #26: no format in book (Go Girl)
+note: Rhythm And Blues Singles Chart 2025-12-20 #26: no catalogue_number in book (Go Girl)
+note: Rhythm And Blues Singles Chart 2025-12-27 #39: no format in book (Go Girl)
+note: Rhythm And Blues Singles Chart 2025-12-27 #39: no catalogue_number in book (Go Girl)
+note: Adult Contemporary 2025-04-12 #30: wrapped line joined: 'Mark209, David B. Hooten, Jet Jurgensmeyer, Legacy Mission, Village Singers & Sebastian Silas & God Is Love Lamb & Lion DL: QT27V2400023'
+note: Adult Contemporary 2025-04-19 #28: wrapped line joined: 'Mark209, David B. Hooten, Jet Jurgensmeyer, Legacy Mission, Village Singers & Sebastian Silas & God Is Love Lamb & Lion DL: QT27V2400023'
+note: Adult Contemporary 2025-04-26 #26: wrapped line joined: 'Mark209, David B. Hooten, Jet Jurgensmeyer, Legacy Mission, Village Singers & Sebastian Silas & God Is Love Lamb & Lion DL: QT27V2400023'
+note: Adult Contemporary 2025-05-03 #30: wrapped line joined: 'Mark209, David B. Hooten, Jet Jurgensmeyer, Legacy Mission, Village Singers & Sebastian Silas & God Is Love Lamb & Lion DL: QT27V2400023'
+note: Adult Contemporary 2025-05-10 #30: wrapped line joined: 'Mark209, David B. Hooten, Jet Jurgensmeyer, Legacy Mission, Village Singers & Sebastian Silas & God Is Love Lamb & Lion DL: QT27V2400023'
+note: Adult Contemporary 2025-05-17 #27: wrapped line joined: 'Mark209, David B. Hooten, Jet Jurgensmeyer, Legacy Mission, Village Singers & Sebastian Silas & God Is Love Lamb & Lion DL: QT27V2400023'
+note: Adult Contemporary 2025-05-24 #30: wrapped line joined: 'Mark209, David B. Hooten, Jet Jurgensmeyer, Legacy Mission, Village Singers & Sebastian Silas & God Is Love Lamb & Lion DL: QT27V2400023'
+note: Adult Contemporary 2025-05-31 #30: wrapped line joined: 'Mark209, David B. Hooten, Jet Jurgensmeyer, Legacy Mission, Village Singers & Sebastian Silas & God Is Love Lamb & Lion DL: QT27V2400023'
+note: Digital Song Sales 2025-08-02 #4: wrapped line joined: 'USUG12504155'
+note: Digital Song Sales 2025-08-09 #14: wrapped line joined: 'USUG12504155'
+note: Hot Rock & Alternative Songs 2025-08-02 #42: wrapped line joined: 'USUG12504155'
+note: Hot Rock & Alternative Songs 2025-08-09 #42: wrapped line joined: 'USUG12504155'
+note: Holiday Digital Song Sales: 329-day gap between charts 2025-01-04 and 2025-11-29
+note: Streaming Songs 2025-11-29 #47: no format in book (Go Girl)
+note: Streaming Songs 2025-11-29 #47: no catalogue_number in book (Go Girl)
+note: R&B Streaming Songs 2025-11-29 #4: no format in book (Go Girl)
+note: R&B Streaming Songs 2025-11-29 #4: no catalogue_number in book (Go Girl)
+note: R&B Streaming Songs 2025-12-06 #15: no format in book (Go Girl)
+note: R&B Streaming Songs 2025-12-06 #15: no catalogue_number in book (Go Girl)
+note: R&B Hip-Hop Digital Sales 2025-08-02 #6: no duration in book (5 Star)
+note: R&B Hip-Hop Digital Sales 2025-08-02 #6: no format in book (5 Star)
+note: R&B Hip-Hop Digital Sales 2025-08-02 #6: no catalogue_number in book (5 Star)
+note: R&B Hip-Hop Streaming Songs 2025-11-29 #5: no format in book (Go Girl)
+note: R&B Hip-Hop Streaming Songs 2025-11-29 #5: no catalogue_number in book (Go Girl)
+note: R&B Hip-Hop Streaming Songs 2025-12-06 #23: no format in book (Go Girl)
+note: R&B Hip-Hop Streaming Songs 2025-12-06 #23: no catalogue_number in book (Go Girl)
+note: Hot R&B Songs 2025-11-29 #8: no format in book (Go Girl)
+note: Hot R&B Songs 2025-11-29 #8: no catalogue_number in book (Go Girl)
+note: Hot R&B Songs 2025-12-06 #7: no format in book (Go Girl)
+note: Hot R&B Songs 2025-12-06 #7: no catalogue_number in book (Go Girl)
+note: Hot R&B Songs 2025-12-13 #8: no format in book (Go Girl)
+note: Hot R&B Songs 2025-12-13 #8: no catalogue_number in book (Go Girl)
+note: Hot R&B Songs 2025-12-20 #8: no format in book (Go Girl)
+note: Hot R&B Songs 2025-12-20 #8: no catalogue_number in book (Go Girl)
+note: Hot R&B Songs 2025-12-27 #8: no format in book (Go Girl)
+note: Hot R&B Songs 2025-12-27 #8: no catalogue_number in book (Go Girl)
+note: Rap Digital Sales 2025-08-02 #7: no duration in book (5 Star)
+note: Rap Digital Sales 2025-08-02 #7: no format in book (5 Star)
+note: Rap Digital Sales 2025-08-02 #7: no catalogue_number in book (5 Star)
+note: Rock Digital Sales 2025-08-02 #4: wrapped line joined: 'USUG12504155'
+note: Rock Digital Sales 2025-08-09 #9: wrapped line joined: 'USUG12504155'
+note: Rock Digital Sales 2025-08-16 #14: wrapped line joined: 'USUG12504155'
+note: Rock Digital Sales 2025-09-27 #6: no format in book (Drag Path)
+note: Rock Digital Sales 2025-09-27 #6: no catalogue_number in book (Drag Path)
+note: Hard Rock Digital Song Sales 2025-08-02 #4: wrapped line joined: 'USUG12504155'
+note: Hard Rock Digital Song Sales 2025-08-09 #8: wrapped line joined: 'USUG12504155'
+note: Hard Rock Digital Song Sales 2025-08-16 #8: wrapped line joined: 'USUG12504155'
+note: Hard Rock Digital Song Sales 2025-09-20 #9: wrapped line joined: 'USUG12504155'
+note: Hard Rock Digital Song Sales 2025-10-04 #8: wrapped line joined: 'USUG12504155'
+note: Alternative Digital Song Sales 2025-09-27 #3: no format in book (Drag Path)
+note: Alternative Digital Song Sales 2025-09-27 #3: no catalogue_number in book (Drag Path)
+note: Hot Hard Rock Songs 2025-08-02 #11: wrapped line joined: 'USUG12504155'
+note: Hot Hard Rock Songs 2025-08-09 #10: wrapped line joined: 'USUG12504155'
+note: Hot Hard Rock Songs 2025-08-16 #20: wrapped line joined: 'USUG12504155'
+note: R&B Airplay 2025-12-20 #40: no format in book (Go Girl)
+note: R&B Airplay 2025-12-20 #40: no catalogue_number in book (Go Girl)
+note: R&B Airplay 2025-12-27 #26: no format in book (Go Girl)
+note: R&B Airplay 2025-12-27 #26: no catalogue_number in book (Go Girl)
+note: Mainstream R&B Hip-Hop Airplay 2025-12-20 #29: no format in book (Go Girl)
+note: Mainstream R&B Hip-Hop Airplay 2025-12-20 #29: no catalogue_number in book (Go Girl)
+note: Mainstream R&B Hip-Hop Airplay 2025-12-27 #24: no format in book (Go Girl)
+note: Mainstream R&B Hip-Hop Airplay 2025-12-27 #24: no catalogue_number in book (Go Girl)
+note: Bubbling Under The Hot 100 2025-11-29 #101: wrapped line joined: 'Services/SPINDLEHORSE/Atlantic DL: USAT22507429'
+note: Bubbling Under The Hot 100 2025-12-06 #106: wrapped line joined: 'DL: USAT22507429'
+note: Bubbling Under The Hot 100 2025-12-13 #121: wrapped line joined: 'DL: USAT22507429'
+note: Bubbling Under The Hot 100 2025-01-04: chart starts at #101
+note: Bubbling Under The Hot 100 2025-01-11: chart starts at #101
+note: Bubbling Under The Hot 100 2025-01-18: chart starts at #101
+note: Bubbling Under The Hot 100 2025-01-25: chart starts at #101
+note: Bubbling Under The Hot 100 2025-02-01: chart starts at #101
+note: Bubbling Under The Hot 100 2025-02-08: chart starts at #101
+note: Bubbling Under The Hot 100 2025-02-15: chart starts at #101
+note: Bubbling Under The Hot 100 2025-02-22: chart starts at #101
+note: Bubbling Under The Hot 100 2025-03-01: chart starts at #101
+note: Bubbling Under The Hot 100 2025-03-08: chart starts at #101
+note: Bubbling Under The Hot 100 2025-03-15: chart starts at #101
+note: Bubbling Under The Hot 100 2025-03-22: chart starts at #101
+note: Bubbling Under The Hot 100 2025-03-29: chart starts at #101
+note: Bubbling Under The Hot 100 2025-04-05: chart starts at #101
+note: Bubbling Under The Hot 100 2025-04-12: chart starts at #101
+note: Bubbling Under The Hot 100 2025-04-19: chart starts at #101
+note: Bubbling Under The Hot 100 2025-04-26: chart starts at #101
+note: Bubbling Under The Hot 100 2025-05-03: chart starts at #101
+note: Bubbling Under The Hot 100 2025-05-10: chart starts at #101
+note: Bubbling Under The Hot 100 2025-05-17: chart starts at #101
+note: Bubbling Under The Hot 100 2025-05-24: chart starts at #101
+note: Bubbling Under The Hot 100 2025-05-31: chart starts at #101
+note: Bubbling Under The Hot 100 2025-06-07: chart starts at #101
+note: Bubbling Under The Hot 100 2025-06-14: chart starts at #101
+note: Bubbling Under The Hot 100 2025-06-21: chart starts at #101
+note: Bubbling Under The Hot 100 2025-06-28: chart starts at #101
+note: Bubbling Under The Hot 100 2025-07-05: chart starts at #101
+note: Bubbling Under The Hot 100 2025-07-12: chart starts at #101
+note: Bubbling Under The Hot 100 2025-07-19: chart starts at #101
+note: Bubbling Under The Hot 100 2025-07-26: chart starts at #101
+note: Bubbling Under The Hot 100 2025-08-02: chart starts at #101
+note: Bubbling Under The Hot 100 2025-08-09: chart starts at #101
+note: Bubbling Under The Hot 100 2025-08-16: chart starts at #101
+note: Bubbling Under The Hot 100 2025-08-23: chart starts at #101
+note: Bubbling Under The Hot 100 2025-08-30: chart starts at #101
+note: Bubbling Under The Hot 100 2025-09-06: chart starts at #101
+note: Bubbling Under The Hot 100 2025-09-13: chart starts at #101
+note: Bubbling Under The Hot 100 2025-09-20: chart starts at #101
+note: Bubbling Under The Hot 100 2025-09-27: chart starts at #101
+note: Bubbling Under The Hot 100 2025-10-04: chart starts at #101
+note: Bubbling Under The Hot 100 2025-10-11: chart starts at #101
+note: Bubbling Under The Hot 100 2025-10-18: chart starts at #101
+note: Bubbling Under The Hot 100 2025-10-25: chart starts at #101
+note: Bubbling Under The Hot 100 2025-11-01: chart starts at #101
+note: Bubbling Under The Hot 100 2025-11-08: chart starts at #101
+note: Bubbling Under The Hot 100 2025-11-15: chart starts at #101
+note: Bubbling Under The Hot 100 2025-11-22: chart starts at #101
+note: Bubbling Under The Hot 100 2025-11-29: chart starts at #101
+note: Bubbling Under The Hot 100 2025-12-06: chart starts at #101
+note: Bubbling Under The Hot 100 2025-12-13: chart starts at #101
+note: Bubbling Under The Hot 100 2025-12-20: chart starts at #101
+note: Bubbling Under The Hot 100 2025-12-27: chart starts at #101

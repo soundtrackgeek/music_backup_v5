@@ -1,0 +1,79 @@
+1965_us_singles: 13266 rows, 0 problems, 77 notes
+
+note: Billboard Hot 100 1965-02-27 #81: no format in book (4 - By The Beatles)
+note: Billboard Hot 100 1965-02-27 #81: no catalogue_number in book (4 - By The Beatles)
+note: Billboard Hot 100 1965-03-06 #77: no format in book (4 - By The Beatles)
+note: Billboard Hot 100 1965-03-06 #77: no catalogue_number in book (4 - By The Beatles)
+note: Billboard Hot 100 1965-03-13 #73: no format in book (4 - By The Beatles)
+note: Billboard Hot 100 1965-03-13 #73: no catalogue_number in book (4 - By The Beatles)
+note: Billboard Hot 100 1965-03-20 #70: no format in book (4 - By The Beatles)
+note: Billboard Hot 100 1965-03-20 #70: no catalogue_number in book (4 - By The Beatles)
+note: Billboard Hot 100 1965-03-27 #68: no format in book (4 - By The Beatles)
+note: Billboard Hot 100 1965-03-27 #68: no catalogue_number in book (4 - By The Beatles)
+note: Billboard Hot 100 1965-07-10 #98: no format in book (Tickle Me)
+note: Billboard Hot 100 1965-07-10 #98: no catalogue_number in book (Tickle Me)
+note: Billboard Hot 100 1965-07-17 #88: no format in book (Tickle Me)
+note: Billboard Hot 100 1965-07-17 #88: no catalogue_number in book (Tickle Me)
+note: Billboard Hot 100 1965-07-24 #84: no format in book (Tickle Me)
+note: Billboard Hot 100 1965-07-24 #84: no catalogue_number in book (Tickle Me)
+note: Billboard Hot 100 1965-07-31 #83: no format in book (Tickle Me)
+note: Billboard Hot 100 1965-07-31 #83: no catalogue_number in book (Tickle Me)
+note: Billboard Hot 100 1965-08-07 #73: no format in book (Tickle Me)
+note: Billboard Hot 100 1965-08-07 #73: no catalogue_number in book (Tickle Me)
+note: Billboard Hot 100 1965-08-14 #70: no format in book (Tickle Me)
+note: Billboard Hot 100 1965-08-14 #70: no catalogue_number in book (Tickle Me)
+note: Billboard Hot 100 1965-08-21 #82: no format in book (Tickle Me)
+note: Billboard Hot 100 1965-08-21 #82: no catalogue_number in book (Tickle Me)
+note: Christmas Singles 1965-12-18: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 500, 500, 500, 500, 500]
+note: Bubbling Under The Hot 100 1965-01-02: chart starts at #101
+note: Bubbling Under The Hot 100 1965-01-09: chart starts at #101
+note: Bubbling Under The Hot 100 1965-01-16: chart starts at #101
+note: Bubbling Under The Hot 100 1965-01-23: chart starts at #101
+note: Bubbling Under The Hot 100 1965-01-30: chart starts at #101
+note: Bubbling Under The Hot 100 1965-02-06: chart starts at #101
+note: Bubbling Under The Hot 100 1965-02-13: chart starts at #101
+note: Bubbling Under The Hot 100 1965-02-20: chart starts at #101
+note: Bubbling Under The Hot 100 1965-02-27: chart starts at #101
+note: Bubbling Under The Hot 100 1965-03-06: chart starts at #101
+note: Bubbling Under The Hot 100 1965-03-13: chart starts at #101
+note: Bubbling Under The Hot 100 1965-03-20: chart starts at #101
+note: Bubbling Under The Hot 100 1965-03-27: chart starts at #101
+note: Bubbling Under The Hot 100 1965-04-03: chart starts at #101
+note: Bubbling Under The Hot 100 1965-04-10: chart starts at #101
+note: Bubbling Under The Hot 100 1965-04-17: chart starts at #101
+note: Bubbling Under The Hot 100 1965-04-24: chart starts at #101
+note: Bubbling Under The Hot 100 1965-05-01: chart starts at #101
+note: Bubbling Under The Hot 100 1965-05-08: chart starts at #101
+note: Bubbling Under The Hot 100 1965-05-15: chart starts at #101
+note: Bubbling Under The Hot 100 1965-05-22: chart starts at #101
+note: Bubbling Under The Hot 100 1965-05-29: chart starts at #101
+note: Bubbling Under The Hot 100 1965-06-05: chart starts at #101
+note: Bubbling Under The Hot 100 1965-06-12: chart starts at #101
+note: Bubbling Under The Hot 100 1965-06-19: chart starts at #101
+note: Bubbling Under The Hot 100 1965-06-26: chart starts at #101
+note: Bubbling Under The Hot 100 1965-07-03: chart starts at #101
+note: Bubbling Under The Hot 100 1965-07-10: chart starts at #101
+note: Bubbling Under The Hot 100 1965-07-17: chart starts at #101
+note: Bubbling Under The Hot 100 1965-07-24: chart starts at #101
+note: Bubbling Under The Hot 100 1965-07-31: chart starts at #101
+note: Bubbling Under The Hot 100 1965-08-07: chart starts at #101
+note: Bubbling Under The Hot 100 1965-08-14: chart starts at #101
+note: Bubbling Under The Hot 100 1965-08-21: chart starts at #101
+note: Bubbling Under The Hot 100 1965-08-28: chart starts at #101
+note: Bubbling Under The Hot 100 1965-09-04: chart starts at #101
+note: Bubbling Under The Hot 100 1965-09-11: chart starts at #101
+note: Bubbling Under The Hot 100 1965-09-18: chart starts at #101
+note: Bubbling Under The Hot 100 1965-09-25: chart starts at #101
+note: Bubbling Under The Hot 100 1965-10-02: chart starts at #101
+note: Bubbling Under The Hot 100 1965-10-09: chart starts at #101
+note: Bubbling Under The Hot 100 1965-10-16: chart starts at #101
+note: Bubbling Under The Hot 100 1965-10-23: chart starts at #101
+note: Bubbling Under The Hot 100 1965-10-30: chart starts at #101
+note: Bubbling Under The Hot 100 1965-11-06: chart starts at #101
+note: Bubbling Under The Hot 100 1965-11-13: chart starts at #101
+note: Bubbling Under The Hot 100 1965-11-20: chart starts at #101
+note: Bubbling Under The Hot 100 1965-11-27: chart starts at #101
+note: Bubbling Under The Hot 100 1965-12-04: chart starts at #101
+note: Bubbling Under The Hot 100 1965-12-11: chart starts at #101
+note: Bubbling Under The Hot 100 1965-12-18: chart starts at #101
+note: Bubbling Under The Hot 100 1965-12-25: chart starts at #101

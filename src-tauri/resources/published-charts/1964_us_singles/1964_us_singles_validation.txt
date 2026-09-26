@@ -1,0 +1,102 @@
+1964_us_singles: 10627 rows, 0 problems, 100 notes
+
+note: Billboard Hot 100 1964-06-13 #97: no format in book (Four By The Beatles)
+note: Billboard Hot 100 1964-06-13 #97: no catalogue_number in book (Four By The Beatles)
+note: Billboard Hot 100 1964-06-20 #97: no format in book (Four By The Beatles)
+note: Billboard Hot 100 1964-06-20 #97: no catalogue_number in book (Four By The Beatles)
+note: Billboard Hot 100 1964-06-27 #92: no format in book (Four By The Beatles)
+note: Billboard Hot 100 1964-06-27 #92: no catalogue_number in book (Four By The Beatles)
+note: Billboard Hot 100 1964-07-04 #92: no format in book (Viva Las Vegas)
+note: Billboard Hot 100 1964-07-04 #92: no catalogue_number in book (Viva Las Vegas)
+note: Billboard Hot 100 1964-10-17 #71: no format in book (Wendy)
+note: Billboard Hot 100 1964-10-17 #71: no catalogue_number in book (Wendy)
+note: Billboard Hot 100 1964-10-17 #85: no format in book (4-By The Beach Boys)
+note: Billboard Hot 100 1964-10-17 #85: no catalogue_number in book (4-By The Beach Boys)
+note: Billboard Hot 100 1964-10-24 #62: no format in book (Wendy)
+note: Billboard Hot 100 1964-10-24 #62: no catalogue_number in book (Wendy)
+note: Billboard Hot 100 1964-10-24 #78: no format in book (4-By The Beach Boys)
+note: Billboard Hot 100 1964-10-24 #78: no catalogue_number in book (4-By The Beach Boys)
+note: Billboard Hot 100 1964-10-31 #54: no format in book (Wendy)
+note: Billboard Hot 100 1964-10-31 #54: no catalogue_number in book (Wendy)
+note: Billboard Hot 100 1964-10-31 #73: no format in book (4-By The Beach Boys)
+note: Billboard Hot 100 1964-10-31 #73: no catalogue_number in book (4-By The Beach Boys)
+note: Billboard Hot 100 1964-11-07 #50: no format in book (Wendy)
+note: Billboard Hot 100 1964-11-07 #50: no catalogue_number in book (Wendy)
+note: Billboard Hot 100 1964-11-07 #69: no format in book (4-By The Beach Boys)
+note: Billboard Hot 100 1964-11-07 #69: no catalogue_number in book (4-By The Beach Boys)
+note: Billboard Hot 100 1964-11-14 #44: no format in book (Wendy)
+note: Billboard Hot 100 1964-11-14 #44: no catalogue_number in book (Wendy)
+note: Billboard Hot 100 1964-11-14 #65: no format in book (4-By The Beach Boys)
+note: Billboard Hot 100 1964-11-14 #65: no catalogue_number in book (4-By The Beach Boys)
+note: Billboard Hot 100 1964-11-21 #56: no format in book (Wendy)
+note: Billboard Hot 100 1964-11-21 #56: no catalogue_number in book (Wendy)
+note: Christmas Singles 1964-12-05: irregular numbering, as printed: [1, 2, 3, 4, 5, 500, 500, 500, 500, 500]
+note: Christmas Singles 1964-12-12: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 500, 500, 500, 500, 500]
+note: Bubbling Under The Hot 100 1964-01-04: chart starts at #101
+note: Bubbling Under The Hot 100 1964-01-11: chart starts at #101
+note: Bubbling Under The Hot 100 1964-01-18: chart starts at #101
+note: Bubbling Under The Hot 100 1964-01-18 #117: no format in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1964-01-18 #117: no catalogue_number in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1964-01-25: chart starts at #101
+note: Bubbling Under The Hot 100 1964-01-25 #119: no format in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1964-01-25 #119: no catalogue_number in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1964-02-01: chart starts at #101
+note: Bubbling Under The Hot 100 1964-02-01 #108: no format in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1964-02-01 #108: no catalogue_number in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1964-02-08: chart starts at #101
+note: Bubbling Under The Hot 100 1964-02-15: chart starts at #101
+note: Bubbling Under The Hot 100 1964-02-22: chart starts at #101
+note: Bubbling Under The Hot 100 1964-02-29: chart starts at #101
+note: Bubbling Under The Hot 100 1964-03-07: chart starts at #101
+note: Bubbling Under The Hot 100 1964-03-14: chart starts at #101
+note: Bubbling Under The Hot 100 1964-03-21: chart starts at #101
+note: Bubbling Under The Hot 100 1964-03-28: chart starts at #101
+note: Bubbling Under The Hot 100 1964-04-04: chart starts at #101
+note: Bubbling Under The Hot 100 1964-04-11: chart starts at #101
+note: Bubbling Under The Hot 100 1964-04-18: chart starts at #101
+note: Bubbling Under The Hot 100 1964-04-25: chart starts at #101
+note: Bubbling Under The Hot 100 1964-05-02: chart starts at #101
+note: Bubbling Under The Hot 100 1964-05-09: chart starts at #101
+note: Bubbling Under The Hot 100 1964-05-16: chart starts at #101
+note: Bubbling Under The Hot 100 1964-05-23: chart starts at #101
+note: Bubbling Under The Hot 100 1964-05-30: chart starts at #101
+note: Bubbling Under The Hot 100 1964-06-06: chart starts at #101
+note: Bubbling Under The Hot 100 1964-06-06 #105: no format in book (Four By The Beatles)
+note: Bubbling Under The Hot 100 1964-06-06 #105: no catalogue_number in book (Four By The Beatles)
+note: Bubbling Under The Hot 100 1964-06-13: chart starts at #101
+note: Bubbling Under The Hot 100 1964-06-20: chart starts at #101
+note: Bubbling Under The Hot 100 1964-06-27: chart starts at #101
+note: Bubbling Under The Hot 100 1964-07-04: chart starts at #101
+note: Bubbling Under The Hot 100 1964-07-11: chart starts at #101
+note: Bubbling Under The Hot 100 1964-07-18: chart starts at #101
+note: Bubbling Under The Hot 100 1964-07-25: chart starts at #101
+note: Bubbling Under The Hot 100 1964-08-01: chart starts at #101
+note: Bubbling Under The Hot 100 1964-08-08: chart starts at #101
+note: Bubbling Under The Hot 100 1964-08-15: chart starts at #101
+note: Bubbling Under The Hot 100 1964-08-22: chart starts at #101
+note: Bubbling Under The Hot 100 1964-08-29: chart starts at #101
+note: Bubbling Under The Hot 100 1964-09-05: chart starts at #101
+note: Bubbling Under The Hot 100 1964-09-12: chart starts at #101
+note: Bubbling Under The Hot 100 1964-09-19: chart starts at #101
+note: Bubbling Under The Hot 100 1964-09-26: chart starts at #101
+note: Bubbling Under The Hot 100 1964-09-26 #132: no format in book (4-By The Beach Boys)
+note: Bubbling Under The Hot 100 1964-09-26 #132: no catalogue_number in book (4-By The Beach Boys)
+note: Bubbling Under The Hot 100 1964-10-03: chart starts at #101
+note: Bubbling Under The Hot 100 1964-10-03 #117: no format in book (4-By The Beach Boys)
+note: Bubbling Under The Hot 100 1964-10-03 #117: no catalogue_number in book (4-By The Beach Boys)
+note: Bubbling Under The Hot 100 1964-10-10: chart starts at #101
+note: Bubbling Under The Hot 100 1964-10-10 #124: no format in book (Wendy)
+note: Bubbling Under The Hot 100 1964-10-10 #124: no catalogue_number in book (Wendy)
+note: Bubbling Under The Hot 100 1964-10-10 #132: no format in book (4-By The Beach Boys)
+note: Bubbling Under The Hot 100 1964-10-10 #132: no catalogue_number in book (4-By The Beach Boys)
+note: Bubbling Under The Hot 100 1964-10-17: chart starts at #101
+note: Bubbling Under The Hot 100 1964-10-24: chart starts at #101
+note: Bubbling Under The Hot 100 1964-10-31: chart starts at #101
+note: Bubbling Under The Hot 100 1964-11-07: chart starts at #101
+note: Bubbling Under The Hot 100 1964-11-14: chart starts at #101
+note: Bubbling Under The Hot 100 1964-11-21: chart starts at #101
+note: Bubbling Under The Hot 100 1964-11-28: chart starts at #101
+note: Bubbling Under The Hot 100 1964-12-05: chart starts at #101
+note: Bubbling Under The Hot 100 1964-12-12: chart starts at #101
+note: Bubbling Under The Hot 100 1964-12-19: chart starts at #101
+note: Bubbling Under The Hot 100 1964-12-26: chart starts at #101

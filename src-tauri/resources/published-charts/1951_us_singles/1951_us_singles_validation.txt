@@ -1,0 +1,17 @@
+1951_us_singles: 7822 rows, 0 problems, 15 notes
+
+note: Billboard Best Sellers In Stores 1951-06-09: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 26, 28, 29, 29, 29]
+note: Juke Box Race 1951-12-01: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 6, 7, 9, 9]
+note: Juke Box Chart 1951-01-13: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 7, 9, 10, 11, 12, 13, 13, 15, 16, 16, 16, 19, 20, 20, 20, 24, 24, 26, 26, 26, 26, 30, 30, 30, 30, 30, 30]
+note: Most Played C&W By Jockeys 1951-03-10: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 7, 7, 8, 10]
+note: Juke Box Folk - Coming Up 1951-05-26 #3: no catalogue_number in book (Poison Love)
+note: Juke Box Folk - Coming Up: 14-day gap between charts 1951-04-07 and 1951-04-21
+note: Juke Box Folk - Coming Up: 14-day gap between charts 1951-09-22 and 1951-10-06
+note: Most Played C&W By Jockeys - Coming Up 1951-07-21 #2: no duration in book (Send Me A Penny Post Card)
+note: Most Played C&W By Jockeys - Coming Up 1951-08-18 #1: no duration in book (Send Me A Penny Post Card)
+note: Most Played C&W By Jockeys - Coming Up: 21-day gap between charts 1951-03-31 and 1951-04-21
+note: Most Played C&W By Jockeys - Coming Up: 14-day gap between charts 1951-08-04 and 1951-08-18
+note: Most Played C&W By Jockeys - Coming Up: 14-day gap between charts 1951-09-22 and 1951-10-06
+note: Best Selling Retail Folk Records - Coming Up 1951-05-05 #2: no catalogue_number in book (Poison Love)
+note: Best Selling Retail Folk Records - Coming Up: 21-day gap between charts 1951-03-31 and 1951-04-21
+note: Best Selling Retail Folk Records - Coming Up: 14-day gap between charts 1951-09-22 and 1951-10-06

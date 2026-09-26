@@ -1,0 +1,43 @@
+1952_us_singles: 7395 rows, 0 problems, 41 notes
+
+note: Juke Box Folk 1952-09-20 #8: no format in book (Blackberry Boogie)
+note: Juke Box Folk 1952-09-20 #8: no catalogue_number in book (Blackberry Boogie)
+note: Juke Box Folk 1952-09-27 #7: no format in book (Blackberry Boogie)
+note: Juke Box Folk 1952-09-27 #7: no catalogue_number in book (Blackberry Boogie)
+note: Juke Box Folk 1952-10-04 #8: no format in book (Blackberry Boogie)
+note: Juke Box Folk 1952-10-04 #8: no catalogue_number in book (Blackberry Boogie)
+note: Juke Box Folk 1952-10-11 #6: no format in book (Blackberry Boogie)
+note: Juke Box Folk 1952-10-11 #6: no catalogue_number in book (Blackberry Boogie)
+note: Juke Box Folk 1952-10-18 #9: no format in book (Blackberry Boogie)
+note: Juke Box Folk 1952-10-18 #9: no catalogue_number in book (Blackberry Boogie)
+note: Juke Box Folk 1952-10-25 #9: no format in book (Blackberry Boogie)
+note: Juke Box Folk 1952-10-25 #9: no catalogue_number in book (Blackberry Boogie)
+note: Juke Box Folk 1952-11-01 #10: no format in book (Blackberry Boogie)
+note: Juke Box Folk 1952-11-01 #10: no catalogue_number in book (Blackberry Boogie)
+note: Most Played C&W By Jockeys 1952-01-19: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 8, 9]
+note: Most Played C&W By Jockeys 1952-10-04 #9: no format in book (Blackberry Boogie)
+note: Most Played C&W By Jockeys 1952-10-04 #9: no catalogue_number in book (Blackberry Boogie)
+note: Most Played C&W By Jockeys 1952-10-18 #9: no format in book (Blackberry Boogie)
+note: Most Played C&W By Jockeys 1952-10-18 #9: no catalogue_number in book (Blackberry Boogie)
+note: Best Selling Retail Folk Records 1952-09-20 #10: no format in book (Blackberry Boogie)
+note: Best Selling Retail Folk Records 1952-09-20 #10: no catalogue_number in book (Blackberry Boogie)
+note: Best Selling Retail Folk Records 1952-10-04 #9: no format in book (Blackberry Boogie)
+note: Best Selling Retail Folk Records 1952-10-04 #9: no catalogue_number in book (Blackberry Boogie)
+note: Best Selling Retail Folk Records 1952-10-11 #9: no format in book (Blackberry Boogie)
+note: Best Selling Retail Folk Records 1952-10-11 #9: no catalogue_number in book (Blackberry Boogie)
+note: Best Selling Retail Folk Records 1952-10-18 #10: no format in book (Blackberry Boogie)
+note: Best Selling Retail Folk Records 1952-10-18 #10: no catalogue_number in book (Blackberry Boogie)
+note: Disk Jockey Chart 1952-02-09: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 19, 21, 22, 22, 22, 25, 26, 27, 27, 30]
+note: Disk Jockey Chart 1952-08-23: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 14, 15, 16, 17, 18, 19, 20, 21, 21, 23, 24, 24, 26, 28, 29, 29]
+note: Juke Box Folk - Coming Up 1952-05-03 #3: no format in book (Down South)
+note: Juke Box Folk - Coming Up 1952-05-03 #3: no catalogue_number in book (Down South)
+note: Juke Box Folk - Coming Up 1952-05-10 #3: no format in book (Down South)
+note: Juke Box Folk - Coming Up 1952-05-10 #3: no catalogue_number in book (Down South)
+note: Juke Box Folk - Coming Up: 14-day gap between charts 1952-04-12 and 1952-04-26
+note: Juke Box Folk - Coming Up: 21-day gap between charts 1952-05-17 and 1952-06-07
+note: Most Played C&W By Jockeys - Coming Up: 21-day gap between charts 1952-05-17 and 1952-06-07
+note: Best Selling Retail Folk Records - Coming Up 1952-03-15 #3: no format in book (A Heartsick Soldier On Heartbreak Ridge)
+note: Best Selling Retail Folk Records - Coming Up 1952-03-15 #3: no catalogue_number in book (A Heartsick Soldier On Heartbreak Ridge)
+note: Best Selling Retail Rhythm And Blues - Coming Up 1952-05-03 #1: no format in book (Looking For My Baby)
+note: Best Selling Retail Rhythm And Blues - Coming Up 1952-05-03 #1: no catalogue_number in book (Looking For My Baby)
+note: Best Selling Retail Rhythm And Blues - Coming Up: 21-day gap between charts 1952-04-12 and 1952-05-03

@@ -1,0 +1,260 @@
+2017_us_singles: 83040 rows, 0 problems, 258 notes
+
+note: Billboard Hot 100 2017-08-12 #81: wrapped line joined: 'USWD11779698'
+note: Billboard Hot 100 2017-08-19 #77: wrapped line joined: 'USWD11779698'
+note: Billboard Hot 100 2017-08-26 #96: wrapped line joined: 'USWD11779698'
+note: Billboard Hot 100 2017-09-02 #96: wrapped line joined: 'USWD11779698'
+note: Billboard Hot 100 2017-01-14 #86: no format in book (My Sh*t)
+note: Billboard Hot 100 2017-01-14 #86: no catalogue_number in book (My Sh*t)
+note: Billboard Hot 100 2017-01-21 #96: no format in book (My Sh*t)
+note: Billboard Hot 100 2017-01-21 #96: no catalogue_number in book (My Sh*t)
+note: Billboard Hot 100 2017-02-04 #100: no format in book (My Sh*t)
+note: Billboard Hot 100 2017-02-04 #100: no catalogue_number in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-01-07 #45: no format in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-01-07 #45: no catalogue_number in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-01-14 #36: no format in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-01-14 #36: no catalogue_number in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-01-21 #39: no format in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-01-21 #39: no catalogue_number in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-01-28 #42: no format in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-01-28 #42: no catalogue_number in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-02-04 #40: no format in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-02-04 #40: no catalogue_number in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-02-11 #49: no format in book (My Sh*t)
+note: Rhythm And Blues Singles Chart 2017-02-11 #49: no catalogue_number in book (My Sh*t)
+note: Digital Song Sales 2017-08-12 #47: wrapped line joined: 'USWD11779698'
+note: Hot Rock Songs 2017-10-14 #38: no duration in book (Some Kind Of Love)
+note: Disco Singles 2017-01-07 #26: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-01-07 #26: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-01-07 #26: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-01-14 #20: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-01-14 #20: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-01-14 #20: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-01-21 #12: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-01-21 #12: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-01-21 #12: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-01-28 #9: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-01-28 #9: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-01-28 #9: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-04 #6: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-04 #6: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-04 #6: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-11 #5: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-11 #5: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-11 #5: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-11 #53: no format in book (I Betcha)
+note: Disco Singles 2017-02-11 #53: no catalogue_number in book (I Betcha)
+note: Disco Singles 2017-02-18 #3: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-18 #3: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-18 #3: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-25 #4: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-25 #4: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-25 #4: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-02-25 #44: no format in book (I Betcha)
+note: Disco Singles 2017-02-25 #44: no catalogue_number in book (I Betcha)
+note: Disco Singles 2017-03-04 #13: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-03-04 #13: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-03-04 #13: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-03-04 #31: no format in book (I Betcha)
+note: Disco Singles 2017-03-04 #31: no catalogue_number in book (I Betcha)
+note: Disco Singles 2017-03-11 #15: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-03-11 #15: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-03-11 #15: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-03-11 #26: no format in book (I Betcha)
+note: Disco Singles 2017-03-11 #26: no catalogue_number in book (I Betcha)
+note: Disco Singles 2017-03-18 #21: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-03-18 #21: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-03-18 #21: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-03-18 #24: no format in book (I Betcha)
+note: Disco Singles 2017-03-18 #24: no catalogue_number in book (I Betcha)
+note: Disco Singles 2017-03-25 #21: no format in book (I Betcha)
+note: Disco Singles 2017-03-25 #21: no catalogue_number in book (I Betcha)
+note: Disco Singles 2017-03-25 #41: no duration in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-03-25 #41: no format in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-03-25 #41: no catalogue_number in book (Enough Is Enough 2017 (Offer Nissim's Drama Remix))
+note: Disco Singles 2017-04-01 #18: no format in book (I Betcha)
+note: Disco Singles 2017-04-01 #18: no catalogue_number in book (I Betcha)
+note: Disco Singles 2017-04-08 #23: no format in book (I Betcha)
+note: Disco Singles 2017-04-08 #23: no catalogue_number in book (I Betcha)
+note: Disco Singles 2017-04-15 #27: no format in book (I Betcha)
+note: Disco Singles 2017-04-15 #27: no catalogue_number in book (I Betcha)
+note: Disco Singles 2017-04-22 #27: no format in book (I Betcha)
+note: Disco Singles 2017-04-22 #27: no catalogue_number in book (I Betcha)
+note: Disco Singles 2017-06-10 #51: no duration in book (Be Magical)
+note: Disco Singles 2017-06-10 #51: no format in book (Be Magical)
+note: Disco Singles 2017-06-10 #51: no catalogue_number in book (Be Magical)
+note: Disco Singles 2017-06-17 #46: no duration in book (Be Magical)
+note: Disco Singles 2017-06-17 #46: no format in book (Be Magical)
+note: Disco Singles 2017-06-17 #46: no catalogue_number in book (Be Magical)
+note: Disco Singles 2017-06-24 #45: no duration in book (Be Magical)
+note: Disco Singles 2017-06-24 #45: no format in book (Be Magical)
+note: Disco Singles 2017-06-24 #45: no catalogue_number in book (Be Magical)
+note: Disco Singles 2017-07-01 #39: no duration in book (Be Magical)
+note: Disco Singles 2017-07-01 #39: no format in book (Be Magical)
+note: Disco Singles 2017-07-01 #39: no catalogue_number in book (Be Magical)
+note: Disco Singles 2017-07-08 #33: no duration in book (Be Magical)
+note: Disco Singles 2017-07-08 #33: no format in book (Be Magical)
+note: Disco Singles 2017-07-08 #33: no catalogue_number in book (Be Magical)
+note: Disco Singles 2017-07-08 #55: no format in book (12345)
+note: Disco Singles 2017-07-08 #55: no catalogue_number in book (12345)
+note: Disco Singles 2017-07-15 #31: no duration in book (Be Magical)
+note: Disco Singles 2017-07-15 #31: no format in book (Be Magical)
+note: Disco Singles 2017-07-15 #31: no catalogue_number in book (Be Magical)
+note: Disco Singles 2017-07-22 #28: no duration in book (Be Magical)
+note: Disco Singles 2017-07-22 #28: no format in book (Be Magical)
+note: Disco Singles 2017-07-22 #28: no catalogue_number in book (Be Magical)
+note: Disco Singles 2017-07-29 #38: no duration in book (Be Magical)
+note: Disco Singles 2017-07-29 #38: no format in book (Be Magical)
+note: Disco Singles 2017-07-29 #38: no catalogue_number in book (Be Magical)
+note: Disco Singles 2017-08-05 #41: no duration in book (Be Magical)
+note: Disco Singles 2017-08-05 #41: no format in book (Be Magical)
+note: Disco Singles 2017-08-05 #41: no catalogue_number in book (Be Magical)
+note: Disco Singles 2017-08-12 #44: no duration in book (Be Magical)
+note: Disco Singles 2017-08-12 #44: no format in book (Be Magical)
+note: Disco Singles 2017-08-12 #44: no catalogue_number in book (Be Magical)
+note: Disco Singles 2017-09-16 #53: no format in book (Party All Night)
+note: Disco Singles 2017-09-16 #53: no catalogue_number in book (Party All Night)
+note: Disco Singles 2017-10-14 #48: no format in book (Party All Night)
+note: Disco Singles 2017-10-14 #48: no catalogue_number in book (Party All Night)
+note: Disco Singles 2017-10-21 #45: no format in book (Party All Night)
+note: Disco Singles 2017-10-21 #45: no catalogue_number in book (Party All Night)
+note: Disco Singles 2017-10-28 #33: no format in book (Party All Night)
+note: Disco Singles 2017-10-28 #33: no catalogue_number in book (Party All Night)
+note: Disco Singles 2017-10-28 #54: no format in book (Crown And The Girls)
+note: Disco Singles 2017-10-28 #54: no catalogue_number in book (Crown And The Girls)
+note: Disco Singles 2017-11-04 #32: no format in book (Party All Night)
+note: Disco Singles 2017-11-04 #32: no catalogue_number in book (Party All Night)
+note: Disco Singles 2017-11-11 #41: no format in book (Party All Night)
+note: Disco Singles 2017-11-11 #41: no catalogue_number in book (Party All Night)
+note: Disco Singles 2017-11-11 #49: no format in book (Crown And The Girls)
+note: Disco Singles 2017-11-11 #49: no catalogue_number in book (Crown And The Girls)
+note: Disco Singles 2017-11-18 #40: no format in book (Crown And The Girls)
+note: Disco Singles 2017-11-18 #40: no catalogue_number in book (Crown And The Girls)
+note: Disco Singles 2017-11-18 #49: no format in book (Party All Night)
+note: Disco Singles 2017-11-18 #49: no catalogue_number in book (Party All Night)
+note: Disco Singles 2017-11-25 #41: no format in book (Crown And The Girls)
+note: Disco Singles 2017-11-25 #41: no catalogue_number in book (Crown And The Girls)
+note: Disco Singles 2017-11-25 #44: no format in book (Party All Night)
+note: Disco Singles 2017-11-25 #44: no catalogue_number in book (Party All Night)
+note: Disco Singles 2017-12-23 #52: no format in book (I Don't Know)
+note: Disco Singles 2017-12-23 #52: no catalogue_number in book (I Don't Know)
+note: Holiday Digital Song Sales 2017-10-21 #15: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2017-10-28 #23: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2017-11-04 #21: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2017-11-11 #33: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2017-12-09 #20: odd duration as printed: '34:6' (The Thanksgiving Song)
+note: Holiday Digital Song Sales: 287-day gap between charts 2017-01-07 and 2017-10-21
+note: Pop Digital Sales 2017-08-12 #21: wrapped line joined: 'USWD11779698'
+note: Adult R&B Airplay 2017-01-07 #22: no format in book (Endless Love)
+note: Adult R&B Airplay 2017-01-07 #22: no catalogue_number in book (Endless Love)
+note: Bubbling Under The Hot 100 2017-01-07: chart starts at #101
+note: Bubbling Under The Hot 100 2017-01-14: chart starts at #101
+note: Bubbling Under The Hot 100 2017-01-21: chart starts at #101
+note: Bubbling Under The Hot 100 2017-01-28: chart starts at #101
+note: Bubbling Under The Hot 100 2017-02-04: chart starts at #101
+note: Bubbling Under The Hot 100 2017-02-11: chart starts at #101
+note: Bubbling Under The Hot 100 2017-02-18: chart starts at #101
+note: Bubbling Under The Hot 100 2017-02-25: chart starts at #101
+note: Bubbling Under The Hot 100 2017-03-04: chart starts at #101
+note: Bubbling Under The Hot 100 2017-03-11: chart starts at #101
+note: Bubbling Under The Hot 100 2017-03-18: chart starts at #101
+note: Bubbling Under The Hot 100 2017-03-25: chart starts at #101
+note: Bubbling Under The Hot 100 2017-04-01: chart starts at #101
+note: Bubbling Under The Hot 100 2017-04-08: chart starts at #101
+note: Bubbling Under The Hot 100 2017-04-15: chart starts at #101
+note: Bubbling Under The Hot 100 2017-04-22: chart starts at #101
+note: Bubbling Under The Hot 100 2017-04-29: chart starts at #101
+note: Bubbling Under The Hot 100 2017-05-06: chart starts at #101
+note: Bubbling Under The Hot 100 2017-05-13: chart starts at #101
+note: Bubbling Under The Hot 100 2017-05-20: chart starts at #101
+note: Bubbling Under The Hot 100 2017-05-27: chart starts at #101
+note: Bubbling Under The Hot 100 2017-06-03: chart starts at #101
+note: Bubbling Under The Hot 100 2017-06-10: chart starts at #101
+note: Bubbling Under The Hot 100 2017-06-17: chart starts at #101
+note: Bubbling Under The Hot 100 2017-06-24: chart starts at #101
+note: Bubbling Under The Hot 100 2017-07-01: chart starts at #101
+note: Bubbling Under The Hot 100 2017-07-08: chart starts at #101
+note: Bubbling Under The Hot 100 2017-07-15: chart starts at #101
+note: Bubbling Under The Hot 100 2017-07-22: chart starts at #101
+note: Bubbling Under The Hot 100 2017-07-29: chart starts at #101
+note: Bubbling Under The Hot 100 2017-08-05: chart starts at #101
+note: Bubbling Under The Hot 100 2017-08-12: chart starts at #101
+note: Bubbling Under The Hot 100 2017-08-19: chart starts at #101
+note: Bubbling Under The Hot 100 2017-08-19 #122: no format in book (#freetayk)
+note: Bubbling Under The Hot 100 2017-08-19 #122: no catalogue_number in book (#freetayk)
+note: Bubbling Under The Hot 100 2017-08-26: chart starts at #101
+note: Bubbling Under The Hot 100 2017-09-02: chart starts at #101
+note: Bubbling Under The Hot 100 2017-09-09: chart starts at #101
+note: Bubbling Under The Hot 100 2017-09-16: chart starts at #101
+note: Bubbling Under The Hot 100 2017-09-23: chart starts at #101
+note: Bubbling Under The Hot 100 2017-09-30: chart starts at #101
+note: Bubbling Under The Hot 100 2017-10-07: chart starts at #101
+note: Bubbling Under The Hot 100 2017-10-14: chart starts at #101
+note: Bubbling Under The Hot 100 2017-10-21: chart starts at #101
+note: Bubbling Under The Hot 100 2017-10-28: chart starts at #101
+note: Bubbling Under The Hot 100 2017-11-04: chart starts at #101
+note: Bubbling Under The Hot 100 2017-11-11: chart starts at #101
+note: Bubbling Under The Hot 100 2017-11-18: chart starts at #101
+note: Bubbling Under The Hot 100 2017-11-25: chart starts at #101
+note: Bubbling Under The Hot 100 2017-12-02: chart starts at #101
+note: Bubbling Under The Hot 100 2017-12-09: chart starts at #101
+note: Bubbling Under The Hot 100 2017-12-16: chart starts at #101
+note: Bubbling Under The Hot 100 2017-12-23: chart starts at #101
+note: Bubbling Under The Hot 100 2017-12-30: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-01-07: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-01-14: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-01-21: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-01-28: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-02-04: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-02-11: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-02-18: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-02-25: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-03-04: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-03-11: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-03-18: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-03-25: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-04-01: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-04-08: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-04-15: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-04-22: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-04-29: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-05-06: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-05-13: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-05-20: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-05-27: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-06-03: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-06-10: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-06-17: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-06-24: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-07-01: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-07-08: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-07-15: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-07-22: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-07-29: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-08-05: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-08-12: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-08-19: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-08-19 #103: no format in book (#freetayk)
+note: Bubbling Under The R&B Singles Chart 2017-08-19 #103: no catalogue_number in book (#freetayk)
+note: Bubbling Under The R&B Singles Chart 2017-08-26: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-09-02: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-09-09: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-09-16: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-09-23: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-09-30: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-10-07: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-10-07 #107: no duration in book (10 Million)
+note: Bubbling Under The R&B Singles Chart 2017-10-07 #107: no format in book (10 Million)
+note: Bubbling Under The R&B Singles Chart 2017-10-07 #107: no catalogue_number in book (10 Million)
+note: Bubbling Under The R&B Singles Chart 2017-10-14: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-10-21: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-10-28: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-11-04: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-11-11: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-11-18: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-11-25: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-12-02: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-12-09: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-12-16: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-12-23: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2017-12-30: chart starts at #101

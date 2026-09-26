@@ -1,0 +1,15 @@
+1943_us_singles: 3120 rows, 0 problems, 13 notes
+
+note: Billboard Best Sellers In Stores 1943-01-23 #10: wrapped line joined: '4375'
+note: Billboard Best Sellers In Stores 1943-12-18 #9: no format in book (Oklahoma!)
+note: Billboard Best Sellers In Stores 1943-12-18 #9: no catalogue_number in book (Oklahoma!)
+note: Billboard Best Sellers In Stores 1943-12-18 #9: odd duration as printed: '03551' (Oklahoma!)
+note: Best Sellers In Stores - East Coast 1943-12-18 #3: no format in book (Oklahoma!)
+note: Best Sellers In Stores - East Coast 1943-12-18 #3: no catalogue_number in book (Oklahoma!)
+note: Best Sellers In Stores - East Coast 1943-12-18 #3: odd duration as printed: '03551' (Oklahoma!)
+note: Best Sellers In Stores - East Coast 1943-12-25 #4: no format in book (Oklahoma!)
+note: Best Sellers In Stores - East Coast 1943-12-25 #4: no catalogue_number in book (Oklahoma!)
+note: Best Sellers In Stores - East Coast 1943-12-25 #4: odd duration as printed: '03551' (Oklahoma!)
+note: Best Sellers In Stores - Mid West 1943-10-30: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 9, 10]
+note: Best Sellers In Stores - Mid West 1943-11-20: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 10]
+note: Best Sellers In Stores - South 1943-01-23 #2: wrapped line joined: '4375'

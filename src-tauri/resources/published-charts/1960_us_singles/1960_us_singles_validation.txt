@@ -1,0 +1,60 @@
+1960_us_singles: 9276 rows, 0 problems, 58 notes
+
+note: Billboard Hot 100: 5-day gap between charts 1960-12-26 and 1960-12-31
+note: Country Singles Chart: 5-day gap between charts 1960-12-26 and 1960-12-31
+note: Rhythm And Blues Singles Chart 1960-07-18 #1: wrapped line joined: '71629X45'
+note: Rhythm And Blues Singles Chart: 5-day gap between charts 1960-12-26 and 1960-12-31
+note: Bubbling Under The Hot 100 1960-01-04: chart starts at #101
+note: Bubbling Under The Hot 100 1960-01-11: chart starts at #101
+note: Bubbling Under The Hot 100 1960-01-18: chart starts at #101
+note: Bubbling Under The Hot 100 1960-01-25: chart starts at #101
+note: Bubbling Under The Hot 100 1960-02-01: chart starts at #101
+note: Bubbling Under The Hot 100 1960-02-08: chart starts at #101
+note: Bubbling Under The Hot 100 1960-02-15: chart starts at #101
+note: Bubbling Under The Hot 100 1960-02-22: chart starts at #101
+note: Bubbling Under The Hot 100 1960-02-29: chart starts at #101
+note: Bubbling Under The Hot 100 1960-03-07: chart starts at #101
+note: Bubbling Under The Hot 100 1960-03-14: chart starts at #101
+note: Bubbling Under The Hot 100 1960-03-21: chart starts at #101
+note: Bubbling Under The Hot 100 1960-03-28: chart starts at #101
+note: Bubbling Under The Hot 100 1960-04-04: chart starts at #101
+note: Bubbling Under The Hot 100 1960-04-11: chart starts at #101
+note: Bubbling Under The Hot 100 1960-04-18: chart starts at #101
+note: Bubbling Under The Hot 100 1960-04-25: chart starts at #101
+note: Bubbling Under The Hot 100 1960-05-02: chart starts at #101
+note: Bubbling Under The Hot 100 1960-05-09: chart starts at #101
+note: Bubbling Under The Hot 100 1960-05-16: chart starts at #101
+note: Bubbling Under The Hot 100 1960-05-23: chart starts at #101
+note: Bubbling Under The Hot 100 1960-05-30: chart starts at #101
+note: Bubbling Under The Hot 100 1960-06-06: chart starts at #101
+note: Bubbling Under The Hot 100 1960-06-13: chart starts at #101
+note: Bubbling Under The Hot 100 1960-06-20: chart starts at #101
+note: Bubbling Under The Hot 100 1960-06-27: chart starts at #101
+note: Bubbling Under The Hot 100 1960-07-04: chart starts at #101
+note: Bubbling Under The Hot 100 1960-07-11: chart starts at #101
+note: Bubbling Under The Hot 100 1960-07-18: chart starts at #101
+note: Bubbling Under The Hot 100 1960-07-25: chart starts at #101
+note: Bubbling Under The Hot 100 1960-08-01: chart starts at #101
+note: Bubbling Under The Hot 100 1960-08-08: chart starts at #101
+note: Bubbling Under The Hot 100 1960-08-15: chart starts at #101
+note: Bubbling Under The Hot 100 1960-08-22: chart starts at #101
+note: Bubbling Under The Hot 100 1960-08-29: chart starts at #101
+note: Bubbling Under The Hot 100 1960-09-05: chart starts at #101
+note: Bubbling Under The Hot 100 1960-09-12: chart starts at #101
+note: Bubbling Under The Hot 100 1960-09-19: chart starts at #101
+note: Bubbling Under The Hot 100 1960-09-26: chart starts at #101
+note: Bubbling Under The Hot 100 1960-10-03: chart starts at #101
+note: Bubbling Under The Hot 100 1960-10-10: chart starts at #101
+note: Bubbling Under The Hot 100 1960-10-17: chart starts at #101
+note: Bubbling Under The Hot 100 1960-10-24: chart starts at #101
+note: Bubbling Under The Hot 100 1960-10-31: chart starts at #101
+note: Bubbling Under The Hot 100 1960-11-07: chart starts at #101
+note: Bubbling Under The Hot 100 1960-11-14: chart starts at #101
+note: Bubbling Under The Hot 100 1960-11-21: chart starts at #101
+note: Bubbling Under The Hot 100 1960-11-28: chart starts at #101
+note: Bubbling Under The Hot 100 1960-12-05: chart starts at #101
+note: Bubbling Under The Hot 100 1960-12-12: chart starts at #101
+note: Bubbling Under The Hot 100 1960-12-19: chart starts at #101
+note: Bubbling Under The Hot 100 1960-12-26: chart starts at #101
+note: Bubbling Under The Hot 100 1960-12-31: chart starts at #101
+note: Bubbling Under The Hot 100: 5-day gap between charts 1960-12-26 and 1960-12-31

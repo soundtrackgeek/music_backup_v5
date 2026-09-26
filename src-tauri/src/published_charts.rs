@@ -1,16 +1,18 @@
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, NaiveDate};
+use flate2::read::MultiGzDecoder;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 #[cfg(not(test))]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 #[cfg(not(test))]
-use tauri::{AppHandle, Emitter};
+use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
 
 const ENTRY_HEADERS: [&str; 21] = [
     "book",
@@ -94,6 +96,17 @@ struct SourceRow {
     peak_date: String,
     bpi_award: String,
     source_page: String,
+}
+
+#[derive(Deserialize)]
+struct BundleManifest {
+    books: Vec<BundleBook>,
+}
+
+#[derive(Deserialize)]
+struct BundleBook {
+    book: String,
+    csv_sha256: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -262,32 +275,48 @@ pub(crate) fn schema_exists(conn: &Connection) -> Result<bool> {
     Ok(count == 3)
 }
 
-fn source_folder(source_path: &str) -> Result<PathBuf> {
-    let source_path = source_path.trim();
-    if source_path.is_empty() {
-        bail!("Choose the Charts folder before importing");
+#[cfg(not(test))]
+fn bundled_folder(app: &AppHandle) -> Result<PathBuf> {
+    let inventory = app.path().resolve(
+        "resources/published-charts/chart_inventory.csv",
+        BaseDirectory::Resource,
+    )?;
+    if inventory.is_file() {
+        return Ok(inventory.parent().unwrap().to_path_buf());
     }
-    let provided = PathBuf::from(source_path);
-    let candidates = if provided.is_absolute() {
-        vec![provided]
-    } else {
-        let cwd = std::env::current_dir().context("Could not find the current directory")?;
-        let mut candidates = vec![cwd.join(&provided)];
-        if let Some(parent) = cwd.parent() {
-            candidates.push(parent.join(&provided));
+    #[cfg(debug_assertions)]
+    {
+        let development = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/published-charts");
+        if development.join("chart_inventory.csv").is_file() {
+            return Ok(development);
         }
-        candidates.push(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("..")
-                .join(&provided),
-        );
-        candidates
-    };
-    candidates
+    }
+    bail!("Bundled US chart data is missing from this installation")
+}
+
+fn bundle_hashes(
+    folder: &Path,
+    books: &BTreeMap<i32, Vec<InventoryRow>>,
+) -> Result<Option<HashMap<String, String>>> {
+    let path = folder.join("manifest.json");
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let manifest: BundleManifest = serde_json::from_slice(&fs::read(&path)?)
+        .with_context(|| format!("Invalid bundled chart manifest at {}", path.display()))?;
+    let hashes: HashMap<_, _> = manifest
+        .books
         .into_iter()
-        .find(|candidate| candidate.join("chart_inventory.csv").is_file())
-        .map(|candidate| candidate.canonicalize().unwrap_or(candidate))
-        .ok_or_else(|| anyhow!("Could not find chart_inventory.csv in {source_path}"))
+        .map(|book| (book.book, book.csv_sha256))
+        .collect();
+    if hashes.len() != books.len()
+        || books
+            .keys()
+            .any(|year| !hashes.contains_key(&format!("{year}_us_singles")))
+    {
+        bail!("Bundled chart manifest does not match the inventory");
+    }
+    Ok(Some(hashes))
 }
 
 fn read_inventory(folder: &Path) -> Result<BTreeMap<i32, Vec<InventoryRow>>> {
@@ -337,6 +366,7 @@ where
 {
     let started = Instant::now();
     let years = read_inventory(folder)?;
+    let hashes = bundle_hashes(folder, &years)?;
     let total_years = years.len();
     let mut imported_rows = 0;
     let mut chart_names = HashSet::new();
@@ -344,10 +374,77 @@ where
     for (completed_years, (year, inventory)) in years.into_iter().enumerate() {
         let book = format!("{year}_us_singles");
         let expected_rows: usize = inventory.iter().map(|row| row.rows).sum();
+        chart_names.extend(inventory.iter().map(|row| row.chart.clone()));
+        let bundle_source = hashes
+            .as_ref()
+            .map(|items| format!("bundle:{}", items[&book]));
+        if let Some(source) = &bundle_source {
+            let previous = conn.query_row(
+                "SELECT source_path, row_count FROM published_chart_import_years WHERE year = ?1",
+                params![year],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+            ).optional()?;
+            let expected_books: HashSet<_> = inventory
+                .iter()
+                .map(|row| {
+                    (
+                        row.chart.clone(),
+                        row.first_week.clone(),
+                        row.last_week.clone(),
+                        row.weekly_charts as i64,
+                        row.rows as i64,
+                    )
+                })
+                .collect();
+            let mut statement = conn.prepare(
+                "SELECT chart, first_week, last_week, weekly_charts, row_count \
+                 FROM published_chart_books WHERE book = ?1",
+            )?;
+            let stored_books = statement
+                .query_map(params![book], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, i64>(3)?,
+                        row.get::<_, i64>(4)?,
+                    ))
+                })?
+                .collect::<rusqlite::Result<HashSet<_>>>()?;
+            if previous
+                .as_ref()
+                .is_some_and(|(path, rows)| path == source && *rows == expected_rows as i64)
+                && stored_books == expected_books
+            {
+                imported_rows += expected_rows;
+                progress(PublishedChartsImportProgress {
+                    completed_years: completed_years + 1,
+                    total_years,
+                    current_year: year,
+                    imported_rows,
+                });
+                continue;
+            }
+        }
         validate_report(folder, &book, expected_rows)?;
-        let csv_path = folder.join(&book).join(format!("{book}_all_charts.csv"));
-        let mut reader = csv::Reader::from_path(&csv_path)
-            .with_context(|| format!("Could not read {}", csv_path.display()))?;
+        let plain_path = folder.join(&book).join(format!("{book}_all_charts.csv"));
+        let compressed_path = folder.join(&book).join(format!("{book}_all_charts.csv.gz"));
+        let csv_path = if compressed_path.is_file() {
+            compressed_path
+        } else {
+            plain_path
+        };
+        let source: Box<dyn Read> = if csv_path.extension().is_some_and(|ext| ext == "gz") {
+            Box::new(MultiGzDecoder::new(File::open(&csv_path).with_context(
+                || format!("Could not read {}", csv_path.display()),
+            )?))
+        } else {
+            Box::new(
+                File::open(&csv_path)
+                    .with_context(|| format!("Could not read {}", csv_path.display()))?,
+            )
+        };
+        let mut reader = csv::Reader::from_reader(source);
         let headers = reader
             .headers()
             .context("Could not read chart CSV headers")?;
@@ -372,7 +469,6 @@ where
                     row.weekly_charts as i64, row.rows as i64, row.first_page, row.last_page],
             )?;
             book_ids.insert(row.chart.as_str(), tx.last_insert_rowid());
-            chart_names.insert(row.chart.clone());
         }
 
         let mut actual: HashMap<i64, (usize, HashSet<String>, String, String)> = HashMap::new();
@@ -466,7 +562,11 @@ where
              VALUES (?1, ?2, ?3, datetime('now'))
              ON CONFLICT(year) DO UPDATE SET source_path = excluded.source_path,
                 row_count = excluded.row_count, imported_at = excluded.imported_at",
-            params![year, csv_path.to_string_lossy(), count as i64],
+            params![
+                year,
+                bundle_source.unwrap_or_else(|| csv_path.to_string_lossy().to_string()),
+                count as i64
+            ],
         )?;
         tx.commit().context("Could not commit chart year import")?;
         imported_rows += count;
@@ -487,12 +587,9 @@ where
 }
 
 #[cfg(not(test))]
-pub fn import_for_app(
-    app: &AppHandle,
-    source_path: String,
-) -> Result<PublishedChartsImportSummary> {
+pub fn import_for_app(app: &AppHandle) -> Result<PublishedChartsImportSummary> {
     let _guard = ImportGuard::acquire()?;
-    let folder = source_folder(&source_path)?;
+    let folder = bundled_folder(app)?;
     let (mut conn, _) = crate::db::open(app)?;
     import_folder(&mut conn, &folder, |progress| {
         let _ = app.emit("published-charts-import-progress", progress);
@@ -554,15 +651,10 @@ pub fn catalog(conn: &Connection) -> Result<PublishedChartCatalog> {
     })
 }
 
-pub fn catalog_with_inventory(
-    conn: &Connection,
-    source_path: &str,
-) -> Result<PublishedChartCatalog> {
+pub fn catalog_with_inventory(conn: &Connection, folder: &Path) -> Result<PublishedChartCatalog> {
     let mut result = catalog(conn)?;
-    let Ok(folder) = source_folder(source_path) else {
-        return Ok(result);
-    };
-    let inventory = read_inventory(&folder)?;
+    let inventory = read_inventory(folder)?;
+    let hashes = bundle_hashes(folder, &inventory)?;
     result.inventory_years = inventory.len();
     let mut by_chart: BTreeMap<String, PublishedChartSeries> = BTreeMap::new();
     let mut expected_books = HashSet::new();
@@ -611,6 +703,22 @@ pub fn catalog_with_inventory(
         })?
         .collect::<rusqlite::Result<HashSet<_>>>()?;
     result.needs_import = expected_books != imported_books;
+    if let Some(hashes) = hashes {
+        let mut statement =
+            conn.prepare("SELECT year, source_path FROM published_chart_import_years")?;
+        let imported_sources = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, i32>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<rusqlite::Result<HashMap<_, _>>>()?;
+        if hashes.iter().any(|(book, hash)| {
+            let year = book[0..4].parse::<i32>().unwrap();
+            imported_sources.get(&year).map(String::as_str)
+                != Some(format!("bundle:{hash}").as_str())
+        }) {
+            result.needs_import = true;
+        }
+    }
     result.series = by_chart.into_values().collect();
     Ok(result)
 }
@@ -785,9 +893,9 @@ pub fn entries(
 }
 
 #[cfg(not(test))]
-pub fn catalog_for_app(app: &AppHandle, source_path: &str) -> Result<PublishedChartCatalog> {
+pub fn catalog_for_app(app: &AppHandle) -> Result<PublishedChartCatalog> {
     let (conn, _) = crate::db::open(app)?;
-    catalog_with_inventory(&conn, source_path)
+    catalog_with_inventory(&conn, &bundled_folder(app)?)
 }
 
 #[cfg(not(test))]
@@ -824,6 +932,7 @@ pub fn entries_for_app(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flate2::{write::GzEncoder, Compression};
 
     fn fixture(folder: &Path, row_count: usize) {
         let year = folder.join("2019_us_singles");
@@ -864,7 +973,7 @@ mod tests {
         let mut conn = Connection::open_in_memory().unwrap();
         conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
         ensure_schema(&conn).unwrap();
-        let available = catalog_with_inventory(&conn, temp.path().to_str().unwrap()).unwrap();
+        let available = catalog_with_inventory(&conn, temp.path()).unwrap();
         assert_eq!(available.imported_years, 0);
         assert_eq!(available.inventory_years, 1);
         assert!(available.needs_import);
@@ -872,7 +981,7 @@ mod tests {
         let summary = import_folder(&mut conn, temp.path(), |_| {}).unwrap();
         assert_eq!(summary.rows_imported, 3);
         assert!(
-            !catalog_with_inventory(&conn, temp.path().to_str().unwrap())
+            !catalog_with_inventory(&conn, temp.path())
                 .unwrap()
                 .needs_import
         );
@@ -886,7 +995,7 @@ mod tests {
 
         fixture(temp.path(), 3);
         assert!(
-            catalog_with_inventory(&conn, temp.path().to_str().unwrap())
+            catalog_with_inventory(&conn, temp.path())
                 .unwrap()
                 .needs_import
         );
@@ -898,6 +1007,156 @@ mod tests {
                 .total_rows,
             2
         );
+    }
+
+    #[test]
+    fn imports_compressed_book_and_detects_bundle_revisions() {
+        let temp = tempfile::tempdir().unwrap();
+        fixture(temp.path(), 2);
+        let year = temp.path().join("2019_us_singles");
+        let plain = year.join("2019_us_singles_all_charts.csv");
+        let compressed = year.join("2019_us_singles_all_charts.csv.gz");
+        let mut encoder =
+            GzEncoder::new(File::create(&compressed).unwrap(), Compression::default());
+        std::io::copy(&mut File::open(&plain).unwrap(), &mut encoder).unwrap();
+        encoder.finish().unwrap();
+        fs::remove_file(plain).unwrap();
+        let manifest = temp.path().join("manifest.json");
+        fs::write(
+            &manifest,
+            r#"{"books":[{"book":"2019_us_singles","csv_sha256":"first"}]}"#,
+        )
+        .unwrap();
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        ensure_schema(&conn).unwrap();
+        assert!(
+            catalog_with_inventory(&conn, temp.path())
+                .unwrap()
+                .needs_import
+        );
+        import_folder(&mut conn, temp.path(), |_| {}).unwrap();
+        assert!(
+            !catalog_with_inventory(&conn, temp.path())
+                .unwrap()
+                .needs_import
+        );
+        conn.execute(
+            "DELETE FROM published_chart_books WHERE book = '2019_us_singles'",
+            [],
+        )
+        .unwrap();
+        assert!(
+            catalog_with_inventory(&conn, temp.path())
+                .unwrap()
+                .needs_import
+        );
+        import_folder(&mut conn, temp.path(), |_| {}).unwrap();
+        assert!(
+            !catalog_with_inventory(&conn, temp.path())
+                .unwrap()
+                .needs_import
+        );
+        fs::write(&compressed, b"broken gzip").unwrap();
+        import_folder(&mut conn, temp.path(), |_| {}).unwrap();
+        assert!(
+            !catalog_with_inventory(&conn, temp.path())
+                .unwrap()
+                .needs_import
+        );
+        fs::write(
+            &manifest,
+            r#"{"books":[{"book":"2019_us_singles","csv_sha256":"second"}]}"#,
+        )
+        .unwrap();
+        assert!(
+            catalog_with_inventory(&conn, temp.path())
+                .unwrap()
+                .needs_import
+        );
+        assert!(import_folder(&mut conn, temp.path(), |_| {}).is_err());
+        assert_eq!(catalog(&conn).unwrap().total_rows, 3);
+    }
+
+    #[test]
+    fn bundled_inventory_lists_all_us_series_before_import() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/published-charts");
+        let conn = Connection::open_in_memory().unwrap();
+        ensure_schema(&conn).unwrap();
+        let available = catalog_with_inventory(&conn, &source).unwrap();
+        assert_eq!(available.inventory_years, 86);
+        assert_eq!(available.imported_years, 0);
+        assert!(available.needs_import);
+        assert!(available
+            .series
+            .iter()
+            .any(|series| series.chart == "Billboard Hot 100"));
+        assert_eq!(available.series.len(), 88);
+        assert_eq!(
+            available
+                .series
+                .iter()
+                .map(|series| series.rows)
+                .sum::<i64>(),
+            3_279_068
+        );
+        assert!(available
+            .series
+            .iter()
+            .all(|series| !series.chart.starts_with("UK ")));
+    }
+
+    #[test]
+    fn every_bundled_book_parses_to_its_inventory_row_counts() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/published-charts");
+        let inventory = read_inventory(&source).unwrap();
+        let mut total = 0_usize;
+        for (year, series) in inventory {
+            let book = format!("{year}_us_singles");
+            let expected_rows: usize = series.iter().map(|item| item.rows).sum();
+            validate_report(&source, &book, expected_rows).unwrap();
+            let file =
+                File::open(source.join(&book).join(format!("{book}_all_charts.csv.gz"))).unwrap();
+            let mut reader = csv::Reader::from_reader(MultiGzDecoder::new(file));
+            assert!(reader.headers().unwrap().iter().eq(ENTRY_HEADERS));
+            let mut counts = HashMap::new();
+            for item in reader.deserialize::<SourceRow>() {
+                let item = item.unwrap();
+                assert_eq!(item.book, book);
+                *counts.entry(item.chart).or_insert(0_usize) += 1;
+            }
+            assert_eq!(counts.len(), series.len(), "{book}");
+            for item in series {
+                assert_eq!(
+                    counts.get(&item.chart),
+                    Some(&item.rows),
+                    "{book} / {}",
+                    item.chart
+                );
+            }
+            total += expected_rows;
+        }
+        assert_eq!(total, 3_279_068);
+    }
+
+    #[test]
+    #[ignore = "imports all 3.28 million bundled entries into a temporary SQLite database"]
+    fn imports_entire_bundled_collection() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/published-charts");
+        let temp = tempfile::tempdir().unwrap();
+        let mut conn = Connection::open(temp.path().join("charts.sqlite3")).unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        ensure_schema(&conn).unwrap();
+        let summary = import_folder(&mut conn, &source, |_| {}).unwrap();
+        assert_eq!(summary.years_imported, 86);
+        assert_eq!(summary.rows_imported, 3_279_068);
+        let actual: i64 = conn
+            .query_row("SELECT COUNT(*) FROM published_chart_entries", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(actual, 3_279_068);
+        assert!(!catalog_with_inventory(&conn, &source).unwrap().needs_import);
     }
 
     #[test]
@@ -975,21 +1234,14 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "uses the optional local Charts source"]
-    fn imports_real_2019_chart_book_when_available() {
-        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../Charts");
-        if !source
-            .join("2019_us_singles/2019_us_singles_all_charts.csv")
-            .is_file()
-        {
-            return;
-        }
+    fn imports_bundled_2019_chart_book() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/published-charts");
         let temp = tempfile::tempdir().unwrap();
         let year = temp.path().join("2019_us_singles");
         fs::create_dir_all(&year).unwrap();
         fs::copy(
-            source.join("2019_us_singles/2019_us_singles_all_charts.csv"),
-            year.join("2019_us_singles_all_charts.csv"),
+            source.join("2019_us_singles/2019_us_singles_all_charts.csv.gz"),
+            year.join("2019_us_singles_all_charts.csv.gz"),
         )
         .unwrap();
         fs::copy(

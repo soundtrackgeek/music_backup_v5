@@ -1,0 +1,90 @@
+1961_us_singles: 10003 rows, 0 problems, 88 notes
+
+note: Billboard Hot 100 1961-04-17 #85: no format in book (Elvis By Request)
+note: Billboard Hot 100 1961-04-17 #85: no catalogue_number in book (Elvis By Request)
+note: Billboard Hot 100 1961-04-24 #34: no format in book (Elvis By Request)
+note: Billboard Hot 100 1961-04-24 #34: no catalogue_number in book (Elvis By Request)
+note: Billboard Hot 100 1961-05-01 #19: no format in book (Elvis By Request)
+note: Billboard Hot 100 1961-05-01 #19: no catalogue_number in book (Elvis By Request)
+note: Billboard Hot 100 1961-05-08 #16: no format in book (Elvis By Request)
+note: Billboard Hot 100 1961-05-08 #16: no catalogue_number in book (Elvis By Request)
+note: Billboard Hot 100 1961-05-15 #14: no format in book (Elvis By Request)
+note: Billboard Hot 100 1961-05-15 #14: no catalogue_number in book (Elvis By Request)
+note: Billboard Hot 100 1961-05-22 #27: no format in book (Elvis By Request)
+note: Billboard Hot 100 1961-05-22 #27: no catalogue_number in book (Elvis By Request)
+note: Billboard Hot 100 1961-05-29 #47: no format in book (Elvis By Request)
+note: Billboard Hot 100 1961-05-29 #47: no catalogue_number in book (Elvis By Request)
+note: Billboard Hot 100 1961-09-25 #87: no format in book (Don't Blame Me)
+note: Billboard Hot 100 1961-09-25 #87: no catalogue_number in book (Don't Blame Me)
+note: Billboard Hot 100 1961-10-02 #46: no format in book (Don't Blame Me)
+note: Billboard Hot 100 1961-10-02 #46: no catalogue_number in book (Don't Blame Me)
+note: Billboard Hot 100 1961-10-09 #28: no format in book (Don't Blame Me)
+note: Billboard Hot 100 1961-10-09 #28: no catalogue_number in book (Don't Blame Me)
+note: Billboard Hot 100 1961-10-16 #20: no format in book (Don't Blame Me)
+note: Billboard Hot 100 1961-10-16 #20: no catalogue_number in book (Don't Blame Me)
+note: Billboard Hot 100 1961-10-23 #23: no format in book (Don't Blame Me)
+note: Billboard Hot 100 1961-10-23 #23: no catalogue_number in book (Don't Blame Me)
+note: Billboard Hot 100 1961-10-30 #22: no format in book (Don't Blame Me)
+note: Billboard Hot 100 1961-10-30 #22: no catalogue_number in book (Don't Blame Me)
+note: Billboard Hot 100 1961-11-06 #29: no format in book (Don't Blame Me)
+note: Billboard Hot 100 1961-11-06 #29: no catalogue_number in book (Don't Blame Me)
+note: Billboard Hot 100 1961-11-13 #40: no format in book (Don't Blame Me)
+note: Billboard Hot 100 1961-11-13 #40: no catalogue_number in book (Don't Blame Me)
+note: Teen Beat 1961-10-16 #16: no format in book (Don't Blame Me)
+note: Teen Beat 1961-10-16 #16: no catalogue_number in book (Don't Blame Me)
+note: Teen Beat 1961-10-23 #19: no format in book (Don't Blame Me)
+note: Teen Beat 1961-10-23 #19: no catalogue_number in book (Don't Blame Me)
+note: Teen Beat 1961-10-30 #18: no format in book (Don't Blame Me)
+note: Teen Beat 1961-10-30 #18: no catalogue_number in book (Don't Blame Me)
+note: Bubbling Under The Hot 100 1961-01-09: chart starts at #101
+note: Bubbling Under The Hot 100 1961-01-16: chart starts at #101
+note: Bubbling Under The Hot 100 1961-01-23: chart starts at #101
+note: Bubbling Under The Hot 100 1961-01-30: chart starts at #101
+note: Bubbling Under The Hot 100 1961-02-06: chart starts at #101
+note: Bubbling Under The Hot 100 1961-02-13: chart starts at #101
+note: Bubbling Under The Hot 100 1961-02-20: chart starts at #101
+note: Bubbling Under The Hot 100 1961-02-27: chart starts at #101
+note: Bubbling Under The Hot 100 1961-03-06: chart starts at #101
+note: Bubbling Under The Hot 100 1961-03-13: chart starts at #101
+note: Bubbling Under The Hot 100 1961-03-20: chart starts at #101
+note: Bubbling Under The Hot 100 1961-03-27: chart starts at #101
+note: Bubbling Under The Hot 100 1961-04-03: chart starts at #101
+note: Bubbling Under The Hot 100 1961-04-10: chart starts at #101
+note: Bubbling Under The Hot 100 1961-04-17: chart starts at #101
+note: Bubbling Under The Hot 100 1961-04-17: ties ranked densely, as printed: [101, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120]
+note: Bubbling Under The Hot 100 1961-04-24: chart starts at #101
+note: Bubbling Under The Hot 100 1961-05-01: chart starts at #101
+note: Bubbling Under The Hot 100 1961-05-08: chart starts at #101
+note: Bubbling Under The Hot 100 1961-05-15: chart starts at #101
+note: Bubbling Under The Hot 100 1961-05-22: chart starts at #101
+note: Bubbling Under The Hot 100 1961-05-29: chart starts at #101
+note: Bubbling Under The Hot 100 1961-06-05: chart starts at #101
+note: Bubbling Under The Hot 100 1961-06-12: chart starts at #101
+note: Bubbling Under The Hot 100 1961-06-19: chart starts at #101
+note: Bubbling Under The Hot 100 1961-06-26: chart starts at #101
+note: Bubbling Under The Hot 100 1961-07-03: chart starts at #101
+note: Bubbling Under The Hot 100 1961-07-10: chart starts at #101
+note: Bubbling Under The Hot 100 1961-07-17: chart starts at #101
+note: Bubbling Under The Hot 100 1961-07-24: chart starts at #101
+note: Bubbling Under The Hot 100 1961-07-31: chart starts at #101
+note: Bubbling Under The Hot 100 1961-08-07: chart starts at #101
+note: Bubbling Under The Hot 100 1961-08-14: chart starts at #101
+note: Bubbling Under The Hot 100 1961-08-21: chart starts at #101
+note: Bubbling Under The Hot 100 1961-08-28: chart starts at #101
+note: Bubbling Under The Hot 100 1961-09-04: chart starts at #101
+note: Bubbling Under The Hot 100 1961-09-11: chart starts at #101
+note: Bubbling Under The Hot 100 1961-09-18: chart starts at #101
+note: Bubbling Under The Hot 100 1961-09-25: chart starts at #101
+note: Bubbling Under The Hot 100 1961-10-02: chart starts at #101
+note: Bubbling Under The Hot 100 1961-10-09: chart starts at #101
+note: Bubbling Under The Hot 100 1961-10-16: chart starts at #101
+note: Bubbling Under The Hot 100 1961-10-23: chart starts at #101
+note: Bubbling Under The Hot 100 1961-10-30: chart starts at #101
+note: Bubbling Under The Hot 100 1961-11-06: chart starts at #101
+note: Bubbling Under The Hot 100 1961-11-13: chart starts at #101
+note: Bubbling Under The Hot 100 1961-11-20: chart starts at #101
+note: Bubbling Under The Hot 100 1961-11-27: chart starts at #101
+note: Bubbling Under The Hot 100 1961-12-04: chart starts at #101
+note: Bubbling Under The Hot 100 1961-12-11: chart starts at #101
+note: Bubbling Under The Hot 100 1961-12-18: chart starts at #101
+note: Bubbling Under The Hot 100 1961-12-25: chart starts at #101

@@ -1,0 +1,64 @@
+1963_us_singles: 10877 rows, 0 problems, 62 notes
+
+note: Christmas Singles 1963-12-21 #9: no format in book (Songs Of Christmas)
+note: Christmas Singles 1963-12-21 #9: no catalogue_number in book (Songs Of Christmas)
+note: Christmas Singles 1963-12-28 #12: no format in book (Songs Of Christmas)
+note: Christmas Singles 1963-12-28 #12: no catalogue_number in book (Songs Of Christmas)
+note: Bubbling Under The Hot 100 1963-01-05: chart starts at #101
+note: Bubbling Under The Hot 100 1963-01-12: chart starts at #101
+note: Bubbling Under The Hot 100 1963-01-19: chart starts at #101
+note: Bubbling Under The Hot 100 1963-01-26: chart starts at #101
+note: Bubbling Under The Hot 100 1963-02-02: chart starts at #101
+note: Bubbling Under The Hot 100 1963-02-09: chart starts at #101
+note: Bubbling Under The Hot 100 1963-02-16: chart starts at #101
+note: Bubbling Under The Hot 100 1963-02-23: chart starts at #101
+note: Bubbling Under The Hot 100 1963-03-02: chart starts at #101
+note: Bubbling Under The Hot 100 1963-03-09: chart starts at #101
+note: Bubbling Under The Hot 100 1963-03-16: chart starts at #101
+note: Bubbling Under The Hot 100 1963-03-23: chart starts at #101
+note: Bubbling Under The Hot 100 1963-03-23 #115: no format in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1963-03-23 #115: no catalogue_number in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1963-03-30: chart starts at #101
+note: Bubbling Under The Hot 100 1963-04-06: chart starts at #101
+note: Bubbling Under The Hot 100 1963-04-06 #128: no format in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1963-04-06 #128: no catalogue_number in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1963-04-13: chart starts at #101
+note: Bubbling Under The Hot 100 1963-04-13 #123: no format in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1963-04-13 #123: no catalogue_number in book (The 4 Seasons Sing)
+note: Bubbling Under The Hot 100 1963-04-20: chart starts at #101
+note: Bubbling Under The Hot 100 1963-04-27: chart starts at #101
+note: Bubbling Under The Hot 100 1963-05-04: chart starts at #101
+note: Bubbling Under The Hot 100 1963-05-11: chart starts at #101
+note: Bubbling Under The Hot 100 1963-05-18: chart starts at #101
+note: Bubbling Under The Hot 100 1963-05-25: chart starts at #101
+note: Bubbling Under The Hot 100 1963-06-01: chart starts at #101
+note: Bubbling Under The Hot 100 1963-06-08: chart starts at #101
+note: Bubbling Under The Hot 100 1963-06-15: chart starts at #101
+note: Bubbling Under The Hot 100 1963-06-22: chart starts at #101
+note: Bubbling Under The Hot 100 1963-06-29: chart starts at #101
+note: Bubbling Under The Hot 100 1963-07-06: chart starts at #101
+note: Bubbling Under The Hot 100 1963-07-13: chart starts at #101
+note: Bubbling Under The Hot 100 1963-07-20: chart starts at #101
+note: Bubbling Under The Hot 100 1963-07-27: chart starts at #101
+note: Bubbling Under The Hot 100 1963-08-03: chart starts at #101
+note: Bubbling Under The Hot 100 1963-08-10: chart starts at #101
+note: Bubbling Under The Hot 100 1963-08-17: chart starts at #101
+note: Bubbling Under The Hot 100 1963-08-24: chart starts at #101
+note: Bubbling Under The Hot 100 1963-08-31: chart starts at #101
+note: Bubbling Under The Hot 100 1963-09-07: chart starts at #101
+note: Bubbling Under The Hot 100 1963-09-14: chart starts at #101
+note: Bubbling Under The Hot 100 1963-09-21: chart starts at #101
+note: Bubbling Under The Hot 100 1963-09-28: chart starts at #101
+note: Bubbling Under The Hot 100 1963-10-05: chart starts at #101
+note: Bubbling Under The Hot 100 1963-10-12: chart starts at #101
+note: Bubbling Under The Hot 100 1963-10-19: chart starts at #101
+note: Bubbling Under The Hot 100 1963-10-26: chart starts at #101
+note: Bubbling Under The Hot 100 1963-11-02: chart starts at #101
+note: Bubbling Under The Hot 100 1963-11-09: chart starts at #101
+note: Bubbling Under The Hot 100 1963-11-16: chart starts at #101
+note: Bubbling Under The Hot 100 1963-11-23: chart starts at #101
+note: Bubbling Under The Hot 100 1963-11-30: chart starts at #101
+note: Bubbling Under The Hot 100 1963-12-07: chart starts at #101
+note: Bubbling Under The Hot 100 1963-12-14: chart starts at #101
+note: Bubbling Under The Hot 100 1963-12-21: chart starts at #101
+note: Bubbling Under The Hot 100 1963-12-28: chart starts at #101

@@ -57,16 +57,18 @@ describe("PublishedChartsWorkspace", () => {
     await waitFor(() => expect(getRankings).toHaveBeenCalledWith("Billboard Hot 100", 2019, 2019, null, null, 0));
   });
 
-  it("shows inventory chart choices immediately and imports missing rows automatically", async () => {
+  it("shows bundled chart choices immediately and prepares missing rows automatically", async () => {
     getCatalog.mockResolvedValueOnce({
       importedYears: 0, inventoryYears: 2, needsImport: true, totalRows: 0,
       series: [{ chart: "Billboard Hot 100", years: [2018, 2019], firstWeek: "2018-01-06", lastWeek: "2019-01-12", rows: 6 }],
     });
     render(<PublishedChartsWorkspace />);
     expect(await screen.findByRole("option", { name: "Billboard Hot 100" })).toBeInTheDocument();
-    await waitFor(() => expect(importCharts).toHaveBeenCalledWith("Charts"));
+    await waitFor(() => expect(importCharts).toHaveBeenCalledWith());
     await waitFor(() => expect(getCatalog).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole("button", { name: "Browse" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Charts folder")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reimport US charts" })).not.toBeInTheDocument();
   });
 
   it("supports a range across years and an exact week with source positions", async () => {

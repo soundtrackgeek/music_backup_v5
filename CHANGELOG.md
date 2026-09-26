@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.153.0] - 2026-09-26
+
+### Added
+
+- Ship the complete US Published Charts inventory and 86 compressed weekly books as verified desktop resources.
+
+### Changed
+
+- Show bundled chart choices immediately and prepare the local searchable chart data automatically on first use or when the bundled data changes. Completed years are reused if preparation is interrupted. Remove the Charts folder and reimport controls from Published Charts.
+
+### Fixed
+
+- Resolve Published Charts from installed app resources instead of a development machine path that does not exist after a GitHub release build.
+
 ## [0.152.2] - 2026-09-26
 
 ### Fixed

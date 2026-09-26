@@ -1,0 +1,150 @@
+2021_us_singles: 73540 rows, 0 problems, 148 notes
+
+note: Billboard Hot 100 2021-09-11 #20: no duration in book (Praise God)
+note: Billboard Hot 100 2021-09-18 #66: no duration in book (Praise God)
+note: Billboard Hot 100 2021-10-16 #60: no format in book (Hot)
+note: Billboard Hot 100 2021-10-16 #60: no catalogue_number in book (Hot)
+note: Billboard Hot 100 2021-10-23 #99: no duration in book (Praise God)
+note: Billboard Hot 100 2021-10-30 #89: no duration in book (Praise God)
+note: Billboard Hot 100 2021-11-06 #80: no duration in book (Praise God)
+note: Billboard Hot 100 2021-11-13 #78: no duration in book (Praise God)
+note: Billboard Hot 100 2021-11-20 #96: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-09-11 #10: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-09-18 #36: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-10-16 #20: no format in book (Hot)
+note: Rhythm And Blues Singles Chart 2021-10-16 #20: no catalogue_number in book (Hot)
+note: Rhythm And Blues Singles Chart 2021-10-23 #37: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-10-23 #47: no format in book (Hot)
+note: Rhythm And Blues Singles Chart 2021-10-23 #47: no catalogue_number in book (Hot)
+note: Rhythm And Blues Singles Chart 2021-10-30 #35: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-11-06 #32: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-11-13 #27: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-11-20 #45: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-11-27 #36: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-12-04 #32: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-12-11 #32: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-12-18 #45: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2021-12-25 #50: no duration in book (Praise God)
+note: Hot Rap Singles 2021-09-11 #9: no duration in book (Praise God)
+note: Hot Rap Singles 2021-10-16 #15: no format in book (Hot)
+note: Hot Rap Singles 2021-10-16 #15: no catalogue_number in book (Hot)
+note: Hot Rap Singles 2021-11-06 #25: no duration in book (Praise God)
+note: Hot Rap Singles 2021-11-13 #21: no duration in book (Praise God)
+note: Hot Rap Singles 2021-11-20 #19: no duration in book (Praise God)
+note: Hot Rap Singles 2021-11-27 #20: no duration in book (Praise God)
+note: Hot Rap Singles 2021-12-04 #21: no duration in book (Praise God)
+note: Hot Rap Singles 2021-12-11 #22: no duration in book (Praise God)
+note: Digital Song Sales 2021-03-06 #36: wrapped line joined: 'USHR12141346'
+note: Digital Song Sales 2021-10-16 #34: no catalogue_number in book (Hot)
+note: Hot Rock Songs 2021-08-07 #27: no duration in book (Stay High)
+note: Hot Rock Songs 2021-08-07 #27: no format in book (Stay High)
+note: Hot Rock Songs 2021-08-07 #27: no catalogue_number in book (Stay High)
+note: Holiday Digital Song Sales 2021-01-02 #36: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2021-01-09 #27: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2021-01-09 #42: no format in book (The Holiday Spirit Carries On)
+note: Holiday Digital Song Sales 2021-01-09 #42: no catalogue_number in book (The Holiday Spirit Carries On)
+note: Holiday Digital Song Sales 2021-12-04 #40: odd duration as printed: '34:6' (The Thanksgiving Song)
+note: Holiday Digital Song Sales: 329-day gap between charts 2021-01-09 and 2021-12-04
+note: Streaming Songs 2021-09-11 #10: no duration in book (Praise God)
+note: Streaming Songs 2021-09-18 #42: no duration in book (Praise God)
+note: Streaming Songs 2021-10-16 #35: no format in book (Hot)
+note: Streaming Songs 2021-10-16 #35: no catalogue_number in book (Hot)
+note: R&B Hip-Hop Digital Sales 2021-01-30 #25: no format in book (Delete)
+note: R&B Hip-Hop Digital Sales 2021-01-30 #25: no catalogue_number in book (Delete)
+note: R&B Hip-Hop Digital Sales 2021-10-16 #6: no format in book (Hot)
+note: R&B Hip-Hop Digital Sales 2021-10-16 #6: no catalogue_number in book (Hot)
+note: R&B Hip-Hop Digital Sales 2021-10-23 #20: no format in book (Hot)
+note: R&B Hip-Hop Digital Sales 2021-10-23 #20: no catalogue_number in book (Hot)
+note: R&B Hip-Hop Digital Sales 2021-11-06 #16: no duration in book (Praise God)
+note: R&B Hip-Hop Digital Sales 2021-11-13 #15: no duration in book (Praise God)
+note: R&B Hip-Hop Digital Sales 2021-11-20 #18: no duration in book (Praise God)
+note: R&B Hip-Hop Digital Sales 2021-11-27 #20: no duration in book (Praise God)
+note: R&B Hip-Hop Digital Sales 2021-12-04 #20: no duration in book (Praise God)
+note: R&B Hip-Hop Digital Sales 2021-12-11 #17: no duration in book (Praise God)
+note: R&B Hip-Hop Streaming Songs 2021-09-11 #9: no duration in book (Praise God)
+note: R&B Hip-Hop Streaming Songs 2021-10-16 #15: no format in book (Hot)
+note: R&B Hip-Hop Streaming Songs 2021-10-16 #15: no catalogue_number in book (Hot)
+note: R&B Hip-Hop Streaming Songs 2021-11-06 #25: no duration in book (Praise God)
+note: Hot R&B Songs 2021-08-07 #21: no duration in book (Stay High)
+note: Hot R&B Songs 2021-08-07 #21: no format in book (Stay High)
+note: Hot R&B Songs 2021-08-07 #21: no catalogue_number in book (Stay High)
+note: Rap Digital Sales 2021-01-30 #15: no format in book (Delete)
+note: Rap Digital Sales 2021-01-30 #15: no catalogue_number in book (Delete)
+note: Rap Digital Sales 2021-10-16 #5: no format in book (Hot)
+note: Rap Digital Sales 2021-10-16 #5: no catalogue_number in book (Hot)
+note: Rap Digital Sales 2021-10-23 #15: no format in book (Hot)
+note: Rap Digital Sales 2021-10-23 #15: no catalogue_number in book (Hot)
+note: Rap Digital Sales 2021-11-06 #11: no duration in book (Praise God)
+note: Rap Digital Sales 2021-11-13 #9: no duration in book (Praise God)
+note: Rap Digital Sales 2021-11-20 #12: no duration in book (Praise God)
+note: Rap Digital Sales 2021-11-27 #13: no duration in book (Praise God)
+note: Rap Digital Sales 2021-12-11 #10: no duration in book (Praise God)
+note: Rap Digital Sales 2021-12-25 #15: no duration in book (Praise God)
+note: Rap Streaming Songs 2021-09-11 #9: no duration in book (Praise God)
+note: Rap Streaming Songs 2021-10-16 #14: no format in book (Hot)
+note: Rap Streaming Songs 2021-10-16 #14: no catalogue_number in book (Hot)
+note: Rock Digital Sales 2021-05-22 #21: no duration in book (Send Me On My Way)
+note: Hard Rock Digital Song Sales 2021-01-09 #25: no format in book (The Holiday Spirit Carries On)
+note: Hard Rock Digital Song Sales 2021-01-09 #25: no catalogue_number in book (The Holiday Spirit Carries On)
+note: Hot Alternative Songs 2021-08-07 #23: no duration in book (Stay High)
+note: Hot Alternative Songs 2021-08-07 #23: no format in book (Stay High)
+note: Hot Alternative Songs 2021-08-07 #23: no catalogue_number in book (Stay High)
+note: Alternative Digital Song Sales 2021-05-22 #21: no duration in book (Send Me On My Way)
+note: Alternative Digital Song Sales 2021-05-29 #25: no duration in book (Send Me On My Way)
+note: Alternative Digital Song Sales 2021-10-30 #24: no duration in book (Send Me On My Way)
+note: Bubbling Under The Hot 100 2021-01-02: chart starts at #101
+note: Bubbling Under The Hot 100 2021-01-09: chart starts at #101
+note: Bubbling Under The Hot 100 2021-01-16: chart starts at #101
+note: Bubbling Under The Hot 100 2021-01-23: chart starts at #101
+note: Bubbling Under The Hot 100 2021-01-30: chart starts at #101
+note: Bubbling Under The Hot 100 2021-02-06: chart starts at #101
+note: Bubbling Under The Hot 100 2021-02-13: chart starts at #101
+note: Bubbling Under The Hot 100 2021-02-20: chart starts at #101
+note: Bubbling Under The Hot 100 2021-02-27: chart starts at #101
+note: Bubbling Under The Hot 100 2021-03-06: chart starts at #101
+note: Bubbling Under The Hot 100 2021-03-13: chart starts at #101
+note: Bubbling Under The Hot 100 2021-03-20: chart starts at #101
+note: Bubbling Under The Hot 100 2021-03-27: chart starts at #101
+note: Bubbling Under The Hot 100 2021-04-03: chart starts at #101
+note: Bubbling Under The Hot 100 2021-04-10: chart starts at #101
+note: Bubbling Under The Hot 100 2021-04-17: chart starts at #101
+note: Bubbling Under The Hot 100 2021-04-24: chart starts at #101
+note: Bubbling Under The Hot 100 2021-05-01: chart starts at #101
+note: Bubbling Under The Hot 100 2021-05-08: chart starts at #101
+note: Bubbling Under The Hot 100 2021-05-15: chart starts at #101
+note: Bubbling Under The Hot 100 2021-05-22: chart starts at #101
+note: Bubbling Under The Hot 100 2021-05-29: chart starts at #101
+note: Bubbling Under The Hot 100 2021-06-05: chart starts at #101
+note: Bubbling Under The Hot 100 2021-06-12: chart starts at #101
+note: Bubbling Under The Hot 100 2021-06-19: chart starts at #101
+note: Bubbling Under The Hot 100 2021-06-26: chart starts at #101
+note: Bubbling Under The Hot 100 2021-07-03: chart starts at #101
+note: Bubbling Under The Hot 100 2021-07-10: chart starts at #101
+note: Bubbling Under The Hot 100 2021-07-17: chart starts at #101
+note: Bubbling Under The Hot 100 2021-07-17 #120: no format in book (Ram Pam Pam)
+note: Bubbling Under The Hot 100 2021-07-17 #120: no catalogue_number in book (Ram Pam Pam)
+note: Bubbling Under The Hot 100 2021-07-24: chart starts at #101
+note: Bubbling Under The Hot 100 2021-07-24 #121: no format in book (Ram Pam Pam)
+note: Bubbling Under The Hot 100 2021-07-24 #121: no catalogue_number in book (Ram Pam Pam)
+note: Bubbling Under The Hot 100 2021-07-31: chart starts at #101
+note: Bubbling Under The Hot 100 2021-08-07: chart starts at #101
+note: Bubbling Under The Hot 100 2021-08-14: chart starts at #101
+note: Bubbling Under The Hot 100 2021-08-21: chart starts at #101
+note: Bubbling Under The Hot 100 2021-08-28: chart starts at #101
+note: Bubbling Under The Hot 100 2021-09-04: chart starts at #101
+note: Bubbling Under The Hot 100 2021-09-11: chart starts at #101
+note: Bubbling Under The Hot 100 2021-09-18: chart starts at #101
+note: Bubbling Under The Hot 100 2021-09-25: chart starts at #101
+note: Bubbling Under The Hot 100 2021-10-02: chart starts at #101
+note: Bubbling Under The Hot 100 2021-10-09: chart starts at #101
+note: Bubbling Under The Hot 100 2021-10-16: chart starts at #101
+note: Bubbling Under The Hot 100 2021-10-23: chart starts at #101
+note: Bubbling Under The Hot 100 2021-10-30: chart starts at #101
+note: Bubbling Under The Hot 100 2021-11-06: chart starts at #101
+note: Bubbling Under The Hot 100 2021-11-13: chart starts at #101
+note: Bubbling Under The Hot 100 2021-11-20: chart starts at #101
+note: Bubbling Under The Hot 100 2021-11-27: chart starts at #101
+note: Bubbling Under The Hot 100 2021-12-04: chart starts at #101
+note: Bubbling Under The Hot 100 2021-12-11: chart starts at #101
+note: Bubbling Under The Hot 100 2021-12-18: chart starts at #101
+note: Bubbling Under The Hot 100 2021-12-25: chart starts at #101

@@ -1,0 +1,101 @@
+1962_us_singles: 10520 rows, 0 problems, 99 notes
+
+note: Billboard Hot 100 1962-05-12 #58: no format in book (Follow That Dream)
+note: Billboard Hot 100 1962-05-12 #58: no catalogue_number in book (Follow That Dream)
+note: Billboard Hot 100 1962-05-19 #38: no format in book (Follow That Dream)
+note: Billboard Hot 100 1962-05-19 #38: no catalogue_number in book (Follow That Dream)
+note: Billboard Hot 100 1962-05-26 #30: no format in book (Follow That Dream)
+note: Billboard Hot 100 1962-05-26 #30: no catalogue_number in book (Follow That Dream)
+note: Billboard Hot 100 1962-06-02 #24: no format in book (Follow That Dream)
+note: Billboard Hot 100 1962-06-02 #24: no catalogue_number in book (Follow That Dream)
+note: Billboard Hot 100 1962-06-09 #22: no format in book (Follow That Dream)
+note: Billboard Hot 100 1962-06-09 #22: no catalogue_number in book (Follow That Dream)
+note: Billboard Hot 100 1962-06-16 #15: no format in book (Follow That Dream)
+note: Billboard Hot 100 1962-06-16 #15: no catalogue_number in book (Follow That Dream)
+note: Billboard Hot 100 1962-06-23 #15: no format in book (Follow That Dream)
+note: Billboard Hot 100 1962-06-23 #15: no catalogue_number in book (Follow That Dream)
+note: Billboard Hot 100 1962-06-30 #26: no format in book (Follow That Dream)
+note: Billboard Hot 100 1962-06-30 #26: no catalogue_number in book (Follow That Dream)
+note: Billboard Hot 100 1962-07-07 #54: no format in book (Follow That Dream)
+note: Billboard Hot 100 1962-07-07 #54: no catalogue_number in book (Follow That Dream)
+note: Billboard Hot 100 1962-07-14 #66: no format in book (Follow That Dream)
+note: Billboard Hot 100 1962-07-14 #66: no catalogue_number in book (Follow That Dream)
+note: Billboard Hot 100 1962-09-22 #69: no format in book (Kid Galahad)
+note: Billboard Hot 100 1962-09-22 #69: no catalogue_number in book (Kid Galahad)
+note: Billboard Hot 100 1962-09-29 #53: no format in book (Kid Galahad)
+note: Billboard Hot 100 1962-09-29 #53: no catalogue_number in book (Kid Galahad)
+note: Billboard Hot 100 1962-10-06 #37: no format in book (Kid Galahad)
+note: Billboard Hot 100 1962-10-06 #37: no catalogue_number in book (Kid Galahad)
+note: Billboard Hot 100 1962-10-13 #35: no format in book (Kid Galahad)
+note: Billboard Hot 100 1962-10-13 #35: no catalogue_number in book (Kid Galahad)
+note: Billboard Hot 100 1962-10-20 #30: no format in book (Kid Galahad)
+note: Billboard Hot 100 1962-10-20 #30: no catalogue_number in book (Kid Galahad)
+note: Billboard Hot 100 1962-10-27 #39: no format in book (Kid Galahad)
+note: Billboard Hot 100 1962-10-27 #39: no catalogue_number in book (Kid Galahad)
+note: Billboard Hot 100 1962-11-03 #58: no format in book (Kid Galahad)
+note: Billboard Hot 100 1962-11-03 #58: no catalogue_number in book (Kid Galahad)
+note: Adult Contemporary 1962-05-12 #13: no format in book (Follow That Dream)
+note: Adult Contemporary 1962-05-12 #13: no catalogue_number in book (Follow That Dream)
+note: Adult Contemporary 1962-05-19 #10: no format in book (Follow That Dream)
+note: Adult Contemporary 1962-05-19 #10: no catalogue_number in book (Follow That Dream)
+note: Adult Contemporary 1962-05-26 #9: no format in book (Follow That Dream)
+note: Adult Contemporary 1962-05-26 #9: no catalogue_number in book (Follow That Dream)
+note: Adult Contemporary 1962-06-02 #6: no format in book (Follow That Dream)
+note: Adult Contemporary 1962-06-02 #6: no catalogue_number in book (Follow That Dream)
+note: Adult Contemporary 1962-06-09 #6: no format in book (Follow That Dream)
+note: Adult Contemporary 1962-06-09 #6: no catalogue_number in book (Follow That Dream)
+note: Adult Contemporary 1962-06-16 #5: no format in book (Follow That Dream)
+note: Adult Contemporary 1962-06-16 #5: no catalogue_number in book (Follow That Dream)
+note: Bubbling Under The Hot 100 1962-01-06: chart starts at #101
+note: Bubbling Under The Hot 100 1962-01-13: chart starts at #101
+note: Bubbling Under The Hot 100 1962-01-20: chart starts at #101
+note: Bubbling Under The Hot 100 1962-01-27: chart starts at #101
+note: Bubbling Under The Hot 100 1962-02-03: chart starts at #101
+note: Bubbling Under The Hot 100 1962-02-10: chart starts at #101
+note: Bubbling Under The Hot 100 1962-02-17: chart starts at #101
+note: Bubbling Under The Hot 100 1962-02-24: chart starts at #101
+note: Bubbling Under The Hot 100 1962-03-03: chart starts at #101
+note: Bubbling Under The Hot 100 1962-03-10: chart starts at #101
+note: Bubbling Under The Hot 100 1962-03-17: chart starts at #101
+note: Bubbling Under The Hot 100 1962-03-24: chart starts at #101
+note: Bubbling Under The Hot 100 1962-03-31: chart starts at #101
+note: Bubbling Under The Hot 100 1962-04-07: chart starts at #101
+note: Bubbling Under The Hot 100 1962-04-14: chart starts at #101
+note: Bubbling Under The Hot 100 1962-04-21: chart starts at #101
+note: Bubbling Under The Hot 100 1962-04-28: chart starts at #101
+note: Bubbling Under The Hot 100 1962-05-05: chart starts at #101
+note: Bubbling Under The Hot 100 1962-05-12: chart starts at #101
+note: Bubbling Under The Hot 100 1962-05-19: chart starts at #101
+note: Bubbling Under The Hot 100 1962-05-26: chart starts at #101
+note: Bubbling Under The Hot 100 1962-06-02: chart starts at #101
+note: Bubbling Under The Hot 100 1962-06-09: chart starts at #101
+note: Bubbling Under The Hot 100 1962-06-16: chart starts at #101
+note: Bubbling Under The Hot 100 1962-06-23: chart starts at #101
+note: Bubbling Under The Hot 100 1962-06-30: chart starts at #101
+note: Bubbling Under The Hot 100 1962-07-07: chart starts at #101
+note: Bubbling Under The Hot 100 1962-07-14: chart starts at #101
+note: Bubbling Under The Hot 100 1962-07-21: chart starts at #101
+note: Bubbling Under The Hot 100 1962-07-28: chart starts at #101
+note: Bubbling Under The Hot 100 1962-08-04: chart starts at #101
+note: Bubbling Under The Hot 100 1962-08-11: chart starts at #101
+note: Bubbling Under The Hot 100 1962-08-18: chart starts at #101
+note: Bubbling Under The Hot 100 1962-08-25: chart starts at #101
+note: Bubbling Under The Hot 100 1962-09-01: chart starts at #101
+note: Bubbling Under The Hot 100 1962-09-08: chart starts at #101
+note: Bubbling Under The Hot 100 1962-09-15: chart starts at #101
+note: Bubbling Under The Hot 100 1962-09-22: chart starts at #101
+note: Bubbling Under The Hot 100 1962-09-29: chart starts at #101
+note: Bubbling Under The Hot 100 1962-10-06: chart starts at #101
+note: Bubbling Under The Hot 100 1962-10-06: ties ranked densely, as printed: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132]
+note: Bubbling Under The Hot 100 1962-10-13: chart starts at #101
+note: Bubbling Under The Hot 100 1962-10-20: chart starts at #101
+note: Bubbling Under The Hot 100 1962-10-27: chart starts at #101
+note: Bubbling Under The Hot 100 1962-11-03: chart starts at #101
+note: Bubbling Under The Hot 100 1962-11-10: chart starts at #101
+note: Bubbling Under The Hot 100 1962-11-17: chart starts at #101
+note: Bubbling Under The Hot 100 1962-11-24: chart starts at #101
+note: Bubbling Under The Hot 100 1962-12-01: chart starts at #101
+note: Bubbling Under The Hot 100 1962-12-08: chart starts at #101
+note: Bubbling Under The Hot 100 1962-12-15: chart starts at #101
+note: Bubbling Under The Hot 100 1962-12-22: chart starts at #101
+note: Bubbling Under The Hot 100 1962-12-29: chart starts at #101

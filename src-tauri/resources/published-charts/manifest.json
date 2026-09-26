@@ -1,0 +1,781 @@
+{
+  "books": [
+    {
+      "book": "1940_us_singles",
+      "charts": 5,
+      "csv_sha256": "ead93170314af368972566a2945964c8cb3ee5e8fcd8f6ecd439f246532f8d1b",
+      "gzip_bytes": 17250,
+      "gzip_sha256": "9c4f8ec81b2d94463da302a92a64ae473c1916ee18b325bfb584c0f084fe9735",
+      "rows": 1149,
+      "validation_sha256": "3cf9534d112af262c9046d456242c637e22e890517b4966c387c2ac92c49be96"
+    },
+    {
+      "book": "1941_us_singles",
+      "charts": 5,
+      "csv_sha256": "2162bc3b0125648d648fb81121bbbee3aadc9fa0fddd6ee3847072809943ce53",
+      "gzip_bytes": 42210,
+      "gzip_sha256": "ca8742a05b122918bc6675cdaed5b473cea41b01318ce7a05b86549d706a9a34",
+      "rows": 2596,
+      "validation_sha256": "ae4261cbb5b01feb28b4a759f2f7b23011f166ff6410abcffce514113b8fcef8"
+    },
+    {
+      "book": "1942_us_singles",
+      "charts": 6,
+      "csv_sha256": "c1e3a0b041045aa5ec4a9f70d71397280d598ea04838599f587552fd4f3d1797",
+      "gzip_bytes": 41992,
+      "gzip_sha256": "efbaf90c2c9c24fda5bbfd53d650270c3f315cbe411bb1cecf6f5e0f75fbe128",
+      "rows": 2700,
+      "validation_sha256": "05dbe5a5b18fe3a96b99555261f7de4b24f4e32f5b18912e090238ef1fd4da50"
+    },
+    {
+      "book": "1943_us_singles",
+      "charts": 6,
+      "csv_sha256": "72e5c63845e4907cd03bc70171e08407cc0a1214d9be53957af8803ea03462ae",
+      "gzip_bytes": 44588,
+      "gzip_sha256": "5c73188d499863aee252f2278fe8091a31ba7667308a65db0947e2ee015fc488",
+      "rows": 3120,
+      "validation_sha256": "bd0d28b8d35806dc911b95f8ec642f7fc6090b2da3681efaa22887c59fc5e5af"
+    },
+    {
+      "book": "1944_us_singles",
+      "charts": 8,
+      "csv_sha256": "a34ff0609427cf24d098aa3eccbc28677f99d25117b6d53b9c42e1d52a7d15be",
+      "gzip_bytes": 62565,
+      "gzip_sha256": "690ebcd38db181c6b817d55c6bb0b681a29144ec220ef42c5e4740b09b1f9610",
+      "rows": 4415,
+      "validation_sha256": "11b7b764f05cb5b65ed2b5755fe2a08a697620c1e6f85ead7464104903c02b00"
+    },
+    {
+      "book": "1945_us_singles",
+      "charts": 10,
+      "csv_sha256": "45ba324b0aadb6017ba44b7da5f0b03e03a3a85accc64ffce7a9a0b86719cb9a",
+      "gzip_bytes": 55680,
+      "gzip_sha256": "44cac0de17c0eeb5596a4ea135b21df4662f01e74bedd215f9ade23b083e4a18",
+      "rows": 3815,
+      "validation_sha256": "1ea6a5202287df458ed3dfebcc2976b7534de0cba78cc6ce1c3ed3180a1973b2"
+    },
+    {
+      "book": "1946_us_singles",
+      "charts": 5,
+      "csv_sha256": "31cb4c93dfe2b410dbec425f05f8fe8c223f25d903fbcf43040d21f040d81fe7",
+      "gzip_bytes": 54238,
+      "gzip_sha256": "8a88977374ff2e54cd8f7937d8a01b5e0634c879744967855c5693aea7e17086",
+      "rows": 3688,
+      "validation_sha256": "0446a3bd447c0acf5a81e5be9fd5eb528833d358a16ab788616040060bb321f5"
+    },
+    {
+      "book": "1947_us_singles",
+      "charts": 5,
+      "csv_sha256": "eeed73feb452229044898c6f4c94d548f0a5deea34b3b83d684878a3cd9cbd22",
+      "gzip_bytes": 48630,
+      "gzip_sha256": "59c6e328b26144cfe7964b2b9bffd1af9021ec670aefb0e7498f7e8deedc94b6",
+      "rows": 3275,
+      "validation_sha256": "bd93ee3c45d3d37840fccdae18c27daadaf00f2f437c826d809fb68a819da88f"
+    },
+    {
+      "book": "1948_us_singles",
+      "charts": 7,
+      "csv_sha256": "6b109dcc6e8929074062fa44986297fd99ffcc02957110a0b65fa0ada1181723",
+      "gzip_bytes": 86264,
+      "gzip_sha256": "89c71272bed90a458d951fbbc9abaae6bab089d4a3533347cf16bdfa56ee5139",
+      "rows": 5946,
+      "validation_sha256": "2f4033a4545b40177ba25ee5e8edfe2d859b6333b09b6e68470b6c905a4d1638"
+    },
+    {
+      "book": "1949_us_singles",
+      "charts": 8,
+      "csv_sha256": "7329e3df395c57214af6e2d06fdd1d94f9157ef665211455c1c6e85c08b3e6ec",
+      "gzip_bytes": 120778,
+      "gzip_sha256": "08d7e532f2244bf5bec8ebd84a4c4ddafcfb64e96c123d42813ab5ab662f5dc5",
+      "rows": 8188,
+      "validation_sha256": "942137d1181d74dae8a18cdaf2361b32eedaedc4670d5f126f3cd9ff447aebb7"
+    },
+    {
+      "book": "1950_us_singles",
+      "charts": 8,
+      "csv_sha256": "698d191a86159a2ae6772e2465bafd689a40d4762956f8129bb9350ec8ce3d8c",
+      "gzip_bytes": 112360,
+      "gzip_sha256": "18235b1d93ac62793d607ea922a9a38881cc9366b0e088416e3c8c1ed81a1b30",
+      "rows": 7584,
+      "validation_sha256": "11b8de92ac2e27089a2b33b748e9018e48261ce59352472b81c2c61cebca1fe4"
+    },
+    {
+      "book": "1951_us_singles",
+      "charts": 11,
+      "csv_sha256": "bf08cf730db7de023be340a544764d1cc8bb4430676f476170ff230dc11b7391",
+      "gzip_bytes": 115116,
+      "gzip_sha256": "4373c2fb973fc0279339ac7cb8e578a4e70721e2f9af99c35c88a7accaf30e36",
+      "rows": 7822,
+      "validation_sha256": "0055605a96ad21ed8dd527b7e905a4e902b62b15e0af2f002b6403d1231cc9ed"
+    },
+    {
+      "book": "1952_us_singles",
+      "charts": 13,
+      "csv_sha256": "42120dc6bc9fb15ad0fe84ff0b1582fa9098b9305c9a4bfcbae9ee19bd471967",
+      "gzip_bytes": 103924,
+      "gzip_sha256": "cd033499ff8dc71ea96e48b317224aedc48b3d0816ec8bdaa676cf6d8bf7944b",
+      "rows": 7395,
+      "validation_sha256": "6fbbaddc7b4a9e22c2a4c73d2ce4eaccce9562395e97bf418901448bd7aabfa0"
+    },
+    {
+      "book": "1953_us_singles",
+      "charts": 8,
+      "csv_sha256": "34dd116220325d651f9721e85f96ddc869ed3ea05082622a2cf800338e0f26e7",
+      "gzip_bytes": 69036,
+      "gzip_sha256": "f083e03c4a6e5d4049ae64d4a7206526db9eb95d09c81e7dfd6ee866271c1ca3",
+      "rows": 4880,
+      "validation_sha256": "be23d35042d770d69033a2b9712713489807eccf756c0c1430b5f646743f95ae"
+    },
+    {
+      "book": "1954_us_singles",
+      "charts": 8,
+      "csv_sha256": "02991dce230f36dfb6968e3906c879c6f33ff6a2c623b94e4eb177bf45043cbc",
+      "gzip_bytes": 84122,
+      "gzip_sha256": "ef06d13c0e4f134ee7ec7448b190c0ef7dc552559bf016ae45ae2752527979a8",
+      "rows": 6378,
+      "validation_sha256": "27c5fa9e58c9e59bbf694f693aa5df78939aeb95fb66412a1ff946859e710c3f"
+    },
+    {
+      "book": "1955_us_singles",
+      "charts": 10,
+      "csv_sha256": "d7758d352c1e516de70b46c74cc3e335af08e6cbf9af2fbb94f3f783335c6046",
+      "gzip_bytes": 120418,
+      "gzip_sha256": "354b519e836f90d1d2b49b5f29b94c9538111a5da5a66e8e02988668f6062d6a",
+      "rows": 8657,
+      "validation_sha256": "510dfac2b7c51eff7f9b05d06266bbf91af8ac529df4c752747cbff82355f8ba"
+    },
+    {
+      "book": "1956_us_singles",
+      "charts": 10,
+      "csv_sha256": "18c4f9afd858e5a1bb418a1a0f7c346ef234ca7c17c8b2561791356d90385422",
+      "gzip_bytes": 185095,
+      "gzip_sha256": "1471f4b11c37288766d5b17c88767949732b67c30e426cab6c0ac19b01306c73",
+      "rows": 13001,
+      "validation_sha256": "77be6ba678f2a7247d08c1879941ecd855c155df2c0f5fb28d0c9d438a8ba074"
+    },
+    {
+      "book": "1957_us_singles",
+      "charts": 10,
+      "csv_sha256": "1602cd9dca90e139504f7d42d97ccdd2750549b5046821e4cc452d644202a214",
+      "gzip_bytes": 178253,
+      "gzip_sha256": "d4ae351b4eddaaf9500ed11205a28c7a28fae50213afd68083b40f3eb9ed8cb8",
+      "rows": 12549,
+      "validation_sha256": "6b288446d6927ca66b6960407644f36d07da8538567a6ffc43843b48e4a02c44"
+    },
+    {
+      "book": "1958_us_singles",
+      "charts": 10,
+      "csv_sha256": "17b9bf12a37786b8abcceca93ed83bff8297e2d71456df62304dadd98a01e5eb",
+      "gzip_bytes": 166743,
+      "gzip_sha256": "f1645dec60ba6e256a4104cc6ddb915ca9bc8fb6ceb488b263d8e1d3d1a11a05",
+      "rows": 11548,
+      "validation_sha256": "9b2962b08198e50015c70e040669dc45629f4185a7ed405166f4a3cd9e5a2065"
+    },
+    {
+      "book": "1959_us_singles",
+      "charts": 4,
+      "csv_sha256": "5d3e6e8a568a9da94c4dcd1a6289208112099ae04a2856fc4d5186d3a4ca0ba5",
+      "gzip_bytes": 130121,
+      "gzip_sha256": "16773ddbfcecc9cef0cdb9e9fc63e7d9cf8c1b8b469beef354740b844d6e7ec7",
+      "rows": 8786,
+      "validation_sha256": "cbec5c325dd6e15e2a3ca1dec93f5535e0a441d3b3d0399a42030c424fa49027"
+    },
+    {
+      "book": "1960_us_singles",
+      "charts": 4,
+      "csv_sha256": "0d28b4dc8dffcf42c1c90fcfe26b9dfb08e6f01ac371d49216ed77a66ba25729",
+      "gzip_bytes": 141534,
+      "gzip_sha256": "4dd171143ed8b572f61c3ce7f9fc96fd838d52c73cc85851f2058101fbdf29ac",
+      "rows": 9276,
+      "validation_sha256": "90e8a24c9e03980b971f2445e221e7de7873103cb0d2123dec1d24ea85bfeaa6"
+    },
+    {
+      "book": "1961_us_singles",
+      "charts": 6,
+      "csv_sha256": "eaf1107f1d1577bb8683335601ef1b68df05f39daad553dc0fb630ad9ba8ac0e",
+      "gzip_bytes": 157678,
+      "gzip_sha256": "338e67b156932c0394b38000c23cd01992810b07d06c82908cc91a06b33808b5",
+      "rows": 10003,
+      "validation_sha256": "136405cce4988a5a29418de2c0bfa0e94d39130f4ad5ef4eeb4960d3fb335c23"
+    },
+    {
+      "book": "1962_us_singles",
+      "charts": 5,
+      "csv_sha256": "6a28e6b464150944ea1511ce1d51edbd9abf0e4e5cf41ddd39ac5fa46ec8ea64",
+      "gzip_bytes": 164197,
+      "gzip_sha256": "1acaff5c4d2709d08e12a6bf79b204c8cd86983963e2fd68a4e564b0fa7112eb",
+      "rows": 10520,
+      "validation_sha256": "82d704dad7bfb4802f2817eba6e2e55be4e5b22def7e4204f06fb51d2aadb974"
+    },
+    {
+      "book": "1963_us_singles",
+      "charts": 6,
+      "csv_sha256": "a9dde662cd47ce6d5b246c52b13c23dc0d75a5c468796b9aaf41cfa4d3452984",
+      "gzip_bytes": 173405,
+      "gzip_sha256": "b22bee44711ad5a14a81ef576c0f59bcce3ecdd2aff254679de43cfe6a49134d",
+      "rows": 10877,
+      "validation_sha256": "98043447df6efe4b801dfa56d8daeb4914c6bd507fe1e3326662e213473ad8e4"
+    },
+    {
+      "book": "1964_us_singles",
+      "charts": 5,
+      "csv_sha256": "b8683ce064c27bc24ad4a62e29c263f3ea5d4464348492018c246e581d4a1725",
+      "gzip_bytes": 167757,
+      "gzip_sha256": "594b4435a38ed45cc596b28c5312eb7c0eb833f9339d47be39bbb3268f702502",
+      "rows": 10627,
+      "validation_sha256": "0eafed743f8fbfc6defc6cd2811f5b9b5e23cff6b52f00a90e5678a55e6a8f1a"
+    },
+    {
+      "book": "1965_us_singles",
+      "charts": 6,
+      "csv_sha256": "c9d5d5b211c545c0ed0c03572680433e7d206a88ece6ba4b151f6f6603cd3c9f",
+      "gzip_bytes": 204536,
+      "gzip_sha256": "154393fe455d7d4275ad193074f4ac549fe1608935ccc4377b2bd2e07dceee65",
+      "rows": 13266,
+      "validation_sha256": "7e2a8b8dd7f09fa1b96deaef346554c698ae897ae0da5521c3c6a8c0ac768e1f"
+    },
+    {
+      "book": "1966_us_singles",
+      "charts": 6,
+      "csv_sha256": "ad22ee6edbeda976c6a3784fd6e15f427cf1438824ff9ead804f41847bc4ff3c",
+      "gzip_bytes": 225777,
+      "gzip_sha256": "dc3077001688bfb28654180497ac8e0482a67a3d6f565abe6e14e4c3e2cb43ff",
+      "rows": 14615,
+      "validation_sha256": "61e805bd9171ce6e4e527e6790aac84a34432368106e97e643dd2121cbf0c479"
+    },
+    {
+      "book": "1967_us_singles",
+      "charts": 6,
+      "csv_sha256": "08f2b4b916bc420ed81c2c6e74d02ac48d62e04eafe9f43928f5093d2cf916e4",
+      "gzip_bytes": 239706,
+      "gzip_sha256": "ee3ace3d17f502ccd8e22818073c80862a1968a95edcf4e0c9a5ef7ef788ec0b",
+      "rows": 15607,
+      "validation_sha256": "65b0ab1024ee6bcf17838f32bbab46597ccfd1a62239c0b04a708c49d243cdbb"
+    },
+    {
+      "book": "1968_us_singles",
+      "charts": 6,
+      "csv_sha256": "ad993114396aba53c7681b8f6cc77b4f4a32a882e783e8ac0c01602c439a3df6",
+      "gzip_bytes": 237836,
+      "gzip_sha256": "074fc5dba3249ec9b48746a63494ac14abc1d87b2921394138c7425d146c1ec9",
+      "rows": 15349,
+      "validation_sha256": "a586b6e4663ab3ea26092f18e870293ea66c63010c96660e0e91a63b2daa1b1b"
+    },
+    {
+      "book": "1969_us_singles",
+      "charts": 6,
+      "csv_sha256": "70475b5b5f2afffeb166b55f00be822484c481ecd633b17e016a5c49b04c3d51",
+      "gzip_bytes": 238562,
+      "gzip_sha256": "0aa0b30650af5c5f74f2d4064620da57249c4e62b3ef5bcf876b071f4a8294d3",
+      "rows": 15385,
+      "validation_sha256": "4dea4da00a4d8c6f8df4b6586581004d19177b8c362efa8a706f23374ed4f2ee"
+    },
+    {
+      "book": "1970_us_singles",
+      "charts": 6,
+      "csv_sha256": "efc29a0ef5d31d51d978439144940bf16ea89d6000a6c963d4dfbfeb9247763b",
+      "gzip_bytes": 232752,
+      "gzip_sha256": "bc53a287becf222608e598409c692352c6fa607ea67988bf84a4e7233c4aee03",
+      "rows": 14998,
+      "validation_sha256": "478f4d51c91244dd783a7726b245d1254f9659857f3630b9c85e77ade7f6ce1f"
+    },
+    {
+      "book": "1971_us_singles",
+      "charts": 6,
+      "csv_sha256": "ee03e4b696fab5367445eba277614a6235aa59a8f82aab8573aeff5ba61bf2f0",
+      "gzip_bytes": 223769,
+      "gzip_sha256": "e249ee408067eac4889d7cb1f09d152034e54533b600bdca1305e75d33dd14f4",
+      "rows": 14834,
+      "validation_sha256": "192b8da0eccb94a79d2a25575e633a5a3ca0041412240d9229a81b4f5a65f3bd"
+    },
+    {
+      "book": "1972_us_singles",
+      "charts": 6,
+      "csv_sha256": "beda237ae833ae6a09c575064a435b4ec32465aeb0aac86c5dc51847a03c1ca3",
+      "gzip_bytes": 220093,
+      "gzip_sha256": "59c744a1a77177bc4e4f9b329a3528d20bd4ed36370bb81984886fa4ff451772",
+      "rows": 15005,
+      "validation_sha256": "8be45edb1f12f8737d0edb1f79d11b517dda93aa9f5eb4288c5b5d25f94d1909"
+    },
+    {
+      "book": "1973_us_singles",
+      "charts": 6,
+      "csv_sha256": "0c248be79f09265a69725b4cad1da6109d1f478b7979ca90571fdb6ec2f289f1",
+      "gzip_bytes": 248201,
+      "gzip_sha256": "d7edf6e36c013ec2ca75d9a6503bd34223bc35f728139c2cbec064e71f6dd087",
+      "rows": 17104,
+      "validation_sha256": "c0a9ece5552bda4d1d09ad711953ce0e63421f4cfbc585015039a4337707378e"
+    },
+    {
+      "book": "1974_us_singles",
+      "charts": 6,
+      "csv_sha256": "92c8e4a0f43d6e8702282f63a22295f7fc094275e10339183c0a138f1f3f473a",
+      "gzip_bytes": 261932,
+      "gzip_sha256": "cc0a274f37aed5bb4683425ad67444857332949536b4fc26352ad95a83ee9ca3",
+      "rows": 18865,
+      "validation_sha256": "2b6b4f671b86bb97ed195e7e8373a49d10cc6dfad4440551db0d44acbf43d14c"
+    },
+    {
+      "book": "1975_us_singles",
+      "charts": 6,
+      "csv_sha256": "0efd947ebdfb92d75054c9080af62c3a08be54b54107662410bdc0f434291b85",
+      "gzip_bytes": 266243,
+      "gzip_sha256": "d47daff0a5fdd0f9fef8614c61162797c752a7e65f97734c8f7655d143a7225c",
+      "rows": 18912,
+      "validation_sha256": "2b45893cbbcd918fc2c2dbdba502fb66dcf2cbf4291ccae01fb27e2eb815fb50"
+    },
+    {
+      "book": "1976_us_singles",
+      "charts": 6,
+      "csv_sha256": "b27d25c8698dfa2e57739130b58616f9c06317e3c42c18340c499e045e5b6fa0",
+      "gzip_bytes": 278320,
+      "gzip_sha256": "ec23f8b6ce6937f48f39deae036d2bbdb6e8233be03709fa85690bcbd14a5f05",
+      "rows": 19420,
+      "validation_sha256": "8612916899eb8904dea8084d0da0f0481daabace8a6faa6e6b0822320cae2e12"
+    },
+    {
+      "book": "1977_us_singles",
+      "charts": 6,
+      "csv_sha256": "475de22179a9d4957274034a30b3ca9c60dfb6963d3db2209f34095ad6b84cb6",
+      "gzip_bytes": 294556,
+      "gzip_sha256": "3c8ddc2d19cae8f619f503ac98fa5205299ac7e13f52090c9a559206e4da93c2",
+      "rows": 21200,
+      "validation_sha256": "9eab5c53f689045e7bd097072867c4884d9fe30606bb878af865bd37ae330a9d"
+    },
+    {
+      "book": "1978_us_singles",
+      "charts": 6,
+      "csv_sha256": "01a7a95caff895edc0ba52f315184e4b986405c6a78c526027dec3ed5501867f",
+      "gzip_bytes": 280450,
+      "gzip_sha256": "91c94d11adbf9f97fbcced8e6608686437e47bc936c117a19819921166b0d0ec",
+      "rows": 20800,
+      "validation_sha256": "9e36190142718817b74e80532ed9c3f0c7fd49e55cf7c9588962501a3fded13d"
+    },
+    {
+      "book": "1979_us_singles",
+      "charts": 6,
+      "csv_sha256": "4120c59f6a9957fb1f4b96e936e7f1ac0e9fc34cb84ebbc8d1135e4290cb300d",
+      "gzip_bytes": 307505,
+      "gzip_sha256": "fc14cd456afa4b3e2bfc50e74cc1205663ae87d516d4030b2a0242eeee136c2c",
+      "rows": 22680,
+      "validation_sha256": "c4b8437bb87ea6cc451371452ce71d37c0f6a8e7d316ffb3abf120b264ae3ec1"
+    },
+    {
+      "book": "1980_us_singles",
+      "charts": 7,
+      "csv_sha256": "63cd2ab6944e9217f529a081e1f165b35931960de7800147bbc7964e565b1875",
+      "gzip_bytes": 323455,
+      "gzip_sha256": "29bf51155ee1a370bddcc0215769f6f8bfdf8a1c3d87edb74b44355daf96fdb2",
+      "rows": 23985,
+      "validation_sha256": "9b896d49151841bdc81ea40e3c5fe81e83d908aecf53968eaa21c493d5a34359"
+    },
+    {
+      "book": "1981_us_singles",
+      "charts": 8,
+      "csv_sha256": "c856e32f99d36499dcfe0ca862cf1eb22f6c9b655f21ee91c49777199a0899eb",
+      "gzip_bytes": 347066,
+      "gzip_sha256": "5ccc2d4537ee61016262629beeb344011db6cb4aaa9cbd64c3d4476e6e54b1a6",
+      "rows": 26027,
+      "validation_sha256": "7a39441419a70850f7d61fbe7e68dc0a83546799786b96445bb33cbf6d6946f9"
+    },
+    {
+      "book": "1982_us_singles",
+      "charts": 7,
+      "csv_sha256": "519d8da97270d65710cc384f3c7248f7d1f368dd2d9a11a06d5c3bc324f6606d",
+      "gzip_bytes": 344497,
+      "gzip_sha256": "ebda5a101eae111b77a0164ce76f1b7cc50adbce3321aa5108163bf944f20703",
+      "rows": 26000,
+      "validation_sha256": "924ff7f492c07d8befd3633f80c39ed24ccb842bd319c757d9132a6302dd47a8"
+    },
+    {
+      "book": "1983_us_singles",
+      "charts": 8,
+      "csv_sha256": "8fdf47da8a21c0972e924919977a59100af35a1c7f53a332aa40cb5b1e5cc001",
+      "gzip_bytes": 350616,
+      "gzip_sha256": "2b98805b72f2badaae0f275241d6ae1dc3e70fd6f77f1f63d939aa1c5a745f10",
+      "rows": 26519,
+      "validation_sha256": "9f42ccf4083565649484d0f72dacf6310eefd95fdd1c2892f71ab8ee1f0783b8"
+    },
+    {
+      "book": "1984_us_singles",
+      "charts": 14,
+      "csv_sha256": "ef1a78793d0fe14cb9a2108ef37a45a13a7527974a472af4b2fbec7a3db52411",
+      "gzip_bytes": 375297,
+      "gzip_sha256": "0c6993dd2e120d8ef24834983a4bdb9dc3495a828490912bacae686a2e9f0c14",
+      "rows": 27776,
+      "validation_sha256": "34b0faa85763ea6337fbdeb887abfaff2ebfd2e9a669baaa11069bdb016516a0"
+    },
+    {
+      "book": "1985_us_singles",
+      "charts": 15,
+      "csv_sha256": "af295917996a063e2d23bc71cbe8facbd0137e5ec458240e73889fb9538d5cf7",
+      "gzip_bytes": 463306,
+      "gzip_sha256": "814cbd6155bb22e10b65c399dd7f1742a55b1b2a0b9ebd56fd7d20c57bf939d6",
+      "rows": 33695,
+      "validation_sha256": "7e1acd6b01b24427c074ad1cbf7005f8baf88ff821d1c2e7628810594ae29187"
+    },
+    {
+      "book": "1986_us_singles",
+      "charts": 13,
+      "csv_sha256": "1485b865ea1ec12bed089ce9ad8364083839d1675afc7c6ead7a34154404b54d",
+      "gzip_bytes": 499040,
+      "gzip_sha256": "382a82ff463c99a34c9cfbe3585d0ff26535d96465e5df99f78d57c724be5ffc",
+      "rows": 36971,
+      "validation_sha256": "3e16dca6c9c8eb187bec80a335697e2b2fca2b4e38cdee3759b73494e09ddd4a"
+    },
+    {
+      "book": "1987_us_singles",
+      "charts": 13,
+      "csv_sha256": "f36a6460490dc37317c85dec1373f60a5f8221f9407849713c8ad7a307752a37",
+      "gzip_bytes": 497176,
+      "gzip_sha256": "f8d84aadd28fc9576849d92524f2ebcf618442957826daa4fb2e905e45d9c2a1",
+      "rows": 36765,
+      "validation_sha256": "9cb16386878b825e144ee1b4926531388817e443d09a4dd9e1d5ecf5f7a141c4"
+    },
+    {
+      "book": "1988_us_singles",
+      "charts": 13,
+      "csv_sha256": "d948fe0895cfe1e38b0089efefe601e08aca4963f5fbda69c9a3e0ebc6ef6804",
+      "gzip_bytes": 507487,
+      "gzip_sha256": "9bee1775b9e27e92050c775bf12ce028cc1886c2cdbf336b82265e7d2d9c678e",
+      "rows": 37669,
+      "validation_sha256": "2e9f20a703c5654318048679a8ce3b7bc36e4ff420ca1db431592b53be128908"
+    },
+    {
+      "book": "1989_us_singles",
+      "charts": 14,
+      "csv_sha256": "14761dc02f93bc5925bfd6381f33d72bc91a496c5bb571a5b002463df3e40bb3",
+      "gzip_bytes": 506904,
+      "gzip_sha256": "0180d60a0c330942e852a690d04c41a23899c8f8ebdd4b6a1b879f317199fd24",
+      "rows": 37684,
+      "validation_sha256": "b5b026c63de176d70c1fa370079e62fd34f9e3bf24db5ebf4878f95a50c7a276"
+    },
+    {
+      "book": "1990_us_singles",
+      "charts": 16,
+      "csv_sha256": "05d39f28806e6ccb2f3e64ede53631bb3c782a6bb788991c306dcd7c6d41df36",
+      "gzip_bytes": 515310,
+      "gzip_sha256": "b098970e92d632ca79a18a86cdae11d2d059bb5143cb3b1f9c57d884466691a0",
+      "rows": 37960,
+      "validation_sha256": "f90520f560429633cb18fa72ef5f662c8a88001897785234097039b35965f8ac"
+    },
+    {
+      "book": "1991_us_singles",
+      "charts": 18,
+      "csv_sha256": "03d5683bb52b548582a7001b51a844da3c47d8c98c8fdd4f198750fbc9a19a44",
+      "gzip_bytes": 587503,
+      "gzip_sha256": "a5091995d69cb0699c8ed329b0439e03a77f2cd6c8ef6222c59c815cfa5e5244",
+      "rows": 43435,
+      "validation_sha256": "e312d4b8f01b689829f2a0fe2c9261168c5917e6b74dbba89390fa5158451285"
+    },
+    {
+      "book": "1992_us_singles",
+      "charts": 23,
+      "csv_sha256": "ba8a12cdab1f844b5bc5774ca55da5b48d7e68711252e4589287ad0c3dced159",
+      "gzip_bytes": 626500,
+      "gzip_sha256": "2e8dfae367b10fc40613866e876ae47371787dfadb53cfdc5c6b9ed3992e1779",
+      "rows": 46200,
+      "validation_sha256": "3e3ecf9cb5d8a8d929aee5254f8933b5a3b57cc87b653262c8e95dacc3893d76"
+    },
+    {
+      "book": "1993_us_singles",
+      "charts": 25,
+      "csv_sha256": "5a57779a3a68df72f73fbd3e333f21677ea207f72c143148c5ccf5aff7e652aa",
+      "gzip_bytes": 784704,
+      "gzip_sha256": "e0681ca3b98fd33134503001e2e21dff9bee5548c1f49f31c0c2b8afd0f15f9d",
+      "rows": 57437,
+      "validation_sha256": "c4f0259bc4b44e28c0f6d2e53f1c9c541576decc43a24d2434e71f5c252803d0"
+    },
+    {
+      "book": "1994_us_singles",
+      "charts": 25,
+      "csv_sha256": "9c5d0ea2bf17f9f7e7e85e11ce6c4369ba4a9497af25a0ea49900c4383de7700",
+      "gzip_bytes": 845084,
+      "gzip_sha256": "bc2468c1f02e40de93ff7f1acf7d1fd45cd0e781a91b3c8833bea8505c083ba7",
+      "rows": 62539,
+      "validation_sha256": "063e7be60815beb81cffd9b25ca26a7b732e861adf05138c00a3529902d7cfee"
+    },
+    {
+      "book": "1995_us_singles",
+      "charts": 27,
+      "csv_sha256": "e81f21c4679ee57f9b18c4337197cf755f7afd16cb1999570c08142e572003fc",
+      "gzip_bytes": 851664,
+      "gzip_sha256": "99be8a0657dd806480245dd9407b6db47e25fd6edfe4671952c020e51466063f",
+      "rows": 62640,
+      "validation_sha256": "1c97aa7504d9b469126361d37f5ac0c669a4fcca6bf0a4e2eac8e25f19cc7936"
+    },
+    {
+      "book": "1996_us_singles",
+      "charts": 27,
+      "csv_sha256": "f11b7d658a46bf25cf14603e6d8e55b330ac863288c72dbed2f8efeb52ef254f",
+      "gzip_bytes": 877717,
+      "gzip_sha256": "3ae3af7caf9ff3ed1ad11fd6c062c54471054a1ad3803864ce88690555633602",
+      "rows": 64827,
+      "validation_sha256": "50a6ebe1acb9d83390b01c12a38a2eebf08888d34ad2db442d862c5f8eab0e1c"
+    },
+    {
+      "book": "1997_us_singles",
+      "charts": 27,
+      "csv_sha256": "b7180f852050042e23507c969cc56be58f6e4b72ef64ef03162a707479ab76e1",
+      "gzip_bytes": 874372,
+      "gzip_sha256": "5056d7989f2353d0a91d18f8d2960aa253ebe5fec2198038187ad48dc7147601",
+      "rows": 64719,
+      "validation_sha256": "432c5341915a5ad5f03ce76d502b1289451912f97bac892df802762f1f28f6d5"
+    },
+    {
+      "book": "1998_us_singles",
+      "charts": 28,
+      "csv_sha256": "8ce154ae30b3b7ab82a365d0c97657500d2a06d2a72ee0890e26805297c38149",
+      "gzip_bytes": 875658,
+      "gzip_sha256": "cf2340e77ed704926146f3a4ce2207467988a99bbcd045c4f95f98099ff83812",
+      "rows": 64936,
+      "validation_sha256": "14c9dffeef7c1f5e521eba9490946797eadc40e943f8ee46236bbe3e7ea5d34d"
+    },
+    {
+      "book": "1999_us_singles",
+      "charts": 30,
+      "csv_sha256": "7082139bff51d74c74804e6dfc5785e0e2f2124c7eb669cccc21962ae592ba10",
+      "gzip_bytes": 921069,
+      "gzip_sha256": "0ae08eb4f8772d9c839c4bcc7dd3bf4d172865ee4315d0b3aea5eb1f428f17e4",
+      "rows": 69454,
+      "validation_sha256": "2027ebbd94bc854773d9e33c5b42665476bfc4d60e7623dd845eb215bf90ca5b"
+    },
+    {
+      "book": "2000_us_singles",
+      "charts": 30,
+      "csv_sha256": "7c70cb671353202c7fe0594f44542e8e4dee2357ef172c45ec6eba6d5bef0a35",
+      "gzip_bytes": 950302,
+      "gzip_sha256": "1e70b7baee9177a0bdc60c1ef9c215783b8a583ae3bee59cae55283ccc53c31c",
+      "rows": 71282,
+      "validation_sha256": "3599c9d6e11b45d69fea1579d014f64e76f7c20126b77641d5a3c228bcfa1a4b"
+    },
+    {
+      "book": "2001_us_singles",
+      "charts": 30,
+      "csv_sha256": "a5637757484112a2ba9381273fbda6e2f6e8569e528e219943f5bded15d555e4",
+      "gzip_bytes": 915275,
+      "gzip_sha256": "cb6d1f55901bf6ad3bf93c76e61e2458a44e835418074e753440c0a43201ee06",
+      "rows": 68024,
+      "validation_sha256": "e0a916c32878223b468070999ea6ad4df563bbbaff486ba96a0e7eeff9c9ea20"
+    },
+    {
+      "book": "2002_us_singles",
+      "charts": 30,
+      "csv_sha256": "fa9e645f7a8789c853203e5bcac788dd21c5db271767e7930b70278353ca4d18",
+      "gzip_bytes": 891492,
+      "gzip_sha256": "f8ea73b4b3699c79beec7fdc7e32c9277770d0f488572edbe832d2b39f6185ef",
+      "rows": 66148,
+      "validation_sha256": "0ecfcca27e325dd4818d1153d6f5729072397fc9268c69b4829f33f5c555d10b"
+    },
+    {
+      "book": "2003_us_singles",
+      "charts": 30,
+      "csv_sha256": "dc8ce2231d0b820b65cd73ff6705ac081a957c72f356038a2ebb9a013b19065f",
+      "gzip_bytes": 819896,
+      "gzip_sha256": "1f6fcfe80e3e749e9c231300cae8b34f31090c858142d0b403949fc9af31775c",
+      "rows": 61608,
+      "validation_sha256": "9b7da90fc945021193cabd1e5508c1ca6b6e620f971331c91e9220baf81fbafa"
+    },
+    {
+      "book": "2004_us_singles",
+      "charts": 30,
+      "csv_sha256": "cf0b37b4d8e72bbaa14f6773266f497ab0a4cbdd2f155181669031f18e217d89",
+      "gzip_bytes": 813954,
+      "gzip_sha256": "d09ec22841b8c2e3560886c2d8d75118d37a3dd7a1e40f205597b4858825ddfb",
+      "rows": 61670,
+      "validation_sha256": "bb20ce6b3a8f224bc9766063266f0f472c908c60ef7c90521264e5a4d4d194e7"
+    },
+    {
+      "book": "2005_us_singles",
+      "charts": 32,
+      "csv_sha256": "13cdc0e773298c8987d11afa6b9ecd14d86f19e5d1d88c54f939649e1e54cad6",
+      "gzip_bytes": 970240,
+      "gzip_sha256": "70c23c32ebf011e19dde1400e3500b4e8144de6b46e9774daa3d4fad1769e58e",
+      "rows": 72206,
+      "validation_sha256": "056788d1814d5027a667cad769c839c27e0d412e1a0c087e8c60bdf751add4f8"
+    },
+    {
+      "book": "2006_us_singles",
+      "charts": 31,
+      "csv_sha256": "dc546cac66028073636c376a87dd60e592027070c2e15028fb0a74086035b3d5",
+      "gzip_bytes": 970732,
+      "gzip_sha256": "ab73825e91fc99e172438ba4970aeb4684b2c867e016b1c45054a285c0057fe6",
+      "rows": 71301,
+      "validation_sha256": "86089d133aa02b8f7fdf4f8a9c27dc98befd5ef4cebf604a2de021f64da421e6"
+    },
+    {
+      "book": "2007_us_singles",
+      "charts": 31,
+      "csv_sha256": "38f2f540be19aaa9b995810cf67588d9f07e1a9128c82c23d5bd6b619cae87a7",
+      "gzip_bytes": 930960,
+      "gzip_sha256": "993c9930018477d969cf5faa298937bc45175d5500137493736de51fe1c9ec69",
+      "rows": 69119,
+      "validation_sha256": "6bb81be9450b31c7e5ff021af9df4e9f0d498cf2f48dfff931bcbe35f9c0080a"
+    },
+    {
+      "book": "2008_us_singles",
+      "charts": 31,
+      "csv_sha256": "9b6a0ab57bd68f9f710070bf24ae4620c240935c64f450c8dbb6cf14037ff6ad",
+      "gzip_bytes": 928425,
+      "gzip_sha256": "51fac93da6d9bd465ef9d46f41e22c054340fb5720cbfa0997599cc8fa50f50f",
+      "rows": 68880,
+      "validation_sha256": "1d6bf7ecc492ec9ab150b65b727f01ed4f3229e3d71f62538a34035a2999b44e"
+    },
+    {
+      "book": "2009_us_singles",
+      "charts": 33,
+      "csv_sha256": "0356d248cbf25eaad88b1fa5d688b6141ce7cf0ad1128afe232b4b09b98d3307",
+      "gzip_bytes": 915031,
+      "gzip_sha256": "aed17841d0c9304496aacf47fafeb8b4c3728e3a677a67aa31ca99b270585194",
+      "rows": 68204,
+      "validation_sha256": "cdf4cc26d767ac440925e95fcdff31333d8989048619bae12903a2da8fca9282"
+    },
+    {
+      "book": "2010_us_singles",
+      "charts": 38,
+      "csv_sha256": "97a65994b26fbaffa40b1bd14cc3750688a746e7e2b9d8375a7cf83139a904c8",
+      "gzip_bytes": 1040350,
+      "gzip_sha256": "a87818948ba9bd4ae9134d024c3ce778d446b7f9927cce7a2a932c4f3ee97c44",
+      "rows": 76934,
+      "validation_sha256": "938e13eefee88da88724cebc0e46904be9684eb88c5d8fef8ecf759153469434"
+    },
+    {
+      "book": "2011_us_singles",
+      "charts": 40,
+      "csv_sha256": "65e8341cc41bbef0b1f90deb6f4c002d91216862a0f48f7415a5da22e7384062",
+      "gzip_bytes": 1121422,
+      "gzip_sha256": "8a55b3e4c24014ec102d87cb657748631fb1517dba7d9e4c8c7b1d4b5ab78b64",
+      "rows": 81810,
+      "validation_sha256": "e50d6f6a1e5ff32c0931de36a3652b0630a9c0f30882c77da039f187783848e7"
+    },
+    {
+      "book": "2012_us_singles",
+      "charts": 44,
+      "csv_sha256": "2977211d9268223ba619ca13d3b9ba7ddc24d6fe23c66ae222e24ad0553f073b",
+      "gzip_bytes": 1111352,
+      "gzip_sha256": "12eaf9579ff6b9654a87837f781db207c4713c9d153412629a0b956b102ec16f",
+      "rows": 82560,
+      "validation_sha256": "d969f47eaa6f3b1355d4b6d45b22f9021159899baaa3b739cc4769a64b897fba"
+    },
+    {
+      "book": "2013_us_singles",
+      "charts": 50,
+      "csv_sha256": "525fb99d1de83d8f4fd936b2eeb042b71b0d5f431fe75e7cce7f713661145bd3",
+      "gzip_bytes": 1191413,
+      "gzip_sha256": "0c0198d6776e77c01aebcb67be8b43f182a92903742174e712dd1dfc69cce6f7",
+      "rows": 89290,
+      "validation_sha256": "e8dc3c65c0d4e5a5fe4088ee39eb2c344abbed7f576da2c4933c1d14c1176e68"
+    },
+    {
+      "book": "2014_us_singles",
+      "charts": 48,
+      "csv_sha256": "44c9f404ce52970676ab650b751d716f84ca2f4b7f592128ca491194ccbd8f27",
+      "gzip_bytes": 1152014,
+      "gzip_sha256": "4d3d1838ddb63931fee39ce88bc0ac22fe7f5795b5ff917a58241e2d70d93b32",
+      "rows": 87380,
+      "validation_sha256": "c42c56d0db45a51c9be1e821130e151aeca64e0e741542ad352a08582e7512a6"
+    },
+    {
+      "book": "2015_us_singles",
+      "charts": 48,
+      "csv_sha256": "c60d884adc511f8d3b4fc932df8f63a272692b4cd6b7b51b9a0fa0f3919f5c66",
+      "gzip_bytes": 1173874,
+      "gzip_sha256": "d49be2d804f831401f4537bc30f1b17dc0b8c7d7219dba9891f82dd4c6f64b8a",
+      "rows": 88260,
+      "validation_sha256": "9f44f8ac94d5379f98bc8f4aa8e0f31f57f89fe654c02be3e0aa53f10a0072d3"
+    },
+    {
+      "book": "2016_us_singles",
+      "charts": 48,
+      "csv_sha256": "2944503bd603ad3deaa9a47e2436862ef47f3030998cf29ae4890081050cddb3",
+      "gzip_bytes": 1203161,
+      "gzip_sha256": "446087a153e834d1021f681d2e146af1cebadfe50a75313ebda5a1641c218bf1",
+      "rows": 89470,
+      "validation_sha256": "14821d02c00d2de9316997660a79ebba1b02f00b6a06ffceb8af6877a88d43f2"
+    },
+    {
+      "book": "2017_us_singles",
+      "charts": 48,
+      "csv_sha256": "b51dab4e4825af881af1aaa4a08f9f163f190e04029a79129d601033e48b4102",
+      "gzip_bytes": 1125295,
+      "gzip_sha256": "197e12940a03a9df60b401c61b58c691bec0b83d13390b97254f8b243345f362",
+      "rows": 83040,
+      "validation_sha256": "58b8e54026c50933d27bb6d4e2e5d4d5ce321521759e6f9a9a7cd3ef1306e851"
+    },
+    {
+      "book": "2018_us_singles",
+      "charts": 48,
+      "csv_sha256": "52aeaabb39ff923843ac9c573beb4cbb1dfd4760f232faed02ceb12abae5014e",
+      "gzip_bytes": 1167252,
+      "gzip_sha256": "dc639bb191dbd00f9202b87b0534a19ee2b8dabb777132816d32d25ded396ddf",
+      "rows": 84670,
+      "validation_sha256": "bc57fd227c4bffcd6e1a96f6166e2b94ad46b47bc1d276f21209087589033fa9"
+    },
+    {
+      "book": "2019_us_singles",
+      "charts": 48,
+      "csv_sha256": "123b26a1196235ce07027d3cc04863a4c36119db531062119583de7617d0fd96",
+      "gzip_bytes": 1140507,
+      "gzip_sha256": "5602aa75adeebada7fb976ae62075c7b216dd46fd42a96d17a120e93d1e0a86c",
+      "rows": 82089,
+      "validation_sha256": "88ca0e8ef9b32d0db3e5c24e7ba1179501b7beaae12400dd61c0a6764ff4139d"
+    },
+    {
+      "book": "2020_us_singles",
+      "charts": 47,
+      "csv_sha256": "9d8a79a47697eef535454001cd44ed8d59d9ba24ba1a8008524262b7fdba2372",
+      "gzip_bytes": 1060293,
+      "gzip_sha256": "9d64d2abb60124f1c111d5203941fd7eaf9877a8d9f6d5f7197791033242a560",
+      "rows": 73615,
+      "validation_sha256": "6d411f22e5aa2fa9a5bc895bc960efb1548d2ecb8035eb1b2c606735de0c4091"
+    },
+    {
+      "book": "2021_us_singles",
+      "charts": 43,
+      "csv_sha256": "3d516592f65b1eefc3a9d22dfebe23a47a8d8e0e8548e8480e72b7503d0c5bf8",
+      "gzip_bytes": 1075126,
+      "gzip_sha256": "300f7a73a719165c214924652821227436bfa9979a1d4390311e85a829081e19",
+      "rows": 73540,
+      "validation_sha256": "ec0c9c43ea2cfc53334fac36085bd464391ae5a61dfcce5c022cc33c5fdafd3b"
+    },
+    {
+      "book": "2022_us_singles",
+      "charts": 44,
+      "csv_sha256": "ab9e5e0996d635049097851a1cd248f3c8df26513f63c2fa4b0545b3d81567ff",
+      "gzip_bytes": 1102942,
+      "gzip_sha256": "70476206e8c47f5225873f45712f839816f9059a6520c8d9678f8f9454492831",
+      "rows": 75315,
+      "validation_sha256": "1ff25a4f3379f34392af7a61779c445ce45e143161d663b25a71b6ef83c26134"
+    },
+    {
+      "book": "2023_us_singles",
+      "charts": 44,
+      "csv_sha256": "cadb2be65a4fcf1825296878d16361eff05934188caed6f0421f29998ca09d9d",
+      "gzip_bytes": 1050117,
+      "gzip_sha256": "d39ab39a13396218a848965c8cb4ecfdd4259ee5cfeab3947c51c1c5d57b3e23",
+      "rows": 72545,
+      "validation_sha256": "06596640a6c81f69f87f603ecb99aa24753468023b69ef5b4d3b29135661689d"
+    },
+    {
+      "book": "2024_us_singles",
+      "charts": 43,
+      "csv_sha256": "87a06ae7e3adc98cb4bbe8c884a796cd7ad1062c9a3fbafade073a98343d51bf",
+      "gzip_bytes": 953248,
+      "gzip_sha256": "8e9e9ecfd1f1beef368069b9088601e8c2921238e0decdf14e5d390f55263b7b",
+      "rows": 68005,
+      "validation_sha256": "b5a7c6693d040ec13f4c6eaf3f1592873131d64bda065fd63ab1ab62aba41688"
+    },
+    {
+      "book": "2025_us_singles",
+      "charts": 43,
+      "csv_sha256": "2f054fea9422e8c488027801696b07a31c64bbf86518f24ea998dd6b3293a788",
+      "gzip_bytes": 952118,
+      "gzip_sha256": "9e5266da877755c78359093601809f84c17c5646d90b53d05ee68db561ed37e8",
+      "rows": 68030,
+      "validation_sha256": "c13e17058df18c1f3464410d7475f4acff65efede2b94f785b3e5f2132684189"
+    }
+  ],
+  "inventory_sha256": "31449fd863e8c27fb62d4d04ddc4bf8d46e2fda15eca32e6b91eb54bc506d954",
+  "schema": 1,
+  "total_rows": 3279068
+}

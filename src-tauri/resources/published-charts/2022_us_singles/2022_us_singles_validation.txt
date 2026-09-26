@@ -1,0 +1,170 @@
+2022_us_singles: 75315 rows, 0 problems, 168 notes
+
+note: Billboard Hot 100 2022-02-05 #1: wrapped line joined: 'USWV22127496'
+note: Billboard Hot 100 2022-02-12 #1: wrapped line joined: 'USWV22127496'
+note: Billboard Hot 100 2022-02-19 #1: wrapped line joined: 'USWV22127496'
+note: Billboard Hot 100 2022-02-26 #1: wrapped line joined: 'USWV22127496'
+note: Billboard Hot 100 2022-03-05 #1: wrapped line joined: 'USWV22127496'
+note: Billboard Hot 100 2022-05-21 #15: no duration in book (The Heart Part 5)
+note: Billboard Hot 100 2022-05-28 #77: no duration in book (The Heart Part 5)
+note: Rhythm And Blues Singles Chart 2022-01-01 #32: no format in book (All Good)
+note: Rhythm And Blues Singles Chart 2022-01-01 #32: no catalogue_number in book (All Good)
+note: Rhythm And Blues Singles Chart 2022-01-08 #45: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2022-01-15 #43: no duration in book (Praise God)
+note: Rhythm And Blues Singles Chart 2022-05-21 #5: no duration in book (The Heart Part 5)
+note: Rhythm And Blues Singles Chart 2022-05-28 #31: no duration in book (The Heart Part 5)
+note: Adult Contemporary 2022-12-10 #27: wrapped line joined: 'QZSYP2267903'
+note: Adult Contemporary 2022-12-17 #14: wrapped line joined: 'QZSYP2267903'
+note: Adult Contemporary 2022-12-24 #16: wrapped line joined: 'QZSYP2267903'
+note: Adult Contemporary 2022-12-31 #15: wrapped line joined: 'QZSYP2267903'
+note: Hot Rap Singles 2022-01-01 #22: no format in book (All Good)
+note: Hot Rap Singles 2022-01-01 #22: no catalogue_number in book (All Good)
+note: Hot Rap Singles 2022-05-21 #4: no duration in book (The Heart Part 5)
+note: Digital Song Sales 2022-01-29 #1: wrapped line joined: 'USWV22127496'
+note: Digital Song Sales 2022-05-21 #11: no duration in book (The Heart Part 5)
+note: Digital Song Sales 2022-05-28 #20: no duration in book (The Heart Part 5)
+note: Mainstream Rock Tracks 2022-08-06 #37: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-08-13 #27: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-08-20 #20: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-08-27 #17: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-09-03 #14: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-09-10 #14: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-09-17 #15: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-09-24 #12: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-10-01 #10: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-10-08 #9: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-10-15 #8: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-10-22 #9: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-10-29 #7: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-11-05 #4: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-11-12 #3: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-11-19 #2: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-11-26 #2: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-12-03 #3: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-12-10 #3: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-12-17 #8: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-12-24 #10: no duration in book (More Than Machines)
+note: Mainstream Rock Tracks 2022-12-31 #14: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-10-08 #40: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-10-22 #38: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-10-29 #38: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-11-05 #37: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-11-12 #36: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-11-19 #34: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-11-26 #33: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-12-03 #36: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-12-10 #36: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-12-17 #36: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-12-24 #36: no duration in book (More Than Machines)
+note: Modern Rock Tracks 2022-12-31 #34: no duration in book (More Than Machines)
+note: Holiday Digital Song Sales 2022-01-15 #4: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2022-12-03 #20: odd duration as printed: '34:6' (The Thanksgiving Song)
+note: Holiday Digital Song Sales: 322-day gap between charts 2022-01-15 and 2022-12-03
+note: Streaming Songs 2022-01-15 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-01-22 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-01-29 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-02-05 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-02-12 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-02-19 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-02-26 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-03-05 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-03-12 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-03-19 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-03-26 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-04-02 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-04-09 #1: wrapped line joined: 'USWV22127496'
+note: Streaming Songs 2022-05-21 #9: no duration in book (The Heart Part 5)
+note: R&B Hip-Hop Digital Sales 2022-01-15 #22: no duration in book (Praise God)
+note: R&B Hip-Hop Digital Sales 2022-05-21 #5: no duration in book (The Heart Part 5)
+note: R&B Hip-Hop Digital Sales 2022-05-28 #5: no duration in book (The Heart Part 5)
+note: R&B Hip-Hop Streaming Songs 2022-05-21 #3: no duration in book (The Heart Part 5)
+note: Rap Digital Sales 2022-01-15 #15: no duration in book (Praise God)
+note: Rap Digital Sales 2022-05-21 #4: no duration in book (The Heart Part 5)
+note: Rap Digital Sales 2022-05-28 #4: no duration in book (The Heart Part 5)
+note: Rap Streaming Songs 2022-05-21 #3: no duration in book (The Heart Part 5)
+note: Alternative Digital Song Sales 2022-04-02 #21: no duration in book (Send Me On My Way)
+note: Alternative Digital Song Sales 2022-07-23 #19: no duration in book (Send Me On My Way)
+note: Alternative Digital Song Sales 2022-07-30 #23: no duration in book (Send Me On My Way)
+note: Hot Hard Rock Songs 2022-10-22 #23: no duration in book (More Than Machines)
+note: Hot Hard Rock Songs 2022-10-29 #24: no duration in book (More Than Machines)
+note: Hot Hard Rock Songs 2022-11-19 #22: no duration in book (More Than Machines)
+note: Hot Hard Rock Songs 2022-11-26 #24: no duration in book (More Than Machines)
+note: Hot Hard Rock Songs 2022-12-03 #25: no duration in book (More Than Machines)
+note: Hot Hard Rock Songs 2022-12-10 #20: no duration in book (More Than Machines)
+note: Hot Hard Rock Songs 2022-12-17 #21: no duration in book (More Than Machines)
+note: Rock Airplay 2022-08-06 #33: no duration in book (More Than Machines)
+note: Rock Airplay 2022-08-20 #39: no duration in book (More Than Machines)
+note: Rock Airplay 2022-08-27 #40: no duration in book (More Than Machines)
+note: Rock Airplay 2022-09-03 #34: no duration in book (More Than Machines)
+note: Rock Airplay 2022-09-10 #31: no duration in book (More Than Machines)
+note: Rock Airplay 2022-09-17 #26: no duration in book (More Than Machines)
+note: Rock Airplay 2022-09-24 #23: no duration in book (More Than Machines)
+note: Rock Airplay 2022-10-01 #19: no duration in book (More Than Machines)
+note: Rock Airplay 2022-10-08 #19: no duration in book (More Than Machines)
+note: Rock Airplay 2022-10-15 #19: no duration in book (More Than Machines)
+note: Rock Airplay 2022-10-22 #20: no duration in book (More Than Machines)
+note: Rock Airplay 2022-10-29 #13: no duration in book (More Than Machines)
+note: Rock Airplay 2022-11-05 #12: no duration in book (More Than Machines)
+note: Rock Airplay 2022-11-12 #8: no duration in book (More Than Machines)
+note: Rock Airplay 2022-11-19 #7: no duration in book (More Than Machines)
+note: Rock Airplay 2022-11-26 #7: no duration in book (More Than Machines)
+note: Rock Airplay 2022-12-03 #5: no duration in book (More Than Machines)
+note: Rock Airplay 2022-12-10 #8: no duration in book (More Than Machines)
+note: Rock Airplay 2022-12-17 #9: no duration in book (More Than Machines)
+note: Rock Airplay 2022-12-24 #16: no duration in book (More Than Machines)
+note: Rock Airplay 2022-12-31 #17: no duration in book (More Than Machines)
+note: Bubbling Under The Hot 100 2022-01-01: chart starts at #101
+note: Bubbling Under The Hot 100 2022-01-01 #102: no format in book (All Good)
+note: Bubbling Under The Hot 100 2022-01-01 #102: no catalogue_number in book (All Good)
+note: Bubbling Under The Hot 100 2022-01-08: chart starts at #101
+note: Bubbling Under The Hot 100 2022-01-15: chart starts at #101
+note: Bubbling Under The Hot 100 2022-01-22: chart starts at #101
+note: Bubbling Under The Hot 100 2022-01-29: chart starts at #101
+note: Bubbling Under The Hot 100 2022-02-05: chart starts at #101
+note: Bubbling Under The Hot 100 2022-02-12: chart starts at #101
+note: Bubbling Under The Hot 100 2022-02-19: chart starts at #101
+note: Bubbling Under The Hot 100 2022-02-26: chart starts at #101
+note: Bubbling Under The Hot 100 2022-03-05: chart starts at #101
+note: Bubbling Under The Hot 100 2022-03-12: chart starts at #101
+note: Bubbling Under The Hot 100 2022-03-19: chart starts at #101
+note: Bubbling Under The Hot 100 2022-03-26: chart starts at #101
+note: Bubbling Under The Hot 100 2022-04-02: chart starts at #101
+note: Bubbling Under The Hot 100 2022-04-09: chart starts at #101
+note: Bubbling Under The Hot 100 2022-04-16: chart starts at #101
+note: Bubbling Under The Hot 100 2022-04-23: chart starts at #101
+note: Bubbling Under The Hot 100 2022-04-30: chart starts at #101
+note: Bubbling Under The Hot 100 2022-05-07: chart starts at #101
+note: Bubbling Under The Hot 100 2022-05-14: chart starts at #101
+note: Bubbling Under The Hot 100 2022-05-21: chart starts at #101
+note: Bubbling Under The Hot 100 2022-05-28: chart starts at #101
+note: Bubbling Under The Hot 100 2022-06-04: chart starts at #101
+note: Bubbling Under The Hot 100 2022-06-11: chart starts at #101
+note: Bubbling Under The Hot 100 2022-06-18: chart starts at #101
+note: Bubbling Under The Hot 100 2022-06-25: chart starts at #101
+note: Bubbling Under The Hot 100 2022-07-02: chart starts at #101
+note: Bubbling Under The Hot 100 2022-07-09: chart starts at #101
+note: Bubbling Under The Hot 100 2022-07-16: chart starts at #101
+note: Bubbling Under The Hot 100 2022-07-23: chart starts at #101
+note: Bubbling Under The Hot 100 2022-07-30: chart starts at #101
+note: Bubbling Under The Hot 100 2022-08-06: chart starts at #101
+note: Bubbling Under The Hot 100 2022-08-13: chart starts at #101
+note: Bubbling Under The Hot 100 2022-08-20: chart starts at #101
+note: Bubbling Under The Hot 100 2022-08-27: chart starts at #101
+note: Bubbling Under The Hot 100 2022-09-03: chart starts at #101
+note: Bubbling Under The Hot 100 2022-09-10: chart starts at #101
+note: Bubbling Under The Hot 100 2022-09-17: chart starts at #101
+note: Bubbling Under The Hot 100 2022-09-24: chart starts at #101
+note: Bubbling Under The Hot 100 2022-10-01: chart starts at #101
+note: Bubbling Under The Hot 100 2022-10-08: chart starts at #101
+note: Bubbling Under The Hot 100 2022-10-15: chart starts at #101
+note: Bubbling Under The Hot 100 2022-10-22: chart starts at #101
+note: Bubbling Under The Hot 100 2022-10-29: chart starts at #101
+note: Bubbling Under The Hot 100 2022-11-05: chart starts at #101
+note: Bubbling Under The Hot 100 2022-11-12: chart starts at #101
+note: Bubbling Under The Hot 100 2022-11-19: chart starts at #101
+note: Bubbling Under The Hot 100 2022-11-26: chart starts at #101
+note: Bubbling Under The Hot 100 2022-12-03: chart starts at #101
+note: Bubbling Under The Hot 100 2022-12-10: chart starts at #101
+note: Bubbling Under The Hot 100 2022-12-17: chart starts at #101
+note: Bubbling Under The Hot 100 2022-12-24: chart starts at #101
+note: Bubbling Under The Hot 100 2022-12-31: chart starts at #101

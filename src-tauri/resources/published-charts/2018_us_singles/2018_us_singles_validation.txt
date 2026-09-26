@@ -1,0 +1,477 @@
+2018_us_singles: 84670 rows, 0 problems, 475 notes
+
+note: Billboard Hot 100 2018-05-05 #8: no duration in book (Kevin's Heart)
+note: Billboard Hot 100 2018-05-05 #30: no duration in book (Brackets)
+note: Billboard Hot 100 2018-05-12 #48: no duration in book (Kevin's Heart)
+note: Billboard Hot 100 2018-05-19 #57: no duration in book (Kevin's Heart)
+note: Billboard Hot 100 2018-05-26 #68: no duration in book (Kevin's Heart)
+note: Billboard Hot 100 2018-06-02 #92: no duration in book (Kevin's Heart)
+note: Billboard Hot 100: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Country Singles Chart: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Rhythm And Blues Singles Chart 2018-05-05 #5: no duration in book (Kevin's Heart)
+note: Rhythm And Blues Singles Chart 2018-05-05 #20: no duration in book (Brackets)
+note: Rhythm And Blues Singles Chart 2018-05-12 #31: no duration in book (Kevin's Heart)
+note: Rhythm And Blues Singles Chart 2018-05-19 #32: no duration in book (Kevin's Heart)
+note: Rhythm And Blues Singles Chart 2018-05-26 #36: no duration in book (Kevin's Heart)
+note: Rhythm And Blues Singles Chart 2018-06-02 #48: no duration in book (Kevin's Heart)
+note: Rhythm And Blues Singles Chart: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Adult Contemporary: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Hot Rap Singles 2018-05-05 #5: no duration in book (Kevin's Heart)
+note: Hot Rap Singles 2018-05-05 #16: no duration in book (Brackets)
+note: Hot Rap Singles 2018-05-12 #22: no duration in book (Kevin's Heart)
+note: Hot Rap Singles 2018-05-19 #24: no duration in book (Kevin's Heart)
+note: Hot Rap Singles: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Adult Pop Songs 2018-12-08 #40: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2018-12-08 #40: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2018-12-15 #38: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2018-12-15 #38: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2018-12-22 #37: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2018-12-22 #37: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2018-12-29 #31: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2018-12-29 #31: no duration in book (You're Somebody Else)
+note: Adult Pop Songs: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Adult Pop Songs - Recurrent: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Digital Song Sales 2018-10-13 #44: wrapped line joined: 'Jam DL: USUM71815323'
+note: Digital Song Sales: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Hot Rock Songs 2018-08-25 #49: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-08-25 #49: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-09-01 #36: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-09-01 #36: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-09-08 #35: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-09-08 #35: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-09-15 #36: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-09-15 #36: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-09-22 #32: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-09-22 #32: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-09-29 #28: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-09-29 #28: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-10-06 #21: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-10-06 #21: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-10-13 #18: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-10-13 #18: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-10-20 #26: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-10-20 #26: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-10-27 #15: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-10-27 #15: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-11-03 #19: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-11-03 #19: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-11-10 #19: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-11-10 #19: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-11-17 #26: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-11-17 #26: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-11-24 #24: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-11-24 #24: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-12-01 #22: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-12-01 #22: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-12-08 #18: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-12-08 #18: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-12-15 #16: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-12-15 #16: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-12-22 #12: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-12-22 #12: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2018-12-29 #10: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2018-12-29 #10: no duration in book (You're Somebody Else)
+note: Hot Rock Songs: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Mainstream Rock Tracks: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Modern Rock Tracks 2018-06-09 #40: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-06-09 #40: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-06-23 #39: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-06-23 #39: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-06-30 #36: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-06-30 #36: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-07-07 #31: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-07-07 #31: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-07-14 #28: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-07-14 #28: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-07-21 #28: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-07-21 #28: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-07-28 #30: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-07-28 #30: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-08-04 #27: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-08-04 #27: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-08-11 #27: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-08-11 #27: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-08-18 #27: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-08-18 #27: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-08-25 #26: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-08-25 #26: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-09-01 #25: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-09-01 #25: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-09-08 #22: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-09-08 #22: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-09-15 #23: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-09-15 #23: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-09-22 #22: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-09-22 #22: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-09-29 #17: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-09-29 #17: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-10-06 #16: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-10-06 #16: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-10-13 #14: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-10-13 #14: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-10-20 #12: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-10-20 #12: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-10-27 #11: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-10-27 #11: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-11-03 #10: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-11-03 #10: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-11-10 #10: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-11-10 #10: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-11-17 #10: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-11-17 #10: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-11-24 #10: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-11-24 #10: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-12-01 #9: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-12-01 #9: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-12-08 #8: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-12-08 #8: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-12-15 #7: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-12-15 #7: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-12-22 #5: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-12-22 #5: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-12-29 #5: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2018-12-29 #5: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Hot 100 Recurrent Singles: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Adult Contemporary Recurrents: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Country Airplay: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Disco Singles 2018-01-03 #41: no format in book (I Don't Know)
+note: Disco Singles 2018-01-03 #41: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-01-06 #33: no format in book (I Don't Know)
+note: Disco Singles 2018-01-06 #33: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-01-13 #28: no format in book (I Don't Know)
+note: Disco Singles 2018-01-13 #28: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-01-20 #19: no format in book (I Don't Know)
+note: Disco Singles 2018-01-20 #19: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-01-27 #14: no format in book (I Don't Know)
+note: Disco Singles 2018-01-27 #14: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-02-03 #10: no format in book (I Don't Know)
+note: Disco Singles 2018-02-03 #10: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-02-10 #5: no format in book (I Don't Know)
+note: Disco Singles 2018-02-10 #5: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-02-17 #4: no format in book (I Don't Know)
+note: Disco Singles 2018-02-17 #4: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-02-24 #4: no format in book (I Don't Know)
+note: Disco Singles 2018-02-24 #4: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-03-03 #14: no format in book (I Don't Know)
+note: Disco Singles 2018-03-03 #14: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-03-10 #20: no format in book (I Don't Know)
+note: Disco Singles 2018-03-10 #20: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-03-17 #20: no format in book (I Don't Know)
+note: Disco Singles 2018-03-17 #20: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-03-24 #37: no format in book (I Don't Know)
+note: Disco Singles 2018-03-24 #37: no catalogue_number in book (I Don't Know)
+note: Disco Singles 2018-09-08 #54: no format in book (Dopamine Machine)
+note: Disco Singles 2018-09-08 #54: no catalogue_number in book (Dopamine Machine)
+note: Disco Singles 2018-09-22 #52: no duration in book (Hydrolove)
+note: Disco Singles 2018-09-22 #52: no format in book (Hydrolove)
+note: Disco Singles 2018-09-22 #52: no catalogue_number in book (Hydrolove)
+note: Disco Singles 2018-10-13 #43: no duration in book (Hydrolove)
+note: Disco Singles 2018-10-13 #43: no format in book (Hydrolove)
+note: Disco Singles 2018-10-13 #43: no catalogue_number in book (Hydrolove)
+note: Disco Singles 2018-10-20 #39: no duration in book (Hydrolove)
+note: Disco Singles 2018-10-20 #39: no format in book (Hydrolove)
+note: Disco Singles 2018-10-20 #39: no catalogue_number in book (Hydrolove)
+note: Disco Singles 2018-10-27 #31: no duration in book (Hydrolove)
+note: Disco Singles 2018-10-27 #31: no format in book (Hydrolove)
+note: Disco Singles 2018-10-27 #31: no catalogue_number in book (Hydrolove)
+note: Disco Singles 2018-11-03 #30: no duration in book (Hydrolove)
+note: Disco Singles 2018-11-03 #30: no format in book (Hydrolove)
+note: Disco Singles 2018-11-03 #30: no catalogue_number in book (Hydrolove)
+note: Disco Singles 2018-11-10 #35: no duration in book (Hydrolove)
+note: Disco Singles 2018-11-10 #35: no format in book (Hydrolove)
+note: Disco Singles 2018-11-10 #35: no catalogue_number in book (Hydrolove)
+note: Disco Singles 2018-11-17 #35: no duration in book (Hydrolove)
+note: Disco Singles 2018-11-17 #35: no format in book (Hydrolove)
+note: Disco Singles 2018-11-17 #35: no catalogue_number in book (Hydrolove)
+note: Disco Singles 2018-11-17 #52: no format in book (Love Sensation)
+note: Disco Singles 2018-11-17 #52: no catalogue_number in book (Love Sensation)
+note: Disco Singles 2018-11-24 #33: no format in book (Love Sensation)
+note: Disco Singles 2018-11-24 #33: no catalogue_number in book (Love Sensation)
+note: Disco Singles 2018-11-24 #38: no duration in book (Hydrolove)
+note: Disco Singles 2018-11-24 #38: no format in book (Hydrolove)
+note: Disco Singles 2018-11-24 #38: no catalogue_number in book (Hydrolove)
+note: Disco Singles 2018-12-01 #22: no format in book (Love Sensation)
+note: Disco Singles 2018-12-01 #22: no catalogue_number in book (Love Sensation)
+note: Disco Singles 2018-12-01 #49: no duration in book (Hydrolove)
+note: Disco Singles 2018-12-01 #49: no format in book (Hydrolove)
+note: Disco Singles 2018-12-01 #49: no catalogue_number in book (Hydrolove)
+note: Disco Singles 2018-12-08 #17: no format in book (Love Sensation)
+note: Disco Singles 2018-12-08 #17: no catalogue_number in book (Love Sensation)
+note: Disco Singles 2018-12-15 #12: no format in book (Love Sensation)
+note: Disco Singles 2018-12-15 #12: no catalogue_number in book (Love Sensation)
+note: Disco Singles 2018-12-22 #7: no format in book (Love Sensation)
+note: Disco Singles 2018-12-22 #7: no catalogue_number in book (Love Sensation)
+note: Disco Singles 2018-12-29 #4: no format in book (Love Sensation)
+note: Disco Singles 2018-12-29 #4: no catalogue_number in book (Love Sensation)
+note: Disco Singles: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Holiday Digital Song Sales 2018-10-20 #14: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2018-10-27 #20: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2018-11-03 #27: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2018-12-01 #20: odd duration as printed: '34:6' (The Thanksgiving Song)
+note: Holiday Digital Song Sales: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Holiday Digital Song Sales: 287-day gap between charts 2018-01-06 and 2018-10-20
+note: On Demand Streaming 2018-05-05 #2: no duration in book (Kevin's Heart)
+note: On Demand Streaming 2018-05-05 #9: no duration in book (Brackets)
+note: On Demand Streaming 2018-05-12 #21: no duration in book (Kevin's Heart)
+note: On Demand Streaming 2018-05-12 #44: no duration in book (Brackets)
+note: On Demand Streaming 2018-05-19 #26: no duration in book (Kevin's Heart)
+note: On Demand Streaming 2018-05-26 #28: no duration in book (Kevin's Heart)
+note: On Demand Streaming 2018-06-02 #41: no duration in book (Kevin's Heart)
+note: On Demand Streaming: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Pop Digital Sales: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Streaming Songs 2018-05-05 #3: no duration in book (Kevin's Heart)
+note: Streaming Songs 2018-05-05 #17: no duration in book (Brackets)
+note: Streaming Songs 2018-05-12 #27: no duration in book (Kevin's Heart)
+note: Streaming Songs 2018-05-19 #36: no duration in book (Kevin's Heart)
+note: Streaming Songs 2018-05-26 #46: no duration in book (Kevin's Heart)
+note: Streaming Songs: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Country Digital Sales: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Country Streaming Songs: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: R&B Digital Song Sales: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: R&B Streaming Songs: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: R&B Hip-Hop Digital Sales 2018-10-13 #17: wrapped line joined: 'Jam DL: USUM71815323'
+note: R&B Hip-Hop Digital Sales 2018-05-05 #23: no duration in book (Kevin's Heart)
+note: R&B Hip-Hop Digital Sales 2018-08-11 #19: no format in book (Hot Summer)
+note: R&B Hip-Hop Digital Sales 2018-08-11 #19: no catalogue_number in book (Hot Summer)
+note: R&B Hip-Hop Digital Sales: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: R&B Hip-Hop Streaming Songs 2018-05-05 #3: no duration in book (Kevin's Heart)
+note: R&B Hip-Hop Streaming Songs 2018-05-05 #16: no duration in book (Brackets)
+note: R&B Hip-Hop Streaming Songs 2018-05-12 #23: no duration in book (Kevin's Heart)
+note: R&B Hip-Hop Streaming Songs: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Hot R&B Songs: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Rap Digital Sales 2018-10-13 #16: wrapped line joined: 'Jam DL: USUM71815323'
+note: Rap Digital Sales 2018-05-05 #17: no duration in book (Kevin's Heart)
+note: Rap Digital Sales 2018-08-11 #15: no format in book (Hot Summer)
+note: Rap Digital Sales 2018-08-11 #15: no catalogue_number in book (Hot Summer)
+note: Rap Digital Sales: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Rap Streaming Songs 2018-05-05 #3: no duration in book (Kevin's Heart)
+note: Rap Streaming Songs 2018-05-05 #14: no duration in book (Brackets)
+note: Rap Streaming Songs 2018-05-12 #19: no duration in book (Kevin's Heart)
+note: Rap Streaming Songs 2018-05-19 #22: no duration in book (Kevin's Heart)
+note: Rap Streaming Songs: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Rock Digital Sales 2018-10-13 #24: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2018-10-13 #24: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2018-10-27 #23: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2018-10-27 #23: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2018-11-10 #25: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2018-11-10 #25: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2018-12-08 #25: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2018-12-08 #25: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2018-12-15 #23: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2018-12-15 #23: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2018-12-22 #22: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2018-12-22 #22: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2018-12-29 #16: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2018-12-29 #16: no duration in book (You're Somebody Else)
+note: Rock Digital Sales: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Rock Streaming Songs: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Hard Rock Digital Song Sales: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Alternative Digital Song Sales 2018-09-22 #22: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-09-22 #22: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-09-29 #23: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-09-29 #23: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-10-06 #21: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-10-06 #21: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-10-13 #20: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-10-13 #20: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-10-20 #22: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-10-20 #22: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-10-27 #18: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-10-27 #18: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-11-03 #18: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-11-03 #18: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-11-10 #17: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-11-10 #17: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-11-17 #18: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-11-17 #18: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-11-24 #16: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-11-24 #16: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-12-01 #14: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-12-01 #14: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-12-08 #12: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-12-08 #12: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-12-15 #11: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-12-15 #11: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-12-22 #11: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-12-22 #11: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-12-29 #9: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2018-12-29 #9: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Country Recurrent Airplay: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Radio Songs: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Radio Songs Recurrents: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: R&B Airplay: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: R&B Radio Monitor Recurrent: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Top 40 Radio - Pop: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Top 40 Radio - Rhythmic: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Adult R&B Airplay: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Mainstream R&B Hip-Hop Airplay: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Mainstream Top 40 Recurrents: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Rap Airplay: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Hot Dance Airplay: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Rock Airplay 2018-07-07 #47: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-07-07 #47: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-07-14 #42: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-07-14 #42: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-07-28 #40: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-07-28 #40: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-08-04 #45: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-08-04 #45: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-08-11 #38: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-08-11 #38: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-08-18 #42: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-08-18 #42: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-08-25 #39: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-08-25 #39: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-09-01 #29: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-09-01 #29: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-09-08 #25: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-09-08 #25: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-09-15 #26: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-09-15 #26: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-09-22 #23: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-09-22 #23: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-09-29 #21: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-09-29 #21: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-10-06 #18: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-10-06 #18: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-10-13 #17: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-10-13 #17: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-10-20 #17: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-10-20 #17: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-10-27 #15: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-10-27 #15: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-11-03 #15: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-11-03 #15: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-11-10 #12: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-11-10 #12: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-11-17 #13: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-11-17 #13: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-11-24 #11: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-11-24 #11: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-12-01 #11: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-12-01 #11: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-12-08 #8: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-12-08 #8: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-12-15 #7: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-12-15 #7: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-12-22 #7: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-12-22 #7: no duration in book (You're Somebody Else)
+note: Rock Airplay 2018-12-29 #5: no label in book (You're Somebody Else)
+note: Rock Airplay 2018-12-29 #5: no duration in book (You're Somebody Else)
+note: Rock Airplay: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Bubbling Under The Hot 100 2018-10-13 #101: wrapped line joined: 'Visionary/Def Jam DL: USUM71815323'
+note: Bubbling Under The Hot 100 2018-01-03: chart starts at #101
+note: Bubbling Under The Hot 100 2018-01-06: chart starts at #101
+note: Bubbling Under The Hot 100 2018-01-13: chart starts at #101
+note: Bubbling Under The Hot 100 2018-01-20: chart starts at #101
+note: Bubbling Under The Hot 100 2018-01-27: chart starts at #101
+note: Bubbling Under The Hot 100 2018-02-03: chart starts at #101
+note: Bubbling Under The Hot 100 2018-02-10: chart starts at #101
+note: Bubbling Under The Hot 100 2018-02-17: chart starts at #101
+note: Bubbling Under The Hot 100 2018-02-24: chart starts at #101
+note: Bubbling Under The Hot 100 2018-03-03: chart starts at #101
+note: Bubbling Under The Hot 100 2018-03-10: chart starts at #101
+note: Bubbling Under The Hot 100 2018-03-17: chart starts at #101
+note: Bubbling Under The Hot 100 2018-03-24: chart starts at #101
+note: Bubbling Under The Hot 100 2018-03-31: chart starts at #101
+note: Bubbling Under The Hot 100 2018-04-07: chart starts at #101
+note: Bubbling Under The Hot 100 2018-04-14: chart starts at #101
+note: Bubbling Under The Hot 100 2018-04-21: chart starts at #101
+note: Bubbling Under The Hot 100 2018-04-28: chart starts at #101
+note: Bubbling Under The Hot 100 2018-05-05: chart starts at #101
+note: Bubbling Under The Hot 100 2018-05-12: chart starts at #101
+note: Bubbling Under The Hot 100 2018-05-19: chart starts at #101
+note: Bubbling Under The Hot 100 2018-05-26: chart starts at #101
+note: Bubbling Under The Hot 100 2018-06-02: chart starts at #101
+note: Bubbling Under The Hot 100 2018-06-09: chart starts at #101
+note: Bubbling Under The Hot 100 2018-06-16: chart starts at #101
+note: Bubbling Under The Hot 100 2018-06-23: chart starts at #101
+note: Bubbling Under The Hot 100 2018-06-30: chart starts at #101
+note: Bubbling Under The Hot 100 2018-07-07: chart starts at #101
+note: Bubbling Under The Hot 100 2018-07-14: chart starts at #101
+note: Bubbling Under The Hot 100 2018-07-21: chart starts at #101
+note: Bubbling Under The Hot 100 2018-07-28: chart starts at #101
+note: Bubbling Under The Hot 100 2018-08-04: chart starts at #101
+note: Bubbling Under The Hot 100 2018-08-11: chart starts at #101
+note: Bubbling Under The Hot 100 2018-08-11 #111: no format in book (Hot Summer)
+note: Bubbling Under The Hot 100 2018-08-11 #111: no catalogue_number in book (Hot Summer)
+note: Bubbling Under The Hot 100 2018-08-18: chart starts at #101
+note: Bubbling Under The Hot 100 2018-08-25: chart starts at #101
+note: Bubbling Under The Hot 100 2018-09-01: chart starts at #101
+note: Bubbling Under The Hot 100 2018-09-08: chart starts at #101
+note: Bubbling Under The Hot 100 2018-09-15: chart starts at #101
+note: Bubbling Under The Hot 100 2018-09-22: chart starts at #101
+note: Bubbling Under The Hot 100 2018-09-29: chart starts at #101
+note: Bubbling Under The Hot 100 2018-10-06: chart starts at #101
+note: Bubbling Under The Hot 100 2018-10-13: chart starts at #101
+note: Bubbling Under The Hot 100 2018-10-20: chart starts at #101
+note: Bubbling Under The Hot 100 2018-10-27: chart starts at #101
+note: Bubbling Under The Hot 100 2018-11-03: chart starts at #101
+note: Bubbling Under The Hot 100 2018-11-10: chart starts at #101
+note: Bubbling Under The Hot 100 2018-11-17: chart starts at #101
+note: Bubbling Under The Hot 100 2018-11-24: chart starts at #101
+note: Bubbling Under The Hot 100 2018-12-01: chart starts at #101
+note: Bubbling Under The Hot 100 2018-12-08: chart starts at #101
+note: Bubbling Under The Hot 100 2018-12-15: chart starts at #101
+note: Bubbling Under The Hot 100 2018-12-22: chart starts at #101
+note: Bubbling Under The Hot 100 2018-12-29: chart starts at #101
+note: Bubbling Under The Hot 100: 3-day gap between charts 2018-01-03 and 2018-01-06
+note: Bubbling Under The R&B Singles Chart 2018-10-13 #102: wrapped line joined: 'Jam DL: USUM71815323'
+note: Bubbling Under The R&B Singles Chart 2018-01-03: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-01-06: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-01-13: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-01-20: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-01-27: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-02-03: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-02-10: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-02-17: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-02-24: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-03-03: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-03-10: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-03-17: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-03-24: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-03-31: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-04-07: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-04-14: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-04-21: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-04-28: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-05-05: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-05-12: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-05-19: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-05-26: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-06-02: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-06-09: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-06-16: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-06-23: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-06-30: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-07-07: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-07-14: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-07-21: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-07-28: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-08-04: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-08-11: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-08-11 #101: no format in book (Hot Summer)
+note: Bubbling Under The R&B Singles Chart 2018-08-11 #101: no catalogue_number in book (Hot Summer)
+note: Bubbling Under The R&B Singles Chart 2018-08-18: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-08-25: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-09-01: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-09-08: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-09-15: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-09-22: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-09-29: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-10-06: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-10-13: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-10-20: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-10-27: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-11-03: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-11-10: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-11-17: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-11-24: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-12-01: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-12-08: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-12-15: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-12-22: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2018-12-29: chart starts at #101
+note: Bubbling Under The R&B Singles Chart: 3-day gap between charts 2018-01-03 and 2018-01-06

@@ -37,7 +37,6 @@ function detail(label: string, value: string | undefined) {
 }
 
 export function PublishedChartsWorkspace() {
-  const [folder, setFolder] = useState(() => savedValue("publishedCharts.folder", "Charts"));
   const [catalog, setCatalog] = useState<PublishedChartCatalog | null>(null);
   const [chart, setChart] = useState(() => savedValue("publishedCharts.chart", "Billboard Hot 100"));
   const [fromYear, setFromYear] = useState(() => Number(savedValue("publishedCharts.fromYear", "0")));
@@ -58,20 +57,17 @@ export function PublishedChartsWorkspace() {
   const [importError, setImportError] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const autoImportAttempted = useRef("");
+  const autoImportAttempted = useRef(false);
 
   const refreshCatalog = useCallback(async () => {
     try {
-      const result = await getPublishedChartCatalog(folder);
+      const result = await getPublishedChartCatalog();
       setCatalog(result);
       setError("");
     } catch (cause) { setError(String(cause)); }
-  }, [folder]);
+  }, []);
 
   useEffect(() => { void refreshCatalog(); }, [refreshCatalog]);
-  useEffect(() => {
-    try { window.localStorage.setItem("publishedCharts.folder", folder); } catch { /* unavailable */ }
-  }, [folder]);
   useEffect(() => {
     try {
       window.localStorage.setItem("publishedCharts.chart", chart);
@@ -104,7 +100,7 @@ export function PublishedChartsWorkspace() {
   }, [series, fromYear, toYear]);
 
   useEffect(() => {
-    if (!series?.years.includes(fromYear) || !catalog?.importedYears) { setFromWeeks([]); return; }
+    if (!series?.years.includes(fromYear) || !catalog?.importedYears || catalog.needsImport) { setFromWeeks([]); return; }
     let active = true;
     void listPublishedChartWeeks(chart, fromYear)
       .then((result) => {
@@ -114,10 +110,10 @@ export function PublishedChartsWorkspace() {
       })
       .catch((cause) => { if (active) setError(String(cause)); });
     return () => { active = false; };
-  }, [chart, fromYear, series, catalog?.importedYears]);
+  }, [chart, fromYear, series, catalog?.importedYears, catalog?.needsImport]);
 
   useEffect(() => {
-    if (!series?.years.includes(toYear) || !catalog?.importedYears) { setToWeeks([]); return; }
+    if (!series?.years.includes(toYear) || !catalog?.importedYears || catalog.needsImport) { setToWeeks([]); return; }
     let active = true;
     void listPublishedChartWeeks(chart, toYear)
       .then((result) => {
@@ -127,7 +123,7 @@ export function PublishedChartsWorkspace() {
       })
       .catch((cause) => { if (active) setError(String(cause)); });
     return () => { active = false; };
-  }, [chart, toYear, series, catalog?.importedYears]);
+  }, [chart, toYear, series, catalog?.importedYears, catalog?.needsImport]);
 
   const effectiveFromWeek = fromWeeks.some((item) => item.weekEnding === fromWeek) ? fromWeek : "";
   const effectiveToWeek = toWeeks.some((item) => item.weekEnding === toWeek) ? toWeek : "";
@@ -137,7 +133,7 @@ export function PublishedChartsWorkspace() {
     ? effectiveFromWeek : "";
 
   useEffect(() => {
-    if (!series || !catalog?.importedYears || !validRange || isImporting) {
+    if (!series || !catalog?.importedYears || catalog.needsImport || !validRange || isImporting) {
       setRanking(emptyRanking);
       return;
     }
@@ -148,10 +144,10 @@ export function PublishedChartsWorkspace() {
       .catch((cause) => { if (active) setError(String(cause)); })
       .finally(() => { if (active) setIsLoading(false); });
     return () => { active = false; };
-  }, [chart, fromYear, toYear, effectiveFromWeek, effectiveToWeek, offset, series, catalog?.importedYears, validRange, isImporting]);
+  }, [chart, fromYear, toYear, effectiveFromWeek, effectiveToWeek, offset, series, catalog?.importedYears, catalog?.needsImport, validRange, isImporting]);
 
   useEffect(() => {
-    if (!exactWeek || !catalog?.importedYears || isImporting) {
+    if (!exactWeek || !catalog?.importedYears || catalog.needsImport || isImporting) {
       setEntries(emptyEntries);
       setSelected(null);
       return;
@@ -162,7 +158,7 @@ export function PublishedChartsWorkspace() {
       .then((result) => { if (active) setEntries(result); })
       .catch((cause) => { if (active) setError(String(cause)); });
     return () => { active = false; };
-  }, [chart, exactWeek, entryOffset, catalog?.importedYears, isImporting]);
+  }, [chart, exactWeek, entryOffset, catalog?.importedYears, catalog?.needsImport, isImporting]);
 
   async function runImport() {
     if (isImporting) return;
@@ -173,8 +169,8 @@ export function PublishedChartsWorkspace() {
     let unsubscribe: (() => void) | undefined;
     try {
       unsubscribe = await subscribePublishedChartsImportProgress(setProgress);
-      const result = await importPublishedCharts(folder);
-      setImportMessage(`Imported ${formatCount(result.rowsImported)} rows from ${result.yearsImported} years across ${result.chartSeries} charts.`);
+      const result = await importPublishedCharts();
+      setImportMessage(`${formatCount(result.rowsImported)} US chart entries ready across ${result.yearsImported} years and ${result.chartSeries} charts.`);
     } catch (cause) { setImportError(String(cause)); }
     finally {
       unsubscribe?.();
@@ -184,11 +180,11 @@ export function PublishedChartsWorkspace() {
   }
 
   useEffect(() => {
-    if (catalog?.needsImport && autoImportAttempted.current !== folder) {
-      autoImportAttempted.current = folder;
+    if (catalog?.needsImport && !autoImportAttempted.current) {
+      autoImportAttempted.current = true;
       void runImport();
     }
-  }, [catalog, folder]);
+  }, [catalog]);
 
   const pageCount = Math.max(1, Math.ceil(ranking.totalArtists / pageSize));
   const entryPageCount = Math.max(1, Math.ceil(entries.totalRows / pageSize));
@@ -197,7 +193,7 @@ export function PublishedChartsWorkspace() {
   return <section className="workspace published-charts-workspace">
     <header className="topbar">
       <div><h1>Published Charts</h1><p>US chart history, ranked by published artist credit.</p></div>
-      <button className="icon-button" type="button" aria-label="Refresh published charts" onClick={() => { setError(""); void refreshCatalog(); }}><RotateCcw size={18} /></button>
+      <button className="icon-button" type="button" aria-label="Refresh published charts" onClick={() => { autoImportAttempted.current = false; setError(""); void refreshCatalog(); }}><RotateCcw size={18} /></button>
     </header>
 
     {catalog?.series.length ? <section className="published-picker" aria-label="Choose published chart range">
@@ -221,36 +217,27 @@ export function PublishedChartsWorkspace() {
       </select></label>
     </section> : null}
 
-    <details className="published-import-panel">
-      <summary>Chart source · {catalog?.inventoryYears ?? 0} years available · {catalog?.importedYears ?? 0} imported</summary>
-      <p>Chart choices come from chart_inventory.csv. The local US weekly rows import automatically when the folder is found.</p>
-      <div className="published-import-controls">
-        <label><span>Charts folder</span><input value={folder} onChange={(event) => { setFolder(event.target.value); setCatalog(null); autoImportAttempted.current = ""; }} disabled={isImporting} /></label>
-        <button className="secondary-button" type="button" onClick={() => void runImport()} disabled={isImporting || !folder.trim()}>{isImporting ? "Importing…" : "Reimport US charts"}</button>
-      </div>
-      {progress ? <p className="published-progress" role="status">Imported {progress.completedYears} of {progress.totalYears} years · through {progress.currentYear} · {formatCount(progress.importedRows)} rows</p> : null}
-      {importMessage ? <p className="published-success" role="status">{importMessage}</p> : null}
-    </details>
-    {isImporting ? <p className="published-progress" role="status">Importing US charts… {progress ? `${progress.completedYears} of ${progress.totalYears} years` : "Starting"}</p> : null}
+    {isImporting ? <p className="published-progress" role="status">Preparing bundled US charts… {progress ? `${progress.completedYears} of ${progress.totalYears} years · through ${progress.currentYear} · ${formatCount(progress.importedRows)} entries` : "Starting"}</p>
+      : catalog && !catalog.needsImport ? <p className="published-success" role="status">{importMessage || `${catalog.series.length} charts · ${catalog.inventoryYears} years ready`}</p> : null}
     {importError ? <p className="published-error" role="alert">{importError}</p> : null}
     {error ? <p className="published-error" role="alert">{error}</p> : null}
 
     {series ? <section className="published-chart-panel" aria-label="Published artist ranking">
       <div className="published-chart-heading"><div><h2>{chart}</h2><p>{dateLabel}{effectiveFromWeek || effectiveToWeek ? ` · ${effectiveFromWeek ? formatWeek(effectiveFromWeek) : "first week"} to ${effectiveToWeek ? formatWeek(effectiveToWeek) : "last week"}` : " · all weeks"}</p></div>
-        {catalog ? <span className="published-count">{formatCount(ranking.totalArtists)} artists · {formatCount(ranking.chartWeeks)} chart weeks · {formatCount(ranking.totalEntries)} entries</span> : null}
+        {catalog && !catalog.needsImport && !isImporting ? <span className="published-count">{formatCount(ranking.totalArtists)} artists · {formatCount(ranking.chartWeeks)} chart weeks · {formatCount(ranking.totalEntries)} entries</span> : null}
       </div>
       <p className="published-source-note">Artists are credited exactly as printed. Each distinct week at position 1 counts once per credit; ties use chart weeks, then appearances, then name.</p>
       {!validRange ? <p className="published-error">Choose a last week on or after the first week.</p> : null}
-      {validRange && catalog?.importedYears ? <div className="published-table-wrap">
+      {validRange && catalog?.importedYears && !catalog.needsImport && !isImporting ? <div className="published-table-wrap">
         <table className="published-chart-table published-artist-table"><thead><tr><th scope="col">#</th><th scope="col">Artist credit</th><th scope="col">#1 weeks</th><th scope="col">Chart weeks</th><th scope="col">Entries</th><th scope="col">Best</th></tr></thead>
           <tbody>{ranking.artists.map((item) => <tr key={item.artist}><td className="published-rank">{item.rank}</td><td>{item.artist}</td><td>{item.numberOneWeeks}</td><td>{item.chartWeeks}</td><td>{item.appearances}</td><td>{item.bestPosition}</td></tr>)}</tbody>
         </table>
         {isLoading ? <p className="published-table-message">Calculating artist ranks…</p> : !ranking.artists.length ? <p className="published-table-message">No chart entries in this range.</p> : null}
         {ranking.totalArtists > pageSize ? <div className="published-pager"><button className="secondary-button" type="button" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Previous</button><span>Page {Math.floor(offset / pageSize) + 1} of {pageCount}</span><button className="secondary-button" type="button" disabled={Math.floor(offset / pageSize) + 1 >= pageCount} onClick={() => setOffset(offset + pageSize)}>Next</button></div> : null}
-      </div> : <p className="published-table-message">{isImporting ? "Importing the weekly chart data…" : "Set a Charts folder containing chart_inventory.csv to load the weekly rows."}</p>}
-    </section> : <section className="published-empty"><h2>Chart inventory unavailable</h2><p>Enter the local Charts folder under Chart source. All US chart series will then appear here.</p></section>}
+      </div> : <p className="published-table-message">{isImporting || catalog?.needsImport ? "Preparing the bundled weekly chart data…" : "Bundled chart data is unavailable in this installation."}</p>}
+    </section> : <section className="published-empty"><h2>Bundled chart data unavailable</h2><p>The US chart collection was not found in this installation. Refresh after updating the app.</p></section>}
 
-    {exactWeek && catalog?.importedYears ? <section className="published-chart-panel" aria-label="Weekly published chart">
+    {exactWeek && catalog?.importedYears && !catalog.needsImport && !isImporting ? <section className="published-chart-panel" aria-label="Weekly published chart">
       <div className="published-chart-heading"><div><h2>Published positions</h2><p>Week ending {formatWeek(exactWeek)} · {formatCount(entries.totalRows)} entries</p></div></div>
       <div className="published-chart-layout"><div className="published-table-wrap">
         <table className="published-chart-table"><thead><tr><th scope="col">#</th><th scope="col">Song / artist</th><th scope="col">Last</th><th scope="col">Weeks</th><th scope="col">Peak*</th></tr></thead>

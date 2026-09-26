@@ -1743,13 +1743,8 @@ async fn import_billboard_singles(
 
 #[cfg(not(test))]
 #[tauri::command]
-async fn import_published_charts(
-    app: AppHandle,
-    source_path: String,
-) -> Result<PublishedChartsImportSummary, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        published_charts::import_for_app(&app, source_path)
-    })
+async fn import_published_charts(app: AppHandle) -> Result<PublishedChartsImportSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || published_charts::import_for_app(&app))
     .await
     .map_err(|error| format!("Published Charts import task failed: {error}"))?
     .map_err(|error| format!("{error:#}"))
@@ -1757,11 +1752,8 @@ async fn import_published_charts(
 
 #[cfg(not(test))]
 #[tauri::command]
-async fn get_published_chart_catalog(
-    app: AppHandle,
-    source_path: String,
-) -> Result<PublishedChartCatalog, String> {
-    tauri::async_runtime::spawn_blocking(move || published_charts::catalog_for_app(&app, &source_path))
+async fn get_published_chart_catalog(app: AppHandle) -> Result<PublishedChartCatalog, String> {
+    tauri::async_runtime::spawn_blocking(move || published_charts::catalog_for_app(&app))
         .await
         .map_err(|error| format!("Published Charts catalog task failed: {error}"))?
         .map_err(|error| error.to_string())

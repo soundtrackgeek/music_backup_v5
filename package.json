@@ -1,7 +1,7 @@
 {
   "name": "music-library-app",
   "private": true,
-  "version": "0.152.2",
+  "version": "0.153.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -11,8 +11,9 @@
     "test:database-sync": "python -B -m unittest discover -s scripts -p test_sync_library_from_main_pc.py -v",
     "build": "tsc && vite build",
     "check:version": "node scripts/check-version.mjs",
+    "check:charts-bundle": "python -B scripts/build_published_charts_bundle.py --check",
     "security:check": "node scripts/security-check.mjs",
-    "check": "npm run check:version && npm run test:release && npm run test:run && npm run test:tools && npm run test:database-sync && npm run security:check && npm run build && cd src-tauri && cargo test -- --test-threads=1 && cargo check",
+    "check": "npm run check:version && npm run check:charts-bundle && npm run test:release && npm run test:run && npm run test:tools && npm run test:database-sync && npm run security:check && npm run build && cd src-tauri && cargo test -- --test-threads=1 && cargo check",
     "preview": "vite preview --host 127.0.0.1",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

@@ -1,0 +1,150 @@
+1975_us_singles: 18912 rows, 0 problems, 148 notes
+
+note: Adult Contemporary 1975-01-04 #29: no duration in book (You Foxy Thing, I Love You)
+note: Adult Contemporary 1975-01-11 #35: no duration in book (You Foxy Thing, I Love You)
+note: Adult Contemporary 1975-05-03 #50: no duration in book (Smile On Me)
+note: Adult Contemporary 1975-05-10 #45: no duration in book (Smile On Me)
+note: Adult Contemporary 1975-05-17 #41: no duration in book (Smile On Me)
+note: Adult Contemporary 1975-05-24 #39: no duration in book (Smile On Me)
+note: Adult Contemporary 1975-05-31 #37: no duration in book (Smile On Me)
+note: Adult Contemporary 1975-06-07 #31: no duration in book (Smile On Me)
+note: Adult Contemporary 1975-06-14 #30: no duration in book (Smile On Me)
+note: Adult Contemporary 1975-06-21 #28: no duration in book (Smile On Me)
+note: Adult Contemporary 1975-06-28 #34: no duration in book (Smile On Me)
+note: Adult Contemporary 1975-07-05 #42: no duration in book (Smile On Me)
+note: Disco Singles 1975-01-04 #3: no format in book (E-Man Boogie)
+note: Disco Singles 1975-01-04 #3: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-01-04 #10: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-01-04 #10: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-01-11: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 14, 15]
+note: Disco Singles 1975-01-11 #3: no format in book (E-Man Boogie)
+note: Disco Singles 1975-01-11 #3: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-01-11 #6: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-01-11 #9: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-01-11 #9: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-01-11 #13: no format in book (That's What I Want For You Baby)
+note: Disco Singles 1975-01-11 #13: no catalogue_number in book (That's What I Want For You Baby)
+note: Disco Singles 1975-01-11 #14: no format in book (African Symphony)
+note: Disco Singles 1975-01-11 #14: no catalogue_number in book (African Symphony)
+note: Disco Singles 1975-01-18: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 14, 15]
+note: Disco Singles 1975-01-18 #3: no format in book (E-Man Boogie)
+note: Disco Singles 1975-01-18 #3: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-01-18 #4: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-01-18 #9: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-01-18 #9: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-01-25 #3: no format in book (E-Man Boogie)
+note: Disco Singles 1975-01-25 #3: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-01-25 #6: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-01-25 #9: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-01-25 #9: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-02-01 #4: no format in book (E-Man Boogie)
+note: Disco Singles 1975-02-01 #4: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-02-01 #5: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-02-01 #10: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-02-01 #10: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-02-08 #4: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-02-08 #6: no format in book (E-Man Boogie)
+note: Disco Singles 1975-02-08 #6: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-02-08 #10: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-02-08 #10: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-02-15 #3: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-02-15 #4: no format in book (E-Man Boogie)
+note: Disco Singles 1975-02-15 #4: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-02-15 #10: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-02-15 #10: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-02-22 #2: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-02-22 #6: no format in book (E-Man Boogie)
+note: Disco Singles 1975-02-22 #6: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-02-22 #13: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-02-22 #13: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-02-22 #15: no format in book (And You Call That Love)
+note: Disco Singles 1975-02-22 #15: no catalogue_number in book (And You Call That Love)
+note: Disco Singles 1975-03-01 #3: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-03-01 #6: no format in book (E-Man Boogie)
+note: Disco Singles 1975-03-01 #6: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-03-01 #11: no format in book (Protect Our Love / Pain Reliever)
+note: Disco Singles 1975-03-01 #11: no catalogue_number in book (Protect Our Love / Pain Reliever)
+note: Disco Singles 1975-03-01 #14: no format in book (And You Call That Love)
+note: Disco Singles 1975-03-01 #14: no catalogue_number in book (And You Call That Love)
+note: Disco Singles 1975-03-01 #15: no format in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-03-01 #15: no catalogue_number in book (Lady Marmalade / What Can I Do For You?)
+note: Disco Singles 1975-03-08 #3: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-03-08 #6: no format in book (E-Man Boogie)
+note: Disco Singles 1975-03-08 #6: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-03-08 #9: no format in book (Protect Our Love / Pain Reliever)
+note: Disco Singles 1975-03-08 #9: no catalogue_number in book (Protect Our Love / Pain Reliever)
+note: Disco Singles 1975-03-08 #13: no format in book (And You Call That Love)
+note: Disco Singles 1975-03-08 #13: no catalogue_number in book (And You Call That Love)
+note: Disco Singles 1975-03-15 #4: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-03-15 #7: no format in book (E-Man Boogie)
+note: Disco Singles 1975-03-15 #7: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-03-15 #8: no format in book (Protect Our Love / Pain Reliever)
+note: Disco Singles 1975-03-15 #8: no catalogue_number in book (Protect Our Love / Pain Reliever)
+note: Disco Singles 1975-03-15 #13: no format in book (And You Call That Love)
+note: Disco Singles 1975-03-15 #13: no catalogue_number in book (And You Call That Love)
+note: Disco Singles 1975-03-22 #6: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-03-22 #7: no format in book (Protect Our Love / Pain Reliever)
+note: Disco Singles 1975-03-22 #7: no catalogue_number in book (Protect Our Love / Pain Reliever)
+note: Disco Singles 1975-03-22 #11: no format in book (E-Man Boogie)
+note: Disco Singles 1975-03-22 #11: no catalogue_number in book (E-Man Boogie)
+note: Disco Singles 1975-03-22 #12: no format in book (And You Call That Love)
+note: Disco Singles 1975-03-22 #12: no catalogue_number in book (And You Call That Love)
+note: Disco Singles 1975-03-29 #6: odd duration as printed: '03358' (Never Can Say Goodbye)
+note: Disco Singles 1975-03-29 #8: no format in book (And You Call That Love)
+note: Disco Singles 1975-03-29 #8: no catalogue_number in book (And You Call That Love)
+note: Disco Singles 1975-03-29 #9: no format in book (Protect Our Love / Pain Reliever)
+note: Disco Singles 1975-03-29 #9: no catalogue_number in book (Protect Our Love / Pain Reliever)
+note: Disco Singles 1975-03-29 #14: no format in book (E-Man Boogie)
+note: Disco Singles 1975-03-29 #14: no catalogue_number in book (E-Man Boogie)
+note: Bubbling Under The Hot 100 1975-01-04: chart starts at #101
+note: Bubbling Under The Hot 100 1975-01-11: chart starts at #101
+note: Bubbling Under The Hot 100 1975-01-18: chart starts at #101
+note: Bubbling Under The Hot 100 1975-01-25: chart starts at #101
+note: Bubbling Under The Hot 100 1975-02-01: chart starts at #101
+note: Bubbling Under The Hot 100 1975-02-08: chart starts at #101
+note: Bubbling Under The Hot 100 1975-02-15: chart starts at #101
+note: Bubbling Under The Hot 100 1975-02-22: chart starts at #101
+note: Bubbling Under The Hot 100 1975-03-01: chart starts at #101
+note: Bubbling Under The Hot 100 1975-03-08: chart starts at #101
+note: Bubbling Under The Hot 100 1975-03-15: chart starts at #101
+note: Bubbling Under The Hot 100 1975-03-22: chart starts at #101
+note: Bubbling Under The Hot 100 1975-03-29: chart starts at #101
+note: Bubbling Under The Hot 100 1975-04-05: chart starts at #101
+note: Bubbling Under The Hot 100 1975-04-12: chart starts at #101
+note: Bubbling Under The Hot 100 1975-04-19: chart starts at #101
+note: Bubbling Under The Hot 100 1975-04-26: chart starts at #101
+note: Bubbling Under The Hot 100 1975-05-03: chart starts at #101
+note: Bubbling Under The Hot 100 1975-05-10: chart starts at #101
+note: Bubbling Under The Hot 100 1975-05-17: chart starts at #101
+note: Bubbling Under The Hot 100 1975-05-24: chart starts at #101
+note: Bubbling Under The Hot 100 1975-05-31: chart starts at #101
+note: Bubbling Under The Hot 100 1975-06-07: chart starts at #101
+note: Bubbling Under The Hot 100 1975-06-14: chart starts at #101
+note: Bubbling Under The Hot 100 1975-06-21: chart starts at #101
+note: Bubbling Under The Hot 100 1975-06-28: chart starts at #101
+note: Bubbling Under The Hot 100 1975-07-05: chart starts at #101
+note: Bubbling Under The Hot 100 1975-07-12: chart starts at #101
+note: Bubbling Under The Hot 100 1975-07-19: chart starts at #101
+note: Bubbling Under The Hot 100 1975-07-26: chart starts at #101
+note: Bubbling Under The Hot 100 1975-08-02: chart starts at #101
+note: Bubbling Under The Hot 100 1975-08-09: chart starts at #101
+note: Bubbling Under The Hot 100 1975-08-16: chart starts at #101
+note: Bubbling Under The Hot 100 1975-08-23: chart starts at #101
+note: Bubbling Under The Hot 100 1975-08-30: chart starts at #101
+note: Bubbling Under The Hot 100 1975-09-06: chart starts at #101
+note: Bubbling Under The Hot 100 1975-09-13: chart starts at #101
+note: Bubbling Under The Hot 100 1975-09-20: chart starts at #101
+note: Bubbling Under The Hot 100 1975-09-27: chart starts at #101
+note: Bubbling Under The Hot 100 1975-10-04: chart starts at #101
+note: Bubbling Under The Hot 100 1975-10-11: chart starts at #101
+note: Bubbling Under The Hot 100 1975-10-18: chart starts at #101
+note: Bubbling Under The Hot 100 1975-10-25: chart starts at #101
+note: Bubbling Under The Hot 100 1975-11-01: chart starts at #101
+note: Bubbling Under The Hot 100 1975-11-08: chart starts at #101
+note: Bubbling Under The Hot 100 1975-11-15: chart starts at #101
+note: Bubbling Under The Hot 100 1975-11-22: chart starts at #101
+note: Bubbling Under The Hot 100 1975-11-29: chart starts at #101
+note: Bubbling Under The Hot 100 1975-12-06: chart starts at #101
+note: Bubbling Under The Hot 100 1975-12-13: chart starts at #101
+note: Bubbling Under The Hot 100 1975-12-20: chart starts at #101
+note: Bubbling Under The Hot 100 1975-12-27: chart starts at #101

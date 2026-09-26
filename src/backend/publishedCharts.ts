@@ -82,11 +82,11 @@ export type PublishedChartsImportSummary = {
 
 let ongoingImport: Promise<PublishedChartsImportSummary> | null = null;
 
-export function getPublishedChartCatalog(sourcePath: string): Promise<PublishedChartCatalog> {
+export function getPublishedChartCatalog(): Promise<PublishedChartCatalog> {
   if (!isTauriRuntime()) {
     return Promise.resolve({ importedYears: 0, inventoryYears: 0, needsImport: false, totalRows: 0, series: [] });
   }
-  return invoke("get_published_chart_catalog", { sourcePath });
+  return invoke("get_published_chart_catalog");
 }
 
 export function getPublishedArtistRankings(
@@ -115,12 +115,12 @@ export function getPublishedChartEntries(
   return invoke("get_published_chart_entries", { chart, week, offset });
 }
 
-export function importPublishedCharts(sourcePath: string): Promise<PublishedChartsImportSummary> {
+export function importPublishedCharts(): Promise<PublishedChartsImportSummary> {
   if (!isTauriRuntime()) {
     return Promise.reject(new Error("Published Charts import is available in the desktop app."));
   }
   if (!ongoingImport) {
-    ongoingImport = invoke<PublishedChartsImportSummary>("import_published_charts", { sourcePath })
+    ongoingImport = invoke<PublishedChartsImportSummary>("import_published_charts")
       .finally(() => { ongoingImport = null; });
   }
   return ongoingImport;

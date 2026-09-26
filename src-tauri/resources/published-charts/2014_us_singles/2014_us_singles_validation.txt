@@ -1,0 +1,343 @@
+2014_us_singles: 87380 rows, 0 problems, 341 notes
+
+note: Billboard Hot 100 2014-02-15 #89: no format in book (A Man Who Was Gonna Die Young)
+note: Billboard Hot 100 2014-02-15 #89: no catalogue_number in book (A Man Who Was Gonna Die Young)
+note: Country Singles Chart 2014-01-04 #51: no duration in book (The Call)
+note: Country Singles Chart 2014-01-04 #51: no format in book (The Call)
+note: Country Singles Chart 2014-01-04 #51: no catalogue_number in book (The Call)
+note: Country Singles Chart 2014-01-11 #56: no duration in book (The Call)
+note: Country Singles Chart 2014-01-11 #56: no format in book (The Call)
+note: Country Singles Chart 2014-01-11 #56: no catalogue_number in book (The Call)
+note: Country Singles Chart 2014-01-18 #55: no duration in book (The Call)
+note: Country Singles Chart 2014-01-18 #55: no format in book (The Call)
+note: Country Singles Chart 2014-01-18 #55: no catalogue_number in book (The Call)
+note: Country Singles Chart 2014-01-25 #56: no duration in book (The Call)
+note: Country Singles Chart 2014-01-25 #56: no format in book (The Call)
+note: Country Singles Chart 2014-01-25 #56: no catalogue_number in book (The Call)
+note: Digital Song Sales 2014-02-15 #36: no catalogue_number in book (A Man Who Was Gonna Die Young)
+note: Hot Rock Songs 2014-02-22 #35: no format in book (Lydia)
+note: Hot Rock Songs 2014-02-22 #35: no catalogue_number in book (Lydia)
+note: Hot Rock Songs 2014-12-13 #44: no format in book (Flashed Junk Mind)
+note: Hot Rock Songs 2014-12-13 #44: no catalogue_number in book (Flashed Junk Mind)
+note: Hot Rock Songs 2014-12-20 #41: no format in book (Flashed Junk Mind)
+note: Hot Rock Songs 2014-12-20 #41: no catalogue_number in book (Flashed Junk Mind)
+note: Hot Rock Songs 2014-12-27 #41: no format in book (Flashed Junk Mind)
+note: Hot Rock Songs 2014-12-27 #41: no catalogue_number in book (Flashed Junk Mind)
+note: Mainstream Rock Tracks 2014-03-01 #39: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-03-01 #39: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-03-08 #32: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-03-08 #32: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-03-15 #28: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-03-15 #28: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-03-22 #24: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-03-22 #24: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-03-29 #24: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-03-29 #24: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-04-05 #22: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-04-05 #22: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-04-12 #23: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-04-12 #23: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-04-19 #18: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-04-19 #18: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-04-26 #17: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-04-26 #17: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-05-03 #13: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-05-03 #13: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-05-03 #36: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-05-03 #36: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-05-10 #11: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-05-10 #11: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-05-10 #28: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-05-10 #28: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-05-17 #13: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-05-17 #13: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-05-17 #27: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-05-17 #27: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-05-24 #10: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-05-24 #10: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-05-24 #30: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-05-24 #30: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-05-31 #11: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-05-31 #11: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-05-31 #24: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-05-31 #24: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-06-07 #15: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-06-07 #15: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-06-07 #22: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-06-07 #22: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-06-14 #19: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-06-14 #19: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-06-14 #21: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-06-14 #21: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-06-14 #34: no format in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-06-14 #34: no catalogue_number in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-06-21 #19: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-06-21 #19: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-06-21 #30: no format in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-06-21 #30: no catalogue_number in book (Times Are Hard)
+note: Mainstream Rock Tracks 2014-06-21 #35: no format in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-06-21 #35: no catalogue_number in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-06-28 #20: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-06-28 #20: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-06-28 #35: no format in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-06-28 #35: no catalogue_number in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-07-05 #20: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-07-05 #20: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-07-05 #33: no format in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-07-05 #33: no catalogue_number in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-07-12 #21: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-07-12 #21: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-07-12 #32: no format in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-07-12 #32: no catalogue_number in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-07-19 #21: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-07-19 #21: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-07-19 #38: no format in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-07-19 #38: no catalogue_number in book (Smooth Sailing)
+note: Mainstream Rock Tracks 2014-07-26 #18: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-07-26 #18: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-08-02 #17: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-08-02 #17: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-08-09 #20: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-08-09 #20: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-08-16 #23: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-08-16 #23: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-08-23 #36: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-08-23 #36: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-08-30 #36: no format in book (Sangre Por Sangre (Blood For Blood))
+note: Mainstream Rock Tracks 2014-08-30 #36: no catalogue_number in book (Sangre Por Sangre (Blood For Blood))
+note: Country Airplay 2014-02-15 #24: no format in book (A Man Who Was Gonna Die Young)
+note: Country Airplay 2014-02-15 #24: no catalogue_number in book (A Man Who Was Gonna Die Young)
+note: Country Airplay 2014-02-22 #41: no format in book (A Man Who Was Gonna Die Young)
+note: Country Airplay 2014-02-22 #41: no catalogue_number in book (A Man Who Was Gonna Die Young)
+note: Disco Singles 2014-04-05 #53: no format in book (Bounce)
+note: Disco Singles 2014-04-05 #53: no catalogue_number in book (Bounce)
+note: Disco Singles 2014-04-19 #49: no format in book (Bounce)
+note: Disco Singles 2014-04-19 #49: no catalogue_number in book (Bounce)
+note: Disco Singles 2014-04-26 #43: no format in book (Bounce)
+note: Disco Singles 2014-04-26 #43: no catalogue_number in book (Bounce)
+note: Disco Singles 2014-05-03 #39: no format in book (Bounce)
+note: Disco Singles 2014-05-03 #39: no catalogue_number in book (Bounce)
+note: Disco Singles 2014-05-10 #32: no format in book (Bounce)
+note: Disco Singles 2014-05-10 #32: no catalogue_number in book (Bounce)
+note: Disco Singles 2014-05-17 #37: no format in book (Bounce)
+note: Disco Singles 2014-05-17 #37: no catalogue_number in book (Bounce)
+note: Disco Singles 2014-05-24 #44: no format in book (Bounce)
+note: Disco Singles 2014-05-24 #44: no catalogue_number in book (Bounce)
+note: Disco Singles 2014-05-31 #50: no format in book (Bounce)
+note: Disco Singles 2014-05-31 #50: no catalogue_number in book (Bounce)
+note: Disco Singles 2014-11-15 #51: no duration in book (Destination (We Are The Ones))
+note: Disco Singles 2014-11-15 #51: no format in book (Destination (We Are The Ones))
+note: Disco Singles 2014-11-15 #51: no catalogue_number in book (Destination (We Are The Ones))
+note: Disco Singles 2014-11-22 #43: no duration in book (Destination (We Are The Ones))
+note: Disco Singles 2014-11-22 #43: no format in book (Destination (We Are The Ones))
+note: Disco Singles 2014-11-22 #43: no catalogue_number in book (Destination (We Are The Ones))
+note: Disco Singles 2014-11-29 #32: no duration in book (Destination (We Are The Ones))
+note: Disco Singles 2014-11-29 #32: no format in book (Destination (We Are The Ones))
+note: Disco Singles 2014-11-29 #32: no catalogue_number in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-06 #29: no duration in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-06 #29: no format in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-06 #29: no catalogue_number in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-13 #21: no duration in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-13 #21: no format in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-13 #21: no catalogue_number in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-20 #16: no duration in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-20 #16: no format in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-20 #16: no catalogue_number in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-27 #13: no duration in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-27 #13: no format in book (Destination (We Are The Ones))
+note: Disco Singles 2014-12-27 #13: no catalogue_number in book (Destination (We Are The Ones))
+note: Holiday Digital Song Sales 2014-01-11 #42: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2014-10-25 #11: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2014-11-01 #21: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2014-11-08 #33: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2014-11-15 #23: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2014-11-22 #50: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2014-12-13 #24: odd duration as printed: '34:6' (The Thanksgiving Song)
+note: Holiday Digital Song Sales: 287-day gap between charts 2014-01-11 and 2014-10-25
+note: Country Digital Sales 2014-02-15 #3: no format in book (A Man Who Was Gonna Die Young)
+note: Country Digital Sales 2014-02-15 #3: no catalogue_number in book (A Man Who Was Gonna Die Young)
+note: Country Digital Sales 2014-02-22 #27: no format in book (A Man Who Was Gonna Die Young)
+note: Country Digital Sales 2014-02-22 #27: no catalogue_number in book (A Man Who Was Gonna Die Young)
+note: R&B Digital Song Sales 2014-04-26 #17: no duration in book (Talk Dirty To Me)
+note: R&B Digital Song Sales 2014-04-26 #17: no format in book (Talk Dirty To Me)
+note: R&B Digital Song Sales 2014-04-26 #17: no catalogue_number in book (Talk Dirty To Me)
+note: R&B Digital Song Sales 2014-05-03 #20: no duration in book (Talk Dirty To Me)
+note: R&B Digital Song Sales 2014-05-03 #20: no format in book (Talk Dirty To Me)
+note: R&B Digital Song Sales 2014-05-03 #20: no catalogue_number in book (Talk Dirty To Me)
+note: R&B Digital Song Sales 2014-08-02 #22: no format in book (I Don't Want Her)
+note: R&B Digital Song Sales 2014-08-02 #22: no catalogue_number in book (I Don't Want Her)
+note: R&B Hip-Hop Digital Sales 2014-09-13 #23: wrapped line joined: 'USUYG1052147'
+note: R&B Hip-Hop Digital Sales 2014-04-26 #42: no duration in book (Talk Dirty To Me)
+note: R&B Hip-Hop Digital Sales 2014-04-26 #42: no format in book (Talk Dirty To Me)
+note: R&B Hip-Hop Digital Sales 2014-04-26 #42: no catalogue_number in book (Talk Dirty To Me)
+note: R&B Hip-Hop Digital Sales 2014-08-02 #43: no format in book (I Don't Want Her)
+note: R&B Hip-Hop Digital Sales 2014-08-02 #43: no catalogue_number in book (I Don't Want Her)
+note: Rap Digital Sales 2014-09-13 #17: wrapped line joined: 'USUYG1052147'
+note: Rap Digital Sales 2014-09-20 #44: wrapped line joined: 'USUYG1052147'
+note: Rock Digital Sales 2014-01-04 #33: no format in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-01-04 #33: no catalogue_number in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-01-11 #22: no format in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-01-11 #22: no catalogue_number in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-01-18 #23: no format in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-01-18 #23: no catalogue_number in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-01-25 #21: no format in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-01-25 #21: no catalogue_number in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-02-22 #18: no format in book (Lydia)
+note: Rock Digital Sales 2014-02-22 #18: no catalogue_number in book (Lydia)
+note: Rock Digital Sales 2014-03-22 #48: no format in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-03-22 #48: no catalogue_number in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-09-13 #22: no format in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-09-13 #22: no catalogue_number in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-09-20 #22: no format in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-09-20 #22: no catalogue_number in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-09-27 #26: no format in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-09-27 #26: no catalogue_number in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-10-04 #30: no format in book (Drops Of Jupiter (Tell Me))
+note: Rock Digital Sales 2014-10-04 #30: no catalogue_number in book (Drops Of Jupiter (Tell Me))
+note: Top 40 Radio - Rhythmic 2014-02-22 #38: no format in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-02-22 #38: no catalogue_number in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-03-01 #36: no format in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-03-01 #36: no catalogue_number in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-03-08 #36: no format in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-03-08 #36: no catalogue_number in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-03-15 #37: no format in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-03-15 #37: no catalogue_number in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-03-22 #37: no format in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-03-22 #37: no catalogue_number in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-03-29 #36: no format in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-03-29 #36: no catalogue_number in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-04-05 #35: no format in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-04-05 #35: no catalogue_number in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-04-12 #36: no format in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-04-12 #36: no catalogue_number in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-04-19 #35: no format in book (I Don't Want Her)
+note: Top 40 Radio - Rhythmic 2014-04-19 #35: no catalogue_number in book (I Don't Want Her)
+note: Rock Airplay 2014-04-26 #43: no format in book (Times Are Hard)
+note: Rock Airplay 2014-04-26 #43: no catalogue_number in book (Times Are Hard)
+note: Rock Airplay 2014-05-03 #40: no format in book (Times Are Hard)
+note: Rock Airplay 2014-05-03 #40: no catalogue_number in book (Times Are Hard)
+note: Rock Airplay 2014-05-10 #34: no format in book (Times Are Hard)
+note: Rock Airplay 2014-05-10 #34: no catalogue_number in book (Times Are Hard)
+note: Rock Airplay 2014-05-17 #32: no format in book (Times Are Hard)
+note: Rock Airplay 2014-05-17 #32: no catalogue_number in book (Times Are Hard)
+note: Rock Airplay 2014-05-24 #31: no format in book (Times Are Hard)
+note: Rock Airplay 2014-05-24 #31: no catalogue_number in book (Times Are Hard)
+note: Rock Airplay 2014-05-31 #36: no format in book (Times Are Hard)
+note: Rock Airplay 2014-05-31 #36: no catalogue_number in book (Times Are Hard)
+note: Rock Airplay 2014-06-07 #37: no format in book (Times Are Hard)
+note: Rock Airplay 2014-06-07 #37: no catalogue_number in book (Times Are Hard)
+note: Rock Airplay 2014-06-14 #44: no format in book (Times Are Hard)
+note: Rock Airplay 2014-06-14 #44: no catalogue_number in book (Times Are Hard)
+note: Bubbling Under The Hot 100 2014-01-04: chart starts at #101
+note: Bubbling Under The Hot 100 2014-01-11: chart starts at #101
+note: Bubbling Under The Hot 100 2014-01-18: chart starts at #101
+note: Bubbling Under The Hot 100 2014-01-25: chart starts at #101
+note: Bubbling Under The Hot 100 2014-02-01: chart starts at #101
+note: Bubbling Under The Hot 100 2014-02-08: chart starts at #101
+note: Bubbling Under The Hot 100 2014-02-15: chart starts at #101
+note: Bubbling Under The Hot 100 2014-02-22: chart starts at #101
+note: Bubbling Under The Hot 100 2014-03-01: chart starts at #101
+note: Bubbling Under The Hot 100 2014-03-08: chart starts at #101
+note: Bubbling Under The Hot 100 2014-03-15: chart starts at #101
+note: Bubbling Under The Hot 100 2014-03-22: chart starts at #101
+note: Bubbling Under The Hot 100 2014-03-29: chart starts at #101
+note: Bubbling Under The Hot 100 2014-04-05: chart starts at #101
+note: Bubbling Under The Hot 100 2014-04-12: chart starts at #101
+note: Bubbling Under The Hot 100 2014-04-19: chart starts at #101
+note: Bubbling Under The Hot 100 2014-04-26: chart starts at #101
+note: Bubbling Under The Hot 100 2014-05-03: chart starts at #101
+note: Bubbling Under The Hot 100 2014-05-10: chart starts at #101
+note: Bubbling Under The Hot 100 2014-05-17: chart starts at #101
+note: Bubbling Under The Hot 100 2014-05-24: chart starts at #101
+note: Bubbling Under The Hot 100 2014-05-31: chart starts at #101
+note: Bubbling Under The Hot 100 2014-05-31 #123: no format in book (Love Runs Out)
+note: Bubbling Under The Hot 100 2014-05-31 #123: no catalogue_number in book (Love Runs Out)
+note: Bubbling Under The Hot 100 2014-06-07: chart starts at #101
+note: Bubbling Under The Hot 100 2014-06-14: chart starts at #101
+note: Bubbling Under The Hot 100 2014-06-21: chart starts at #101
+note: Bubbling Under The Hot 100 2014-06-28: chart starts at #101
+note: Bubbling Under The Hot 100 2014-07-05: chart starts at #101
+note: Bubbling Under The Hot 100 2014-07-12: chart starts at #101
+note: Bubbling Under The Hot 100 2014-07-19: chart starts at #101
+note: Bubbling Under The Hot 100 2014-07-26: chart starts at #101
+note: Bubbling Under The Hot 100 2014-08-02: chart starts at #101
+note: Bubbling Under The Hot 100 2014-08-09: chart starts at #101
+note: Bubbling Under The Hot 100 2014-08-16: chart starts at #101
+note: Bubbling Under The Hot 100 2014-08-23: chart starts at #101
+note: Bubbling Under The Hot 100 2014-08-30: chart starts at #101
+note: Bubbling Under The Hot 100 2014-09-06: chart starts at #101
+note: Bubbling Under The Hot 100 2014-09-13: chart starts at #101
+note: Bubbling Under The Hot 100 2014-09-20: chart starts at #101
+note: Bubbling Under The Hot 100 2014-09-27: chart starts at #101
+note: Bubbling Under The Hot 100 2014-10-04: chart starts at #101
+note: Bubbling Under The Hot 100 2014-10-11: chart starts at #101
+note: Bubbling Under The Hot 100 2014-10-18: chart starts at #101
+note: Bubbling Under The Hot 100 2014-10-25: chart starts at #101
+note: Bubbling Under The Hot 100 2014-11-01: chart starts at #101
+note: Bubbling Under The Hot 100 2014-11-08: chart starts at #101
+note: Bubbling Under The Hot 100 2014-11-15: chart starts at #101
+note: Bubbling Under The Hot 100 2014-11-22: chart starts at #101
+note: Bubbling Under The Hot 100 2014-11-29: chart starts at #101
+note: Bubbling Under The Hot 100 2014-12-06: chart starts at #101
+note: Bubbling Under The Hot 100 2014-12-13: chart starts at #101
+note: Bubbling Under The Hot 100 2014-12-20: chart starts at #101
+note: Bubbling Under The Hot 100 2014-12-27: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-09-13 #103: wrapped line joined: 'USUYG1052147'
+note: Bubbling Under The R&B Singles Chart 2014-01-04: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-01-11: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-01-18: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-01-25: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-02-01: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-02-08: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-02-15: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-02-22: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-03-01: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-03-08: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-03-15: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-03-22: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-03-29: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-04-05: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-04-12: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-04-12 #108: no format in book (I Don't Want Her)
+note: Bubbling Under The R&B Singles Chart 2014-04-12 #108: no catalogue_number in book (I Don't Want Her)
+note: Bubbling Under The R&B Singles Chart 2014-04-19: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-04-19 #106: no format in book (I Don't Want Her)
+note: Bubbling Under The R&B Singles Chart 2014-04-19 #106: no catalogue_number in book (I Don't Want Her)
+note: Bubbling Under The R&B Singles Chart 2014-04-26: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-05-03: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-05-10: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-05-17: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-05-24: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-05-31: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-06-07: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-06-14: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-06-21: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-06-28: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-07-05: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-07-12: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-07-19: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-07-26: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-08-02: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-08-02 #103: no format in book (I Don't Want Her)
+note: Bubbling Under The R&B Singles Chart 2014-08-02 #103: no catalogue_number in book (I Don't Want Her)
+note: Bubbling Under The R&B Singles Chart 2014-08-09: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-08-16: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-08-23: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-08-30: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-09-06: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-09-13: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-09-20: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-09-27: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-10-04: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-10-11: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-10-18: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-10-25: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-11-01: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-11-08: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-11-15: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-11-22: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-11-29: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-12-06: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-12-13: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-12-20: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2014-12-27: chart starts at #101

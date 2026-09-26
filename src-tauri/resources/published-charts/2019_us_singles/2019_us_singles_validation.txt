@@ -1,0 +1,371 @@
+2019_us_singles: 82089 rows, 0 problems, 369 notes
+
+note: Billboard Hot 100 2019-11-09 #23: no duration in book (On God)
+note: Billboard Hot 100 2019-11-16 #96: no duration in book (On God)
+note: Rhythm And Blues Singles Chart 2019-11-09 #12: no duration in book (On God)
+note: Rhythm And Blues Singles Chart 2019-11-16 #46: no duration in book (On God)
+note: Hot Rap Singles 2019-11-09 #9: no duration in book (On God)
+note: Adult Pop Songs 2019-01-05 #31: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-01-05 #31: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-01-12 #33: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-01-12 #33: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-01-19 #29: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-01-19 #29: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-01-26 #29: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-01-26 #29: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-02-02 #29: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-02-02 #29: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-02-09 #30: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-02-09 #30: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-02-16 #28: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-02-16 #28: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-02-23 #26: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-02-23 #26: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-03-02 #24: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-03-02 #24: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-03-09 #24: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-03-09 #24: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-03-16 #25: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-03-16 #25: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-03-23 #26: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-03-23 #26: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-03-30 #24: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-03-30 #24: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-04-06 #22: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-04-06 #22: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-04-13 #22: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-04-13 #22: no duration in book (You're Somebody Else)
+note: Adult Pop Songs 2019-04-20 #22: no label in book (You're Somebody Else)
+note: Adult Pop Songs 2019-04-20 #22: no duration in book (You're Somebody Else)
+note: Digital Song Sales 2019-09-28 #25: wrapped line joined: 'US6XF1800288'
+note: Hot Rock Songs 2019-01-05 #11: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2019-01-05 #11: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2019-01-12 #6: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2019-01-12 #6: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2019-01-19 #5: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2019-01-19 #5: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2019-01-26 #6: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2019-01-26 #6: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2019-02-02 #5: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2019-02-02 #5: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2019-02-09 #7: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2019-02-09 #7: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2019-02-16 #5: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2019-02-16 #5: no duration in book (You're Somebody Else)
+note: Hot Rock Songs 2019-02-23 #7: no label in book (You're Somebody Else)
+note: Hot Rock Songs 2019-02-23 #7: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-01-05 #5: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-01-05 #5: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-01-12 #5: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-01-12 #5: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-01-19 #5: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-01-19 #5: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-01-26 #5: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-01-26 #5: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-02-02 #4: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-02-02 #4: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-02-09 #2: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-02-09 #2: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-02-16 #2: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-02-16 #2: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-02-23 #3: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-02-23 #3: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-03-02 #7: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-03-02 #7: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-03-09 #9: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-03-09 #9: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-03-16 #11: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-03-16 #11: no duration in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-03-23 #15: no label in book (You're Somebody Else)
+note: Modern Rock Tracks 2019-03-23 #15: no duration in book (You're Somebody Else)
+note: Country Airplay 2019-09-28 #47: wrapped line joined: 'US6XF1800288'
+note: Country Airplay 2019-08-10: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 37, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50]
+note: Disco Singles 2019-01-05 #3: no format in book (Love Sensation)
+note: Disco Singles 2019-01-05 #3: no catalogue_number in book (Love Sensation)
+note: Disco Singles 2019-01-12 #4: no format in book (Love Sensation)
+note: Disco Singles 2019-01-12 #4: no catalogue_number in book (Love Sensation)
+note: Disco Singles 2019-01-19 #13: no format in book (Love Sensation)
+note: Disco Singles 2019-01-19 #13: no catalogue_number in book (Love Sensation)
+note: Disco Singles 2019-01-26 #13: no format in book (Love Sensation)
+note: Disco Singles 2019-01-26 #13: no catalogue_number in book (Love Sensation)
+note: Disco Singles 2019-02-02 #21: no format in book (Love Sensation)
+note: Disco Singles 2019-02-02 #21: no catalogue_number in book (Love Sensation)
+note: Disco Singles 2019-06-01 #52: no format in book (Ready For Love)
+note: Disco Singles 2019-06-01 #52: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-06-08 #48: no format in book (Ready For Love)
+note: Disco Singles 2019-06-08 #48: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-06-15 #43: no format in book (Ready For Love)
+note: Disco Singles 2019-06-15 #43: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-06-22 #35: no format in book (Ready For Love)
+note: Disco Singles 2019-06-22 #35: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-06-29 #30: no format in book (Ready For Love)
+note: Disco Singles 2019-06-29 #30: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-07-06 #29: no format in book (Ready For Love)
+note: Disco Singles 2019-07-06 #29: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-07-06 #53: no duration in book (Fire)
+note: Disco Singles 2019-07-06 #53: no format in book (Fire)
+note: Disco Singles 2019-07-06 #53: no catalogue_number in book (Fire)
+note: Disco Singles 2019-07-13 #24: no format in book (Ready For Love)
+note: Disco Singles 2019-07-13 #24: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-07-20 #16: no format in book (Ready For Love)
+note: Disco Singles 2019-07-20 #16: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-07-20 #47: no duration in book (Fire)
+note: Disco Singles 2019-07-20 #47: no format in book (Fire)
+note: Disco Singles 2019-07-20 #47: no catalogue_number in book (Fire)
+note: Disco Singles 2019-07-27 #13: no format in book (Ready For Love)
+note: Disco Singles 2019-07-27 #13: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-07-27 #41: no duration in book (Fire)
+note: Disco Singles 2019-07-27 #41: no format in book (Fire)
+note: Disco Singles 2019-07-27 #41: no catalogue_number in book (Fire)
+note: Disco Singles 2019-08-03 #24: no format in book (Ready For Love)
+note: Disco Singles 2019-08-03 #24: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-08-03 #36: no duration in book (Fire)
+note: Disco Singles 2019-08-03 #36: no format in book (Fire)
+note: Disco Singles 2019-08-03 #36: no catalogue_number in book (Fire)
+note: Disco Singles 2019-08-10 #25: no duration in book (Fire)
+note: Disco Singles 2019-08-10 #25: no format in book (Fire)
+note: Disco Singles 2019-08-10 #25: no catalogue_number in book (Fire)
+note: Disco Singles 2019-08-10 #27: no format in book (Ready For Love)
+note: Disco Singles 2019-08-10 #27: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-08-17 #23: no duration in book (Fire)
+note: Disco Singles 2019-08-17 #23: no format in book (Fire)
+note: Disco Singles 2019-08-17 #23: no catalogue_number in book (Fire)
+note: Disco Singles 2019-08-17 #27: no format in book (Ready For Love)
+note: Disco Singles 2019-08-17 #27: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-08-24 #18: no duration in book (Fire)
+note: Disco Singles 2019-08-24 #18: no format in book (Fire)
+note: Disco Singles 2019-08-24 #18: no catalogue_number in book (Fire)
+note: Disco Singles 2019-08-24 #40: no format in book (Ready For Love)
+note: Disco Singles 2019-08-24 #40: no catalogue_number in book (Ready For Love)
+note: Disco Singles 2019-08-31 #13: no duration in book (Fire)
+note: Disco Singles 2019-08-31 #13: no format in book (Fire)
+note: Disco Singles 2019-08-31 #13: no catalogue_number in book (Fire)
+note: Disco Singles 2019-09-07 #13: no duration in book (Fire)
+note: Disco Singles 2019-09-07 #13: no format in book (Fire)
+note: Disco Singles 2019-09-07 #13: no catalogue_number in book (Fire)
+note: Disco Singles 2019-09-14 #15: no duration in book (Fire)
+note: Disco Singles 2019-09-14 #15: no format in book (Fire)
+note: Disco Singles 2019-09-14 #15: no catalogue_number in book (Fire)
+note: Disco Singles 2019-09-21 #21: no duration in book (Fire)
+note: Disco Singles 2019-09-21 #21: no format in book (Fire)
+note: Disco Singles 2019-09-21 #21: no catalogue_number in book (Fire)
+note: Disco Singles 2019-09-28 #21: no duration in book (Fire)
+note: Disco Singles 2019-09-28 #21: no format in book (Fire)
+note: Disco Singles 2019-09-28 #21: no catalogue_number in book (Fire)
+note: Disco Singles 2019-10-05 #31: no duration in book (Fire)
+note: Disco Singles 2019-10-05 #31: no format in book (Fire)
+note: Disco Singles 2019-10-05 #31: no catalogue_number in book (Fire)
+note: Disco Singles 2019-10-05 #51: no format in book (No Day Like Today)
+note: Disco Singles 2019-10-05 #51: no catalogue_number in book (No Day Like Today)
+note: Disco Singles 2019-10-12 #47: no format in book (No Day Like Today)
+note: Disco Singles 2019-10-12 #47: no catalogue_number in book (No Day Like Today)
+note: Disco Singles 2019-10-12 #48: no duration in book (Fire)
+note: Disco Singles 2019-10-12 #48: no format in book (Fire)
+note: Disco Singles 2019-10-12 #48: no catalogue_number in book (Fire)
+note: Disco Singles 2019-10-19 #41: no format in book (No Day Like Today)
+note: Disco Singles 2019-10-19 #41: no catalogue_number in book (No Day Like Today)
+note: Disco Singles 2019-10-26 #36: no format in book (No Day Like Today)
+note: Disco Singles 2019-10-26 #36: no catalogue_number in book (No Day Like Today)
+note: Disco Singles 2019-11-02 #28: no format in book (No Day Like Today)
+note: Disco Singles 2019-11-02 #28: no catalogue_number in book (No Day Like Today)
+note: Disco Singles 2019-11-09 #26: no format in book (No Day Like Today)
+note: Disco Singles 2019-11-09 #26: no catalogue_number in book (No Day Like Today)
+note: Disco Singles 2019-11-16 #23: no format in book (No Day Like Today)
+note: Disco Singles 2019-11-16 #23: no catalogue_number in book (No Day Like Today)
+note: Disco Singles 2019-11-23 #29: no format in book (No Day Like Today)
+note: Disco Singles 2019-11-23 #29: no catalogue_number in book (No Day Like Today)
+note: Disco Singles 2019-11-30 #28: no format in book (No Day Like Today)
+note: Disco Singles 2019-11-30 #28: no catalogue_number in book (No Day Like Today)
+note: Disco Singles 2019-12-07 #34: no format in book (No Day Like Today)
+note: Disco Singles 2019-12-07 #34: no catalogue_number in book (No Day Like Today)
+note: Disco Singles 2019-12-14 #44: no format in book (No Day Like Today)
+note: Disco Singles 2019-12-14 #44: no catalogue_number in book (No Day Like Today)
+note: Holiday Digital Song Sales 2019-10-19 #18: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2019-10-26 #13: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2019-11-02 #37: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2019-11-09 #34: odd duration as printed: '51:8' (Same Old Lang Syne)
+note: Holiday Digital Song Sales 2019-12-07 #20: odd duration as printed: '34:6' (The Thanksgiving Song)
+note: Holiday Digital Song Sales: 287-day gap between charts 2019-01-05 and 2019-10-19
+note: On Demand Streaming 2019-11-09 #6: no duration in book (On God)
+note: On Demand Streaming 2019-11-16 #46: no duration in book (On God)
+note: Streaming Songs 2019-11-09 #8: no duration in book (On God)
+note: Country Digital Sales 2019-09-28 #7: wrapped line joined: 'US6XF1800288'
+note: Country Digital Sales 2019-08-31 #22: no format in book (Young)
+note: Country Digital Sales 2019-08-31 #22: no catalogue_number in book (Young)
+note: Country Digital Sales 2019-09-07 #14: no format in book (Young)
+note: Country Digital Sales 2019-09-07 #14: no catalogue_number in book (Young)
+note: R&B Digital Song Sales 2019-08-24: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24]
+note: R&B Streaming Songs 2019-06-15: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24]
+note: R&B Hip-Hop Streaming Songs 2019-11-09 #7: no duration in book (On God)
+note: Rap Digital Sales 2019-11-09 #25: no duration in book (On God)
+note: Rap Streaming Songs 2019-11-09 #6: no duration in book (On God)
+note: Rock Digital Sales 2019-01-19 #21: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2019-01-19 #21: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2019-01-26 #22: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2019-01-26 #22: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2019-02-02 #21: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2019-02-02 #21: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2019-02-09 #23: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2019-02-09 #23: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2019-02-16 #20: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2019-02-16 #20: no duration in book (You're Somebody Else)
+note: Rock Digital Sales 2019-02-23 #20: no label in book (You're Somebody Else)
+note: Rock Digital Sales 2019-02-23 #20: no duration in book (You're Somebody Else)
+note: Rock Streaming Songs 2019-01-05 #16: no duration in book (What Christmas Means To Me)
+note: Rock Streaming Songs 2019-01-05 #16: no format in book (What Christmas Means To Me)
+note: Rock Streaming Songs 2019-01-05 #16: no catalogue_number in book (What Christmas Means To Me)
+note: Alternative Digital Song Sales 2019-01-05 #23: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-01-05 #23: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-01-12 #21: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-01-12 #21: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-01-19 #15: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-01-19 #15: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-01-26 #16: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-01-26 #16: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-02-02 #13: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-02-02 #13: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-02-09 #16: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-02-09 #16: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-02-16 #15: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-02-16 #15: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-02-23 #12: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-02-23 #12: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-03-02 #14: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-03-02 #14: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-03-09 #11: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-03-09 #11: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-03-16 #18: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-03-16 #18: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-03-23 #21: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-03-23 #21: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-03-30 #24: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-03-30 #24: no duration in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-04-06 #24: no label in book (You're Somebody Else)
+note: Alternative Digital Song Sales 2019-04-06 #24: no duration in book (You're Somebody Else)
+note: Radio Songs Recurrents 2019-08-17: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 25]
+note: Rock Airplay 2019-01-05 #6: no label in book (You're Somebody Else)
+note: Rock Airplay 2019-01-05 #6: no duration in book (You're Somebody Else)
+note: Rock Airplay 2019-01-12 #5: no label in book (You're Somebody Else)
+note: Rock Airplay 2019-01-12 #5: no duration in book (You're Somebody Else)
+note: Rock Airplay 2019-01-19 #5: no label in book (You're Somebody Else)
+note: Rock Airplay 2019-01-19 #5: no duration in book (You're Somebody Else)
+note: Rock Airplay 2019-01-26 #5: no label in book (You're Somebody Else)
+note: Rock Airplay 2019-01-26 #5: no duration in book (You're Somebody Else)
+note: Rock Airplay 2019-02-02 #4: no label in book (You're Somebody Else)
+note: Rock Airplay 2019-02-02 #4: no duration in book (You're Somebody Else)
+note: Rock Airplay 2019-02-09 #3: no label in book (You're Somebody Else)
+note: Rock Airplay 2019-02-09 #3: no duration in book (You're Somebody Else)
+note: Rock Airplay 2019-02-16 #3: no label in book (You're Somebody Else)
+note: Rock Airplay 2019-02-16 #3: no duration in book (You're Somebody Else)
+note: Rock Airplay 2019-02-23 #6: no label in book (You're Somebody Else)
+note: Rock Airplay 2019-02-23 #6: no duration in book (You're Somebody Else)
+note: Rock Airplay 2019-03-02 #6: no label in book (You're Somebody Else)
+note: Rock Airplay 2019-03-02 #6: no duration in book (You're Somebody Else)
+note: Rock Airplay 2019-03-09 #7: no label in book (You're Somebody Else)
+note: Rock Airplay 2019-03-09 #7: no duration in book (You're Somebody Else)
+note: Rock Airplay 2019-03-16 #10: no label in book (You're Somebody Else)
+note: Rock Airplay 2019-03-16 #10: no duration in book (You're Somebody Else)
+note: Bubbling Under The Hot 100 2019-01-05: chart starts at #101
+note: Bubbling Under The Hot 100 2019-01-12: chart starts at #101
+note: Bubbling Under The Hot 100 2019-01-19: chart starts at #101
+note: Bubbling Under The Hot 100 2019-01-26: chart starts at #101
+note: Bubbling Under The Hot 100 2019-02-02: chart starts at #101
+note: Bubbling Under The Hot 100 2019-02-09: chart starts at #101
+note: Bubbling Under The Hot 100 2019-02-16: chart starts at #101
+note: Bubbling Under The Hot 100 2019-02-23: chart starts at #101
+note: Bubbling Under The Hot 100 2019-03-02: chart starts at #101
+note: Bubbling Under The Hot 100 2019-03-09: chart starts at #101
+note: Bubbling Under The Hot 100 2019-03-16: chart starts at #101
+note: Bubbling Under The Hot 100 2019-03-23: chart starts at #101
+note: Bubbling Under The Hot 100 2019-03-30: chart starts at #101
+note: Bubbling Under The Hot 100 2019-04-06: chart starts at #101
+note: Bubbling Under The Hot 100 2019-04-13: chart starts at #101
+note: Bubbling Under The Hot 100 2019-04-20: chart starts at #101
+note: Bubbling Under The Hot 100 2019-04-27: chart starts at #101
+note: Bubbling Under The Hot 100 2019-05-04: chart starts at #101
+note: Bubbling Under The Hot 100 2019-05-11: chart starts at #101
+note: Bubbling Under The Hot 100 2019-05-18: chart starts at #101
+note: Bubbling Under The Hot 100 2019-05-25: chart starts at #101
+note: Bubbling Under The Hot 100 2019-06-01: chart starts at #101
+note: Bubbling Under The Hot 100 2019-06-08: chart starts at #101
+note: Bubbling Under The Hot 100 2019-06-15: chart starts at #101
+note: Bubbling Under The Hot 100 2019-06-22: chart starts at #101
+note: Bubbling Under The Hot 100 2019-06-29: chart starts at #101
+note: Bubbling Under The Hot 100 2019-07-06: chart starts at #101
+note: Bubbling Under The Hot 100 2019-07-13: chart starts at #101
+note: Bubbling Under The Hot 100 2019-07-20: chart starts at #101
+note: Bubbling Under The Hot 100 2019-07-27: chart starts at #101
+note: Bubbling Under The Hot 100 2019-08-03: chart starts at #101
+note: Bubbling Under The Hot 100 2019-08-10: chart starts at #101
+note: Bubbling Under The Hot 100 2019-08-17: chart starts at #101
+note: Bubbling Under The Hot 100 2019-08-24: chart starts at #101
+note: Bubbling Under The Hot 100 2019-08-31: chart starts at #101
+note: Bubbling Under The Hot 100 2019-09-07: chart starts at #101
+note: Bubbling Under The Hot 100 2019-09-14: chart starts at #101
+note: Bubbling Under The Hot 100 2019-09-21: chart starts at #101
+note: Bubbling Under The Hot 100 2019-09-28: chart starts at #101
+note: Bubbling Under The Hot 100 2019-10-05: chart starts at #101
+note: Bubbling Under The Hot 100 2019-10-12: chart starts at #101
+note: Bubbling Under The Hot 100 2019-10-19: chart starts at #101
+note: Bubbling Under The Hot 100 2019-10-26: chart starts at #101
+note: Bubbling Under The Hot 100 2019-11-02: chart starts at #101
+note: Bubbling Under The Hot 100 2019-11-09: chart starts at #101
+note: Bubbling Under The Hot 100 2019-11-16: chart starts at #101
+note: Bubbling Under The Hot 100 2019-11-23: chart starts at #101
+note: Bubbling Under The Hot 100 2019-11-30: chart starts at #101
+note: Bubbling Under The Hot 100 2019-12-07: chart starts at #101
+note: Bubbling Under The Hot 100 2019-12-14: chart starts at #101
+note: Bubbling Under The Hot 100 2019-12-21: chart starts at #101
+note: Bubbling Under The Hot 100 2019-12-28: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-01-05: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-01-12: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-01-19: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-01-26: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-02-02: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-02-09: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-02-16: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-02-23: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-03-02: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-03-09: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-03-16: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-03-23: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-03-30: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-04-06: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-04-13: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-04-20: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-04-27: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-05-04: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-05-11: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-05-18: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-05-25: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-06-01: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-06-08: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-06-15: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-06-22: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-06-29: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-07-06: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-07-13: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-07-20: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-07-27: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-08-03: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-08-10: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-08-17: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-08-24: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-08-31: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-09-07: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-09-14: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-09-21: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-09-28: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-10-05: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-10-12: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-10-19: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-10-26: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-11-02: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-11-09: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-11-16: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-11-23: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-11-30: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-12-07: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-12-14: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-12-21: chart starts at #101
+note: Bubbling Under The R&B Singles Chart 2019-12-28: chart starts at #101
