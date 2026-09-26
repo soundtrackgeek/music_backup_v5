@@ -7651,6 +7651,11 @@ fn billboard_single_match_keys(artist_key: &str, title_key: &str) -> Vec<String>
 
 fn billboard_single_artist_key_variants(key: &str) -> Vec<String> {
     let mut variants = Vec::new();
+    // A source-specific disambiguator, not a different performer. Do not strip
+    // arbitrary country/name suffixes from unrelated artists.
+    if key == "jade usa" {
+        push_unique(&mut variants, "jade".to_string());
+    }
     for base in billboard_key_variants(key) {
         push_unique(&mut variants, base.clone());
         let without_connectors = remove_artist_connector_tokens(&base);
@@ -7665,6 +7670,18 @@ fn billboard_single_title_key_variants(key: &str) -> Vec<String> {
     let mut variants = vec![key.to_string()];
     if let Some(stripped) = strip_title_feature_suffix(key) {
         push_unique(&mut variants, stripped);
+    }
+    // Keys already have punctuation folded. Use a small explicit allowlist;
+    // removing every parenthetical would conflate different songs/recordings.
+    for base in variants.clone() {
+        for suffix in [" album version", " lp version", " album walk", " lp"] {
+            if let Some(stripped) = base.strip_suffix(suffix).filter(|value| !value.is_empty()) {
+                push_unique(&mut variants, stripped.to_string());
+            }
+        }
+        if base == "a whole new world aladdin s theme" {
+            push_unique(&mut variants, "a whole new world".to_string());
+        }
     }
     variants
 }
@@ -29365,6 +29382,123 @@ mod tests {
         );
 
         fs::remove_dir_all(source_dir).expect("remove Norsktoppen csv dir");
+    }
+
+    #[test]
+    fn imports_billboard_singles_with_archive_aliases_and_reconciles_them() {
+        for (source_artist, source_title, library_artist, library_title, should_match) in [
+            (
+                "Spin Doctors",
+                "Two Princes (Album Version)",
+                "Spin Doctors",
+                "Two Princes",
+                true,
+            ),
+            (
+                "Jade [USA]",
+                "Don't Walk Away (Album Walk)",
+                "Jade",
+                "Don't Walk Away",
+                true,
+            ),
+            (
+                "Peabo Bryson & Regina Belle",
+                "A Whole New World (Aladdin's Theme)",
+                "Peabo Bryson & Regina Belle",
+                "A Whole New World",
+                true,
+            ),
+            (
+                "Aerosmith",
+                "Livin' On The Edge (LP)",
+                "Aerosmith",
+                "Livin' On The Edge",
+                true,
+            ),
+            (
+                "Sting",
+                "If I Ever Lose My Faith In You - LP Version",
+                "Sting",
+                "If I Ever Lose My Faith In You",
+                true,
+            ),
+            (
+                "Spin Doctors",
+                "Two Princes",
+                "Spin Doctors",
+                "Two Princes (Album Version)",
+                true,
+            ),
+            (
+                "Spin Doctors",
+                "Two Princes (Live)",
+                "Spin Doctors",
+                "Two Princes",
+                false,
+            ),
+            (
+                "Spin Doctors",
+                "Two Princes (Remix)",
+                "Spin Doctors",
+                "Two Princes",
+                false,
+            ),
+            (
+                "Spin Doctors",
+                "Two Princes (Album Version)",
+                "Other Artist",
+                "Two Princes",
+                false,
+            ),
+            ("Artist", "Song (Part Two)", "Artist", "Song", false),
+        ] {
+            let mut conn = seeded_connection();
+            conn.execute(
+                "UPDATE tracks SET display_artist = ?1, title = ?2",
+                params![library_artist, library_title],
+            )
+            .unwrap();
+            rebuild_search_indexes(&conn).unwrap();
+            let directory = tempfile::tempdir().unwrap();
+            let mut csv = csv::Writer::from_path(directory.path().join("1993.csv")).unwrap();
+            csv.write_record(["Yearly Rank", "Artist", "Featured", "Track", "Date Entered"])
+                .unwrap();
+            csv.write_record(["8", source_artist, "", source_title, "1993-01-02"])
+                .unwrap();
+            csv.flush().unwrap();
+            drop(csv);
+            let summary = import_billboard_singles(&mut conn, directory.path()).unwrap();
+            assert_eq!(
+                summary.matched_tracks,
+                i64::from(should_match),
+                "{source_artist}: {source_title}"
+            );
+            let printed: (String, String) = conn
+                .query_row(
+                    "SELECT artist, title FROM billboard_single_chart_entries",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap();
+            assert_eq!(
+                printed,
+                (source_artist.to_string(), source_title.to_string())
+            );
+            // Exercise the persisted-key path used after a library refresh too.
+            conn.execute("UPDATE tracks SET billboard_single_rank = NULL", [])
+                .unwrap();
+            reconcile_track_chart_matches(&conn).unwrap();
+            let mut request = BrowseRequest::default();
+            request.view = "tracks".to_string();
+            request.filters.billboard_single_rank_min = Some(8);
+            request.filters.billboard_single_rank_max = Some(8);
+            let found = search_library(&conn, request, 50).unwrap();
+            assert_eq!(found.total, if should_match { 1 } else { 0 });
+            if should_match {
+                assert_eq!(found.rows[0].billboard_single_rank, Some(8));
+                assert_eq!(found.rows[0].title.as_deref(), Some(library_title));
+            }
+        }
     }
 
     #[test]

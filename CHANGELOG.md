@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.155.0] - 2026-09-26
+
+### Added
+
+- Reproducible annual US singles ranking generator using the Published Charts weekly archive for 1940–2025, with historical predecessor transitions, verified backups, rollback on replacement failure, and preservation of pre-1940 and incomplete-source 1953 rankings.
+
+### Changed
+
+- Calculate annual song ranks by weeks at number one, weeks charted, then peak position, retaining printed song identities and unambiguous legacy album hints. Record archive coverage and keep plausible printed entry dates separate from first observed weeks.
+
+### Fixed
+
+- Match Billboard singles with LP, LP Version, Album Version, and Album Walk suffixes to library titles without them; recognize Jade [USA] and A Whole New World (Aladdin's Theme). Keep aliases during library reconciliation without broadly removing meaningful subtitles, live versions, or remixes.
+
 ## [0.154.0] - 2026-09-26
 
 ### Changed
