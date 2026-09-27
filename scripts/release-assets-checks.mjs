@@ -5,6 +5,20 @@ import os from 'node:os';
 import path from 'node:path';
 import { prepareAssets } from './prepare-release-assets.mjs';
 import { mergeAssets } from './merge-release-assets.mjs';
+import { extractReleaseNotes } from './extract-release-notes.mjs';
+
+test('extracts only the requested release with LF or CRLF line endings', () => {
+  const changelog = '# Changelog\n\n## [1.2.3] - 2026-09-27\n\n### Fixed\n- Intake fix.\n\n## [1.2.2] - 2026-09-26\n\n- Older change.\n';
+  for (const source of [changelog, changelog.replaceAll('\n', '\r\n')]) {
+    assert.equal(extractReleaseNotes(source, '1.2.3'), 'Release date: 2026-09-27\n\n### Fixed\n- Intake fix.\n');
+  }
+});
+
+test('rejects missing, malformed, and empty release sections before packaging', () => {
+  assert.throws(() => extractReleaseNotes('## 1.2.3 - 2026-09-27\n\n- Fix.', '1.2.3'), /does not contain/);
+  assert.throws(() => extractReleaseNotes('## [1.2.2] - 2026-09-27\n\n- Fix.', '1.2.3'), /does not contain/);
+  assert.throws(() => extractReleaseNotes('## [1.2.3] - 2026-09-27\n\n## 1.2.2 - 2026-09-26\n\n- Older fix.', '1.2.3'), /is empty/);
+});
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'release-assets-'));

@@ -1,5 +1,7 @@
 # Music Library
 
+Music Library 0.156.2 repairs release-note extraction for the nested Inbox intake fix. `npm run check:version` now also requires a nonempty, correctly formatted changelog section before a release build.
+
 Music Library 0.156.1 fixes Aurora intake for nested artist/category folders and empty containers left after Inbox renaming. Multi-disc albums stay together, and mixed album tags remain blocked.
 
 Music Library 0.156.0 expands **Artists → Chart Busters** to every US Published Charts series, with named chart sections, country filters, and weekly history for matched local songs.

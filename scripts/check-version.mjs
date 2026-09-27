@@ -1,3 +1,4 @@
+import { extractReleaseNotes } from "./extract-release-notes.mjs";
 import { readFileSync } from "node:fs";
 
 const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -28,5 +29,7 @@ if (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME !== `v$
   console.error(`Release tag ${process.env.GITHUB_REF_NAME} does not match Music Library ${version}.`);
   process.exit(1);
 }
+
+extractReleaseNotes(readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8"), version);
 
 console.log(`Music Library versions aligned at ${version}.`);
