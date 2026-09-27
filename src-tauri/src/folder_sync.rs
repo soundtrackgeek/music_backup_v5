@@ -415,16 +415,7 @@ pub(crate) fn discover_batch_album_sources(selected: &Path) -> Result<Vec<PathBu
         .iter()
         .filter(|(_, has_mp3)| *has_mp3)
         .collect::<Vec<_>>();
-    if populated_children.len() == 1 && !looks_like_disc_folder(&populated_children[0].0) {
-        if child_dirs.len() != 1 {
-            bail!("Every immediate child of a batch folder must be a complete album folder");
-        }
-        let scan = scan_folder(&populated_children[0].0, &cancel)?;
-        validate_single_album(&scan.tracks)?;
-        return Ok(vec![scan.canonical_folder]);
-    }
     if !populated_children.is_empty()
-        && populated_children.len() == child_dirs.len()
         && populated_children
             .iter()
             .all(|(child, _)| looks_like_disc_folder(child))
@@ -437,14 +428,15 @@ pub(crate) fn discover_batch_album_sources(selected: &Path) -> Result<Vec<PathBu
     let mut albums = Vec::new();
     for (child, has_mp3) in child_dirs {
         if !has_mp3 {
-            bail!(
-                "Every immediate child of a batch folder must be a complete album folder; {} contains no MP3 files",
-                child.display()
-            );
+            // Renaming can leave empty artist containers or artwork-only folders.
+            // collect_mp3_paths already validated their files and link safety.
+            continue;
         }
-        let scan = scan_folder(&child, &cancel)?;
-        validate_single_album(&scan.tracks)?;
-        albums.push(scan.canonical_folder);
+        // Artist/category containers may be nested; move only complete album roots.
+        albums.extend(discover_batch_album_sources(&child)?);
+        if albums.len() > MAX_BATCH_ALBUMS {
+            bail!("An Aurora intake batch can contain at most {MAX_BATCH_ALBUMS} album folders");
+        }
     }
     if albums.is_empty() {
         bail!("The selected folder does not contain any complete tagged albums");
@@ -2542,6 +2534,50 @@ mod tests {
             discover_batch_album_sources(&disc_album).expect("disc album"),
             vec![disc_album.canonicalize().unwrap()]
         );
+    }
+
+    #[test]
+    fn batch_discovery_descends_artist_and_category_containers() {
+        let temp = tempdir().unwrap();
+        let inbox = temp.path().join("Inbox");
+        let mut expected = Vec::new();
+        for (relative, title) in [
+            ("Greg Kihn/Next of Kihn", "Next of Kihn"),
+            ("Greg Kihn/Glass House Rock", "Glass House Rock"),
+            ("Greg Kihn Band/Kihntinued", "Kihntinued"),
+            (
+                "The Go-Go's/a - Studio Albums/Beauty and the Beat",
+                "Beauty and the Beat",
+            ),
+            ("The Go-Go's/a - Studio Albums/Talk Show", "Talk Show"),
+            ("Another Artist/Double Album/Disc 1", "Double Album"),
+            ("Another Artist/Double Album/Disc 2", "Double Album"),
+        ] {
+            let folder = inbox.join(relative);
+            fs::create_dir_all(&folder).unwrap();
+            write_tagged_mp3(&folder.join("01.mp3"), title);
+            let album = if looks_like_disc_folder(&folder) {
+                folder.parent().unwrap().to_path_buf()
+            } else {
+                folder
+            };
+            expected.push(album.canonicalize().unwrap());
+        }
+        expected.sort_by_key(|path| normalized_path(path));
+        expected.dedup();
+        fs::create_dir_all(inbox.join("Empty artist/Studio Albums")).unwrap();
+        fs::create_dir_all(inbox.join("Another Artist/Double Album/Covers")).unwrap();
+        fs::write(
+            inbox.join("Another Artist/Double Album/Covers/front.jpg"),
+            b"cover",
+        )
+        .unwrap();
+        assert_eq!(discover_batch_album_sources(&inbox).unwrap(), expected);
+        write_tagged_mp3(&inbox.join("Greg Kihn/Next of Kihn/02.mp3"), "Wrong Album");
+        assert!(discover_batch_album_sources(&inbox)
+            .unwrap_err()
+            .to_string()
+            .contains("more than one album"));
     }
 
     #[test]

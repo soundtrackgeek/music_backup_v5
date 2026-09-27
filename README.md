@@ -1,5 +1,7 @@
 # Music Library
 
+Music Library 0.156.1 fixes Aurora intake for nested artist/category folders and empty containers left after Inbox renaming. Multi-disc albums stay together, and mixed album tags remain blocked.
+
 Music Library 0.156.0 expands **Artists → Chart Busters** to every US Published Charts series, with named chart sections, country filters, and weekly history for matched local songs.
 
 Music Library 0.155.1: Aurora can now synchronize a consistent Album Artist edit across a complete album with a stable catalog identity. The guarded transaction updates album and track metadata plus both search indexes, preserves the track Artist, and leaves MP3 bytes unchanged. Partial, mixed, missing-file, and unstable-identity edits remain guarded. With Aurora 0.28.1 or newer, reopen the affected album’s Tags to retry a previously blocked edit.
@@ -793,3 +795,5 @@ Verify the checker with `python -m unittest discover -s Tools/library_inventory 
 ### Verified Aurora track deletions
 
 Aurora sends saved, still-missing MP3 identities to Music Library. Music Library verifies the complete surviving album and commits catalog removals, album metrics, search cleanup, and Updates history atomically. Restored files, unavailable folders, unknown tracks, and changed catalog data prevent deletion sync. Older identity-set failures receive a fresh guarded retry after upgrading Aurora; Music Library must also support verified deletion sync. Empty albums still require the reviewed album-removal workflow.
+
+Aurora intake now discovers albums inside nested artist/category folders while preserving multi-disc album roots and rejecting mixed album tags.

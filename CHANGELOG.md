@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.156.1 - 2026-09-27
+
+### Fixed
+- Aurora intake now discovers albums inside nested artist/category folders while preserving multi-disc album roots and rejecting mixed album tags.
+
 ## [0.156.0] - 2026-09-26
 
 ### Added
