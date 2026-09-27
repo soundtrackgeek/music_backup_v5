@@ -1,5 +1,7 @@
 # Music Library
 
+Music Library 0.156.4 keeps the database-lock recovery behavior and fixes its cross-platform regression test: the competing lock is released only after the first preview attempt reports SQLite contention.
+
 Music Library 0.156.3 automatically retries temporary database locks during Aurora intake previews (up to four attempts, retaining SQLite's busy wait). Each retry rebuilds the review from current catalog state. Persistent locks remain a clear database-busy error; permanent failures are not retried, and reviewed file transfers are never replayed by this retry.
 
 Music Library 0.156.2 repairs release-note extraction for the nested Inbox intake fix. `npm run check:version` now also requires a nonempty, correctly formatted changelog section before a release build.

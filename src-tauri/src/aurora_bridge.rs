@@ -3809,36 +3809,27 @@ mod tests {
             .iter()
             .map(|target| fs::read(Path::new(&target.source_path).join("01.mp3")).unwrap())
             .collect();
-        let request_path = app_data.join("lock-test.request.json");
-        let progress_path = request_path.with_extension("progress.json");
-        let worker = std::thread::spawn(move || {
-            preview_selection(
+        let mut attempts = 0;
+        let request = PreviewSelectionRequest { targets };
+        // Keep the real writer lock until the retry engine observes SQLITE_BUSY.
+        // Progress files are advisory and can be missed; elapsed time is not
+        // evidence that the first preview attempt has finished on every OS.
+        let result = retry_preview_database_busy(4, |attempt| {
+            attempts += 1;
+            if attempt == 1 {
+                conn.execute_batch("ROLLBACK")?;
+            }
+            preview_selection_once(
                 &app_data,
-                PreviewSelectionRequest { targets },
-                &mut BridgeProgressReporter::new(&request_path, "previewSelection"),
+                &request,
+                &mut BridgeProgressReporter::disabled("previewSelection"),
             )
         });
-        let started = std::time::Instant::now();
-        let mut waited = false;
-        while started.elapsed() < Duration::from_secs(25) && !worker.is_finished() {
-            let progress = fs::read(&progress_path)
-                .ok()
-                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
-            if progress
-                .as_ref()
-                .is_some_and(|value| value["stage"] == "waiting")
-            {
-                waited = true;
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(10));
+        if !conn.is_autocommit() {
+            conn.execute_batch("ROLLBACK").unwrap();
         }
-        conn.execute_batch("ROLLBACK").unwrap();
-        let preview = worker.join().unwrap().unwrap();
-        assert!(
-            waited,
-            "preview must recover after the initial SQLite wait expires"
-        );
+        let preview = result.unwrap();
+        assert_eq!(attempts, 2, "a real busy failure must precede recovery");
         assert_eq!(preview["albumCount"], 6);
         assert_eq!(
             conn.query_row("SELECT COUNT(*) FROM import_sessions", [], |row| row

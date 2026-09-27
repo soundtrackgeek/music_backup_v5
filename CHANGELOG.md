@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.156.4] - 2026-09-27
+
+### Fixed
+- Synchronize the SQLite lock-recovery regression with the actual retry boundary rather than a timed progress-file poll, so macOS and Windows verify the same real lock recovery deterministically.
+
 ## [0.156.3] - 2026-09-27
 
 ### Fixed
