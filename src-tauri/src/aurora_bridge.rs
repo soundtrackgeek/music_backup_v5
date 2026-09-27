@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const PROTOCOL_VERSION: u32 = 1;
 const PLAN_FORMAT_VERSION: u32 = 3;
@@ -574,6 +574,49 @@ fn preview_selection(
     request: PreviewSelectionRequest,
     progress: &mut BridgeProgressReporter,
 ) -> Result<Value> {
+    // A preview does not publish the new intake. Drop the failed connection and
+    // rebuild from current catalog state; never replay an apply/transfer here.
+    retry_preview_database_busy(4, |attempt| {
+        if attempt > 0 {
+            progress.report(
+                "waiting",
+                "Waiting for another library update to finish, then rebuilding the preview.",
+                0,
+            );
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        preview_selection_once(app_data_dir, &request, progress)
+    })
+}
+
+fn database_is_busy(error: &anyhow::Error) -> bool {
+    matches!(error.downcast_ref::<rusqlite::Error>(),
+        Some(rusqlite::Error::SqliteFailure(failure, _))
+            if matches!(failure.code, rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked))
+}
+
+fn retry_preview_database_busy<T>(
+    attempts: usize,
+    mut prepare: impl FnMut(usize) -> Result<T>,
+) -> Result<T> {
+    for attempt in 0..attempts {
+        match prepare(attempt) {
+            Err(error) if database_is_busy(&error) => {
+                if attempt + 1 == attempts {
+                    return Err(error.context("Music Library's database is still busy after waiting for another update. Let the current import or sync finish, then preview again"));
+                }
+            }
+            result => return result,
+        }
+    }
+    unreachable!("preview retries require at least one attempt")
+}
+
+fn preview_selection_once(
+    app_data_dir: &Path,
+    request: &PreviewSelectionRequest,
+    progress: &mut BridgeProgressReporter,
+) -> Result<Value> {
     progress.report(
         "scanning",
         "Finding selected albums and checking their destinations.",
@@ -584,7 +627,8 @@ fn preview_selection(
     let destination_root = canonical_destination_root(&category)?;
     let database_path = app_data_dir.join("music-library.sqlite3");
     let mut conn = open_database(&database_path)?;
-    cleanup_abandoned_bridge_plans(&conn, app_data_dir)?;
+    cleanup_abandoned_bridge_plans(&conn, app_data_dir)
+        .context("Could not clean up previous Aurora previews")?;
     progress.total_albums = inputs.len();
     progress.report(
         "analyzing",
@@ -622,7 +666,7 @@ fn preview_selection(
         Err(error) => {
             folder_sync::cleanup_generated_snapshot(snapshot_path.to_string_lossy().as_ref());
             let _ = fs::remove_dir_all(&plan_directory);
-            return Err(error);
+            return Err(error.context("Could not stage the Aurora intake preview"));
         }
     };
     progress.report(
@@ -3220,8 +3264,8 @@ fn validate_relative_path(path: &Path) -> Result<()> {
 fn open_database(path: &Path) -> Result<Connection> {
     let conn = Connection::open(path)
         .with_context(|| format!("Could not open Music Library database {}", path.display()))?;
-    db::configure(&conn)?;
-    db::migrate(&conn)?;
+    db::configure(&conn).context("Could not configure the Aurora bridge database connection")?;
+    db::migrate(&conn).context("Could not prepare the Aurora bridge database schema")?;
     Ok(conn)
 }
 
@@ -3614,6 +3658,9 @@ fn display_path(path: &Path) -> String {
 }
 
 fn bridge_error_code(error: &anyhow::Error) -> &'static str {
+    if database_is_busy(error) {
+        return "databaseBusy";
+    }
     let message = format!("{error:#}").to_lowercase();
     if message.contains("protocol version") {
         "unsupportedProtocol"
@@ -3683,6 +3730,144 @@ fn set_hidden(_path: &Path, _hidden: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preview_retries_busy_snapshot_from_a_fresh_transaction() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("busy.sqlite3");
+        let writer = Connection::open(&path).unwrap();
+        writer.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE items (value INTEGER); INSERT INTO items VALUES (1);").unwrap();
+        let mut attempts = 0;
+        retry_preview_database_busy(4, |attempt| {
+            attempts += 1;
+            let mut conn = Connection::open(&path)?;
+            let tx = conn.transaction()?;
+            let value: i64 = tx.query_row("SELECT value FROM items", [], |row| row.get(0))?;
+            if attempt == 0 {
+                writer.execute("UPDATE items SET value=2", [])?;
+            }
+            tx.execute("UPDATE items SET value=?1", [value + 10])?;
+            tx.commit()?;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(attempts, 2);
+        assert_eq!(
+            writer
+                .query_row("SELECT value FROM items", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            12
+        );
+    }
+
+    #[test]
+    fn preview_busy_retries_are_bounded_and_do_not_retry_permanent_errors() {
+        for code in [
+            rusqlite::ffi::SQLITE_BUSY,
+            rusqlite::ffi::SQLITE_LOCKED,
+            rusqlite::ffi::SQLITE_READONLY,
+            rusqlite::ffi::SQLITE_CONSTRAINT,
+            rusqlite::ffi::SQLITE_CORRUPT,
+        ] {
+            let mut attempts = 0;
+            let result: Result<()> = retry_preview_database_busy(4, |_| {
+                attempts += 1;
+                Err(anyhow::Error::new(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(code),
+                    None,
+                ))
+                .context("preview database operation"))
+            });
+            let error = result.unwrap_err();
+            let busy = matches!(
+                code,
+                rusqlite::ffi::SQLITE_BUSY | rusqlite::ffi::SQLITE_LOCKED
+            );
+            assert_eq!(attempts, if busy { 4 } else { 1 });
+            assert_eq!(bridge_error_code(&error) == "databaseBusy", busy);
+            if busy {
+                assert!(error.to_string().contains("still busy"));
+            }
+        }
+        let mut attempts = 0;
+        let result: Result<()> = retry_preview_database_busy(4, |_| {
+            attempts += 1;
+            bail!("a filename contains database is locked");
+        });
+        assert!(result.is_err());
+        assert_eq!(attempts, 1);
+    }
+
+    #[test]
+    fn preview_waits_for_another_writer_then_keeps_one_reviewable_plan() {
+        let fixture = SelectionFixture::new();
+        let app_data = bridge_app_data_dir().unwrap();
+        let conn = open_database(&app_data.join("music-library.sqlite3")).unwrap();
+        conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let targets = fixture.targets.clone();
+        let before: Vec<_> = targets
+            .iter()
+            .map(|target| fs::read(Path::new(&target.source_path).join("01.mp3")).unwrap())
+            .collect();
+        let request_path = app_data.join("lock-test.request.json");
+        let progress_path = request_path.with_extension("progress.json");
+        let worker = std::thread::spawn(move || {
+            preview_selection(
+                &app_data,
+                PreviewSelectionRequest { targets },
+                &mut BridgeProgressReporter::new(&request_path, "previewSelection"),
+            )
+        });
+        let started = std::time::Instant::now();
+        let mut waited = false;
+        while started.elapsed() < Duration::from_secs(25) && !worker.is_finished() {
+            let progress = fs::read(&progress_path)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+            if progress
+                .as_ref()
+                .is_some_and(|value| value["stage"] == "waiting")
+            {
+                waited = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        conn.execute_batch("ROLLBACK").unwrap();
+        let preview = worker.join().unwrap().unwrap();
+        assert!(
+            waited,
+            "preview must recover after the initial SQLite wait expires"
+        );
+        assert_eq!(preview["albumCount"], 6);
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM import_sessions", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM tracks", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        for (target, original) in fixture.targets.iter().zip(before) {
+            assert_eq!(
+                fs::read(Path::new(&target.source_path).join("01.mp3")).unwrap(),
+                original
+            );
+        }
+        fixture
+            .apply(&preview)
+            .expect("reviewed preview remains applicable");
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM tracks", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            6
+        );
+    }
 
     struct SelectionFixture {
         temp: tempfile::TempDir,

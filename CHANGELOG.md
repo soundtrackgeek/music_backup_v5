@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.156.3] - 2026-09-27
+
+### Fixed
+- Retry transient SQLite contention during Aurora batch previews with fresh connections and rebuilt plans. Preserve staged-import cleanup and transfer/review safeguards, and report persistent contention as databaseBusy instead of validationFailed.
+
 ## [0.156.2] - 2026-09-27
 
 ### Fixed

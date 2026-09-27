@@ -1,5 +1,7 @@
 # Music Library
 
+Music Library 0.156.3 automatically retries temporary database locks during Aurora intake previews (up to four attempts, retaining SQLite's busy wait). Each retry rebuilds the review from current catalog state. Persistent locks remain a clear database-busy error; permanent failures are not retried, and reviewed file transfers are never replayed by this retry.
+
 Music Library 0.156.2 repairs release-note extraction for the nested Inbox intake fix. `npm run check:version` now also requires a nonempty, correctly formatted changelog section before a release build.
 
 Music Library 0.156.1 fixes Aurora intake for nested artist/category folders and empty containers left after Inbox renaming. Multi-disc albums stay together, and mixed album tags remain blocked.
