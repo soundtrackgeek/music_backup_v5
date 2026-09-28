@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.156.5] - 2026-09-28
+
+### Fixed
+- Match chart songs by full title first, then try a balanced-parentheses fallback with the same artist. Preserve printed titles, prefer exact titles, and leave ambiguous version matches unresolved.
+- Use the same matching path for all singles imports, catalog reconciliation, the chart-match rebuild action, and published artist histories.
+
 ## [0.156.4] - 2026-09-27
 
 ### Fixed

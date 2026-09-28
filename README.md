@@ -1,6 +1,6 @@
 # Music Library
 
-Music Library 0.156.4 keeps the database-lock recovery behavior and fixes its cross-platform regression test: the competing lock is released only after the first preview attempt reports SQLite contention.
+Music Library 0.156.5 improves chart song matching with an exact-title-first parenthetical fallback, shared across singles imports, catalog reconciliation, and published artist histories.
 
 Music Library 0.156.3 automatically retries temporary database locks during Aurora intake previews (up to four attempts, retaining SQLite's busy wait). Each retry rebuilds the review from current catalog state. Persistent locks remain a clear database-busy error; permanent failures are not retried, and reviewed file transfers are never replayed by this retry.
 
@@ -803,3 +803,11 @@ Verify the checker with `python -m unittest discover -s Tools/library_inventory 
 Aurora sends saved, still-missing MP3 identities to Music Library. Music Library verifies the complete surviving album and commits catalog removals, album metrics, search cleanup, and Updates history atomically. Restored files, unavailable folders, unknown tracks, and changed catalog data prevent deletion sync. Older identity-set failures receive a fresh guarded retry after upgrading Aurora; Music Library must also support verified deletion sync. Empty albums still require the reviewed album-removal workflow.
 
 Aurora intake now discovers albums inside nested artist/category folders while preserving multi-disc album roots and rejecting mixed album tags.
+
+### Chart song title matching
+
+Chart song matching tries the full artist/title first, then existing title aliases, then a fallback that removes balanced parenthetical groups from either the chart title or the library title. For example, `In And Out Of Love (Edit)` can match `In And Out Of Love` by Bon Jovi, and `We Don't Need Another Hero (Thunderdome)` can match the shorter Tina Turner title. Artist matching remains required; printed chart titles and audio-file tags are unchanged.
+
+An exact title always takes priority. Different parenthetical versions are not matched to each other by stripping both titles; a bare title that could select several different versions stays unmatched. Duplicate copies of the same title retain the usual album preference. Empty or malformed parenthetical titles do not gain fallback matches.
+
+These rules apply to singles imports, subsequent catalog reconciliation, and published artist chart histories. To update existing stored singles links without reimporting CSV files, use the chart-match rebuild action in source health.

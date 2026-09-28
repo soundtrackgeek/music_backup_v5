@@ -1,5 +1,6 @@
 #![cfg_attr(test, allow(dead_code, unused_imports))]
 
+mod chart_song_match;
 mod ai;
 mod album_review;
 mod artist_biography;
