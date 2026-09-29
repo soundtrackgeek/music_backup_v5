@@ -20,7 +20,7 @@ export function PublishedSongHistory({ chart, song, onClose }: { chart: string; 
   const peak = weeks.length ? Math.min(...weeks.map((week) => week.position)) : null;
   const peakWeek = weeks.find((week) => week.position === peak);
   return <section ref={panel} tabIndex={-1} className="published-history" aria-label="Song chart history">
-    <div className="published-chart-heading"><div><span className="published-detail-kicker">Song history · {chart}</span><h3>{song.artist} – {song.title}</h3></div><button type="button" className="secondary-button" onClick={onClose}>Close history</button></div>
+    <div className="published-chart-heading"><div><span className="published-detail-kicker">Song history · {chart}</span><h3>{song.artist} – {song.title}</h3>{song.printedVariants.length ? <p className="published-variants">Also printed as {song.printedVariants.join("; ")}</p> : null}</div><button type="button" className="secondary-button" onClick={onClose}>Close history</button></div>
     {loading ? <p role="status">Loading song history…</p> : error ? <p role="alert">{error}</p> : !weeks.length ? <p>No archived weeks found.</p> : <>
       <dl className="published-song-stats">
         <div><dt>First archived appearance</dt><dd>{weeks[0].weekEnding}<small>Entered at #{weeks[0].position}</small></dd></div>

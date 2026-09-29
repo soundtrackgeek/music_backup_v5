@@ -31,7 +31,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 #[cfg(not(test))]
 use tauri::{AppHandle, Emitter, Manager};
-use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const DEFAULT_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
@@ -5049,29 +5048,7 @@ fn normalize_local_artist_text(value: &str) -> String {
 }
 
 fn musicbrainz_text_key(value: &str) -> String {
-    let lowercased = value.replace('&', " and ").to_lowercase();
-    let folded = lowercased
-        .nfd()
-        .filter(|character| !is_combining_mark(*character))
-        .fold(String::new(), |mut normalized, character| {
-            match character {
-                'æ' => normalized.push_str("ae"),
-                'œ' => normalized.push_str("oe"),
-                'ø' => normalized.push('o'),
-                'ð' => normalized.push('d'),
-                'þ' => normalized.push_str("th"),
-                'ł' => normalized.push('l'),
-                'ß' => normalized.push_str("ss"),
-                _ => normalized.push(character),
-            }
-            normalized
-        });
-
-    folded
-        .split(|character: char| !character.is_alphanumeric())
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+    crate::chart_identity::text_key(value)
 }
 
 fn empty_status(

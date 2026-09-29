@@ -43,8 +43,8 @@ describe("PublishedChartsWorkspace", () => {
     getRankings.mockResolvedValue({
       totalSongs: 2, chartWeeks: 2, totalEntries: 3,
       songs: [
-        { rank: 1, artist: "First artist", title: "First song", firstWeek: "2019-01-05", lastWeek: "2019-01-12", numberOneWeeks: 2, chartWeeks: 2, appearances: 2, bestPosition: 1 },
-        { rank: 2, artist: "First artist", title: "Second song", firstWeek: "2019-01-05", lastWeek: "2019-01-05", numberOneWeeks: 0, chartWeeks: 1, appearances: 1, bestPosition: 2 },
+        { rank: 1, artist: "First artist", title: "First song", firstWeek: "2019-01-05", lastWeek: "2019-01-12", numberOneWeeks: 2, chartWeeks: 2, appearances: 2, bestPosition: 1, printedVariants: ["The First Artist – First Song"] },
+        { rank: 2, artist: "First artist", title: "Second song", firstWeek: "2019-01-05", lastWeek: "2019-01-05", numberOneWeeks: 0, chartWeeks: 1, appearances: 1, bestPosition: 2, printedVariants: [] },
       ],
     });
     getEntries.mockResolvedValue({ totalRows: 2, entries: [baseEntry, { ...baseEntry, id: 2, title: "Second song" }] });
@@ -54,6 +54,8 @@ describe("PublishedChartsWorkspace", () => {
     render(<PublishedChartsWorkspace />);
     expect(await screen.findByText("First artist – First song")).toBeInTheDocument();
     expect(screen.getByText("First artist – Second song")).toBeInTheDocument();
+    expect(screen.getByText("Also printed as The First Artist – First Song")).toBeInTheDocument();
+    expect(screen.getAllByText(/Also printed as/)).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Browse" })).not.toBeInTheDocument();
     await waitFor(() => expect(getRankings).toHaveBeenCalledWith("Billboard Hot 100", 2019, 2019, null, null, 0));
   });
@@ -64,6 +66,7 @@ describe("PublishedChartsWorkspace", () => {
     const history = await screen.findByRole("region", { name: "Song chart history" });
     expect(await within(history).findByText("Entered at #8")).toBeInTheDocument();
     expect(within(history).getByText("First reached 2019-01-05")).toBeInTheDocument();
+    expect(within(history).getByText("Also printed as The First Artist – First Song")).toBeInTheDocument();
     fireEvent.click(within(history).getByRole("button", { name: "Close history" }));
     expect(screen.queryByRole("region", { name: "Song chart history" })).not.toBeInTheDocument();
   });

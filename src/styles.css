@@ -26704,6 +26704,8 @@ button {
 .published-rank { color: #0d756d; font-weight: 750; }
 .published-song { display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 180px; color: #17211f; background: none; padding: 0; text-align: left; cursor: pointer; }
 .published-song span { color: #697671; font-size: 12px; }
+.published-variants { color: #697671; font-size: 12px; font-style: italic; }
+.published-history .published-variants { margin: 4px 0 0; }
 .published-song:hover strong,
 .published-song:focus-visible strong { color: #0d756d; text-decoration: underline; }
 .published-song:focus-visible { outline: 2px solid #0d756d; outline-offset: 3px; }
@@ -26773,6 +26775,7 @@ button {
 :root[data-theme="dark"] .published-entry-detail > p,
 :root[data-theme="dark"] .published-source-note,
 :root[data-theme="dark"] .published-song span,
+:root[data-theme="dark"] .published-variants,
 :root[data-theme="dark"] .published-detail-field dt,
 :root[data-theme="dark"] .published-chart-table th {
   color: #aabbb4;

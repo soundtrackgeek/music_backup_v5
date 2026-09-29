@@ -67,7 +67,6 @@ use tauri::{AppHandle, Manager};
 type ProgressApp<'a> = &'a AppHandle;
 #[cfg(test)]
 type ProgressApp<'a> = &'a ();
-use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 mod backups;
 mod migrations;
@@ -7103,29 +7102,7 @@ fn nonempty_str(value: &str) -> Option<&str> {
 }
 
 fn billboard_text_key(value: &str) -> String {
-    let lowercased = value.replace('&', " and ").to_lowercase();
-    let folded = lowercased
-        .nfd()
-        .filter(|character| !is_combining_mark(*character))
-        .fold(String::new(), |mut normalized, character| {
-            match character {
-                'æ' => normalized.push_str("ae"),
-                'œ' => normalized.push_str("oe"),
-                'ø' => normalized.push('o'),
-                'ð' => normalized.push('d'),
-                'þ' => normalized.push_str("th"),
-                'ł' => normalized.push('l'),
-                'ß' => normalized.push_str("ss"),
-                _ => normalized.push(character),
-            }
-            normalized
-        });
-
-    folded
-        .split(|character: char| !character.is_alphanumeric())
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+    crate::chart_identity::text_key(value)
 }
 
 #[cfg(not(test))]
@@ -24603,29 +24580,7 @@ fn normalize_artist_key(value: &str) -> String {
 }
 
 fn musicbrainz_text_key(value: &str) -> String {
-    let lowercased = value.replace('&', " and ").to_lowercase();
-    let folded = lowercased
-        .nfd()
-        .filter(|character| !is_combining_mark(*character))
-        .fold(String::new(), |mut normalized, character| {
-            match character {
-                'æ' => normalized.push_str("ae"),
-                'œ' => normalized.push_str("oe"),
-                'ø' => normalized.push('o'),
-                'ð' => normalized.push('d'),
-                'þ' => normalized.push_str("th"),
-                'ł' => normalized.push('l'),
-                'ß' => normalized.push_str("ss"),
-                _ => normalized.push(character),
-            }
-            normalized
-        });
-
-    folded
-        .split(|character: char| !character.is_alphanumeric())
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+    crate::chart_identity::text_key(value)
 }
 
 fn normalize_artist_dashes(value: &str) -> String {

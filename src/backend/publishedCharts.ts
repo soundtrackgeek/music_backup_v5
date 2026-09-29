@@ -23,6 +23,8 @@ export type PublishedArtistRow = {
   chartWeeks: number;
   appearances: number;
   bestPosition: number;
+  /** Other printed spellings grouped into this row, most printed first. */
+  printedVariants: string[];
 };
 
 export type PublishedArtistRanking = {

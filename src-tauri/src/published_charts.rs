@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, NaiveDate};
 use flate2::read::MultiGzDecoder;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{functions::FunctionFlags, params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, File};
@@ -180,6 +180,8 @@ pub struct PublishedArtistRow {
     pub chart_weeks: i64,
     pub appearances: i64,
     pub best_position: i32,
+    /// Other printed spellings merged into this row, most printed first.
+    pub printed_variants: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -248,6 +250,8 @@ pub(crate) fn ensure_schema(conn: &Connection) -> Result<()> {
             peak_date TEXT NOT NULL,
             bpi_award TEXT NOT NULL,
             source_page TEXT NOT NULL,
+            artist_group_key TEXT,
+            title_key TEXT,
             UNIQUE(book_id, source_row)
         );
         CREATE INDEX IF NOT EXISTS idx_published_chart_entries_artist
@@ -261,21 +265,173 @@ pub(crate) fn ensure_schema(conn: &Connection) -> Result<()> {
             row_count INTEGER NOT NULL,
             imported_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS published_chart_identity (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            key_version INTEGER NOT NULL
+        );
         ",
     )
-    .context("Could not create Published Charts tables")
+    .context("Could not create Published Charts tables")?;
+    let mut statement = conn.prepare("SELECT name FROM pragma_table_info('published_chart_entries')")?;
+    let columns = statement
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<HashSet<_>>>()?;
+    for column in ["artist_group_key", "title_key"] {
+        if !columns.contains(column) {
+            conn.execute_batch(&format!(
+                "ALTER TABLE published_chart_entries ADD COLUMN {column} TEXT"
+            ))
+            .context("Could not add Published Charts identity keys")?;
+        }
+    }
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_published_chart_entries_identity
+            ON published_chart_entries(artist_group_key, title_key);",
+    )
+    .context("Could not index Published Charts identity keys")?;
+    // An empty archive has nothing to backfill; imported rows carry their keys.
+    let empty: bool = conn.query_row(
+        "SELECT NOT EXISTS(SELECT 1 FROM published_chart_entries)",
+        [],
+        |row| row.get(0),
+    )?;
+    if empty {
+        mark_identity_keys_current(conn)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn schema_exists(conn: &Connection) -> Result<bool> {
     let count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM sqlite_master WHERE name IN (
             'published_chart_books', 'published_chart_entries', 'published_chart_import_years',
-            'idx_published_chart_entries_artist'
+            'idx_published_chart_entries_artist', 'published_chart_identity',
+            'idx_published_chart_entries_identity'
         )",
         [],
         |row| row.get(0),
     )?;
-    Ok(count == 4)
+    Ok(count == 6)
+}
+
+/// Bump when chart_identity keys change so stored archive keys are rebuilt.
+const IDENTITY_KEY_VERSION: i64 = 1;
+
+fn identity_keys_current(conn: &Connection) -> Result<bool> {
+    let version = conn
+        .query_row(
+            "SELECT key_version FROM published_chart_identity WHERE id = 1",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()?;
+    Ok(version == Some(IDENTITY_KEY_VERSION))
+}
+
+fn require_identity_keys(conn: &Connection) -> Result<()> {
+    if !identity_keys_current(conn)? {
+        bail!("Published Charts are still being prepared; refresh them and try again");
+    }
+    Ok(())
+}
+
+fn printed_variants(others: Option<String>) -> Vec<String> {
+    others
+        .map(|others| others.split('\u{1f}').map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+fn mark_identity_keys_current(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "INSERT INTO published_chart_identity (id, key_version) VALUES (1, ?1)
+         ON CONFLICT(id) DO UPDATE SET key_version = excluded.key_version",
+        params![IDENTITY_KEY_VERSION],
+    )?;
+    Ok(())
+}
+
+/// Memoized keys: the archive repeats a few thousand credits across 3M rows.
+#[derive(Default)]
+struct IdentityKeys {
+    artists: HashMap<String, String>,
+    titles: HashMap<String, String>,
+}
+
+impl IdentityKeys {
+    fn artist(&mut self, artist: &str) -> String {
+        if let Some(key) = self.artists.get(artist) {
+            return key.clone();
+        }
+        let key = crate::chart_identity::artist_group_key(artist);
+        self.artists.insert(artist.to_string(), key.clone());
+        key
+    }
+
+    fn title(&mut self, title: &str) -> String {
+        if let Some(key) = self.titles.get(title) {
+            return key.clone();
+        }
+        let key = crate::chart_identity::text_key(title);
+        self.titles.insert(title.to_string(), key.clone());
+        key
+    }
+}
+
+/// Backfill archives imported before identity keys, or under an older key version.
+fn refresh_identity_keys(conn: &mut Connection) -> Result<()> {
+    if identity_keys_current(conn)? {
+        return Ok(());
+    }
+    let tx = conn
+        .transaction()
+        .context("Could not start Published Charts identity refresh")?;
+    // Key each distinct printed value once, then rewrite rows through in-memory lookups.
+    let identities: [(&str, &str, fn(&str) -> String); 2] = [
+        (
+            "published_artist_identity",
+            "artist",
+            crate::chart_identity::artist_group_key,
+        ),
+        (
+            "published_title_identity",
+            "title",
+            crate::chart_identity::text_key,
+        ),
+    ];
+    for (function, column, key) in identities {
+        let mut select =
+            tx.prepare(&format!("SELECT DISTINCT {column} FROM published_chart_entries"))?;
+        let keys = select
+            .query_map([], |row| row.get::<_, String>(0))?
+            .map(|printed| {
+                printed.map(|printed| {
+                    let identity = key(&printed);
+                    (printed, identity)
+                })
+            })
+            .collect::<rusqlite::Result<HashMap<_, _>>>()?;
+        tx.create_scalar_function(
+            function,
+            1,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            move |context| Ok(keys.get(&context.get::<String>(0)?).cloned()),
+        )?;
+    }
+    let updated = tx
+        .execute_batch(
+            "UPDATE published_chart_entries SET
+                artist_group_key = published_artist_identity(artist),
+                title_key = published_title_identity(title);",
+        )
+        .context("Could not refresh Published Charts identity keys");
+    for (function, _, _) in identities {
+        tx.remove_function(function, 1)?;
+    }
+    updated?;
+    mark_identity_keys_current(&tx)?;
+    tx.commit()
+        .context("Could not commit Published Charts identity refresh")
 }
 
 #[cfg(not(test))]
@@ -373,6 +529,7 @@ where
     let total_years = years.len();
     let mut imported_rows = 0;
     let mut chart_names = HashSet::new();
+    let mut identity = IdentityKeys::default();
 
     for (completed_years, (year, inventory)) in years.into_iter().enumerate() {
         let book = format!("{year}_us_singles");
@@ -480,9 +637,9 @@ where
              (book_id, source_row, week_ending, position, last_week, weeks_on_chart,
               entry_status, movement, title, artist, number_one_marker, label, format,
               catalogue_number, release_type, duration, peak_position, entry_date,
-              peak_date, bpi_award, source_page)
+              peak_date, bpi_award, source_page, artist_group_key, title_key)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
-                     ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+                     ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         )?;
         let mut count = 0_usize;
         for result in reader.deserialize::<SourceRow>() {
@@ -519,6 +676,8 @@ where
             if row.week_ending > stats.3 {
                 stats.3 = row.week_ending.clone();
             }
+            let artist_group_key = identity.artist(&row.artist);
+            let title_key = identity.title(&row.title);
             insert.execute(params![
                 book_id,
                 count as i64 + 1,
@@ -541,6 +700,8 @@ where
                 row.peak_date,
                 row.bpi_award,
                 row.source_page,
+                artist_group_key,
+                title_key,
             ])?;
             count += 1;
         }
@@ -580,6 +741,7 @@ where
             imported_rows,
         });
     }
+    refresh_identity_keys(conn)?;
     Ok(PublishedChartsImportSummary {
         source_path: folder.display().to_string(),
         years_imported: total_years,
@@ -648,7 +810,7 @@ pub fn catalog(conn: &Connection) -> Result<PublishedChartCatalog> {
     Ok(PublishedChartCatalog {
         imported_years,
         inventory_years: imported_years,
-        needs_import: false,
+        needs_import: !identity_keys_current(conn)?,
         total_rows,
         series,
     })
@@ -705,7 +867,7 @@ pub fn catalog_with_inventory(conn: &Connection, folder: &Path) -> Result<Publis
             ))
         })?
         .collect::<rusqlite::Result<HashSet<_>>>()?;
-    result.needs_import = expected_books != imported_books;
+    result.needs_import |= expected_books != imported_books;
     if let Some(hashes) = hashes {
         let mut statement =
             conn.prepare("SELECT year, source_path FROM published_chart_import_years")?;
@@ -754,6 +916,7 @@ pub fn artists(
     if start.year() != from_year || end.year() != to_year || start > end {
         bail!("Chart weeks must fall within the selected years and run in date order");
     }
+    require_identity_keys(conn)?;
     let start = start.format("%Y-%m-%d").to_string();
     let end = end.format("%Y-%m-%d").to_string();
     let filter = "FROM published_chart_books b
@@ -768,20 +931,35 @@ pub fn artists(
         params![chart, from_book, to_book, start, end],
         |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
+    // Printed spellings of one credit share a key; show the most printed one.
     let ranking_sql = format!(
-        "WITH artist_totals AS (
-            SELECT e.artist AS artist,
+        "WITH printed AS MATERIALIZED (
+            SELECT e.artist_group_key AS identity, e.artist AS artist, COUNT(*) AS printed_rows
+            {filter} GROUP BY e.artist_group_key, e.artist
+         ), spellings AS MATERIALIZED (
+            SELECT identity, artist,
+                   ROW_NUMBER() OVER (PARTITION BY identity
+                       ORDER BY printed_rows DESC, artist COLLATE NOCASE, artist) AS choice
+            FROM printed
+         ), variants AS (
+            SELECT identity, GROUP_CONCAT(artist, char(31)) AS others
+            FROM (SELECT identity, artist FROM spellings WHERE choice > 1 ORDER BY identity, choice)
+            GROUP BY identity
+         ), artist_totals AS (
+            SELECT e.artist_group_key AS identity,
                    COUNT(DISTINCT CASE WHEN e.position = 1 THEN e.week_ending END) AS number_one_weeks,
                    COUNT(DISTINCT e.week_ending) AS chart_weeks,
                    COUNT(*) AS appearances,
                    MIN(e.position) AS best_position
-            {filter} GROUP BY e.artist
+            {filter} GROUP BY e.artist_group_key
          )
-         SELECT ROW_NUMBER() OVER (ORDER BY number_one_weeks DESC, chart_weeks DESC,
-                   appearances DESC, artist COLLATE NOCASE, artist) AS rank,
+         SELECT ROW_NUMBER() OVER (ORDER BY t.number_one_weeks DESC, t.chart_weeks DESC,
+                   t.appearances DESC, s.artist COLLATE NOCASE, s.artist) AS rank,
                 COUNT(*) OVER () AS total_artists,
-                artist, number_one_weeks, chart_weeks, appearances, best_position
-         FROM artist_totals
+                s.artist, t.number_one_weeks, t.chart_weeks, t.appearances, t.best_position, v.others
+         FROM artist_totals t
+         JOIN spellings s ON s.identity = t.identity AND s.choice = 1
+         LEFT JOIN variants v ON v.identity = t.identity
          ORDER BY rank LIMIT 100 OFFSET ?6"
     );
     let mut statement = conn.prepare(&ranking_sql)?;
@@ -798,6 +976,7 @@ pub fn artists(
                     chart_weeks: row.get(4)?,
                     appearances: row.get(5)?,
                     best_position: row.get(6)?,
+                    printed_variants: printed_variants(row.get(7)?),
                 })
             },
         )?
@@ -838,6 +1017,7 @@ pub fn songs(
     if start.year() != from_year || end.year() != to_year || start > end {
         bail!("Chart weeks must fall within the selected years and run in date order");
     }
+    require_identity_keys(conn)?;
     let start = start.format("%Y-%m-%d").to_string();
     let end = end.format("%Y-%m-%d").to_string();
     let filter = "FROM published_chart_books b
@@ -852,20 +1032,44 @@ pub fn songs(
         params![chart, from_book, to_book, start, end],
         |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
+    // Printed spellings of one song share keys; show the most printed pair.
     let ranking_sql = format!(
-        "WITH song_totals AS (
-            SELECT e.artist AS artist, e.title AS title, MIN(e.week_ending) AS first_week, MAX(e.week_ending) AS last_week,
+        "WITH printed AS MATERIALIZED (
+            SELECT e.artist_group_key AS artist_identity, e.title_key AS title_identity,
+                   e.artist AS artist, e.title AS title, COUNT(*) AS printed_rows
+            {filter} GROUP BY e.artist_group_key, e.title_key, e.artist, e.title
+         ), spellings AS MATERIALIZED (
+            SELECT artist_identity, title_identity, artist, title,
+                   ROW_NUMBER() OVER (PARTITION BY artist_identity, title_identity
+                       ORDER BY printed_rows DESC, artist COLLATE NOCASE, artist,
+                                title COLLATE NOCASE, title) AS choice
+            FROM printed
+         ), variants AS (
+            SELECT artist_identity, title_identity,
+                   GROUP_CONCAT(artist || ' – ' || title, char(31)) AS others
+            FROM (SELECT * FROM spellings WHERE choice > 1
+                  ORDER BY artist_identity, title_identity, choice)
+            GROUP BY artist_identity, title_identity
+         ), song_totals AS (
+            SELECT e.artist_group_key AS artist_identity, e.title_key AS title_identity,
+                   MIN(e.week_ending) AS first_week, MAX(e.week_ending) AS last_week,
                    COUNT(DISTINCT CASE WHEN e.position = 1 THEN e.week_ending END) AS number_one_weeks,
                    COUNT(DISTINCT e.week_ending) AS chart_weeks,
                    COUNT(*) AS appearances,
                    MIN(e.position) AS best_position
-            {filter} GROUP BY e.artist, e.title
+            {filter} GROUP BY e.artist_group_key, e.title_key
          )
-         SELECT ROW_NUMBER() OVER (ORDER BY number_one_weeks DESC, chart_weeks DESC,
-                   best_position ASC, artist COLLATE NOCASE, artist, title COLLATE NOCASE, title) AS rank,
+         SELECT ROW_NUMBER() OVER (ORDER BY t.number_one_weeks DESC, t.chart_weeks DESC,
+                   t.best_position ASC, s.artist COLLATE NOCASE, s.artist,
+                   s.title COLLATE NOCASE, s.title) AS rank,
                 COUNT(*) OVER () AS total_songs,
-                artist, number_one_weeks, chart_weeks, appearances, best_position, title, first_week, last_week
-         FROM song_totals
+                s.artist, t.number_one_weeks, t.chart_weeks, t.appearances, t.best_position,
+                s.title, t.first_week, t.last_week, v.others
+         FROM song_totals t
+         JOIN spellings s ON s.artist_identity = t.artist_identity
+             AND s.title_identity = t.title_identity AND s.choice = 1
+         LEFT JOIN variants v ON v.artist_identity = t.artist_identity
+             AND v.title_identity = t.title_identity
          ORDER BY rank LIMIT 100 OFFSET ?6"
     );
     let mut statement = conn.prepare(&ranking_sql)?;
@@ -885,6 +1089,7 @@ pub fn songs(
                     title: row.get(7)?,
                     first_week: row.get(8)?,
                     last_week: row.get(9)?,
+                    printed_variants: printed_variants(row.get(10)?),
                 })
             },
         )?
@@ -1235,7 +1440,10 @@ mod tests {
         let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/published-charts");
         let temp = tempfile::tempdir().unwrap();
         let mut conn = Connection::open(temp.path().join("charts.sqlite3")).unwrap();
-        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;",
+        )
+        .unwrap();
         ensure_schema(&conn).unwrap();
         let summary = import_folder(&mut conn, &source, |_| {}).unwrap();
         assert_eq!(summary.years_imported, 86);
@@ -1247,11 +1455,58 @@ mod tests {
             .unwrap();
         assert_eq!(actual, 3_279_068);
         assert!(!catalog_with_inventory(&conn, &source).unwrap().needs_import);
+        conn.execute_batch(
+            "UPDATE published_chart_entries SET artist_group_key = NULL, title_key = NULL;
+             DELETE FROM published_chart_identity;",
+        )
+        .unwrap();
+        let started = Instant::now();
+        refresh_identity_keys(&mut conn).unwrap();
+        eprintln!("identity backfill: {:?}", started.elapsed());
+        let started = Instant::now();
+        let ranking = artists(&conn, "Billboard Hot 100", 1958, 2025, None, None, 0).unwrap();
+        eprintln!("all-time Hot 100 artists: {:?}", started.elapsed());
+        let hall_oates = ranking
+            .artists
+            .iter()
+            .find(|row| row.artist.starts_with("Daryl Hall"))
+            .unwrap();
+        assert!(!hall_oates.printed_variants.is_empty());
+        let started = Instant::now();
+        songs(&conn, "Billboard Hot 100", 1958, 2025, None, None, 0).unwrap();
+        eprintln!("all-time Hot 100 songs: {:?}", started.elapsed());
+    }
+
+    fn rekey(conn: &mut Connection) {
+        conn.execute("DELETE FROM published_chart_identity", []).unwrap();
+        refresh_identity_keys(conn).unwrap();
+    }
+
+    fn insert_entry(
+        conn: &Connection,
+        book_id: i64,
+        source_row: i64,
+        week: &str,
+        position: i32,
+        artist: &str,
+        title: &str,
+    ) {
+        conn.execute(
+            "INSERT INTO published_chart_entries
+             (book_id, source_row, week_ending, position, last_week, weeks_on_chart,
+              entry_status, movement, title, artist, number_one_marker, label, format,
+              catalogue_number, release_type, duration, peak_position, entry_date,
+              peak_date, bpi_award, source_page)
+             VALUES (?1, ?2, ?3, ?4, '', '', '', '', ?5, ?6,
+                     '', '', '', '', '', '', '', '', '', '', '')",
+            params![book_id, source_row, week, position, title, artist],
+        )
+        .unwrap();
     }
 
     #[test]
     fn ranks_all_artist_credits_over_years_and_week_boundaries() {
-        let conn = Connection::open_in_memory().unwrap();
+        let mut conn = Connection::open_in_memory().unwrap();
         ensure_schema(&conn).unwrap();
         for (id, year) in [(1, 2018), (2, 2019)] {
             conn.execute(
@@ -1270,18 +1525,9 @@ mod tests {
             (2, 3, "2019-01-12", 1, "Artist B"),
             (2, 4, "2019-01-12", 3, "Artist C"),
         ] {
-            conn.execute(
-                "INSERT INTO published_chart_entries
-                 (book_id, source_row, week_ending, position, last_week, weeks_on_chart,
-                  entry_status, movement, title, artist, number_one_marker, label, format,
-                  catalogue_number, release_type, duration, peak_position, entry_date,
-                  peak_date, bpi_award, source_page)
-                 VALUES (?1, ?2, ?3, ?4, '', '', '', '', 'Song', ?5,
-                         '', '', '', '', '', '', '', '', '', '', '')",
-                params![book_id, source_row, week, position, artist],
-            )
-            .unwrap();
+            insert_entry(&conn, book_id, source_row, week, position, artist, "Song");
         }
+        rekey(&mut conn);
         let song_rows = songs(&conn, "Billboard Hot 100", 2019, 2019, None, None, 0).unwrap();
         assert_eq!(song_rows.total_songs, 3);
         assert_eq!(song_rows.songs[0].artist, "Artist B");
@@ -1292,6 +1538,7 @@ mod tests {
         assert_eq!(history[0].week_ending, "2018-01-06"); // outside selected range
         assert!(song_history(&conn, "Another chart", "Artist A", "Song").unwrap().is_empty());
         conn.execute("UPDATE published_chart_entries SET title = 'Second song' WHERE book_id = 1 AND source_row = 2", []).unwrap();
+        rekey(&mut conn);
         let separate = songs(&conn, "Billboard Hot 100", 2018, 2019, None, None, 0).unwrap();
         assert_eq!(separate.total_songs, 4); // same artist, different songs remain separate
         assert_eq!(separate.songs.iter().filter(|song| song.artist == "Artist A").count(), 2);
@@ -1338,6 +1585,92 @@ mod tests {
     }
 
     #[test]
+    fn groups_printed_spellings_after_backfilling_legacy_archives() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        // Archive tables as created before identity keys existed.
+        conn.execute_batch(
+            "CREATE TABLE published_chart_books (
+                id INTEGER PRIMARY KEY, book TEXT NOT NULL, chart TEXT NOT NULL,
+                first_week TEXT NOT NULL, last_week TEXT NOT NULL, weekly_charts INTEGER NOT NULL,
+                row_count INTEGER NOT NULL, first_page TEXT NOT NULL, last_page TEXT NOT NULL,
+                UNIQUE(book, chart));
+             CREATE TABLE published_chart_entries (
+                id INTEGER PRIMARY KEY, book_id INTEGER NOT NULL, source_row INTEGER NOT NULL,
+                week_ending TEXT NOT NULL, position INTEGER NOT NULL, last_week TEXT NOT NULL,
+                weeks_on_chart TEXT NOT NULL, entry_status TEXT NOT NULL, movement TEXT NOT NULL,
+                title TEXT NOT NULL, artist TEXT NOT NULL, number_one_marker TEXT NOT NULL,
+                label TEXT NOT NULL, format TEXT NOT NULL, catalogue_number TEXT NOT NULL,
+                release_type TEXT NOT NULL, duration TEXT NOT NULL, peak_position TEXT NOT NULL,
+                entry_date TEXT NOT NULL, peak_date TEXT NOT NULL, bpi_award TEXT NOT NULL,
+                source_page TEXT NOT NULL, UNIQUE(book_id, source_row));
+             CREATE INDEX idx_published_chart_entries_artist ON published_chart_entries(artist);
+             CREATE TABLE published_chart_import_years (
+                year INTEGER PRIMARY KEY, source_path TEXT NOT NULL,
+                row_count INTEGER NOT NULL, imported_at TEXT NOT NULL);
+             INSERT INTO published_chart_books VALUES
+                (1, '1981_us_singles', 'Billboard Hot 100', '1981-05-02', '1981-05-16', 3, 7, '1', '1');",
+        )
+        .unwrap();
+        for (row, week, position, artist, title) in [
+            (1, "1981-05-02", 1, "Daryl Hall & John Oates", "Kiss On My List"),
+            (2, "1981-05-09", 1, "Daryl Hall & John Oates", "Kiss On My List"),
+            (3, "1981-05-16", 2, "Daryl Hall John Oates", "Kiss on My List"),
+            (4, "1981-05-16", 9, "Daryl Hall / John Oates", "You Make My Dreams"),
+            (5, "1981-05-02", 3, "ELO", "Hold On Tight"),
+            (6, "1981-05-09", 4, "Electric Light Orchestra", "Hold On Tight"),
+            (7, "1981-05-16", 5, "The Electric Light Orchestra", "Hold On Tight"),
+        ] {
+            insert_entry(&conn, 1, row, week, position, artist, title);
+        }
+        assert!(!schema_exists(&conn).unwrap());
+        ensure_schema(&conn).unwrap();
+        assert!(schema_exists(&conn).unwrap());
+        assert!(catalog(&conn).unwrap().needs_import);
+        assert!(artists(&conn, "Billboard Hot 100", 1981, 1981, None, None, 0).is_err());
+
+        refresh_identity_keys(&mut conn).unwrap();
+        assert!(!catalog(&conn).unwrap().needs_import);
+        let ranking = artists(&conn, "Billboard Hot 100", 1981, 1981, None, None, 0).unwrap();
+        assert_eq!(
+            ranking
+                .artists
+                .iter()
+                .map(|row| (row.artist.as_str(), row.chart_weeks, row.appearances))
+                .collect::<Vec<_>>(),
+            vec![
+                ("Daryl Hall & John Oates", 3, 4),
+                ("Electric Light Orchestra", 2, 2),
+                ("ELO", 1, 1),
+            ]
+        );
+        assert_eq!(
+            ranking.artists[0].printed_variants,
+            vec!["Daryl Hall / John Oates", "Daryl Hall John Oates"]
+        );
+        assert_eq!(
+            ranking.artists[1].printed_variants,
+            vec!["The Electric Light Orchestra"]
+        );
+        assert!(ranking.artists[2].printed_variants.is_empty());
+
+        let songs = songs(&conn, "Billboard Hot 100", 1981, 1981, None, None, 0).unwrap();
+        assert_eq!(songs.total_songs, 4);
+        assert_eq!(songs.songs[0].artist, "Daryl Hall & John Oates");
+        assert_eq!(songs.songs[0].title, "Kiss On My List");
+        assert_eq!(songs.songs[0].chart_weeks, 3);
+        assert_eq!(
+            songs.songs[0].printed_variants,
+            vec!["Daryl Hall John Oates \u{2013} Kiss on My List"]
+        );
+        // Any printed spelling opens the merged history.
+        let history =
+            song_history(&conn, "Billboard Hot 100", "daryl hall john oates", "KISS ON MY LIST")
+                .unwrap();
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[2].position, 2);
+    }
+
+    #[test]
     fn imports_bundled_2019_chart_book() {
         let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/published-charts");
         let temp = tempfile::tempdir().unwrap();
@@ -1375,6 +1708,15 @@ mod tests {
                 .total_rows,
             100
         );
+        let keyed: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM published_chart_entries
+                 WHERE artist_group_key IS NOT NULL AND title_key IS NOT NULL",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(keyed, 82_089);
         let started = Instant::now();
         let ranking = artists(&conn, "Billboard Hot 100", 2019, 2019, None, None, 0).unwrap();
         assert_eq!(ranking.chart_weeks, 52);
@@ -1404,6 +1746,8 @@ pub struct PublishedSongRow {
     pub best_position: i32,
     pub first_week: String,
     pub last_week: String,
+    /// Other printed artist – title spellings merged into this row.
+    pub printed_variants: Vec<String>,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1414,12 +1758,15 @@ pub struct PublishedSongWeek {
     pub entry_date: String,
 }
 pub fn song_history(conn: &Connection, chart: &str, artist: &str, title: &str) -> Result<Vec<PublishedSongWeek>> {
+    require_identity_keys(conn)?;
     let mut statement = conn.prepare(
         "SELECT e.week_ending, MIN(e.position), MAX(e.entry_status), MAX(e.entry_date)
          FROM published_chart_entries e JOIN published_chart_books b ON b.id = e.book_id
-         WHERE b.chart = ?1 AND e.artist = ?2 AND e.title = ?3
+         WHERE b.chart = ?1 AND e.artist_group_key = ?2 AND e.title_key = ?3
          GROUP BY e.week_ending ORDER BY e.week_ending"
     )?;
+    let artist = crate::chart_identity::artist_group_key(artist);
+    let title = crate::chart_identity::text_key(title);
     let rows = statement.query_map(params![chart, artist, title], |row| Ok(PublishedSongWeek {
         week_ending: row.get(0)?, position: row.get(1)?, entry_status: row.get(2)?, entry_date: row.get(3)?,
     }))?.collect::<rusqlite::Result<Vec<_>>>()?;

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.157.0] - 2026-09-29
+
+### Changed
+- Group Published Charts song rankings, artist rankings, and song histories by a shared artist/title identity that ignores capitalization, punctuation, accents, "&" versus "and" (and "/" or "+" joins), and a leading "The". The most printed spelling is shown, with the other printed spellings listed under the song and in its history.
+- Store the identity keys with the weekly archive. Existing archives are keyed automatically the next time Published Charts or Chart Busters prepares the bundled data; printed artist and title text is unchanged.
+- Move the chart text normalization used for chart matching and MusicBrainz lookups into one `chart_identity` module shared with Aurora, replacing three duplicate copies. Matching behavior is unchanged.
+
 ## [0.156.5] - 2026-09-28
 
 ### Fixed
