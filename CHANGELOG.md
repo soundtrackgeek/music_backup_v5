@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.157.1] - 2026-09-30
+
+### Fixed
+- Match chart songs to library tracks credited to a collaboration: when no full-credit, title-alias, or parenthetical match exists, a song matches when the chart's lead artist is one of the library track's main performers. For example, Official UK Singles' `JOHN LENNON – WOMAN` now matches a library track by `John Lennon & Yoko Ono`, and `DAVE STEWART WITH BARBARA GASKIN` matches `Dave Stewart & Barbara Gaskin`.
+- Main performers are joined by "&", "and", "/", "+", or commas. Guests after "feat."/"featuring"/"ft.", "with", "vs", "x", or in parentheses are ignored, because remakes often feature the original artist (`N-Trance feat. Rod Stewart`). A library artist who is only a co-credit on the chart does not match (`Kygo & Tina Turner` is not Tina Turner's original), and performer matches to different titles stay unresolved.
+- Apply this to singles reconciliation for every chart source and to Chart Busters' published histories.
+
 ## [0.157.0] - 2026-09-29
 
 ### Changed

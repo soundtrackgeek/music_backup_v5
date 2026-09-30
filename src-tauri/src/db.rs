@@ -259,6 +259,8 @@ struct TrackChartReconciliationRow {
     track_id: i64,
     album_key: String,
     display_artist_key: String,
+    /// Main performers of the display artist, lead first.
+    main_performers: Vec<String>,
     title_key: String,
     album_artist_key: String,
     year: Option<i32>,
@@ -271,6 +273,8 @@ struct StoredTrackChartEntry {
     title: String,
     entry_id: i64,
     match_artist_keys: Vec<String>,
+    /// Main performers of the printed artist credit, lead first.
+    main_performers: Vec<String>,
     source_artist_key: String,
     title_key: String,
     source_album_key: String,
@@ -3133,6 +3137,11 @@ fn load_track_chart_reconciliation_rows(
                         .as_deref()
                         .unwrap_or_default(),
                 ),
+                main_performers: crate::chart_identity::main_performers(
+                    row.get::<_, Option<String>>(2)?
+                        .as_deref()
+                        .unwrap_or_default(),
+                ),
                 title_key: billboard_text_key(
                     row.get::<_, Option<String>>(3)?
                         .as_deref()
@@ -3160,7 +3169,7 @@ fn load_billboard_single_reconciliation_entries(
         "
         SELECT id, artist, artist_key, title_key, COALESCE(album_key, ''),
                rank, year, date_entered, date_entered_year, date_entered_month,
-               date_entered_week, date_entered_week_key, title
+               date_entered_week, date_entered_week_key, title, display_artist
         FROM billboard_single_chart_entries
         ORDER BY id
         ",
@@ -3176,6 +3185,7 @@ fn load_billboard_single_reconciliation_entries(
                 title: row.get(12)?,
                 entry_id: row.get(0)?,
                 match_artist_keys,
+                main_performers: crate::chart_identity::main_performers(&row.get::<_, String>(13)?),
                 source_artist_key,
                 title_key: row.get(3)?,
                 source_album_key: row.get(4)?,
@@ -3202,7 +3212,7 @@ fn load_weekly_track_chart_reconciliation_entries(
 ) -> Result<Vec<StoredTrackChartEntry>> {
     let week_key_select = week_key_column.unwrap_or("NULL");
     let sql = format!(
-        "SELECT id, artist_key, title_key, rank, year, week, {date_column}, {week_key_select}, title
+        "SELECT id, artist_key, title_key, rank, year, week, {date_column}, {week_key_select}, title, artist
          FROM {table} ORDER BY id"
     );
     let mut statement = conn.prepare(&sql)?;
@@ -3218,13 +3228,14 @@ fn load_weekly_track_chart_reconciliation_entries(
                 row.get::<_, String>(6)?,
                 row.get::<_, Option<String>>(7)?,
                 row.get::<_, String>(8)?,
+                row.get::<_, String>(9)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     rows.into_iter()
         .map(
-            |(entry_id, artist_key, title_key, rank, year, week, date, stored_week_key, title)| {
+            |(entry_id, artist_key, title_key, rank, year, week, date, stored_week_key, title, artist)| {
                 let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
                     .with_context(|| format!("Invalid chart date {date} in {table}"))?;
                 let week_key = stored_week_key.unwrap_or_else(|| format!("{year:04}-W{week:02}"));
@@ -3232,6 +3243,7 @@ fn load_weekly_track_chart_reconciliation_entries(
                     title,
                     entry_id,
                     match_artist_keys: vec![artist_key.clone()],
+                    main_performers: crate::chart_identity::main_performers(&artist),
                     source_artist_key: artist_key,
                     title_key,
                     source_album_key: String::new(),
@@ -3264,6 +3276,7 @@ fn matching_chart_entries_by_track(
         index.insert(
             id,
             &billboard_single_artist_key_variants(&track.display_artist_key),
+            &track.main_performers,
             &track.title_key,
             &billboard_single_title_key_variants(&track.title_key),
             chart_parenthetical_key(&track.title).as_deref(),
@@ -3278,6 +3291,7 @@ fn matching_chart_entries_by_track(
             .collect::<Vec<_>>();
         for track_id in index.resolve(
             &artists,
+            &entry.main_performers,
             &entry.title_key,
             &billboard_single_title_key_variants(&entry.title_key),
             chart_parenthetical_key(&entry.title).as_deref(),
@@ -13748,13 +13762,17 @@ fn append_published_artist_histories(
     }
     let mut song_matches = crate::chart_song_match::SongIndex::default();
     let mut artist_keys = HashSet::<String>::new();
+    let mut performers = HashSet::<String>::new();
     for (index, track) in local.iter().enumerate() {
         let artist = billboard_text_key(&track.display_artist);
         artist_keys.extend(billboard_single_artist_key_variants(&artist));
+        let credits = crate::chart_identity::main_performers(&track.display_artist);
+        performers.extend(credits.iter().cloned());
         let title = billboard_text_key(&track.title);
         song_matches.insert(
             index,
             &billboard_single_artist_key_variants(&artist),
+            &credits,
             &title,
             &billboard_single_title_key_variants(&title),
             chart_parenthetical_key(&track.title).as_deref(),
@@ -13773,9 +13791,13 @@ fn append_published_artist_histories(
     )?;
     for credit in credits {
         let artist = billboard_text_key(&credit);
+        let credit_performers = crate::chart_identity::main_performers(&credit);
         if !billboard_single_artist_key_variants(&artist)
             .iter()
             .any(|key| artist_keys.contains(key))
+            && !credit_performers
+                .first()
+                .is_some_and(|lead| performers.contains(lead))
         {
             continue;
         }
@@ -13793,6 +13815,7 @@ fn append_published_artist_histories(
             let matched = song_matches
                 .resolve(
                     &billboard_single_artist_key_variants(&artist),
+                    &credit_performers,
                     &full,
                     &billboard_single_title_key_variants(&full),
                     chart_parenthetical_key(&title).as_deref(),
@@ -28685,6 +28708,37 @@ mod tests {
     }
 
     #[test]
+    fn reconciliation_matches_charted_lead_artist_to_library_collaboration() {
+        let conn = seeded_connection();
+        conn.execute(
+            "UPDATE tracks SET display_artist='John Lennon & Yoko Ono', title='Woman'",
+            [],
+        )
+        .unwrap();
+        let tracks = load_track_chart_reconciliation_rows(&conn).unwrap();
+        let entry = |artist: &str| StoredTrackChartEntry {
+            title: "WOMAN".into(),
+            entry_id: 1,
+            match_artist_keys: vec![billboard_text_key(artist)],
+            main_performers: crate::chart_identity::main_performers(artist),
+            source_artist_key: billboard_text_key(artist),
+            title_key: "woman".into(),
+            source_album_key: String::new(),
+            rank: 1,
+            chart_year: 1981,
+            chart_week: Some(6),
+            debut_date: Some("1981-01-24".into()),
+            debut_year: Some(1981),
+            debut_month: Some(1),
+            debut_week: Some(4),
+            debut_week_key: Some("1981-W04".into()),
+        };
+        assert!(!matching_chart_entries_by_track(&tracks, &[entry("JOHN LENNON")]).is_empty());
+        // A different lead artist with the same title is not the same recording.
+        assert!(matching_chart_entries_by_track(&tracks, &[entry("DURAN DURAN")]).is_empty());
+    }
+
+    #[test]
     fn parenthetical_reconciliation_prefers_exact_and_rejects_ambiguous_versions() {
         let conn = seeded_connection();
         conn.execute(
@@ -28697,6 +28751,7 @@ mod tests {
             title: "Song".into(),
             entry_id: 1,
             match_artist_keys: vec!["artist".into()],
+            main_performers: vec!["artist".into()],
             source_artist_key: "artist".into(),
             title_key: "song".into(),
             source_album_key: String::new(),
