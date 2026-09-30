@@ -1,5 +1,7 @@
 # Music Library
 
+Music Library 0.157.2 waits for the selected chart years before loading Published Charts rankings, so selecting a song right after the view opens keeps its history panel.
+
 Music Library 0.157.1 matches charted songs to library tracks credited to collaborations, so `JOHN LENNON – WOMAN` finds a track tagged `John Lennon & Yoko Ono`. See [Chart identity](#chart-identity).
 
 Music Library 0.157.0 groups Published Charts rankings and song histories by artist/title identity instead of exact printed text, so spellings such as `Daryl Hall & John Oates`, `Daryl Hall John Oates`, and `Daryl Hall / John Oates` count as one credit. See [Chart identity](#chart-identity).

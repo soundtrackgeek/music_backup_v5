@@ -137,7 +137,9 @@ export function PublishedChartsWorkspace() {
     ? effectiveFromWeek : "";
 
   useEffect(() => {
-    if (!series || !catalog?.importedYears || catalog.needsImport || !validRange || isImporting) {
+    // Wait for years from the series: a placeholder-year fetch would replace rows mid-click.
+    if (!series?.years.includes(fromYear) || !series.years.includes(toYear)
+      || !catalog?.importedYears || catalog.needsImport || !validRange || isImporting) {
       setRanking(emptyRanking);
       return;
     }

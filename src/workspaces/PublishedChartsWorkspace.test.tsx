@@ -58,6 +58,8 @@ describe("PublishedChartsWorkspace", () => {
     expect(screen.getAllByText(/Also printed as/)).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Browse" })).not.toBeInTheDocument();
     await waitFor(() => expect(getRankings).toHaveBeenCalledWith("Billboard Hot 100", 2019, 2019, null, null, 0));
+    // Rankings wait for a valid year; an earlier fetch would replace rows the user may be clicking.
+    expect(getRankings).toHaveBeenCalledTimes(1);
   });
 
   it("opens full song history beyond the selected range", async () => {

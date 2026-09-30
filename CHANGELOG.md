@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.157.2] - 2026-09-30
+
+### Fixed
+- Published Charts no longer requests a song ranking before the chart's years are selected. The placeholder request could fail and replaced the ranking rows moments later, so a song selected during that window lost its history panel; this also made the song history test flaky on release runners.
+
 ## [0.157.1] - 2026-09-30
 
 ### Fixed
