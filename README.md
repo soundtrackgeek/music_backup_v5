@@ -1,5 +1,7 @@
 # Music Library
 
+Music Library 0.157.3 uses indexed track lookups and an immediate write transaction when caching Aurora intake quality. Post-import quality and cover writes retry only temporary SQLite locks on fresh connections, keep durable completion records, and resume unfinished work during the next intake preview or committed apply replay. Recovery creates no new backup, catalog import, or file transfer. Covers include new and replacement albums, prefer the incoming embedded front cover, and are published atomically; missing artwork is reported as pending. A repairBatch bridge request with the original planId/sessionId repairs an already committed batch without touching its audio or source folders.
+
 Music Library 0.157.2 waits for the selected chart years before loading Published Charts rankings, so selecting a song right after the view opens keeps its history panel.
 
 Music Library 0.157.1 matches charted songs to library tracks credited to collaborations, so `JOHN LENNON – WOMAN` finds a track tagged `John Lennon & Yoko Ono`. See [Chart identity](#chart-identity).

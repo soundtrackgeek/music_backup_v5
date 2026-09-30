@@ -1,6 +1,6 @@
 [package]
 name = "music-library"
-version = "0.157.2"
+version = "0.157.3"
 description = "Local-first MusicBee TSV library app"
 authors = ["jtill"]
 edition = "2021"
@@ -13,6 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.2.0", features = [] }
 
 [dependencies]
+tempfile = "3"
 anyhow = "1.0"
 base64 = "0.22"
 blowfish = "0.9"
@@ -51,6 +52,3 @@ url = "2"
 thiserror = "2"
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
 zeroize = "1.8"
-
-[dev-dependencies]
-tempfile = "3"

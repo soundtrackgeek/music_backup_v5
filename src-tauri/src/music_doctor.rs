@@ -1,8 +1,10 @@
 use crate::db;
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
-use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
-use serde::Serialize;
+use rusqlite::{
+    params, Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior,
+};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -85,7 +87,7 @@ pub struct MusicDoctorSyncResult {
     pub completed_at: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct IntakeTrackQuality {
     pub path: PathBuf,
     pub source_path: PathBuf,
@@ -109,8 +111,9 @@ pub(crate) fn cache_aurora_intake_quality(
         return Ok(());
     }
 
-    let transaction = local
-        .unchecked_transaction()
+    // Acquire the writer before reading. A deferred read snapshot cannot be
+    // upgraded after another connection commits, even with a busy timeout.
+    let transaction = Transaction::new_unchecked(local, TransactionBehavior::Immediate)
         .context("Could not start Aurora intake quality caching")?;
     let mut resolved = Vec::with_capacity(records.len());
     for record in records {
@@ -119,18 +122,32 @@ pub(crate) fn cache_aurora_intake_quality(
             .strip_prefix(r"\\?\")
             .unwrap_or(&input_key)
             .to_owned();
+        let parent = record
+            .path
+            .parent()
+            .unwrap_or(Path::new(""))
+            .to_string_lossy();
+        let ordinary_parent = parent.strip_prefix(r"\\?\").unwrap_or(&parent);
+        let filename = record
+            .path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        // Use idx_tracks_file for the ordinary intake path, including Windows
+        // extended paths and the catalog's optional trailing separator.
         let track = transaction
             .query_row(
-                "
-                SELECT album_id, file_path, filename
-                FROM tracks
-                WHERE unicode_lower(
-                    replace(rtrim(file_path, char(92) || '/'), '/', char(92))
-                    || char(92) || filename
-                ) IN (unicode_lower(?1), unicode_lower(?2))
-                LIMIT 1
-                ",
-                params![input_key, ordinary_input_key],
+                "SELECT album_id, file_path, filename FROM tracks
+             WHERE file_path IN (?1, ?2, ?3, ?4, ?5, ?6) AND filename = ?7 LIMIT 1",
+                params![
+                    parent,
+                    format!("{parent}\\"),
+                    format!("{parent}/"),
+                    ordinary_parent,
+                    format!("{ordinary_parent}\\"),
+                    format!("{ordinary_parent}/"),
+                    filename
+                ],
                 |row| {
                     Ok((
                         row.get::<_, String>(0)?,
@@ -139,13 +156,38 @@ pub(crate) fn cache_aurora_intake_quality(
                     ))
                 },
             )
-            .optional()?
-            .ok_or_else(|| {
-                anyhow!(
-                    "The imported track was not found in the catalog: {}",
-                    record.path.display()
+            .optional()?;
+        // Retain support for older catalogs with different path casing.
+        let track = match track {
+            Some(track) => Some(track),
+            None => transaction
+                .query_row(
+                    "
+                SELECT album_id, file_path, filename
+                FROM tracks
+                WHERE unicode_lower(
+                    replace(rtrim(file_path, char(92) || '/'), '/', char(92))
+                    || char(92) || filename
+                ) IN (unicode_lower(?1), unicode_lower(?2))
+                LIMIT 1
+                ",
+                    params![input_key, ordinary_input_key],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                        ))
+                    },
                 )
-            })?;
+                .optional()?,
+        }
+        .ok_or_else(|| {
+            anyhow!(
+                "The imported track was not found in the catalog: {}",
+                record.path.display()
+            )
+        })?;
         resolved.push((record, track.0, track.1, track.2));
     }
 

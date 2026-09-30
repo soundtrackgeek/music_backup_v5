@@ -11,7 +11,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
-use std::io::Read as _;
+use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
@@ -113,7 +113,8 @@ pub(crate) fn import_added_album_covers_for_bridge(
         &source_dir,
         &cache_dir,
         albums,
-        false,
+        true,
+        true,
         true,
         &mut |_| {},
     )?;
@@ -627,6 +628,7 @@ fn run_cover_import(
         albums,
         request.replace_existing,
         request.extract_embedded_fallback,
+        false,
         &mut |counters| maybe_emit_running_progress(app, counters),
     )?;
 
@@ -658,6 +660,7 @@ fn import_cover_candidates(
     albums: Vec<AlbumCoverCandidate>,
     replace_existing: bool,
     extract_embedded_fallback: bool,
+    prefer_embedded: bool,
     progress: &mut dyn FnMut(&CoverCounters),
 ) -> Result<CoverCounters> {
     let archive_index = build_archive_index(source_dir)?;
@@ -668,7 +671,7 @@ fn import_cover_candidates(
     };
 
     let tx = conn
-        .transaction()
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
         .context("Could not start cover import transaction")?;
     let mut upsert_cover = tx.prepare(
         "
@@ -692,12 +695,21 @@ fn import_cover_candidates(
     for album in albums {
         counters.scanned_albums += 1;
 
-        match find_cover_for_album(
-            &album,
-            &archive_index,
-            &source_dir,
-            extract_embedded_fallback,
-        )? {
+        let embedded = if prefer_embedded {
+            extract_embedded_cover(&album, source_dir)?
+        } else {
+            None
+        };
+        let payload = match embedded {
+            Some(payload) => Some(payload),
+            None => find_cover_for_album(
+                &album,
+                &archive_index,
+                &source_dir,
+                extract_embedded_fallback,
+            )?,
+        };
+        match payload {
             Some(payload) => {
                 let existing_cover = existing_covers.get(&album.album_id);
                 if !replace_existing && existing_cover_matches_payload(existing_cover, &payload) {
@@ -889,7 +901,7 @@ fn load_added_album_cover_candidates(
             SELECT 1
             FROM library_updates updates
             WHERE updates.import_run_id = ?1
-              AND updates.change_kind = 'new'
+              AND updates.change_kind IN ('new', 'changed')
               AND updates.album_id = a.id
         )
         ORDER BY a.id
@@ -1108,7 +1120,14 @@ fn import_cover_payload(
     match payload {
         CoverPayload::ArchiveFile { .. } => {}
         CoverPayload::EmbeddedBytes { bytes, .. } => {
-            fs::write(&destination, bytes)
+            let parent = destination
+                .parent()
+                .ok_or_else(|| anyhow!("Cover has no archive directory"))?;
+            let mut staged = tempfile::NamedTempFile::new_in(parent)?;
+            staged.write_all(&bytes)?;
+            staged.as_file().sync_all()?;
+            staged
+                .persist(&destination)
                 .with_context(|| format!("Could not write cover {}", destination.display()))?;
         }
     }
@@ -1371,6 +1390,34 @@ mod tests {
             })
             .expect("load imported cover");
         assert_eq!(imported, ("new-album".to_string(), "embedded".to_string()));
+        let original_mp3 = fs::read(&track_path).unwrap();
+        let archived = cover_archive.join("Artist - New Album (2026).jpg");
+        fs::write(&archived, b"stale artwork from the replaced release").unwrap();
+        conn.execute(
+            "UPDATE library_updates SET change_kind='changed' WHERE import_run_id=42",
+            [],
+        )
+        .unwrap();
+        // Replacement albums must be included, and their current embedded cover
+        // must win over an older, same-named archive file.
+        assert_eq!(
+            import_added_album_covers_for_bridge(
+                &mut conn,
+                &app_data,
+                cover_archive.to_str().unwrap(),
+                42
+            )
+            .unwrap(),
+            (1, 0)
+        );
+        assert_eq!(fs::read(archived).unwrap(), vec![0xff, 0xd8, 0xff, 0xd9]);
+        assert_eq!(fs::read(&track_path).unwrap(), original_mp3);
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM album_covers", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
         fs::remove_dir_all(root).expect("clean test directory");
     }
 }

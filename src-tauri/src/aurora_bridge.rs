@@ -81,7 +81,6 @@ impl BridgeProgressReporter {
         self.processed_bytes = 0;
     }
 
-    #[cfg(test)]
     fn disabled(operation: &str) -> Self {
         Self {
             path: PathBuf::new(),
@@ -322,6 +321,13 @@ struct ApplyJournal {
     phase: String,
 }
 
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PostcommitState {
+    quality_cached: bool,
+    covers_archived: bool,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct StagingOwner {
@@ -416,6 +422,12 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
             let payload: ApplyBatchRequest = serde_json::from_value(request.payload)
                 .context("applyBatch payload must contain planId and sessionId")?;
             apply_batch(&app_data_dir, payload, &mut progress)
+        }
+        "repairBatch" => {
+            let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
+            let payload: ApplyBatchRequest = serde_json::from_value(request.payload)
+                .context("repairBatch payload must contain planId and sessionId")?;
+            repair_committed_batch(&app_data_dir, payload, &mut progress)
         }
         "syncExistingFolders" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
@@ -1794,12 +1806,24 @@ fn apply_batch(
         let import_run_id = session_state
             .import_run_id
             .ok_or_else(|| anyhow!("Completed Aurora import session has no import run"))?;
-        return Ok(finish_committed_plan(
+        drop(conn);
+        let warnings = complete_committed_intake(
+            app_data_dir,
             &plan,
             &plan_directory,
             import_run_id,
-            session_state.backup_path,
-            Vec::new(),
+            progress,
+        );
+        return Ok(with_cover_status(
+            finish_committed_plan(
+                &plan,
+                &plan_directory,
+                import_run_id,
+                session_state.backup_path,
+                warnings,
+            ),
+            &plan,
+            &plan_directory,
         ));
     }
 
@@ -1868,6 +1892,21 @@ fn apply_batch(
             ));
         }
     };
+    // Persist inspected quality before the commit, so a crash or a lasting lock
+    // can resume post-commit work without moving files or reimporting the batch.
+    if plan.operation == PlanOperation::Intake {
+        if let Err(error) = atomic_write_json(
+            &plan_directory.join("postcommit-quality.json"),
+            &intake_quality,
+        ) {
+            return Err(compensate_precommit(
+                error,
+                &published,
+                &destination_root,
+                &journal_path,
+            ));
+        }
+    }
     if let Err(error) = write_apply_journal(&journal_path, &plan.plan_id, "published") {
         return Err(compensate_precommit(
             error,
@@ -1909,19 +1948,24 @@ fn apply_batch(
                     let mut warnings = vec![format!(
                         "The catalog commit completed, but post-commit reporting returned an error: {error:#}"
                     )];
-                    if let Err(quality_error) =
-                        music_doctor::cache_aurora_intake_quality(&conn, &intake_quality)
-                    {
-                        warnings.push(format!(
-                            "The albums were cataloged, but their audio quality could not be cached: {quality_error:#}"
-                        ));
-                    }
-                    return Ok(finish_committed_plan(
+                    drop(conn);
+                    warnings.extend(complete_committed_intake(
+                        app_data_dir,
                         &plan,
                         &plan_directory,
                         import_run_id,
-                        state.backup_path,
-                        warnings,
+                        progress,
+                    ));
+                    return Ok(with_cover_status(
+                        finish_committed_plan(
+                            &plan,
+                            &plan_directory,
+                            import_run_id,
+                            state.backup_path,
+                            warnings,
+                        ),
+                        &plan,
+                        &plan_directory,
                     ));
                 }
                 Ok(_) => {}
@@ -1939,36 +1983,18 @@ fn apply_batch(
             ));
         }
     };
-    let mut postcommit_warnings = Vec::new();
-    if let Err(error) = music_doctor::cache_aurora_intake_quality(&conn, &intake_quality) {
-        postcommit_warnings.push(format!(
-            "The albums were cataloged, but their audio quality could not be cached: {error:#}"
-        ));
-    }
+    drop(conn);
+    let mut postcommit_warnings = complete_committed_intake(
+        app_data_dir,
+        &plan,
+        &plan_directory,
+        import_summary.import_run_id,
+        progress,
+    );
     if let Err(error) = write_apply_journal(&journal_path, &plan.plan_id, "committed") {
         postcommit_warnings.push(format!(
             "The catalog committed, but Aurora could not update its recovery journal: {error:#}"
         ));
-    }
-    if plan.operation == PlanOperation::Intake {
-        progress.report(
-            "artwork",
-            "Archiving album covers and finalizing catalog artwork.",
-            plan.albums.len(),
-        );
-        match db::settings_for_connection(&conn).and_then(|settings| {
-            covers::import_added_album_covers_for_bridge(
-                &mut conn,
-                app_data_dir,
-                &settings.cover_source_path,
-                import_summary.import_run_id,
-            )
-        }) {
-            Ok(_) => {}
-            Err(error) => postcommit_warnings.push(format!(
-                "The albums were cataloged, but their automatic cover import failed: {error:#}"
-            )),
-        }
     }
     progress.report(
         "finalizing",
@@ -1987,7 +2013,171 @@ fn apply_batch(
         "Albums moved, verified, and cataloged.",
         plan.albums.len(),
     );
-    Ok(result)
+    Ok(with_cover_status(result, &plan, &plan_directory))
+}
+
+fn retry_postcommit_database_busy<T>(mut work: impl FnMut(usize) -> Result<T>) -> Result<T> {
+    for attempt in 0..4 {
+        match work(attempt) {
+            Err(error) if database_is_busy(&error) && attempt < 3 => {}
+            result => return result,
+        }
+    }
+    unreachable!()
+}
+
+fn load_postcommit_state(directory: &Path) -> Result<PostcommitState> {
+    let path = directory.join("postcommit.json");
+    if !path.try_exists()? {
+        return Ok(PostcommitState::default());
+    }
+    Ok(serde_json::from_slice(&fs::read(path)?)?)
+}
+
+fn committed_quality(
+    plan: &StoredPlan,
+    directory: &Path,
+) -> Result<Vec<music_doctor::IntakeTrackQuality>> {
+    let mut published = Vec::new();
+    for (index, album) in plan.albums.iter().enumerate() {
+        let destination = PathBuf::from(&album.destination_path);
+        // Do not attach old quality/art to a later replacement or changed release.
+        if inventory_without_owner_marker(&destination)? != album.inventory {
+            bail!(
+                "The committed album changed before post-import recovery: {}",
+                destination.display()
+            );
+        }
+        published.push(PublishedAlbum {
+            root: plan_album_root(plan, &destination)?,
+            destination,
+            inventory: album.inventory.clone(),
+            plan_id: plan.plan_id.clone(),
+            index,
+            action: album.action,
+            recovery: None,
+            existing_inventory: None,
+        });
+    }
+    let path = directory.join("postcommit-quality.json");
+    if path.try_exists()? {
+        return Ok(serde_json::from_slice(&fs::read(path)?)?);
+    }
+    let quality = inspect_published_mp3_quality(&published)?;
+    atomic_write_json(&path, &quality)?;
+    Ok(quality)
+}
+
+fn complete_committed_intake(
+    app_data_dir: &Path,
+    plan: &StoredPlan,
+    directory: &Path,
+    import_run_id: i64,
+    progress: &mut BridgeProgressReporter,
+) -> Vec<String> {
+    if plan.operation != PlanOperation::Intake {
+        return Vec::new();
+    }
+    let mut warnings = Vec::new();
+    let result = (|| -> Result<()> {
+        let mut state = load_postcommit_state(directory)?;
+        if state.quality_cached && state.covers_archived {
+            return Ok(());
+        }
+        let quality = committed_quality(plan, directory)?;
+        let database = app_data_dir.join("music-library.sqlite3");
+        if !state.quality_cached {
+            let cached = retry_postcommit_database_busy(|attempt| {
+                if attempt > 0 { progress.report("waiting", "Waiting to save imported audio quality; the album move is already committed.", plan.albums.len()); }
+                let conn = open_database(&database)?;
+                music_doctor::cache_aurora_intake_quality(&conn, &quality)
+            }).context("Audio-quality caching is pending");
+            match cached {
+                Ok(()) => {
+                    state.quality_cached = true;
+                    atomic_write_json(&directory.join("postcommit.json"), &state)?;
+                }
+                Err(error) => warnings.push(format!("The albums were cataloged, but audio-quality recovery remains pending and will retry during the next intake preview: {error:#}")),
+            }
+        }
+        if !state.covers_archived {
+            progress.report(
+                "artwork",
+                "Archiving and indexing covers for every imported album.",
+                plan.albums.len(),
+            );
+            let (imported, missing) = retry_postcommit_database_busy(|attempt| {
+                if attempt > 0 {
+                    progress.report(
+                        "waiting",
+                        "Waiting to archive imported covers; the album move is already committed.",
+                        plan.albums.len(),
+                    );
+                }
+                let mut conn = open_database(&database)?;
+                let settings = db::settings_for_connection(&conn)?;
+                covers::import_added_album_covers_for_bridge(
+                    &mut conn,
+                    app_data_dir,
+                    &settings.cover_source_path,
+                    import_run_id,
+                )
+            })
+            .context("Cover archiving is pending")?;
+            if imported + missing != plan.albums.len() as u64 {
+                bail!("Cover import did not account for every reviewed album; cover recovery remains pending");
+            }
+            if missing > 0 {
+                bail!("{missing} imported albums still have no available cover; cover recovery remains pending");
+            }
+            state.covers_archived = true;
+            atomic_write_json(&directory.join("postcommit.json"), &state)?;
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        warnings.push(format!("The albums were cataloged, but post-import recovery is pending and will retry during the next intake preview: {error:#}"));
+    }
+    warnings
+}
+
+fn with_cover_status(mut result: Value, plan: &StoredPlan, directory: &Path) -> Value {
+    result["coverImportStatus"] = json!(if plan.operation != PlanOperation::Intake {
+        "notApplicable"
+    } else if load_postcommit_state(directory).is_ok_and(|state| state.covers_archived) {
+        "completed"
+    } else {
+        "pending"
+    });
+    result
+}
+
+fn repair_committed_batch(
+    app_data_dir: &Path,
+    request: ApplyBatchRequest,
+    progress: &mut BridgeProgressReporter,
+) -> Result<Value> {
+    validate_plan_id(&request.plan_id)?;
+    let directory = plan_directory(app_data_dir, &request.plan_id)?;
+    let plan: StoredPlan = serde_json::from_slice(&fs::read(directory.join("plan.json"))?)?;
+    validate_stored_plan(&plan, &request)?;
+    let conn = open_database(&app_data_dir.join("music-library.sqlite3"))?;
+    let state = importer::bridge_session_state(&conn, request.session_id)?;
+    validate_plan_session_binding(&plan, &state)?;
+    if state.status != "completed" {
+        bail!("Only a committed batch can have its post-import work repaired");
+    }
+    let import_run_id = state
+        .import_run_id
+        .ok_or_else(|| anyhow!("Completed batch has no import run"))?;
+    drop(conn);
+    let warnings =
+        complete_committed_intake(app_data_dir, &plan, &directory, import_run_id, progress);
+    Ok(with_cover_status(
+        json!({"planId":plan.plan_id,"importRunId":import_run_id,"warnings":warnings}),
+        &plan,
+        &directory,
+    ))
 }
 
 fn inspect_published_mp3_quality(
@@ -3397,6 +3587,26 @@ fn cleanup_abandoned_bridge_plans(conn: &Connection, app_data_dir: &Path) -> Res
             }
         };
         if state.status == "completed" {
+            if plan.operation == PlanOperation::Intake
+                && entry.path().join("postcommit-quality.json").is_file()
+                && load_postcommit_state(&entry.path())
+                    .is_ok_and(|state| !state.quality_cached || !state.covers_archived)
+            {
+                validate_plan_session_binding(&plan, &state)?;
+                if let Some(import_run_id) = state.import_run_id {
+                    // Durable unfinished work is resumed without replaying a
+                    // transfer, catalog import, source cleanup, or backup.
+                    for warning in complete_committed_intake(
+                        app_data_dir,
+                        &plan,
+                        &entry.path(),
+                        import_run_id,
+                        &mut BridgeProgressReporter::disabled("repairBatch"),
+                    ) {
+                        eprintln!("{warning}");
+                    }
+                }
+            }
             continue;
         }
         validate_plan_session_binding(&plan, &state)?;
@@ -3956,6 +4166,190 @@ mod tests {
                     None => std::env::remove_var(variable),
                 }
             }
+        }
+    }
+
+    #[test]
+    fn committed_batch_recovers_quality_and_all_six_covers_without_another_import() {
+        let fixture = SelectionFixture::new();
+        use id3::TagLike;
+        let app_data = bridge_app_data_dir().unwrap();
+        let archive = fixture.temp.path().join("covers-archive");
+        fs::create_dir(&archive).unwrap();
+        let conn = open_database(&app_data.join("music-library.sqlite3")).unwrap();
+        conn.execute(
+            "UPDATE app_settings SET cover_source_path=?1",
+            [archive.to_str().unwrap()],
+        )
+        .unwrap();
+        let mut originals = Vec::new();
+        for target in &fixture.targets {
+            let path = Path::new(&target.source_path).join("01.mp3");
+            let mut tag = id3::Tag::read_from_path(&path).unwrap();
+            tag.add_frame(id3::frame::Picture {
+                mime_type: "image/jpeg".into(),
+                picture_type: id3::frame::PictureType::CoverFront,
+                description: String::new(),
+                data: vec![0xff, 0xd8, 0xff, 0xd9],
+            });
+            tag.write_to_path(&path, id3::Version::Id3v24).unwrap();
+            originals.push(fs::read(path).unwrap());
+        }
+        let preview = fixture.preview();
+        assert!(repair_committed_batch(
+            &app_data,
+            ApplyBatchRequest {
+                plan_id: preview["planId"].as_str().unwrap().into(),
+                session_id: preview["sessionId"].as_i64().unwrap()
+            },
+            &mut BridgeProgressReporter::disabled("repairBatch")
+        )
+        .is_err());
+        let receipt = fixture.apply(&preview).unwrap();
+        assert_eq!(receipt["coverImportStatus"], "completed");
+        let directory = plan_directory(&app_data, preview["planId"].as_str().unwrap()).unwrap();
+        // Simulate a crash/old release after the catalog commit: neither source
+        // folders nor the staging snapshot are needed to recover these steps.
+        conn.execute_batch("DELETE FROM album_covers; DELETE FROM music_doctor_track_quality; DELETE FROM music_doctor_album_quality;").unwrap();
+        fs::remove_file(directory.join("postcommit.json")).unwrap();
+        for entry in fs::read_dir(&archive).unwrap() {
+            fs::remove_file(entry.unwrap().path()).unwrap();
+        }
+        let stored: StoredPlan =
+            serde_json::from_slice(&fs::read(directory.join("plan.json")).unwrap()).unwrap();
+        let quality = committed_quality(&stored, &directory).unwrap();
+        let worker = open_database(&app_data.join("music-library.sqlite3")).unwrap();
+        worker.busy_timeout(Duration::from_millis(5)).unwrap();
+        conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let mut attempts = 0;
+        retry_postcommit_database_busy(|attempt| {
+            attempts += 1;
+            if attempt == 1 {
+                conn.execute_batch("ROLLBACK")?;
+            }
+            music_doctor::cache_aurora_intake_quality(&worker, &quality)
+        })
+        .unwrap();
+        assert_eq!(
+            attempts, 2,
+            "quality caching must wait for a real writer before reading"
+        );
+        let repaired = repair_committed_batch(
+            &app_data,
+            ApplyBatchRequest {
+                plan_id: preview["planId"].as_str().unwrap().into(),
+                session_id: preview["sessionId"].as_i64().unwrap(),
+            },
+            &mut BridgeProgressReporter::disabled("repairBatch"),
+        )
+        .unwrap();
+        assert_eq!(repaired["coverImportStatus"], "completed");
+        assert_eq!(repaired["warnings"], json!([]));
+        assert_eq!(repaired["importRunId"], receipt["importRunId"]);
+        for (sql, count) in [
+            ("SELECT COUNT(*) FROM album_covers", 6),
+            ("SELECT COUNT(*) FROM music_doctor_track_quality", 6),
+            ("SELECT COUNT(*) FROM music_doctor_album_quality", 6),
+            ("SELECT COUNT(*) FROM database_backups", 1),
+            ("SELECT COUNT(*) FROM import_runs", 1),
+        ] {
+            assert_eq!(
+                conn.query_row(sql, [], |row| row.get::<_, i64>(0)).unwrap(),
+                count,
+                "{sql}"
+            );
+        }
+        for (album, original) in receipt["albums"].as_array().unwrap().iter().zip(originals) {
+            assert_eq!(
+                fs::read(Path::new(album["destinationPath"].as_str().unwrap()).join("01.mp3"))
+                    .unwrap(),
+                original
+            );
+        }
+        // A persisted partial state also recovers during a later preview.
+        atomic_write_json(
+            &directory.join("postcommit.json"),
+            &PostcommitState {
+                quality_cached: true,
+                covers_archived: false,
+            },
+        )
+        .unwrap();
+        cleanup_abandoned_bridge_plans(&conn, &app_data).unwrap();
+        assert!(load_postcommit_state(&directory).unwrap().covers_archived);
+        assert_eq!(
+            fixture.apply(&preview).unwrap()["coverImportStatus"],
+            "completed"
+        );
+        atomic_write_json(
+            &directory.join("postcommit.json"),
+            &PostcommitState::default(),
+        )
+        .unwrap();
+        let changed =
+            Path::new(receipt["albums"][0]["destinationPath"].as_str().unwrap()).join("01.mp3");
+        let mut bytes = fs::read(&changed).unwrap();
+        bytes.push(1);
+        fs::write(changed, bytes).unwrap();
+        let rejected = repair_committed_batch(
+            &app_data,
+            ApplyBatchRequest {
+                plan_id: preview["planId"].as_str().unwrap().into(),
+                session_id: preview["sessionId"].as_i64().unwrap(),
+            },
+            &mut BridgeProgressReporter::disabled("repairBatch"),
+        )
+        .unwrap();
+        assert_eq!(rejected["coverImportStatus"], "pending");
+        assert!(rejected["warnings"][0]
+            .as_str()
+            .unwrap()
+            .contains("album changed"));
+    }
+
+    #[test]
+    fn postcommit_retry_waits_for_a_real_writer_and_never_retries_permanent_errors() {
+        let temp = tempdir().unwrap();
+        let path = temp.path().join("database.sqlite3");
+        let writer = open_database(&path).unwrap();
+        let worker = open_database(&path).unwrap();
+        worker.busy_timeout(Duration::from_millis(5)).unwrap();
+        writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let mut attempts = 0;
+        retry_postcommit_database_busy(|attempt| {
+            attempts += 1;
+            if attempt == 1 {
+                writer.execute_batch("ROLLBACK")?;
+            }
+            worker.execute_batch("BEGIN IMMEDIATE; ROLLBACK;")?;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(attempts, 2);
+        for code in [
+            rusqlite::ffi::SQLITE_BUSY,
+            rusqlite::ffi::SQLITE_LOCKED,
+            rusqlite::ffi::SQLITE_READONLY,
+            rusqlite::ffi::SQLITE_CONSTRAINT,
+            rusqlite::ffi::SQLITE_CORRUPT,
+        ] {
+            let mut attempts = 0;
+            let result: Result<()> = retry_postcommit_database_busy(|_| {
+                attempts += 1;
+                Err(rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(code), None).into())
+            });
+            assert!(result.is_err());
+            assert_eq!(
+                attempts,
+                if matches!(
+                    code,
+                    rusqlite::ffi::SQLITE_BUSY | rusqlite::ffi::SQLITE_LOCKED
+                ) {
+                    4
+                } else {
+                    1
+                }
+            );
         }
     }
 

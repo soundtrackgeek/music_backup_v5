@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.157.3] - 2026-09-30
+
+### Fixed
+- Prevent read-to-write snapshot lock failures during Aurora intake quality caching and use the file-path index instead of repeated full-catalog scans.
+- Retry post-import quality and cover writes up to four times only for typed SQLite busy/locked errors, retain durable work across failures/restarts, and resume it during later previews or committed replay without another transfer/import/backup.
+- Repair already committed batches through repairBatch, verify destinations are unchanged, import covers for replacement albums too, prefer current embedded artwork over stale archive files, and atomically publish extracted images.
+- Report missing covers and unfinished post-import work honestly. Pin the existing Music Library Rust toolchain to 1.98.1 in local and CI/release verification.
+
 ## [0.157.2] - 2026-09-30
 
 ### Fixed
