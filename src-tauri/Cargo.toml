@@ -1,6 +1,6 @@
 [package]
 name = "music-library"
-version = "0.157.4"
+version = "0.157.5"
 description = "Local-first MusicBee TSV library app"
 authors = ["jtill"]
 edition = "2021"
@@ -52,3 +52,6 @@ url = "2"
 thiserror = "2"
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
 zeroize = "1.8"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }

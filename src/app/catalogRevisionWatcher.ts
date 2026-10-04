@@ -21,28 +21,29 @@ export function createCatalogRevisionChecker({
   let checking = false;
   let revisionAwaitingRetry: string | null = null;
 
-  return async function checkCatalogRevision() {
-    if (checking || !isVisible()) return;
+  return async function checkCatalogRevision(pushedRevision?: string) {
+    if (checking || !isVisible()) return false;
     checking = true;
     try {
-      const revision = await getRevision();
+      const revision = pushedRevision ?? await getRevision();
       if (!hasObservedRevision()) {
         await onRevision(revision, "baseline");
         setObservedRevision(revision);
         revisionAwaitingRetry = revision;
-        return;
+        return true;
       }
       if (revision !== getObservedRevision()) {
         await onRevision(revision, "change");
         setObservedRevision(revision);
         revisionAwaitingRetry = revision;
-        return;
+        return true;
       }
 
-      if (revisionAwaitingRetry !== revision) return;
+      if (revisionAwaitingRetry !== revision) return true;
 
       await onRevision(revision, "retry");
       revisionAwaitingRetry = null;
+      return true;
     } finally {
       checking = false;
     }

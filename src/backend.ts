@@ -4590,7 +4590,7 @@ function advanceMockLibraryCompletionVerification() {
 
 export async function getLibraryCompletionVerificationStatus() {
   if (!isTauriRuntime()) {
-    advanceMockLibraryCompletionVerification();
+    scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
   return invoke<LibraryCompletionVerificationStatus>(
@@ -4712,6 +4712,7 @@ export async function startLibraryCompletionVerification(
       },
       recentItems,
     };
+    scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
   return invoke<LibraryCompletionVerificationStatus>(
@@ -4732,6 +4733,7 @@ export async function setLibraryCompletionVerificationState(
       ...mockLibraryCompletionVerificationStatus,
       batch: { ...batch, state: input.state, updatedAt: new Date().toISOString() },
     };
+    scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
   return invoke<LibraryCompletionVerificationStatus>(
@@ -4776,6 +4778,7 @@ export async function retryLibraryCompletionVerificationFailures(batchId: number
       },
       recentItems,
     };
+    scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
   return invoke<LibraryCompletionVerificationStatus>(
@@ -4958,7 +4961,7 @@ function advanceMockLibraryCompletionArtistVerification() {
 
 export async function getLibraryCompletionArtistVerificationStatus() {
   if (!isTauriRuntime()) {
-    advanceMockLibraryCompletionArtistVerification();
+    scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
   return invoke<LibraryCompletionArtistVerificationStatus>(
@@ -5014,6 +5017,7 @@ export async function startLibraryCompletionArtistVerification(
       },
       recentItems,
     };
+    scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
   return invoke<LibraryCompletionArtistVerificationStatus>(
@@ -5034,6 +5038,7 @@ export async function setLibraryCompletionArtistVerificationState(
       ...mockLibraryCompletionArtistVerificationStatus,
       batch: { ...batch, state: input.state, updatedAt: new Date().toISOString() },
     };
+    scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
   return invoke<LibraryCompletionArtistVerificationStatus>(
@@ -5048,6 +5053,7 @@ export async function retryLibraryCompletionArtistVerificationFailures(batchId: 
     if (!batch || batch.failedCount === 0) {
       throw new Error("This artist verification run has no failed checks to retry.");
     }
+    scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
   return invoke<LibraryCompletionArtistVerificationStatus>(
@@ -8508,4 +8514,61 @@ function musicToolIssueSortValue(issue: MusicToolIssueRow, field: string) {
     default:
       return issue.album?.toLowerCase() ?? "";
   }
+}
+
+
+export async function listenToCatalogRevision(handler: (revision: string) => void) {
+  if (!isTauriRuntime()) return () => undefined;
+  return listen<string>("catalog-revision-changed", (event) => handler(event.payload));
+}
+
+export async function acknowledgeCatalogRevision(revision: string) {
+  if (!isTauriRuntime()) return;
+  await invoke("acknowledge_catalog_revision", { revision });
+}
+
+export async function listenToMusicDoctorSync(handler: (result: MusicDoctorSyncResult) => void) {
+  if (!isTauriRuntime()) return () => undefined;
+  return listen<MusicDoctorSyncResult>("music-doctor-sync-completed", (event) => handler(event.payload));
+}
+
+export async function listenToMusicBrainzOverlaySync(handler: (result: MusicBrainzOverlaySyncResult) => void) {
+  if (!isTauriRuntime()) return () => undefined;
+  return listen<MusicBrainzOverlaySyncResult>("musicbrainz-overlay-sync-completed", (event) => handler(event.payload));
+}
+
+const mockCompletionHandlers = new Set<(status: LibraryCompletionVerificationStatus) => void>();
+const mockArtistCompletionHandlers = new Set<(status: LibraryCompletionArtistVerificationStatus) => void>();
+let mockCompletionTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleMockCompletionProgress() {
+  if (mockCompletionTimer !== null) return;
+  if (mockLibraryCompletionVerificationStatus.batch?.state !== "running" &&
+      mockLibraryCompletionArtistVerificationStatus.batch?.state !== "running") return;
+  mockCompletionTimer = setTimeout(() => {
+    mockCompletionTimer = null;
+    advanceMockLibraryCompletionVerification();
+    advanceMockLibraryCompletionArtistVerification();
+    mockCompletionHandlers.forEach((handler) => handler(mockLibraryCompletionVerificationStatus));
+    mockArtistCompletionHandlers.forEach((handler) => handler(mockLibraryCompletionArtistVerificationStatus));
+    scheduleMockCompletionProgress();
+  }, 1_500);
+}
+
+export async function listenToLibraryCompletionVerification(handler: (status: LibraryCompletionVerificationStatus) => void) {
+  if (!isTauriRuntime()) {
+    mockCompletionHandlers.add(handler);
+    scheduleMockCompletionProgress();
+    return () => { mockCompletionHandlers.delete(handler); };
+  }
+  return listen<LibraryCompletionVerificationStatus>("library-completion-verification-progress", (event) => handler(event.payload));
+}
+
+export async function listenToArtistCompletionVerification(handler: (status: LibraryCompletionArtistVerificationStatus) => void) {
+  if (!isTauriRuntime()) {
+    mockArtistCompletionHandlers.add(handler);
+    scheduleMockCompletionProgress();
+    return () => { mockArtistCompletionHandlers.delete(handler); };
+  }
+  return listen<LibraryCompletionArtistVerificationStatus>("artist-completion-verification-progress", (event) => handler(event.payload));
 }

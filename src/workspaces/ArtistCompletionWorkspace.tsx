@@ -23,6 +23,7 @@ import {
   getDiscogsCredentialStatus,
   getLibraryCompletionArtists,
   getLibraryCompletionArtistVerificationStatus,
+  listenToArtistCompletionVerification,
   openExternalUrl,
   retryLibraryCompletionArtistVerificationFailures,
   searchWishListMusicBrainz,
@@ -40,6 +41,8 @@ import type {
   LibraryCompletionStatus,
   WishListMusicBrainzCandidate,
 } from "../types";
+
+import { subscribeWithSnapshot } from "../app/backendEvents";
 
 type ArtistFilter =
   | "all"
@@ -209,16 +212,14 @@ export function ArtistCompletionWorkspace({
     setIsLoading(true);
     setError(null);
     try {
-      const [response, queue, provider] = await Promise.all([
+      const [response, provider] = await Promise.all([
         getLibraryCompletionArtists(request),
-        getLibraryCompletionArtistVerificationStatus(),
         getDiscogsCredentialStatus(),
       ]);
       setData(response);
       if (!preserveUnverifiedSnapshot) {
         setUnverifiedSnapshotIds(unverifiedArtistIds(response.candidates));
       }
-      setVerificationStatus(queue);
       setDiscogsStatus(provider);
       setSelectedForVerification((current) => {
         const available = new Set(response.candidates.map((candidate) => candidate.id));
@@ -241,15 +242,12 @@ export function ArtistCompletionWorkspace({
   }, [activeRequest, load, refreshToken]);
 
   const batch = verificationStatus?.batch ?? null;
-  useEffect(() => {
-    if (!batch || batch.state !== "running") return;
-    const timer = window.setInterval(() => {
-      void getLibraryCompletionArtistVerificationStatus()
-        .then((status) => setVerificationStatus(status))
-        .catch((pollError) => setError(pollError instanceof Error ? pollError.message : String(pollError)));
-    }, 1_500);
-    return () => window.clearInterval(timer);
-  }, [batch?.id, batch?.state]);
+  useEffect(() => subscribeWithSnapshot(
+    listenToArtistCompletionVerification,
+    getLibraryCompletionArtistVerificationStatus,
+    setVerificationStatus,
+    (statusError) => setError(statusError instanceof Error ? statusError.message : String(statusError)),
+  ), []);
 
   useEffect(() => {
     if (!batch || batch.state !== "completed" || completedBatchReloadRef.current === batch.id) return;

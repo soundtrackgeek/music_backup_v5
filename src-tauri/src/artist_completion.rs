@@ -15,7 +15,7 @@ use std::thread;
 #[cfg(not(test))]
 use std::time::Duration;
 #[cfg(not(test))]
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 const MAX_RETURNED_ARTISTS: usize = 5_000;
 const MAX_VERIFICATION_SELECTION: usize = 5_000;
@@ -1400,6 +1400,7 @@ fn add_discogs_result(
 
 #[cfg(not(test))]
 fn run_verification(
+    app: &AppHandle,
     conn: &mut Connection,
     item_id: Option<i64>,
     artist: &str,
@@ -1408,6 +1409,7 @@ fn run_verification(
     let result = musicbrainz_result(conn, artist, selected);
     if let Some(item_id) = item_id {
         let _ = set_checking_provider(conn, item_id, "discogs");
+        emit_verification_status(app);
     }
     add_discogs_result(result, artist)
 }
@@ -1420,6 +1422,7 @@ fn run_worker(app: AppHandle) {
             let item = claim_next_verification(&mut conn)?;
             Ok(item.map(|item| (conn, item)))
         })();
+        emit_verification_status(&app);
         let Some((mut conn, item)) = (match next {
             Ok(value) => value,
             Err(_) => {
@@ -1429,8 +1432,10 @@ fn run_worker(app: AppHandle) {
         }) else {
             break;
         };
-        let result = run_verification(&mut conn, Some(item.id), &item.artist, None);
+        let result = run_verification(&app, &mut conn, Some(item.id), &item.artist, None);
         let _ = complete_verification_item(&mut conn, &item, &result);
+        drop(conn);
+        emit_verification_status(&app);
         thread::sleep(Duration::from_millis(250));
     }
     ARTIST_VERIFICATION_WORKER_RUNNING.store(false, Ordering::Release);
@@ -1480,12 +1485,20 @@ pub fn verification_status_for_app(
 }
 
 #[cfg(not(test))]
+fn emit_verification_status(app: &AppHandle) {
+    if let Ok(status) = verification_status_for_app(app) {
+        let _ = app.emit("artist-completion-verification-progress", status);
+    }
+}
+
+#[cfg(not(test))]
 pub fn start_verification_for_app(
     app: &AppHandle,
     request: StartLibraryCompletionArtistVerificationRequest,
 ) -> Result<LibraryCompletionArtistVerificationStatus> {
     let (mut conn, _) = db::open(app)?;
     let status = start_verification_for_connection(&mut conn, request)?;
+    let _ = app.emit("artist-completion-verification-progress", &status);
     spawn_verification_worker(app.clone());
     Ok(status)
 }
@@ -1498,6 +1511,7 @@ pub fn set_verification_state_for_app(
     let (conn, _) = db::open(app)?;
     let state = request.state.clone();
     let status = set_verification_state_for_connection(&conn, request)?;
+    let _ = app.emit("artist-completion-verification-progress", &status);
     if state == "running" {
         spawn_verification_worker(app.clone());
     }
@@ -1511,6 +1525,7 @@ pub fn retry_failures_for_app(
 ) -> Result<LibraryCompletionArtistVerificationStatus> {
     let (mut conn, _) = db::open(app)?;
     let status = retry_failures_for_connection(&mut conn, batch_id)?;
+    let _ = app.emit("artist-completion-verification-progress", &status);
     spawn_verification_worker(app.clone());
     Ok(status)
 }
@@ -1527,7 +1542,13 @@ pub fn confirm_match_for_app(
         .into_iter()
         .find(|candidate| candidate.id == artist_id)
         .context("The selected chart artist is no longer missing from the library.")?;
-    let result = run_verification(&mut conn, None, &candidate.artist, Some(request.candidate));
+    let result = run_verification(
+        app,
+        &mut conn,
+        None,
+        &candidate.artist,
+        Some(request.candidate),
+    );
     save_verification_result(&conn, &candidate.id, &candidate.artist, &result)?;
     get_for_connection(&conn, None, false)?
         .candidates

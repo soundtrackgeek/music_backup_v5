@@ -1,5 +1,5 @@
 import { relaunch } from "@tauri-apps/plugin-process";
-import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
+import { invoke, listen } from "../backend/tauriClient";
 
 export type AppUpdateInfo = {
   currentVersion: string;
@@ -15,49 +15,37 @@ export type AppUpdateInstallProgress = {
   percent: number | null;
 };
 
-export type AppUpdateCheckResult = {
-  update: Update;
-  info: AppUpdateInfo;
+export type AppUpdateCheckResult = { update: string; info: AppUpdateInfo };
+export type AppUpdateSnapshot = {
+  checkedAt: string | null;
+  info: AppUpdateInfo | null;
+  error: string | null;
 };
 
-export async function checkForAppUpdate() {
-  const update = await check({ timeout: 15_000 });
-  if (!update) {
-    return null;
-  }
+export function getAppUpdateStatus() {
+  return invoke<AppUpdateSnapshot>("get_app_update_status");
+}
 
-  return {
-    update,
-    info: {
-      currentVersion: update.currentVersion,
-      version: update.version,
-      date: update.date ?? null,
-      notes: update.body ?? null,
-    },
-  } satisfies AppUpdateCheckResult;
+export function listenToAppUpdateChecks(handler: (snapshot: AppUpdateSnapshot) => void) {
+  return listen<AppUpdateSnapshot>("app-update-checked", (event) => handler(event.payload));
+}
+
+export async function checkForAppUpdate() {
+  const snapshot = await invoke<AppUpdateSnapshot>("check_app_update");
+  if (snapshot.error) throw new Error(snapshot.error);
+  return snapshot.info ? { update: snapshot.info.version, info: snapshot.info } : null;
 }
 
 export async function installAppUpdate(
-  update: Update,
+  update: string,
   onProgress: (progress: AppUpdateInstallProgress) => void,
 ) {
-  let downloadedBytes = 0;
-  let totalBytes: number | null = null;
-
-  await update.download((event: DownloadEvent) => {
-    if (event.event === "Started") {
-      downloadedBytes = 0;
-      totalBytes = event.data.contentLength ?? null;
-    } else if (event.event === "Progress") {
-      downloadedBytes += event.data.chunkLength;
-    }
-
-    const percent = totalBytes && totalBytes > 0 ? Math.min(100, (downloadedBytes / totalBytes) * 100) : null;
-    onProgress({ phase: "downloading", downloadedBytes, totalBytes, percent });
-  });
-
-  onProgress({ phase: "installing", downloadedBytes, totalBytes, percent: 100 });
-  await update.install();
-  onProgress({ phase: "restarting", downloadedBytes, totalBytes, percent: 100 });
-  await relaunch();
+  const unlisten = await listen<AppUpdateInstallProgress>("app-update-install-progress", (event) => onProgress(event.payload));
+  try {
+    await invoke("install_app_update", { version: update });
+    onProgress({ phase: "restarting", downloadedBytes: 0, totalBytes: null, percent: 100 });
+    await relaunch();
+  } finally {
+    unlisten();
+  }
 }

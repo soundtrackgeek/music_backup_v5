@@ -29,6 +29,7 @@ import {
   getLibraryCompletion,
   getLibraryCompletionCoverDataUrl,
   getLibraryCompletionVerificationStatus,
+  listenToLibraryCompletionVerification,
   getDiscogsCredentialStatus,
   retryLibraryCompletionVerificationFailures,
   searchDeemixAlbums,
@@ -48,6 +49,8 @@ import type {
   StartLibraryCompletionVerificationRequest,
   WishListMusicBrainzCandidate,
 } from "../types";
+
+import { subscribeWithSnapshot } from "../app/backendEvents";
 
 type CompletionView = "workbench" | "atlas" | "artists";
 type CompletionFilter =
@@ -193,13 +196,11 @@ export function LibraryCompletionWorkspace({
     setError(null);
     setIsLoading(true);
     try {
-      const [response, queueStatus, providerStatus] = await Promise.all([
+      const [response, providerStatus] = await Promise.all([
         getLibraryCompletion(request),
-        getLibraryCompletionVerificationStatus(),
         getDiscogsCredentialStatus(),
       ]);
       setData(response);
-      setVerificationStatus(queueStatus);
       setDiscogsStatus(providerStatus);
       setSelectedForVerification((current) => {
         const available = new Set(response.candidates.map((candidate) => candidate.id));
@@ -384,43 +385,18 @@ export function LibraryCompletionWorkspace({
     };
   }, [coverUrls, selected]);
 
-  useEffect(() => {
-    if (
-      verificationBatch?.state !== "running" &&
-      !(verificationBatch?.state === "paused" && verificationBatch.checkingCount > 0)
-    ) return;
-    let cancelled = false;
-    const refresh = async () => {
-      try {
-        const status = await getLibraryCompletionVerificationStatus();
-        if (cancelled) return;
-        applyVerificationStatus(status);
-        if (
-          status.batch?.state === "completed" &&
-          completedBatchReloadRef.current !== status.batch.id
-        ) {
-          completedBatchReloadRef.current = status.batch.id;
-          await load(activeRequest);
-        }
-      } catch (statusError) {
-        if (!cancelled) {
-          setError(statusError instanceof Error ? statusError.message : String(statusError));
-        }
-      }
-    };
-    const timer = window.setInterval(() => void refresh(), 1_500);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [
+  useEffect(() => subscribeWithSnapshot(
+    listenToLibraryCompletionVerification,
+    getLibraryCompletionVerificationStatus,
     applyVerificationStatus,
-    activeRequest,
-    load,
-    verificationBatch?.checkingCount,
-    verificationBatch?.id,
-    verificationBatch?.state,
-  ]);
+    (statusError) => setError(statusError instanceof Error ? statusError.message : String(statusError)),
+  ), [applyVerificationStatus]);
+
+  useEffect(() => {
+    if (verificationBatch?.state !== "completed" || completedBatchReloadRef.current === verificationBatch.id) return;
+    completedBatchReloadRef.current = verificationBatch.id;
+    void load(activeRequest);
+  }, [activeRequest, load, verificationBatch]);
 
   useEffect(() => {
     setMusicBrainzCandidates([]);

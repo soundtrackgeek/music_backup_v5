@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.157.5] - 2026-10-04
+
+### Fixed
+- Keep MusicBrainz overlay auto-sync on its saved schedule when switching artists or editing an unsaved path. Automatic sync uses only the saved database path and cannot overlap a manual sync.
+- Retain catalog refresh notifications until the visible UI successfully acknowledges them, including a follow-up refresh for transient query failures and catch-up after returning to the window.
+
+### Changed
+- Run Music Doctor checks, MusicBrainz overlay auto-sync, startup/recurring update checks, and catalog revision detection in Rust while the desktop process is open. Saved scheduling changes apply without restarting unrelated jobs; minimized or hidden webviews no longer control the timers.
+- Push completion and progress events to the UI for background sync, updates, and Library/Artist Completion verification queues, replacing the frontend's recurring polling. Manual update checks and installation share the update discovered by the Rust scheduler.
+
 ## [0.157.4] - 2026-10-04
 
 ### Fixed

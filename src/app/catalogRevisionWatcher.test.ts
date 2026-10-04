@@ -37,6 +37,20 @@ function checkerHarness(initialRevision?: string) {
 }
 
 describe("catalog revision checker", () => {
+  it("handles pushed revisions without polling and only acknowledges visible successful refreshes", async () => {
+    const harness = checkerHarness("catalog:17");
+    harness.onRevision.mockResolvedValue();
+    harness.setVisible(false);
+    expect(await harness.check("catalog:18")).toBe(false);
+    expect(harness.observed()).toBe("catalog:17");
+    harness.setVisible(true);
+    expect(await harness.check("catalog:18")).toBe(true);
+    expect(await harness.check("catalog:18")).toBe(true);
+    expect(harness.onRevision.mock.calls).toEqual([
+      ["catalog:18", "change"], ["catalog:18", "retry"],
+    ]);
+    expect(harness.getRevision).not.toHaveBeenCalled();
+  });
   it("refreshes while establishing a baseline so startup cannot retain a stale snapshot", async () => {
     const harness = checkerHarness();
     harness.getRevision.mockResolvedValue("catalog:17");

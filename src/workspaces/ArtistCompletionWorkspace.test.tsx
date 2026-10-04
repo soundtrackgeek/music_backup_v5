@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ArtistCompletionWorkspace } from "./ArtistCompletionWorkspace";
 
 const getLibraryCompletionArtists = vi.fn();
+const listenToArtistCompletionVerification = vi.fn();
 const getLibraryCompletionArtistVerificationStatus = vi.fn();
 const getDiscogsCredentialStatus = vi.fn();
 const startLibraryCompletionArtistVerification = vi.fn();
@@ -15,6 +16,7 @@ const confirmLibraryCompletionArtistMatch = vi.fn();
 const setLibraryCompletionArtistDecision = vi.fn();
 
 vi.mock("../backend", () => ({
+  listenToArtistCompletionVerification: (...args: unknown[]) => listenToArtistCompletionVerification(...args),
   getLibraryCompletionArtists: (...args: unknown[]) => getLibraryCompletionArtists(...args),
   getLibraryCompletionArtistVerificationStatus: (...args: unknown[]) =>
     getLibraryCompletionArtistVerificationStatus(...args),
@@ -138,6 +140,7 @@ const completedFailureStatus = {
 describe("ArtistCompletionWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    listenToArtistCompletionVerification.mockResolvedValue(() => undefined);
     getLibraryCompletionArtists.mockResolvedValue(response);
     getLibraryCompletionArtistVerificationStatus.mockResolvedValue(emptyStatus);
     getDiscogsCredentialStatus.mockResolvedValue({
@@ -160,6 +163,28 @@ describe("ArtistCompletionWorkspace", () => {
       message: "Added Talk Talk with 5 albums missing.",
       updatedAt: "2026-07-29T10:03:00Z",
     });
+  });
+
+  it("renders pushed artist progress and refreshes completion without polling", async () => {
+    let push!: (status: unknown) => void;
+    const cleanup = vi.fn();
+    listenToArtistCompletionVerification.mockImplementation(async (handler) => {
+      push = handler;
+      return cleanup;
+    });
+    const { unmount } = render(<ArtistCompletionWorkspace refreshToken={0} onOpenWishList={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Talk Talk" });
+    const reads = getLibraryCompletionArtistVerificationStatus.mock.calls.length;
+    await act(async () => push(runningStatus));
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    expect(getLibraryCompletionArtistVerificationStatus).toHaveBeenCalledTimes(reads);
+    getLibraryCompletionArtistVerificationStatus.mockResolvedValue(completedFailureStatus);
+    await act(async () => push(completedFailureStatus));
+    await waitFor(() => expect(getLibraryCompletionArtists).toHaveBeenCalledTimes(2));
+    const queue = screen.getByLabelText("Artist discovery candidates");
+    expect(queue).toBeInTheDocument();
+    unmount();
+    expect(cleanup).toHaveBeenCalledOnce();
   });
 
   it("combines album and singles evidence while proving the artist is absent locally", async () => {

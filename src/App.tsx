@@ -165,6 +165,10 @@ import {
   syncMusicDoctor,
   cancelMusicBrainzArtistInfoImport,
   cancelMusicBrainzOriginCountryImport,
+  listenToCatalogRevision,
+  acknowledgeCatalogRevision,
+  listenToMusicDoctorSync,
+  listenToMusicBrainzOverlaySync,
   searchLibrary,
   exportMusicToolIssues,
   restoreDatabaseBackup,
@@ -474,12 +478,15 @@ import {
 } from "./workspaces/UpdatesWorkspace";
 import {
   checkForAppUpdate,
+  getAppUpdateStatus,
+  listenToAppUpdateChecks,
   installAppUpdate,
   type AppUpdateCheckResult,
   type AppUpdateInfo,
   type AppUpdateInstallProgress,
 } from "./app/updater";
 import { setAppUpdateIndicator } from "./app/updateIndicator";
+import { subscribeWithSnapshot } from "./app/backendEvents";
 import { createCatalogRevisionChecker } from "./app/catalogRevisionWatcher";
 import {
   chartCompletenessRange,
@@ -9030,7 +9037,7 @@ export default function App() {
       },
     });
     const checkForExternalImport = () => {
-      void checkCatalogRevision().catch(() => {
+      void checkCatalogRevision().then(() => checkCatalogRevision()).catch(() => {
         // A locked or temporarily unavailable database can be retried on the next tick.
       });
     };
@@ -9042,46 +9049,36 @@ export default function App() {
       }
     };
 
-    const intervalId = window.setInterval(checkForExternalImport, 1_000);
+    const unsubscribe = subscribeWithSnapshot(
+      listenToCatalogRevision,
+      getCatalogRevision,
+      (revision) => {
+        void checkCatalogRevision(revision).then((processed) => {
+          if (processed && !disposed && document.visibilityState !== "hidden" &&
+              hasObservedCatalogRevisionRef.current && observedCatalogRevisionRef.current === revision) {
+            return acknowledgeCatalogRevision(revision);
+          }
+        }).catch(() => undefined);
+      },
+    );
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     checkForExternalImport();
 
     return () => {
       disposed = true;
-      window.clearInterval(intervalId);
+      unsubscribe();
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [canImport]);
 
   useEffect(() => {
-    if (!settings.musicDoctorAutoSync) return;
-
-    let disposed = false;
-    let checking = false;
-    const checkForMusicDoctorScan = async () => {
-      if (checking || disposed) return;
-      checking = true;
-      try {
-        const doctorStatus = await getMusicDoctorStatus();
-        if (!disposed && doctorStatus.valid && doctorStatus.needsSync) {
-          await syncMusicDoctor();
-        }
-      } catch {
-        // The Settings panel reports connection errors; background checks stay quiet.
-      } finally {
-        checking = false;
-      }
-    };
-
-    void checkForMusicDoctorScan();
-    const intervalId = window.setInterval(checkForMusicDoctorScan, 5 * 60_000);
-    return () => {
-      disposed = true;
-      window.clearInterval(intervalId);
-    };
-  }, [settings.musicDoctorAutoSync, settings.musicDoctorDatabasePath]);
+    if (!canImport) return;
+    return subscribeWithSnapshot(listenToMusicDoctorSync, null, () => {
+      setCatalogRefreshKey((current) => current + 1);
+    });
+  }, [canImport]);
 
   useEffect(() => {
     let cancelled = false;
@@ -13516,58 +13513,27 @@ export default function App() {
     }
   }
 
-  async function runMusicBrainzOverlaySync(
-    options: { source?: "manual" | "auto" } = {},
-  ) {
-    if (isMusicBrainzOverlaySyncingRef.current) {
-      return;
-    }
-
-    const isAutoSync = options.source === "auto";
+  async function runMusicBrainzOverlaySync() {
+    if (isMusicBrainzOverlaySyncingRef.current) return;
     const syncPath = musicBrainzOverlaySyncPathDraft.trim();
     if (!syncPath) {
-      if (!isAutoSync) {
-        setMusicBrainzOverlaySyncError(
-          "Choose a shared MusicBrainz overlay sync database path before syncing.",
-        );
-      }
+      setMusicBrainzOverlaySyncError("Choose a shared MusicBrainz overlay sync database path before syncing.");
       return;
     }
     isMusicBrainzOverlaySyncingRef.current = true;
-    if (!isAutoSync) {
-      setIsMusicBrainzOverlaySyncing(true);
-      setMusicBrainzOverlaySyncError(null);
-    }
-
+    setIsMusicBrainzOverlaySyncing(true);
+    setMusicBrainzOverlaySyncError(null);
     try {
-      if (!isAutoSync) {
-        await saveAppSettings({ musicBrainzOverlaySyncPath: syncPath });
-      }
-      const result = await syncMusicBrainzOverlay({ recordNoop: !isAutoSync });
-      if (!isAutoSync || result.changedCount > 0) {
-        setMusicBrainzOverlaySyncResult(result);
-        setMusicBrainzOverlaySyncPathDraft(result.syncPath);
-        const log = await listMusicBrainzOverlaySyncLog(12);
-        setMusicBrainzOverlaySyncLog(log);
-      }
-      if (selectedArtist && (!isAutoSync || result.changedCount > 0)) {
-        const discography = await getMusicBrainzArtistDiscography(
-          selectedArtist.id,
-          selectedArtist.name,
-        );
-        setMusicBrainzArtistDiscography(discography);
-      }
+      await saveAppSettings({ musicBrainzOverlaySyncPath: syncPath });
+      const result = await syncMusicBrainzOverlay({ recordNoop: true });
+      setMusicBrainzOverlaySyncResult(result);
+      setMusicBrainzOverlaySyncLog(await listMusicBrainzOverlaySyncLog(12));
+      await refreshSelectedArtistAfterOverlaySync();
     } catch (error) {
-      if (!isAutoSync) {
-        setMusicBrainzOverlaySyncError(
-          error instanceof Error ? error.message : String(error),
-        );
-      }
+      setMusicBrainzOverlaySyncError(error instanceof Error ? error.message : String(error));
     } finally {
       isMusicBrainzOverlaySyncingRef.current = false;
-      if (!isAutoSync) {
-        setIsMusicBrainzOverlaySyncing(false);
-      }
+      setIsMusicBrainzOverlaySyncing(false);
     }
   }
 
@@ -13616,13 +13582,11 @@ export default function App() {
         const result = await checkForAppUpdate();
         setAppUpdateLastCheckedAt(new Date().toISOString());
         if (result) {
-          void appUpdateRef.current?.close().catch(() => undefined);
           appUpdateRef.current = result.update;
           setAppUpdateInfo(result.info);
           setAppUpdateStatus("available");
           setIsAppUpdateBannerDismissed(false);
         } else {
-          void appUpdateRef.current?.close().catch(() => undefined);
           appUpdateRef.current = null;
           setAppUpdateInfo(null);
           setAppUpdateStatus("upToDate");
@@ -13671,16 +13635,19 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!canImport) {
-      return undefined;
-    }
-
-    void checkAppUpdate("startup");
-
-    return () => {
-      void appUpdateRef.current?.close().catch(() => undefined);
-    };
-  }, [canImport, checkAppUpdate]);
+    if (!canImport) return;
+    return subscribeWithSnapshot(listenToAppUpdateChecks, getAppUpdateStatus, (snapshot) => {
+      if (!snapshot.checkedAt || isAppUpdateInstallingRef.current || isAppUpdateCheckingRef.current) return;
+      setAppUpdateLastCheckedAt(snapshot.checkedAt);
+      // Quiet background errors preserve a previously available update.
+      if (snapshot.error && !snapshot.info) return;
+      appUpdateRef.current = snapshot.info?.version ?? null;
+      setAppUpdateInfo(snapshot.info);
+      setAppUpdateStatus(snapshot.info ? "available" : "upToDate");
+      setAppUpdateError(null);
+      if (snapshot.info) setIsAppUpdateBannerDismissed(false);
+    });
+  }, [canImport]);
 
   useEffect(() => {
     if (!canImport) {
@@ -13694,45 +13661,31 @@ export default function App() {
     );
   }, [appUpdateInfo?.version, canImport]);
 
-  useEffect(() => {
-    const autoCheckMinutes = updateAutoCheckMinutesValue(
-      settings.updateAutoCheckMinutes,
-    );
-    if (!canImport || autoCheckMinutes <= 0) {
-      return undefined;
+  const selectedArtistForSyncRef = useRef(selectedArtist);
+  selectedArtistForSyncRef.current = selectedArtist;
+  async function refreshSelectedArtistAfterOverlaySync() {
+    const artist = selectedArtistForSyncRef.current;
+    if (!artist) return;
+    const discography = await getMusicBrainzArtistDiscography(artist.id, artist.name);
+    if (selectedArtistForSyncRef.current?.id === artist.id) {
+      setMusicBrainzArtistDiscography(discography);
     }
-
-    const intervalId = window.setInterval(() => {
-      void checkAppUpdate("auto");
-    }, autoCheckMinutes * 60_000);
-
-    return () => window.clearInterval(intervalId);
-  }, [canImport, checkAppUpdate, settings.updateAutoCheckMinutes]);
+  }
 
   useEffect(() => {
-    const autoSyncMinutes = overlayAutoSyncMinutesValue(
-      settings.musicBrainzOverlayAutoSyncMinutes,
-    );
-    if (
-      !canImport ||
-      autoSyncMinutes <= 0 ||
-      !settings.musicBrainzOverlaySyncPath.trim()
-    ) {
-      return undefined;
-    }
-
-    const intervalId = window.setInterval(() => {
-      void runMusicBrainzOverlaySync({ source: "auto" });
-    }, autoSyncMinutes * 60_000);
-
-    return () => window.clearInterval(intervalId);
-  }, [
-    canImport,
-    settings.musicBrainzOverlayAutoSyncMinutes,
-    settings.musicBrainzOverlaySyncPath,
-    musicBrainzOverlaySyncPathDraft,
-    selectedArtist?.id,
-  ]);
+    if (!canImport) return;
+    let disposed = false;
+    const unsubscribe = subscribeWithSnapshot(listenToMusicBrainzOverlaySync, null, (result) => {
+      setMusicBrainzOverlaySyncResult(result);
+      // Background completion never replaces a path currently being edited.
+      void listMusicBrainzOverlaySyncLog(12).then((log) => {
+        if (!disposed) setMusicBrainzOverlaySyncLog(log);
+      }).catch(() => undefined);
+      void refreshSelectedArtistAfterOverlaySync().catch(() => undefined);
+      setCatalogRefreshKey((current) => current + 1);
+    });
+    return () => { disposed = true; unsubscribe(); };
+  }, [canImport]);
 
   function saveLeftSidebarDefault(mode: LeftSidebarMode) {
     setLeftSidebarMode(mode);
@@ -18492,6 +18445,7 @@ export default function App() {
 
               <SettingsSection id="data">
                 <MusicDoctorSettingsPanel
+                  refreshToken={catalogRefreshKey}
                   databasePath={settings.musicDoctorDatabasePath}
                   autoSync={settings.musicDoctorAutoSync}
                   isSavingSettings={isSavingSettings}

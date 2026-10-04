@@ -11,6 +11,7 @@ import type { AppSettings, MusicDoctorStatus } from "../types";
 type Props = {
   databasePath: string;
   autoSync: boolean;
+  refreshToken?: number;
   isSavingSettings: boolean;
   onSaveSettings: (values: Partial<AppSettings>) => Promise<boolean>;
 };
@@ -39,6 +40,7 @@ function formatDate(value: string | null) {
 export function MusicDoctorSettingsPanel({
   databasePath,
   autoSync,
+  refreshToken = 0,
   isSavingSettings,
   onSaveSettings,
 }: Props) {
@@ -81,7 +83,7 @@ export function MusicDoctorSettingsPanel({
 
   useEffect(() => {
     void refreshStatus();
-  }, [refreshStatus]);
+  }, [refreshStatus, refreshToken]);
 
   async function saveConnection() {
     const nextPath = pathDraft.trim() || defaultMusicDoctorDatabasePath;

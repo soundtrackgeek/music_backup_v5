@@ -7,6 +7,7 @@ mod album_review;
 mod artist_biography;
 mod artist_completion;
 mod aurora_bridge;
+mod background;
 mod covers;
 mod db;
 mod deemix;
@@ -27,6 +28,8 @@ mod musicbrainz_sync;
 mod plex;
 mod published_charts;
 mod soulseek;
+#[cfg(not(test))]
+mod updater;
 mod updates;
 mod usenet;
 mod wishlist;
@@ -147,6 +150,13 @@ async fn get_catalog_revision(app: AppHandle) -> Result<String, String> {
         .await
         .map_err(|error| format!("Catalog revision task failed: {error}"))?
         .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+fn acknowledge_catalog_revision(app: AppHandle, revision: String) {
+    app.state::<background::CatalogNotifications>()
+        .acknowledge(&revision);
 }
 
 #[cfg(not(test))]
@@ -1289,10 +1299,34 @@ async fn list_musicbrainz_overlay_sync_log(
 #[cfg(not(test))]
 #[tauri::command]
 async fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
-    tauri::async_runtime::spawn_blocking(move || db::save_settings_for_app(&app, settings))
-        .await
-        .map_err(|error| format!("Save settings task failed: {error}"))?
-        .map_err(|error| error.to_string())
+    let saved = tauri::async_runtime::spawn_blocking({
+        let app = app.clone();
+        move || db::save_settings_for_app(&app, settings)
+    })
+    .await
+    .map_err(|error| format!("Save settings task failed: {error}"))?
+    .map_err(|error| error.to_string())?;
+    app.state::<background::BackgroundScheduler>()
+        .configure(&saved);
+    Ok(saved)
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn get_app_update_status(app: AppHandle) -> updater::UpdateSnapshot {
+    updater::snapshot(&app).await
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn check_app_update(app: AppHandle) -> Result<updater::UpdateSnapshot, String> {
+    updater::check(&app).await
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn install_app_update(app: AppHandle, version: String) -> Result<(), String> {
+    updater::install(&app, version).await
 }
 
 #[cfg(not(test))]
@@ -2161,6 +2195,7 @@ pub fn run() {
             library_completion::resume_verification_worker(app.handle().clone());
             artist_completion::resume_verification_worker(app.handle().clone());
             plex::resume_sync_worker(app.handle().clone());
+            background::start(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -2168,6 +2203,7 @@ pub fn run() {
             run_performance_probe,
             list_import_runs,
             get_catalog_revision,
+            acknowledge_catalog_revision,
             list_database_backups,
             restore_database_backup,
             get_settings,
@@ -2302,6 +2338,9 @@ pub fn run() {
             list_musicbrainz_overlay_sync_log,
             export_musicbrainz_artist_releases,
             save_settings,
+            get_app_update_status,
+            check_app_update,
+            install_app_update,
             get_music_doctor_status,
             sync_music_doctor,
             get_statistics,
@@ -2380,6 +2419,7 @@ pub fn run() {
         .expect("failed to build Music Library app")
         .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
+                app_handle.state::<background::BackgroundScheduler>().stop();
                 db::checkpoint_truncate_for_app(app_handle);
             }
         });

@@ -7,6 +7,8 @@ use std::fs;
 use std::path::PathBuf;
 #[cfg(not(test))]
 use tauri::AppHandle;
+#[cfg(not(test))]
+static SYNC_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[cfg(not(test))]
 pub fn sync_for_app(app: &AppHandle) -> Result<MusicBrainzOverlaySyncResult> {
@@ -18,6 +20,7 @@ pub fn sync_for_app_with_options(
     app: &AppHandle,
     record_noop: bool,
 ) -> Result<MusicBrainzOverlaySyncResult> {
+    let _guard = SYNC_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let (conn, _) = db::open(app)?;
     let settings = db::settings_for_connection(&conn)?;
     sync_for_connection_with_options(&conn, &settings.musicbrainz_overlay_sync_path, record_noop)

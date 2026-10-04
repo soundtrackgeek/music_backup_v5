@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 #[cfg(not(test))]
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(not(test))]
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 const MAX_RETURNED_CANDIDATES: usize = 5_000;
 const MAX_CANDIDATE_KEY_LENGTH: usize = 800;
@@ -1726,6 +1726,7 @@ fn verification_worker_loop(app: &AppHandle) -> Result<()> {
             let (mut conn, _) = db::open(app)?;
             claim_next_verification(&mut conn)?
         };
+        emit_verification_status(app);
         let Some(item) = item else {
             return Ok(());
         };
@@ -1738,6 +1739,7 @@ fn verification_worker_loop(app: &AppHandle) -> Result<()> {
                     let (conn, _) = db::open(app)?;
                     set_checking_provider(&conn, item.id, "discogs")?;
                     drop(conn);
+                    emit_verification_status(app);
                     verify_with_discogs(&item, &musicbrainz_result)
                 }
                 Ok(false) => musicbrainz_result,
@@ -1748,6 +1750,8 @@ fn verification_worker_loop(app: &AppHandle) -> Result<()> {
         };
         let (mut conn, _) = db::open(app)?;
         complete_verification_item(&mut conn, &item, &result)?;
+        drop(conn);
+        emit_verification_status(app);
     }
 }
 
@@ -1792,12 +1796,20 @@ pub fn verification_status_for_app(app: &AppHandle) -> Result<LibraryCompletionV
 }
 
 #[cfg(not(test))]
+fn emit_verification_status(app: &AppHandle) {
+    if let Ok(status) = verification_status_for_app(app) {
+        let _ = app.emit("library-completion-verification-progress", status);
+    }
+}
+
+#[cfg(not(test))]
 pub fn start_verification_for_app(
     app: &AppHandle,
     request: StartLibraryCompletionVerificationRequest,
 ) -> Result<LibraryCompletionVerificationStatus> {
     let (mut conn, _) = db::open(app)?;
     let status = start_verification_for_connection(&mut conn, request)?;
+    let _ = app.emit("library-completion-verification-progress", &status);
     resume_verification_worker(app.clone());
     Ok(status)
 }
@@ -1810,6 +1822,7 @@ pub fn set_verification_state_for_app(
     let should_resume = request.state.trim() == "running";
     let (conn, _) = db::open(app)?;
     let status = set_verification_state_for_connection(&conn, request)?;
+    let _ = app.emit("library-completion-verification-progress", &status);
     if should_resume {
         resume_verification_worker(app.clone());
     }
@@ -1823,6 +1836,7 @@ pub fn retry_verification_failures_for_app(
 ) -> Result<LibraryCompletionVerificationStatus> {
     let (mut conn, _) = db::open(app)?;
     let status = retry_verification_failures_for_connection(&mut conn, batch_id)?;
+    let _ = app.emit("library-completion-verification-progress", &status);
     resume_verification_worker(app.clone());
     Ok(status)
 }

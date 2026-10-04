@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LibraryCompletionWorkspace } from "./LibraryCompletionWorkspace";
 
 const getLibraryCompletion = vi.fn();
+const listenToLibraryCompletionVerification = vi.fn();
 const getLibraryCompletionVerificationStatus = vi.fn();
 const getDiscogsCredentialStatus = vi.fn();
 const getLibraryCompletionCoverDataUrl = vi.fn();
@@ -24,6 +25,8 @@ const confirmLibraryCompletionArtistMatch = vi.fn();
 const setLibraryCompletionArtistDecision = vi.fn();
 
 vi.mock("../backend", () => ({
+  listenToLibraryCompletionVerification: (...args: unknown[]) => listenToLibraryCompletionVerification(...args),
+  listenToArtistCompletionVerification: async () => () => undefined,
   getLibraryCompletion: (...args: unknown[]) => getLibraryCompletion(...args),
   getLibraryCompletionVerificationStatus: (...args: unknown[]) =>
     getLibraryCompletionVerificationStatus(...args),
@@ -194,6 +197,7 @@ const completedVerificationStatus = {
 describe("LibraryCompletionWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    listenToLibraryCompletionVerification.mockResolvedValue(() => undefined);
     HTMLElement.prototype.scrollIntoView = vi.fn();
     getLibraryCompletion.mockResolvedValue(response);
     getLibraryCompletionVerificationStatus.mockResolvedValue(emptyVerificationStatus);
@@ -254,6 +258,27 @@ describe("LibraryCompletionWorkspace", () => {
       candidates: [],
     });
     getLibraryCompletionArtistVerificationStatus.mockResolvedValue({ batch: null, recentItems: [] });
+  });
+
+  it("renders pushed queue completion and cleans up its listener", async () => {
+    let push!: (status: unknown) => void;
+    const cleanup = vi.fn();
+    listenToLibraryCompletionVerification.mockImplementation(async (handler) => {
+      push = handler;
+      return cleanup;
+    });
+    const { unmount } = render(<LibraryCompletionWorkspace onOpenWishList={vi.fn()} />);
+    await screen.findByRole("heading", { name: "The Colour of Spring" });
+    const reads = getLibraryCompletionVerificationStatus.mock.calls.length;
+    await act(async () => push(runningVerificationStatus));
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    expect(getLibraryCompletionVerificationStatus).toHaveBeenCalledTimes(reads);
+    getLibraryCompletionVerificationStatus.mockResolvedValue(completedVerificationStatus);
+    await act(async () => push(completedVerificationStatus));
+    await waitFor(() => expect(getLibraryCompletion).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
+    unmount();
+    expect(cleanup).toHaveBeenCalledOnce();
   });
 
   it("moves from an Atlas cohort into a filtered Workbench campaign", async () => {
