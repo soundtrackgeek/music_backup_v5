@@ -902,7 +902,7 @@ fn delete_saved(conn: &Connection, id: i64) -> Result<()> {
 
 #[cfg(not(test))]
 pub fn list_saved_for_app(app: &AppHandle) -> Result<Vec<SavedExternalDiscovery>> {
-    let (conn, _) = db::open(app)?;
+    let (conn, _) = db::open_read(app)?;
     list_saved(&conn)
 }
 

@@ -29,7 +29,7 @@ pub fn list_for_app(
     app: &AppHandle,
     request: LibraryUpdateRequest,
 ) -> Result<LibraryUpdateResponse> {
-    let (conn, _) = db::open(app)?;
+    let (conn, _) = db::open_read(app)?;
     list_for_connection(&conn, request)
 }
 
@@ -38,7 +38,7 @@ pub fn list_artists_for_app(
     app: &AppHandle,
     request: LibraryUpdateRequest,
 ) -> Result<LibraryUpdateArtistResponse> {
-    let (conn, _) = db::open(app)?;
+    let (conn, _) = db::open_read(app)?;
     list_artists_for_connection(&conn, request)
 }
 

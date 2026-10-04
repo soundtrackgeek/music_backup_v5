@@ -2,7 +2,7 @@ use super::{
     configure, count_rows, migrate, BackupMetadata, LATEST_SCHEMA_VERSION, MIGRATION_LOCK,
 };
 #[cfg(not(test))]
-use super::{database_path, open};
+use super::{database_path, open_read};
 use crate::models::{DatabaseBackup, DatabaseRestoreSummary};
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{DateTime, Utc};
@@ -15,7 +15,7 @@ use tauri::AppHandle;
 
 #[cfg(not(test))]
 pub fn list_database_backups_for_app(app: &AppHandle) -> Result<Vec<DatabaseBackup>> {
-    let (conn, db_path) = open(app)?;
+    let (conn, db_path) = open_read(app)?;
     list_database_backups(&conn, &db_path)
 }
 
@@ -52,6 +52,14 @@ pub fn list_database_backups(conn: &Connection, db_path: &Path) -> Result<Vec<Da
 }
 
 pub fn restore_database_backup(
+    db_path: &Path,
+    backup_path: &str,
+) -> Result<DatabaseRestoreSummary> {
+    super::pool_for_path(db_path)?
+        .with_replacement(|| restore_database_backup_exclusive(db_path, backup_path))
+}
+
+fn restore_database_backup_exclusive(
     db_path: &Path,
     backup_path: &str,
 ) -> Result<DatabaseRestoreSummary> {

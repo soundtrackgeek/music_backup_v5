@@ -69,6 +69,9 @@ type ProgressApp<'a> = &'a AppHandle;
 type ProgressApp<'a> = &'a ();
 
 mod backups;
+mod lifecycle;
+#[cfg(test)]
+mod lifecycle_probe;
 mod migrations;
 mod settings;
 use backups::create_database_file_backup;
@@ -76,6 +79,7 @@ use backups::create_database_file_backup;
 use backups::{backup_directory_for_db_path, list_database_backups, restore_database_backup};
 #[cfg(not(test))]
 pub(crate) use backups::{list_database_backups_for_app, restore_database_backup_for_app};
+pub(crate) use lifecycle::{pool_for_path, CatalogConnection};
 use migrations::LATEST_SCHEMA_VERSION;
 use settings::normalize_musicbrainz_cache_path;
 #[cfg(test)]
@@ -615,27 +619,42 @@ pub fn checkpoint_truncate_path(db_path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn checkpoint_truncate_for_app(app: &AppHandle) {
-    if let Ok(db_path) = database_path(app) {
-        if let Err(error) = checkpoint_truncate_path(&db_path) {
-            eprintln!(
-                "Could not checkpoint SQLite WAL on exit for {}: {error:#}",
-                db_path.display()
-            );
-        }
+pub(crate) fn shutdown_for_app(app: &AppHandle) {
+    if let Err(error) = database_path(app).and_then(|path| pool_for_path(&path)?.shutdown()) {
+        eprintln!("Could not optimize and checkpoint SQLite on exit: {error:#}");
     }
 }
 
-pub fn open(app: &AppHandle) -> Result<(Connection, PathBuf)> {
+pub fn open(app: &AppHandle) -> Result<(CatalogConnection, PathBuf)> {
     let db_path = database_path(app)?;
-    let conn = Connection::open(&db_path)
-        .with_context(|| format!("Could not open SQLite database at {}", db_path.display()))?;
-    configure(&conn)?;
-    migrate(&conn)?;
+    let conn = open_path(&db_path)?;
     Ok((conn, db_path))
 }
 
-pub fn configure(conn: &Connection) -> Result<()> {
+pub(crate) fn open_path(path: &Path) -> Result<CatalogConnection> {
+    pool_for_path(path)?.checkout(lifecycle::Access::Write)
+}
+
+pub(crate) fn open_read(app: &AppHandle) -> Result<(CatalogConnection, PathBuf)> {
+    let path = database_path(app)?;
+    let conn = pool_for_path(&path)?.checkout(lifecycle::Access::Read)?;
+    Ok((conn, path))
+}
+
+#[cfg(not(test))]
+fn open_search(app: &AppHandle) -> Result<(CatalogConnection, PathBuf)> {
+    let (conn, path) = open_read(app)?;
+    if search_indexes_current(&conn)? {
+        return Ok((conn, path));
+    }
+    drop(conn);
+    let writer = open_path(&path)?;
+    ensure_search_indexes(&writer)?;
+    drop(writer);
+    open_read(app)
+}
+
+pub(super) fn configure_reader(conn: &Connection) -> Result<()> {
     conn.create_scalar_function(
         "unicode_lower",
         1,
@@ -650,12 +669,19 @@ pub fn configure(conn: &Connection) -> Result<()> {
         "
         PRAGMA busy_timeout = 15000;
         PRAGMA foreign_keys = ON;
-        PRAGMA journal_mode = WAL;
-        PRAGMA synchronous = NORMAL;
         PRAGMA temp_store = MEMORY;
+        PRAGMA cache_size = -32768;
+        PRAGMA mmap_size = 268435456;
         ",
     )
     .context("Could not configure SQLite pragmas")?;
+    Ok(())
+}
+
+pub fn configure(conn: &Connection) -> Result<()> {
+    configure_reader(conn)?;
+    conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")
+        .context("Could not configure SQLite writer pragmas")?;
     Ok(())
 }
 
@@ -664,13 +690,24 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     let user_version = conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))?;
-    if user_version >= LATEST_SCHEMA_VERSION && crate::published_charts::schema_exists(conn)? {
-        return migrate_through_57(conn);
+    if user_version >= LATEST_SCHEMA_VERSION
+        && crate::published_charts::schema_exists(conn)?
+        && migrations::phase_fifty_six_schema_exists(conn)?
+    {
+        return Ok(());
     }
     migrate_through_57(conn)?;
     crate::published_charts::ensure_schema(conn)?;
-    conn.execute_batch("PRAGMA user_version = 58;")
-        .context("Could not mark the Published Charts schema complete")?;
+    let transaction =
+        rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
+    let version: i32 = transaction.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version < 59 {
+        migrations::migrate_uk_origin_country_alias(&transaction)?;
+        transaction
+            .execute_batch("PRAGMA user_version = 59;")
+            .context("Could not mark the UK origin-country migration complete")?;
+    }
+    transaction.commit().context("Could not commit schema 59")?;
     Ok(())
 }
 
@@ -680,13 +717,6 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         .context("Could not read SQLite schema version")?;
 
     if user_version >= 57 && migrations::phase_fifty_six_schema_exists(conn)? {
-        let transaction = conn
-            .unchecked_transaction()
-            .context("Could not start the UK origin-country migration transaction")?;
-        migrations::migrate_uk_origin_country_alias(&transaction)?;
-        transaction
-            .commit()
-            .context("Could not commit the UK origin-country migration")?;
         return Ok(());
     }
 
@@ -4737,7 +4767,7 @@ fn schema_column_exists(conn: &Connection, table: &str, column: &str) -> Result<
 
 #[cfg(not(test))]
 pub fn library_status(app: &AppHandle) -> Result<LibraryStatus> {
-    let (conn, db_path) = open(app)?;
+    let (conn, db_path) = open_read(app)?;
     let track_count = count_rows(&conn, "tracks")?;
     let album_count = count_rows(&conn, "albums")?;
     let cover_count = count_rows(&conn, "album_covers")?;
@@ -4757,6 +4787,7 @@ pub fn library_status(app: &AppHandle) -> Result<LibraryStatus> {
 
 #[cfg(not(test))]
 pub fn performance_probe_for_app(app: &AppHandle) -> Result<PerformanceProbeResponse> {
+    // Discovery in this probe maintains the saved Daily Edition snapshot.
     let (conn, db_path) = open(app)?;
     performance_probe(&conn, db_path.display().to_string())
 }
@@ -7121,7 +7152,7 @@ fn billboard_text_key(value: &str) -> String {
 
 #[cfg(not(test))]
 pub fn list_import_runs_for_app(app: &AppHandle, limit: u32) -> Result<Vec<ImportRun>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     list_import_runs(&conn, limit)
 }
 
@@ -7132,15 +7163,14 @@ pub fn catalog_revision_for_app(app: &AppHandle) -> Result<String> {
         return Ok("0:0:".to_string());
     }
 
-    let conn = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .with_context(|| format!("Could not open SQLite database at {}", db_path.display()))?;
+    let (conn, _) = open_read(app)?;
     conn.busy_timeout(Duration::from_millis(250))?;
     catalog_revision(&conn)
 }
 
 #[cfg(not(test))]
 pub fn statistics_for_app(app: &AppHandle) -> Result<StatisticsResponse> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     statistics(&conn)
 }
 
@@ -7150,7 +7180,7 @@ pub fn album_debut_timeline_for_app(
     selected_year: Option<i32>,
     chart_source: String,
 ) -> Result<AlbumDebutTimelineResponse> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     album_debut_timeline_for_source(&conn, selected_year, &chart_source)
 }
 
@@ -7653,7 +7683,7 @@ pub fn year_progress_for_app(
     app: &AppHandle,
     request: YearProgressRequest,
 ) -> Result<Vec<YearProgressStats>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     year_progress_stats_filtered(&conn, &request)
 }
 
@@ -7662,7 +7692,7 @@ pub fn genre_progress_for_app(
     app: &AppHandle,
     request: GenreProgressRequest,
 ) -> Result<Vec<GenreProgressStats>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     genre_progress_stats_filtered(&conn, &request)
 }
 
@@ -7671,7 +7701,7 @@ pub fn library_profile_for_app(
     app: &AppHandle,
     request: &LibraryProfileRequest,
 ) -> Result<LibraryProfileResult> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     library_profile(&conn, request)
 }
 
@@ -9401,8 +9431,7 @@ pub fn rebuild_search_indexes(conn: &Connection) -> Result<()> {
 
 #[cfg(not(test))]
 pub fn search_library_for_app(app: &AppHandle, request: BrowseRequest) -> Result<BrowseResponse> {
-    let (conn, _) = open(app)?;
-    ensure_search_indexes(&conn)?;
+    let (conn, _) = open_search(app)?;
     search_library(&conn, request, COMPLETE_SEARCH_RESULT_LIMIT)
 }
 
@@ -9415,8 +9444,7 @@ pub fn inspect_current_view_for_app(
     scope_limit: Option<u32>,
     inspection: &ViewInspectionRequest,
 ) -> Result<ViewInspectionResult> {
-    let (conn, _) = open(app)?;
-    ensure_search_indexes(&conn)?;
+    let (conn, _) = open_search(app)?;
     inspect_current_view(&conn, request, scope_limit, inspection)
 }
 
@@ -9426,8 +9454,7 @@ pub fn inspect_music_research_context_for_app(
     context: &AiMusicResearchContext,
     inspection: &MusicResearchInspectionRequest,
 ) -> Result<MusicResearchInspectionResult> {
-    let (conn, _) = open(app)?;
-    ensure_search_indexes(&conn)?;
+    let (conn, _) = open_search(app)?;
     inspect_music_research_context(&conn, context, inspection)
 }
 
@@ -9436,7 +9463,7 @@ pub fn list_artists_for_app(
     app: &AppHandle,
     request: ArtistListRequest,
 ) -> Result<ArtistListResponse> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     list_artists(&conn, request, 500)
 }
 
@@ -9445,7 +9472,7 @@ pub fn artist_track_highlights_for_app(
     app: &AppHandle,
     artist_id: &str,
 ) -> Result<ArtistTrackHighlights> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     artist_track_highlights(&conn, artist_id)
 }
 
@@ -9454,7 +9481,7 @@ pub fn list_genres_for_app(
     app: &AppHandle,
     request: GenreListRequest,
 ) -> Result<GenreListResponse> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     list_genres(&conn, request, 2000)
 }
 
@@ -9463,7 +9490,7 @@ pub fn genre_timeline_for_app(
     app: &AppHandle,
     request: GenreTimelineRequest,
 ) -> Result<GenreTimelineResponse> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     genre_timeline(&conn, request)
 }
 
@@ -9472,7 +9499,7 @@ pub fn artist_timeline_for_app(
     app: &AppHandle,
     request: ArtistTimelineRequest,
 ) -> Result<ArtistTimelineResponse> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     artist_timeline(&conn, request)
 }
 
@@ -9696,7 +9723,7 @@ pub(crate) fn lastfm_artist_identity_for_app(
     app: &AppHandle,
     artist_id: &str,
 ) -> Result<Option<LastFmArtistIdentity>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     lastfm_artist_identity(&conn, artist_id)
 }
 
@@ -9704,7 +9731,7 @@ pub(crate) fn artist_biography_identity_for_app(
     app: &AppHandle,
     artist_id: &str,
 ) -> Result<Option<ArtistBiographyIdentity>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     Ok(
         lastfm_artist_identity(&conn, artist_id)?.map(|identity| ArtistBiographyIdentity {
             artist_key: identity.artist_key,
@@ -9753,7 +9780,7 @@ pub(crate) fn artist_biography_cache_for_app(
     app: &AppHandle,
     artist_key: &str,
 ) -> Result<Option<ArtistBiographyCacheRecord>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     artist_biography_cache(&conn, artist_key)
 }
 
@@ -9848,7 +9875,7 @@ pub(crate) fn album_review_identity_for_app(
     app: &AppHandle,
     album_id: &str,
 ) -> Result<Option<AlbumReviewIdentity>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     album_review_identity(&conn, album_id)
 }
 
@@ -9897,7 +9924,7 @@ pub(crate) fn album_review_cache_for_app(
     app: &AppHandle,
     album_id: &str,
 ) -> Result<Option<AlbumReviewCacheRecord>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     album_review_cache(&conn, album_id)
 }
 
@@ -9991,7 +10018,7 @@ pub(crate) fn lastfm_local_tracks_for_artist_for_app(
     app: &AppHandle,
     artist_id: &str,
 ) -> Result<Vec<LastFmLocalTrackCandidate>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     let artist_key = artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
     let sql = format!(
         "
@@ -10027,7 +10054,7 @@ pub(crate) fn lastfm_local_tracks_for_album_for_app(
     app: &AppHandle,
     album_id: &str,
 ) -> Result<Vec<LastFmLocalTrackCandidate>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     let artist_key = artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
     let sql = format!(
         "
@@ -10062,7 +10089,7 @@ pub(crate) fn lastfm_artist_popularity_cache_for_app(
     app: &AppHandle,
     artist_key: &str,
 ) -> Result<Option<LastFmArtistPopularityCacheRecord>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     conn.query_row(
         "
         SELECT artist_key, artist_name, musicbrainz_mbid, source_url, state,
@@ -10092,7 +10119,7 @@ pub(crate) fn lastfm_artist_similarity_cache_for_app(
     app: &AppHandle,
     artist_key: &str,
 ) -> Result<Option<LastFmArtistSimilarityCacheRecord>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     conn.query_row(
         "
         SELECT artist_key, artist_name, musicbrainz_mbid, source_url, state,
@@ -10122,7 +10149,7 @@ pub(crate) fn lastfm_similar_artist_cache_for_app(
     app: &AppHandle,
     artist_key: &str,
 ) -> Result<Vec<LastFmSimilarArtistCacheRecord>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     let mut stmt = conn.prepare(
         "
         SELECT artist_key, rank, similar_artist_name, similar_artist_mbid,
@@ -10239,7 +10266,7 @@ pub(crate) fn lastfm_similar_local_artists_for_app(
     app: &AppHandle,
     candidates: &[(Option<String>, String)],
 ) -> Result<Vec<Option<LastFmSimilarLocalArtist>>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     lastfm_similar_local_artists(&conn, candidates)
 }
 
@@ -10247,7 +10274,7 @@ pub(crate) fn lastfm_album_relationships_cache_for_app(
     app: &AppHandle,
     album_id: &str,
 ) -> Result<Option<LastFmAlbumRelationshipsCacheRecord>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     conn.query_row(
         "
         SELECT album_id, album_artist, album_title, source_url,
@@ -10278,7 +10305,7 @@ pub(crate) fn lastfm_related_album_cache_for_app(
     app: &AppHandle,
     album_id: &str,
 ) -> Result<Vec<LastFmRelatedAlbumCacheRecord>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     let mut stmt = conn.prepare(
         "
         SELECT album_id, rank, candidate_artist_name, candidate_artist_mbid,
@@ -10381,7 +10408,7 @@ pub(crate) fn lastfm_related_local_albums_for_app(
     app: &AppHandle,
     candidates: &[(Option<String>, String, String)],
 ) -> Result<Vec<Option<LastFmRelatedLocalAlbum>>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     lastfm_related_local_albums(&conn, candidates)
 }
 
@@ -10389,7 +10416,7 @@ pub(crate) fn lastfm_track_popularity_cache_for_app(
     app: &AppHandle,
     artist_key: &str,
 ) -> Result<Vec<LastFmTrackPopularityCacheRecord>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     let mut stmt = conn.prepare(
         "
         SELECT artist_key, track_key, artist_name, track_name,
@@ -10684,7 +10711,7 @@ pub(crate) fn artist_image_candidates_for_app(
     app: &AppHandle,
     limit: u32,
 ) -> Result<Vec<ArtistImageCandidate>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     let artist_key = artist_key_sql("a.album_artist_display");
     let mut stmt = conn.prepare(&format!(
         "
@@ -10712,7 +10739,7 @@ pub(crate) fn artist_image_candidates_for_app(
 }
 
 pub(crate) fn artist_image_remaining_for_app(app: &AppHandle) -> Result<i64> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     let artist_key = artist_key_sql("a.album_artist_display");
     conn.query_row(
         &format!(
@@ -10783,7 +10810,7 @@ pub(crate) fn upsert_artist_image_for_app(
 
 #[cfg(not(test))]
 pub fn genre_suggestion_names_for_app(app: &AppHandle) -> Result<Vec<String>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     genre_suggestion_names(&conn)
 }
 
@@ -10957,7 +10984,7 @@ pub fn list_music_tool_fix_history_for_app(
     app: &AppHandle,
     tool_id: Option<String>,
 ) -> Result<Vec<MusicToolFixHistoryEntry>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     list_music_tool_fix_history(&conn, tool_id.as_deref())
 }
 
@@ -12308,7 +12335,7 @@ fn delete_ai_snapshot(conn: &Connection, id: i64) -> Result<()> {
 
 #[cfg(not(test))]
 pub fn list_ai_snapshots_for_app(app: &AppHandle, kind: Option<String>) -> Result<Vec<AiSnapshot>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     list_ai_snapshots(&conn, kind.as_deref())
 }
 
@@ -12351,7 +12378,7 @@ pub fn export_ai_markdown_for_app(
     input: AiMarkdownExportRequest,
 ) -> Result<ExportResult> {
     let (title, markdown) = normalize_ai_markdown_export(input)?;
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     let export_dir = app
         .path()
         .app_data_dir()
@@ -13107,7 +13134,7 @@ pub fn export_playlist_for_app(
 
 #[cfg(not(test))]
 pub fn list_saved_searches_for_app(app: &AppHandle) -> Result<Vec<SavedSearch>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     let mut stmt = conn.prepare(
         "
         SELECT id, name, view, request_json, created_at, updated_at
@@ -13179,7 +13206,7 @@ pub fn delete_saved_search_for_app(app: &AppHandle, id: i64) -> Result<()> {
 
 #[cfg(not(test))]
 pub fn list_saved_charts_for_app(app: &AppHandle) -> Result<Vec<SavedChart>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
     let mut stmt = conn.prepare(
         "
         SELECT id, name, config_json, created_at, updated_at
@@ -13255,8 +13282,7 @@ pub fn export_search_for_app(app: &AppHandle, input: ExportSearchRequest) -> Res
         bail!("Unsupported export format: {}", input.format);
     }
 
-    let (conn, _) = open(app)?;
-    ensure_search_indexes(&conn)?;
+    let (conn, _) = open_search(app)?;
 
     let mut request = input.request.clone();
     request.offset = 0;
@@ -13400,13 +13426,17 @@ fn count_rows(conn: &Connection, table: &str) -> Result<i64> {
         .with_context(|| format!("Could not count rows in {table}"))
 }
 
-fn ensure_search_indexes(conn: &Connection) -> Result<()> {
+fn search_indexes_current(conn: &Connection) -> Result<bool> {
     let album_count = count_rows(conn, "albums")?;
     let track_count = count_rows(conn, "tracks")?;
     let album_fts_count = count_rows(conn, "album_search_fts")?;
     let track_fts_count = count_rows(conn, "track_search_fts")?;
 
-    if album_count != album_fts_count || track_count != track_fts_count {
+    Ok(album_count == album_fts_count && track_count == track_fts_count)
+}
+
+fn ensure_search_indexes(conn: &Connection) -> Result<()> {
+    if !search_indexes_current(conn)? {
         rebuild_search_indexes(conn)?;
     }
 
@@ -29908,6 +29938,32 @@ mod tests {
     }
 
     #[test]
+    fn pooled_readers_support_catalog_browsing_and_provider_cache_reads() {
+        let source = seeded_connection();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("catalog.sqlite3");
+        source
+            .execute("VACUUM INTO ?1", [path.to_str().unwrap()])
+            .unwrap();
+        let pool = pool_for_path(&path).unwrap();
+        let conn = pool.checkout(lifecycle::Access::Read).unwrap();
+        assert_eq!(
+            search_library(&conn, BrowseRequest::default(), 50)
+                .unwrap()
+                .total,
+            1
+        );
+        list_artists(&conn, ArtistListRequest::default(), 50).unwrap();
+        list_genres(&conn, GenreListRequest::default(), 50).unwrap();
+        statistics(&conn).unwrap();
+        catalog_revision(&conn).unwrap();
+        settings_for_connection(&conn).unwrap();
+        artist_biography_cache(&conn, "pet shop boys").unwrap();
+        album_review_cache(&conn, "mb:test").unwrap();
+        assert!(conn.execute("DELETE FROM tracks", []).is_err());
+    }
+
+    #[test]
     fn previews_and_applies_whitespace_music_tool_fix() {
         let mut conn = seeded_connection();
         conn.execute(
@@ -30192,6 +30248,18 @@ mod tests {
         )
         .expect("insert legacy UK artist origin");
 
+        conn.execute_batch("PRAGMA user_version=58;").unwrap();
+
+        conn.execute_batch("CREATE TRIGGER fail_uk_repair BEFORE DELETE ON musicbrainz_origin_countries BEGIN SELECT RAISE(ABORT, 'repair failed'); END;").unwrap();
+        assert!(migrate(&conn).is_err());
+        assert_eq!(
+            conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+                .unwrap(),
+            58
+        );
+        assert_eq!(conn.query_row("SELECT country_code FROM musicbrainz_artist_origin_countries WHERE local_artist_key='lazy racer'", [], |row| row.get::<_, String>(0)).unwrap(), "UK");
+        conn.execute_batch("DROP TRIGGER fail_uk_repair;").unwrap();
+
         migrate(&conn).expect("canonicalize legacy UK artist origin");
 
         let saved = conn
@@ -30211,6 +30279,19 @@ mod tests {
 
         assert_eq!(saved, ("GB".to_string(), "United Kingdom".to_string()));
         assert_eq!(uk_option_count, 0);
+
+        // Once upgraded, migrations do not scan or repair country data again.
+        conn.execute_batch("INSERT INTO musicbrainz_origin_countries(country_code, country_name, iso_source, created_at, updated_at) VALUES('UK', 'UK', 'manual', 'now', 'now');").unwrap();
+        migrate(&conn).unwrap();
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM musicbrainz_origin_countries WHERE country_code='UK'",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1
+        );
     }
 
     #[test]

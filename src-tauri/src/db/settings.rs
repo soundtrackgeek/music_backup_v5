@@ -1,5 +1,5 @@
 #[cfg(not(test))]
-use super::open;
+use super::{open, open_read};
 use super::{
     DEFAULT_BACKUP_RETENTION, DEFAULT_BILLBOARD_SINGLES_SOURCE_PATH, DEFAULT_BILLBOARD_SOURCE_PATH,
     DEFAULT_COUNTRY_FLAG_DISPLAY, DEFAULT_COVER_SOURCE_PATH, DEFAULT_DEEMIX_DOWNLOAD_FALLBACK,
@@ -21,7 +21,17 @@ use tauri::AppHandle;
 
 #[cfg(not(test))]
 pub fn settings_for_app(app: &AppHandle) -> Result<AppSettings> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = open_read(app)?;
+    // A missing singleton is unusual, but retain the existing self-repair.
+    if !conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM app_settings WHERE id=1)",
+        [],
+        |row| row.get::<_, bool>(0),
+    )? {
+        drop(conn);
+        let (conn, _) = open(app)?;
+        return settings_for_connection(&conn);
+    }
     settings_for_connection(&conn)
 }
 

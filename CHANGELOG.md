@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.157.7] - 2026-10-04
+
+### Changed
+- Initialize SQLite migrations once per catalog lifecycle in the desktop app and Aurora bridge. Reuse up to four read-only connections and one cached writer with 32 MiB page caches and 256 MiB memory-mapped reads; allow temporary writer handles for overlapping mixed workflows so network/file work does not monopolize the writer.
+- Drain catalog connections before restore/rollback, reset failed transactions, temporary tables and attached provider databases between commands, and run bounded SQLite optimization before the exit WAL checkpoint.
+
+### Fixed
+- Move the UK-to-GB origin-country repair into schema 59, eliminating repeated migration transactions and country-table scans on current catalogs.
+- Release MusicBrainz writer leases before overlay sync and retain separate readers for browsing, revision checks, statistics, and provider caches during writes.
+
 ## [0.157.6] - 2026-10-04
 
 ### Changed

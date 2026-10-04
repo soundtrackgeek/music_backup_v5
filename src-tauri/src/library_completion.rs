@@ -1757,12 +1757,12 @@ fn verification_worker_loop(app: &AppHandle) -> Result<()> {
 
 #[cfg(not(test))]
 fn has_running_verification_for_app(app: &AppHandle) -> bool {
-    db::open(app)
+    db::open_read(app)
         .and_then(|(conn, _)| active_verification_batch_id(&conn))
         .ok()
         .flatten()
         .is_some_and(|batch_id| {
-            db::open(app)
+            db::open_read(app)
                 .and_then(|(conn, _)| verification_batch_for_connection(&conn, Some(batch_id)))
                 .ok()
                 .flatten()
@@ -1791,7 +1791,7 @@ pub fn resume_verification_worker(app: AppHandle) {
 
 #[cfg(not(test))]
 pub fn verification_status_for_app(app: &AppHandle) -> Result<LibraryCompletionVerificationStatus> {
-    let (conn, _) = db::open(app)?;
+    let (conn, _) = db::open_read(app)?;
     verification_status_for_connection(&conn, None)
 }
 

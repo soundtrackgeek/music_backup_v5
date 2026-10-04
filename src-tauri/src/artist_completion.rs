@@ -1417,7 +1417,7 @@ fn run_verification(
 #[cfg(not(test))]
 fn run_worker(app: AppHandle) {
     loop {
-        let next = (|| -> Result<Option<(Connection, ArtistVerificationQueueItem)>> {
+        let next = (|| -> Result<Option<(db::CatalogConnection, ArtistVerificationQueueItem)>> {
             let (mut conn, _) = db::open(&app)?;
             let item = claim_next_verification(&mut conn)?;
             Ok(item.map(|item| (conn, item)))
@@ -1480,7 +1480,7 @@ pub fn get_for_app(
 pub fn verification_status_for_app(
     app: &AppHandle,
 ) -> Result<LibraryCompletionArtistVerificationStatus> {
-    let (conn, _) = db::open(app)?;
+    let (conn, _) = db::open_read(app)?;
     verification_status_for_connection(&conn, None)
 }
 

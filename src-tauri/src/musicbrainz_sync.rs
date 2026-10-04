@@ -31,7 +31,7 @@ pub fn sync_log_for_app(
     app: &AppHandle,
     limit: Option<u32>,
 ) -> Result<Vec<MusicBrainzOverlaySyncLogEntry>> {
-    let (conn, _) = db::open(app)?;
+    let (conn, _) = db::open_read(app)?;
     sync_log_for_connection(&conn, limit.unwrap_or(12))
 }
 

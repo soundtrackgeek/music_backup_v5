@@ -390,8 +390,9 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
         );
     }
     let app_data_dir = bridge_app_data_dir()?;
+    let catalog_pool = db::pool_for_path(&app_data_dir.join("music-library.sqlite3"))?;
     let mut progress = BridgeProgressReporter::new(request_path, &request.operation);
-    match request.operation.as_str() {
+    let result = match request.operation.as_str() {
         "capabilities" => capabilities(),
         "previewBatch" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
@@ -436,7 +437,11 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
             sync_existing_folders(&app_data_dir, payload)
         }
         operation => bail!("Unknown Aurora bridge operation {operation:?}"),
+    };
+    if let Err(error) = catalog_pool.shutdown() {
+        eprintln!("Could not optimize/checkpoint the bridge catalog: {error:#}");
     }
+    result
 }
 
 struct BridgeProcessLock {
@@ -3451,12 +3456,8 @@ fn validate_relative_path(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn open_database(path: &Path) -> Result<Connection> {
-    let conn = Connection::open(path)
-        .with_context(|| format!("Could not open Music Library database {}", path.display()))?;
-    db::configure(&conn).context("Could not configure the Aurora bridge database connection")?;
-    db::migrate(&conn).context("Could not prepare the Aurora bridge database schema")?;
-    Ok(conn)
+fn open_database(path: &Path) -> Result<db::CatalogConnection> {
+    db::open_path(path).context("Could not prepare the Aurora bridge database connection")
 }
 
 fn bridge_app_data_dir() -> Result<PathBuf> {

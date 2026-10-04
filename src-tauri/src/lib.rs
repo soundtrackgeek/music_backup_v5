@@ -2179,6 +2179,7 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            app.manage(db::pool_for_path(&db::database_path(app.handle())?)?);
             let (conn, _) = db::open(app.handle())?;
             if let Err(error) = importer::cleanup_legacy_completed_staging(&conn) {
                 eprintln!("Could not clean legacy completed import staging: {error:#}");
@@ -2405,17 +2406,17 @@ pub fn run() {
             export_search,
             export_music_tool_issues
         ])
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                db::checkpoint_truncate_for_app(window.app_handle());
-            }
-        })
         .build(tauri::generate_context!())
         .expect("failed to build Music Library app")
         .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 app_handle.state::<background::BackgroundScheduler>().stop();
-                db::checkpoint_truncate_for_app(app_handle);
+                let _ = app_handle
+                    .state::<thumbnails::ThumbnailService>()
+                    .with_catalog_replacement(|| {
+                        db::shutdown_for_app(app_handle);
+                        Ok(())
+                    });
             }
         });
 }

@@ -60,7 +60,7 @@ pub fn cache_status_for_app(
 
 #[cfg(not(test))]
 pub fn origin_country_status_for_app(app: &AppHandle) -> Result<MusicBrainzOriginCountryStatus> {
-    let (conn, _) = db::open(app)?;
+    let (conn, _) = db::open_read(app)?;
     origin_country_status_for_connection(&conn)
 }
 
@@ -69,8 +69,8 @@ pub fn preview_origin_country_import_for_app(
     app: &AppHandle,
     request: MusicBrainzOriginCountryImportRequest,
 ) -> Result<MusicBrainzOriginCountryPreview> {
-    let (conn, _) = db::open(app)?;
-    let settings = db::settings_for_app(app)?;
+    let (conn, _) = db::open_read(app)?;
+    let settings = db::settings_for_connection(&conn)?;
     preview_origin_country_import_for_connection(
         &conn,
         Some(settings.musicbrainz_cache_path),
@@ -85,7 +85,7 @@ pub fn import_origin_countries_for_app(
 ) -> Result<MusicBrainzOriginCountryImportSummary> {
     ORIGIN_COUNTRY_IMPORT_CANCELLED.store(false, Ordering::SeqCst);
     let (conn, _) = db::open(app)?;
-    let settings = db::settings_for_app(app)?;
+    let settings = db::settings_for_connection(&conn)?;
     let progress_callback = |progress: MusicBrainzOriginCountryImportProgress| {
         emit_origin_country_import_progress(app, progress);
     };
@@ -113,7 +113,7 @@ fn emit_origin_country_import_progress(
 
 #[cfg(not(test))]
 pub fn artist_info_status_for_app(app: &AppHandle) -> Result<MusicBrainzArtistInfoStatus> {
-    let (conn, _) = db::open(app)?;
+    let (conn, _) = db::open_read(app)?;
     artist_info_status_for_connection(&conn)
 }
 
@@ -122,8 +122,8 @@ pub fn preview_artist_info_import_for_app(
     app: &AppHandle,
     request: MusicBrainzArtistInfoImportRequest,
 ) -> Result<MusicBrainzArtistInfoPreview> {
-    let (conn, _) = db::open(app)?;
-    let settings = db::settings_for_app(app)?;
+    let (conn, _) = db::open_read(app)?;
+    let settings = db::settings_for_connection(&conn)?;
     preview_artist_info_import_for_connection(
         &conn,
         Some(settings.musicbrainz_cache_path),
@@ -138,7 +138,7 @@ pub fn import_artist_infos_for_app(
 ) -> Result<MusicBrainzArtistInfoImportSummary> {
     ARTIST_INFO_IMPORT_CANCELLED.store(false, Ordering::SeqCst);
     let (conn, _) = db::open(app)?;
-    let settings = db::settings_for_app(app)?;
+    let settings = db::settings_for_connection(&conn)?;
     let progress_callback = |progress: MusicBrainzArtistInfoImportProgress| {
         emit_artist_info_import_progress(app, progress);
     };
@@ -170,7 +170,7 @@ pub fn artist_discography_for_app(
     request: MusicBrainzArtistDiscographyRequest,
 ) -> Result<MusicBrainzArtistDiscographyResponse> {
     let (app_conn, _) = db::open(app)?;
-    let settings = db::settings_for_app(app)?;
+    let settings = db::settings_for_connection(&app_conn)?;
     artist_discography_for_connection(&app_conn, Some(settings.musicbrainz_cache_path), request)
 }
 
@@ -181,6 +181,7 @@ pub fn set_release_decision_for_app(
 ) -> Result<()> {
     let (conn, _) = db::open(app)?;
     set_release_decision_for_connection(&conn, request)?;
+    drop(conn);
     musicbrainz_sync::sync_for_app(app)?;
     Ok(())
 }
@@ -192,6 +193,7 @@ pub fn set_artist_link_for_app(
 ) -> Result<()> {
     let (conn, _) = db::open(app)?;
     set_artist_link_for_connection(&conn, request)?;
+    drop(conn);
     musicbrainz_sync::sync_for_app(app)?;
     Ok(())
 }
@@ -218,6 +220,7 @@ pub fn refresh_artist_release_groups_for_app(
         &origin_payload,
         &fetched_at,
     )?;
+    drop(conn);
     musicbrainz_sync::sync_for_app(app)?;
 
     Ok(MusicBrainzArtistRefreshResult {

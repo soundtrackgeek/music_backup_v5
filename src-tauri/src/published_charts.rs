@@ -1189,7 +1189,7 @@ pub fn entries(
 
 #[cfg(not(test))]
 pub fn catalog_for_app(app: &AppHandle) -> Result<PublishedChartCatalog> {
-    let (conn, _) = crate::db::open(app)?;
+    let (conn, _) = crate::db::open_read(app)?;
     catalog_with_inventory(&conn, &bundled_folder(app)?)
 }
 
@@ -1203,13 +1203,13 @@ pub fn artists_for_app(
     to_week: Option<&str>,
     offset: u32,
 ) -> Result<PublishedArtistRanking> {
-    let (conn, _) = crate::db::open(app)?;
+    let (conn, _) = crate::db::open_read(app)?;
     artists(&conn, chart, from_year, to_year, from_week, to_week, offset)
 }
 
 #[cfg(not(test))]
 pub fn weeks_for_app(app: &AppHandle, chart: &str, year: i32) -> Result<Vec<PublishedChartWeek>> {
-    let (conn, _) = crate::db::open(app)?;
+    let (conn, _) = crate::db::open_read(app)?;
     weeks(&conn, chart, year)
 }
 
@@ -1220,7 +1220,7 @@ pub fn entries_for_app(
     week: &str,
     offset: u32,
 ) -> Result<PublishedChartEntries> {
-    let (conn, _) = crate::db::open(app)?;
+    let (conn, _) = crate::db::open_read(app)?;
     entries(&conn, chart, week, offset)
 }
 
@@ -1774,11 +1774,11 @@ pub fn song_history(conn: &Connection, chart: &str, artist: &str, title: &str) -
 }
 #[cfg(not(test))]
 pub fn songs_for_app(app: &AppHandle, chart: &str, from_year: i32, to_year: i32, from_week: Option<&str>, to_week: Option<&str>, offset: u32) -> Result<PublishedSongRanking> {
-    let (conn, _) = crate::db::open(app)?;
+    let (conn, _) = crate::db::open_read(app)?;
     songs(&conn, chart, from_year, to_year, from_week, to_week, offset)
 }
 #[cfg(not(test))]
 pub fn song_history_for_app(app: &AppHandle, chart: &str, artist: &str, title: &str) -> Result<Vec<PublishedSongWeek>> {
-    let (conn, _) = crate::db::open(app)?;
+    let (conn, _) = crate::db::open_read(app)?;
     song_history(&conn, chart, artist, title)
 }
