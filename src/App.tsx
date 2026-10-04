@@ -9014,6 +9014,7 @@ export default function App() {
         // The checker issues one follow-up retry pulse after acknowledgement so a
         // transient child query failure cannot leave the visible view stale.
         setCatalogRefreshKey((current) => current + 1);
+        clearCoverImageCache();
         if (reason === "retry") return;
 
         const nextRuns = await listImportRuns(8);

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.157.6] - 2026-10-04
+
+### Changed
+- Deliver album covers, Last.fm portraits, and Library Completion artwork through an asynchronous local cover protocol instead of full-size base64 IPC payloads. Reuse a read-only catalog connection without per-image migrations.
+- Cache aspect-preserving WebP thumbnails at 96, 300, and 600 pixels, prewarm them after committed imports/downloads, and load images lazily with asynchronous decoding. Source-versioned URLs support immutable browser caching; obsolete thumbnail revisions are removed.
+
+### Fixed
+- Refresh mounted and previously failed artwork after imports, external catalog refreshes, database restores, portrait sync, and cover enrichment. Keep the 300-pixel hover preview and existing missing-art fallbacks, including Mac archive-root resolution.
+- Coordinate thumbnail snapshots with archive/cache writes and close source files before decoding, allowing immediate cover replacements while background prewarming runs on Windows.
+
 ## [0.157.5] - 2026-10-04
 
 ### Fixed

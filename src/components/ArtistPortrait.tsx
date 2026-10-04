@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { getArtistImageDataUrl } from "../backend";
+import { getArtistImageUrl } from "../backend";
+import { useArtworkRevision } from "../backend/artwork";
 import { AlbumCover } from "./AlbumCover";
 
 type ArtistPortraitProps = {
@@ -26,13 +27,14 @@ export function ArtistPortrait({
 }: ArtistPortraitProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
+  const revision = useArtworkRevision();
 
   useEffect(() => {
     setImageUrl(null);
     setImageFailed(false);
     if (!portraitAvailable) return;
     let cancelled = false;
-    void getArtistImageDataUrl(artistId)
+    void getArtistImageUrl(artistId)
       .then((nextUrl) => {
         if (!cancelled) setImageUrl(nextUrl);
       })
@@ -42,7 +44,7 @@ export function ArtistPortrait({
     return () => {
       cancelled = true;
     };
-  }, [artistId, portraitAvailable]);
+  }, [artistId, portraitAvailable, revision]);
 
   const classes = ["artist-portrait", className].filter(Boolean).join(" ");
   const label = `${artistName} portrait`;
@@ -53,6 +55,7 @@ export function ArtistPortrait({
           src={imageUrl}
           alt={decorative ? "" : label}
           loading="lazy"
+          decoding="async"
           onError={() => setImageFailed(true)}
         />
       </span>

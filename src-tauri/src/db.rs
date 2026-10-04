@@ -10737,6 +10737,7 @@ pub(crate) fn upsert_artist_image_for_app(
     record: &ArtistImageCacheRecord,
 ) -> Result<()> {
     let (conn, _) = open(app)?;
+    let fetched_at = Utc::now().to_rfc3339();
     conn.execute(
         "
         INSERT INTO artist_images (
@@ -10761,33 +10762,23 @@ pub(crate) fn upsert_artist_image_for_app(
             &record.mime_type,
             &record.state,
             &record.message,
-            Utc::now().to_rfc3339(),
+            &fetched_at,
         ],
     )
     .context("Could not save the artist portrait cache record")?;
+    if record.state == "available" {
+        if let Some(path) = &record.cache_path {
+            crate::thumbnails::prewarm(
+                app.path().app_data_dir()?.join("thumbs"),
+                vec![(
+                    format!("artist:{}", record.artist_key),
+                    PathBuf::from(path),
+                    fetched_at,
+                )],
+            );
+        }
+    }
     Ok(())
-}
-
-pub(crate) fn artist_image_file_for_app(
-    app: &AppHandle,
-    artist_id: &str,
-) -> Result<Option<(String, String)>> {
-    let (conn, _) = open(app)?;
-    let artist_key = normalize_artist_text(artist_id);
-    conn.query_row(
-        "
-        SELECT cache_path, mime_type
-        FROM artist_images
-        WHERE artist_key = ?
-          AND state = 'available'
-          AND NULLIF(TRIM(COALESCE(cache_path, '')), '') IS NOT NULL
-          AND NULLIF(TRIM(COALESCE(mime_type, '')), '') IS NOT NULL
-        ",
-        [artist_key],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    )
-    .optional()
-    .context("Could not load the cached artist portrait")
 }
 
 #[cfg(not(test))]
@@ -24589,7 +24580,7 @@ fn normalize_country_code(value: &str) -> String {
     }
 }
 
-fn normalize_artist_text(value: &str) -> String {
+pub(crate) fn normalize_artist_text(value: &str) -> String {
     normalize_text(&normalize_artist_dashes(value))
 }
 

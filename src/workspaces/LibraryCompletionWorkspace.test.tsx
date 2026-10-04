@@ -7,7 +7,7 @@ const getLibraryCompletion = vi.fn();
 const listenToLibraryCompletionVerification = vi.fn();
 const getLibraryCompletionVerificationStatus = vi.fn();
 const getDiscogsCredentialStatus = vi.fn();
-const getLibraryCompletionCoverDataUrl = vi.fn();
+const getLibraryCompletionCoverUrl = vi.fn();
 const enrichLibraryCompletionCover = vi.fn();
 const startLibraryCompletionVerification = vi.fn();
 const setLibraryCompletionVerificationState = vi.fn();
@@ -32,8 +32,8 @@ vi.mock("../backend", () => ({
     getLibraryCompletionVerificationStatus(...args),
   getDiscogsCredentialStatus: (...args: unknown[]) =>
     getDiscogsCredentialStatus(...args),
-  getLibraryCompletionCoverDataUrl: (...args: unknown[]) =>
-    getLibraryCompletionCoverDataUrl(...args),
+  getLibraryCompletionCoverUrl: (...args: unknown[]) =>
+    getLibraryCompletionCoverUrl(...args),
   enrichLibraryCompletionCover: (...args: unknown[]) =>
     enrichLibraryCompletionCover(...args),
   startLibraryCompletionVerification: (...args: unknown[]) =>
@@ -205,7 +205,7 @@ describe("LibraryCompletionWorkspace", () => {
       configured: true,
       source: "windowsCredentialManager",
     });
-    getLibraryCompletionCoverDataUrl.mockResolvedValue(
+    getLibraryCompletionCoverUrl.mockResolvedValue(
       "data:image/png;base64,cHJldmlldw==",
     );
     enrichLibraryCompletionCover.mockResolvedValue({

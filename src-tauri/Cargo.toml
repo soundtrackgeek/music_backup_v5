@@ -1,6 +1,6 @@
 [package]
 name = "music-library"
-version = "0.157.5"
+version = "0.157.6"
 description = "Local-first MusicBee TSV library app"
 authors = ["jtill"]
 edition = "2021"
@@ -24,12 +24,15 @@ cookie_store = "0.21"
 csv = "1.3"
 dotenvy = "0.15"
 flate2 = "1"
+fast_image_resize = { version = "6.1", features = ["image"] }
 hex = "0.4"
 id3 = "1"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp"] }
 keyring = { version = "4.1.5", default-features = false, features = ["v1", "windows-native-keyring-store"] }
 md-5 = "0.10"
 md5-legacy = { package = "md5", version = "0.8" }
 native-tls = "0.2"
+percent-encoding = "2"
 quick-xml = { version = "0.38", features = ["serialize"] }
 crc32fast = "1.4"
 metaflac = "0.2.8"

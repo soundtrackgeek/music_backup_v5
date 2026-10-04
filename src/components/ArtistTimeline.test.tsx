@@ -11,8 +11,8 @@ const listArtists = vi.fn();
 vi.mock("../backend", () => ({
   getArtistTimeline: (...args: unknown[]) => getArtistTimeline(...args),
   listArtists: (...args: unknown[]) => listArtists(...args),
-  getArtistImageDataUrl: vi.fn().mockResolvedValue(null),
-  getAlbumCoverDataUrl: vi.fn().mockResolvedValue(null),
+  getArtistImageUrl: vi.fn().mockResolvedValue(null),
+  getAlbumCoverUrl: vi.fn().mockResolvedValue(null),
 }));
 
 const response: ArtistTimelineResponse = {

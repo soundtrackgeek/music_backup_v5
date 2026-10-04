@@ -28,6 +28,7 @@ mod musicbrainz_sync;
 mod plex;
 mod published_charts;
 mod soulseek;
+mod thumbnails;
 #[cfg(not(test))]
 mod updater;
 mod updates;
@@ -175,7 +176,9 @@ async fn restore_database_backup(
     backup_path: String,
 ) -> Result<DatabaseRestoreSummary, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        db::restore_database_backup_for_app(&app, backup_path)
+        app.state::<thumbnails::ThumbnailService>().with_catalog_replacement(|| {
+            db::restore_database_backup_for_app(&app, backup_path)
+        })
     })
     .await
     .map_err(|error| format!("Database restore task failed: {error}"))?
@@ -452,18 +455,6 @@ async fn refresh_lastfm_artist_images(
     tauri::async_runtime::spawn_blocking(move || lastfm::refresh_artist_images(app, limit))
         .await
         .map_err(|error| format!("Last.fm portrait sync task failed: {error}"))?
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-async fn get_artist_image_data_url(
-    app: AppHandle,
-    artist_id: String,
-) -> Result<Option<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || lastfm::artist_image_data_url(app, artist_id))
-        .await
-        .map_err(|error| format!("Artist portrait load task failed: {error}"))?
         .map_err(|error| error.to_string())
 }
 
@@ -1692,7 +1683,11 @@ async fn rollback_import_run(
     app: AppHandle,
     import_run_id: i64,
 ) -> Result<models::DatabaseRestoreSummary, String> {
-    tauri::async_runtime::spawn_blocking(move || importer::rollback_import_run(&app, import_run_id))
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<thumbnails::ThumbnailService>().with_catalog_replacement(|| {
+            importer::rollback_import_run(&app, import_run_id)
+        })
+    })
         .await
         .map_err(|error| format!("Import rollback task failed: {error}"))?
         .map_err(|error| error.to_string())
@@ -1726,18 +1721,6 @@ async fn import_billboard_charts(
 
 #[cfg(not(test))]
 #[tauri::command]
-async fn get_album_cover_data_url(
-    app: AppHandle,
-    album_id: String,
-) -> Result<Option<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || covers::album_cover_data_url(app, album_id))
-        .await
-        .map_err(|error| format!("Cover image task failed: {error}"))?
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
 async fn enrich_library_completion_cover(
     app: AppHandle,
     candidate_id: String,
@@ -1747,20 +1730,6 @@ async fn enrich_library_completion_cover(
     })
     .await
     .map_err(|error| format!("Cover enrichment task failed: {error}"))?
-    .map_err(|error| error.to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-async fn get_library_completion_cover_data_url(
-    app: AppHandle,
-    candidate_id: String,
-) -> Result<Option<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        covers::library_completion_cover_data_url(app, candidate_id)
-    })
-    .await
-    .map_err(|error| format!("Enriched cover image task failed: {error}"))?
     .map_err(|error| error.to_string())
 }
 
@@ -2174,6 +2143,31 @@ async fn export_music_tool_issues(
 #[cfg(not(test))]
 pub fn run() {
     tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol("cover", |context, request, responder| {
+            let app = context.app_handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Queue outside the blocking pool; at most two image requests run at once.
+                static REQUESTS: std::sync::OnceLock<tokio::sync::Semaphore> =
+                    std::sync::OnceLock::new();
+                let _permit = REQUESTS
+                    .get_or_init(|| tokio::sync::Semaphore::new(2))
+                    .acquire()
+                    .await;
+                let response = tauri::async_runtime::spawn_blocking(move || {
+                    app.state::<thumbnails::ThumbnailService>().respond(request)
+                })
+                .await;
+                match response {
+                    Ok(response) => responder.respond(response),
+                    Err(_) => responder.respond(
+                        tauri::http::Response::builder()
+                            .status(500)
+                            .body(Vec::<u8>::new())
+                            .unwrap(),
+                    ),
+                }
+            });
+        })
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -2190,6 +2184,10 @@ pub fn run() {
                 eprintln!("Could not clean legacy completed import staging: {error:#}");
             }
             drop(conn);
+            app.manage(thumbnails::ThumbnailService::new(
+                db::database_path(app.handle())?,
+                app.path().app_data_dir()?.join("thumbs"),
+            ));
             app.manage(soulseek::initialize(app.handle())?);
             app.manage(usenet::initialize(app.handle())?);
             library_completion::resume_verification_worker(app.handle().clone());
@@ -2231,7 +2229,6 @@ pub fn run() {
             get_lastfm_album_popularity,
             get_lastfm_related_albums,
             refresh_lastfm_artist_images,
-            get_artist_image_data_url,
             search_deemix_albums,
             preflight_deemix_album_download,
             download_deemix_album,
@@ -2386,9 +2383,7 @@ pub fn run() {
             import_official_uk_singles,
             import_ti_i_skuddet_singles,
             import_norsktoppen_singles,
-            get_album_cover_data_url,
             enrich_library_completion_cover,
-            get_library_completion_cover_data_url,
             search_library,
             list_artists,
             get_artist_track_highlights,

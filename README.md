@@ -1,5 +1,7 @@
 # Music Library
 
+Music Library 0.157.6 serves album covers, Last.fm portraits, and Library Completion artwork through a local thumbnail protocol. List covers use 96 px, grids and hover previews use 300 px, and large album details use 600 px images. See [Cover thumbnails](#cover-thumbnails).
+
 Music Library 0.157.4 shares HTTP connections and MusicBrainz request pacing across artist refreshes, Wish List, Discovery, biographies, and album reviews. Provider reads retry temporary throttling and outages with bounded backoff, while a shared circuit breaker lets queued work fail promptly during an outage. See [External provider requests](#external-provider-requests).
 
 Music Library 0.157.3 uses indexed track lookups and an immediate write transaction when caching Aurora intake quality. Post-import quality and cover writes retry only temporary SQLite locks on fresh connections, keep durable completion records, and resume unfinished work during the next intake preview or committed apply replay. Recovery creates no new backup, catalog import, or file transfer. Covers include new and replacement albums, prefer the incoming embedded front cover, and are published atomically; missing artwork is reported as pending. A repairBatch bridge request with the original planId/sessionId repairs an already committed batch without touching its audio or source folders.
@@ -141,6 +143,14 @@ Configure Plex under **Settings → Providers → Plex playlists**. The default 
 Track identity is the normalized full path built from MusicBee `<File Path>` plus `<Filename>` and Plex's media-part file path. For a local Plex server, the indexed Plex SQLite catalog is opened read-only to avoid scanning very large libraries; remote servers and unresolved paths use authenticated Plex API queries. Matches are cached locally. A track that Music Library knows about before Plex's nightly scan is counted as **waiting for Plex**, skipped for that run, and retried later. If a non-empty Smart playlist maps zero tracks, the existing Plex playlist is left untouched.
 
 The Plex token is stored as a generic credential in Windows Credential Manager and is never returned to the frontend, written to SQLite or `plex.json`, logged, exported, or included in backups. Debug builds may temporarily read `PLEX_TOKEN` from the repo-root `.env`; a token saved in Settings takes precedence, and production builds do not load `.env`.
+
+## Cover thumbnails
+
+Desktop artwork uses the asynchronous `cover://localhost/<kind>/<id>?size=96|300|600` protocol (`http://cover.localhost/` in Windows WebView2). IDs resolve through a reusable read-only catalog connection; image bytes no longer pass through IPC as full-size base64 strings. Images load lazily and decode asynchronously, while missing or unreadable artwork keeps the existing album/artist fallback.
+
+The app creates WebP thumbnails under `appData/thumbs/`, preserves aspect ratio and transparency, and never enlarges small originals. Cache identities include the artwork ID, indexed revision, source path, source modification time and byte length, and requested size. Windows unversioned URLs redirect without caching to source-versioned URLs with a one-year immutable browser cache and ETag validation. Native schemes on Mac/Linux deliver the cached thumbnail directly with ETag revalidation, avoiding unsupported scheme redirects. Imports, catalog refreshes, restores, portrait sync, and cover enrichment refresh mounted artwork, including previously failed images. Only the latest source revision for each ID and size stays on disk; restores and import rollbacks close the thumbnail reader before replacing SQLite files.
+
+Cover imports prewarm all three sizes after the catalog transaction commits; portrait and Library Completion downloads use the same bounded background queue. If the queue is full, images are generated on demand. Thumbnail generation has file, dimension, and allocation limits and is serialized to keep image memory bounded. Original archived artwork and MP3 files are unchanged. The Mac archive-root mapping remains supported; browser preview continues to use its sample images. No new setting or reimport is required. The `thumbs` folder is disposable and regenerated as needed.
 
 ## External provider requests
 

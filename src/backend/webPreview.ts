@@ -1902,10 +1902,6 @@ let mockSavedCharts: SavedChart[] = [];
 let mockAiSnapshots: AiSnapshot[] = [];
 let mockSettings: AppSettings = loadCachedSettings();
 let mockMusicBrainzOverlaySyncLog: MusicBrainzOverlaySyncLogEntry[] = [];
-const coverDataUrlCache = new Map<
-  string,
-  Promise<string | null> | string | null
->();
 
 const mockImportRun = {
   id: 1,
@@ -3771,7 +3767,6 @@ export function setMockAiSnapshots(value: AiSnapshot[]) {
 
 export {
   applyMockArtistOriginCountry,
-  coverDataUrlCache,
   emitMockMusicBrainzArtistInfoProgress,
   emitMockMusicBrainzOriginProgress,
   emitMockMusicToolProgress,

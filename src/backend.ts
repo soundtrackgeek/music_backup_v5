@@ -1,3 +1,4 @@
+import { artworkUrl, invalidateArtwork, type ThumbnailSize } from "./backend/artwork";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 import {
@@ -46,7 +47,6 @@ import { canonicalCountryCode } from "./app/countryNames";
 import { normalizeAllowedExternalUrl } from "./backend/externalUrl";
 import {
   applyMockArtistOriginCountry,
-  coverDataUrlCache,
   emitMockMusicBrainzArtistInfoProgress,
   emitMockMusicBrainzOriginProgress,
   emitMockMusicToolProgress,
@@ -2829,7 +2829,7 @@ export async function refreshLastFmArtistImages(limit = 50) {
   }
   return invoke<LastFmArtistImageRefreshSummary>("refresh_lastfm_artist_images", {
     limit,
-  });
+  }).then((summary) => { invalidateArtwork(); return summary; });
 }
 
 export async function getLastFmArtistPopularity(
@@ -3215,11 +3215,8 @@ export async function getLastFmRelatedAlbums(
   });
 }
 
-export async function getArtistImageDataUrl(artistId: string) {
-  if (!isTauriRuntime()) return null;
-  return invoke<string | null>("get_artist_image_data_url", { artistId }).catch(
-    () => null,
-  );
+export async function getArtistImageUrl(artistId: string, size: ThumbnailSize = 300) {
+  return artworkUrl("artist", artistId, size);
 }
 
 export async function selectDeemixDownloadDirectory(defaultPath?: string) {
@@ -4598,13 +4595,11 @@ export async function getLibraryCompletionVerificationStatus() {
   );
 }
 
-export async function getLibraryCompletionCoverDataUrl(candidateId: string) {
+export async function getLibraryCompletionCoverUrl(candidateId: string, size: ThumbnailSize = 300) {
   if (!isTauriRuntime()) {
     return mockLibraryCompletionCovers.get(candidateId)?.dataUrl ?? null;
   }
-  return invoke<string | null>("get_library_completion_cover_data_url", {
-    candidateId,
-  });
+  return artworkUrl("completion", candidateId, size);
 }
 
 export async function enrichLibraryCompletionCover(candidateId: string) {
@@ -4631,7 +4626,7 @@ export async function enrichLibraryCompletionCover(candidateId: string) {
   return invoke<LibraryCompletionCoverEnrichment>(
     "enrich_library_completion_cover",
     { candidateId },
-  );
+  ).then((result) => { invalidateArtwork(); return result; });
 }
 
 export async function startLibraryCompletionVerification(
@@ -6711,26 +6706,12 @@ export async function importNorsktoppenSingles(sourcePath: string) {
   });
 }
 
-export async function getAlbumCoverDataUrl(albumId: string) {
-  if (!isTauriRuntime()) {
-    return null;
-  }
-
-  if (coverDataUrlCache.has(albumId)) {
-    return coverDataUrlCache.get(albumId) ?? null;
-  }
-
-  const request = invoke<string | null>("get_album_cover_data_url", {
-    albumId,
-  }).catch(() => null);
-  coverDataUrlCache.set(albumId, request);
-  const dataUrl = await request;
-  coverDataUrlCache.set(albumId, dataUrl);
-  return dataUrl;
+export async function getAlbumCoverUrl(albumId: string, size: ThumbnailSize = 300) {
+  return artworkUrl("album", albumId, size);
 }
 
 export function clearCoverImageCache() {
-  coverDataUrlCache.clear();
+  invalidateArtwork();
 }
 
 export async function searchLibrary(request: BrowseRequest) {

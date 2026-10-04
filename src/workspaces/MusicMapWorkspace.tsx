@@ -33,12 +33,13 @@ import mapLibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import {
-  getAlbumCoverDataUrl,
+  getAlbumCoverUrl,
   getMusicMap,
   getMusicMapLocationDetails,
   isTauriRuntime,
   refreshMusicMapLocations,
 } from "../backend";
+import { useArtworkRevision } from "../backend/artwork";
 import { formatNumber } from "../app/display";
 import {
   createMusicMapQuestionRequest,
@@ -976,16 +977,18 @@ function ArtistRow({
   onOpenArtist: MusicMapWorkspaceProps["onOpenArtist"];
 }) {
   const [cover, setCover] = useState<string | null>(null);
+  const revision = useArtworkRevision();
   useEffect(() => {
     let cancelled = false;
+    setCover(null);
     if (!artist.representativeAlbumId) return;
-    void getAlbumCoverDataUrl(artist.representativeAlbumId).then((value) => {
+    void getAlbumCoverUrl(artist.representativeAlbumId, 96).then((value) => {
       if (!cancelled) setCover(value);
     });
     return () => {
       cancelled = true;
     };
-  }, [artist.representativeAlbumId]);
+  }, [artist.representativeAlbumId, revision]);
 
   return (
     <button
@@ -994,7 +997,7 @@ function ArtistRow({
     >
       <span className="music-map-artist-cover">
         {cover ? (
-          <img src={cover} alt="" />
+          <img src={cover} alt="" loading="lazy" decoding="async" onError={() => setCover(null)} />
         ) : (
           <Disc3 aria-hidden="true" size={17} />
         )}

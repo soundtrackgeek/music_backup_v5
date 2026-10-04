@@ -2,7 +2,6 @@ use crate::db;
 use crate::discogs;
 use crate::models::{CoverImportProgress, CoverImportRequest, CoverImportSummary};
 use anyhow::{anyhow, bail, Context, Result};
-use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
 use id3::frame::PictureType;
 use id3::Tag;
@@ -135,7 +134,7 @@ pub fn import_album_covers(
 // Imported Windows catalog paths remain unchanged. Mac readers can use the
 // configured archive root without reimporting the million-track catalog.
 #[cfg(any(target_os = "macos", test))]
-fn mounted_archive_cover(root: &str, stored: &str) -> Option<PathBuf> {
+pub(crate) fn mounted_archive_cover(root: &str, stored: &str) -> Option<PathBuf> {
     let root = Path::new(root);
     if !root.is_absolute() {
         return None;
@@ -147,85 +146,6 @@ fn mounted_archive_cover(root: &str, stored: &str) -> Option<PathBuf> {
     let root = root.canonicalize().ok()?;
     let candidate = root.join(filename).canonicalize().ok()?;
     (candidate.starts_with(&root) && candidate.is_file()).then_some(candidate)
-}
-
-pub fn album_cover_data_url(app: AppHandle, album_id: String) -> Result<Option<String>> {
-    let (conn, _) = db::open(&app)?;
-    let cover = conn
-        .query_row(
-            "
-            SELECT cache_path, mime_type
-            FROM album_covers
-            WHERE album_id = ?1
-            ",
-            params![album_id],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-        )
-        .optional()
-        .context("Could not load album cover metadata")?;
-
-    let Some((cover_path, mime_type)) = cover else {
-        return Ok(None);
-    };
-
-    let path = PathBuf::from(&cover_path);
-    #[cfg(target_os = "macos")]
-    let path = if !path.is_file() {
-        let root: String = conn.query_row(
-            "SELECT cover_source_path FROM app_settings WHERE id = 1",
-            [],
-            |row| row.get(0),
-        )?;
-        mounted_archive_cover(&root, &cover_path).unwrap_or(path)
-    } else {
-        path
-    };
-    if !path.is_file() {
-        return Ok(None);
-    }
-
-    let bytes = fs::read(&path)
-        .with_context(|| format!("Could not read cover image {}", path.display()))?;
-    let encoded = general_purpose::STANDARD.encode(bytes);
-    Ok(Some(format!("data:{mime_type};base64,{encoded}")))
-}
-
-pub fn library_completion_cover_data_url(
-    app: AppHandle,
-    candidate_id: String,
-) -> Result<Option<String>> {
-    let candidate_id = validated_candidate_id(candidate_id)?;
-    let (conn, _) = db::open(&app)?;
-    let cover = conn
-        .query_row(
-            "
-            SELECT cover_cache_path, cover_mime_type
-            FROM library_completion_verifications
-            WHERE candidate_key = ?1 AND cover_state = 'available'
-            ",
-            params![candidate_id],
-            |row| {
-                Ok((
-                    row.get::<_, Option<String>>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                ))
-            },
-        )
-        .optional()
-        .context("Could not load Library Completion cover metadata")?;
-    let Some((Some(cover_path), Some(mime_type))) = cover else {
-        return Ok(None);
-    };
-    let path = PathBuf::from(&cover_path);
-    if !path.is_file() {
-        return Ok(None);
-    }
-    let bytes = fs::read(&path)
-        .with_context(|| format!("Could not read enriched cover {}", path.display()))?;
-    Ok(Some(format!(
-        "data:{mime_type};base64,{}",
-        general_purpose::STANDARD.encode(bytes)
-    )))
 }
 
 pub fn enrich_library_completion_cover(
@@ -335,6 +255,14 @@ pub fn enrich_library_completion_cover(
                 message,
                 &checked_at,
             )?;
+            crate::thumbnails::prewarm(
+                app.path().app_data_dir()?.join("thumbs"),
+                vec![(
+                    format!("completion:{candidate_id}"),
+                    PathBuf::from(&cache_path),
+                    checked_at.clone(),
+                )],
+            );
             Ok(LibraryCompletionCoverEnrichment {
                 candidate_id,
                 state: "available".to_string(),
@@ -533,8 +461,11 @@ fn cache_completion_cover(
         .with_context(|| format!("Could not create cover cache {}", cache_dir.display()))?;
     let cache_stem = cover_cache_stem(candidate_id);
     let destination = cache_dir.join(format!("{cache_stem}.{}", cover.extension));
-    remove_stale_cache_files(&cache_dir, &cache_stem, Some(&destination))?;
-    fs::write(&destination, &cover.bytes)
+    crate::thumbnails::with_source_write(|| {
+        remove_stale_cache_files(&cache_dir, &cache_stem, Some(&destination))?;
+        fs::write(&destination, &cover.bytes)?;
+        Ok(())
+    })
         .with_context(|| format!("Could not cache cover {}", destination.display()))?;
     Ok((
         cover.source_url,
@@ -640,6 +571,7 @@ fn import_cover_candidates(
 ) -> Result<CoverCounters> {
     let archive_index = build_archive_index(source_dir)?;
     let existing_covers = load_existing_covers(conn)?;
+    let mut warm_sources = Vec::new();
     let mut counters = CoverCounters {
         total_albums: albums.len() as u64,
         ..CoverCounters::default()
@@ -703,6 +635,12 @@ fn import_cover_candidates(
                 }
 
                 let imported = import_cover_payload(&cache_dir, &album.album_id, payload)?;
+                let imported_at = Utc::now().to_rfc3339();
+                warm_sources.push((
+                    format!("album:{}", album.album_id),
+                    PathBuf::from(&imported.cache_path),
+                    imported_at.clone(),
+                ));
                 upsert_cover.execute(params![
                     &album.album_id,
                     imported.source,
@@ -711,7 +649,7 @@ fn import_cover_candidates(
                     imported.mime_type,
                     imported.extension,
                     imported.file_size_bytes,
-                    Utc::now().to_rfc3339(),
+                    imported_at,
                 ])?;
                 counters.imported_covers += 1;
             }
@@ -735,6 +673,10 @@ fn import_cover_candidates(
     drop(upsert_cover);
     tx.commit()
         .context("Could not commit cover import transaction")?;
+
+    if let Some(app_data) = cache_dir.parent() {
+        crate::thumbnails::prewarm(app_data.join("thumbs"), warm_sources);
+    }
 
     Ok(counters)
 }
@@ -1090,22 +1032,23 @@ fn import_cover_payload(
         ),
     };
 
-    remove_stale_cache_files(cache_dir, &cache_stem, Some(&destination))?;
-
-    match payload {
-        CoverPayload::ArchiveFile { .. } => {}
-        CoverPayload::EmbeddedBytes { bytes, .. } => {
-            let parent = destination
-                .parent()
-                .ok_or_else(|| anyhow!("Cover has no archive directory"))?;
-            let mut staged = tempfile::NamedTempFile::new_in(parent)?;
-            staged.write_all(&bytes)?;
-            staged.as_file().sync_all()?;
-            staged
-                .persist(&destination)
-                .with_context(|| format!("Could not write cover {}", destination.display()))?;
+    crate::thumbnails::with_source_write(|| {
+        remove_stale_cache_files(cache_dir, &cache_stem, Some(&destination))?;
+        match payload {
+            CoverPayload::ArchiveFile { .. } => {}
+            CoverPayload::EmbeddedBytes { bytes, .. } => {
+                let parent = destination
+                    .parent()
+                    .ok_or_else(|| anyhow!("Cover has no archive directory"))?;
+                let mut staged = tempfile::NamedTempFile::new_in(parent)?;
+                staged.write_all(&bytes)?;
+                staged.as_file().sync_all()?;
+                staged.persist(&destination)
+                    .with_context(|| format!("Could not write cover {}", destination.display()))?;
+            }
         }
-    }
+        Ok(())
+    })?;
 
     let file_size_bytes = fs::metadata(&destination)
         .with_context(|| format!("Could not read cover metadata {}", destination.display()))?

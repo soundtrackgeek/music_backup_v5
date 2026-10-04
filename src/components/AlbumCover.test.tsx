@@ -3,13 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BrowseRow } from "../types";
 import { AlbumCover, AlbumCoverPreviewProvider } from "./AlbumCover";
+import { invalidateArtwork } from "../backend/artwork";
 
 const backend = vi.hoisted(() => ({
-  getAlbumCoverDataUrl: vi.fn(),
+  getAlbumCoverUrl: vi.fn(),
 }));
 
 vi.mock("../backend", () => ({
-  getAlbumCoverDataUrl: backend.getAlbumCoverDataUrl,
+  getAlbumCoverUrl: backend.getAlbumCoverUrl,
 }));
 
 function albumRow(
@@ -26,10 +27,11 @@ function albumRow(
 
 describe("album cover hover preview", () => {
   beforeEach(() => {
-    backend.getAlbumCoverDataUrl.mockReset();
+    backend.getAlbumCoverUrl.mockReset();
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
     vi.useRealTimers();
     Object.defineProperty(document, "fullscreenElement", {
       configurable: true,
@@ -37,8 +39,32 @@ describe("album cover hover preview", () => {
     });
   });
 
+  it("resolves a native Mac archive path through the protocol and uses 600px for large details", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    backend.getAlbumCoverUrl.mockResolvedValue("cover://localhost/album/id?size=600");
+    render(<AlbumCover row={albumRow("mac-album", "Actually", "/Volumes/Music/AlbumCovers/art.jpg")} className="album-cover-large" decorative={false} />);
+    await screen.findByRole("img", { name: "Actually cover" });
+    expect(backend.getAlbumCoverUrl).toHaveBeenCalledWith("mac-album", 600);
+  });
+
+  it("loads a 300px hover image after a 96px thumbnail and retries failed mounted covers on refresh", async () => {
+    backend.getAlbumCoverUrl.mockImplementation((_id: string, size: number) => Promise.resolve(`http://cover.localhost/art?size=${size}`));
+    render(<AlbumCoverPreviewProvider><AlbumCover row={albumRow("album-1", "Actually", "C:\\covers\\art.jpg")} className="cover-mini" decorative={false} previewOnHover /></AlbumCoverPreviewProvider>);
+    const image = await screen.findByRole("img", { name: "Actually cover" });
+    expect(image).toHaveAttribute("src", "http://cover.localhost/art?size=96");
+    expect(image).toHaveAttribute("loading", "lazy");
+    expect(image).toHaveAttribute("decoding", "async");
+    fireEvent.mouseEnter(image.parentElement!);
+    await waitFor(() => expect(document.querySelector(".album-cover-preview img")).toHaveAttribute("src", "http://cover.localhost/art?size=300"));
+    fireEvent.error(image);
+    expect(screen.queryByRole("img", { name: "Actually cover" })).toBeNull();
+    backend.getAlbumCoverUrl.mockResolvedValue("http://cover.localhost/refreshed");
+    act(() => invalidateArtwork());
+    await waitFor(() => expect(screen.getByRole("img", { name: "Actually cover" })).toHaveAttribute("src", "http://cover.localhost/refreshed"));
+  });
+
   it("shows the loaded artwork in a 300px floating preview", async () => {
-    backend.getAlbumCoverDataUrl.mockResolvedValue(
+    backend.getAlbumCoverUrl.mockResolvedValue(
       "data:image/png;base64,Y292ZXI=",
     );
     render(
@@ -53,7 +79,7 @@ describe("album cover hover preview", () => {
     );
 
     await waitFor(() => {
-      expect(backend.getAlbumCoverDataUrl).toHaveBeenCalledWith("album-1");
+      expect(backend.getAlbumCoverUrl).toHaveBeenCalledWith("album-1", 96);
       expect(screen.getByRole("img", { name: "Actually cover" })).toBeVisible();
     });
 
@@ -137,7 +163,7 @@ describe("album cover hover preview", () => {
       configurable: true,
       value: fullscreenSurface,
     });
-    backend.getAlbumCoverDataUrl.mockResolvedValue(
+    backend.getAlbumCoverUrl.mockResolvedValue(
       "data:image/png;base64,Y292ZXI=",
     );
     render(

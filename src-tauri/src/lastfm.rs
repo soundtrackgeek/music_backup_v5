@@ -5,7 +5,6 @@ use crate::db::{
     LastFmSimilarArtistCacheRecord, LastFmSimilarLocalArtist, LastFmTrackPopularityCacheRecord,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use base64::{engine::general_purpose, Engine as _};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use keyring::Entry;
 use serde::de::DeserializeOwned;
@@ -2287,7 +2286,10 @@ pub fn refresh_artist_images(
                 Some(source_url) => match download_image(&source_url) {
                     Ok(image) => {
                         let path = portrait_path(&app, &candidate.artist_key, &image.extension)?;
-                        fs::write(&path, &image.bytes).with_context(|| {
+                        crate::thumbnails::with_source_write(|| {
+                            fs::write(&path, &image.bytes)?;
+                            Ok(())
+                        }).with_context(|| {
                             format!("Could not cache the portrait for {}", candidate.artist_name)
                         })?;
                         downloaded += 1;
@@ -2355,22 +2357,6 @@ pub fn refresh_artist_images(
             format!("Portrait sync checked {requested} artists and cached {downloaded} images.")
         },
     })
-}
-
-pub fn artist_image_data_url(app: AppHandle, artist_id: String) -> Result<Option<String>> {
-    let Some((cache_path, mime_type)) = db::artist_image_file_for_app(&app, &artist_id)? else {
-        return Ok(None);
-    };
-    let path = PathBuf::from(cache_path);
-    if !path.is_file() {
-        return Ok(None);
-    }
-    let bytes = fs::read(&path)
-        .with_context(|| format!("Could not read artist portrait {}", path.display()))?;
-    Ok(Some(format!(
-        "data:{mime_type};base64,{}",
-        general_purpose::STANDARD.encode(bytes)
-    )))
 }
 
 #[cfg(test)]

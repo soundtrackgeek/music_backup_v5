@@ -14,7 +14,9 @@ import type {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { getAlbumCoverDataUrl } from "../backend";
+import { getAlbumCoverUrl } from "../backend";
+import { useArtworkRevision, type ThumbnailSize } from "../backend/artwork";
+import { isTauriRuntime } from "../backend/tauriClient";
 import type { BrowseRow } from "../types";
 
 export type AlbumCoverSource = Pick<
@@ -58,7 +60,8 @@ function albumInitial(row: AlbumCoverSource | null) {
 }
 
 function isDirectCoverUrl(coverPath: string) {
-  return /^(?:blob:|data:|https?:\/\/|\/)/i.test(coverPath);
+  return /^(?:blob:|data:|https?:\/\/)/i.test(coverPath)
+    || (coverPath.startsWith("/") && !isTauriRuntime());
 }
 
 function coverPreviewPosition(element: HTMLElement, hasCaption: boolean) {
@@ -177,7 +180,7 @@ export function AlbumCoverPreviewProvider({
                 style={{ height: `${preview.size}px` }}
               >
                 {preview.imageUrl ? (
-                  <img src={preview.imageUrl} alt="" draggable={false} />
+                  <img src={preview.imageUrl} alt="" draggable={false} decoding="async" />
                 ) : (
                   <span>{preview.initial}</span>
                 )}
@@ -201,25 +204,32 @@ export function AlbumCover({
   decorative = true,
   previewOnHover = false,
   previewCaption = null,
+  size,
 }: {
   row: AlbumCoverSource | null;
   className?: string;
   decorative?: boolean;
   previewOnHover?: boolean;
   previewCaption?: string | null;
+  size?: ThumbnailSize;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [previewActive, setPreviewActive] = useState(false);
+  const revision = useArtworkRevision();
   const coverPreview = useContext(CoverPreviewContext);
   const coverRef = useRef<HTMLSpanElement | null>(null);
   const previewActiveRef = useRef(false);
   const previewId = useId();
   const coverPath = row?.coverPath ?? null;
   const albumId = row?.albumId ?? null;
+  const thumbnailSize = size ?? (/cover-(?:mini|list)/.test(className) ? 96 : /album-cover-large|artist-album-expanded-art/.test(className) ? 600 : 300);
 
   useEffect(() => {
     setImageFailed(false);
     setImageUrl(null);
+    setPreviewImageUrl(null);
     if (!albumId || !coverPath) {
       return;
     }
@@ -230,7 +240,7 @@ export function AlbumCover({
     }
 
     let cancelled = false;
-    void getAlbumCoverDataUrl(albumId).then((nextImageUrl) => {
+    void getAlbumCoverUrl(albumId, thumbnailSize).then((nextImageUrl) => {
       if (!cancelled) {
         setImageUrl(nextImageUrl);
       }
@@ -239,7 +249,7 @@ export function AlbumCover({
     return () => {
       cancelled = true;
     };
-  }, [albumId, coverPath]);
+  }, [albumId, coverPath, thumbnailSize, revision]);
 
   const displayImageUrl = imageFailed ? null : imageUrl;
   const label = row?.album ? `${row.album} cover` : "Album cover";
@@ -261,7 +271,7 @@ export function AlbumCover({
       coverPreview.showPreview({
         caption: previewCaption,
         id: previewId,
-        imageUrl: displayImageUrl,
+        imageUrl: displayImageUrl ? previewImageUrl ?? displayImageUrl : null,
         initial,
         label,
         portalTarget: document.fullscreenElement ?? document.body,
@@ -271,6 +281,7 @@ export function AlbumCover({
     [
       coverPreview,
       displayImageUrl,
+      previewImageUrl,
       initial,
       label,
       previewCaption,
@@ -285,6 +296,15 @@ export function AlbumCover({
     }
   }, [showHoverPreview]);
 
+  useEffect(() => {
+    if (!previewActive || !albumId || !coverPath || isDirectCoverUrl(coverPath) || thumbnailSize !== 96) return;
+    let cancelled = false;
+    void getAlbumCoverUrl(albumId, 300).then((url) => {
+      if (!cancelled) setPreviewImageUrl(url);
+    });
+    return () => { cancelled = true; };
+  }, [previewActive, albumId, coverPath, thumbnailSize, revision]);
+
   useEffect(
     () => () => {
       coverPreview?.hidePreview(previewId);
@@ -294,6 +314,7 @@ export function AlbumCover({
 
   function handleMouseEnter() {
     previewActiveRef.current = true;
+    setPreviewActive(true);
     if (coverRef.current) {
       showHoverPreview(coverRef.current);
     }
@@ -301,6 +322,7 @@ export function AlbumCover({
 
   function handleMouseLeave() {
     previewActiveRef.current = false;
+    setPreviewActive(false);
     coverPreview?.hidePreview(previewId);
   }
 
@@ -317,6 +339,7 @@ export function AlbumCover({
           src={displayImageUrl}
           alt={decorative ? "" : label}
           loading="lazy"
+          decoding="async"
           onError={() => setImageFailed(true)}
         />
       ) : (

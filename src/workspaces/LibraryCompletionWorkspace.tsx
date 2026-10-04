@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { artworkUrl, useArtworkRevision } from "../backend/artwork";
 import {
   Album,
   BarChart3,
@@ -27,7 +28,7 @@ import {
   addWishListMusicBrainzCandidate,
   enrichLibraryCompletionCover,
   getLibraryCompletion,
-  getLibraryCompletionCoverDataUrl,
+  getLibraryCompletionCoverUrl,
   getLibraryCompletionVerificationStatus,
   listenToLibraryCompletionVerification,
   getDiscogsCredentialStatus,
@@ -188,6 +189,19 @@ export function LibraryCompletionWorkspace({
   const [pendingQueueAction, setPendingQueueAction] = useState(false);
   const [pendingCoverId, setPendingCoverId] = useState<string | null>(null);
   const [coverUrls, setCoverUrls] = useState<Map<string, string>>(() => new Map());
+  const artworkRevision = useArtworkRevision();
+  const [failedCovers, setFailedCovers] = useState<Set<string>>(() => new Set());
+  useEffect(() => { setFailedCovers(new Set()); }, [artworkRevision]);
+
+  function candidateCoverUrl(candidate: LibraryCompletionCandidate, size: 96 | 300) {
+    if (failedCovers.has(candidate.id)) return null;
+    return (candidate.coverStatus === "available" ? artworkUrl("completion", candidate.id, size) : null)
+      ?? coverUrls.get(candidate.id) ?? candidate.coverUrl;
+  }
+
+  function markCoverFailed(id: string) {
+    setFailedCovers((current) => new Set(current).add(id));
+  }
   const completedBatchReloadRef = useRef<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const candidateRowsRef = useRef(new Map<string, HTMLDivElement>());
@@ -275,7 +289,7 @@ export function LibraryCompletionWorkspace({
     data?.atlas[0] ??
     null;
   const selectedCoverUrl = selected
-    ? coverUrls.get(selected.id) ?? selected.coverUrl
+    ? candidateCoverUrl(selected, 300)
     : null;
   const decades = useMemo(
     () => [...new Set(data?.atlas.map((cell) => cell.decade) ?? [])].sort((a, b) => a - b),
@@ -372,7 +386,7 @@ export function LibraryCompletionWorkspace({
       coverUrls.has(selected.id)
     ) return;
     let cancelled = false;
-    void getLibraryCompletionCoverDataUrl(selected.id).then((dataUrl) => {
+    void getLibraryCompletionCoverUrl(selected.id).then((dataUrl) => {
       if (cancelled || !dataUrl) return;
       setCoverUrls((current) => {
         const next = new Map(current);
@@ -708,7 +722,7 @@ export function LibraryCompletionWorkspace({
           : candidate),
       } : current);
       if (result.hasCover) {
-        const dataUrl = await getLibraryCompletionCoverDataUrl(selected.id);
+        const dataUrl = await getLibraryCompletionCoverUrl(selected.id);
         if (dataUrl) {
           setCoverUrls((current) => {
             const next = new Map(current);
@@ -1065,8 +1079,8 @@ export function LibraryCompletionWorkspace({
                     type="button"
                     onClick={() => setSelectedId(candidate.id)}
                   >
-                    {coverUrls.get(candidate.id) ?? candidate.coverUrl ? (
-                      <img src={(coverUrls.get(candidate.id) ?? candidate.coverUrl)!} alt="" />
+                    {candidateCoverUrl(candidate, 96) ? (
+                      <img src={candidateCoverUrl(candidate, 96)!} alt="" loading="lazy" decoding="async" onError={() => markCoverFailed(candidate.id)} />
                     ) : (
                       <span className="completion-cover-fallback"><Album size={19} /></span>
                     )}
@@ -1096,7 +1110,7 @@ export function LibraryCompletionWorkspace({
               <>
                 <div className="completion-dossier-heading">
                   {selectedCoverUrl ? (
-                    <img src={selectedCoverUrl} alt={`${selected.title} cover artwork`} />
+                    <img src={selectedCoverUrl} alt={`${selected.title} cover artwork`} loading="lazy" decoding="async" onError={() => markCoverFailed(selected.id)} />
                   ) : (
                     <span className="completion-dossier-cover-fallback"><Album size={28} /></span>
                   )}
