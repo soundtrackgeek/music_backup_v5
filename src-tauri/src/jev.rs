@@ -78,8 +78,8 @@ pub fn delete_api_key() -> Result<AiKeyStatus> {
 }
 
 fn send_request(key: &str, body: Value) -> Result<Value> {
-    match ureq::AgentBuilder::new().timeout(Duration::from_secs(40)).build()
-        .post(ENDPOINT).set("Authorization", &format!("Bearer {key}"))
+    match crate::http::agent().post(ENDPOINT).timeout(Duration::from_secs(40))
+        .set("Authorization", &format!("Bearer {key}"))
         .set("Content-Type", "application/json").set("X-Title", "Music Library Mixtape")
         .send_json(body) {
         Ok(response) => response.into_json().context("Jev returned an unreadable response"),

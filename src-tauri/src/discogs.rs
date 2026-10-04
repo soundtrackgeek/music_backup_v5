@@ -1,9 +1,6 @@
 use anyhow::{bail, Context, Result};
 use keyring::Entry;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
-use std::sync::{Mutex, OnceLock};
-use std::thread;
-use std::time::{Duration, Instant};
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 use url::Url;
 use zeroize::{Zeroize, Zeroizing};
@@ -11,11 +8,7 @@ use zeroize::{Zeroize, Zeroizing};
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.discogs";
 const KEYRING_USER: &str = "consumer-credentials";
 const DISCOGS_API_BASE: &str = "https://api.discogs.com";
-const DISCOGS_USER_AGENT: &str = "music-backup-v5/0.145.3 (local desktop Discogs verifier)";
-const REQUEST_INTERVAL: Duration = Duration::from_millis(1_200);
 const MAX_CREDENTIAL_LENGTH: usize = 256;
-
-static REQUEST_GATE: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -223,18 +216,6 @@ pub fn credential_status() -> Result<DiscogsCredentialStatus> {
     })
 }
 
-fn wait_for_request_slot() {
-    let gate = REQUEST_GATE.get_or_init(|| Mutex::new(None));
-    let mut last_request = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some(last_request_at) = *last_request {
-        let elapsed = last_request_at.elapsed();
-        if elapsed < REQUEST_INTERVAL {
-            thread::sleep(REQUEST_INTERVAL - elapsed);
-        }
-    }
-    *last_request = Some(Instant::now());
-}
-
 fn api_url(path: &str, query: &[(&str, &str)]) -> Result<Url> {
     let mut url = Url::parse(DISCOGS_API_BASE)
         .context("Could not create the Discogs API URL")?
@@ -250,19 +231,14 @@ fn get_json<T: for<'de> Deserialize<'de>>(
     query: &[(&str, &str)],
     context: &str,
 ) -> Result<DiscogsResponse<T>> {
-    wait_for_request_slot();
     let url = api_url(path, query)?;
     let authorization = Zeroizing::new(format!(
         "Discogs key={}, secret={}",
         credentials.consumer_key, credentials.consumer_secret
     ));
-    let response = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .get(url.as_str())
+    let response = crate::http::get(url.as_str())
         .set("Accept", "application/json")
         .set("Authorization", authorization.as_str())
-        .set("User-Agent", DISCOGS_USER_AGENT)
         .call()
         .map_err(|error| match error {
             ureq::Error::Status(401 | 403, _) => {

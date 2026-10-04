@@ -14,6 +14,7 @@ mod deemix_download;
 mod discogs;
 mod external_discovery;
 mod folder_sync;
+mod http;
 mod importer;
 mod jev;
 mod lastfm;

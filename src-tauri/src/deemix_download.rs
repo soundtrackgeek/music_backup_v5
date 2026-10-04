@@ -25,8 +25,7 @@ use zeroize::Zeroizing;
 
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_MEDIA_URL: &str = "https://media.deezer.com/v1/get_url";
-const DEEMIX_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.145.3";
+const DEEMIX_USER_AGENT: &str = crate::http::BROWSER_USER_AGENT;
 const DOWNLOAD_EVENT: &str = "deemix-download-progress";
 const STREAM_CHUNK_SIZE: usize = 2048;
 const MAX_ARTWORK_BYTES: u64 = 20 * 1024 * 1024;
@@ -977,11 +976,9 @@ fn fetch_album(
     quality_candidates: &[DownloadQuality],
 ) -> Result<AlbumMetadata> {
     let url = format!("https://api.deezer.com/album/{album_id}");
-    let response = session
-        .agent
-        .get(&url)
+    let response = crate::http::get(&url)
+        .timeout(Duration::from_secs(45))
         .set("Accept", "application/json")
-        .set("User-Agent", DEEMIX_USER_AGENT)
         .call()
         .map_err(|error| network_error(error, "Deezer album metadata"))?;
     let public_album = response

@@ -15,8 +15,6 @@ use tauri::AppHandle;
 
 #[cfg(not(test))]
 const WIKIDATA_SPARQL_URL: &str = "https://query.wikidata.org/sparql";
-#[cfg(not(test))]
-const MAP_USER_AGENT: &str = "music-backup-v5/0.145.3 (local desktop app)";
 const UNKNOWN_GENRE: &str = "Unknown";
 
 #[derive(Debug, Clone)]
@@ -615,9 +613,6 @@ fn fetch_wikidata_locations(
     precision: &str,
     candidates: &[(String, String)],
 ) -> Result<HashMap<String, ResolvedLocation>> {
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(45))
-        .build();
     let mut resolved = HashMap::new();
     for batch in candidates.chunks(150) {
         let values = batch
@@ -640,10 +635,10 @@ fn fetch_wikidata_locations(
             }}
             "
         );
-        let response = agent
+        let response = crate::http::agent()
             .post(WIKIDATA_SPARQL_URL)
+            .timeout(Duration::from_secs(45))
             .set("Accept", "application/sparql-results+json")
-            .set("User-Agent", MAP_USER_AGENT)
             .send_form(&[("query", query.as_str()), ("format", "json")])
             .context("Could not resolve MusicBrainz map locations with Wikidata")?
             .into_json::<SparqlResponse>()

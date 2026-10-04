@@ -1,5 +1,7 @@
 # Music Library
 
+Music Library 0.157.4 shares HTTP connections and MusicBrainz request pacing across artist refreshes, Wish List, Discovery, biographies, and album reviews. Provider reads retry temporary throttling and outages with bounded backoff, while a shared circuit breaker lets queued work fail promptly during an outage. See [External provider requests](#external-provider-requests).
+
 Music Library 0.157.3 uses indexed track lookups and an immediate write transaction when caching Aurora intake quality. Post-import quality and cover writes retry only temporary SQLite locks on fresh connections, keep durable completion records, and resume unfinished work during the next intake preview or committed apply replay. Recovery creates no new backup, catalog import, or file transfer. Covers include new and replacement albums, prefer the incoming embedded front cover, and are published atomically; missing artwork is reported as pending. A repairBatch bridge request with the original planId/sessionId repairs an already committed batch without touching its audio or source folders.
 
 Music Library 0.157.2 waits for the selected chart years before loading Published Charts rankings, so selecting a song right after the view opens keeps its history panel.
@@ -139,6 +141,16 @@ Configure Plex under **Settings → Providers → Plex playlists**. The default 
 Track identity is the normalized full path built from MusicBee `<File Path>` plus `<Filename>` and Plex's media-part file path. For a local Plex server, the indexed Plex SQLite catalog is opened read-only to avoid scanning very large libraries; remote servers and unresolved paths use authenticated Plex API queries. Matches are cached locally. A track that Music Library knows about before Plex's nightly scan is counted as **waiting for Plex**, skipped for that run, and retried later. If a non-empty Smart playlist maps zero tracks, the existing Plex playlist is left untouched.
 
 The Plex token is stored as a generic credential in Windows Credential Manager and is never returned to the frontend, written to SQLite or `plex.json`, logged, exported, or included in backups. Debug builds may temporarily read `PLEX_TOKEN` from the repo-root `.env`; a token saved in Settings takes precedence, and production builds do not load `.env`.
+
+## External provider requests
+
+The backend uses one lazy HTTP connection pool with a versioned `MusicLibrary/<version>` User-Agent and the project's contact URL. All MusicBrainz lookups share one process-wide request gate, including retries, so concurrent workspaces cannot multiply the request rate. This follows the [MusicBrainz rate-limit and identification guidance](https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting); other applications and other Music Library processes on the same public IP still have their own traffic.
+
+Provider reads use host-specific pacing, exponential backoff with jitter for HTTP 429/503, and both forms of `Retry-After` (seconds or an HTTP date). Discogs response quota headers adjust its pacing. Backoff and a short circuit breaker are shared by host, so one provider's outage does not delay other providers. Long server-requested waits fail promptly and defer later requests instead of occupying a worker for the entire delay. Existing response-size limits, metadata caches, and offline fallbacks remain in their feature modules.
+
+MusicBrainz starts are spaced at least 1.1 seconds apart with no accumulated burst. Reads make at most three attempts; after repeated failures the circuit pauses that provider for 20 seconds and allows one recovery probe. GETs have a default 30-second queue/retry/response budget, with existing feature-specific overrides. The retained ureq 2 transport has a separate 10-second connection timeout. Proxy discovery is centralized through ureq's environment-proxy support.
+
+AI requests, Plex writes, and NZB downloads share the connection pool without automatic replay. Deezer account validation and authenticated audio downloads retain private agents to isolate session cookies and preserve download-specific settings.
 
 ## Album reviews
 

@@ -11,8 +11,6 @@ use url::Url;
 
 const MUSICBRAINZ_RELEASE_GROUP_API: &str = "https://musicbrainz.org/ws/2/release-group/";
 const CRITIQUEBRAINZ_REVIEW_API: &str = "https://critiquebrainz.org/ws/1/review/";
-const PROVIDER_USER_AGENT: &str =
-    "music-backup-v5/0.145.3 (album reviews; https://github.com/soundtrackgeek/music_backup_v5)";
 const REVIEW_CACHE_DAYS: i64 = 30;
 const UNAVAILABLE_CACHE_DAYS: i64 = 7;
 
@@ -139,12 +137,6 @@ struct ResolvedReview {
     license_url: Option<String>,
 }
 
-fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(20))
-        .build()
-}
-
 fn valid_uuid(value: &str) -> bool {
     value.len() == 36
         && value
@@ -268,10 +260,9 @@ fn fetch_release_group_mbid(identity: &AlbumReviewIdentity) -> Result<Option<Str
         .append_pair("limit", "10")
         .append_pair("fmt", "json");
 
-    crate::musicbrainz::wait_for_musicbrainz_request_slot();
-    let response = agent()
+    let response = crate::http::musicbrainz()
         .get(url.as_str())
-        .set("User-Agent", PROVIDER_USER_AGENT)
+        .timeout(Duration::from_secs(20))
         .call()
         .context("Could not search MusicBrainz for the album")?;
     let payload = response
@@ -392,9 +383,8 @@ fn fetch_review(release_group_mbid: &str) -> Result<Option<ResolvedReview>> {
         .append_pair("sort", "popularity")
         .append_pair("sort_order", "desc")
         .append_pair("limit", "50");
-    let response = agent()
-        .get(url.as_str())
-        .set("User-Agent", PROVIDER_USER_AGENT)
+    let response = crate::http::get(url.as_str())
+        .timeout(Duration::from_secs(20))
         .call()
         .context("Could not fetch CritiqueBrainz album reviews")?;
     let payload = response

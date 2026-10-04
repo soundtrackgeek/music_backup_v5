@@ -1719,11 +1719,9 @@ fn validate_music_research_conversation(
 }
 
 fn send_openai_request(api_key: &str, request_body: Value) -> Result<Value> {
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(75))
-        .build();
-    match agent
+    match crate::http::agent()
         .post(OPENAI_API_URL)
+        .timeout(Duration::from_secs(75))
         .set("Authorization", &format!("Bearer {api_key}"))
         .set("Content-Type", "application/json")
         .send_json(request_body)

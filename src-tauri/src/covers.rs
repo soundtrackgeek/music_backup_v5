@@ -13,19 +13,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager};
 use url::Url;
 
 const SUPPORTED_ARCHIVE_EXTENSIONS: [&str; 5] = ["jpg", "jpeg", "png", "gif", "bmp"];
 const COMPLETION_COVER_MAX_BYTES: usize = 5 * 1024 * 1024;
-const COMPLETION_COVER_REQUEST_INTERVAL: Duration = Duration::from_millis(1_200);
-const COMPLETION_COVER_USER_AGENT: &str =
-    "music-backup-v5/0.145.3 (local desktop cover enrichment)";
-
-static COMPLETION_COVER_REQUEST_GATE: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -476,14 +469,8 @@ fn fetch_completion_cover(
 
 fn download_completion_cover(url: &str) -> Result<Option<DownloadedCompletionCover>> {
     validate_remote_cover_url(url)?;
-    wait_for_completion_cover_request_slot();
-    let response = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(30))
-        .redirects(5)
-        .build()
-        .get(url)
+    let response = crate::http::get(url)
         .set("Accept", "image/jpeg,image/png")
-        .set("User-Agent", COMPLETION_COVER_USER_AGENT)
         .call();
     let response = match response {
         Ok(response) => response,
@@ -554,18 +541,6 @@ fn cache_completion_cover(
         destination.display().to_string(),
         cover.mime_type,
     ))
-}
-
-fn wait_for_completion_cover_request_slot() {
-    let gate = COMPLETION_COVER_REQUEST_GATE.get_or_init(|| Mutex::new(None));
-    let mut last_request = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some(last_request_at) = *last_request {
-        let elapsed = last_request_at.elapsed();
-        if elapsed < COMPLETION_COVER_REQUEST_INTERVAL {
-            thread::sleep(COMPLETION_COVER_REQUEST_INTERVAL - elapsed);
-        }
-    }
-    *last_request = Some(Instant::now());
 }
 
 fn validate_remote_cover_url(value: &str) -> Result<()> {

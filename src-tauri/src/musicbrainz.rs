@@ -26,9 +26,8 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 #[cfg(not(test))]
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -43,26 +42,9 @@ const MUSICBRAINZ_RELEASES_URL: &str = "https://musicbrainz.org/ws/2/release";
 #[cfg(not(test))]
 const MUSICBRAINZ_RELEASE_GROUPS_URL: &str = "https://musicbrainz.org/ws/2/release-group";
 #[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.145.3 (local desktop app)";
-#[cfg(not(test))]
 const MUSICBRAINZ_PAGE_LIMIT: usize = 100;
-const MUSICBRAINZ_RATE_LIMIT_DELAY_MS: u64 = 1100;
-static MUSICBRAINZ_REQUEST_GATE: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 static ORIGIN_COUNTRY_IMPORT_CANCELLED: AtomicBool = AtomicBool::new(false);
 static ARTIST_INFO_IMPORT_CANCELLED: AtomicBool = AtomicBool::new(false);
-
-pub(crate) fn wait_for_musicbrainz_request_slot() {
-    let gate = MUSICBRAINZ_REQUEST_GATE.get_or_init(|| Mutex::new(None));
-    let mut previous = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some(last_request) = *previous {
-        let minimum_interval = Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS);
-        let elapsed = last_request.elapsed();
-        if elapsed < minimum_interval {
-            thread::sleep(minimum_interval - elapsed);
-        }
-    }
-    *previous = Some(Instant::now());
-}
 
 #[cfg(not(test))]
 pub fn cache_status_for_app(
@@ -112,7 +94,6 @@ pub fn import_origin_countries_for_app(
         Some(settings.musicbrainz_cache_path),
         request,
         fetch_artist_origin,
-        true,
         Some(&progress_callback),
     )?;
     Ok(summary)
@@ -166,7 +147,6 @@ pub fn import_artist_infos_for_app(
         Some(settings.musicbrainz_cache_path),
         request,
         fetch_artist_origin,
-        true,
         Some(&progress_callback),
     )?;
     Ok(summary)
@@ -225,7 +205,6 @@ pub fn refresh_artist_release_groups_for_app(
     let artist_key = normalize_local_artist_key(&request.artist_key, &artist_name);
     let mbid = required_mbid(request.musicbrainz_mbid.as_deref())?;
     let rows = fetch_artist_release_groups(&mbid, ArtistReleaseGroupScope::AlbumsAndEps)?;
-    thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
     let origin_payload = fetch_artist_origin(&mbid)?;
     let fetched_at = Utc::now().to_rfc3339();
     // Open the current catalog only after the network work has finished.
@@ -419,9 +398,6 @@ fn fetch_artist_release_groups(
     artist_mbid: &str,
     scope: ArtistReleaseGroupScope,
 ) -> Result<Vec<RefreshedReleaseGroup>> {
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(30))
-        .build();
     let mut rows = Vec::new();
     for &(type_filter, fallback_type) in release_group_types_for_scope(scope) {
         let mut offset = 0usize;
@@ -429,10 +405,8 @@ fn fetch_artist_release_groups(
             let url = format!(
                 "{MUSICBRAINZ_RELEASE_GROUPS_URL}?artist={artist_mbid}&type={type_filter}&fmt=json&limit={MUSICBRAINZ_PAGE_LIMIT}&offset={offset}"
             );
-            wait_for_musicbrainz_request_slot();
-            let response = agent
+            let response = crate::http::musicbrainz()
                 .get(&url)
-                .set("User-Agent", MUSICBRAINZ_USER_AGENT)
                 .call()
                 .with_context(|| {
                     format!(
@@ -465,7 +439,6 @@ fn fetch_artist_release_groups(
             if offset >= total {
                 break;
             }
-            thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
         }
     }
 
@@ -836,7 +809,6 @@ fn import_origin_countries_for_connection<F>(
     cache_path: Option<String>,
     request: MusicBrainzOriginCountryImportRequest,
     fetcher: F,
-    pace_requests: bool,
     progress_callback: Option<&dyn Fn(MusicBrainzOriginCountryImportProgress)>,
 ) -> Result<MusicBrainzOriginCountryImportSummary>
 where
@@ -908,7 +880,7 @@ where
         ),
     );
 
-    for (index, row) in eligible_rows.into_iter().take(selected_count).enumerate() {
+    for row in eligible_rows.into_iter().take(selected_count) {
         if ORIGIN_COUNTRY_IMPORT_CANCELLED.load(Ordering::SeqCst) {
             cancelled = true;
             break;
@@ -1009,10 +981,6 @@ where
                 event_message,
             ),
         );
-
-        if pace_requests && index + 1 < selected_count {
-            thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
-        }
     }
 
     let status = if cancelled {
@@ -1271,7 +1239,6 @@ fn import_artist_infos_for_connection<F>(
     cache_path: Option<String>,
     request: MusicBrainzArtistInfoImportRequest,
     fetcher: F,
-    pace_requests: bool,
     progress_callback: Option<&dyn Fn(MusicBrainzArtistInfoImportProgress)>,
 ) -> Result<MusicBrainzArtistInfoImportSummary>
 where
@@ -1342,7 +1309,7 @@ where
         ),
     );
 
-    for (index, row) in eligible_rows.into_iter().take(selected_count).enumerate() {
+    for row in eligible_rows.into_iter().take(selected_count) {
         if ARTIST_INFO_IMPORT_CANCELLED.load(Ordering::SeqCst) {
             cancelled = true;
             break;
@@ -1443,10 +1410,6 @@ where
                 event_message,
             ),
         );
-
-        if pace_requests && index + 1 < selected_count {
-            thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
-        }
     }
 
     let status = if cancelled {
@@ -1582,14 +1545,9 @@ fn artist_info_final_progress_message(
 
 #[cfg(not(test))]
 fn fetch_artist_origin(mbid: &str) -> Result<MusicBrainzArtistLookupResponse> {
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(30))
-        .build();
     let url = format!("{MUSICBRAINZ_ARTIST_URL}/{mbid}?fmt=json");
-    wait_for_musicbrainz_request_slot();
-    let response = agent
+    let response = crate::http::musicbrainz()
         .get(&url)
-        .set("User-Agent", MUSICBRAINZ_USER_AGENT)
         .call()
         .with_context(|| format!("Could not fetch MusicBrainz artist {mbid}"))?;
     response
@@ -3516,7 +3474,6 @@ pub(crate) fn official_album_release_groups_for_wishlist(
 ) -> Result<(Vec<WishListOfficialAlbum>, String)> {
     let artist_mbid = required_mbid(Some(artist_mbid))?;
     let rows = fetch_artist_release_groups(&artist_mbid, wishlist_release_group_scope())?;
-    thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
     let official_ids = fetch_official_release_group_ids(&artist_mbid)?
         .context("MusicBrainz could not verify official album releases")?;
     let fetched_at = Utc::now().to_rfc3339();
@@ -4526,9 +4483,6 @@ fn save_official_release_statuses(
 
 #[cfg(not(test))]
 fn fetch_official_release_group_ids(artist_mbid: &str) -> Result<Option<HashSet<String>>> {
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(20))
-        .build();
     let mut official_ids = HashSet::new();
     let mut offset = 0usize;
 
@@ -4536,10 +4490,9 @@ fn fetch_official_release_group_ids(artist_mbid: &str) -> Result<Option<HashSet<
         let url = format!(
             "{MUSICBRAINZ_RELEASES_URL}?artist={artist_mbid}&type=album&status=official&inc=release-groups&fmt=json&limit={MUSICBRAINZ_PAGE_LIMIT}&offset={offset}"
         );
-        wait_for_musicbrainz_request_slot();
-        let response = agent
+        let response = crate::http::musicbrainz()
             .get(&url)
-            .set("User-Agent", MUSICBRAINZ_USER_AGENT)
+            .timeout(Duration::from_secs(20))
             .call()
             .with_context(|| {
                 format!("Could not fetch MusicBrainz official releases for {artist_mbid}")
@@ -4560,7 +4513,6 @@ fn fetch_official_release_group_ids(artist_mbid: &str) -> Result<Option<HashSet<
         if offset >= payload.release_count.unwrap_or(0) {
             break;
         }
-        thread::sleep(Duration::from_millis(MUSICBRAINZ_RATE_LIMIT_DELAY_MS));
     }
 
     Ok(Some(official_ids))
@@ -6131,7 +6083,6 @@ mod tests {
                     end_area: None,
                 })
             },
-            false,
             None,
         )
         .expect("import artist info");

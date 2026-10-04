@@ -6,12 +6,6 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 #[cfg(not(test))]
-use std::{
-    sync::{Mutex, OnceLock},
-    thread,
-    time::{Duration, Instant},
-};
-#[cfg(not(test))]
 use tauri::AppHandle;
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 #[cfg(not(test))]
@@ -24,27 +18,6 @@ const MAX_MUSICBRAINZ_SEARCH_QUERY_LENGTH: usize = 200;
 const LASTFM_SIMILAR_ARTIST_SOURCE_PREFIX: &str = "Last.fm Similar Artists";
 #[cfg(not(test))]
 const MUSICBRAINZ_SEARCH_LIMIT: usize = 8;
-#[cfg(not(test))]
-const MUSICBRAINZ_USER_AGENT: &str = "music-backup-v5/0.145.3 (local desktop app)";
-#[cfg(not(test))]
-const MUSICBRAINZ_REQUEST_INTERVAL: Duration = Duration::from_millis(1_100);
-#[cfg(not(test))]
-static MUSICBRAINZ_LAST_REQUEST: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
-
-#[cfg(not(test))]
-fn wait_for_musicbrainz_request_slot() {
-    let mut last_request = MUSICBRAINZ_LAST_REQUEST
-        .get_or_init(|| Mutex::new(None))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some(last_request_at) = *last_request {
-        let elapsed = last_request_at.elapsed();
-        if elapsed < MUSICBRAINZ_REQUEST_INTERVAL {
-            thread::sleep(MUSICBRAINZ_REQUEST_INTERVAL - elapsed);
-        }
-    }
-    *last_request = Some(Instant::now());
-}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -344,12 +317,9 @@ pub fn search_musicbrainz_for_wishlist(
 ) -> Result<WishListMusicBrainzSearchResponse> {
     let request = normalize_musicbrainz_search_request(request)?;
     let url = musicbrainz_search_url(&request)?;
-    wait_for_musicbrainz_request_slot();
-    let response = ureq::AgentBuilder::new()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
+    let response = crate::http::musicbrainz()
         .get(url.as_str())
-        .set("User-Agent", MUSICBRAINZ_USER_AGENT)
+        .timeout(std::time::Duration::from_secs(20))
         .call()
         .context("Could not search MusicBrainz for this Wish List item")?;
     let mut candidates = if request.entity == "artist" {
@@ -405,12 +375,9 @@ pub(crate) fn validate_musicbrainz_album_candidate(
     url.query_pairs_mut()
         .append_pair("inc", "artist-credits+releases")
         .append_pair("fmt", "json");
-    wait_for_musicbrainz_request_slot();
-    let response = ureq::AgentBuilder::new()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
+    let response = crate::http::musicbrainz()
         .get(url.as_str())
-        .set("User-Agent", MUSICBRAINZ_USER_AGENT)
+        .timeout(std::time::Duration::from_secs(20))
         .call()
         .context("MusicBrainz could not confirm that the selected album still exists")?;
     let row = response

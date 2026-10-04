@@ -27,7 +27,7 @@ const MAX_AUTO_SYNC_MINUTES: u32 = 1_440;
 const TRACK_LOOKUP_BATCH_SIZE: usize = 25;
 const PLAYLIST_PAGE_SIZE: u32 = 1_000;
 const PLEX_PRODUCT: &str = "Music Library";
-const PLEX_VERSION: &str = "0.145.3";
+const PLEX_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 static SYNC_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -173,7 +173,6 @@ struct PlexPlaylistItem {
 struct PlexClient {
     profile: StoredPlexProfile,
     token: Zeroizing<String>,
-    agent: ureq::Agent,
 }
 
 impl PlexClient {
@@ -181,11 +180,6 @@ impl PlexClient {
         Self {
             profile,
             token,
-            agent: ureq::AgentBuilder::new()
-                .timeout_connect(Duration::from_secs(10))
-                .timeout_read(Duration::from_secs(60))
-                .timeout_write(Duration::from_secs(30))
-                .build(),
         }
     }
 
@@ -197,8 +191,22 @@ impl PlexClient {
     }
 
     fn request(&self, method: &str, url: &Url) -> Result<ureq::Response> {
-        self.agent
+        if method == "GET" {
+            return crate::http::get(url.as_str())
+                .timeout(Duration::from_secs(60))
+                .set("Accept", "application/json")
+                .set("X-Plex-Token", self.token.as_str())
+                .set("X-Plex-Client-Identifier", &self.profile.client_identifier)
+                .set("X-Plex-Product", PLEX_PRODUCT)
+                .set("X-Plex-Version", PLEX_VERSION)
+                .set("X-Plex-Platform", "Windows")
+                .set("X-Plex-Pms-Api-Version", "1.2.2")
+                .call()
+                .map_err(plex_request_error);
+        }
+        let response = crate::http::agent()
             .request(method, url.as_str())
+            .timeout(Duration::from_secs(60))
             .set("Accept", "application/json")
             .set("X-Plex-Token", self.token.as_str())
             .set("X-Plex-Client-Identifier", &self.profile.client_identifier)
@@ -207,7 +215,11 @@ impl PlexClient {
             .set("X-Plex-Platform", "Windows")
             .set("X-Plex-Pms-Api-Version", "1.2.2")
             .call()
-            .map_err(plex_request_error)
+            .map_err(plex_request_error)?;
+        if (300..400).contains(&response.status()) {
+            bail!("Plex redirected the write request. Check the configured server URL before retrying.");
+        }
+        Ok(response)
     }
 
     fn json(&self, method: &str, url: &Url) -> Result<Value> {
@@ -408,9 +420,8 @@ impl PlexClient {
             url.query_pairs_mut()
                 .append_pair("playlistType", "audio")
                 .append_pair("smart", "0");
-            let response = self
-                .agent
-                .get(url.as_str())
+            let response = crate::http::get(url.as_str())
+                .timeout(Duration::from_secs(60))
                 .set("Accept", "application/json")
                 .set("X-Plex-Token", self.token.as_str())
                 .set("X-Plex-Client-Identifier", &self.profile.client_identifier)
@@ -452,9 +463,8 @@ impl PlexClient {
         let mut items = Vec::new();
         loop {
             let url = self.url(&format!("/playlists/{playlist_id}/items"))?;
-            let response = self
-                .agent
-                .get(url.as_str())
+            let response = crate::http::get(url.as_str())
+                .timeout(Duration::from_secs(60))
                 .set("Accept", "application/json")
                 .set("X-Plex-Token", self.token.as_str())
                 .set("X-Plex-Client-Identifier", &self.profile.client_identifier)

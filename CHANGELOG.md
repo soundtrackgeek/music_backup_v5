@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.157.4] - 2026-10-04
+
+### Fixed
+- Route every MusicBrainz lookup through one shared HTTP client and rate gate, preventing simultaneous artist refreshes, Wish List, Discovery, biography, and album-review requests from exceeding the app's request budget.
+- Retry provider reads on HTTP 429/503 with bounded exponential backoff and jitter, honor `Retry-After`, and share host cooldowns and a circuit breaker so outages do not stall each queued lookup.
+
+### Changed
+- Reuse one provider connection pool and a release-versioned User-Agent with the project contact URL. Centralize host pacing, including Discogs quota headers, while retaining private Deezer session/download agents and avoiding automatic replay of paid or state-changing requests.
+
 ## [0.157.3] - 2026-09-30
 
 ### Fixed

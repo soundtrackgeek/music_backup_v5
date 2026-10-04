@@ -1138,7 +1138,7 @@ fn prowlarr_get_json<T: for<'de> Deserialize<'de>>(
         .join(path)
         .context("Could not build the Prowlarr API URL")?;
     url.query_pairs_mut().extend_pairs(query.iter().copied());
-    let response = ureq::get(url.as_str())
+    let response = crate::http::get(url.as_str())
         .set("X-Api-Key", api_key)
         .timeout(Duration::from_secs(45))
         .call()
@@ -1162,7 +1162,8 @@ fn prowlarr_download(profile: &UsenetProfile, api_key: &str, download_url: &str)
     {
         bail!("Prowlarr returned an NZB link on a different server; the API key was not sent.");
     }
-    let response = ureq::get(url.as_str())
+    let response = crate::http::get(url.as_str())
+        .without_retries()
         .set("X-Api-Key", api_key)
         .timeout(Duration::from_secs(60))
         .call()

@@ -16,8 +16,6 @@ use std::fs;
 use std::io::Read as _;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
-use std::thread;
-use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 use unicode_normalization::UnicodeNormalization;
 use url::Url;
@@ -26,8 +24,6 @@ use zeroize::Zeroizing;
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.lastfm";
 const KEYRING_USER: &str = "api-key";
 const LASTFM_API_BASE: &str = "https://ws.audioscrobbler.com/2.0/";
-const LASTFM_USER_AGENT: &str = "music-backup-v5/0.145.3 (local music metadata enrichment)";
-const REQUEST_INTERVAL: Duration = Duration::from_millis(350);
 const POPULARITY_CACHE_DAYS: i64 = 7;
 const UNAVAILABLE_CACHE_DAYS: i64 = 30;
 const ARTIST_TOP_TRACK_LIMIT: usize = 50;
@@ -47,7 +43,6 @@ const ARTIST_NAME_EMPTY_MESSAGE: &str =
 const MAX_IMAGE_BYTES: u64 = 8 * 1024 * 1024;
 const LASTFM_PLACEHOLDER_HASH: &str = "2a96cbd8b46e442fc41c2b86b821562f";
 
-static REQUEST_GATE: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 static POPULARITY_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 static SIMILARITY_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 static RELATED_ALBUMS_GATE: OnceLock<Mutex<()>> = OnceLock::new();
@@ -459,18 +454,6 @@ fn require_api_key() -> Result<Zeroizing<String>> {
         .context("Last.fm metadata is not configured. Add the API key in Settings > Providers.")
 }
 
-fn wait_for_request_slot() {
-    let gate = REQUEST_GATE.get_or_init(|| Mutex::new(None));
-    let mut last_request = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some(last_request_at) = *last_request {
-        let elapsed = last_request_at.elapsed();
-        if elapsed < REQUEST_INTERVAL {
-            thread::sleep(REQUEST_INTERVAL - elapsed);
-        }
-    }
-    *last_request = Some(Instant::now());
-}
-
 fn cache_control_max_age(value: &str) -> Option<i64> {
     value.split(',').find_map(|directive| {
         let (name, value) = directive.trim().split_once('=')?;
@@ -502,13 +485,8 @@ fn response_cache_policy(response: &ureq::Response, fallback_days: i64) -> (bool
 }
 
 fn lastfm_json(url: &Url, fallback_days: i64) -> Result<LastFmJsonResponse<serde_json::Value>> {
-    wait_for_request_slot();
-    let response = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .get(url.as_str())
+    let response = crate::http::get(url.as_str())
         .set("Accept", "application/json")
-        .set("User-Agent", LASTFM_USER_AGENT)
         .call()
         .map_err(|error| match error {
             ureq::Error::Status(403, _) => anyhow!("Last.fm rejected the configured API key."),
@@ -721,7 +699,6 @@ fn meaningful_album_tag(value: &str) -> bool {
 }
 
 fn artist_info(api_key: &str, artist: &str) -> Result<LastFmArtist> {
-    wait_for_request_slot();
     let mut url = Url::parse(LASTFM_API_BASE).context("Could not create the Last.fm API URL")?;
     url.query_pairs_mut()
         .append_pair("method", "artist.getInfo")
@@ -729,12 +706,8 @@ fn artist_info(api_key: &str, artist: &str) -> Result<LastFmArtist> {
         .append_pair("api_key", api_key)
         .append_pair("autocorrect", "1")
         .append_pair("format", "json");
-    let response = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .get(url.as_str())
+    let response = crate::http::get(url.as_str())
         .set("Accept", "application/json")
-        .set("User-Agent", LASTFM_USER_AGENT)
         .call()
         .map_err(|error| match error {
             ureq::Error::Status(403, _) => anyhow!("Last.fm rejected the configured API key."),
@@ -2247,13 +2220,8 @@ fn selected_image_url(images: &[LastFmImage]) -> Option<String> {
 }
 
 fn download_image(source_url: &str) -> Result<DownloadedImage> {
-    wait_for_request_slot();
-    let response = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .get(source_url)
+    let response = crate::http::get(source_url)
         .set("Accept", "image/jpeg,image/png,image/webp")
-        .set("User-Agent", LASTFM_USER_AGENT)
         .call()
         .map_err(|error| match error {
             ureq::Error::Status(status, _) => {

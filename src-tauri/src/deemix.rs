@@ -11,8 +11,6 @@ const KEYRING_SERVICE: &str = "com.local.musiclibrary.deemix";
 const KEYRING_USER: &str = "arl";
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_ALBUM_SEARCH_URL: &str = "https://api.deezer.com/search/album";
-const DEEMIX_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MusicLibrary/0.145.3";
 const MAX_SEARCH_LENGTH: usize = 300;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -109,13 +107,6 @@ fn normalize_arl(value: String) -> Result<Zeroizing<String>> {
     Ok(normalized)
 }
 
-fn http_agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(30))
-        .redirects(0)
-        .build()
-}
-
 fn response_json(response: ureq::Response, context: &str) -> Result<Value> {
     response
         .into_json::<Value>()
@@ -124,7 +115,13 @@ fn response_json(response: ureq::Response, context: &str) -> Result<Value> {
 
 fn gateway_profile_with_arl(arl: &str) -> Result<DeemixConnectionTest> {
     let cookie = Zeroizing::new(format!("arl={arl}"));
-    let response = http_agent()
+    // Keep account cookies out of the shared public-provider connection pool.
+    let response = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(30))
+        .timeout_connect(Duration::from_secs(10))
+        .redirects(0)
+        .user_agent(crate::http::BROWSER_USER_AGENT)
+        .build()
         .post(DEEZER_GATEWAY_URL)
         .query("api_version", "1.0")
         .query("api_token", "null")
@@ -133,7 +130,6 @@ fn gateway_profile_with_arl(arl: &str) -> Result<DeemixConnectionTest> {
         .set("Accept", "application/json")
         .set("Content-Type", "application/json")
         .set("Cookie", cookie.as_str())
-        .set("User-Agent", DEEMIX_USER_AGENT)
         .send_json(json!({}))
         .map_err(|error| match error {
             ureq::Error::Status(status, _) => {
@@ -436,13 +432,11 @@ pub(crate) fn search_albums_after_validation(
     let limit = validate_search_request(&mut request)?;
     let query = format!("{} {}", request.artist, request.title);
     let limit_text = limit.to_string();
-    let response = http_agent()
-        .get(DEEZER_ALBUM_SEARCH_URL)
+    let response = crate::http::get(DEEZER_ALBUM_SEARCH_URL)
         .query("q", &query)
         .query("index", "0")
         .query("limit", &limit_text)
         .set("Accept", "application/json")
-        .set("User-Agent", DEEMIX_USER_AGENT)
         .call()
         .map_err(|error| match error {
             ureq::Error::Status(status, _) => {

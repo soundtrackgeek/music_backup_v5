@@ -11,8 +11,6 @@ use url::Url;
 
 const MUSICBRAINZ_ARTIST_API: &str = "https://musicbrainz.org/ws/2/artist/";
 const WIKIDATA_ENTITY_API: &str = "https://www.wikidata.org/wiki/Special:EntityData/";
-const PROVIDER_USER_AGENT: &str =
-    "music-backup-v5/0.145.3 (artist biography; https://github.com/soundtrackgeek/music_backup_v5)";
 const BIOGRAPHY_CACHE_DAYS: i64 = 30;
 const UNAVAILABLE_CACHE_DAYS: i64 = 7;
 const NAME_LOOKUP_UNAVAILABLE_MESSAGE: &str =
@@ -124,12 +122,6 @@ struct ResolvedBiography {
 struct BiographyResolution {
     biography: ResolvedBiography,
     used_name_fallback: bool,
-}
-
-fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(20))
-        .build()
 }
 
 fn valid_mbid(value: &str) -> bool {
@@ -245,10 +237,9 @@ fn fetch_musicbrainz_artist_mbid_by_name(artist_name: &str) -> Result<Option<Str
         .append_pair("limit", "10")
         .append_pair("fmt", "json");
 
-    crate::musicbrainz::wait_for_musicbrainz_request_slot();
-    let response = agent()
+    let response = crate::http::musicbrainz()
         .get(url.as_str())
-        .set("User-Agent", PROVIDER_USER_AGENT)
+        .timeout(Duration::from_secs(20))
         .call()
         .context("Could not search MusicBrainz for the artist name")?;
     let payload = response
@@ -272,10 +263,9 @@ fn fetch_musicbrainz_targets(
         .append_pair("inc", "url-rels")
         .append_pair("fmt", "json");
 
-    crate::musicbrainz::wait_for_musicbrainz_request_slot();
-    let response = agent()
+    let response = crate::http::musicbrainz()
         .get(url.as_str())
-        .set("User-Agent", PROVIDER_USER_AGENT)
+        .timeout(Duration::from_secs(20))
         .call()
         .context("Could not fetch the artist's MusicBrainz links")?;
     let payload = response
@@ -289,9 +279,8 @@ fn fetch_wikidata_target(wikidata_id: &str) -> Result<Option<WikipediaTarget>> {
         bail!("The linked Wikidata ID is invalid");
     }
     let url = format!("{WIKIDATA_ENTITY_API}{wikidata_id}.json?flavor=simple");
-    let response = agent()
-        .get(&url)
-        .set("User-Agent", PROVIDER_USER_AGENT)
+    let response = crate::http::get(&url)
+        .timeout(Duration::from_secs(20))
         .call()
         .context("Could not fetch the artist's Wikidata entity")?;
     let payload = response
@@ -344,9 +333,8 @@ fn trusted_wikipedia_article_url(value: &str, language: &str) -> bool {
 
 fn fetch_wikipedia_summary(target: &WikipediaTarget) -> Result<Option<(String, String, String)>> {
     let url = wikipedia_summary_url(target)?;
-    let response = match agent()
-        .get(url.as_str())
-        .set("User-Agent", PROVIDER_USER_AGENT)
+    let response = match crate::http::get(url.as_str())
+        .timeout(Duration::from_secs(20))
         .call()
     {
         Ok(response) => response,
