@@ -184,9 +184,11 @@ Then add a global **Activity Center**: a top-bar icon with a count badge and a d
 
 ---
 
-### 7. Break up `App.tsx`, add state stores, error boundaries, and scoped CSS
+### 7. Break up `App.tsx`, add state stores, error boundaries, and scoped CSS - DONE
 
-**Current state**
+**Implemented in 0.160.0 (2026-10-06):** `App.tsx` mounts a small shell and 13 typed React reducer/context stores. Workspace workflow hooks, views, details, and catalog panels live in feature modules; Settings has dedicated General, Updates, Data, Diagnostics, and MusicBrainz panels. Catalog events, ordered settings saves, request cancellation, import review/apply, and cross-workspace launches retain their existing contracts. Workspace/details/Luna boundaries provide **Reload this view** and **Copy error details** while stores and backend jobs remain mounted, with bounded session diagnostics ready for a later combined export. The stylesheet is a manifest for co-located feature/component styles and shared tokens/primitives. ESLint warns at 1,500 nonblank, noncomment lines and runs in the check workflow. New regression tests cover state updates, navigation retention, and render recovery. See [Frontend architecture](frontend-architecture.md). Subscription/render optimization and unproven dead-CSS removal remain separate work.
+
+**Original state**
 - `App.tsx` is 21,888 lines with **275 `useState`**, 59 `useEffect`, and **zero `useReducer`**.
 - Only 3 contexts exist and there are **no React error boundaries**, so a render error in any panel (say the Music Map) can blank the whole app.
 - `styles.css` is 26,848 lines with only 84 CSS custom properties.

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.160.0] - 2026-10-06
+
+### Added
+- Add recoverable error boundaries for every workspace, its details, and Luna. Reload a failed view without losing workspace state or stopping background jobs; copy versioned error and component-stack details, with selectable fallback and bounded session diagnostics.
+- Add typed reducer/context stores for workspace state, stable functional-update setters, and an ESLint file-size warning included in the check workflow.
+
+### Changed
+- Replace the oversized `App.tsx` with a small entry point, app shell, workspace routing, domain workflow hooks, and co-located views, inspectors, and panels. Keep catalog refresh, settings write ordering, navigation launches, import review/apply, and request cancellation coordinated.
+- Separate Settings into focused panels and move catalog criteria, tables, charts, statistics, discovery plots, and MusicBrainz panels into their owning modules.
+- Replace the monolithic stylesheet with a manifest, co-located feature styles, shared primitives, and reusable palette, spacing, radius, and recovery-theme tokens while retaining existing responsive and theme rules.
+
 ## [0.159.0] - 2026-10-06
 
 ### Removed

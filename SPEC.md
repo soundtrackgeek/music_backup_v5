@@ -276,10 +276,10 @@ App-owned trust layer:
 
 Core files:
 
-- `src/App.tsx`: top-level app composition, shared state wiring, and cross-workspace user workflows.
+- `src/App.tsx`: small entry point mounting workspace stores, recovery boundary, and app shell; `src/app/useAppController.ts` composes domain hooks and cross-workspace coordination.
 - `src/backend.ts`: runtime-neutral backend facade and command dispatch.
 - `src/types.ts`: shared TypeScript contracts that mirror Rust model payloads.
-- `src/styles.css`: app layout, themes, workspace styling, and responsive behavior.
+- `src/styles.css`: manifest for shared tokens/layout and co-located workspace/component-family styles, retaining theme and responsive variants.
 
 Focused frontend modules:
 
@@ -634,9 +634,9 @@ Done criteria:
 
 #### Phase 19: Frontend Workspace Modularization
 
-Problem:
+Original problem:
 
-- `App.tsx` still owns most workspace rendering and workflow state.
+- `App.tsx` owned most workspace rendering and workflow state.
 
 Expected outcome:
 
@@ -657,6 +657,14 @@ Progress in 0.51.0:
 - Added Search, Artists, and Settings workspace presentation components while keeping shared state local to `App.tsx`.
 - Split direct Tauri access, web-preview fixtures/mock state, and settings normalization out of `backend.ts`.
 - Added the Vitest/React Testing Library safety net before continuing deeper panel/state extraction.
+
+Progress in 0.160.0:
+
+- Replace `App.tsx` with a small store/shell entry point; move workspace views, details, domain effects/handlers, and catalog panels into feature modules.
+- Add per-workspace reducer/context stores with stable setters and retained state across navigation and panel recovery. Keep startup/catalog refresh and serialized settings writes coordinated through domain hooks.
+- Add workspace, details, Luna, and final app error boundaries with local retry and copyable, bounded diagnostics.
+- Co-locate feature CSS, retain shared primitives and theme/responsive rules, and add reusable design tokens plus the `npm run lint` file-size warning.
+- Document contracts and the remaining coordinated subscription model in `docs/frontend-architecture.md`; retain regression coverage for existing workflows and add state/recovery isolation tests.
 
 Done criteria:
 

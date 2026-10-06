@@ -1,0 +1,21 @@
+:root {
+  --palette-ink: #17211f;
+  --palette-muted: #66746f;
+  --palette-white: #ffffff;
+  --palette-canvas: #f7f9f8;
+  --palette-border: #d5dfdc;
+  --space-control: 12px;
+  --space-panel: 24px;
+  --radius-control: 12px;
+  --radius-panel: 16px;
+  --radius-pill: 999px;
+  --color-text: var(--palette-ink);
+  --color-panel: var(--palette-white);
+  --color-border: var(--palette-border);
+}
+
+:root[data-theme="dark"] {
+  --color-text: #e5eeeb;
+  --color-panel: #111d22;
+  --color-border: #2c3a3b;
+}

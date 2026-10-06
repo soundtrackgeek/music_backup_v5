@@ -1,0 +1,1078 @@
+/* musicbrainz styles. Selectors retain their feature namespaces. */
+
+
+.musicbrainz-release-results .result-table-head,
+.musicbrainz-release-results .result-table-row {
+  grid-template-columns:
+    minmax(240px, 2fr) 70px 96px minmax(220px, 1.5fr)
+    92px 84px;
+  min-width: 852px;
+}
+
+.musicbrainz-settings-panel {
+  grid-column: span 2;
+}
+
+.musicbrainz-origin-settings-panel {
+  grid-column: span 2;
+}
+
+.musicbrainz-artist-info-settings-panel {
+  grid-column: span 2;
+}
+
+.musicbrainz-sync-settings-panel {
+  grid-column: span 2;
+}
+
+.musicbrainz-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-control);
+  margin-top: 16px;
+}
+
+.musicbrainz-sync-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px auto;
+  align-items: end;
+  gap: var(--space-control);
+  margin-top: 16px;
+}
+
+.musicbrainz-cache-path {
+  min-width: 0;
+}
+
+.musicbrainz-origin-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.92fr) minmax(420px, 1.08fr);
+  align-items: start;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.musicbrainz-origin-workflow {
+  min-width: 0;
+}
+
+.musicbrainz-origin-live-panel {
+  display: grid;
+  gap: var(--space-control);
+  min-width: 0;
+  border: 1px solid #d4e4df;
+  border-radius: 8px;
+  background: #f7fbfa;
+  padding: 12px;
+}
+
+.musicbrainz-origin-live-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-control);
+}
+
+.musicbrainz-origin-live-heading h3 {
+  margin: 0;
+  color: #16231f;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 780;
+}
+
+.musicbrainz-origin-live-heading p {
+  margin: 3px 0 0;
+  color: #53635e;
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.musicbrainz-origin-progress-block {
+  margin: 0;
+  background: var(--palette-white);
+}
+
+.musicbrainz-origin-live-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.musicbrainz-origin-live-stats div {
+  min-width: 0;
+  border: 1px solid #dce7e3;
+  border-radius: 8px;
+  background: var(--palette-white);
+  padding: 8px 10px;
+}
+
+.musicbrainz-origin-live-stats dt {
+  color: #0b625c;
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.musicbrainz-origin-live-stats dd {
+  margin: 3px 0 0;
+  color: #17211e;
+  font-size: 15px;
+  line-height: 19px;
+  font-weight: 780;
+}
+
+.musicbrainz-origin-log {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.musicbrainz-origin-log article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid #dce7e3;
+  border-radius: 8px;
+  background: var(--palette-white);
+  padding: 9px 10px;
+}
+
+.musicbrainz-origin-log article > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.musicbrainz-origin-log strong {
+  color: #0b625c;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 780;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.musicbrainz-origin-log span,
+.musicbrainz-origin-log small {
+  min-width: 0;
+  color: #53635e;
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.musicbrainz-origin-log span {
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.musicbrainz-origin-preview-list {
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.musicbrainz-origin-report {
+  display: grid;
+  gap: var(--space-control);
+  margin-top: 16px;
+  min-width: 0;
+  border-top: 1px solid #d8e4e0;
+  padding-top: 16px;
+}
+
+.musicbrainz-origin-report-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  align-items: end;
+  gap: var(--space-control);
+}
+
+.musicbrainz-origin-report-heading h3 {
+  margin: 0;
+  color: #16231f;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 780;
+}
+
+.musicbrainz-origin-report-heading p {
+  margin: 3px 0 0;
+  color: #53635e;
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 650;
+}
+
+.musicbrainz-origin-report-search input {
+  width: 100%;
+}
+
+.musicbrainz-origin-report-tabs {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.musicbrainz-origin-report-tabs button {
+  gap: 5px;
+  min-width: 0;
+}
+
+.musicbrainz-origin-report-tabs span {
+  color: inherit;
+  font-size: 11px;
+  line-height: 14px;
+  opacity: 0.72;
+}
+
+.musicbrainz-origin-report-table {
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid #dce7e3;
+  border-radius: 8px;
+}
+
+.musicbrainz-origin-report-head,
+.musicbrainz-origin-report-row {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1.15fr) 116px minmax(110px, 0.6fr)
+    minmax(230px, 1.25fr) minmax(220px, 1.3fr);
+  align-items: center;
+  gap: var(--space-control);
+  min-width: 980px;
+}
+
+.musicbrainz-origin-report-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid #dce7e3;
+  background: #f2f7f5;
+  padding: 9px 12px;
+}
+
+.musicbrainz-origin-report-head span {
+  color: #53635e;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.musicbrainz-origin-report-row {
+  border-bottom: 1px solid #e5eeeb;
+  background: var(--palette-white);
+  padding: 10px 12px;
+}
+
+.musicbrainz-origin-report-row:last-child {
+  border-bottom: 0;
+}
+
+.musicbrainz-origin-report-row > span {
+  min-width: 0;
+  color: #27332f;
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.musicbrainz-origin-report-row > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.musicbrainz-origin-report-row strong {
+  color: #16231f;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 780;
+}
+
+.musicbrainz-origin-report-row small {
+  color: #6a7772;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.musicbrainz-origin-report-row > span:nth-child(4) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.musicbrainz-origin-report-row > span:nth-child(4) > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.musicbrainz-artist-info-report-head,
+.musicbrainz-artist-info-report-row {
+  display: grid;
+  grid-template-columns:
+    minmax(170px, 1.05fr) 116px minmax(86px, 0.45fr) minmax(82px, 0.45fr)
+    minmax(230px, 1.25fr) minmax(230px, 1.2fr) minmax(220px, 1.2fr);
+  align-items: center;
+  gap: var(--space-control);
+  min-width: 1180px;
+}
+
+.musicbrainz-artist-info-report-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid #dce7e3;
+  background: #f2f7f5;
+  padding: 9px 12px;
+}
+
+.musicbrainz-artist-info-report-head span {
+  color: #53635e;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.musicbrainz-artist-info-report-row {
+  border-bottom: 1px solid #e5eeeb;
+  background: var(--palette-white);
+  padding: 10px 12px;
+}
+
+.musicbrainz-artist-info-report-row:last-child {
+  border-bottom: 0;
+}
+
+.musicbrainz-artist-info-report-row > span {
+  min-width: 0;
+  color: #27332f;
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.musicbrainz-artist-info-report-row > span:first-child,
+.musicbrainz-artist-info-report-row > span:nth-child(5) {
+  display: grid;
+  gap: 2px;
+}
+
+.musicbrainz-artist-info-report-row > span:nth-child(6) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.musicbrainz-artist-info-report-row > span:nth-child(6) > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.musicbrainz-artist-info-report-row strong {
+  color: #16231f;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 780;
+}
+
+.musicbrainz-artist-info-report-row small {
+  color: #6a7772;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.musicbrainz-origin-report-link {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+}
+
+.musicbrainz-origin-report-empty {
+  border: 0;
+  border-radius: 0;
+}
+
+.musicbrainz-origin-report-limit {
+  color: #53635e;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 650;
+}
+
+.musicbrainz-sync-path {
+  min-width: 0;
+}
+
+.musicbrainz-sync-interval input {
+  width: 100%;
+}
+
+.musicbrainz-sync-result {
+  margin-top: 12px;
+}
+
+.musicbrainz-sync-log {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.musicbrainz-sync-log article {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background: #f8fbfa;
+  padding: 10px 12px;
+}
+
+.musicbrainz-sync-log article > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-control);
+}
+
+.musicbrainz-sync-log strong {
+  color: #23312d;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.musicbrainz-sync-log span,
+.musicbrainz-sync-log small {
+  min-width: 0;
+  color: #697671;
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.musicbrainz-status-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  border: 1px solid #d4e4df;
+  border-radius: 8px;
+  background: #f4faf8;
+  padding: 10px 12px;
+}
+
+.musicbrainz-status-strip > span:last-child {
+  min-width: 0;
+  color: #33413d;
+  font-size: 13px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.musicbrainz-status-warning {
+  border-color: #e7d099;
+  background: #fff9e8;
+}
+
+.musicbrainz-status-invalid {
+  border-color: #e9b8b2;
+  background: #fff5f4;
+}
+
+.musicbrainz-status-ignored {
+  border-color: #d8e1dd;
+  background: var(--palette-canvas);
+}
+
+.musicbrainz-artist-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.musicbrainz-artist-meta span,
+.musicbrainz-artist-meta a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #d8e1dd;
+  border-radius: var(--radius-pill);
+  background: #fbfcfc;
+  color: #4e5b57;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.musicbrainz-artist-meta a {
+  color: #0b625c;
+  text-decoration: none;
+}
+
+.musicbrainz-artist-meta a:focus-visible {
+  outline: 2px solid #168279;
+  outline-offset: 2px;
+}
+
+.musicbrainz-link-review {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.musicbrainz-link-actions,
+.musicbrainz-manual-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.musicbrainz-link-actions .primary-button {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.musicbrainz-link-actions .icon-button,
+.musicbrainz-manual-link .icon-button {
+  width: 34px;
+  height: 34px;
+}
+
+.musicbrainz-manual-link {
+  flex: 1 1 360px;
+  justify-content: flex-end;
+}
+
+.musicbrainz-manual-link input {
+  width: min(100%, 360px);
+  min-width: 180px;
+  height: 34px;
+  border: 1px solid #cfd9d5;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #17211e;
+  background: #fbfcfc;
+  outline: none;
+}
+
+.musicbrainz-manual-link input:focus {
+  border-color: #168279;
+  box-shadow: 0 0 0 3px rgba(22, 130, 121, 0.14);
+}
+
+.musicbrainz-origin-editor {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.35fr) minmax(180px, 1fr) 34px;
+  align-items: end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.musicbrainz-origin-editor label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: #697671;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 700;
+}
+
+.musicbrainz-origin-editor input {
+  width: 100%;
+  height: 34px;
+  border: 1px solid #cfd9d5;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #17211e;
+  background: #fbfcfc;
+  outline: none;
+}
+
+.musicbrainz-origin-editor input:focus {
+  border-color: #168279;
+  box-shadow: 0 0 0 3px rgba(22, 130, 121, 0.14);
+}
+
+.musicbrainz-origin-editor .icon-button {
+  width: 34px;
+  height: 34px;
+}
+
+.musicbrainz-info-results {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.musicbrainz-update-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 1px solid #cce0da;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #0b625c;
+  background: #eff8f5;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.musicbrainz-update-button:disabled {
+  opacity: 0.52;
+  cursor: default;
+}
+
+.musicbrainz-update-button span {
+  white-space: nowrap;
+}
+
+.musicbrainz-export-controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.musicbrainz-export-result {
+  max-width: min(640px, 100%);
+  padding: 8px 10px;
+}
+
+.musicbrainz-candidate-results {
+  margin-top: 14px;
+}
+
+.musicbrainz-candidate-results .result-table-head,
+.musicbrainz-candidate-results .result-table-row {
+  grid-template-columns:
+    minmax(180px, 1.45fr)
+    minmax(220px, 1.65fr)
+    minmax(112px, 0.8fr)
+    minmax(68px, 0.45fr)
+    minmax(140px, 1fr)
+    minmax(54px, 0.35fr);
+}
+
+.musicbrainz-candidate-row {
+  background: #fbfcfc;
+}
+
+.musicbrainz-candidate-row.suspect {
+  background: #fffaf0;
+}
+
+.musicbrainz-candidate-row a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: #0b625c;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.musicbrainz-candidate-row a:focus-visible {
+  outline: 2px solid #168279;
+  outline-offset: 2px;
+}
+
+.musicbrainz-candidate-action {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.musicbrainz-candidate-action .icon-button {
+  width: 30px;
+  height: 30px;
+}
+
+.musicbrainz-release-results {
+  margin-top: 14px;
+}
+
+.musicbrainz-release-row.owned {
+  background: #fbfffd;
+}
+
+.musicbrainz-release-row.missing {
+  background: #fffafa;
+}
+
+.musicbrainz-release-row.excluded {
+  color: #6a7470;
+  background: var(--palette-canvas);
+}
+
+.musicbrainz-scope-action {
+  display: flex;
+  justify-content: flex-start;
+  gap: 4px;
+}
+
+.musicbrainz-scope-action .icon-button {
+  width: 30px;
+  height: 30px;
+}
+
+.musicbrainz-quality-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.musicbrainz-quality-grid div {
+  min-width: 0;
+  border: 1px solid #e0e7e4;
+  border-radius: 8px;
+  background: #fbfcfc;
+  padding: 9px 10px;
+}
+
+.musicbrainz-quality-grid dt,
+.musicbrainz-warning-list dt {
+  color: #6f7c78;
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 720;
+  text-transform: uppercase;
+}
+
+.musicbrainz-quality-grid dd,
+.musicbrainz-warning-list dd {
+  margin: 2px 0 0;
+  color: #26322f;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+}
+
+.musicbrainz-warning-list {
+  display: grid;
+  gap: 0;
+  margin-top: 14px;
+  border-top: 1px solid #e0e7e4;
+}
+
+.musicbrainz-warning-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.35fr);
+  gap: 10px;
+  min-width: 0;
+  border-bottom: 1px solid #e0e7e4;
+  padding: 10px 0;
+}
+
+.musicbrainz-warning-list article > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.musicbrainz-warning-list strong,
+.musicbrainz-warning-list span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.musicbrainz-warning-list strong {
+  color: var(--palette-ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.musicbrainz-warning-list span {
+  color: #697671;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.musicbrainz-warning-list dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(64px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+:root[data-theme="dark"] .musicbrainz-origin-live-panel,
+:root[data-theme="dark"] .musicbrainz-origin-progress-block,
+:root[data-theme="dark"] .musicbrainz-origin-live-stats div,
+:root[data-theme="dark"] .musicbrainz-origin-log article,
+:root[data-theme="dark"] .musicbrainz-origin-report-table,
+:root[data-theme="dark"] .musicbrainz-origin-report-row,
+:root[data-theme="dark"] .musicbrainz-artist-info-report-row {
+  border-color: #2f3d38;
+  color: #dce7e3;
+  background: #171f1c;
+}
+
+.musicbrainz-scope-action .icon-button.active {
+  border-color: #9ecbc1;
+  color: #0f766e;
+  background: #eaf7f3;
+}
+
+.musicbrainz-wish-list-error {
+  margin: 10px 12px;
+}
+
+:root[data-theme="dark"] .musicbrainz-origin-live-heading h3,
+:root[data-theme="dark"] .musicbrainz-origin-live-stats dd {
+  color: #f3f8f6;
+}
+
+:root[data-theme="dark"] .musicbrainz-warning-list,
+:root[data-theme="dark"] .musicbrainz-warning-list article,
+:root[data-theme="dark"] .musicbrainz-artist-meta span,
+:root[data-theme="dark"] .musicbrainz-artist-meta a,
+:root[data-theme="dark"] .musicbrainz-origin-preview-list,
+:root[data-theme="dark"] .musicbrainz-origin-report,
+:root[data-theme="dark"] .musicbrainz-origin-report-head,
+:root[data-theme="dark"] .musicbrainz-artist-info-report-head,
+:root[data-theme="dark"] .musicbrainz-origin-report-table,
+:root[data-theme="dark"] .musicbrainz-origin-report-row,
+:root[data-theme="dark"] .musicbrainz-artist-info-report-row,
+:root[data-theme="dark"] .musicbrainz-origin-log article,
+:root[data-theme="dark"] .musicbrainz-origin-live-stats div {
+  border-color: #2f3d38;
+}
+
+:root[data-theme="dark"] .musicbrainz-quality-grid dd,
+:root[data-theme="dark"] .musicbrainz-warning-list strong,
+:root[data-theme="dark"] .musicbrainz-warning-list dd,
+:root[data-theme="dark"] .musicbrainz-origin-log strong,
+:root[data-theme="dark"] .musicbrainz-origin-report-heading h3,
+:root[data-theme="dark"] .musicbrainz-origin-report-row strong,
+:root[data-theme="dark"] .musicbrainz-artist-info-report-row strong {
+  color: #eef7f4;
+}
+
+:root[data-theme="dark"] .musicbrainz-quality-grid div,
+:root[data-theme="dark"] .musicbrainz-origin-live-stats div {
+  border-color: #35433e;
+  background: #111815;
+}
+
+:root[data-theme="dark"] .musicbrainz-origin-report-heading p,
+:root[data-theme="dark"] .musicbrainz-origin-report-head span,
+:root[data-theme="dark"] .musicbrainz-origin-report-row small,
+:root[data-theme="dark"] .musicbrainz-artist-info-report-head span,
+:root[data-theme="dark"] .musicbrainz-artist-info-report-row small,
+:root[data-theme="dark"] .musicbrainz-origin-report-limit,
+:root[data-theme="dark"] .musicbrainz-origin-live-heading p,
+:root[data-theme="dark"] .musicbrainz-origin-log span,
+:root[data-theme="dark"] .musicbrainz-origin-log small,
+:root[data-theme="dark"] .musicbrainz-quality-grid dt,
+:root[data-theme="dark"] .musicbrainz-warning-list dt,
+:root[data-theme="dark"] .musicbrainz-warning-list span,
+:root[data-theme="dark"] .musicbrainz-artist-meta span,
+:root[data-theme="dark"] .musicbrainz-artist-meta a {
+  color: #a9b7b2;
+}
+
+:root[data-theme="dark"] .musicbrainz-origin-report-head,
+:root[data-theme="dark"] .musicbrainz-artist-info-report-head {
+  background: #111815;
+}
+
+:root[data-theme="dark"] .musicbrainz-origin-report-row > span,
+:root[data-theme="dark"] .musicbrainz-artist-info-report-row > span {
+  color: #dce7e3;
+}
+
+:root[data-theme="dark"] .musicbrainz-update-button,
+:root[data-theme="dark"] .musicbrainz-manual-link input,
+:root[data-theme="dark"] .musicbrainz-origin-editor input {
+  border-color: #35433e;
+  color: #dce7e3;
+  background: #111815;
+}
+
+:root[data-theme="dark"] .musicbrainz-manual-link input,
+:root[data-theme="dark"] .musicbrainz-origin-editor input {
+  color: #f0f6f4;
+}
+
+:root[data-theme="dark"] .musicbrainz-status-strip {
+  border-color: #315a53;
+  background: #13241f;
+}
+
+:root[data-theme="dark"] .musicbrainz-sync-log article {
+  border-color: #315a53;
+  background: #13241f;
+}
+
+:root[data-theme="dark"] .musicbrainz-sync-log strong {
+  color: #f0f6f4;
+}
+
+:root[data-theme="dark"] .musicbrainz-sync-log span,
+:root[data-theme="dark"] .musicbrainz-sync-log small {
+  color: #a9b7b2;
+}
+
+:root[data-theme="dark"] .musicbrainz-status-ignored {
+  border-color: #35433e;
+  background: #111815;
+}
+
+:root[data-theme="dark"] .musicbrainz-update-button {
+  color: #7dd3c7;
+  background: #16312c;
+}
+
+:root[data-theme="dark"] .musicbrainz-status-strip > span:last-child {
+  color: #dce7e3;
+}
+
+:root[data-theme="dark"] .musicbrainz-status-warning {
+  border-color: #6e6234;
+  background: #302814;
+}
+
+:root[data-theme="dark"] .musicbrainz-status-invalid {
+  border-color: #713b37;
+  background: #3a1d1b;
+}
+
+:root[data-theme="dark"] .musicbrainz-artist-meta span,
+:root[data-theme="dark"] .musicbrainz-candidate-row,
+:root[data-theme="dark"] .musicbrainz-release-row.owned,
+:root[data-theme="dark"] .musicbrainz-release-row.missing,
+:root[data-theme="dark"] .musicbrainz-release-row.excluded {
+  background: #111815;
+}
+
+:root[data-theme="dark"] .musicbrainz-candidate-row.suspect {
+  background: #302814;
+}
+
+:root[data-theme="dark"] .musicbrainz-candidate-row a {
+  color: #8ee4d8;
+}
+
+:root[data-theme="dark"] .musicbrainz-release-row.excluded {
+  color: #93a29d;
+}
+
+@media (max-width: 900px) {
+
+  .musicbrainz-export-controls {
+    justify-items: stretch;
+    width: 100%;
+  }
+
+  .musicbrainz-export-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .musicbrainz-origin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .musicbrainz-origin-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .musicbrainz-origin-editor .icon-button {
+    justify-self: flex-start;
+  }
+
+  .musicbrainz-origin-report-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .musicbrainz-origin-report-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .musicbrainz-candidate-results .result-table-head,
+.musicbrainz-candidate-results .result-table-row,
+.musicbrainz-release-results .result-table-head,
+.musicbrainz-release-results .result-table-row {
+    min-width: 820px;
+  }
+
+  .musicbrainz-quality-grid,
+.musicbrainz-warning-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .musicbrainz-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .musicbrainz-sync-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .musicbrainz-toolbar .primary-button {
+    justify-self: start;
+  }
+
+  .musicbrainz-sync-toolbar .primary-button {
+    justify-self: start;
+  }
+
+  .musicbrainz-sync-log article > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
+@media (max-width: 640px) {
+
+  .musicbrainz-settings-panel,
+.musicbrainz-origin-settings-panel,
+.musicbrainz-artist-info-settings-panel,
+.musicbrainz-sync-settings-panel {
+    grid-column: span 1;
+  }
+
+  .musicbrainz-origin-live-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .musicbrainz-origin-report-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

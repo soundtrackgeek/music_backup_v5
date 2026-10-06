@@ -1,0 +1,28 @@
+.workspace-render-error {
+  margin: var(--space-panel, 24px);
+  padding: var(--space-panel, 24px);
+  border: 1px solid var(--color-border, #d9e2df);
+  border-radius: var(--radius-panel, 16px);
+  color: var(--color-text, #17211f);
+  background: var(--color-panel, #fff);
+}
+
+.workspace-render-error h2 {
+  margin-top: 0;
+}
+.workspace-render-error p {
+  line-height: 1.6;
+}
+.workspace-render-error-actions {
+  display: flex;
+  gap: var(--space-control, 12px);
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.workspace-render-error pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  max-height: 320px;
+  overflow: auto;
+}

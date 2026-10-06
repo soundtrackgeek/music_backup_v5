@@ -1,0 +1,29 @@
+/* Shared theme and browse media overrides originally followed feature defaults. */
+
+:root[data-theme="dark"] .progress-block {
+  border-color: #35433e;
+  color: #dce7e3;
+  background: #111815;
+}
+
+
+@media (max-width: 1280px) {
+
+  .filter-grid {
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+
+  .filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
