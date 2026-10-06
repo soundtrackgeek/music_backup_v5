@@ -1,3 +1,4 @@
+import { previewActivity, registerPreviewControl } from "./backend/activity";
 import { artworkUrl, invalidateArtwork, type ThumbnailSize } from "./backend/artwork";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
@@ -8523,6 +8524,12 @@ const mockArtistCompletionHandlers = new Set<(status: LibraryCompletionArtistVer
 let mockCompletionTimer: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleMockCompletionProgress() {
+  for (const [kind, status, offset] of [["albumVerification", mockLibraryCompletionVerificationStatus, 10000], ["artistVerification", mockLibraryCompletionArtistVerificationStatus, 20000]] as const) {
+    const batch=status.batch;
+    if (batch) previewActivity(kind,batch.label,batch.state === "completed" && batch.failedCount > 0 ? "failed" : batch.state,batch.completedCount,batch.totalCount,true,offset+batch.id);
+  }
+  mockCompletionHandlers.forEach(handler => handler(mockLibraryCompletionVerificationStatus));
+  mockArtistCompletionHandlers.forEach(handler => handler(mockLibraryCompletionArtistVerificationStatus));
   if (mockCompletionTimer !== null) return;
   if (mockLibraryCompletionVerificationStatus.batch?.state !== "running" &&
       mockLibraryCompletionArtistVerificationStatus.batch?.state !== "running") return;
@@ -8553,3 +8560,28 @@ export async function listenToArtistCompletionVerification(handler: (status: Lib
   }
   return listen<LibraryCompletionArtistVerificationStatus>("artist-completion-verification-progress", (event) => handler(event.payload));
 }
+
+registerPreviewControl("albumVerification", async action => {
+  const batch=mockLibraryCompletionVerificationStatus.batch;
+  if (!batch) return;
+  if (action === "cancel") {
+    mockLibraryCompletionVerificationStatus={...mockLibraryCompletionVerificationStatus,batch:{...batch,state:"completed"}};
+    mockCompletionHandlers.forEach(handler=>handler(mockLibraryCompletionVerificationStatus));
+  } else if (action === "retry" && batch.failedCount === 0 && batch.queuedCount + batch.checkingCount > 0) {
+    mockLibraryCompletionVerificationStatus={...mockLibraryCompletionVerificationStatus,batch:{...batch,state:"running",completedAt:null}};
+    scheduleMockCompletionProgress();
+  } else if (action === "retry") await retryLibraryCompletionVerificationFailures(batch.id);
+  else await setLibraryCompletionVerificationState({batchId:batch.id,state:action==="pause"?"paused":"running"});
+});
+registerPreviewControl("artistVerification", async action => {
+  const batch=mockLibraryCompletionArtistVerificationStatus.batch;
+  if (!batch) return;
+  if (action === "cancel") {
+    mockLibraryCompletionArtistVerificationStatus={...mockLibraryCompletionArtistVerificationStatus,batch:{...batch,state:"completed"}};
+    mockArtistCompletionHandlers.forEach(handler=>handler(mockLibraryCompletionArtistVerificationStatus));
+  } else if (action === "retry" && batch.failedCount === 0 && batch.queuedCount + batch.checkingCount > 0) {
+    mockLibraryCompletionArtistVerificationStatus={...mockLibraryCompletionArtistVerificationStatus,batch:{...batch,state:"running",completedAt:null}};
+    scheduleMockCompletionProgress();
+  } else if (action === "retry") await retryLibraryCompletionArtistVerificationFailures(batch.id);
+  else await setLibraryCompletionArtistVerificationState({batchId:batch.id,state:action==="pause"?"paused":"running"});
+});

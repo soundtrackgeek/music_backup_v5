@@ -1,3 +1,4 @@
+import { ActivityCenter } from "./components/ActivityCenter";
 import { TransitionRegion } from "./components/TransitionRegion";
 import { getPublishedChartCatalog, importPublishedCharts } from "./backend/publishedCharts";
 import { ResizableTable, ResizableColumnHeader } from "./components/ResizableTable";
@@ -14162,6 +14163,7 @@ export default function App() {
 
   return (
     <main className={appShellClassName}>
+      <ActivityCenter />
       {isLeftSidebarHidden ? (
         <button
           className="icon-button edge-toggle left-sidebar-toggle"

@@ -162,6 +162,8 @@ On an up-to-date database, `migrate()` still enters `migrate_through_57`. That p
 
 ### 6. One job system and Activity Center
 
+**Implemented in 0.158.0 (2026-10-06):** persistent local `jobs.sqlite3` registry, a two-worker Rust pool, shared rate-gated provider handlers, and a global Activity Center. Verification keeps its item checkpoints and pause/resume/retry controls; other operations expose controls only at supported safe boundaries. Doctor and overlay schedules share the pool, and interrupted non-checkpoint writes require explicit retry. Plex is intentionally excluded at the user's request. See [Activity Center](../README.md#activity-center).
+
 **Current state:** long work runs through at least eight separate mechanisms:
 - Library Completion verification (a persistent queue with pause/resume and ETA, which is good),
 - Artist discovery verification,

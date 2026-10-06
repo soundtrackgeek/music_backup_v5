@@ -9,8 +9,6 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 #[cfg(not(test))]
-use std::sync::atomic::{AtomicBool, Ordering};
-#[cfg(not(test))]
 use tauri::{AppHandle, Emitter};
 
 const MAX_RETURNED_CANDIDATES: usize = 5_000;
@@ -18,8 +16,6 @@ const MAX_CANDIDATE_KEY_LENGTH: usize = 800;
 const MAX_TEXT_LENGTH: usize = 300;
 const MAX_VERIFICATION_SELECTION: usize = 5_000;
 const RECENT_VERIFICATION_ITEMS: usize = 8;
-#[cfg(not(test))]
-static VERIFICATION_WORKER_RUNNING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -1391,18 +1387,26 @@ fn recover_interrupted_verifications(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 fn claim_next_verification(conn: &mut Connection) -> Result<Option<VerificationQueueItem>> {
+    claim_next_verification_scoped(conn, None)
+}
+
+fn claim_next_verification_scoped(
+    conn: &mut Connection,
+    expected_batch: Option<i64>,
+) -> Result<Option<VerificationQueueItem>> {
     loop {
         let batch_id = conn
             .query_row(
                 "
                 SELECT id
                 FROM library_completion_verification_batches
-                WHERE state = 'running'
+                WHERE state = 'running' AND (?1 IS NULL OR id = ?1)
                 ORDER BY id
                 LIMIT 1
                 ",
-                [],
+                params![expected_batch],
                 |row| row.get::<_, i64>(0),
             )
             .optional()?;
@@ -1716,15 +1720,16 @@ fn verify_with_discogs(
 }
 
 #[cfg(not(test))]
-fn verification_worker_loop(app: &AppHandle) -> Result<()> {
+fn verification_worker_loop(app: &AppHandle, batch_id: i64) -> Result<()> {
     {
         let (conn, _) = db::open(app)?;
         recover_interrupted_verifications(&conn)?;
     }
     loop {
+        crate::jobs::checkpoint()?;
         let item = {
             let (mut conn, _) = db::open(app)?;
-            claim_next_verification(&mut conn)?
+            claim_next_verification_scoped(&mut conn, Some(batch_id))?
         };
         emit_verification_status(app);
         let Some(item) = item else {
@@ -1756,37 +1761,79 @@ fn verification_worker_loop(app: &AppHandle) -> Result<()> {
 }
 
 #[cfg(not(test))]
-fn has_running_verification_for_app(app: &AppHandle) -> bool {
-    db::open_read(app)
-        .and_then(|(conn, _)| active_verification_batch_id(&conn))
-        .ok()
-        .flatten()
-        .is_some_and(|batch_id| {
-            db::open_read(app)
-                .and_then(|(conn, _)| verification_batch_for_connection(&conn, Some(batch_id)))
-                .ok()
-                .flatten()
-                .is_some_and(|batch| batch.state == "running")
-        })
+pub fn resume_verification_worker(app: AppHandle) {
+    if let Ok(status) = verification_status_for_app(&app) {
+        let _ = crate::jobs::verification_status(
+            &app,
+            "albumVerification",
+            &serde_json::to_value(status).unwrap_or_default(),
+        );
+    }
 }
 
 #[cfg(not(test))]
-pub fn resume_verification_worker(app: AppHandle) {
-    if VERIFICATION_WORKER_RUNNING
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
+pub fn run_job(app: &AppHandle, batch_id: i64, created_at: &str) -> Result<serde_json::Value> {
     {
-        return;
+        let (conn, _) = db::open_read(app)?;
+        let status = verification_status_for_connection(&conn, Some(batch_id))?;
+        crate::jobs::validate_checkpoint(
+            created_at,
+            status.batch.as_ref().map(|batch| batch.created_at.as_str()),
+        )?;
     }
-    tauri::async_runtime::spawn_blocking(move || {
-        if let Err(error) = verification_worker_loop(&app) {
-            eprintln!("Library Completion verification worker stopped: {error:#}");
-        }
-        VERIFICATION_WORKER_RUNNING.store(false, Ordering::SeqCst);
-        if has_running_verification_for_app(&app) {
-            resume_verification_worker(app);
-        }
-    });
+    verification_worker_loop(app, batch_id)?;
+    let (conn, _) = db::open_read(app)?;
+    let status = verification_status_for_connection(&conn, Some(batch_id))?;
+    drop(conn);
+    let value = serde_json::to_value(status)?;
+    crate::jobs::verification_status(app, "albumVerification", &value)?;
+    Ok(value)
+}
+
+fn retry_job_for_connection(
+    conn: &mut Connection,
+    batch_id: i64,
+) -> Result<LibraryCompletionVerificationStatus> {
+    let status = verification_status_for_connection(conn, Some(batch_id))?;
+    let batch = status
+        .batch
+        .ok_or_else(|| anyhow::anyhow!("The verification checkpoint no longer exists."))?;
+    if batch.failed_count > 0 {
+        return retry_verification_failures_for_connection(conn, batch_id);
+    }
+    if batch.queued_count + batch.checking_count == 0 {
+        bail!("This verification job has no remaining checks.");
+    }
+    conn.execute("UPDATE library_completion_verification_batches SET state='running',completed_at=NULL,updated_at=?2 WHERE id=?1",params![batch_id,Utc::now().to_rfc3339()])?;
+    recover_interrupted_verifications(conn)?;
+    verification_status_for_connection(conn, Some(batch_id))
+}
+
+#[cfg(not(test))]
+pub fn control_job(app: &AppHandle, batch_id: i64, action: &str) -> Result<()> {
+    let (mut conn, _) = db::open(app)?;
+    if action == "retry" {
+        retry_job_for_connection(&mut conn, batch_id)?;
+    } else if action == "cancel" {
+        conn.execute("UPDATE library_completion_verification_batches SET state='completed',completed_at=?2,updated_at=?2 WHERE id=?1",params![batch_id,Utc::now().to_rfc3339()])?;
+    } else {
+        set_verification_state_for_connection(
+            &conn,
+            SetLibraryCompletionVerificationStateRequest {
+                batch_id,
+                state: if action == "resume" {
+                    "running"
+                } else {
+                    "paused"
+                }
+                .into(),
+            },
+        )?;
+    }
+    let status = verification_status_for_connection(&conn, Some(batch_id))?;
+    drop(conn);
+    let _ = app.emit("library-completion-verification-progress", &status);
+    Ok(())
 }
 
 #[cfg(not(test))]
@@ -1798,6 +1845,11 @@ pub fn verification_status_for_app(app: &AppHandle) -> Result<LibraryCompletionV
 #[cfg(not(test))]
 fn emit_verification_status(app: &AppHandle) {
     if let Ok(status) = verification_status_for_app(app) {
+        let _ = crate::jobs::verification_status(
+            app,
+            "albumVerification",
+            &serde_json::to_value(&status).unwrap_or_default(),
+        );
         let _ = app.emit("library-completion-verification-progress", status);
     }
 }
@@ -1807,8 +1859,11 @@ pub fn start_verification_for_app(
     app: &AppHandle,
     request: StartLibraryCompletionVerificationRequest,
 ) -> Result<LibraryCompletionVerificationStatus> {
+    crate::jobs::ensure_verification_slot(app, "albumVerification", None)?;
     let (mut conn, _) = db::open(app)?;
     let status = start_verification_for_connection(&mut conn, request)?;
+    drop(conn);
+    crate::jobs::verification_status(app, "albumVerification", &serde_json::to_value(&status)?)?;
     let _ = app.emit("library-completion-verification-progress", &status);
     resume_verification_worker(app.clone());
     Ok(status)
@@ -1822,6 +1877,8 @@ pub fn set_verification_state_for_app(
     let should_resume = request.state.trim() == "running";
     let (conn, _) = db::open(app)?;
     let status = set_verification_state_for_connection(&conn, request)?;
+    drop(conn);
+    crate::jobs::verification_status(app, "albumVerification", &serde_json::to_value(&status)?)?;
     let _ = app.emit("library-completion-verification-progress", &status);
     if should_resume {
         resume_verification_worker(app.clone());
@@ -1834,8 +1891,11 @@ pub fn retry_verification_failures_for_app(
     app: &AppHandle,
     batch_id: i64,
 ) -> Result<LibraryCompletionVerificationStatus> {
+    crate::jobs::ensure_verification_slot(app, "albumVerification", Some(batch_id))?;
     let (mut conn, _) = db::open(app)?;
     let status = retry_verification_failures_for_connection(&mut conn, batch_id)?;
+    drop(conn);
+    crate::jobs::verification_status(app, "albumVerification", &serde_json::to_value(&status)?)?;
     let _ = app.emit("library-completion-verification-progress", &status);
     resume_verification_worker(app.clone());
     Ok(status)
@@ -2278,5 +2338,51 @@ mod tests {
         assert_eq!(retried_batch.state, "running");
         assert_eq!(retried_batch.queued_count, 1);
         assert_eq!(retried_batch.failed_count, 0);
+    }
+    #[test]
+    fn job_claim_is_scoped_and_interrupted_checks_can_retry() {
+        let mut conn = connection();
+        insert_billboard_candidate(&conn);
+        let batch_id = start_verification_for_connection(
+            &mut conn,
+            StartLibraryCompletionVerificationRequest {
+                scope: "candidate".into(),
+                candidate_ids: vec!["massive attack\u{1f}mezzanine".into()],
+                source: None,
+                decade: None,
+                label: None,
+            },
+        )
+        .unwrap()
+        .batch
+        .unwrap()
+        .id;
+        assert!(
+            claim_next_verification_scoped(&mut conn, Some(batch_id + 1))
+                .unwrap()
+                .is_none()
+        );
+        let item = claim_next_verification_scoped(&mut conn, Some(batch_id))
+            .unwrap()
+            .unwrap();
+        // Simulate cancellation/restart before a provider result was committed.
+        conn.execute(
+            "UPDATE library_completion_verification_batches SET state='completed' WHERE id=?1",
+            [batch_id],
+        )
+        .unwrap();
+        let batch = retry_job_for_connection(&mut conn, batch_id)
+            .unwrap()
+            .batch
+            .unwrap();
+        assert_eq!(batch.queued_count, 1);
+        assert_eq!(batch.checking_count, 0);
+        assert_eq!(
+            claim_next_verification_scoped(&mut conn, Some(batch_id))
+                .unwrap()
+                .unwrap()
+                .id,
+            item.id
+        );
     }
 }

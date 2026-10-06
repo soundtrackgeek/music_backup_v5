@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.158.0] - 2026-10-06
+
+### Added
+- Add a global Activity Center beside Luna with active-job badge, progress/ETA, needs-attention and finished filters, error details, and capability-aware pause/resume/retry/cancel controls. Keep job status visible across workspace navigation with keyboard focus restoration.
+- Add a persistent app-owned `jobs.sqlite3` registry and two-worker Rust pool with registered handlers, one active job per kind, private saved requests/results, streamed snapshots, and restart recovery. Cover Library/Artist Completion verification, Wish List MusicBrainz work, metadata and cover imports, Last.fm portraits, Music Doctor and overlay sync; Plex remains on its existing path.
+
+### Changed
+- Run manual and scheduled Doctor/overlay work through the same job pool. Reuse verification item checkpoints, recover interrupted checks, retain paused/cancelled state across restart, and require explicit review/retry for interrupted work without checkpoints.
+- Deliver Activity controls back to the original verification workspace and preserve successful checks on retry. Cancel supported imports at item boundaries; allow queued cancellation for every kind while transactional operations finish safely.
+
+### Fixed
+- Show partial import failures as needs-attention jobs, prevent stale command snapshots from replacing newer progress events, and stop workers from claiming a later verification batch.
+- Guard catalog restore/rollback against active jobs and invalidate waiting requests after replacement so old work cannot mutate a restored catalog.
+
 ## [0.157.8] - 2026-10-06
 
 ### Changed

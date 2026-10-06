@@ -99,6 +99,7 @@ pub fn import_origin_countries_for_app(
     Ok(summary)
 }
 
+#[cfg(test)]
 pub fn cancel_origin_country_import() {
     ORIGIN_COUNTRY_IMPORT_CANCELLED.store(true, Ordering::SeqCst);
 }
@@ -108,6 +109,7 @@ fn emit_origin_country_import_progress(
     app: &AppHandle,
     progress: MusicBrainzOriginCountryImportProgress,
 ) {
+    crate::jobs::progress(progress.processed_count,progress.eligible_count,&progress.message);
     let _ = app.emit("musicbrainz-origin-country-import-progress", progress);
 }
 
@@ -152,6 +154,7 @@ pub fn import_artist_infos_for_app(
     Ok(summary)
 }
 
+#[cfg(test)]
 pub fn cancel_artist_info_import() {
     ARTIST_INFO_IMPORT_CANCELLED.store(true, Ordering::SeqCst);
 }
@@ -161,6 +164,7 @@ fn emit_artist_info_import_progress(
     app: &AppHandle,
     progress: MusicBrainzArtistInfoImportProgress,
 ) {
+    crate::jobs::progress(progress.processed_count,progress.eligible_count,&progress.message);
     let _ = app.emit("musicbrainz-artist-info-import-progress", progress);
 }
 
@@ -884,7 +888,7 @@ where
     );
 
     for row in eligible_rows.into_iter().take(selected_count) {
-        if ORIGIN_COUNTRY_IMPORT_CANCELLED.load(Ordering::SeqCst) {
+        if ORIGIN_COUNTRY_IMPORT_CANCELLED.load(Ordering::SeqCst) || crate::jobs::cancel_requested() {
             cancelled = true;
             break;
         }
@@ -1313,7 +1317,7 @@ where
     );
 
     for row in eligible_rows.into_iter().take(selected_count) {
-        if ARTIST_INFO_IMPORT_CANCELLED.load(Ordering::SeqCst) {
+        if ARTIST_INFO_IMPORT_CANCELLED.load(Ordering::SeqCst) || crate::jobs::cancel_requested() {
             cancelled = true;
             break;
         }

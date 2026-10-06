@@ -77,7 +77,7 @@ pub struct WishListResponse {
     pub auto_removed_count: usize,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListMusicBrainzSearchRequest {
     pub entity: String,
@@ -110,7 +110,7 @@ pub struct WishListMusicBrainzSearchResponse {
     pub searched_at: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddWishListMusicBrainzCandidateRequest {
     pub candidate: WishListMusicBrainzCandidate,

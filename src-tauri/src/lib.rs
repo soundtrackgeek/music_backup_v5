@@ -18,6 +18,7 @@ mod folder_sync;
 mod http;
 mod importer;
 mod jev;
+mod jobs;
 mod lastfm;
 mod library_completion;
 mod models;
@@ -78,7 +79,7 @@ use models::{
     AlbumDebutTimelineResponse, AppSettings, ArtistListRequest, ArtistListResponse,
     ArtistTimelineRequest, ArtistTimelineResponse, ArtistTrackHighlights, BillboardImportSummary,
     BillboardSinglesImportSummary, BrowseRequest, BrowseResponse, CoverImportRequest,
-    CoverImportSummary, DatabaseBackup, DatabaseRestoreSummary, DiscoveryAnniversaryStory,
+    DatabaseBackup, DatabaseRestoreSummary, DiscoveryAnniversaryStory,
     DiscoveryChartSnapshot, DiscoveryChartSnapshotRequest, DiscoveryCompletionSnapshot,
     DiscoveryCompletionSnapshotRequest, DiscoveryDailyEditionSnapshotResponse,
     DiscoveryDeepCutSnapshot, DiscoveryDeepCutSnapshotRequest, DiscoveryMixerRequest,
@@ -90,12 +91,12 @@ use models::{
     LibraryUpdateArtistResponse, LibraryUpdateRequest, LibraryUpdateResponse,
     MusicBrainzArtistDiscographyRequest, MusicBrainzArtistDiscographyResponse,
     MusicBrainzArtistExportRequest, MusicBrainzArtistInfoImportRequest,
-    MusicBrainzArtistInfoImportSummary, MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus,
+    MusicBrainzArtistInfoPreview, MusicBrainzArtistInfoStatus,
     MusicBrainzArtistLinkRequest, MusicBrainzArtistOriginCountryRequest,
     MusicBrainzArtistOriginCountryUpdate, MusicBrainzArtistRefreshRequest,
     MusicBrainzArtistRefreshResult, MusicBrainzCacheStatus, MusicBrainzOriginCountryImportRequest,
-    MusicBrainzOriginCountryImportSummary, MusicBrainzOriginCountryPreview,
-    MusicBrainzOriginCountryStatus, MusicBrainzOverlaySyncLogEntry, MusicBrainzOverlaySyncResult,
+    MusicBrainzOriginCountryPreview,
+    MusicBrainzOriginCountryStatus, MusicBrainzOverlaySyncLogEntry,
     MusicBrainzReleaseDecisionRequest, MusicMapLocationDetails, MusicMapRefreshSummary,
     MusicMapResponse, MusicToolFixHistoryEntry, MusicToolFixRequest, MusicToolFixSummary,
     MusicToolIssueRequest, MusicToolIssueResponse, MusicToolSummary, MusicToolUndoSummary,
@@ -177,7 +178,7 @@ async fn restore_database_backup(
 ) -> Result<DatabaseRestoreSummary, String> {
     tauri::async_runtime::spawn_blocking(move || {
         app.state::<thumbnails::ThumbnailService>().with_catalog_replacement(|| {
-            db::restore_database_backup_for_app(&app, backup_path)
+            jobs::with_catalog_replacement(&app, || db::restore_database_backup_for_app(&app, backup_path))
         })
     })
     .await
@@ -451,11 +452,8 @@ async fn get_lastfm_related_albums(
 async fn refresh_lastfm_artist_images(
     app: AppHandle,
     limit: u32,
-) -> Result<lastfm::LastFmArtistImageRefreshSummary, String> {
-    tauri::async_runtime::spawn_blocking(move || lastfm::refresh_artist_images(app, limit))
-        .await
-        .map_err(|error| format!("Last.fm portrait sync task failed: {error}"))?
-        .map_err(|error| error.to_string())
+) -> Result<serde_json::Value, String> {
+    jobs::execute(app,"portraits",serde_json::json!({"limit":limit})).await
 }
 
 #[cfg(not(test))]
@@ -1014,12 +1012,10 @@ async fn add_wish_list_item(
 #[cfg(not(test))]
 #[tauri::command]
 async fn search_wish_list_musicbrainz(
+    app: AppHandle,
     input: wishlist::WishListMusicBrainzSearchRequest,
-) -> Result<wishlist::WishListMusicBrainzSearchResponse, String> {
-    tauri::async_runtime::spawn_blocking(move || wishlist::search_musicbrainz_for_wishlist(input))
-        .await
-        .map_err(|error| format!("Wish List MusicBrainz search task failed: {error}"))?
-        .map_err(|error| error.to_string())
+) -> Result<serde_json::Value, String> {
+    jobs::execute(app,"wishListSearch",serde_json::to_value(input).map_err(|e|e.to_string())?).await
 }
 
 #[cfg(not(test))]
@@ -1027,13 +1023,8 @@ async fn search_wish_list_musicbrainz(
 async fn add_wish_list_musicbrainz_candidate(
     app: AppHandle,
     input: wishlist::AddWishListMusicBrainzCandidateRequest,
-) -> Result<wishlist::AddWishListMusicBrainzCandidateResponse, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        wishlist::add_musicbrainz_candidate_for_app(&app, input)
-    })
-    .await
-    .map_err(|error| format!("Add MusicBrainz Wish List item task failed: {error}"))?
-    .map_err(|error| error.to_string())
+) -> Result<serde_json::Value, String> {
+    jobs::execute(app,"wishListVerification",serde_json::to_value(input).map_err(|e|e.to_string())?).await
 }
 
 #[cfg(not(test))]
@@ -1129,20 +1120,14 @@ async fn preview_musicbrainz_origin_country_import(
 async fn import_musicbrainz_origin_countries(
     app: AppHandle,
     request: MusicBrainzOriginCountryImportRequest,
-) -> Result<MusicBrainzOriginCountryImportSummary, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        musicbrainz::import_origin_countries_for_app(&app, request)
-    })
-    .await
-    .map_err(|error| format!("MusicBrainz origin-country import task failed: {error}"))?
-    .map_err(|error| error.to_string())
+) -> Result<serde_json::Value, String> {
+    jobs::execute(app,"originCountries",serde_json::to_value(request).map_err(|e|e.to_string())?).await
 }
 
 #[cfg(not(test))]
 #[tauri::command]
-async fn cancel_musicbrainz_origin_country_import() -> Result<(), String> {
-    musicbrainz::cancel_origin_country_import();
-    Ok(())
+async fn cancel_musicbrainz_origin_country_import(app: AppHandle) -> Result<(), String> {
+    jobs::cancel_kind(&app,"originCountries").map_err(|e|e.to_string())
 }
 
 #[cfg(not(test))]
@@ -1175,20 +1160,14 @@ async fn preview_musicbrainz_artist_info_import(
 async fn import_musicbrainz_artist_infos(
     app: AppHandle,
     request: MusicBrainzArtistInfoImportRequest,
-) -> Result<MusicBrainzArtistInfoImportSummary, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        musicbrainz::import_artist_infos_for_app(&app, request)
-    })
-    .await
-    .map_err(|error| format!("MusicBrainz artist-info import task failed: {error}"))?
-    .map_err(|error| error.to_string())
+) -> Result<serde_json::Value, String> {
+    jobs::execute(app,"artistInfo",serde_json::to_value(request).map_err(|e|e.to_string())?).await
 }
 
 #[cfg(not(test))]
 #[tauri::command]
-async fn cancel_musicbrainz_artist_info_import() -> Result<(), String> {
-    musicbrainz::cancel_artist_info_import();
-    Ok(())
+async fn cancel_musicbrainz_artist_info_import(app: AppHandle) -> Result<(), String> {
+    jobs::cancel_kind(&app,"artistInfo").map_err(|e|e.to_string())
 }
 
 #[cfg(not(test))]
@@ -1266,13 +1245,8 @@ async fn set_musicbrainz_artist_origin_country(
 async fn sync_musicbrainz_overlay(
     app: AppHandle,
     record_noop: Option<bool>,
-) -> Result<MusicBrainzOverlaySyncResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        musicbrainz_sync::sync_for_app_with_options(&app, record_noop.unwrap_or(true))
-    })
-    .await
-    .map_err(|error| format!("MusicBrainz overlay sync task failed: {error}"))?
-    .map_err(|error| error.to_string())
+) -> Result<serde_json::Value, String> {
+    jobs::execute(app,"overlay",serde_json::json!({"recordNoop":record_noop.unwrap_or(true)})).await
 }
 
 #[cfg(not(test))]
@@ -1333,11 +1307,8 @@ async fn get_music_doctor_status(
 
 #[cfg(not(test))]
 #[tauri::command]
-async fn sync_music_doctor(app: AppHandle) -> Result<music_doctor::MusicDoctorSyncResult, String> {
-    tauri::async_runtime::spawn_blocking(move || music_doctor::sync_for_app(&app))
-        .await
-        .map_err(|error| format!("Music Doctor sync task failed: {error}"))?
-        .map_err(|error| error.to_string())
+async fn sync_music_doctor(app: AppHandle) -> Result<serde_json::Value, String> {
+    jobs::execute(app,"musicDoctor",serde_json::json!({})).await
 }
 
 #[cfg(not(test))]
@@ -1685,7 +1656,7 @@ async fn rollback_import_run(
 ) -> Result<models::DatabaseRestoreSummary, String> {
     tauri::async_runtime::spawn_blocking(move || {
         app.state::<thumbnails::ThumbnailService>().with_catalog_replacement(|| {
-            importer::rollback_import_run(&app, import_run_id)
+            jobs::with_catalog_replacement(&app, || importer::rollback_import_run(&app, import_run_id))
         })
     })
         .await
@@ -1698,11 +1669,8 @@ async fn rollback_import_run(
 async fn import_album_covers(
     app: AppHandle,
     request: CoverImportRequest,
-) -> Result<CoverImportSummary, String> {
-    tauri::async_runtime::spawn_blocking(move || covers::import_album_covers(app, request))
-        .await
-        .map_err(|error| format!("Cover import task failed: {error}"))?
-        .map_err(|error| error.to_string())
+) -> Result<serde_json::Value, String> {
+    jobs::execute(app,"covers",serde_json::to_value(request).map_err(|e|e.to_string())?).await
 }
 
 #[cfg(not(test))]
@@ -2191,13 +2159,14 @@ pub fn run() {
             ));
             app.manage(soulseek::initialize(app.handle())?);
             app.manage(usenet::initialize(app.handle())?);
-            library_completion::resume_verification_worker(app.handle().clone());
-            artist_completion::resume_verification_worker(app.handle().clone());
+            jobs::start(app.handle())?;
             plex::resume_sync_worker(app.handle().clone());
             background::start(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            list_activity_jobs,
+            control_activity_job,
             get_library_status,
             run_performance_probe,
             list_import_runs,
@@ -2411,6 +2380,7 @@ pub fn run() {
         .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 app_handle.state::<background::BackgroundScheduler>().stop();
+                app_handle.state::<jobs::JobSystem>().stop();
                 let _ = app_handle
                     .state::<thumbnails::ThumbnailService>()
                     .with_catalog_replacement(|| {
@@ -2419,4 +2389,17 @@ pub fn run() {
                     });
             }
         });
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn list_activity_jobs(app: AppHandle) -> Result<Vec<jobs::Job>, String> {
+    tauri::async_runtime::spawn_blocking(move || jobs::list_for_app(&app)).await
+        .map_err(|e|e.to_string())?.map_err(|e|e.to_string())
+}
+#[cfg(not(test))]
+#[tauri::command]
+async fn control_activity_job(app: AppHandle, id: i64, action: String) -> Result<Vec<jobs::Job>, String> {
+    tauri::async_runtime::spawn_blocking(move || jobs::control_for_app(&app,id,&action)).await
+        .map_err(|e|e.to_string())?.map_err(|e|e.to_string())
 }

@@ -600,6 +600,7 @@ fn import_cover_candidates(
     )?;
 
     for album in albums {
+        crate::jobs::checkpoint()?;
         counters.scanned_albums += 1;
 
         let embedded = if prefer_embedded {
@@ -1173,6 +1174,7 @@ fn emit_progress(
     percent: f64,
     message: &str,
 ) {
+    crate::jobs::progress(counters.scanned_albums as i64,counters.total_albums as i64,message);
     let _ = app.emit(
         "cover-import-progress",
         CoverImportProgress {

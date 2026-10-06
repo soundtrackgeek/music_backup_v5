@@ -2281,6 +2281,7 @@ pub fn refresh_artist_images(
     let mut failed = 0;
 
     for candidate in candidates {
+        crate::jobs::checkpoint()?;
         let record = match artist_info(api_key.as_str(), &candidate.artist_name) {
             Ok(artist) => match selected_image_url(&artist.image) {
                 Some(source_url) => match download_image(&source_url) {
@@ -2343,6 +2344,7 @@ pub fn refresh_artist_images(
             }
         };
         db::upsert_artist_image_for_app(&app, &record)?;
+        crate::jobs::progress((downloaded+unavailable+failed) as i64,requested as i64,"Checking artist portraits");
     }
     let remaining = db::artist_image_remaining_for_app(&app)?;
     Ok(LastFmArtistImageRefreshSummary {

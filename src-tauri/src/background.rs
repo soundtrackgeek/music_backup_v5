@@ -102,7 +102,7 @@ impl RevisionNotifier {
 #[cfg(not(test))]
 mod desktop {
     use super::*;
-    use crate::{db, models::AppSettings, music_doctor, musicbrainz_sync, updater};
+    use crate::{db, models::AppSettings, music_doctor, updater};
     use tauri::{AppHandle, Emitter, Manager};
 
     pub struct BackgroundScheduler {
@@ -186,8 +186,7 @@ mod desktop {
                         }
                         let status = music_doctor::status_for_app(&app)?;
                         if status.valid && status.needs_sync && !status.sync_in_progress {
-                            let result = music_doctor::sync_for_app(&app)?;
-                            let _ = app.emit("music-doctor-sync-completed", result);
+                            crate::jobs::submit(&app,"musicDoctor",serde_json::json!({}))?;
                         }
                         Ok(())
                     })
@@ -204,10 +203,7 @@ mod desktop {
                         {
                             return Ok::<_, anyhow::Error>(());
                         }
-                        let result = musicbrainz_sync::sync_for_app_with_options(&app, false)?;
-                        if result.changed_count > 0 {
-                            let _ = app.emit("musicbrainz-overlay-sync-completed", result);
-                        }
+                        crate::jobs::submit(&app,"overlay",serde_json::json!({"recordNoop":false}))?;
                         Ok(())
                     })
                     .await;

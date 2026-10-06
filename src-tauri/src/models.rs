@@ -243,7 +243,7 @@ fn default_library_update_limit() -> u32 {
     50
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CoverImportRequest {
     pub source_path: String,
@@ -544,7 +544,7 @@ pub struct MusicBrainzOriginCountryPreview {
     pub rows: Vec<MusicBrainzOriginCountryPreviewRow>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzOriginCountryImportRequest {
     #[serde(default)]
@@ -662,7 +662,7 @@ pub struct MusicBrainzArtistInfoPreview {
     pub rows: Vec<MusicBrainzArtistInfoPreviewRow>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistInfoImportRequest {
     #[serde(default)]
