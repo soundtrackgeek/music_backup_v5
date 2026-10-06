@@ -2230,7 +2230,9 @@ mod tests {
                 "artist_album_year_folders"
             )
             .expect("nested"),
-            Path::new(r"D:\Downloads").join("Helmet").join("Meantime (1992)")
+            Path::new(r"D:\Downloads")
+                .join("Helmet")
+                .join("Meantime (1992)")
         );
     }
 
