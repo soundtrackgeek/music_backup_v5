@@ -162,16 +162,15 @@ On an up-to-date database, `migrate()` still enters `migrate_through_57`. That p
 
 ### 6. One job system and Activity Center
 
-**Implemented in 0.158.0 (2026-10-06):** persistent local `jobs.sqlite3` registry, a two-worker Rust pool, shared rate-gated provider handlers, and a global Activity Center. Verification keeps its item checkpoints and pause/resume/retry controls; other operations expose controls only at supported safe boundaries. Doctor and overlay schedules share the pool, and interrupted non-checkpoint writes require explicit retry. Plex is intentionally excluded at the user's request. See [Activity Center](../README.md#activity-center).
+**Implemented in 0.158.0 (2026-10-06):** persistent local `jobs.sqlite3` registry, a two-worker Rust pool, shared rate-gated provider handlers, and a global Activity Center. Verification keeps its item checkpoints and pause/resume/retry controls; other operations expose controls only at supported safe boundaries. Doctor and overlay schedules share the pool, and interrupted non-checkpoint writes require explicit retry. Plex integration was subsequently removed in 0.159.0 (2026-10-06). See [Activity Center](../README.md#activity-center).
 
-**Current state:** long work runs through at least eight separate mechanisms:
+**Current state:** long work runs through at least seven separate mechanisms:
 - Library Completion verification (a persistent queue with pause/resume and ETA, which is good),
 - Artist discovery verification,
 - Wish List MusicBrainz verification (synchronous),
 - Origin Country and Artist Info imports (each with its own cancel `AtomicBool`),
 - cover import,
 - Last.fm portrait sync,
-- Plex sync,
 - Music Doctor sync.
 
 Each has its own progress UI in its own workspace, so you can't see "everything that's running" in one place.
@@ -341,7 +340,7 @@ The same artist can therefore match in one feature (Wish List auto-complete) and
 ### 18. macOS parity
 
 **Current state**
-- `keyring` is compiled with only `windows-native-keyring-store` ([`Cargo.toml:29`](../src-tauri/Cargo.toml#L29)), but universal macOS DMGs ship. Saving OpenAI, OpenRouter, Last.fm, Discogs, Plex, and other keys on a Mac is therefore unlikely to work. The error text also says "Windows Credential Manager" ([`ai.rs:796`](../src-tauri/src/ai.rs#L796)).
+- `keyring` is compiled with only `windows-native-keyring-store` ([`Cargo.toml:29`](../src-tauri/Cargo.toml#L29)), but universal macOS DMGs ship. Saving OpenAI, OpenRouter, Last.fm, Discogs, and other keys on a Mac is therefore unlikely to work. The error text also says "Windows Credential Manager" ([`ai.rs:796`](../src-tauri/src/ai.rs#L796)).
 - The Aurora intake roots are compile-time constants: `D:\MUSIC`, `G:\_BACKUP\SCORES`, `H:\Synthwave`, and `D:\MUSIC_NOT_ALBUMS` ([`aurora_bridge.rs:831`](../src-tauri/src/aurora_bridge.rs#L831), [`2689-2699`](../src-tauri/src/aurora_bridge.rs#L2689)). Env var overrides exist only for tests.
 
 **How to improve**
@@ -376,7 +375,7 @@ The same artist can therefore match in one feature (Wish List auto-complete) and
 
 | # | Feature | Builds on | Effort |
 | --- | --- | --- | --- |
-| 1 | Listening history (Plex, Last.fm, ListenBrainz, Aurora) | `plex.rs` already reads Plex's database | M |
+| 1 | Listening history (Tonehavn, Last.fm, ListenBrainz, Aurora) | Last.fm credentials and Aurora bridge already exist | M |
 | 2 | Year in Review and taste drift | `rating_events`, `rating_snapshots`, `library_updates` | M |
 | 3 | Loudness (ReplayGain/R128), BPM, and key | Music Doctor quality tables, `symphonia` | M |
 | 4 | "Sounds like" similarity and sonic-path playlists | Playlist Builder, Mixtape | L |
@@ -390,11 +389,11 @@ The same artist can therefore match in one feature (Wish List auto-complete) and
 | 12 | Physical collection (formats, Discogs collection) | Discogs credentials | M |
 | 13 | Wish List prices and legitimate purchase links | Discogs, Wish List | M |
 | 14 | Command palette (Ctrl/⌘+K) | Navigation, saved searches, Luna | S–M |
-| 15 | "Play in…" handoff and deep links | Aurora, Plex, Tonehavn | S–M |
+| 15 | "Play in…" handoff and deep links | Aurora, Tonehavn | S–M |
 | 16 | OS notifications and tray quick actions | Tray icon, job system | S |
 | 17 | Personal listening diary: notes, tags, reviews | Album and Artist pages | M |
 | 18 | Your library as an MCP server | Luna's bounded inspection tools | M |
-| 19 | Playlist sync to Navidrome/Jellyfin; M3U8 import | Plex sync engine | M |
+| 19 | Playlist sync to Navidrome/Jellyfin; M3U8 import | Saved playlists and local exports | M |
 | 20 | Off-machine verified backups | `db/backups.rs` | S–M |
 
 ---
@@ -408,7 +407,6 @@ The same artist can therefore match in one feature (Wish List auto-complete) and
 - "rediscover" shelves in the Daily Edition.
 
 **How to build it**
-- **Plex:** [`plex.rs:314`](../src-tauri/src/plex.rs#L314) already opens Plex's SQLite **read-only** and maps media-part file paths to `metadata_items`. Joining Plex's per-item view counts, last-viewed timestamps, and play history tables gives per-track plays with almost no new matching work.
 - **Last.fm:** `user.getRecentTracks` (the API key is already stored). Match on artist/title with the identity module (Part 1 #10).
 - **ListenBrainz:** `GET /1/user/{user}/listens` (min_ts/max_ts paging), often with MBID mapping.
 - **Aurora:** add a `recordPlays` bridge operation, or have Aurora write a small plays file that Music Library ingests.
@@ -436,7 +434,7 @@ Also add a **taste drift** chart (genre share of 4★+ ratings by year). Export 
 - Use it to:
   - flag clipped or over-compressed releases in Music Tools ("Loudness war" view),
   - enable tempo-aware and loudness-matched mixtape transitions,
-  - optionally write ReplayGain tags for Aurora and Plex.
+  - optionally write ReplayGain tags for Aurora and Tonehavn.
 
 ### 4. "Sounds like" similarity
 
@@ -472,7 +470,7 @@ Also add a **taste drift** chart (genre share of 4★+ ratings by year). Export 
 You get:
 - a lyrics tab on the track and album panes,
 - a local **lyrics full-text search** in FTS5 ("which of my songs mention *Oslo*?"),
-- optional `.lrc` sidecar export for Aurora, Plex, and Navidrome.
+- optional `.lrc` sidecar export for Aurora, Tonehavn, and Navidrome.
 
 ### 8. New-release radar
 
@@ -529,7 +527,7 @@ HD logos and backgrounds would also look good in Career Peaks and on Artist page
 **Why:** Music Library has no audio playback. When you find something you want to hear, you leave the app and search again.
 
 **How**
-- Add **Play in Aurora / Plex / Tonehavn** buttons on album, track, and playlist rows: an Aurora bridge request, the Plex `/playQueues` API, or the system default handler.
+- Add **Play in Aurora / Tonehavn** buttons on album, track, and playlist rows: an Aurora bridge request, a Tonehavn handoff, or the system default handler.
 - Register a `musiclibrary://album/<id>` URL scheme (`tauri-plugin-deep-link`, plus `tauri-plugin-single-instance` so links reuse the running window). Aurora, Markdown exports, and Luna answers can then link straight into the app.
 
 ### 16. OS notifications and tray quick actions
@@ -553,7 +551,7 @@ Store everything in app-owned tables (the same pattern as the MusicBrainz overla
 
 ### 19. Playlist sync to more targets; M3U8 import
 
-**How:** generalize the Plex sync engine (managed-playlist marker, add/remove/reorder only what the app manages) into a `PlaylistTarget` trait. Add:
+**How:** build a `PlaylistTarget` trait around saved playlists, with a managed-playlist marker and add/remove/reorder operations limited to playlists owned by Music Library. Add:
 - **Navidrome/OpenSubsonic** (`createPlaylist` / `updatePlaylist`),
 - **Jellyfin**.
 

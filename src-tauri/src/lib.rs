@@ -26,7 +26,6 @@ mod music_doctor;
 mod music_map;
 mod musicbrainz;
 mod musicbrainz_sync;
-mod plex;
 mod published_charts;
 mod soulseek;
 mod thumbnails;
@@ -693,75 +692,6 @@ async fn refresh_smart_playlist(
     tauri::async_runtime::spawn_blocking(move || db::refresh_smart_playlist_for_app(&app, id))
         .await
         .map_err(|error| format!("Smart playlist refresh task failed: {error}"))?
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-async fn plex_bootstrap(app: AppHandle) -> Result<plex::PlexBootstrap, String> {
-    tauri::async_runtime::spawn_blocking(move || plex::bootstrap(&app))
-        .await
-        .map_err(|error| format!("Plex settings task failed: {error}"))?
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-async fn plex_save_profile(
-    app: AppHandle,
-    input: plex::SavePlexProfileRequest,
-) -> Result<plex::PlexBootstrap, String> {
-    tauri::async_runtime::spawn_blocking(move || plex::save_profile(&app, input))
-        .await
-        .map_err(|error| format!("Plex settings save task failed: {error}"))?
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-async fn plex_save_token(token: String) -> Result<plex::PlexCredentialStatus, String> {
-    tauri::async_runtime::spawn_blocking(move || plex::save_token(token))
-        .await
-        .map_err(|error| format!("Plex token save task failed: {error}"))?
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-async fn plex_delete_token() -> Result<plex::PlexCredentialStatus, String> {
-    tauri::async_runtime::spawn_blocking(plex::delete_token)
-        .await
-        .map_err(|error| format!("Plex token removal task failed: {error}"))?
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-async fn plex_test_connection(app: AppHandle) -> Result<plex::PlexConnectionTest, String> {
-    tauri::async_runtime::spawn_blocking(move || plex::test_connection(&app))
-        .await
-        .map_err(|error| format!("Plex connection task failed: {error}"))?
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-async fn plex_sync_all(app: AppHandle) -> Result<plex::PlexSyncSummary, String> {
-    tauri::async_runtime::spawn_blocking(move || plex::sync_all(&app, "manual"))
-        .await
-        .map_err(|error| format!("Plex playlist sync task failed: {error}"))?
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-async fn plex_sync_playlist(
-    app: AppHandle,
-    id: i64,
-) -> Result<plex::PlexPlaylistSyncResult, String> {
-    tauri::async_runtime::spawn_blocking(move || plex::sync_playlist(&app, id))
-        .await
-        .map_err(|error| format!("Plex playlist sync task failed: {error}"))?
         .map_err(|error| error.to_string())
 }
 
@@ -2160,7 +2090,6 @@ pub fn run() {
             app.manage(soulseek::initialize(app.handle())?);
             app.manage(usenet::initialize(app.handle())?);
             jobs::start(app.handle())?;
-            plex::resume_sync_worker(app.handle().clone());
             background::start(app.handle())?;
             Ok(())
         })
@@ -2255,13 +2184,6 @@ pub fn run() {
             delete_saved_playlist,
             set_playlist_automation,
             refresh_smart_playlist,
-            plex_bootstrap,
-            plex_save_profile,
-            plex_save_token,
-            plex_delete_token,
-            plex_test_connection,
-            plex_sync_all,
-            plex_sync_playlist,
             export_playlist,
             discover_outside_library,
             list_saved_external_discoveries,

@@ -308,7 +308,7 @@ fn redirects_drop_cross_origin_credentials_and_preserve_artwork_headers() {
     for header in [
         "Authorization",
         "X-Api-Key",
-        "X-Plex-Token",
+        "X-Provider-Token",
         "Cookie",
         "Proxy-Authorization",
         "Host",

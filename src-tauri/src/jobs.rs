@@ -274,7 +274,7 @@ mod tests {
         control(&c, id, "retry").unwrap();
         claim(&mut c).unwrap();
         finish(&c, id, &Ok(serde_json::Value::Null)).unwrap();
-        let id = enqueue(&c, "plex", "Plex", "{}", false, false, true, None).unwrap();
+        let id = enqueue(&c, "atomic_write", "Atomic write", "{}", false, false, true, None).unwrap();
         claim(&mut c).unwrap();
         assert!(control(&c, id, "pause").is_err());
         assert!(control(&c, id, "cancel").is_err());

@@ -302,8 +302,8 @@ pub(crate) fn apply_album_removal(
         params![completed,run_id,track_count,album_count,session_id])?;
     progress("committing", "Committing the verified album removal.");
     tx.commit()?;
-    // Removal cannot newly satisfy a wishlist entry. Smart playlist loading and Plex sync
-    // already reevaluate their rules against the current catalog, so do not run every
+    // Removal cannot newly satisfy a wishlist entry. Smart playlist loading
+    // already reevaluates its rules against the current catalog, so do not run every
     // playlist query synchronously before the source folder can be finalized.
     // Keep the small reviewed marker for durable session binding and idempotent recovery.
     Ok(BridgeImportSummary {

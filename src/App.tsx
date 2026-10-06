@@ -407,7 +407,6 @@ import { SoulseekSettingsPanel } from "./components/SoulseekSettingsPanel";
 import { UsenetSettingsPanel } from "./components/UsenetSettingsPanel";
 import { DiscogsSettingsPanel } from "./components/DiscogsSettingsPanel";
 import { LastFmSettingsPanel } from "./components/LastFmSettingsPanel";
-import { PlexSettingsPanel } from "./components/PlexSettingsPanel";
 import { MusicDoctorSettingsPanel } from "./components/MusicDoctorSettingsPanel";
 import { CurrentViewQuestionPanel } from "./components/CurrentViewQuestionPanel";
 import { ExportResultStatus } from "./components/ExportResultStatus";
@@ -18350,7 +18349,6 @@ export default function App() {
               </SettingsSection>
 
               <SettingsSection id="providers">
-                <PlexSettingsPanel />
                 <DiscogsSettingsPanel />
                 <LastFmSettingsPanel />
                 <DeemixSettingsPanel

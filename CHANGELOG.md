@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.159.0] - 2026-10-06
+
+### Removed
+- Remove Plex settings, token commands, connection tests, playlist sync controls and badges, startup scheduling, and the Plex client. Music Library no longer connects to Plex.
+
+### Changed
+- Keep local Smart playlists with saved filters, manual and import-triggered refresh, matching counts, refresh timestamps, and rule evaluation errors. Schema 60 preserves saved playlist contents and Smart rules while retiring Plex mappings, cache, and schedules. Existing Plex server data, playlists, profiles, and stored credentials are untouched.
+
 ## [0.158.1] - 2026-10-06
 
 ### Fixed

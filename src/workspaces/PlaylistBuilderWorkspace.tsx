@@ -9,7 +9,6 @@ import {
   ListMusic,
   RefreshCw,
   Save,
-  Server,
   ShieldCheck,
   Sparkles,
   Star,
@@ -25,7 +24,6 @@ import {
   refreshSmartPlaylist,
   savePlaylist,
   setPlaylistAutomation,
-  syncPlexPlaylist,
 } from "../backend";
 import type {
   AiPlaylist,
@@ -104,7 +102,7 @@ export function PlaylistBuilderWorkspace({
   const [savedError, setSavedError] = useState<string | null>(null);
   const [automationMessage, setAutomationMessage] = useState<string | null>(null);
   const [busyAutomation, setBusyAutomation] = useState<
-    "smart" | "plex" | "refresh" | "sync" | null
+    "smart" | "refresh" | null
   >(null);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [sourceCohortTitle, setSourceCohortTitle] = useState<string | null>(null);
@@ -278,30 +276,21 @@ export function PlaylistBuilderWorkspace({
     }
   }
 
-  async function updateAutomation(
-    action: "smart" | "plex",
-    smart: boolean,
-    plexSyncEnabled: boolean,
-  ) {
+  async function updateAutomation(smart: boolean) {
     if (activeSavedId == null) return;
-    setBusyAutomation(action);
+    setBusyAutomation("smart");
     setSavedError(null);
     setAutomationMessage(null);
     try {
       const saved = await setPlaylistAutomation({
         id: activeSavedId,
         smart,
-        plexSyncEnabled,
       });
       replaceSavedPlaylist(saved);
       setAutomationMessage(
-        action === "smart"
-          ? smart
-            ? "Smart rules enabled. The playlist now follows the saved filters."
-            : "Smart rules and Plex auto-sync disabled."
-          : plexSyncEnabled
-            ? "Automatic Plex sync enabled for this playlist."
-            : "Automatic Plex sync disabled for this playlist.",
+        smart
+          ? "Smart rules enabled. The playlist now follows the saved filters."
+          : "Smart rules disabled.",
       );
     } catch (automationError) {
       setSavedError(
@@ -329,28 +318,6 @@ export function PlaylistBuilderWorkspace({
       setSavedError(
         refreshError instanceof Error ? refreshError.message : String(refreshError),
       );
-    } finally {
-      setBusyAutomation(null);
-    }
-  }
-
-  async function syncActivePlexPlaylist() {
-    if (activeSavedId == null) return;
-    setBusyAutomation("sync");
-    setSavedError(null);
-    setAutomationMessage(null);
-    try {
-      const result = await syncPlexPlaylist(activeSavedId);
-      const refreshed = await listSavedPlaylists();
-      setSavedPlaylists(refreshed);
-      const active = refreshed.find((saved) => saved.id === activeSavedId);
-      if (active) {
-        setPlaylist(active.playlist);
-        setName(active.name);
-      }
-      setAutomationMessage(result.message);
-    } catch (syncError) {
-      setSavedError(syncError instanceof Error ? syncError.message : String(syncError));
     } finally {
       setBusyAutomation(null);
     }
@@ -612,16 +579,16 @@ export function PlaylistBuilderWorkspace({
               {activeSavedPlaylist && !playlist.mixtape ? (
                 <section
                   className="playlist-automation-panel"
-                  aria-label="Smart playlist and Plex synchronization"
+                  aria-label="Smart playlist automation"
                 >
                   <div className="playlist-automation-heading">
                     <div>
                       <span>Automation</span>
-                      <h3>Smart playlist & Plex</h3>
+                      <h3>Smart playlist</h3>
                     </div>
-                    {activeSavedPlaylist.automation.lastPlexSuccessAt ? (
+                    {activeSavedPlaylist.automation.lastEvaluatedAt ? (
                       <small>
-                        Last Plex sync {new Date(activeSavedPlaylist.automation.lastPlexSuccessAt).toLocaleString()}
+                        Last refreshed {new Date(activeSavedPlaylist.automation.lastEvaluatedAt).toLocaleString()}
                       </small>
                     ) : null}
                   </div>
@@ -632,12 +599,7 @@ export function PlaylistBuilderWorkspace({
                         checked={activeSavedPlaylist.automation.smart}
                         disabled={busyAutomation !== null}
                         onChange={(event) =>
-                          void updateAutomation(
-                            "smart",
-                            event.target.checked,
-                            event.target.checked &&
-                              activeSavedPlaylist.automation.plexSyncEnabled,
-                          )
+                          void updateAutomation(event.target.checked)
                         }
                       />
                       <span>
@@ -645,40 +607,11 @@ export function PlaylistBuilderWorkspace({
                         <small>Rebuild from the saved filters as the library changes.</small>
                       </span>
                     </label>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={activeSavedPlaylist.automation.plexSyncEnabled}
-                        disabled={
-                          busyAutomation !== null ||
-                          !activeSavedPlaylist.automation.smart
-                        }
-                        onChange={(event) =>
-                          void updateAutomation(
-                            "plex",
-                            true,
-                            event.target.checked,
-                          )
-                        }
-                      />
-                      <span>
-                        <strong>Sync automatically to Plex</strong>
-                        <small>Update the managed Plex playlist on the global schedule.</small>
-                      </span>
-                    </label>
                   </div>
                   <div className="playlist-automation-status">
                     <span>
                       <strong>{activeSavedPlaylist.automation.desiredCount.toLocaleString()}</strong>
                       matching locally
-                    </span>
-                    <span>
-                      <strong>{activeSavedPlaylist.automation.matchedCount.toLocaleString()}</strong>
-                      found in Plex
-                    </span>
-                    <span>
-                      <strong>{activeSavedPlaylist.automation.missingCount.toLocaleString()}</strong>
-                      waiting for Plex
                     </span>
                   </div>
                   <div className="playlist-automation-actions">
@@ -696,22 +629,10 @@ export function PlaylistBuilderWorkspace({
                         {busyAutomation === "refresh" ? "Refreshing" : "Refresh rules"}
                       </span>
                     </button>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={
-                        busyAutomation !== null ||
-                        !activeSavedPlaylist.automation.plexSyncEnabled
-                      }
-                      onClick={() => void syncActivePlexPlaylist()}
-                    >
-                      <Server size={15} />
-                      <span>{busyAutomation === "sync" ? "Syncing" : "Sync to Plex"}</span>
-                    </button>
                   </div>
-                  {activeSavedPlaylist.automation.lastPlexError ? (
+                  {activeSavedPlaylist.automation.lastError ? (
                     <p className="error-message">
-                      {activeSavedPlaylist.automation.lastPlexError}
+                      {activeSavedPlaylist.automation.lastError}
                     </p>
                   ) : null}
                   {automationMessage ? (
@@ -860,10 +781,6 @@ export function PlaylistBuilderWorkspace({
                     {saved.automation.smart ? (
                       <span className="playlist-automation-badges">
                         <em>Smart</em>
-                        {saved.automation.plexSyncEnabled ? <em>Plex</em> : null}
-                        {saved.automation.missingCount > 0 ? (
-                          <em>{saved.automation.missingCount} waiting</em>
-                        ) : null}
                       </span>
                     ) : null}
                   </button>

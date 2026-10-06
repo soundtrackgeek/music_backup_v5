@@ -10853,98 +10853,8 @@ button {
 .deemix-settings-panel,
 .soulseek-settings-panel,
 .usenet-settings-panel,
-.discogs-settings-panel,
-.plex-settings-panel {
+.discogs-settings-panel {
   grid-column: span 2;
-}
-
-.plex-settings-grid {
-  display: grid;
-  grid-template-columns: minmax(260px, 2fr) minmax(180px, 1fr) 160px;
-  align-items: end;
-  gap: 12px;
-}
-
-.plex-auto-sync-toggle {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  border: 1px solid #d8e1dd;
-  border-radius: 8px;
-  background: #f8fbfa;
-  padding: 10px 12px;
-  cursor: pointer;
-}
-
-.plex-auto-sync-toggle input {
-  margin-top: 2px;
-  accent-color: #1d6b55;
-}
-
-.plex-auto-sync-toggle > span {
-  display: grid;
-  gap: 2px;
-}
-
-.plex-auto-sync-toggle strong {
-  color: #263630;
-  font-size: 13px;
-}
-
-.plex-auto-sync-toggle small {
-  color: #697671;
-  font-size: 11px;
-}
-
-.plex-settings-actions,
-.plex-token-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.plex-token-row .criterion {
-  flex: 1 1 320px;
-}
-
-.plex-schedule-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.plex-schedule-grid article {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 2px 7px;
-  border: 1px solid #d8e1dd;
-  border-radius: 8px;
-  background: #f8fbfa;
-  padding: 10px;
-  color: #60706a;
-}
-
-.plex-schedule-grid article > span {
-  font-size: 11px;
-}
-
-.plex-schedule-grid article > strong {
-  grid-column: 2;
-  overflow: hidden;
-  color: #263630;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.plex-sync-detail {
-  margin: 10px 0 0;
-  color: #53635d;
-  font-size: 12px;
 }
 
 .usenet-settings-group {
@@ -12260,23 +12170,6 @@ button {
   color: #9bd2bf;
 }
 
-:root[data-theme="dark"] .plex-auto-sync-toggle,
-:root[data-theme="dark"] .plex-schedule-grid article {
-  border-color: #35433e;
-  background: #111815;
-}
-
-:root[data-theme="dark"] .plex-auto-sync-toggle strong,
-:root[data-theme="dark"] .plex-schedule-grid article > strong {
-  color: #dce7e3;
-}
-
-:root[data-theme="dark"] .plex-auto-sync-toggle small,
-:root[data-theme="dark"] .plex-schedule-grid article,
-:root[data-theme="dark"] .plex-sync-detail {
-  color: #a9b7b2;
-}
-
 :root[data-theme="dark"] .criterion .criterion-checkbox-row {
   border-color: #35433e;
   background: #111815;
@@ -13433,7 +13326,6 @@ button {
   .soulseek-settings-panel,
   .usenet-settings-panel,
   .discogs-settings-panel,
-  .plex-settings-panel,
   .update-settings-panel,
   .backup-settings-panel,
   .performance-settings-panel,
@@ -13451,8 +13343,6 @@ button {
   .soulseek-settings-actions,
   .soulseek-share-heading,
   .discogs-settings-toolbar,
-  .plex-settings-grid,
-  .plex-schedule-grid,
   .deemix-download-toolbar,
   .deemix-preference-grid,
   .soulseek-connection-grid,
@@ -17760,7 +17650,7 @@ button {
 
 .playlist-automation-options {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 

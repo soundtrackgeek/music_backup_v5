@@ -1,7 +1,48 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 59;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 60;
+
+pub(super) fn remove_plex_sync_schema(conn: &Connection) -> Result<()> {
+    if super::schema_column_exists(conn, "playlist_automations", "plex_sync_enabled")? {
+        conn.execute_batch(
+            "
+            CREATE TABLE playlist_automations_without_plex (
+                saved_playlist_id INTEGER PRIMARY KEY
+                    REFERENCES saved_playlists(id) ON DELETE CASCADE,
+                smart INTEGER NOT NULL DEFAULT 0,
+                last_evaluated_at TEXT,
+                last_error TEXT,
+                desired_count INTEGER NOT NULL DEFAULT 0
+            );
+            INSERT INTO playlist_automations_without_plex (
+                saved_playlist_id, smart, last_evaluated_at, desired_count
+            )
+            SELECT saved_playlist_id, smart, last_evaluated_at, desired_count
+            FROM playlist_automations;
+            DROP TABLE playlist_automations;
+            ALTER TABLE playlist_automations_without_plex RENAME TO playlist_automations;
+            ",
+        )
+        .context("Could not preserve Smart playlist rules while removing Plex sync")?;
+    } else if !super::schema_column_exists(conn, "playlist_automations", "last_error")? {
+        conn.execute_batch("ALTER TABLE playlist_automations ADD COLUMN last_error TEXT;")?;
+    }
+    conn.execute_batch(
+        "DROP TABLE IF EXISTS plex_track_cache;
+         DROP TABLE IF EXISTS plex_sync_state;",
+    )
+    .context("Could not remove retired Plex cache and schedule")?;
+    Ok(())
+}
+
+pub(super) fn phase_sixty_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(phase_fifty_six_schema_exists(conn)?
+        && super::schema_column_exists(conn, "playlist_automations", "last_error")?
+        && !super::schema_column_exists(conn, "playlist_automations", "plex_sync_enabled")?
+        && !super::schema_table_exists(conn, "plex_track_cache")?
+        && !super::schema_table_exists(conn, "plex_sync_state")?)
+}
 
 pub(super) fn migrate_half_star_ratings(conn: &Connection) -> Result<()> {
     conn.execute_batch(
@@ -170,10 +211,9 @@ pub(super) fn migrate_uk_origin_country_alias(conn: &Connection) -> Result<()> {
 
 pub(super) fn phase_fifty_six_schema_exists(conn: &Connection) -> Result<bool> {
     Ok(phase_fifty_five_schema_exists(conn)?
-        && super::schema_table_exists(conn, "playlist_automations")?
-        && super::schema_table_exists(conn, "plex_track_cache")?
-        && super::schema_table_exists(conn, "plex_sync_state")?
-        && super::schema_index_exists(conn, "idx_plex_track_cache_path")?)
+        && super::schema_column_exists(conn, "playlist_automations", "smart")?
+        && super::schema_column_exists(conn, "playlist_automations", "last_evaluated_at")?
+        && super::schema_column_exists(conn, "playlist_automations", "desired_count")?)
 }
 
 pub(super) fn phase_fifty_five_schema_exists(conn: &Connection) -> Result<bool> {

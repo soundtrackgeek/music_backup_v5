@@ -692,7 +692,7 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     let user_version = conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))?;
     if user_version >= LATEST_SCHEMA_VERSION
         && crate::published_charts::schema_exists(conn)?
-        && migrations::phase_fifty_six_schema_exists(conn)?
+        && migrations::phase_sixty_schema_exists(conn)?
     {
         return Ok(());
     }
@@ -707,7 +707,15 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             .execute_batch("PRAGMA user_version = 59;")
             .context("Could not mark the UK origin-country migration complete")?;
     }
-    transaction.commit().context("Could not commit schema 59")?;
+    if version < 60 || !migrations::phase_sixty_schema_exists(&transaction)? {
+        migrations::remove_plex_sync_schema(&transaction)?;
+        if version < 60 {
+            transaction
+                .execute_batch("PRAGMA user_version = 60;")
+                .context("Could not mark the Plex removal migration complete")?;
+        }
+    }
+    transaction.commit().context("Could not commit schema 60")?;
     Ok(())
 }
 
@@ -738,7 +746,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         let transaction = conn
             .unchecked_transaction()
             .context("Could not start the schema 56 migration transaction")?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -755,7 +763,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
             .context("Could not start the schema 55 migration transaction")?;
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -773,7 +781,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         ensure_daily_edition_snapshot_schema(&transaction)?;
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -792,7 +800,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         ensure_daily_edition_snapshot_schema(&transaction)?;
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -812,7 +820,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         ensure_daily_edition_snapshot_schema(&transaction)?;
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -833,7 +841,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         ensure_daily_edition_snapshot_schema(&transaction)?;
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -855,7 +863,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         ensure_daily_edition_snapshot_schema(&transaction)?;
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -878,7 +886,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         ensure_daily_edition_snapshot_schema(&transaction)?;
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -902,7 +910,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         ensure_daily_edition_snapshot_schema(&transaction)?;
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -927,7 +935,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         ensure_daily_edition_snapshot_schema(&transaction)?;
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -953,7 +961,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         ensure_daily_edition_snapshot_schema(&transaction)?;
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -980,7 +988,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
         ensure_daily_edition_snapshot_schema(&transaction)?;
         ensure_chart_album_match_state_schema(&transaction)?;
         reconcile_album_chart_matches(&transaction)?;
-        ensure_plex_sync_schema(&transaction)?;
+        ensure_smart_playlist_schema(&transaction)?;
         migrations::migrate_half_star_ratings(&transaction)?;
         transaction
             .execute_batch("PRAGMA user_version = 57;")
@@ -2208,7 +2216,7 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
     ensure_music_doctor_schema(conn)?;
     ensure_daily_edition_snapshot_schema(conn)?;
     ensure_chart_album_match_state_schema(conn)?;
-    ensure_plex_sync_schema(conn)?;
+    ensure_smart_playlist_schema(conn)?;
     migrations::migrate_half_star_ratings(conn)?;
     migrations::migrate_portable_overlay_sync_default(conn)?;
     migrations::migrate_billboard_album_source_default(conn)?;
@@ -2222,58 +2230,20 @@ fn migrate_through_57(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn ensure_plex_sync_schema(conn: &Connection) -> Result<()> {
+fn ensure_smart_playlist_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS playlist_automations (
             saved_playlist_id INTEGER PRIMARY KEY
                 REFERENCES saved_playlists(id) ON DELETE CASCADE,
             smart INTEGER NOT NULL DEFAULT 0,
-            plex_sync_enabled INTEGER NOT NULL DEFAULT 0,
-            plex_playlist_rating_key TEXT,
             last_evaluated_at TEXT,
-            last_plex_attempt_at TEXT,
-            last_plex_success_at TEXT,
-            last_plex_error TEXT,
-            desired_count INTEGER NOT NULL DEFAULT 0,
-            matched_count INTEGER NOT NULL DEFAULT 0,
-            missing_count INTEGER NOT NULL DEFAULT 0,
-            last_content_hash TEXT
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_playlist_automations_plex_sync
-            ON playlist_automations(plex_sync_enabled, saved_playlist_id);
-
-        CREATE TABLE IF NOT EXISTS plex_track_cache (
-            library_key TEXT NOT NULL,
-            cache_run TEXT NOT NULL,
-            plex_track_rating_key TEXT NOT NULL,
-            normalized_file_path TEXT NOT NULL,
-            PRIMARY KEY (
-                library_key, cache_run, plex_track_rating_key, normalized_file_path
-            )
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_plex_track_cache_path
-            ON plex_track_cache(library_key, cache_run, normalized_file_path);
-
-        CREATE TABLE IF NOT EXISTS plex_sync_state (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            next_auto_sync_at TEXT,
-            last_attempt_at TEXT,
-            last_success_at TEXT,
             last_error TEXT,
-            library_key TEXT,
-            library_scanned_at TEXT,
-            cache_run TEXT,
-            cache_track_count INTEGER NOT NULL DEFAULT 0
+            desired_count INTEGER NOT NULL DEFAULT 0
         );
-
-        INSERT OR IGNORE INTO plex_sync_state (id, cache_track_count)
-        VALUES (1, 0);
         ",
     )
-    .context("Could not create Plex playlist synchronization schema")?;
+    .context("Could not create Smart playlist schema")?;
     migrations::migrate_uk_origin_country_alias(conn)?;
     Ok(())
 }
@@ -12622,15 +12592,9 @@ fn saved_playlist_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SavedPla
         updated_at: row.get(9)?,
         automation: PlaylistAutomationStatus {
             smart: row.get::<_, i64>(10)? != 0,
-            plex_sync_enabled: row.get::<_, i64>(11)? != 0,
-            plex_playlist_rating_key: row.get(12)?,
-            last_evaluated_at: row.get(13)?,
-            last_plex_attempt_at: row.get(14)?,
-            last_plex_success_at: row.get(15)?,
-            last_plex_error: row.get(16)?,
-            desired_count: row.get(17)?,
-            matched_count: row.get(18)?,
-            missing_count: row.get(19)?,
+            last_evaluated_at: row.get(11)?,
+            last_error: row.get(12)?,
+            desired_count: row.get(13)?,
         },
     })
 }
@@ -12642,15 +12606,9 @@ fn load_saved_playlist(conn: &Connection, id: i64) -> Result<SavedPlaylist> {
                p.library_imported_at, p.library_album_count, p.library_track_count,
                p.created_at, p.updated_at,
                COALESCE(automation.smart, 0),
-               COALESCE(automation.plex_sync_enabled, 0),
-               automation.plex_playlist_rating_key,
                automation.last_evaluated_at,
-               automation.last_plex_attempt_at,
-               automation.last_plex_success_at,
-               automation.last_plex_error,
-               COALESCE(automation.desired_count, 0),
-               COALESCE(automation.matched_count, 0),
-               COALESCE(automation.missing_count, 0)
+               automation.last_error,
+               COALESCE(automation.desired_count, 0)
         FROM saved_playlists AS p
         LEFT JOIN playlist_automations AS automation
           ON automation.saved_playlist_id = p.id
@@ -12669,15 +12627,9 @@ fn list_saved_playlists(conn: &Connection) -> Result<Vec<SavedPlaylist>> {
                p.library_imported_at, p.library_album_count, p.library_track_count,
                p.created_at, p.updated_at,
                COALESCE(automation.smart, 0),
-               COALESCE(automation.plex_sync_enabled, 0),
-               automation.plex_playlist_rating_key,
                automation.last_evaluated_at,
-               automation.last_plex_attempt_at,
-               automation.last_plex_success_at,
-               automation.last_plex_error,
-               COALESCE(automation.desired_count, 0),
-               COALESCE(automation.matched_count, 0),
-               COALESCE(automation.missing_count, 0)
+               automation.last_error,
+               COALESCE(automation.desired_count, 0)
         FROM saved_playlists AS p
         LEFT JOIN playlist_automations AS automation
           ON automation.saved_playlist_id = p.id
@@ -12778,13 +12730,7 @@ fn delete_saved_playlist(conn: &Connection, id: i64) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug)]
-pub(crate) struct SmartPlaylistEvaluation {
-    pub playlist: SavedPlaylist,
-    pub desired_paths: Vec<String>,
-}
-
-fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SmartPlaylistEvaluation> {
+fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SavedPlaylist> {
     let mut saved = load_saved_playlist(conn, id)?;
     if saved.playlist.mixtape.is_some() { bail!("A mixtape cannot be refreshed as a Smart playlist") }
     if !saved.automation.smart {
@@ -12806,8 +12752,6 @@ fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SmartPlaylistEv
     }
 
     let mut playlist_tracks = Vec::new();
-    let mut desired_paths = Vec::new();
-    let mut seen_paths = HashSet::new();
     let mut desired_count = 0_i64;
     loop {
         let response = search_library(conn, request.clone(), 1_000)?;
@@ -12816,18 +12760,7 @@ fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SmartPlaylistEv
         }
         let page_count = response.rows.len();
         for row in response.rows {
-            playlist_tracks.push(playlist_track_from_row(row.clone())?);
-            let directory = row.file_path.as_deref().map(str::trim).unwrap_or("");
-            let filename = row.filename.as_deref().map(str::trim).unwrap_or("");
-            if !directory.is_empty() && !filename.is_empty() {
-                let path = PathBuf::from(directory)
-                    .join(filename)
-                    .display()
-                    .to_string();
-                if seen_paths.insert(path.clone()) {
-                    desired_paths.push(path);
-                }
-            }
+            playlist_tracks.push(playlist_track_from_row(row)?);
         }
         if page_count == 0 {
             break;
@@ -12877,16 +12810,13 @@ fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SmartPlaylistEv
         "
         UPDATE playlist_automations
         SET last_evaluated_at = ?1, desired_count = ?2,
-            last_plex_error = NULL
+            last_error = NULL
         WHERE saved_playlist_id = ?3
         ",
         params![refreshed_at, desired_count, id],
     )?;
 
-    Ok(SmartPlaylistEvaluation {
-        playlist: load_saved_playlist(conn, id)?,
-        desired_paths,
-    })
+    load_saved_playlist(conn, id)
 }
 
 fn set_playlist_automation(
@@ -12897,9 +12827,6 @@ fn set_playlist_automation(
     if request.smart && saved.playlist.mixtape.is_some() {
         bail!("Mixtapes preserve an exact side order and locks; Smart refresh is not available for them")
     }
-    if request.plex_sync_enabled && !request.smart {
-        bail!("Plex auto-sync requires a Smart playlist")
-    }
     if request.smart && !saved.playlist.request.filters.track_ids.is_empty() {
         bail!(
             "This playlist is based on temporary track IDs. Build it from reusable filters before enabling Smart playlist"
@@ -12907,25 +12834,16 @@ fn set_playlist_automation(
     }
     conn.execute(
         "
-        INSERT INTO playlist_automations (
-            saved_playlist_id, smart, plex_sync_enabled
-        ) VALUES (?1, ?2, ?3)
+        INSERT INTO playlist_automations (saved_playlist_id, smart)
+        VALUES (?1, ?2)
         ON CONFLICT(saved_playlist_id) DO UPDATE SET
             smart = excluded.smart,
-            plex_sync_enabled = CASE
-                WHEN excluded.smart = 0 THEN 0
-                ELSE excluded.plex_sync_enabled
-            END,
-            last_plex_error = NULL
+            last_error = NULL
         ",
-        params![
-            request.id,
-            if request.smart { 1 } else { 0 },
-            if request.plex_sync_enabled { 1 } else { 0 }
-        ],
+        params![request.id, if request.smart { 1 } else { 0 }],
     )?;
     if request.smart {
-        return Ok(evaluate_smart_playlist(conn, request.id)?.playlist);
+        return evaluate_smart_playlist(conn, request.id);
     }
     load_saved_playlist(conn, request.id)
 }
@@ -12943,42 +12861,13 @@ pub(crate) fn refresh_all_smart_playlists_for_connection(conn: &Connection) -> R
             Ok(_) => refreshed += 1,
             Err(error) => {
                 conn.execute(
-                    "UPDATE playlist_automations SET last_plex_error = ?1 WHERE saved_playlist_id = ?2",
+                    "UPDATE playlist_automations SET last_error = ?1 WHERE saved_playlist_id = ?2",
                     params![error.to_string(), id],
                 )?;
             }
         }
     }
     Ok(refreshed)
-}
-
-pub(crate) fn plex_enabled_smart_playlist_ids(conn: &Connection) -> Result<Vec<i64>> {
-    let mut stmt = conn.prepare(
-        "
-        SELECT saved_playlist_id
-        FROM playlist_automations
-        WHERE smart = 1 AND plex_sync_enabled = 1
-        ORDER BY saved_playlist_id
-        ",
-    )?;
-    let ids = stmt
-        .query_map([], |row| row.get::<_, i64>(0))?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(ids)
-}
-
-pub(crate) fn load_saved_playlist_for_connection(
-    conn: &Connection,
-    id: i64,
-) -> Result<SavedPlaylist> {
-    load_saved_playlist(conn, id)
-}
-
-pub(crate) fn evaluate_smart_playlist_for_connection(
-    conn: &Connection,
-    id: i64,
-) -> Result<SmartPlaylistEvaluation> {
-    evaluate_smart_playlist(conn, id)
 }
 
 fn playlist_track_file(track: &AiPlaylistTrack) -> Option<PathBuf> {
@@ -13069,15 +12958,14 @@ pub fn refresh_smart_playlist_for_app(
     let (conn, _) = open(app)?;
     let evaluation = evaluate_smart_playlist(&conn, id)?;
     let refreshed_at = evaluation
-        .playlist
         .automation
         .last_evaluated_at
         .clone()
         .unwrap_or_else(|| Utc::now().to_rfc3339());
     Ok(SmartPlaylistRefreshResult {
-        desired_count: evaluation.playlist.automation.desired_count,
-        preview_count: evaluation.playlist.playlist.tracks.len(),
-        playlist: evaluation.playlist,
+        desired_count: evaluation.automation.desired_count,
+        preview_count: evaluation.playlist.tracks.len(),
+        playlist: evaluation,
         refreshed_at,
     })
 }
@@ -31737,7 +31625,7 @@ mod tests {
         assert!(exported.find("# Side A").unwrap() < exported.find("track-2.mp3").unwrap());
         assert!(exported.find("track-2.mp3").unwrap() < exported.find("# Side B").unwrap());
         assert!(exported.find("# Side B").unwrap() < exported.find("track-3.mp3").unwrap());
-        assert!(set_playlist_automation(&conn, SetPlaylistAutomationRequest { id: saved.id, smart: true, plex_sync_enabled: false }).unwrap_err().to_string().contains("Mixtapes"));
+        assert!(set_playlist_automation(&conn, SetPlaylistAutomationRequest { id: saved.id, smart: true }).unwrap_err().to_string().contains("Mixtapes"));
     }
 
     #[test]
@@ -31760,6 +31648,115 @@ mod tests {
     }
 
     #[test]
+    fn plex_removal_upgrade_preserves_saved_playlists_and_smart_rules() {
+        for version in [55, 59] {
+            let conn = seeded_connection();
+            let playlist = build_playlist(&conn, test_playlist_plan()).expect("build playlist");
+            let saved = save_playlist(
+                &conn,
+                SavePlaylistRequest {
+                    id: None,
+                    name: "Living Synthpop".to_string(),
+                    playlist: playlist.clone(),
+                },
+            )
+            .expect("save Smart playlist");
+            let snapshot = save_playlist(
+                &conn,
+                SavePlaylistRequest {
+                    id: None,
+                    name: "Fixed snapshot".to_string(),
+                    playlist,
+                },
+            )
+            .expect("save fixed playlist");
+            let before: Vec<(i64, String, String, String)> = conn
+                .prepare("SELECT id, name, playlist_json, updated_at FROM saved_playlists ORDER BY id")
+                .unwrap()
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap();
+            conn.execute_batch(
+                "
+                DROP TABLE playlist_automations;
+                CREATE TABLE playlist_automations (
+                    saved_playlist_id INTEGER PRIMARY KEY REFERENCES saved_playlists(id) ON DELETE CASCADE,
+                    smart INTEGER NOT NULL DEFAULT 0,
+                    plex_sync_enabled INTEGER NOT NULL DEFAULT 0,
+                    plex_playlist_rating_key TEXT,
+                    last_evaluated_at TEXT,
+                    last_plex_attempt_at TEXT,
+                    last_plex_success_at TEXT,
+                    last_plex_error TEXT,
+                    desired_count INTEGER NOT NULL DEFAULT 0,
+                    matched_count INTEGER NOT NULL DEFAULT 0,
+                    missing_count INTEGER NOT NULL DEFAULT 0,
+                    last_content_hash TEXT
+                );
+                CREATE INDEX idx_playlist_automations_plex_sync ON playlist_automations(plex_sync_enabled, saved_playlist_id);
+                CREATE TABLE plex_track_cache (normalized_file_path TEXT);
+                CREATE INDEX idx_plex_track_cache_path ON plex_track_cache(normalized_file_path);
+                INSERT INTO plex_track_cache VALUES ('D:\\Music\\track.mp3');
+                CREATE TABLE plex_sync_state (id INTEGER PRIMARY KEY, last_error TEXT);
+                INSERT INTO plex_sync_state VALUES (1, 'retired sync error');
+                ",
+            )
+            .expect("restore populated legacy schema");
+            conn.execute(
+                "INSERT INTO playlist_automations (saved_playlist_id, smart, plex_sync_enabled,
+                    plex_playlist_rating_key, last_evaluated_at, last_plex_error, desired_count)
+                 VALUES (?1, 1, 1, 'plex-playlist-42', '2026-10-05T12:00:00Z', 'old Plex failure', 1)",
+                params![saved.id],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO playlist_automations (saved_playlist_id) VALUES (?1)",
+                params![snapshot.id],
+            )
+            .unwrap();
+            conn.pragma_update(None, "user_version", version).unwrap();
+
+            migrate(&conn).expect("upgrade legacy Plex catalog");
+            migrate(&conn).expect("repeat upgrade without recreating Plex tables");
+
+            let after: Vec<(i64, String, String, String)> = conn
+                .prepare("SELECT id, name, playlist_json, updated_at FROM saved_playlists ORDER BY id")
+                .unwrap()
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap();
+            assert_eq!(before, after, "saved playlist snapshots must stay byte-for-byte intact");
+            assert!(migrations::phase_sixty_schema_exists(&conn).unwrap());
+            let automation = load_saved_playlist(&conn, saved.id).unwrap().automation;
+            assert!(automation.smart);
+            assert_eq!(automation.desired_count, 1);
+            assert_eq!(automation.last_evaluated_at.as_deref(), Some("2026-10-05T12:00:00Z"));
+            assert!(automation.last_error.is_none());
+            assert!(!load_saved_playlist(&conn, snapshot.id).unwrap().automation.smart);
+            let columns: Vec<String> = conn
+                .prepare("PRAGMA table_info(playlist_automations)")
+                .unwrap()
+                .query_map([], |row| row.get(1))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap();
+            assert_eq!(columns, ["saved_playlist_id", "smart", "last_evaluated_at", "last_error", "desired_count"]);
+            assert!(!schema_index_exists(&conn, "idx_playlist_automations_plex_sync").unwrap());
+            assert!(!schema_index_exists(&conn, "idx_plex_track_cache_path").unwrap());
+            assert_eq!(refresh_all_smart_playlists_for_connection(&conn).unwrap(), 1);
+            delete_saved_playlist(&conn, saved.id).unwrap();
+            let remaining: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM playlist_automations WHERE saved_playlist_id = ?1",
+                params![saved.id], |row| row.get(0),
+            ).unwrap();
+            assert_eq!(remaining, 0, "the migrated Smart rules must still cascade on deletion");
+            assert_eq!(list_saved_playlists(&conn).unwrap().len(), 1);
+        }
+    }
+
+    #[test]
     fn smart_playlists_re_evaluate_saved_rules_and_preserve_full_paths() {
         let conn = seeded_connection();
         let playlist = build_playlist(&conn, test_playlist_plan()).expect("build playlist");
@@ -31778,12 +31775,10 @@ mod tests {
             SetPlaylistAutomationRequest {
                 id: saved.id,
                 smart: true,
-                plex_sync_enabled: true,
             },
         )
-        .expect("enable smart Plex playlist");
+        .expect("enable smart playlist");
         assert!(enabled.automation.smart);
-        assert!(enabled.automation.plex_sync_enabled);
         assert_eq!(enabled.automation.desired_count, 1);
 
         conn.execute(
@@ -31806,13 +31801,37 @@ mod tests {
         rebuild_search_indexes(&conn).expect("rebuild search indexes");
 
         let evaluation = evaluate_smart_playlist(&conn, saved.id).expect("refresh smart playlist");
-        assert_eq!(evaluation.playlist.automation.desired_count, 2);
-        assert_eq!(evaluation.playlist.playlist.matching_track_count, 2);
-        assert_eq!(evaluation.desired_paths.len(), 2);
+        assert_eq!(evaluation.automation.desired_count, 2);
+        assert_eq!(evaluation.playlist.matching_track_count, 2);
+        assert_eq!(evaluation.playlist.tracks.len(), 2);
         assert!(evaluation
-            .desired_paths
+            .playlist
+            .tracks
             .iter()
+            .filter_map(playlist_track_file)
             .any(|path| path.ends_with("01 One More Chance.mp3")));
+
+        let mut invalid = evaluation.playlist.clone();
+        invalid.request.filters.track_ids = vec![1];
+        conn.execute(
+            "UPDATE saved_playlists SET playlist_json = ?1 WHERE id = ?2",
+            params![serde_json::to_string(&invalid).unwrap(), saved.id],
+        )
+        .unwrap();
+        assert_eq!(refresh_all_smart_playlists_for_connection(&conn).unwrap(), 0);
+        assert!(load_saved_playlist(&conn, saved.id)
+            .unwrap()
+            .automation
+            .last_error
+            .unwrap()
+            .contains("temporary track IDs"));
+        conn.execute(
+            "UPDATE saved_playlists SET playlist_json = ?1 WHERE id = ?2",
+            params![serde_json::to_string(&evaluation.playlist).unwrap(), saved.id],
+        )
+        .unwrap();
+        assert_eq!(refresh_all_smart_playlists_for_connection(&conn).unwrap(), 1);
+        assert!(load_saved_playlist(&conn, saved.id).unwrap().automation.last_error.is_none());
     }
 
     #[test]
@@ -31836,7 +31855,6 @@ mod tests {
             SetPlaylistAutomationRequest {
                 id: saved.id,
                 smart: true,
-                plex_sync_enabled: false,
             },
         )
         .is_err());

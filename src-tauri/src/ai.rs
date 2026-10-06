@@ -432,22 +432,15 @@ pub struct SavePlaylistRequest {
 pub struct SetPlaylistAutomationRequest {
     pub id: i64,
     pub smart: bool,
-    pub plex_sync_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaylistAutomationStatus {
     pub smart: bool,
-    pub plex_sync_enabled: bool,
-    pub plex_playlist_rating_key: Option<String>,
     pub last_evaluated_at: Option<String>,
-    pub last_plex_attempt_at: Option<String>,
-    pub last_plex_success_at: Option<String>,
-    pub last_plex_error: Option<String>,
+    pub last_error: Option<String>,
     pub desired_count: i64,
-    pub matched_count: i64,
-    pub missing_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]

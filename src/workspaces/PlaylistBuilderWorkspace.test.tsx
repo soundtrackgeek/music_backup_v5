@@ -164,16 +164,16 @@ describe("playlist builder workspace", () => {
         "Smart rules enabled. The playlist now follows the saved filters.",
       ),
     ).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: /Sync automatically to Plex/ }),
-    );
-    expect(
-      await screen.findByText(
-        "Automatic Plex sync enabled for this playlist.",
-      ),
-    ).toBeInTheDocument();
     expect(screen.getByText("Smart")).toBeInTheDocument();
-    expect(screen.getByText("Plex")).toBeInTheDocument();
+    expect(screen.queryByText(/Plex/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh rules" }));
+    expect(
+      await screen.findByText("Smart rules refreshed: 2 matching tracks."),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Last refreshed/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Smart playlist/ }));
+    expect(await screen.findByText("Smart rules disabled.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh rules" })).toBeDisabled();
 
     fireEvent.click(
       screen.getByRole("button", {
