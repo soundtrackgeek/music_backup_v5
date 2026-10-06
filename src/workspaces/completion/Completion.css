@@ -366,6 +366,8 @@
   box-shadow: 0 7px 24px rgba(27, 43, 38, 0.04);
 }
 .completion-candidate-panel {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 .completion-candidate-panel > header {
@@ -410,10 +412,16 @@
 .completion-candidate-list {
   display: grid;
   align-content: start;
-  max-height: 696px;
+  /* Fill the panel (sized by the neighbouring dossier column) instead of
+     stopping at a fixed height; basis 0 keeps the list from stretching it. */
+  flex: 1 1 0;
+  min-height: 350px;
   overflow-y: auto;
   padding: 5px;
   scrollbar-width: thin;
+}
+.completion-candidate-panel > .completion-candidate-list.virtual-list.is-virtualized {
+  max-height: none;
 }
 .completion-candidate-row {
   display: grid;
@@ -1791,7 +1799,10 @@
     flex: 1 1 auto;
   }
 
-  .completion-candidate-list {
+  .completion-candidate-list,
+  .completion-candidate-panel > .completion-candidate-list.virtual-list.is-virtualized {
+    flex: 0 1 auto;
+    min-height: 0;
     max-height: 350px;
   }
 

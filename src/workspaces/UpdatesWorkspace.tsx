@@ -322,7 +322,7 @@ function ArtistUpdateList({
         </span>
         <span>Largest impact first</span>
       </header>
-      <VirtualList className="updates-artist-list" items={artists} getKey={artistKey} estimateSize={64}
+      <VirtualList unbounded className="updates-artist-list" items={artists} getKey={artistKey} estimateSize={64}
         renderItem={(artist) => {
           const albumLabels = albumImpactLabels(artist);
           return (
@@ -653,7 +653,7 @@ export function UpdatesWorkspace({
               </span>
             </div>
           ) : (
-            <VirtualList className="updates-activity-list" items={ledgerEntries} getKey={ledgerKey}
+            <VirtualList unbounded className="updates-activity-list" items={ledgerEntries} getKey={ledgerKey}
               estimateSize={56} resetKey={`${offset}|${deferredQuery}|${changeKind}|${dateRange}`}
               renderItem={(entry) => {
                 if ("updates" in entry) {

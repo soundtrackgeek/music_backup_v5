@@ -101,6 +101,7 @@ export function ResultTable({
   onOpenAlbum,
   onOpenArtist,
   onOpenGenre,
+  unbounded = false,
 }: {
   response: BrowseResponse | null;
   sort: BrowseSort;
@@ -110,6 +111,7 @@ export function ResultTable({
   onOpenAlbum?: (albumId: string) => void;
   onOpenArtist?: (artistId: string, artistName: string) => void;
   onOpenGenre?: (genreId: string, genreName: string) => void;
+  unbounded?: boolean;
 }) {
   if (!response) {
     return (
@@ -200,6 +202,7 @@ export function ResultTable({
   return response.view === "tracks" ? (
     <ResizableTable
       tableId="search-tracks"
+      unbounded={unbounded}
       columns={trackTableColumns}
       className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showBillboardSingleColumn ? " with-billboard-single" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}${showTiISkuddetColumn ? " with-ti-i-skuddet" : ""}${showTiISkuddetDebutColumn ? " with-ti-i-skuddet-debut" : ""}${showNorsktoppenColumn ? " with-norsktoppen" : ""}${showNorsktoppenDebutColumn ? " with-norsktoppen-debut" : ""}`}
       items={response.rows}
@@ -459,6 +462,7 @@ export function ResultTable({
   ) : (
     <ResizableTable
       tableId="search-albums"
+      unbounded={unbounded}
       columns={albumTableColumns}
       className={`result-table album-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}`}
       items={response.rows}

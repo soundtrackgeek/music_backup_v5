@@ -485,6 +485,7 @@ export function ChartResults({
     <ResizableTable
       tableId={isTracks ? "chart-tracks" : "chart-albums"}
       className="result-table chart-results"
+      unbounded
       columns={Object.fromEntries(columns.map((column) => [
         column.sortField ?? column.key,
         column.key === "rank" ? "48px"

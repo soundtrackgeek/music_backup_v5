@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.161.0] - 2026-10-06
+
+### Changed
+- Show every row without an inner vertical scroll area in Search results, Chart results, the selected Playlist, and both Updates lists, including 200-row pages. Artist tables keep their scrolling.
+
+### Fixed
+- Make the Completion candidate list fill its panel to the bottom instead of stopping at a fixed height; it still scrolls internally.
+
 ## [0.160.0] - 2026-10-06
 
 ### Added

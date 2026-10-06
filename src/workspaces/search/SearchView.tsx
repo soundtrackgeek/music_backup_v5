@@ -1120,6 +1120,7 @@ export function SearchView({
 
         {browseError ? <p className="error-message">{browseError}</p> : null}
         <ResultTable
+          unbounded
           response={response}
           sort={request.sort}
           onSort={sortSearchBy}

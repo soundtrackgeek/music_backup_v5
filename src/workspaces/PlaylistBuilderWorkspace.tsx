@@ -641,7 +641,7 @@ export function PlaylistBuilderWorkspace({
                 </section>
               ) : null}
 
-              {playlist.mixtape ? <MixtapeReview playlist={playlist} disabled={isBuilding || isSaving} onChange={(next) => { setPlaylist(next); setExportResult(null); }} /> : <VirtualList className="playlist-track-list" aria-label="Playlist tracks"
+              {playlist.mixtape ? <MixtapeReview playlist={playlist} disabled={isBuilding || isSaving} onChange={(next) => { setPlaylist(next); setExportResult(null); }} /> : <VirtualList unbounded className="playlist-track-list" aria-label="Playlist tracks"
                 items={playlist.tracks} getKey={(_, index) => playlistTrackKeys[index]} estimateSize={64}
                 resetKey={`${activeSavedId}|${directSearchTitle}|${playlist.prompt}`}
                 renderItem={(track, index) => (

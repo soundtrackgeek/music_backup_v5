@@ -56,6 +56,8 @@ type TableProps<T = ReactNode> = {
   columns: Columns;
   className: string;
   children: ReactNode;
+  // Show every row without an inner vertical scroll area.
+  unbounded?: boolean;
   items?: readonly T[];
   getRowKey?: (item: T, index: number) => Key;
   renderRow?: (item: T, index: number) => ReactNode;
@@ -66,13 +68,13 @@ export function ResizableTable<T = ReactNode>(props: TableProps<T>) {
   return <TableLayout key={props.tableId} {...props} />;
 }
 
-function TableLayout<T>({ tableId, columns, className, children, items, getRowKey, renderRow }: TableProps<T>) {
+function TableLayout<T>({ tableId, columns, className, children, unbounded = false, items, getRowKey, renderRow }: TableProps<T>) {
   const tableRef = useRef<HTMLDivElement>(null);
   const elements = Children.toArray(children);
   const header = elements[0];
   const rows = elements.slice(1);
   const rowCount = items?.length ?? rows.length;
-  const virtualized = rowCount > virtualizationThreshold;
+  const virtualized = !unbounded && rowCount > virtualizationThreshold;
   const [headerHeight, setHeaderHeight] = useState(37);
   useLayoutEffect(() => {
     const head = tableRef.current?.querySelector<HTMLElement>(".result-table-head");
@@ -195,11 +197,11 @@ function TableLayout<T>({ tableId, columns, className, children, items, getRowKe
             return isValidElement(row)
               ? cloneElement(row as ReactElement<HTMLAttributes<HTMLElement>>, { "aria-rowindex": index + 2 }) : row;
           }}
-          scrollRef={tableRef} estimateSize={43} gap={1} scrollMargin={headerHeight} />
+          scrollRef={tableRef} estimateSize={43} gap={1} scrollMargin={headerHeight} unbounded={unbounded} />
           : <VirtualRows items={rows} getKey={(row, index) => isValidElement(row) ? row.key ?? index : index}
             renderItem={(row, index) => isValidElement(row)
               ? cloneElement(row as ReactElement<HTMLAttributes<HTMLElement>>, { "aria-rowindex": index + 2 }) : row}
-            scrollRef={tableRef} estimateSize={43} gap={1} scrollMargin={headerHeight} />}
+            scrollRef={tableRef} estimateSize={43} gap={1} scrollMargin={headerHeight} unbounded={unbounded} />}
       </div>
     </ResizeContext.Provider>
   );

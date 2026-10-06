@@ -8,7 +8,7 @@ import type { BrowseResponse, BrowseRow } from "../types";
 import { mockVirtualLayout } from "../test/virtualLayout";
 
 describe("playlist builder workspace", () => {
-  it("edits the final track in a large draft and keeps focus on a reordered track", async () => {
+  it("shows a large draft in full and keeps focus on a reordered track", async () => {
     const restoreLayout = mockVirtualLayout();
     const request = createRequest("tracks");
     const response: BrowseResponse = { view: "tracks", total: 1200, limit: 1200, offset: 0,
@@ -22,8 +22,7 @@ describe("playlist builder workspace", () => {
       const { container } = render(<PlaylistBuilderWorkspace isAvailable launch={{ id: 99,
         cohortTitle: "Large draft", prompt: draft.prompt, request, draft }} />);
       const list = screen.getByRole("list", { name: "Playlist tracks" });
-      expect(container.querySelectorAll(".playlist-track").length).toBeLessThan(30);
-      fireEvent.scroll(list, { target: { scrollTop: 1190 * 64 } });
+      expect(container.querySelectorAll(".playlist-track")).toHaveLength(1200);
       const move = await screen.findByRole("button", { name: "Move Track 1199 up" });
       act(() => move.focus());
       fireEvent.click(move);
@@ -33,7 +32,7 @@ describe("playlist builder workspace", () => {
       fireEvent.click(screen.getByRole("button", { name: "Remove Track 1199" }));
       expect(screen.queryByText("Track 1199")).not.toBeInTheDocument();
       expect(list).toHaveAttribute("data-item-count", "1199");
-      expect(container.querySelectorAll(".playlist-track").length).toBeLessThan(30);
+      expect(container.querySelectorAll(".playlist-track")).toHaveLength(1199);
     } finally { restoreLayout(); }
   });
   it("opens a Search handoff as a populated local draft without Luna planning", () => {

@@ -13,7 +13,7 @@ const focusableSelector = 'button:not(:disabled), input:not(:disabled), select:n
 export function VirtualRows<T>({
   items, getKey, renderItem, scrollRef, estimateSize = 64, gap = 0,
   scrollMargin = 0, resetKey, scrollToKey, scrollRequestKey,
-  itemRole = "presentation",
+  itemRole = "presentation", unbounded = false,
 }: {
   items: readonly T[];
   getKey: (item: T, index: number) => Key;
@@ -26,8 +26,10 @@ export function VirtualRows<T>({
   scrollToKey?: Key | null;
   scrollRequestKey?: Key;
   itemRole?: "listitem" | "presentation";
+  // Render every row in normal flow so the page, not this list, scrolls.
+  unbounded?: boolean;
 }) {
-  const virtualized = items.length > virtualizationThreshold;
+  const virtualized = !unbounded && items.length > virtualizationThreshold;
   // This child commits before its parent's viewport ref. Start observing on
   // the following layout pass, once that ref exists (including initial loads).
   const [ready, setReady] = useState(false);
@@ -165,7 +167,7 @@ export function VirtualRows<T>({
 }
 
 export function VirtualList<T>({
-  items, getKey, renderItem, estimateSize, resetKey, scrollToKey, scrollRequestKey, viewportRef, className = "", children, ...props
+  items, getKey, renderItem, estimateSize, resetKey, scrollToKey, scrollRequestKey, viewportRef, unbounded = false, className = "", children, ...props
 }: Omit<HTMLAttributes<HTMLDivElement>, "children"> & {
   items: readonly T[];
   getKey: (item: T, index: number) => Key;
@@ -175,13 +177,14 @@ export function VirtualList<T>({
   scrollToKey?: Key | null;
   scrollRequestKey?: Key;
   viewportRef?: RefObject<HTMLDivElement | null>;
+  unbounded?: boolean;
   children?: ReactNode;
 }) {
   const internalRef = useRef<HTMLDivElement>(null);
   const scrollRef = viewportRef ?? internalRef;
-  return <div role="list" {...props} ref={scrollRef} className={`${className} virtual-list${items.length > virtualizationThreshold ? " is-virtualized" : ""}`} data-item-count={items.length}>
+  return <div role="list" {...props} ref={scrollRef} className={`${className} virtual-list${!unbounded && items.length > virtualizationThreshold ? " is-virtualized" : ""}`} data-item-count={items.length}>
     <VirtualRows items={items} getKey={getKey} renderItem={renderItem} scrollRef={scrollRef}
-      estimateSize={estimateSize} resetKey={resetKey} scrollToKey={scrollToKey} scrollRequestKey={scrollRequestKey} itemRole="listitem" />
+      estimateSize={estimateSize} resetKey={resetKey} scrollToKey={scrollToKey} scrollRequestKey={scrollRequestKey} itemRole="listitem" unbounded={unbounded} />
     {children}
   </div>;
 }
