@@ -271,6 +271,8 @@ npm install
 
 ## Development
 
+Commit reusable source, scripts, and project documentation. Git ignores local assistant files in `.codex/`, browser diagnostics in `.playwright-mcp/`, the optional `.github/hooks/impeccable.json` hook, Python bytecode caches, and the root-level library-trimmer manifests, apply journals, backups, and review CSVs. Keep trimming journals and backups until any recovery work is complete; ignoring them leaves the files on disk. Other CSV/JSON files and shared GitHub hooks remain eligible for version control.
+
 Run the web UI only:
 
 ```powershell

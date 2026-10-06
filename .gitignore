@@ -27,6 +27,22 @@ Charts/
 chart-ranking-backups/
 MusicBrainz/
 
+# Local assistant tooling and browser diagnostics
+/.codex/
+/.playwright-mcp/
+/.github/hooks/impeccable.json
+
+# Python bytecode caches
+__pycache__/
+*.py[cod]
+
+# Local library-trimmer manifests, recovery journals, and review exports
+/tobemoved.csv
+/trim-manifest.json
+/trim-manifest-apply-*.json
+/trim-manifest.json.*.bak
+/trim-review.csv
+
 # Release staging
 release-assets/
 release-inputs/
