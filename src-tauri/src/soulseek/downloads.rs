@@ -21,7 +21,7 @@ const MAX_CONCURRENT_DOWNLOADS: u8 = 6;
 const DEFAULT_RELAY_SUGGESTION_MINUTES: u32 = 10;
 const RELAY_SUGGESTION_MINUTES: [u32; 6] = [0, 5, 10, 20, 30, 60];
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum TransferSafetyState {
     #[default]
@@ -48,7 +48,7 @@ impl TransferSafetyState {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum TransferPreparationMode {
     PauseNow,
@@ -67,7 +67,7 @@ fn default_soundcheck_enabled() -> bool {
     true
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum TransferStatus {
     Queued,
@@ -81,7 +81,7 @@ pub enum TransferStatus {
     Failed,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum VerificationStatus {
     #[default]
@@ -91,7 +91,7 @@ pub enum VerificationStatus {
     SizeMismatch,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseAlternativeFile {
     pub title: String,
@@ -99,7 +99,7 @@ pub struct ReleaseAlternativeFile {
     pub size_bytes: u64,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseAlternativeSource {
     pub username: String,
@@ -107,7 +107,7 @@ pub struct ReleaseAlternativeSource {
     pub files: Vec<ReleaseAlternativeFile>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchRepairSnapshot {
     pub reason: String,
@@ -120,7 +120,7 @@ pub struct PatchRepairSnapshot {
     pub warnings: Vec<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchReleaseFileRequest {
     pub release_id: String,
@@ -147,7 +147,7 @@ impl TransferStatus {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferSnapshot {
     pub id: String,
@@ -204,7 +204,7 @@ pub struct TransferSnapshot {
     transfer_token: Option<u32>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferQueueSnapshot {
     pub transfers: Vec<TransferSnapshot>,
@@ -215,7 +215,7 @@ pub struct TransferQueueSnapshot {
     pub safety_state: TransferSafetyState,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EnqueueTransferRequest {
     pub title: String,
@@ -224,7 +224,7 @@ pub struct EnqueueTransferRequest {
     pub size_bytes: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EnqueueReleaseFileRequest {
     pub title: String,
@@ -232,7 +232,7 @@ pub struct EnqueueReleaseFileRequest {
     pub size_bytes: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EnqueueReleaseRequest {
     pub title: String,

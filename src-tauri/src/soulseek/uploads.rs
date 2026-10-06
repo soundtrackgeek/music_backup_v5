@@ -16,7 +16,7 @@ use thiserror::Error;
 const UPLOAD_EVENT: &str = "music-library://soulseek-uploads";
 const MAX_UPLOAD_QUEUE: usize = 500;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum UploadStatus {
     Queued,
@@ -37,7 +37,7 @@ impl UploadStatus {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UploadSnapshot {
     pub id: String,
@@ -67,7 +67,7 @@ pub struct UploadSnapshot {
     file_claimed: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UploadQueueSnapshot {
     pub uploads: Vec<UploadSnapshot>,

@@ -51,7 +51,7 @@ impl Default for SharingStore {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedRootSnapshot {
     pub id: String,
@@ -64,7 +64,7 @@ pub struct SharedRootSnapshot {
     pub error: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalSharesSnapshot {
     pub roots: Vec<SharedRootSnapshot>,

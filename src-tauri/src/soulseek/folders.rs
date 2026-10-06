@@ -16,7 +16,7 @@ pub struct FolderTicket {
     pub folder: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderFileSnapshot {
     pub remote_filename: String,
@@ -31,7 +31,7 @@ pub struct FolderFileSnapshot {
     pub bit_depth: Option<u32>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderInspection {
     pub token: u32,

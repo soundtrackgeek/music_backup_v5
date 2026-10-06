@@ -21,7 +21,7 @@ const MAX_RECENT: usize = 40;
 const MAX_RUNTIME_PROFILES: usize = 256;
 const MAX_PENDING_PROFILES: usize = 8;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum PersonStatus {
     Unknown,
@@ -41,7 +41,7 @@ impl PersonStatus {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum ProfileState {
     Idle,
@@ -51,7 +51,7 @@ pub enum ProfileState {
     Error,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonProfile {
     pub username: String,
@@ -117,7 +117,7 @@ impl PersonProfile {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PeopleSnapshot {
     pub users: Vec<PersonProfile>,

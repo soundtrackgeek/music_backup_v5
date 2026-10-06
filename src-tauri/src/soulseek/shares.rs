@@ -17,7 +17,7 @@ pub struct SharesTicket {
     pub username: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareDirectorySummary {
     pub path: String,
@@ -29,7 +29,7 @@ pub struct ShareDirectorySummary {
     pub is_private: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UserSharesOverview {
     pub username: String,
@@ -41,7 +41,7 @@ pub struct UserSharesOverview {
     pub received_at_ms: u64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareFileSnapshot {
     pub remote_filename: String,
@@ -57,7 +57,7 @@ pub struct ShareFileSnapshot {
     pub is_private: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareFolderSnapshot {
     pub username: String,
@@ -67,7 +67,7 @@ pub struct ShareFolderSnapshot {
     pub total_size_bytes: u64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareSearchSnapshot {
     pub username: String,

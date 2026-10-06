@@ -4,6 +4,50 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	usenetBootstrap: () => __TAURI_INVOKE<UsenetBootstrap>("usenet_bootstrap"),
+	usenetSaveProfile: (request: SaveUsenetProfileRequest) => __TAURI_INVOKE<UsenetBootstrap>("usenet_save_profile", { request }),
+	usenetReset: () => __TAURI_INVOKE<UsenetBootstrap>("usenet_reset"),
+	usenetTestConnections: () => __TAURI_INVOKE<UsenetConnectionTest>("usenet_test_connections"),
+	usenetSearch: (request: UsenetSearchRequest) => __TAURI_INVOKE<UsenetSearchResponse>("usenet_search", { request }),
+	usenetTransfersSnapshot: () => __TAURI_INVOKE<UsenetTransferQueue>("usenet_transfers_snapshot"),
+	usenetEnqueueDownload: (request: UsenetDownloadRequest) => __TAURI_INVOKE<UsenetTransferQueue>("usenet_enqueue_download", { request }),
+	usenetClearCompleted: () => __TAURI_INVOKE<UsenetTransferQueue>("usenet_clear_completed"),
+	localSharesSnapshot: () => __TAURI_INVOKE<LocalSharesSnapshot>("local_shares_snapshot"),
+	localSharesAdd: (path: string) => __TAURI_INVOKE<LocalSharesSnapshot>("local_shares_add", { path }),
+	localSharesRemove: (id: string) => __TAURI_INVOKE<LocalSharesSnapshot>("local_shares_remove", { id }),
+	localSharesSetEnabled: (id: string, enabled: boolean) => __TAURI_INVOKE<LocalSharesSnapshot>("local_shares_set_enabled", { id, enabled }),
+	localSharesRescan: () => __TAURI_INVOKE<LocalSharesSnapshot>("local_shares_rescan"),
+	localSharesSetUploadSlots: (uploadSlots: number) => __TAURI_INVOKE<LocalSharesSnapshot>("local_shares_set_upload_slots", { uploadSlots }),
+	uploadsSnapshot: () => __TAURI_INVOKE<UploadQueueSnapshot>("uploads_snapshot"),
+	uploadCancel: (id: string) => __TAURI_INVOKE<UploadQueueSnapshot>("upload_cancel", { id }),
+	uploadClearFinished: () => __TAURI_INVOKE<UploadQueueSnapshot>("upload_clear_finished"),
+	transfersSnapshot: () => __TAURI_INVOKE<TransferQueueSnapshot>("transfers_snapshot"),
+	transferSetMaxConcurrentDownloads: (maxConcurrentDownloads: number) => __TAURI_INVOKE<TransferQueueSnapshot>("transfer_set_max_concurrent_downloads", { maxConcurrentDownloads }),
+	transferEnqueueRelease: (request: EnqueueReleaseRequest) => __TAURI_INVOKE<TransferQueueSnapshot>("transfer_enqueue_release", { request }),
+	transferPauseRelease: (releaseId: string) => __TAURI_INVOKE<TransferQueueSnapshot>("transfer_pause_release", { releaseId }),
+	transferResumeRelease: (releaseId: string) => __TAURI_INVOKE<TransferQueueSnapshot>("transfer_resume_release", { releaseId }),
+	transferCancelRelease: (releaseId: string) => __TAURI_INVOKE<TransferQueueSnapshot>("transfer_cancel_release", { releaseId }),
+	transferClearCompleted: () => __TAURI_INVOKE<TransferQueueSnapshot>("transfer_clear_completed"),
+	transferRevealReleasePath: (releaseId: string) => __TAURI_INVOKE<string>("transfer_reveal_release_path", { releaseId }),
+	connectionBootstrap: () => __TAURI_INVOKE<ConnectionBootstrap>("connection_bootstrap"),
+	connectionSaveProfile: (request: SaveConnectionRequest) => __TAURI_INVOKE<ConnectionBootstrap>("connection_save_profile", { request }),
+	connectionConnect: () => __TAURI_INVOKE<ConnectionSnapshot>("connection_connect"),
+	connectionDisconnect: () => __TAURI_INVOKE<ConnectionSnapshot>("connection_disconnect"),
+	connectionReset: () => __TAURI_INVOKE<ConnectionBootstrap>("connection_reset"),
+	searchSnapshot: () => __TAURI_INVOKE<SearchSnapshot[]>("search_snapshot"),
+	searchStart: (clientId: string, query: string) => __TAURI_INVOKE<SearchSnapshot>("search_start", { clientId, query }),
+	searchStop: (clientId: string) => __TAURI_INVOKE<{
+	state: SearchState,
+	token: number | null,
+	clientId: string,
+	query: string,
+	resultCount: number,
+	peerCount: number,
+	message: string,
+	startedAtMs: number | null,
+	finishedAtMs: number | null,
+} | null>("search_stop", { clientId }),
+	searchClose: (clientId: string) => __TAURI_INVOKE<boolean>("search_close", { clientId }),
 	getArtistBiography: (artistId: string, forceRefresh: boolean | null) => __TAURI_INVOKE<ArtistBiography>("get_artist_biography", { artistId, forceRefresh }),
 	getAlbumReview: (albumId: string, forceRefresh: boolean | null) => __TAURI_INVOKE<AlbumReview>("get_album_review", { albumId, forceRefresh }),
 	scoreMixtapeCandidates: (input: ScoreRequest) => __TAURI_INVOKE<ScoreResult>("score_mixtape_candidates", { input }),
@@ -542,6 +586,38 @@ export type ConfirmLibraryCompletionArtistMatchRequest = {
 	candidate: WishListMusicBrainzCandidate,
 };
 
+export type ConnectionBootstrap = {
+	profile: ConnectionProfile | null,
+	suggestedProfile: ConnectionProfile,
+	hasPassword: boolean,
+	snapshot: ConnectionSnapshot,
+	diagnosticsPath: string,
+	diagnostics: DiagnosticEntry[],
+	searchNetwork: DistributedSnapshot,
+};
+
+export type ConnectionProfile = {
+	username: string,
+	serverHost: string,
+	serverPort: number,
+	downloadDirectory: string,
+	rememberPassword: boolean,
+	autoConnect: boolean,
+};
+
+export type ConnectionSnapshot = {
+	state: ConnectionState,
+	username: string | null,
+	server: string | null,
+	message: string,
+	attempt: number,
+	connectedAtMs: number | null,
+	retryInSeconds: number | null,
+	updatedAtMs: number,
+};
+
+export type ConnectionState = "unconfigured" | "offline" | "connecting" | "authenticating" | "online" | "reconnecting" | "error";
+
 export type DeemixAlbumDownloadPreflight = {
 	alreadyDownloaded: boolean,
 	destinationPath: string | null,
@@ -626,6 +702,13 @@ export type DeemixCredentialStatus = {
 	source: string,
 };
 
+export type DiagnosticEntry = {
+	timestampMs: number,
+	level: string,
+	event: string,
+	message: string,
+};
+
 export type DiscogsConnectionTest = {
 	authenticated: boolean,
 	rateLimit: number | null,
@@ -636,6 +719,35 @@ export type DiscogsConnectionTest = {
 export type DiscogsCredentialStatus = {
 	configured: boolean,
 	source: string,
+};
+
+export type DistributedSnapshot = {
+	state: DistributedState,
+	message: string,
+	branchLevel: number | null,
+	searchesReceived: number,
+	searchesMatched: number,
+	searchesAnswered: number,
+	searchesIgnored: number,
+	updatedAtMs: number,
+};
+
+export type DistributedState = "offline" | "discovering" | "connected" | "branchRoot";
+
+export type EnqueueReleaseFileRequest = {
+	title: string,
+	remoteFilename: string,
+	sizeBytes: number,
+};
+
+export type EnqueueReleaseRequest = {
+	title: string,
+	username: string,
+	remoteFolder: string,
+	files: EnqueueReleaseFileRequest[],
+	expectedTrackCount?: number | null,
+	releaseGroupId?: string | null,
+	alternatives?: ReleaseAlternativeSource[],
 };
 
 export type ExportPlaylistRequest = ExportPlaylistRequest_Serialize | ExportPlaylistRequest_Deserialize;
@@ -1019,6 +1131,16 @@ export type LibraryCompletionVerificationStatus = {
 	recentItems: LibraryCompletionVerificationItemSummary[],
 };
 
+export type LocalSharesSnapshot = {
+	roots: SharedRootSnapshot[],
+	uploadSlots: number,
+	scanning: boolean,
+	totalFileCount: number,
+	totalDirectoryCount: number,
+	totalSizeBytes: number,
+	lastScanAtMs: number | null,
+};
+
 export type MixtapeConfig = {
 	briefs: [string, string],
 	minutes: [number, number],
@@ -1084,6 +1206,15 @@ export type MusicDoctorStatus = {
 	sources: MusicDoctorSource[],
 	formatStats: MusicDoctorFormatStat[],
 	bitrateStats: MusicDoctorBitrateStat[],
+};
+
+export type PatchRepairSnapshot = {
+	reason: string,
+	originalUsername: string | null,
+	originalRemoteFilename: string | null,
+	requestedAtMs: number,
+	repairedAtMs?: number | null,
+	warnings?: string[],
 };
 
 export type PlaylistAutomationStatus = {
@@ -1196,6 +1327,18 @@ export type PublishedSongWeek = {
 	entryDate: string,
 };
 
+export type ReleaseAlternativeFile = {
+	title: string,
+	remoteFilename: string,
+	sizeBytes: number,
+};
+
+export type ReleaseAlternativeSource = {
+	username: string,
+	remoteFolder: string,
+	files: ReleaseAlternativeFile[],
+};
+
 export type SaveAiSnapshotRequest = SaveAiSnapshotRequest_Serialize | SaveAiSnapshotRequest_Deserialize;
 
 export type SaveAiSnapshotRequest_Deserialize = {
@@ -1206,6 +1349,11 @@ export type SaveAiSnapshotRequest_Deserialize = {
 export type SaveAiSnapshotRequest_Serialize = {
 	title: string,
 	content: AiSnapshotContent_Serialize,
+};
+
+export type SaveConnectionRequest = {
+	profile: ConnectionProfile,
+	password: string | null,
 };
 
 export type SaveDiscogsCredentialsRequest = {
@@ -1235,6 +1383,12 @@ export type SavePlaylistRequest_Serialize = {
 	id: number | null,
 	name: string,
 	playlist: AiPlaylist_Serialize,
+};
+
+export type SaveUsenetProfileRequest = {
+	profile: UsenetProfile,
+	prowlarrApiKey: string | null,
+	newsPassword: string | null,
 };
 
 export type SavedExternalDiscovery = {
@@ -1294,6 +1448,20 @@ export type ScoreResult = {
 	usage: AiUsage,
 };
 
+export type SearchSnapshot = {
+	state: SearchState,
+	token: number | null,
+	clientId: string,
+	query: string,
+	resultCount: number,
+	peerCount: number,
+	message: string,
+	startedAtMs: number | null,
+	finishedAtMs: number | null,
+};
+
+export type SearchState = "idle" | "searching" | "completed" | "stopped" | "error";
+
 export type SetLibraryCompletionArtistDecisionRequest = {
 	artistId: string,
 	artist: string,
@@ -1327,6 +1495,17 @@ export type SetPlaylistAutomationRequest = {
 	smart: boolean,
 };
 
+export type SharedRootSnapshot = {
+	id: string,
+	path: string,
+	alias: string,
+	enabled: boolean,
+	fileCount: number,
+	directoryCount: number,
+	totalSizeBytes: number,
+	error: string | null,
+};
+
 export type Slot = {
 	trackId: number,
 	role: string,
@@ -1350,6 +1529,24 @@ export type SmartPlaylistRefreshResult_Serialize = {
 	refreshedAt: string,
 };
 
+export type SoundcheckResult = {
+	status: SoundcheckStatus,
+	checkedAtMs: number,
+	deep: boolean,
+	codec: string | null,
+	container: string | null,
+	durationSeconds: number | null,
+	bitrateKbps: number | null,
+	sampleRate: number | null,
+	bitsPerSample: number | null,
+	channels: number | null,
+	trackNumber: number | null,
+	trackTotal: number | null,
+	issues: string[],
+};
+
+export type SoundcheckStatus = "pending" | "passed" | "review" | "failed" | "unsupported";
+
 export type StartLibraryCompletionArtistVerificationRequest = {
 	artistIds?: string[],
 	label: string | null,
@@ -1368,6 +1565,53 @@ export type TextFilter = {
 	value?: string,
 };
 
+export type TransferQueueSnapshot = {
+	transfers: TransferSnapshot[],
+	activeCount: number,
+	maxConcurrentDownloads: number,
+	relaySuggestionMinutes: number,
+	soundcheckEnabled: boolean,
+	safetyState: TransferSafetyState,
+};
+
+export type TransferSafetyState = "running" | "draining" | "pausedForRestart";
+
+export type TransferSnapshot = {
+	id: string,
+	releaseId?: string | null,
+	releaseTitle?: string | null,
+	releaseFolder?: string | null,
+	fileIndex?: number | null,
+	fileCount?: number | null,
+	expectedTrackCount?: number | null,
+	releaseGroupId?: string | null,
+	title: string,
+	username: string,
+	remoteFilename: string,
+	sizeBytes: number,
+	transferredBytes: number,
+	speedBytesPerSecond: number,
+	etaSeconds: number | null,
+	status: TransferStatus,
+	queuePosition: number | null,
+	localPath: string,
+	error: string | null,
+	retryCount?: number,
+	retryAtMs?: number | null,
+	waitingSinceMs?: number | null,
+	verificationStatus?: VerificationStatus,
+	verificationMessage?: string | null,
+	verifiedAtMs?: number | null,
+	filedAtMs?: number | null,
+	soundcheck?: SoundcheckResult | null,
+	patchRepair?: PatchRepairSnapshot | null,
+	alternativeSources?: ReleaseAlternativeSource[],
+	createdAtMs: number,
+	updatedAtMs: number,
+};
+
+export type TransferStatus = "queued" | "retrying" | "requesting" | "remotelyQueued" | "connecting" | "downloading" | "paused" | "completed" | "failed";
+
 export type UpdateInfo = {
 	currentVersion: string,
 	version: string,
@@ -1380,6 +1624,122 @@ export type UpdateSnapshot = {
 	info: UpdateInfo | null,
 	error: string | null,
 };
+
+export type UploadQueueSnapshot = {
+	uploads: UploadSnapshot[],
+	activeCount: number,
+	queuedCount: number,
+	sessionUploadedBytes: number,
+};
+
+export type UploadSnapshot = {
+	id: string,
+	username: string,
+	remoteFilename: string,
+	filename: string,
+	sizeBytes: number,
+	transferredBytes: number,
+	speedBytesPerSecond: number,
+	etaSeconds: number | null,
+	status: UploadStatus,
+	queuePosition: number | null,
+	error: string | null,
+	createdAtMs: number,
+	updatedAtMs: number,
+};
+
+export type UploadStatus = "queued" | "connecting" | "uploading" | "completed" | "failed" | "cancelled";
+
+export type UsenetBootstrap = {
+	profile: UsenetProfile,
+	hasProwlarrApiKey: boolean,
+	hasNewsPassword: boolean,
+	extractorPath: string | null,
+	par2Path: string | null,
+};
+
+export type UsenetConnectionTest = {
+	prowlarrVersion: string,
+	newsServer: string,
+	extractorPath: string | null,
+	par2Path: string | null,
+	message: string,
+};
+
+export type UsenetDownloadRequest = {
+	guid: string,
+	title: string,
+	indexer: string,
+	downloadUrl: string,
+	sizeBytes: number,
+	expectedArtist: string,
+	expectedAlbum: string,
+	expectedYear: number | null,
+	releaseGroupId: string | null,
+};
+
+export type UsenetProfile = {
+	prowlarrUrl: string,
+	newsHost: string,
+	newsPort: number,
+	useTls: boolean,
+	username: string,
+	downloadDirectory: string,
+	connections: number,
+};
+
+export type UsenetSearchRequest = {
+	title: string,
+	artist: string,
+	year?: number | null,
+	limit?: number | null,
+};
+
+export type UsenetSearchResponse = {
+	query: string,
+	results: UsenetSearchResult[],
+	searchedAt: string,
+};
+
+export type UsenetSearchResult = {
+	guid: string,
+	title: string,
+	indexer: string,
+	sizeBytes: number,
+	ageDays: number,
+	grabs: number | null,
+	publishDate: string | null,
+	downloadUrl: string,
+	infoUrl: string | null,
+	categories: string[],
+	matchScore: number,
+};
+
+export type UsenetTransfer = {
+	id: string,
+	guid: string,
+	title: string,
+	indexer: string,
+	status: UsenetTransferStatus,
+	progressPercent: number,
+	downloadedBytes: number,
+	totalBytes: number,
+	message: string,
+	destinationPath: string | null,
+	error: string | null,
+	releaseGroupId: string | null,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type UsenetTransferQueue = {
+	transfers: UsenetTransfer[],
+	activeCount: number,
+};
+
+export type UsenetTransferStatus = "queued" | "fetchingNzb" | "downloading" | "verifying" | "repairing" | "extracting" | "completed" | "failed";
+
+export type VerificationStatus = "pending" | "verified" | "missing" | "sizeMismatch";
 
 export type Weights = {
 	atmosphere: number | null,

@@ -9,7 +9,7 @@ use std::{
 
 const MAX_RECENT_ENTRIES: usize = 120;
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticEntry {
     pub timestamp_ms: u64,

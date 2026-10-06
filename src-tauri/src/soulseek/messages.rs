@@ -14,14 +14,14 @@ const MAX_CONVERSATIONS: usize = 100;
 const MAX_MESSAGES_PER_CONVERSATION: usize = 500;
 pub const MAX_PRIVATE_MESSAGE_BYTES: usize = 8 * 1024;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum MessageDirection {
     Incoming,
     Outgoing,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum MessageDelivery {
     Received,
@@ -31,7 +31,7 @@ pub enum MessageDelivery {
     Failed,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PrivateMessage {
     pub id: String,
@@ -47,7 +47,7 @@ pub struct PrivateMessage {
     pub error: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PrivateConversation {
     pub username: String,
@@ -56,7 +56,7 @@ pub struct PrivateConversation {
     pub updated_at_ms: u64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MessagesSnapshot {
     pub conversations: Vec<PrivateConversation>,

@@ -5,7 +5,7 @@ use thiserror::Error;
 pub const DEFAULT_SERVER_HOST: &str = "server.slsknet.org";
 pub const DEFAULT_SERVER_PORT: u16 = 2242;
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionProfile {
     pub username: String,

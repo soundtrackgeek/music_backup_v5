@@ -403,6 +403,7 @@ pub async fn messages_remove(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn local_shares_snapshot(
     manager: State<'_, ConnectionManager>,
 ) -> Result<local_shares::LocalSharesSnapshot, String> {
@@ -410,6 +411,7 @@ pub async fn local_shares_snapshot(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn local_shares_add(
     manager: State<'_, ConnectionManager>,
     path: String,
@@ -422,6 +424,7 @@ pub async fn local_shares_add(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn local_shares_remove(
     manager: State<'_, ConnectionManager>,
     id: String,
@@ -434,6 +437,7 @@ pub async fn local_shares_remove(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn local_shares_set_enabled(
     manager: State<'_, ConnectionManager>,
     id: String,
@@ -447,6 +451,7 @@ pub async fn local_shares_set_enabled(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn local_shares_rescan(
     manager: State<'_, ConnectionManager>,
 ) -> Result<local_shares::LocalSharesSnapshot, String> {
@@ -458,6 +463,7 @@ pub async fn local_shares_rescan(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn local_shares_set_upload_slots(
     manager: State<'_, ConnectionManager>,
     upload_slots: u8,
@@ -468,6 +474,7 @@ pub async fn local_shares_set_upload_slots(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn uploads_snapshot(
     manager: State<'_, ConnectionManager>,
 ) -> Result<uploads::UploadQueueSnapshot, String> {
@@ -475,6 +482,7 @@ pub async fn uploads_snapshot(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn upload_cancel(
     manager: State<'_, ConnectionManager>,
     id: String,
@@ -485,6 +493,7 @@ pub async fn upload_cancel(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn upload_clear_finished(
     manager: State<'_, ConnectionManager>,
 ) -> Result<uploads::UploadQueueSnapshot, String> {
@@ -492,6 +501,7 @@ pub async fn upload_clear_finished(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn transfers_snapshot(
     manager: State<'_, ConnectionManager>,
 ) -> Result<downloads::TransferQueueSnapshot, String> {
@@ -519,6 +529,7 @@ pub async fn transfers_cancel_restart_preparation(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn transfer_set_max_concurrent_downloads(
     manager: State<'_, ConnectionManager>,
     max_concurrent_downloads: u8,
@@ -559,6 +570,7 @@ pub async fn transfer_enqueue(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn transfer_enqueue_release(
     manager: State<'_, ConnectionManager>,
     request: downloads::EnqueueReleaseRequest,
@@ -609,6 +621,7 @@ pub async fn transfer_reveal_path(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn transfer_pause_release(
     manager: State<'_, ConnectionManager>,
     release_id: String,
@@ -619,6 +632,7 @@ pub async fn transfer_pause_release(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn transfer_resume_release(
     manager: State<'_, ConnectionManager>,
     release_id: String,
@@ -629,6 +643,7 @@ pub async fn transfer_resume_release(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn transfer_cancel_release(
     manager: State<'_, ConnectionManager>,
     release_id: String,
@@ -650,6 +665,7 @@ pub async fn transfer_reorder_release(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn transfer_clear_completed(
     manager: State<'_, ConnectionManager>,
 ) -> Result<downloads::TransferQueueSnapshot, String> {
@@ -755,6 +771,7 @@ pub async fn transfer_patch_release_file(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn transfer_reveal_release_path(
     manager: State<'_, ConnectionManager>,
     release_id: String,
@@ -812,6 +829,7 @@ pub async fn shares_search(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn connection_bootstrap(
     manager: State<'_, ConnectionManager>,
 ) -> Result<ConnectionBootstrap, String> {
@@ -819,6 +837,7 @@ pub async fn connection_bootstrap(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn connection_save_profile(
     manager: State<'_, ConnectionManager>,
     request: SaveConnectionRequest,
@@ -829,6 +848,7 @@ pub async fn connection_save_profile(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn connection_connect(
     manager: State<'_, ConnectionManager>,
 ) -> Result<ConnectionSnapshot, String> {
@@ -836,6 +856,7 @@ pub async fn connection_connect(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn connection_disconnect(
     manager: State<'_, ConnectionManager>,
 ) -> Result<ConnectionSnapshot, String> {
@@ -843,6 +864,7 @@ pub async fn connection_disconnect(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn connection_reset(
     manager: State<'_, ConnectionManager>,
 ) -> Result<ConnectionBootstrap, String> {
@@ -857,6 +879,7 @@ pub async fn connection_diagnostics(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn search_snapshot(
     manager: State<'_, ConnectionManager>,
 ) -> Result<Vec<SearchSnapshot>, String> {
@@ -864,6 +887,7 @@ pub async fn search_snapshot(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn search_start(
     manager: State<'_, ConnectionManager>,
     client_id: String,
@@ -875,6 +899,7 @@ pub async fn search_start(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn search_stop(
     manager: State<'_, ConnectionManager>,
     client_id: String,
@@ -890,6 +915,7 @@ pub async fn search_stop_all(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn search_close(
     manager: State<'_, ConnectionManager>,
     client_id: String,

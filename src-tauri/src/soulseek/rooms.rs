@@ -16,7 +16,7 @@ const STORE_VERSION: u32 = 1;
 const MAX_STORED_ROOMS: usize = 64;
 const MAX_MESSAGES_PER_ROOM: usize = 250;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RoomMessage {
     pub id: String,
@@ -29,7 +29,7 @@ pub struct RoomMessage {
     pub mention: bool,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RoomMember {
     pub username: String,
@@ -57,7 +57,7 @@ impl From<RoomMemberData> for RoomMember {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RoomSnapshot {
     pub name: String,
@@ -73,7 +73,7 @@ pub struct RoomSnapshot {
     pub members: Vec<RoomMember>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RoomsSnapshot {
     pub rooms: Vec<RoomSnapshot>,

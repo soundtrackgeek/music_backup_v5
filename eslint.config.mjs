@@ -2,7 +2,7 @@ import tseslint from "typescript-eslint";
 
 export default [
   {
-    ignores: ["node_modules/**", "dist/**", "src-tauri/**"],
+    ignores: ["node_modules/**", "dist/**", "src-tauri/**", "src/bindings.ts"],
   },
   {
     files: ["src/**/*.{ts,tsx}"],

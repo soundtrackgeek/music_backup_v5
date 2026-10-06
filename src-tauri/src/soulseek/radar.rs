@@ -15,7 +15,7 @@ const RADAR_SEARCH_COOLDOWN: Duration = Duration::from_secs(1);
 const RADAR_RESULT_LIMIT: usize = 2_000;
 const RADAR_EVENT_BATCH_SIZE: usize = 200;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RadarAlbumRequest {
     pub album_id: String,
@@ -25,7 +25,7 @@ pub struct RadarAlbumRequest {
     pub cover_art_url: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum RadarState {
     Idle,
@@ -35,7 +35,7 @@ pub enum RadarState {
     Error,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum RadarAlbumState {
     Queued,
@@ -45,7 +45,7 @@ pub enum RadarAlbumState {
     Error,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RadarAlbumScan {
     pub album_id: String,
@@ -83,7 +83,7 @@ impl RadarAlbumScan {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RadarSnapshot {
     pub state: RadarState,

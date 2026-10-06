@@ -104,7 +104,7 @@ const FILE_BUFFER_SIZE: usize = 128 * 1024;
 const DISTRIBUTED_EVENT_QUEUE_SIZE: usize = 256;
 const DISTRIBUTED_PARENT_IDLE_TIMEOUT: Duration = Duration::from_secs(3 * 60);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum ConnectionState {
     Unconfigured,
@@ -116,7 +116,7 @@ pub enum ConnectionState {
     Error,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionSnapshot {
     pub state: ConnectionState,
@@ -157,7 +157,7 @@ impl ConnectionSnapshot {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionBootstrap {
     pub profile: Option<ConnectionProfile>,
@@ -169,7 +169,7 @@ pub struct ConnectionBootstrap {
     pub search_network: DistributedSnapshot,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveConnectionRequest {
     pub profile: ConnectionProfile,

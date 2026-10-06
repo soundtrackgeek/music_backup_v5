@@ -23,7 +23,7 @@ const NEWS_CREDENTIAL_SERVICE: &str = "com.local.musiclibrary.usenet.news";
 const PROWLARR_CREDENTIAL_ACCOUNT: &str = "api-key";
 const TRANSFER_EVENT: &str = "music-library://usenet-transfers";
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UsenetProfile {
     pub prowlarr_url: String,
@@ -79,7 +79,7 @@ impl UsenetProfile {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveUsenetProfileRequest {
     pub profile: UsenetProfile,
@@ -87,7 +87,7 @@ pub struct SaveUsenetProfileRequest {
     pub news_password: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UsenetBootstrap {
     pub profile: UsenetProfile,
@@ -97,7 +97,7 @@ pub struct UsenetBootstrap {
     pub par2_path: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UsenetConnectionTest {
     pub prowlarr_version: String,
@@ -107,16 +107,18 @@ pub struct UsenetConnectionTest {
     pub message: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UsenetSearchRequest {
     pub title: String,
     pub artist: String,
+    #[serde(default)]
     pub year: Option<i32>,
+    #[serde(default)]
     pub limit: Option<usize>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UsenetSearchResult {
     pub guid: String,
@@ -132,7 +134,7 @@ pub struct UsenetSearchResult {
     pub match_score: u8,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UsenetSearchResponse {
     pub query: String,
@@ -140,7 +142,7 @@ pub struct UsenetSearchResponse {
     pub searched_at: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UsenetDownloadRequest {
     pub guid: String,
@@ -154,7 +156,7 @@ pub struct UsenetDownloadRequest {
     pub release_group_id: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum UsenetTransferStatus {
     Queued,
@@ -167,7 +169,7 @@ pub enum UsenetTransferStatus {
     Failed,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UsenetTransfer {
     pub id: String,
@@ -186,7 +188,7 @@ pub struct UsenetTransfer {
     pub updated_at: String,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UsenetTransferQueue {
     pub transfers: Vec<UsenetTransfer>,
@@ -1023,6 +1025,7 @@ impl UsenetManager {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn usenet_bootstrap(
     manager: State<'_, UsenetManager>,
 ) -> Result<UsenetBootstrap, String> {
@@ -1030,6 +1033,7 @@ pub async fn usenet_bootstrap(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn usenet_save_profile(
     manager: State<'_, UsenetManager>,
     request: SaveUsenetProfileRequest,
@@ -1040,11 +1044,13 @@ pub async fn usenet_save_profile(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn usenet_reset(manager: State<'_, UsenetManager>) -> Result<UsenetBootstrap, String> {
     manager.reset().map_err(|error| error.to_string())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn usenet_test_connections(
     manager: State<'_, UsenetManager>,
 ) -> Result<UsenetConnectionTest, String> {
@@ -1056,6 +1062,7 @@ pub async fn usenet_test_connections(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn usenet_search(
     manager: State<'_, UsenetManager>,
     request: UsenetSearchRequest,
@@ -1068,6 +1075,7 @@ pub async fn usenet_search(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn usenet_transfers_snapshot(
     manager: State<'_, UsenetManager>,
 ) -> Result<UsenetTransferQueue, String> {
@@ -1075,6 +1083,7 @@ pub async fn usenet_transfers_snapshot(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn usenet_enqueue_download(
     manager: State<'_, UsenetManager>,
     request: UsenetDownloadRequest,
@@ -1083,6 +1092,7 @@ pub async fn usenet_enqueue_download(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn usenet_clear_completed(
     manager: State<'_, UsenetManager>,
 ) -> Result<UsenetTransferQueue, String> {

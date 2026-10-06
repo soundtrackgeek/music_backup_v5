@@ -483,7 +483,7 @@ Tauri command types are generated from Rust with `tauri-specta`. Commands annota
 npm run bindings
 ```
 
-`npm run check` runs `npm run check:bindings`, which fails when the committed file is out of date. To migrate another command, add `#[specta::specta]`, derive `specta::Type` on its types, add it to `specta_commands!` in `bindings.rs`, remove it from `generate_handler!`, and call `commands.<name>()` from `backend.ts`. Commands that return a raw `serde_json::Value` must return a typed struct first; exporting `Value` overflows the stack.
+`npm run check` runs `npm run check:bindings`, which fails when the committed file is out of date. To migrate another command, add `#[specta::specta]`, derive `specta::Type` on its types, add it to `specta_commands!` in `bindings.rs` (commands in other modules are listed as `module::command`), remove it from `generate_handler!`, and call `commands.<name>()` from `backend.ts`. Commands that return a raw `serde_json::Value` must return a typed struct first; exporting `Value` overflows the stack.
 
 Run the full release gate, including security checks, frontend build, Rust tests, and Tauri packaging:
 

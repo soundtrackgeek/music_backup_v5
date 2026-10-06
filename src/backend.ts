@@ -3207,7 +3207,7 @@ export async function getSoulseekConnection() {
       diagnosticsPath: "Preview runtime",
     } satisfies SoulseekConnectionBootstrap;
   }
-  return invoke<SoulseekConnectionBootstrap>("connection_bootstrap");
+  return commands.connectionBootstrap() as Promise<SoulseekConnectionBootstrap>;
 }
 
 export async function saveSoulseekConnection(
@@ -3232,9 +3232,7 @@ export async function saveSoulseekConnection(
       diagnosticsPath: "Preview runtime",
     } satisfies SoulseekConnectionBootstrap;
   }
-  return invoke<SoulseekConnectionBootstrap>("connection_save_profile", {
-    request: { profile, password },
-  });
+  return commands.connectionSaveProfile({ profile, password }) as Promise<SoulseekConnectionBootstrap>;
 }
 
 export async function connectSoulseek() {
@@ -3250,7 +3248,7 @@ export async function connectSoulseek() {
       updatedAtMs: Date.now(),
     } satisfies SoulseekConnectionSnapshot;
   }
-  return invoke<SoulseekConnectionSnapshot>("connection_connect");
+  return commands.connectionConnect() as Promise<SoulseekConnectionSnapshot>;
 }
 
 export async function disconnectSoulseek() {
@@ -3266,12 +3264,12 @@ export async function disconnectSoulseek() {
       updatedAtMs: Date.now(),
     } satisfies SoulseekConnectionSnapshot;
   }
-  return invoke<SoulseekConnectionSnapshot>("connection_disconnect");
+  return commands.connectionDisconnect() as Promise<SoulseekConnectionSnapshot>;
 }
 
 export async function resetSoulseekConnection() {
   if (!isTauriRuntime()) return getSoulseekConnection();
-  return invoke<SoulseekConnectionBootstrap>("connection_reset");
+  return commands.connectionReset() as Promise<SoulseekConnectionBootstrap>;
 }
 
 export async function selectSoulseekDownloadDirectory(defaultPath?: string) {
@@ -3296,34 +3294,32 @@ const emptySoulseekShares = (): SoulseekLocalShares => ({
 
 export async function getSoulseekLocalShares() {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return invoke<SoulseekLocalShares>("local_shares_snapshot");
+  return commands.localSharesSnapshot() as Promise<SoulseekLocalShares>;
 }
 
 export async function addSoulseekLocalShare(path: string) {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return invoke<SoulseekLocalShares>("local_shares_add", { path });
+  return commands.localSharesAdd(path) as Promise<SoulseekLocalShares>;
 }
 
 export async function removeSoulseekLocalShare(id: string) {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return invoke<SoulseekLocalShares>("local_shares_remove", { id });
+  return commands.localSharesRemove(id) as Promise<SoulseekLocalShares>;
 }
 
 export async function setSoulseekLocalShareEnabled(id: string, enabled: boolean) {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return invoke<SoulseekLocalShares>("local_shares_set_enabled", { id, enabled });
+  return commands.localSharesSetEnabled(id, enabled) as Promise<SoulseekLocalShares>;
 }
 
 export async function rescanSoulseekLocalShares() {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return invoke<SoulseekLocalShares>("local_shares_rescan");
+  return commands.localSharesRescan() as Promise<SoulseekLocalShares>;
 }
 
 export async function setSoulseekUploadSlots(uploadSlots: number) {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return invoke<SoulseekLocalShares>("local_shares_set_upload_slots", {
-    uploadSlots,
-  });
+  return commands.localSharesSetUploadSlots(uploadSlots) as Promise<SoulseekLocalShares>;
 }
 
 export async function searchSoulseekAlbum(
@@ -3380,7 +3376,7 @@ export async function searchSoulseekAlbum(
       settled = true;
       window.clearTimeout(timeout);
       unlisten?.();
-      void invoke<boolean>("search_close", { clientId }).catch(() => undefined);
+      void (commands.searchClose(clientId) as Promise<boolean>).catch(() => undefined);
       if (failure) {
         reject(new Error(failure));
       } else {
@@ -3393,7 +3389,7 @@ export async function searchSoulseekAlbum(
       }
     };
     const timeout = window.setTimeout(() => {
-      void invoke("search_stop", { clientId }).catch(() => undefined);
+      void commands.searchStop(clientId).catch(() => undefined);
       finish(
         {
           state: "error",
@@ -3424,7 +3420,7 @@ export async function searchSoulseekAlbum(
         }
         },
       );
-      await invoke("search_start", { clientId, query });
+      await commands.searchStart(clientId, query);
     } catch (error) {
       finish(
         {
@@ -3473,7 +3469,7 @@ function publishMockSoulseekTransfers() {
 
 export async function getSoulseekTransfers() {
   if (!isTauriRuntime()) return mockSoulseekTransferSnapshot();
-  return invoke<SoulseekTransferQueue>("transfers_snapshot");
+  return commands.transfersSnapshot() as Promise<SoulseekTransferQueue>;
 }
 
 export async function clearCompletedSoulseekTransfers() {
@@ -3495,7 +3491,7 @@ export async function clearCompletedSoulseekTransfers() {
     );
     return publishMockSoulseekTransfers();
   }
-  return invoke<SoulseekTransferQueue>("transfer_clear_completed");
+  return commands.transferClearCompleted() as Promise<SoulseekTransferQueue>;
 }
 
 export async function enqueueSoulseekRelease(input: SoulseekReleaseDownloadRequest) {
@@ -3560,7 +3556,7 @@ export async function enqueueSoulseekRelease(input: SoulseekReleaseDownloadReque
     }, 700);
     return queuedSnapshot;
   }
-  return invoke<SoulseekTransferQueue>("transfer_enqueue_release", { request: input });
+  return commands.transferEnqueueRelease(input) as Promise<SoulseekTransferQueue>;
 }
 
 export async function getSoulseekUploads() {
@@ -3572,7 +3568,7 @@ export async function getSoulseekUploads() {
       sessionUploadedBytes: 0,
     } satisfies SoulseekUploadQueue;
   }
-  return invoke<SoulseekUploadQueue>("uploads_snapshot");
+  return commands.uploadsSnapshot() as Promise<SoulseekUploadQueue>;
 }
 
 const mockUsenetProfile = {
@@ -3600,7 +3596,7 @@ export async function getUsenetBootstrap() {
       par2Path: null,
     } satisfies UsenetBootstrap;
   }
-  return invoke<UsenetBootstrap>("usenet_bootstrap");
+  return commands.usenetBootstrap() as Promise<UsenetBootstrap>;
 }
 
 export async function saveUsenetProfile(input: SaveUsenetProfileRequest) {
@@ -3614,7 +3610,7 @@ export async function saveUsenetProfile(input: SaveUsenetProfileRequest) {
       par2Path: null,
     } satisfies UsenetBootstrap;
   }
-  return invoke<UsenetBootstrap>("usenet_save_profile", { request: input });
+  return commands.usenetSaveProfile(input) as Promise<UsenetBootstrap>;
 }
 
 export async function resetUsenet() {
@@ -3627,7 +3623,7 @@ export async function resetUsenet() {
       par2Path: null,
     } satisfies UsenetBootstrap;
   }
-  return invoke<UsenetBootstrap>("usenet_reset");
+  return commands.usenetReset() as Promise<UsenetBootstrap>;
 }
 
 export async function testUsenetConnections() {
@@ -3640,7 +3636,7 @@ export async function testUsenetConnections() {
       message: "Desktop runtime required for a live connection test.",
     } satisfies UsenetConnectionTest;
   }
-  return invoke<UsenetConnectionTest>("usenet_test_connections");
+  return commands.usenetTestConnections() as Promise<UsenetConnectionTest>;
 }
 
 export async function selectUsenetDownloadDirectory(defaultPath?: string) {
@@ -3655,12 +3651,12 @@ export async function searchUsenet(input: UsenetSearchRequest) {
       searchedAt: new Date().toISOString(),
     } satisfies UsenetSearchResponse;
   }
-  return invoke<UsenetSearchResponse>("usenet_search", { request: input });
+  return commands.usenetSearch(input) as Promise<UsenetSearchResponse>;
 }
 
 export async function getUsenetTransfers() {
   if (!isTauriRuntime()) return mockUsenetQueue;
-  return invoke<UsenetTransferQueue>("usenet_transfers_snapshot");
+  return commands.usenetTransfersSnapshot() as Promise<UsenetTransferQueue>;
 }
 
 export async function enqueueUsenetDownload(input: UsenetDownloadRequest) {
@@ -3691,7 +3687,7 @@ export async function enqueueUsenetDownload(input: UsenetDownloadRequest) {
     mockUsenetTransferHandlers.forEach((handler) => handler(mockUsenetQueue));
     return mockUsenetQueue;
   }
-  return invoke<UsenetTransferQueue>("usenet_enqueue_download", { request: input });
+  return commands.usenetEnqueueDownload(input) as Promise<UsenetTransferQueue>;
 }
 
 export async function clearCompletedUsenetTransfers() {
@@ -3700,7 +3696,7 @@ export async function clearCompletedUsenetTransfers() {
     mockUsenetTransferHandlers.forEach((handler) => handler(mockUsenetQueue));
     return mockUsenetQueue;
   }
-  return invoke<UsenetTransferQueue>("usenet_clear_completed");
+  return commands.usenetClearCompleted() as Promise<UsenetTransferQueue>;
 }
 
 export async function compileNaturalLanguageQuery(input: AiCompileRequest) {

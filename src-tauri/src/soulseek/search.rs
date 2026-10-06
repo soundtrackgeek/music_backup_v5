@@ -15,7 +15,7 @@ const SEARCH_SESSION_LIMIT: usize = 8;
 const RELAY_SESSION_LIMIT: usize = 4;
 const RELAY_CLIENT_PREFIX: &str = "signal-relay:";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum SearchState {
     Idle,
@@ -25,7 +25,7 @@ pub enum SearchState {
     Error,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchSnapshot {
     pub state: SearchState,
@@ -55,7 +55,7 @@ impl SearchSnapshot {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub id: String,
@@ -75,7 +75,7 @@ pub struct SearchResult {
     pub is_private: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchEvent {
     pub event: &'static str,

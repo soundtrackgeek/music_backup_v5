@@ -12,6 +12,7 @@ use tauri::Wry;
 use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
+    soulseek, usenet,
     get_artist_biography,
     get_album_review,
     score_mixtape_candidates,
@@ -93,16 +94,55 @@ use super::{
 };
 
 macro_rules! specta_commands {
-    ($($name:ident),* $(,)?) => {
+    ($($b:ident $(:: $p:ident)*),* $(,)?) => {
         (
-            tauri_specta::collect_commands![$($name),*],
-            &[$(stringify!($name)),*] as &[&str],
+            tauri_specta::collect_commands![$($b $(:: $p)*),*],
+            // Command names are the last path segment, as Tauri invokes them.
+            vec![$(last_segment(stringify!($b $(:: $p)*))),*],
         )
     };
 }
 
-fn builder() -> (Builder<Wry>, &'static [&'static str]) {
+fn last_segment(path: &'static str) -> &'static str {
+    path.rsplit("::").next().unwrap_or(path).trim()
+}
+
+fn builder() -> (Builder<Wry>, Vec<&'static str>) {
     let (commands, names) = specta_commands![
+        usenet::usenet_bootstrap,
+        usenet::usenet_save_profile,
+        usenet::usenet_reset,
+        usenet::usenet_test_connections,
+        usenet::usenet_search,
+        usenet::usenet_transfers_snapshot,
+        usenet::usenet_enqueue_download,
+        usenet::usenet_clear_completed,
+        soulseek::local_shares_snapshot,
+        soulseek::local_shares_add,
+        soulseek::local_shares_remove,
+        soulseek::local_shares_set_enabled,
+        soulseek::local_shares_rescan,
+        soulseek::local_shares_set_upload_slots,
+        soulseek::uploads_snapshot,
+        soulseek::upload_cancel,
+        soulseek::upload_clear_finished,
+        soulseek::transfers_snapshot,
+        soulseek::transfer_set_max_concurrent_downloads,
+        soulseek::transfer_enqueue_release,
+        soulseek::transfer_pause_release,
+        soulseek::transfer_resume_release,
+        soulseek::transfer_cancel_release,
+        soulseek::transfer_clear_completed,
+        soulseek::transfer_reveal_release_path,
+        soulseek::connection_bootstrap,
+        soulseek::connection_save_profile,
+        soulseek::connection_connect,
+        soulseek::connection_disconnect,
+        soulseek::connection_reset,
+        soulseek::search_snapshot,
+        soulseek::search_start,
+        soulseek::search_stop,
+        soulseek::search_close,
         get_artist_biography,
         get_album_review,
         score_mixtape_candidates,

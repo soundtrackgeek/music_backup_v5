@@ -2201,41 +2201,7 @@ pub fn run() {
             acknowledge_catalog_revision,
             list_database_backups,
             restore_database_backup,
-            get_settings,
-            soulseek::connection_bootstrap,
-            soulseek::connection_save_profile,
-            soulseek::connection_connect,
-            soulseek::connection_disconnect,
-            soulseek::connection_reset,
-            soulseek::search_snapshot,
-            soulseek::search_start,
-            soulseek::search_stop,
-            soulseek::search_close,
-            soulseek::transfers_snapshot,
-            soulseek::transfer_set_max_concurrent_downloads,
-            soulseek::transfer_enqueue_release,
-            soulseek::transfer_pause_release,
-            soulseek::transfer_resume_release,
-            soulseek::transfer_cancel_release,
-            soulseek::transfer_clear_completed,
-            soulseek::transfer_reveal_release_path,
-            soulseek::local_shares_snapshot,
-            soulseek::local_shares_add,
-            soulseek::local_shares_remove,
-            soulseek::local_shares_set_enabled,
-            soulseek::local_shares_rescan,
-            soulseek::local_shares_set_upload_slots,
-            soulseek::uploads_snapshot,
-            soulseek::upload_cancel,
-            soulseek::upload_clear_finished,
-            usenet::usenet_bootstrap,
-            usenet::usenet_save_profile,
-            usenet::usenet_reset,
-            usenet::usenet_test_connections,
-            usenet::usenet_search,
-            usenet::usenet_transfers_snapshot,
-            usenet::usenet_enqueue_download,
-            usenet::usenet_clear_completed,
+            get_settings,
             delete_saved_external_discovery,
             get_musicbrainz_cache_status,
             get_musicbrainz_origin_country_status,

@@ -14,7 +14,7 @@ const MAX_REQUESTS_PER_USER_WINDOW: usize = 12;
 const DUPLICATE_TTL: Duration = Duration::from_secs(5 * 60);
 const MAX_SEEN_REQUESTS: usize = 8_192;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum DistributedState {
     Offline,
@@ -23,7 +23,7 @@ pub enum DistributedState {
     BranchRoot,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DistributedSnapshot {
     pub state: DistributedState,

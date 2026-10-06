@@ -29,7 +29,7 @@ const PROBED_EXTENSIONS: [&str; 12] = [
     "aac", "aif", "aiff", "alac", "caf", "flac", "m4a", "mp3", "mp4", "ogg", "opus", "wav",
 ];
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum SoundcheckStatus {
     #[default]
@@ -40,7 +40,7 @@ pub enum SoundcheckStatus {
     Unsupported,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SoundcheckResult {
     pub status: SoundcheckStatus,

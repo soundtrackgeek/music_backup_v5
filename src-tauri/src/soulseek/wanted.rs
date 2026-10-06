@@ -21,7 +21,7 @@ const AUDIO_EXTENSIONS: &[&str] = &[
     "aac", "aiff", "alac", "ape", "flac", "m4a", "mp3", "ogg", "opus", "wav", "wma", "wv",
 ];
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WantedAlbumRequest {
     pub album_id: String,
@@ -33,7 +33,7 @@ pub struct WantedAlbumRequest {
     pub minimum_track_count: Option<u32>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum WantedFormatPreference {
     Any,
@@ -43,7 +43,7 @@ pub enum WantedFormatPreference {
     Mp3Only,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WantedPreferences {
     pub format_preference: WantedFormatPreference,
@@ -61,7 +61,7 @@ impl Default for WantedPreferences {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WantedBestSource {
     pub username: String,
@@ -76,7 +76,7 @@ pub struct WantedBestSource {
     pub score: u32,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WantedFulfillmentRequest {
     pub album_id: String,
@@ -84,21 +84,21 @@ pub struct WantedFulfillmentRequest {
     pub track_count: Option<u32>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum WantedFulfillmentSource {
     Archive,
     Download,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum WantedDownloadSoundcheck {
     Passed,
     NotChecked,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WantedDownloadReceipt {
     pub release_id: String,
@@ -110,7 +110,7 @@ pub struct WantedDownloadReceipt {
     pub completed_at_ms: u64,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WantedDownloadFulfillmentRequest {
     pub album_id: String,
@@ -123,7 +123,7 @@ pub struct WantedDownloadFulfillmentRequest {
     pub completed_at_ms: u64,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WantedAlbum {
     pub album_id: String,
@@ -165,7 +165,7 @@ pub struct WantedAlbum {
     source_fingerprints: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WantedSnapshot {
     pub albums: Vec<WantedAlbum>,

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.168.0] - 2026-10-06
+
+### Changed
+- Migrate the Usenet (8) and Soulseek (26) commands to generated TypeScript bindings. Their commands live in `usenet.rs` and `soulseek/mod.rs`, so the generated command list now accepts `module::command` paths, and `backend.ts` calls `commands.*` for them.
+- Only the 26 Soulseek commands that were already registered are exposed. `soulseek/mod.rs` also defines 60 other `#[tauri::command]` functions (rooms, messages, people, and similar) that were never registered with Tauri, so the frontend cannot call them; they stay unregistered rather than becoming new IPC endpoints.
+- The Usenet search request marks `year` and `limit` as `#[serde(default)]`, so the generated type treats them as optional like the callers already do (behavior is unchanged).
+
+### Fixed
+- Exclude the generated `src/bindings.ts` from ESLint so its size no longer raises a `max-lines` warning.
+
 ## [0.167.0] - 2026-10-06
 
 ### Changed
