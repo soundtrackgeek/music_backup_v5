@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AiLibraryAnalysis } from "../types";
 import { LibraryAnalystPanel } from "./LibraryAnalystPanel";
+import { enterText } from "../test/userInput";
 
 const backend = vi.hoisted(() => ({
   analyzeLibrary: vi.fn(),
@@ -66,7 +67,7 @@ describe("LibraryAnalystPanel", () => {
 
     render(<LibraryAnalystPanel isAvailable />);
     await user.click(screen.getByRole("button", { name: /Rating backlog/ }));
-    await user.type(
+    await enterText(user, 
       screen.getByRole("textbox", { name: "Focus question" }),
       "Where should I start?",
     );

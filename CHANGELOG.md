@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.165.1] - 2026-10-06
+
+### Fixed
+- Stop the Luna panel tests (natural-language query, music research, current-view question, library analyst) from timing out when the machine is busy. They typed prompts one keystroke at a time, which took 2-3 seconds per test while idle and passed the 5 second limit under CPU load, so the full suite failed intermittently. They now paste the prompt in one step through a shared `enterText` helper.
+
 ## [0.165.0] - 2026-10-06
 
 ### Changed

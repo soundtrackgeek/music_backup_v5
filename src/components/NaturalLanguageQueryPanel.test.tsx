@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createChartConfig, createRequest } from "../app/requests";
 import type { AiCompiledQuery } from "../types";
 import { NaturalLanguageQueryPanel } from "./NaturalLanguageQueryPanel";
+import { enterText } from "../test/userInput";
 
 const backend = vi.hoisted(() => ({
   askCurrentView: vi.fn(),
@@ -76,7 +77,7 @@ describe("NaturalLanguageQueryPanel", () => {
     );
 
     const prompt = "Top AOR albums from 1984 under 45 minutes";
-    await user.type(
+    await enterText(user, 
       screen.getByRole("textbox", { name: "Natural-language search request" }),
       prompt,
     );
@@ -157,7 +158,7 @@ describe("NaturalLanguageQueryPanel", () => {
         onApply={onApply}
       />,
     );
-    await user.type(
+    await enterText(user, 
       screen.getByRole("textbox", { name: "Natural-language search request" }),
       prompt,
     );
@@ -280,11 +281,11 @@ describe("NaturalLanguageQueryPanel", () => {
     const input = screen.getByRole("textbox", {
       name: "Natural-language search request",
     });
-    await user.type(input, firstPrompt);
+    await enterText(user, input, firstPrompt);
     await user.click(screen.getByRole("button", { name: "Search" }));
     await screen.findByText(firstAnswer.answer);
 
-    await user.type(input, followUpPrompt);
+    await enterText(user, input, followUpPrompt);
     await user.click(screen.getByRole("button", { name: "Ask follow-up" }));
 
     expect(backend.compileNaturalLanguageQuery).toHaveBeenNthCalledWith(2, {
@@ -339,7 +340,7 @@ describe("NaturalLanguageQueryPanel", () => {
         onApply={onApply}
       />,
     );
-    await user.type(
+    await enterText(user, 
       screen.getByRole("textbox", { name: "Natural-language chart request" }),
       "Best AOR albums",
     );

@@ -9,6 +9,7 @@ import type {
   SaveAiSnapshotRequest,
 } from "../types";
 import { MusicResearchPanel } from "./MusicResearchPanel";
+import { enterText } from "../test/userInput";
 
 const backend = vi.hoisted(() => ({
   copyTextToClipboard: vi.fn(),
@@ -175,7 +176,7 @@ describe("MusicResearchPanel", () => {
       <MusicResearchPanel isOpen context={albumContext} onClose={vi.fn()} />,
     );
 
-    await user.type(screen.getByRole("textbox"), "What defined the sound?");
+    await enterText(user, screen.getByRole("textbox"), "What defined the sound?");
     await user.click(screen.getByRole("button", { name: "Ask" }));
 
     expect(
@@ -305,7 +306,7 @@ describe("MusicResearchPanel", () => {
       />,
     );
 
-    await user.type(screen.getByRole("textbox"), "Why did it sound this way?");
+    await enterText(user, screen.getByRole("textbox"), "Why did it sound this way?");
     await user.click(screen.getByRole("button", { name: "Ask" }));
     rerender(
       <MusicResearchPanel

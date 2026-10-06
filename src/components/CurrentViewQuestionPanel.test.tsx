@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRequest } from "../app/requests";
 import type { AiCurrentViewAnswer } from "../types";
 import { CurrentViewQuestionPanel } from "./CurrentViewQuestionPanel";
+import { enterText } from "../test/userInput";
 
 const backend = vi.hoisted(() => ({
   askCurrentView: vi.fn(),
@@ -64,7 +65,7 @@ describe("CurrentViewQuestionPanel", () => {
 
     render(<CurrentViewQuestionPanel context="search" request={request} />);
     const question = "Which artists appear most often?";
-    await user.type(
+    await enterText(user, 
       screen.getByRole("textbox", { name: "Question about the current view" }),
       question,
     );
@@ -119,7 +120,7 @@ describe("CurrentViewQuestionPanel", () => {
 
     render(<CurrentViewQuestionPanel context="chart" request={request} />);
     const question = "What does the top 20 tell about me?";
-    await user.type(
+    await enterText(user, 
       screen.getByRole("textbox", { name: "Question about the current view" }),
       question,
     );
@@ -147,7 +148,7 @@ describe("CurrentViewQuestionPanel", () => {
         request={createRequest("tracks")}
       />,
     );
-    await user.type(
+    await enterText(user, 
       screen.getByRole("textbox", { name: "Question about the current view" }),
       "How many are unrated?",
     );
@@ -183,7 +184,7 @@ describe("CurrentViewQuestionPanel", () => {
       />,
     );
     const question = "Which genres stand out here?";
-    await user.type(
+    await enterText(user, 
       screen.getByRole("textbox", { name: "Question about Oslo, Norway" }),
       question,
     );
