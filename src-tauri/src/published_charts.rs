@@ -109,7 +109,7 @@ struct BundleBook {
     csv_sha256: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedChartsImportProgress {
     pub completed_years: usize,
@@ -118,7 +118,7 @@ pub struct PublishedChartsImportProgress {
     pub imported_rows: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedChartsImportSummary {
     pub source_path: String,
@@ -128,7 +128,7 @@ pub struct PublishedChartsImportSummary {
     pub duration_ms: u128,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedChartCatalog {
     pub imported_years: usize,
@@ -138,7 +138,7 @@ pub struct PublishedChartCatalog {
     pub series: Vec<PublishedChartSeries>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedChartSeries {
     pub chart: String,
@@ -148,21 +148,21 @@ pub struct PublishedChartSeries {
     pub rows: i64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedChartWeek {
     pub week_ending: String,
     pub rows: i64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedChartEntries {
     pub total_rows: i64,
     pub entries: Vec<PublishedChartEntry>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedArtistRanking {
     pub total_artists: i64,
@@ -171,7 +171,7 @@ pub struct PublishedArtistRanking {
     pub artists: Vec<PublishedArtistRow>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedArtistRow {
     pub rank: i64,
@@ -184,7 +184,7 @@ pub struct PublishedArtistRow {
     pub printed_variants: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedChartEntry {
     pub id: i64,
@@ -1726,7 +1726,7 @@ mod tests {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedSongRanking {
     pub total_songs: i64,
@@ -1734,7 +1734,7 @@ pub struct PublishedSongRanking {
     pub total_entries: i64,
     pub songs: Vec<PublishedSongRow>,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedSongRow {
     pub rank: i64,
@@ -1749,7 +1749,7 @@ pub struct PublishedSongRow {
     /// Other printed artist – title spellings merged into this row.
     pub printed_variants: Vec<String>,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedSongWeek {
     pub week_ending: String,

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.164.0] - 2026-10-06
+
+### Changed
+- Migrate the Library Completion and Artist Completion commands (14: album and artist workbenches, verification queue status/start/state/retry, decisions, artist match confirmation, and cover enrichment) to generated TypeScript bindings. `backend.ts` now calls `commands.*` from `src/bindings.ts` for them, and they are dispatched by tauri-specta.
+- Public serializable types in the Wish List, Deemix, Discogs, Last.fm, Music Doctor, updater, Published Charts, biography, review, Music Map, and MusicBrainz modules now derive `specta::Type`, ready for their own commands to migrate.
+- Library and artist completion request structs use `#[serde(default)]`, so the generated types mark their filter fields optional like the hand-written ones (behavior is unchanged).
+
 ## [0.163.0] - 2026-10-06
 
 ### Added

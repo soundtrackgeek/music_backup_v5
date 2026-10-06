@@ -4362,7 +4362,7 @@ export async function getLibraryCompletion(input: LibraryCompletionRequest | nul
       atlas: mockLibraryCompletionAtlas,
     } satisfies LibraryCompletionResponse;
   }
-  return invoke<LibraryCompletionResponse>("get_library_completion", { input });
+  return commands.getLibraryCompletion(input) as Promise<LibraryCompletionResponse>;
 }
 
 function advanceMockLibraryCompletionVerification() {
@@ -4436,9 +4436,7 @@ export async function getLibraryCompletionVerificationStatus() {
     scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
-  return invoke<LibraryCompletionVerificationStatus>(
-    "get_library_completion_verification_status",
-  );
+  return commands.getLibraryCompletionVerificationStatus() as Promise<LibraryCompletionVerificationStatus>;
 }
 
 export async function getLibraryCompletionCoverUrl(candidateId: string, size: ThumbnailSize = 300) {
@@ -4469,10 +4467,7 @@ export async function enrichLibraryCompletionCover(candidateId: string) {
     mockLibraryCompletionCovers.set(candidateId, result);
     return result;
   }
-  return invoke<LibraryCompletionCoverEnrichment>(
-    "enrich_library_completion_cover",
-    { candidateId },
-  ).then((result) => { invalidateArtwork(); return result; });
+  return (commands.enrichLibraryCompletionCover(candidateId) as Promise<LibraryCompletionCoverEnrichment>).then((result) => { invalidateArtwork(); return result; });
 }
 
 export async function startLibraryCompletionVerification(
@@ -4556,10 +4551,7 @@ export async function startLibraryCompletionVerification(
     scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
-  return invoke<LibraryCompletionVerificationStatus>(
-    "start_library_completion_verification",
-    { input },
-  );
+  return commands.startLibraryCompletionVerification(input) as Promise<LibraryCompletionVerificationStatus>;
 }
 
 export async function setLibraryCompletionVerificationState(
@@ -4577,10 +4569,7 @@ export async function setLibraryCompletionVerificationState(
     scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
-  return invoke<LibraryCompletionVerificationStatus>(
-    "set_library_completion_verification_state",
-    { input },
-  );
+  return commands.setLibraryCompletionVerificationState(input) as Promise<LibraryCompletionVerificationStatus>;
 }
 
 export async function retryLibraryCompletionVerificationFailures(batchId: number) {
@@ -4622,10 +4611,7 @@ export async function retryLibraryCompletionVerificationFailures(batchId: number
     scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
-  return invoke<LibraryCompletionVerificationStatus>(
-    "retry_library_completion_verification_failures",
-    { batchId },
-  );
+  return commands.retryLibraryCompletionVerificationFailures(batchId) as Promise<LibraryCompletionVerificationStatus>;
 }
 
 export async function setLibraryCompletionDecision(
@@ -4689,10 +4675,7 @@ export async function setLibraryCompletionDecision(
     }
     return decision;
   }
-  return invoke<LibraryCompletionDecision>(
-    "set_library_completion_decision",
-    { input },
-  );
+  return commands.setLibraryCompletionDecision(input) as Promise<LibraryCompletionDecision>;
 }
 
 export async function getLibraryCompletionArtists(
@@ -4727,7 +4710,7 @@ export async function getLibraryCompletionArtists(
       candidates,
     } satisfies LibraryCompletionArtistResponse;
   }
-  return invoke<LibraryCompletionArtistResponse>("get_library_completion_artists", { input });
+  return commands.getLibraryCompletionArtists(input) as Promise<LibraryCompletionArtistResponse>;
 }
 
 function verifiedMockArtist(candidate: LibraryCompletionArtistCandidate) {
@@ -4805,9 +4788,7 @@ export async function getLibraryCompletionArtistVerificationStatus() {
     scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
-  return invoke<LibraryCompletionArtistVerificationStatus>(
-    "get_library_completion_artist_verification_status",
-  );
+  return commands.getLibraryCompletionArtistVerificationStatus() as Promise<LibraryCompletionArtistVerificationStatus>;
 }
 
 export async function startLibraryCompletionArtistVerification(
@@ -4861,10 +4842,7 @@ export async function startLibraryCompletionArtistVerification(
     scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
-  return invoke<LibraryCompletionArtistVerificationStatus>(
-    "start_library_completion_artist_verification",
-    { input },
-  );
+  return commands.startLibraryCompletionArtistVerification(input) as Promise<LibraryCompletionArtistVerificationStatus>;
 }
 
 export async function setLibraryCompletionArtistVerificationState(
@@ -4882,10 +4860,7 @@ export async function setLibraryCompletionArtistVerificationState(
     scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
-  return invoke<LibraryCompletionArtistVerificationStatus>(
-    "set_library_completion_artist_verification_state",
-    { input },
-  );
+  return commands.setLibraryCompletionArtistVerificationState(input) as Promise<LibraryCompletionArtistVerificationStatus>;
 }
 
 export async function retryLibraryCompletionArtistVerificationFailures(batchId: number) {
@@ -4897,10 +4872,7 @@ export async function retryLibraryCompletionArtistVerificationFailures(batchId: 
     scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
-  return invoke<LibraryCompletionArtistVerificationStatus>(
-    "retry_library_completion_artist_verification_failures",
-    { batchId },
-  );
+  return commands.retryLibraryCompletionArtistVerificationFailures(batchId) as Promise<LibraryCompletionArtistVerificationStatus>;
 }
 
 export async function confirmLibraryCompletionArtistMatch(
@@ -4919,10 +4891,7 @@ export async function confirmLibraryCompletionArtistMatch(
     mockLibraryCompletionArtistVerifications.set(candidate.id, verified);
     return verified;
   }
-  return invoke<LibraryCompletionArtistCandidate>(
-    "confirm_library_completion_artist_match",
-    { input },
-  );
+  return commands.confirmLibraryCompletionArtistMatch(input) as Promise<LibraryCompletionArtistCandidate>;
 }
 
 export async function setLibraryCompletionArtistDecision(
@@ -4998,10 +4967,7 @@ export async function setLibraryCompletionArtistDecision(
     mockLibraryCompletionArtistDecisions.set(input.artistId, decision);
     return decision;
   }
-  return invoke<LibraryCompletionArtistDecision>(
-    "set_library_completion_artist_decision",
-    { input },
-  );
+  return commands.setLibraryCompletionArtistDecision(input) as Promise<LibraryCompletionArtistDecision>;
 }
 
 export async function searchWishListMusicBrainz(

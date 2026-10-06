@@ -46,27 +46,27 @@ static POPULARITY_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 static SIMILARITY_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 static RELATED_ALBUMS_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LastFmCredentialStatus {
     pub configured: bool,
     pub source: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LastFmConnectionTest {
     pub authenticated: bool,
     pub message: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveLastFmApiKeyRequest {
     pub api_key: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LastFmArtistImageRefreshSummary {
     pub requested: u32,
@@ -77,7 +77,7 @@ pub struct LastFmArtistImageRefreshSummary {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LastFmPopularTrack {
     pub rank: i64,
@@ -93,7 +93,7 @@ pub struct LastFmPopularTrack {
     pub source_url: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LastFmArtistPopularity {
     pub artist_id: String,
@@ -106,7 +106,7 @@ pub struct LastFmArtistPopularity {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LastFmSimilarArtist {
     pub rank: i64,
@@ -123,7 +123,7 @@ pub struct LastFmSimilarArtist {
     pub representative_cover_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LastFmArtistSimilarity {
     pub artist_id: String,
@@ -136,7 +136,7 @@ pub struct LastFmArtistSimilarity {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LastFmAlbumTrackPopularity {
     pub track_id: i64,
@@ -147,7 +147,7 @@ pub struct LastFmAlbumTrackPopularity {
     pub source_url: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LastFmAlbumPopularity {
     pub artist_id: String,
@@ -162,7 +162,7 @@ pub struct LastFmAlbumPopularity {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LastFmRelatedAlbum {
     pub rank: i64,
@@ -181,7 +181,7 @@ pub struct LastFmRelatedAlbum {
     pub local_cover_mime_type: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LastFmRelatedAlbums {
     pub album_id: String,

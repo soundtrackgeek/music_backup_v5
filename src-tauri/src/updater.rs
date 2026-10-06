@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 use tokio::sync::Mutex;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateInfo {
     current_version: String,
@@ -14,7 +14,7 @@ pub struct UpdateInfo {
     notes: Option<String>,
 }
 
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Default, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSnapshot {
     checked_at: Option<String>,

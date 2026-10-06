@@ -12,7 +12,7 @@ use std::time::Instant;
 
 static SYNC_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicDoctorSource {
     pub path: String,
@@ -22,7 +22,7 @@ pub struct MusicDoctorSource {
     pub total_bytes: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicDoctorFormatStat {
     pub format: String,
@@ -30,7 +30,7 @@ pub struct MusicDoctorFormatStat {
     pub total_bytes: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicDoctorBitrateStat {
     pub band: String,
@@ -39,7 +39,7 @@ pub struct MusicDoctorBitrateStat {
     pub total_bytes: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicDoctorStatus {
     pub database_path: String,
@@ -69,7 +69,7 @@ pub struct MusicDoctorStatus {
     pub bitrate_stats: Vec<MusicDoctorBitrateStat>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicDoctorSyncResult {
     pub sync_run_id: i64,

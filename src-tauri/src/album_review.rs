@@ -16,7 +16,7 @@ const UNAVAILABLE_CACHE_DAYS: i64 = 7;
 
 static REVIEW_REFRESH_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumReview {
     pub album_id: String,

@@ -17,7 +17,7 @@ const MAX_ARTIST_KEY_LENGTH: usize = 400;
 const MAX_TEXT_LENGTH: usize = 300;
 const RECENT_VERIFICATION_ITEMS: usize = 8;
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionArtistEvidence {
     pub source: String,
@@ -29,7 +29,7 @@ pub struct LibraryCompletionArtistEvidence {
     pub appearances: i64,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionArtistCandidate {
     pub id: String,
@@ -54,7 +54,7 @@ pub struct LibraryCompletionArtistCandidate {
     pub evidence: Vec<LibraryCompletionArtistEvidence>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionArtistResponse {
     pub generated_at: String,
@@ -66,8 +66,9 @@ pub struct LibraryCompletionArtistResponse {
     pub candidates: Vec<LibraryCompletionArtistCandidate>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct LibraryCompletionArtistRequest {
     pub source: Option<String>,
     pub chart_kind: Option<String>,
@@ -75,7 +76,7 @@ pub struct LibraryCompletionArtistRequest {
     pub year_to: Option<i32>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct StartLibraryCompletionArtistVerificationRequest {
     #[serde(default)]
@@ -83,21 +84,21 @@ pub struct StartLibraryCompletionArtistVerificationRequest {
     pub label: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SetLibraryCompletionArtistVerificationStateRequest {
     pub batch_id: i64,
     pub state: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfirmLibraryCompletionArtistMatchRequest {
     pub artist_id: String,
     pub candidate: wishlist::WishListMusicBrainzCandidate,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SetLibraryCompletionArtistDecisionRequest {
     pub artist_id: String,
@@ -105,7 +106,7 @@ pub struct SetLibraryCompletionArtistDecisionRequest {
     pub status: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionArtistDecision {
     pub artist_id: String,
@@ -116,7 +117,7 @@ pub struct LibraryCompletionArtistDecision {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionArtistVerificationItemSummary {
     pub artist_id: String,
@@ -128,7 +129,7 @@ pub struct LibraryCompletionArtistVerificationItemSummary {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionArtistVerificationBatch {
     pub id: i64,
@@ -148,7 +149,7 @@ pub struct LibraryCompletionArtistVerificationBatch {
     pub completed_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionArtistVerificationStatus {
     pub batch: Option<LibraryCompletionArtistVerificationBatch>,

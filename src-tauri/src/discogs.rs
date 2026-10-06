@@ -10,14 +10,14 @@ const KEYRING_USER: &str = "consumer-credentials";
 const DISCOGS_API_BASE: &str = "https://api.discogs.com";
 const MAX_CREDENTIAL_LENGTH: usize = 256;
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscogsCredentialStatus {
     pub configured: bool,
     pub source: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscogsConnectionTest {
     pub authenticated: bool,
@@ -26,7 +26,7 @@ pub struct DiscogsConnectionTest {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveDiscogsCredentialsRequest {
     pub consumer_key: String,

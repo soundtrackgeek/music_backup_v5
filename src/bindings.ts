@@ -4,6 +4,30 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	getLibraryCompletion: (input: {
+	source?: string | null,
+	decade?: number | null,
+	yearFrom?: number | null,
+	yearTo?: number | null,
+} | null) => __TAURI_INVOKE<LibraryCompletionResponse>("get_library_completion", { input }),
+	getLibraryCompletionVerificationStatus: () => __TAURI_INVOKE<LibraryCompletionVerificationStatus>("get_library_completion_verification_status"),
+	startLibraryCompletionVerification: (input: StartLibraryCompletionVerificationRequest) => __TAURI_INVOKE<LibraryCompletionVerificationStatus>("start_library_completion_verification", { input }),
+	setLibraryCompletionVerificationState: (input: SetLibraryCompletionVerificationStateRequest) => __TAURI_INVOKE<LibraryCompletionVerificationStatus>("set_library_completion_verification_state", { input }),
+	retryLibraryCompletionVerificationFailures: (batchId: number) => __TAURI_INVOKE<LibraryCompletionVerificationStatus>("retry_library_completion_verification_failures", { batchId }),
+	setLibraryCompletionDecision: (input: SetLibraryCompletionDecisionRequest) => __TAURI_INVOKE<LibraryCompletionDecision>("set_library_completion_decision", { input }),
+	getLibraryCompletionArtists: (input: {
+	source?: string | null,
+	chartKind?: string | null,
+	yearFrom?: number | null,
+	yearTo?: number | null,
+} | null) => __TAURI_INVOKE<LibraryCompletionArtistResponse>("get_library_completion_artists", { input }),
+	getLibraryCompletionArtistVerificationStatus: () => __TAURI_INVOKE<LibraryCompletionArtistVerificationStatus>("get_library_completion_artist_verification_status"),
+	startLibraryCompletionArtistVerification: (input: StartLibraryCompletionArtistVerificationRequest) => __TAURI_INVOKE<LibraryCompletionArtistVerificationStatus>("start_library_completion_artist_verification", { input }),
+	setLibraryCompletionArtistVerificationState: (input: SetLibraryCompletionArtistVerificationStateRequest) => __TAURI_INVOKE<LibraryCompletionArtistVerificationStatus>("set_library_completion_artist_verification_state", { input }),
+	retryLibraryCompletionArtistVerificationFailures: (batchId: number) => __TAURI_INVOKE<LibraryCompletionArtistVerificationStatus>("retry_library_completion_artist_verification_failures", { batchId }),
+	confirmLibraryCompletionArtistMatch: (input: ConfirmLibraryCompletionArtistMatchRequest) => __TAURI_INVOKE<LibraryCompletionArtistCandidate>("confirm_library_completion_artist_match", { input }),
+	setLibraryCompletionArtistDecision: (input: SetLibraryCompletionArtistDecisionRequest) => __TAURI_INVOKE<LibraryCompletionArtistDecision>("set_library_completion_artist_decision", { input }),
+	enrichLibraryCompletionCover: (candidateId: string) => __TAURI_INVOKE<LibraryCompletionCoverEnrichment>("enrich_library_completion_cover", { candidateId }),
 	getAiKeyStatus: () => __TAURI_INVOKE<AiKeyStatus>("get_ai_key_status"),
 	saveOpenaiApiKey: (apiKey: string) => __TAURI_INVOKE<AiKeyStatus>("save_openai_api_key", { apiKey }),
 	deleteOpenaiApiKey: () => __TAURI_INVOKE<AiKeyStatus>("delete_openai_api_key"),
@@ -427,6 +451,11 @@ export type ChartConfig_Serialize = {
 	gridCoverSize: number,
 };
 
+export type ConfirmLibraryCompletionArtistMatchRequest = {
+	artistId: string,
+	candidate: WishListMusicBrainzCandidate,
+};
+
 export type ExportPlaylistRequest = ExportPlaylistRequest_Serialize | ExportPlaylistRequest_Deserialize;
 
 export type ExportPlaylistRequest_Deserialize = {
@@ -471,6 +500,228 @@ export type ExternalDiscoveryResponse = {
 	catalogCandidateCount: number,
 	excludedOwnedCount: number,
 	limitations: string[],
+};
+
+export type LibraryCompletionArtistCandidate = {
+	id: string,
+	artist: string,
+	firstChartYear: number,
+	confidence: string,
+	status: string,
+	wishListItemId: number | null,
+	verificationStatus: string,
+	verificationMessage: string | null,
+	verificationCheckedAt: string | null,
+	musicbrainzVerificationStatus: string | null,
+	musicbrainzVerificationMessage: string | null,
+	musicbrainzId: string | null,
+	musicbrainzUrl: string | null,
+	officialAlbumCount: number,
+	discogsVerificationStatus: string | null,
+	discogsVerificationMessage: string | null,
+	discogsMasterId: string | null,
+	discogsUrl: string | null,
+	discogsStudioAlbumTitle: string | null,
+	evidence: LibraryCompletionArtistEvidence[],
+};
+
+export type LibraryCompletionArtistDecision = {
+	artistId: string,
+	status: string,
+	wishListItemId: number | null,
+	missingAlbumCount: number | null,
+	message: string,
+	updatedAt: string,
+};
+
+export type LibraryCompletionArtistEvidence = {
+	source: string,
+	chartKind: string,
+	label: string,
+	bestRank: number,
+	firstYear: number,
+	lastYear: number,
+	appearances: number,
+};
+
+export type LibraryCompletionArtistRequest = {
+	source?: string | null,
+	chartKind?: string | null,
+	yearFrom?: number | null,
+	yearTo?: number | null,
+};
+
+export type LibraryCompletionArtistResponse = {
+	generatedAt: string,
+	totalChartArtists: number,
+	ownedArtistCount: number,
+	totalCandidates: number,
+	returnedCandidates: number,
+	truncated: boolean,
+	candidates: LibraryCompletionArtistCandidate[],
+};
+
+export type LibraryCompletionArtistVerificationBatch = {
+	id: number,
+	label: string,
+	state: string,
+	totalCount: number,
+	queuedCount: number,
+	checkingCount: number,
+	verifiedCount: number,
+	noMatchCount: number,
+	ambiguousCount: number,
+	failedCount: number,
+	completedCount: number,
+	estimatedSecondsRemaining: number,
+	createdAt: string,
+	updatedAt: string,
+	completedAt: string | null,
+};
+
+export type LibraryCompletionArtistVerificationItemSummary = {
+	artistId: string,
+	artist: string,
+	state: string,
+	provider: string,
+	message: string | null,
+	officialAlbumCount: number,
+	updatedAt: string,
+};
+
+export type LibraryCompletionArtistVerificationStatus = {
+	batch: LibraryCompletionArtistVerificationBatch | null,
+	recentItems: LibraryCompletionArtistVerificationItemSummary[],
+};
+
+export type LibraryCompletionAtlasCell = {
+	source: string,
+	label: string,
+	decade: number,
+	owned: number,
+	candidates: number,
+	verified: number,
+	wanted: number,
+	needsReview: number,
+	excluded: number,
+	total: number,
+};
+
+export type LibraryCompletionCandidate = {
+	id: string,
+	artist: string,
+	title: string,
+	chartYear: number,
+	confidence: string,
+	status: string,
+	wishListItemId: number | null,
+	musicbrainzId: string | null,
+	musicbrainzUrl: string | null,
+	coverUrl: string | null,
+	coverStatus: string | null,
+	coverProvider: string | null,
+	coverMessage: string | null,
+	coverCheckedAt: string | null,
+	verificationStatus: string,
+	verificationProvider: string | null,
+	verificationMessage: string | null,
+	verificationCheckedAt: string | null,
+	musicbrainzVerificationStatus: string | null,
+	musicbrainzVerificationMessage: string | null,
+	discogsVerificationStatus: string | null,
+	discogsVerificationMessage: string | null,
+	discogsMasterId: string | null,
+	discogsUrl: string | null,
+	evidence: LibraryCompletionEvidence[],
+};
+
+export type LibraryCompletionCoverEnrichment = {
+	candidateId: string,
+	state: string,
+	provider: string | null,
+	message: string,
+	hasCover: boolean,
+	checkedAt: string,
+};
+
+export type LibraryCompletionDecision = {
+	candidateId: string,
+	status: string,
+	wishListItemId: number | null,
+	musicbrainzId: string | null,
+	musicbrainzUrl: string | null,
+	updatedAt: string,
+};
+
+export type LibraryCompletionEvidence = {
+	source: string,
+	label: string,
+	bestRank: number,
+	firstYear: number,
+	lastYear: number,
+	appearances: number,
+};
+
+export type LibraryCompletionRequest = {
+	source?: string | null,
+	decade?: number | null,
+	yearFrom?: number | null,
+	yearTo?: number | null,
+};
+
+export type LibraryCompletionResponse = {
+	generatedAt: string,
+	totalChartAlbums: number,
+	totalCandidates: number,
+	returnedCandidates: number,
+	truncated: boolean,
+	candidates: LibraryCompletionCandidate[],
+	atlas: LibraryCompletionAtlasCell[],
+};
+
+export type LibraryCompletionVerificationBatch = {
+	id: number,
+	label: string,
+	source: string | null,
+	decade: number | null,
+	state: string,
+	totalCount: number,
+	queuedCount: number,
+	checkingCount: number,
+	verifiedCount: number,
+	discogsVerifiedCount: number,
+	noMatchCount: number,
+	ambiguousCount: number,
+	failedCount: number,
+	cachedCount: number,
+	completedCount: number,
+	estimatedSecondsRemaining: number,
+	createdAt: string,
+	updatedAt: string,
+	completedAt: string | null,
+};
+
+export type LibraryCompletionVerificationItemSummary = {
+	candidateId: string,
+	artist: string,
+	title: string,
+	state: string,
+	provider: string,
+	message: string | null,
+	musicbrainzId: string | null,
+	musicbrainzUrl: string | null,
+	musicbrainzVerificationStatus: string | null,
+	musicbrainzVerificationMessage: string | null,
+	discogsVerificationStatus: string | null,
+	discogsVerificationMessage: string | null,
+	discogsMasterId: string | null,
+	discogsUrl: string | null,
+	updatedAt: string,
+};
+
+export type LibraryCompletionVerificationStatus = {
+	batch: LibraryCompletionVerificationBatch | null,
+	recentItems: LibraryCompletionVerificationItemSummary[],
 };
 
 export type MixtapeConfig = {
@@ -557,6 +808,34 @@ export type Score = {
 	confidence: number | null,
 };
 
+export type SetLibraryCompletionArtistDecisionRequest = {
+	artistId: string,
+	artist: string,
+	status: string,
+};
+
+export type SetLibraryCompletionArtistVerificationStateRequest = {
+	batchId: number,
+	state: string,
+};
+
+export type SetLibraryCompletionDecisionRequest = {
+	candidateId: string,
+	artist: string,
+	title: string,
+	chartYear: number,
+	source: string,
+	status: string,
+	wishListItemId: number | null,
+	musicbrainzId: string | null,
+	musicbrainzUrl: string | null,
+};
+
+export type SetLibraryCompletionVerificationStateRequest = {
+	batchId: number,
+	state: string,
+};
+
 export type SetPlaylistAutomationRequest = {
 	id: number,
 	smart: boolean,
@@ -585,6 +864,19 @@ export type SmartPlaylistRefreshResult_Serialize = {
 	refreshedAt: string,
 };
 
+export type StartLibraryCompletionArtistVerificationRequest = {
+	artistIds?: string[],
+	label: string | null,
+};
+
+export type StartLibraryCompletionVerificationRequest = {
+	scope: string,
+	candidateIds?: string[],
+	source: string | null,
+	decade: number | null,
+	label: string | null,
+};
+
 export type TextFilter = {
 	operator?: string,
 	value?: string,
@@ -594,5 +886,17 @@ export type Weights = {
 	atmosphere: number | null,
 	role: number | null,
 	rating: number | null,
+};
+
+export type WishListMusicBrainzCandidate = {
+	entity: string,
+	title: string,
+	artist: string,
+	year: number | null,
+	musicbrainzId: string,
+	musicbrainzUrl: string,
+	disambiguation: string | null,
+	country: string | null,
+	score: number,
 };
 

@@ -19,7 +19,7 @@ const LASTFM_SIMILAR_ARTIST_SOURCE_PREFIX: &str = "Last.fm Similar Artists";
 #[cfg(not(test))]
 const MUSICBRAINZ_SEARCH_LIMIT: usize = 8;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AddWishListItemRequest {
     pub entity: String,
@@ -33,7 +33,7 @@ pub struct AddWishListItemRequest {
     pub source: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListItem {
     pub id: i64,
@@ -51,7 +51,7 @@ pub struct WishListItem {
     pub artist_album_summary: Option<WishListArtistAlbumSummary>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListMissingAlbum {
     pub release_group_id: String,
@@ -60,7 +60,7 @@ pub struct WishListMissingAlbum {
     pub musicbrainz_url: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListArtistAlbumSummary {
     pub official_album_count: usize,
@@ -70,14 +70,14 @@ pub struct WishListArtistAlbumSummary {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListResponse {
     pub items: Vec<WishListItem>,
     pub auto_removed_count: usize,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListMusicBrainzSearchRequest {
     pub entity: String,
@@ -87,7 +87,7 @@ pub struct WishListMusicBrainzSearchRequest {
     pub year: Option<i32>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListMusicBrainzCandidate {
     pub entity: String,
@@ -101,7 +101,7 @@ pub struct WishListMusicBrainzCandidate {
     pub score: i32,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListMusicBrainzSearchResponse {
     pub entity: String,
@@ -110,13 +110,13 @@ pub struct WishListMusicBrainzSearchResponse {
     pub searched_at: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AddWishListMusicBrainzCandidateRequest {
     pub candidate: WishListMusicBrainzCandidate,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AddWishListMusicBrainzCandidateResponse {
     pub added: bool,
@@ -411,13 +411,13 @@ pub(crate) fn validate_musicbrainz_album_candidate(
     Ok(confirmed)
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListArtistAlbumDiscoveryRequest {
     pub wish_list_item_id: i64,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListArtistAlbumDiscoveryRow {
     pub release_group_id: String,
@@ -433,7 +433,7 @@ pub struct WishListArtistAlbumDiscoveryRow {
     pub in_library: bool,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListArtistAlbumDiscoveryResponse {
     pub wish_list_item_id: i64,

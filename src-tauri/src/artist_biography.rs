@@ -18,7 +18,7 @@ const NAME_LOOKUP_UNAVAILABLE_MESSAGE: &str =
 
 static BIOGRAPHY_REFRESH_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistBiography {
     pub artist_id: String,

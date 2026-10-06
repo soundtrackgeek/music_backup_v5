@@ -12,6 +12,20 @@ use tauri::Wry;
 use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
+    get_library_completion,
+    get_library_completion_verification_status,
+    start_library_completion_verification,
+    set_library_completion_verification_state,
+    retry_library_completion_verification_failures,
+    set_library_completion_decision,
+    get_library_completion_artists,
+    get_library_completion_artist_verification_status,
+    start_library_completion_artist_verification,
+    set_library_completion_artist_verification_state,
+    retry_library_completion_artist_verification_failures,
+    confirm_library_completion_artist_match,
+    set_library_completion_artist_decision,
+    enrich_library_completion_cover,
     get_ai_key_status,
     save_openai_api_key,
     delete_openai_api_key,
@@ -49,6 +63,20 @@ macro_rules! specta_commands {
 
 fn builder() -> (Builder<Wry>, &'static [&'static str]) {
     let (commands, names) = specta_commands![
+        get_library_completion,
+        get_library_completion_verification_status,
+        start_library_completion_verification,
+        set_library_completion_verification_state,
+        retry_library_completion_verification_failures,
+        set_library_completion_decision,
+        get_library_completion_artists,
+        get_library_completion_artist_verification_status,
+        start_library_completion_artist_verification,
+        set_library_completion_artist_verification_state,
+        retry_library_completion_artist_verification_failures,
+        confirm_library_completion_artist_match,
+        set_library_completion_artist_decision,
+        enrich_library_completion_cover,
         get_ai_key_status,
         save_openai_api_key,
         delete_openai_api_key,

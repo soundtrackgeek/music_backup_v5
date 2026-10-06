@@ -17,7 +17,7 @@ const MAX_TEXT_LENGTH: usize = 300;
 const MAX_VERIFICATION_SELECTION: usize = 5_000;
 const RECENT_VERIFICATION_ITEMS: usize = 8;
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionEvidence {
     pub source: String,
@@ -28,7 +28,7 @@ pub struct LibraryCompletionEvidence {
     pub appearances: i64,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionCandidate {
     pub id: String,
@@ -58,7 +58,7 @@ pub struct LibraryCompletionCandidate {
     pub evidence: Vec<LibraryCompletionEvidence>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionAtlasCell {
     pub source: String,
@@ -73,7 +73,7 @@ pub struct LibraryCompletionAtlasCell {
     pub total: i64,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionResponse {
     pub generated_at: String,
@@ -85,8 +85,9 @@ pub struct LibraryCompletionResponse {
     pub atlas: Vec<LibraryCompletionAtlasCell>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct LibraryCompletionRequest {
     pub source: Option<String>,
     pub decade: Option<i32>,
@@ -94,7 +95,7 @@ pub struct LibraryCompletionRequest {
     pub year_to: Option<i32>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SetLibraryCompletionDecisionRequest {
     pub candidate_id: String,
@@ -108,7 +109,7 @@ pub struct SetLibraryCompletionDecisionRequest {
     pub musicbrainz_url: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionDecision {
     pub candidate_id: String,
@@ -119,7 +120,7 @@ pub struct LibraryCompletionDecision {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct StartLibraryCompletionVerificationRequest {
     pub scope: String,
@@ -130,14 +131,14 @@ pub struct StartLibraryCompletionVerificationRequest {
     pub label: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SetLibraryCompletionVerificationStateRequest {
     pub batch_id: i64,
     pub state: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionVerificationItemSummary {
     pub candidate_id: String,
@@ -157,7 +158,7 @@ pub struct LibraryCompletionVerificationItemSummary {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionVerificationBatch {
     pub id: i64,
@@ -181,7 +182,7 @@ pub struct LibraryCompletionVerificationBatch {
     pub completed_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionVerificationStatus {
     pub batch: Option<LibraryCompletionVerificationBatch>,

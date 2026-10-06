@@ -793,6 +793,7 @@ async fn list_wish_list(app: AppHandle) -> Result<wishlist::WishListResponse, St
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_library_completion(
     app: AppHandle,
     input: Option<library_completion::LibraryCompletionRequest>,
@@ -805,6 +806,7 @@ async fn get_library_completion(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_library_completion_verification_status(
     app: AppHandle,
 ) -> Result<library_completion::LibraryCompletionVerificationStatus, String> {
@@ -818,6 +820,7 @@ async fn get_library_completion_verification_status(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn start_library_completion_verification(
     app: AppHandle,
     input: library_completion::StartLibraryCompletionVerificationRequest,
@@ -832,6 +835,7 @@ async fn start_library_completion_verification(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn set_library_completion_verification_state(
     app: AppHandle,
     input: library_completion::SetLibraryCompletionVerificationStateRequest,
@@ -846,6 +850,7 @@ async fn set_library_completion_verification_state(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn retry_library_completion_verification_failures(
     app: AppHandle,
     batch_id: i64,
@@ -860,6 +865,7 @@ async fn retry_library_completion_verification_failures(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn set_library_completion_decision(
     app: AppHandle,
     input: library_completion::SetLibraryCompletionDecisionRequest,
@@ -874,6 +880,7 @@ async fn set_library_completion_decision(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_library_completion_artists(
     app: AppHandle,
     input: Option<artist_completion::LibraryCompletionArtistRequest>,
@@ -886,6 +893,7 @@ async fn get_library_completion_artists(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_library_completion_artist_verification_status(
     app: AppHandle,
 ) -> Result<artist_completion::LibraryCompletionArtistVerificationStatus, String> {
@@ -899,6 +907,7 @@ async fn get_library_completion_artist_verification_status(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn start_library_completion_artist_verification(
     app: AppHandle,
     input: artist_completion::StartLibraryCompletionArtistVerificationRequest,
@@ -913,6 +922,7 @@ async fn start_library_completion_artist_verification(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn set_library_completion_artist_verification_state(
     app: AppHandle,
     input: artist_completion::SetLibraryCompletionArtistVerificationStateRequest,
@@ -927,6 +937,7 @@ async fn set_library_completion_artist_verification_state(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn retry_library_completion_artist_verification_failures(
     app: AppHandle,
     batch_id: i64,
@@ -941,6 +952,7 @@ async fn retry_library_completion_artist_verification_failures(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn confirm_library_completion_artist_match(
     app: AppHandle,
     input: artist_completion::ConfirmLibraryCompletionArtistMatchRequest,
@@ -955,6 +967,7 @@ async fn confirm_library_completion_artist_match(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn set_library_completion_artist_decision(
     app: AppHandle,
     input: artist_completion::SetLibraryCompletionArtistDecisionRequest,
@@ -1660,6 +1673,7 @@ async fn import_billboard_charts(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn enrich_library_completion_cover(
     app: AppHandle,
     candidate_id: String,
@@ -2206,20 +2220,7 @@ pub fn run() {
             list_saved_external_discoveries,
             save_external_discovery,
             delete_saved_external_discovery,
-            list_wish_list,
-            get_library_completion,
-            get_library_completion_verification_status,
-            start_library_completion_verification,
-            set_library_completion_verification_state,
-            retry_library_completion_verification_failures,
-            set_library_completion_decision,
-            get_library_completion_artists,
-            get_library_completion_artist_verification_status,
-            start_library_completion_artist_verification,
-            set_library_completion_artist_verification_state,
-            retry_library_completion_artist_verification_failures,
-            confirm_library_completion_artist_match,
-            set_library_completion_artist_decision,
+            list_wish_list,
             discover_wish_list_artist_albums,
             refresh_wish_list_artist_album_summary,
             search_wish_list_musicbrainz,
@@ -2291,8 +2292,7 @@ pub fn run() {
             import_official_uk_albums,
             import_official_uk_singles,
             import_ti_i_skuddet_singles,
-            import_norsktoppen_singles,
-            enrich_library_completion_cover,
+            import_norsktoppen_singles,
             search_library,
             list_artists,
             get_artist_track_highlights,

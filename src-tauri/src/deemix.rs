@@ -13,14 +13,14 @@ const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_ALBUM_SEARCH_URL: &str = "https://api.deezer.com/search/album";
 const MAX_SEARCH_LENGTH: usize = 300;
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DeemixCredentialStatus {
     pub configured: bool,
     pub source: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DeemixConnectionTest {
     pub account_name: String,
@@ -31,7 +31,7 @@ pub struct DeemixConnectionTest {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DeemixAlbumSearchRequest {
     pub title: String,
@@ -40,7 +40,7 @@ pub struct DeemixAlbumSearchRequest {
     pub limit: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DeemixAlbumMatch {
     pub id: String,
@@ -57,7 +57,7 @@ pub struct DeemixAlbumMatch {
     pub downloaded_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DeemixAlbumSearchResponse {
     pub query: String,

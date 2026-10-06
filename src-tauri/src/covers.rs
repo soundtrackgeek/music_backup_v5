@@ -19,7 +19,7 @@ use url::Url;
 const SUPPORTED_ARCHIVE_EXTENSIONS: [&str; 5] = ["jpg", "jpeg", "png", "gif", "bmp"];
 const COMPLETION_COVER_MAX_BYTES: usize = 5 * 1024 * 1024;
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionCoverEnrichment {
     pub candidate_id: String,

@@ -34,7 +34,7 @@ const MAX_MEDIA_FALLBACKS: usize = 8;
 const MAX_PATH_SEGMENT_CHARS: usize = 96;
 static DOWNLOAD_LOCK: Mutex<()> = Mutex::new(());
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DeemixAlbumDownloadRequest {
     pub album_id: String,
@@ -52,7 +52,7 @@ pub struct DeemixAlbumDownloadRequest {
     pub allow_duplicate: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DeemixAlbumDownloadPreflightRequest {
     pub album_id: String,
@@ -65,7 +65,7 @@ pub struct DeemixAlbumDownloadPreflightRequest {
     pub year: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DeemixAlbumDownloadPreflight {
     pub already_downloaded: bool,
@@ -74,7 +74,7 @@ pub struct DeemixAlbumDownloadPreflight {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DeemixAlbumDownloadProgress {
     pub request_id: String,
@@ -86,7 +86,7 @@ pub struct DeemixAlbumDownloadProgress {
     pub total_tracks: usize,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DeemixAlbumDownloadSummary {
     pub request_id: String,
