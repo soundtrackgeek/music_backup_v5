@@ -10,6 +10,9 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     restoreMocks: true,
+    // The jsdom UI workflow tests take about 1 s on an idle machine, so the 5 s
+    // default left too little headroom when CI or a local Rust build is busy.
+    testTimeout: 20_000,
   },
   clearScreen: false,
   server: {

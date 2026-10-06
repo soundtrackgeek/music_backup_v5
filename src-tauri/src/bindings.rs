@@ -12,6 +12,20 @@ use tauri::Wry;
 use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
+    get_deemix_credential_status,
+    save_deemix_arl,
+    delete_deemix_arl,
+    test_deemix_connection,
+    search_deemix_albums,
+    download_deemix_album,
+    preflight_deemix_album_download,
+    import_published_charts,
+    get_published_chart_catalog,
+    get_published_artist_rankings,
+    get_published_song_rankings,
+    get_published_song_history,
+    list_published_chart_weeks,
+    get_published_chart_entries,
     get_discogs_credential_status,
     save_discogs_credentials,
     delete_discogs_credentials,
@@ -81,6 +95,20 @@ macro_rules! specta_commands {
 
 fn builder() -> (Builder<Wry>, &'static [&'static str]) {
     let (commands, names) = specta_commands![
+        get_deemix_credential_status,
+        save_deemix_arl,
+        delete_deemix_arl,
+        test_deemix_connection,
+        search_deemix_albums,
+        download_deemix_album,
+        preflight_deemix_album_download,
+        import_published_charts,
+        get_published_chart_catalog,
+        get_published_artist_rankings,
+        get_published_song_rankings,
+        get_published_song_history,
+        list_published_chart_weeks,
+        get_published_chart_entries,
         get_discogs_credential_status,
         save_discogs_credentials,
         delete_discogs_credentials,

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.166.0] - 2026-10-06
+
+### Changed
+- Migrate the Deemix (7) and Published Charts (7) commands to generated TypeScript bindings: credential status/save/delete/test, album search, download preflight and download, and the published chart catalog, week list, entries, artist and song rankings, song history, and import. `backend.ts` and `backend/publishedCharts.ts` call `commands.*` for them.
+- The Deemix album search request marks `year` and `limit` as `#[serde(default)]`, so the generated type treats them as optional like the callers already do (behavior is unchanged).
+
+### Fixed
+- Make the frontend test suite pass on a busy machine. The default 5 s test timeout and 1 s `waitFor`/`findBy*` timeout left too little headroom for UI workflow tests that take about 1 s when idle, so different tests failed intermittently while a Rust build or another test run was using the CPU. Tests now allow 20 s, and async queries wait up to 5 s.
+
 ## [0.165.1] - 2026-10-06
 
 ### Fixed

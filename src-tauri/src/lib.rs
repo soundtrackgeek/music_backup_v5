@@ -253,6 +253,7 @@ async fn test_openai_connection() -> Result<ai::AiConnectionTest, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_deemix_credential_status() -> Result<deemix::DeemixCredentialStatus, String> {
     tauri::async_runtime::spawn_blocking(deemix::credential_status)
         .await
@@ -262,6 +263,7 @@ async fn get_deemix_credential_status() -> Result<deemix::DeemixCredentialStatus
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn save_deemix_arl(arl: String) -> Result<deemix::DeemixConnectionTest, String> {
     tauri::async_runtime::spawn_blocking(move || deemix::save_arl(arl))
         .await
@@ -271,6 +273,7 @@ async fn save_deemix_arl(arl: String) -> Result<deemix::DeemixConnectionTest, St
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn delete_deemix_arl() -> Result<deemix::DeemixCredentialStatus, String> {
     tauri::async_runtime::spawn_blocking(deemix::delete_arl)
         .await
@@ -280,6 +283,7 @@ async fn delete_deemix_arl() -> Result<deemix::DeemixCredentialStatus, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn test_deemix_connection() -> Result<deemix::DeemixConnectionTest, String> {
     tauri::async_runtime::spawn_blocking(deemix::test_connection)
         .await
@@ -491,6 +495,7 @@ async fn refresh_lastfm_artist_images(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn search_deemix_albums(
     input: deemix::DeemixAlbumSearchRequest,
 ) -> Result<deemix::DeemixAlbumSearchResponse, String> {
@@ -502,6 +507,7 @@ async fn search_deemix_albums(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn download_deemix_album(
     app: AppHandle,
     input: deemix_download::DeemixAlbumDownloadRequest,
@@ -516,6 +522,7 @@ async fn download_deemix_album(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn preflight_deemix_album_download(
     app: AppHandle,
     input: deemix_download::DeemixAlbumDownloadPreflightRequest,
@@ -1720,6 +1727,7 @@ async fn import_billboard_singles(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_published_charts(app: AppHandle) -> Result<PublishedChartsImportSummary, String> {
     tauri::async_runtime::spawn_blocking(move || published_charts::import_for_app(&app))
     .await
@@ -1729,6 +1737,7 @@ async fn import_published_charts(app: AppHandle) -> Result<PublishedChartsImport
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_published_chart_catalog(app: AppHandle) -> Result<PublishedChartCatalog, String> {
     tauri::async_runtime::spawn_blocking(move || published_charts::catalog_for_app(&app))
         .await
@@ -1738,6 +1747,7 @@ async fn get_published_chart_catalog(app: AppHandle) -> Result<PublishedChartCat
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_published_artist_rankings(
     app: AppHandle,
     chart: String,
@@ -1759,6 +1769,7 @@ async fn get_published_artist_rankings(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_published_song_rankings(
     app: AppHandle,
     chart: String,
@@ -1780,6 +1791,7 @@ async fn get_published_song_rankings(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_published_song_history(app: AppHandle, chart: String, artist: String, title: String) -> Result<Vec<published_charts::PublishedSongWeek>, String> {
     tauri::async_runtime::spawn_blocking(move || published_charts::song_history_for_app(&app, &chart, &artist, &title))
         .await.map_err(|error| error.to_string())?.map_err(|error| error.to_string())
@@ -1787,6 +1799,7 @@ async fn get_published_song_history(app: AppHandle, chart: String, artist: Strin
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_published_chart_weeks(
     app: AppHandle,
     chart: String,
@@ -1802,6 +1815,7 @@ async fn list_published_chart_weeks(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_published_chart_entries(
     app: AppHandle,
     chart: String,
@@ -2179,16 +2193,9 @@ pub fn run() {
             acknowledge_catalog_revision,
             list_database_backups,
             restore_database_backup,
-            get_settings,
-            get_deemix_credential_status,
-            save_deemix_arl,
-            delete_deemix_arl,
-            test_deemix_connection,
+            get_settings,
             get_artist_biography,
-            get_album_review,
-            search_deemix_albums,
-            preflight_deemix_album_download,
-            download_deemix_album,
+            get_album_review,
             soulseek::connection_bootstrap,
             soulseek::connection_save_profile,
             soulseek::connection_connect,
@@ -2279,14 +2286,7 @@ pub fn run() {
             rollback_import_run,
             import_album_covers,
             import_billboard_charts,
-            import_billboard_singles,
-            import_published_charts,
-            get_published_chart_catalog,
-            get_published_artist_rankings,
-            get_published_song_rankings,
-            get_published_song_history,
-            list_published_chart_weeks,
-            get_published_chart_entries,
+            import_billboard_singles,
             import_vg_lista_albums,
             import_vg_lista_singles,
             import_official_uk_albums,

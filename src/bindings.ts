@@ -4,6 +4,20 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	getDeemixCredentialStatus: () => __TAURI_INVOKE<DeemixCredentialStatus>("get_deemix_credential_status"),
+	saveDeemixArl: (arl: string) => __TAURI_INVOKE<DeemixConnectionTest>("save_deemix_arl", { arl }),
+	deleteDeemixArl: () => __TAURI_INVOKE<DeemixCredentialStatus>("delete_deemix_arl"),
+	testDeemixConnection: () => __TAURI_INVOKE<DeemixConnectionTest>("test_deemix_connection"),
+	searchDeemixAlbums: (input: DeemixAlbumSearchRequest) => __TAURI_INVOKE<DeemixAlbumSearchResponse>("search_deemix_albums", { input }),
+	downloadDeemixAlbum: (input: DeemixAlbumDownloadRequest) => __TAURI_INVOKE<DeemixAlbumDownloadSummary>("download_deemix_album", { input }),
+	preflightDeemixAlbumDownload: (input: DeemixAlbumDownloadPreflightRequest) => __TAURI_INVOKE<DeemixAlbumDownloadPreflight>("preflight_deemix_album_download", { input }),
+	importPublishedCharts: () => __TAURI_INVOKE<PublishedChartsImportSummary>("import_published_charts"),
+	getPublishedChartCatalog: () => __TAURI_INVOKE<PublishedChartCatalog>("get_published_chart_catalog"),
+	getPublishedArtistRankings: (chart: string, fromYear: number, toYear: number, fromWeek: string | null, toWeek: string | null, offset: number) => __TAURI_INVOKE<PublishedArtistRanking>("get_published_artist_rankings", { chart, fromYear, toYear, fromWeek, toWeek, offset }),
+	getPublishedSongRankings: (chart: string, fromYear: number, toYear: number, fromWeek: string | null, toWeek: string | null, offset: number) => __TAURI_INVOKE<PublishedSongRanking>("get_published_song_rankings", { chart, fromYear, toYear, fromWeek, toWeek, offset }),
+	getPublishedSongHistory: (chart: string, artist: string, title: string) => __TAURI_INVOKE<PublishedSongWeek[]>("get_published_song_history", { chart, artist, title }),
+	listPublishedChartWeeks: (chart: string, year: number) => __TAURI_INVOKE<PublishedChartWeek[]>("list_published_chart_weeks", { chart, year }),
+	getPublishedChartEntries: (chart: string, week: string, offset: number) => __TAURI_INVOKE<PublishedChartEntries>("get_published_chart_entries", { chart, week, offset }),
 	getDiscogsCredentialStatus: () => __TAURI_INVOKE<DiscogsCredentialStatus>("get_discogs_credential_status"),
 	saveDiscogsCredentials: (input: SaveDiscogsCredentialsRequest) => __TAURI_INVOKE<DiscogsConnectionTest>("save_discogs_credentials", { input }),
 	deleteDiscogsCredentials: () => __TAURI_INVOKE<DiscogsCredentialStatus>("delete_discogs_credentials"),
@@ -484,6 +498,47 @@ export type ConfirmLibraryCompletionArtistMatchRequest = {
 	candidate: WishListMusicBrainzCandidate,
 };
 
+export type DeemixAlbumDownloadPreflight = {
+	alreadyDownloaded: boolean,
+	destinationPath: string | null,
+	downloadedAt: string | null,
+	message: string,
+};
+
+export type DeemixAlbumDownloadPreflightRequest = {
+	albumId: string,
+	wishListItemId?: number | null,
+	musicbrainzReleaseGroupId?: string | null,
+	artist: string,
+	album: string,
+	year: number | null,
+};
+
+export type DeemixAlbumDownloadRequest = {
+	albumId: string,
+	requestId: string,
+	wishListItemId?: number | null,
+	musicbrainzReleaseGroupId?: string | null,
+	expectedArtist?: string,
+	expectedAlbum?: string,
+	expectedYear: number | null,
+	allowDuplicate?: boolean,
+};
+
+export type DeemixAlbumDownloadSummary = {
+	requestId: string,
+	albumId: string,
+	artist: string,
+	album: string,
+	year: number | null,
+	quality: string,
+	destinationPath: string,
+	coverPath: string | null,
+	warning: string | null,
+	trackCount: number,
+	completedAt: string,
+};
+
 export type DeemixAlbumMatch = {
 	id: string,
 	title: string,
@@ -497,6 +552,34 @@ export type DeemixAlbumMatch = {
 	matchLevel: string,
 	downloadedAt: string | null,
 	downloadedPath: string | null,
+};
+
+export type DeemixAlbumSearchRequest = {
+	title: string,
+	artist: string,
+	year?: number | null,
+	limit?: number | null,
+};
+
+export type DeemixAlbumSearchResponse = {
+	query: string,
+	total: number,
+	matches: DeemixAlbumMatch[],
+	searchedAt: string,
+};
+
+export type DeemixConnectionTest = {
+	accountName: string,
+	userId: string,
+	country: string | null,
+	canStreamHq: boolean,
+	canStreamLossless: boolean,
+	message: string,
+};
+
+export type DeemixCredentialStatus = {
+	configured: boolean,
+	source: string,
 };
 
 export type DiscogsConnectionTest = {
@@ -915,6 +998,109 @@ export type PlaylistAutomationStatus = {
 	lastEvaluatedAt: string | null,
 	lastError: string | null,
 	desiredCount: number,
+};
+
+export type PublishedArtistRanking = {
+	totalArtists: number,
+	chartWeeks: number,
+	totalEntries: number,
+	artists: PublishedArtistRow[],
+};
+
+export type PublishedArtistRow = {
+	rank: number,
+	artist: string,
+	numberOneWeeks: number,
+	chartWeeks: number,
+	appearances: number,
+	bestPosition: number,
+	/**  Other printed spellings merged into this row, most printed first. */
+	printedVariants: string[],
+};
+
+export type PublishedChartCatalog = {
+	importedYears: number,
+	inventoryYears: number,
+	needsImport: boolean,
+	totalRows: number,
+	series: PublishedChartSeries[],
+};
+
+export type PublishedChartEntries = {
+	totalRows: number,
+	entries: PublishedChartEntry[],
+};
+
+export type PublishedChartEntry = {
+	id: number,
+	position: number,
+	lastWeek: string,
+	weeksOnChart: string,
+	entryStatus: string,
+	movement: string,
+	title: string,
+	artist: string,
+	numberOneMarker: string,
+	label: string,
+	format: string,
+	catalogueNumber: string,
+	releaseType: string,
+	duration: string,
+	peakPosition: string,
+	entryDate: string,
+	peakDate: string,
+	bpiAward: string,
+	sourcePage: string,
+	book: string,
+};
+
+export type PublishedChartSeries = {
+	chart: string,
+	years: number[],
+	firstWeek: string,
+	lastWeek: string,
+	rows: number,
+};
+
+export type PublishedChartWeek = {
+	weekEnding: string,
+	rows: number,
+};
+
+export type PublishedChartsImportSummary = {
+	sourcePath: string,
+	yearsImported: number,
+	chartSeries: number,
+	rowsImported: number,
+	durationMs: number,
+};
+
+export type PublishedSongRanking = {
+	totalSongs: number,
+	chartWeeks: number,
+	totalEntries: number,
+	songs: PublishedSongRow[],
+};
+
+export type PublishedSongRow = {
+	rank: number,
+	artist: string,
+	title: string,
+	numberOneWeeks: number,
+	chartWeeks: number,
+	appearances: number,
+	bestPosition: number,
+	firstWeek: string,
+	lastWeek: string,
+	/**  Other printed artist – title spellings merged into this row. */
+	printedVariants: string[],
+};
+
+export type PublishedSongWeek = {
+	weekEnding: string,
+	position: number,
+	entryStatus: string,
+	entryDate: string,
 };
 
 export type SaveAiSnapshotRequest = SaveAiSnapshotRequest_Serialize | SaveAiSnapshotRequest_Deserialize;

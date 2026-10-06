@@ -2699,7 +2699,7 @@ export async function getDeemixCredentialStatus() {
       source: "none",
     } satisfies DeemixCredentialStatus;
   }
-  return invoke<DeemixCredentialStatus>("get_deemix_credential_status");
+  return commands.getDeemixCredentialStatus() as Promise<DeemixCredentialStatus>;
 }
 
 export async function saveDeemixArl(arl: string) {
@@ -2708,7 +2708,7 @@ export async function saveDeemixArl(arl: string) {
       "Deemix credentials can only be stored by the Tauri desktop app.",
     );
   }
-  return invoke<DeemixConnectionTest>("save_deemix_arl", { arl });
+  return commands.saveDeemixArl(arl) as Promise<DeemixConnectionTest>;
 }
 
 export async function deleteDeemixArl() {
@@ -2717,14 +2717,14 @@ export async function deleteDeemixArl() {
       "Deemix credentials can only be removed by the Tauri desktop app.",
     );
   }
-  return invoke<DeemixCredentialStatus>("delete_deemix_arl");
+  return commands.deleteDeemixArl() as Promise<DeemixCredentialStatus>;
 }
 
 export async function testDeemixConnection() {
   if (!isTauriRuntime()) {
     throw new Error("Deemix connection tests require the Tauri desktop app.");
   }
-  return invoke<DeemixConnectionTest>("test_deemix_connection");
+  return commands.testDeemixConnection() as Promise<DeemixConnectionTest>;
 }
 
 export async function getDiscogsCredentialStatus() {
@@ -5142,7 +5142,7 @@ export async function searchDeemixAlbums(input: DeemixAlbumSearchRequest) {
       searchedAt: new Date().toISOString(),
     } satisfies DeemixAlbumSearchResponse;
   }
-  return invoke<DeemixAlbumSearchResponse>("search_deemix_albums", { input });
+  return commands.searchDeemixAlbums(input) as Promise<DeemixAlbumSearchResponse>;
 }
 
 export async function refreshWishListArtistAlbumSummary(wishListItemId: number) {
@@ -5252,10 +5252,7 @@ export async function preflightDeemixAlbumDownload(
         : "This album is not currently in the configured download folder.",
     } satisfies DeemixAlbumDownloadPreflight;
   }
-  return invoke<DeemixAlbumDownloadPreflight>(
-    "preflight_deemix_album_download",
-    { input },
-  );
+  return commands.preflightDeemixAlbumDownload(input) as Promise<DeemixAlbumDownloadPreflight>;
 }
 
 function emitMockDeemixDownloadProgress(
@@ -5344,7 +5341,7 @@ export async function downloadDeemixAlbum(input: DeemixAlbumDownloadRequest) {
     });
     return summary;
   }
-  return invoke<DeemixAlbumDownloadSummary>("download_deemix_album", { input });
+  return commands.downloadDeemixAlbum(input) as Promise<DeemixAlbumDownloadSummary>;
 }
 
 export async function exportPlaylist(input: ExportPlaylistRequest) {

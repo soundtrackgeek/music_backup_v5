@@ -36,7 +36,9 @@ pub struct DeemixConnectionTest {
 pub struct DeemixAlbumSearchRequest {
     pub title: String,
     pub artist: String,
+    #[serde(default)]
     pub year: Option<i32>,
+    #[serde(default)]
     pub limit: Option<usize>,
 }
 
