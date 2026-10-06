@@ -2626,7 +2626,7 @@ export async function getMusicDoctorStatus(): Promise<MusicDoctorStatus> {
     };
   }
 
-  return invoke<MusicDoctorStatus>("get_music_doctor_status");
+  return commands.getMusicDoctorStatus() as Promise<MusicDoctorStatus>;
 }
 
 export async function syncMusicDoctor(): Promise<MusicDoctorSyncResult> {
@@ -3012,10 +3012,7 @@ export async function getArtistBiography(
       message: "Biography loaded from Wikipedia.",
     } satisfies ArtistBiography;
   }
-  return invoke<ArtistBiography>("get_artist_biography", {
-    artistId,
-    forceRefresh,
-  });
+  return commands.getArtistBiography(artistId, forceRefresh) as Promise<ArtistBiography>;
 }
 
 export async function getAlbumReview(albumId: string, forceRefresh = false) {
@@ -3046,10 +3043,7 @@ export async function getAlbumReview(albumId: string, forceRefresh = false) {
       message: "Album review loaded from CritiqueBrainz.",
     } satisfies AlbumReview;
   }
-  return invoke<AlbumReview>("get_album_review", {
-    albumId,
-    forceRefresh,
-  });
+  return commands.getAlbumReview(albumId, forceRefresh) as Promise<AlbumReview>;
 }
 
 export async function getLastFmAlbumPopularity(
@@ -4046,7 +4040,7 @@ export async function scoreMixtapeCandidates(input: {
   notes: Record<string, string>;
 }) {
   if (!isTauriRuntime()) throw new Error("Jev scoring requires the desktop app and an OpenRouter key in Settings → AI. Build locally to preview this workflow.");
-  return invoke<import("./mixtape").JevResult>("score_mixtape_candidates", { input });
+  return commands.scoreMixtapeCandidates(input) as Promise<import("./mixtape").JevResult>;
 }
 
 export async function setPlaylistAutomation(
@@ -4241,7 +4235,7 @@ export async function discoverOutsideLibrary(input: { prompt: string }) {
 
 export async function listSavedExternalDiscoveries() {
   if (!isTauriRuntime()) return mockSavedExternalDiscoveries;
-  return invoke<SavedExternalDiscovery[]>("list_saved_external_discoveries");
+  return commands.listSavedExternalDiscoveries() as Promise<SavedExternalDiscovery[]>;
 }
 
 export async function saveExternalDiscovery(input: SaveExternalDiscoveryRequest) {
@@ -4270,7 +4264,7 @@ export async function saveExternalDiscovery(input: SaveExternalDiscoveryRequest)
     ];
     return saved;
   }
-  return invoke<SavedExternalDiscovery>("save_external_discovery", { input });
+  return commands.saveExternalDiscovery(input) as Promise<SavedExternalDiscovery>;
 }
 
 export async function deleteSavedExternalDiscovery(id: number) {

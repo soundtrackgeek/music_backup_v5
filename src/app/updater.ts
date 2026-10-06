@@ -1,4 +1,5 @@
 import { relaunch } from "@tauri-apps/plugin-process";
+import { commands } from "../bindings";
 import { invoke, listen } from "../backend/tauriClient";
 
 export type AppUpdateInfo = {
@@ -23,7 +24,7 @@ export type AppUpdateSnapshot = {
 };
 
 export function getAppUpdateStatus() {
-  return invoke<AppUpdateSnapshot>("get_app_update_status");
+  return commands.getAppUpdateStatus() as Promise<AppUpdateSnapshot>;
 }
 
 export function listenToAppUpdateChecks(handler: (snapshot: AppUpdateSnapshot) => void) {
@@ -31,7 +32,7 @@ export function listenToAppUpdateChecks(handler: (snapshot: AppUpdateSnapshot) =
 }
 
 export async function checkForAppUpdate() {
-  const snapshot = await invoke<AppUpdateSnapshot>("check_app_update");
+  const snapshot = (await commands.checkAppUpdate()) as AppUpdateSnapshot;
   if (snapshot.error) throw new Error(snapshot.error);
   return snapshot.info ? { update: snapshot.info.version, info: snapshot.info } : null;
 }

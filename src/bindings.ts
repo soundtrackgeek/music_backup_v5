@@ -4,6 +4,14 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	getArtistBiography: (artistId: string, forceRefresh: boolean | null) => __TAURI_INVOKE<ArtistBiography>("get_artist_biography", { artistId, forceRefresh }),
+	getAlbumReview: (albumId: string, forceRefresh: boolean | null) => __TAURI_INVOKE<AlbumReview>("get_album_review", { albumId, forceRefresh }),
+	scoreMixtapeCandidates: (input: ScoreRequest) => __TAURI_INVOKE<ScoreResult>("score_mixtape_candidates", { input }),
+	listSavedExternalDiscoveries: () => __TAURI_INVOKE<SavedExternalDiscovery[]>("list_saved_external_discoveries"),
+	saveExternalDiscovery: (input: SaveExternalDiscoveryRequest) => __TAURI_INVOKE<SavedExternalDiscovery>("save_external_discovery", { input }),
+	getAppUpdateStatus: () => __TAURI_INVOKE<UpdateSnapshot>("get_app_update_status"),
+	checkAppUpdate: () => __TAURI_INVOKE<UpdateSnapshot>("check_app_update"),
+	getMusicDoctorStatus: () => __TAURI_INVOKE<MusicDoctorStatus>("get_music_doctor_status"),
 	getDeemixCredentialStatus: () => __TAURI_INVOKE<DeemixCredentialStatus>("get_deemix_credential_status"),
 	saveDeemixArl: (arl: string) => __TAURI_INVOKE<DeemixConnectionTest>("save_deemix_arl", { arl }),
 	deleteDeemixArl: () => __TAURI_INVOKE<DeemixCredentialStatus>("delete_deemix_arl"),
@@ -357,6 +365,42 @@ export type AiUsage = {
 	inputTokens: number | null,
 	cachedInputTokens: number | null,
 	outputTokens: number | null,
+};
+
+export type AlbumReview = {
+	albumId: string,
+	albumArtist: string,
+	albumTitle: string,
+	releaseGroupMbid: string | null,
+	reviewId: string | null,
+	review: string | null,
+	reviewerName: string | null,
+	rating: number | null,
+	language: string | null,
+	reviewSource: string | null,
+	sourceUrl: string | null,
+	licenseId: string | null,
+	licenseName: string | null,
+	licenseUrl: string | null,
+	fetchedAt: string | null,
+	cached: boolean,
+	stale: boolean,
+	message: string,
+};
+
+export type ArtistBiography = {
+	artistId: string,
+	artistName: string,
+	musicbrainzMbid: string | null,
+	wikidataId: string | null,
+	wikipediaLanguage: string | null,
+	wikipediaTitle: string | null,
+	biography: string | null,
+	sourceUrl: string | null,
+	fetchedAt: string | null,
+	cached: boolean,
+	stale: boolean,
+	message: string,
 };
 
 export type Assessment = {
@@ -993,6 +1037,55 @@ export type MixtapeDraft = {
 	sides: [Slot[], Slot[]],
 };
 
+export type MusicDoctorBitrateStat = {
+	band: string,
+	sortOrder: number,
+	fileCount: number,
+	totalBytes: number,
+};
+
+export type MusicDoctorFormatStat = {
+	format: string,
+	fileCount: number,
+	totalBytes: number,
+};
+
+export type MusicDoctorSource = {
+	path: string,
+	enabled: boolean,
+	lastScanAt: string | null,
+	fileCount: number,
+	totalBytes: number,
+};
+
+export type MusicDoctorStatus = {
+	databasePath: string,
+	resolvedPath: string,
+	exists: boolean,
+	valid: boolean,
+	state: string,
+	message: string,
+	schemaVersion: number | null,
+	fileSizeBytes: number,
+	latestScanId: number | null,
+	latestScanStatus: string | null,
+	latestScanCompletedAt: string | null,
+	sourceCount: number,
+	totalFiles: number,
+	audioFiles: number,
+	audioAlbums: number,
+	matchedTracks: number,
+	unmatchedLibraryTracks: number,
+	unmatchedDoctorAudio: number,
+	fileIssueCount: number,
+	lastSyncedAt: string | null,
+	needsSync: boolean,
+	syncInProgress: boolean,
+	sources: MusicDoctorSource[],
+	formatStats: MusicDoctorFormatStat[],
+	bitrateStats: MusicDoctorBitrateStat[],
+};
+
 export type PlaylistAutomationStatus = {
 	smart: boolean,
 	lastEvaluatedAt: string | null,
@@ -1120,6 +1213,12 @@ export type SaveDiscogsCredentialsRequest = {
 	consumerSecret: string,
 };
 
+export type SaveExternalDiscoveryRequest = {
+	id: number | null,
+	name: string,
+	response: ExternalDiscoveryResponse,
+};
+
 export type SaveLastFmApiKeyRequest = {
 	apiKey: string,
 };
@@ -1136,6 +1235,18 @@ export type SavePlaylistRequest_Serialize = {
 	id: number | null,
 	name: string,
 	playlist: AiPlaylist_Serialize,
+};
+
+export type SavedExternalDiscovery = {
+	id: number,
+	name: string,
+	response: ExternalDiscoveryResponse,
+	libraryImportRunId: number | null,
+	libraryImportedAt: string | null,
+	libraryAlbumCount: number,
+	libraryTrackCount: number,
+	createdAt: string,
+	updatedAt: string,
 };
 
 export type SavedPlaylist = SavedPlaylist_Serialize | SavedPlaylist_Deserialize;
@@ -1169,6 +1280,18 @@ export type SavedPlaylist_Serialize = {
 export type Score = {
 	score: number | null,
 	confidence: number | null,
+};
+
+export type ScoreRequest = {
+	tracks: AiPlaylistTrack[],
+	briefs: [string, string],
+	notes: { [key in string]: string },
+};
+
+export type ScoreResult = {
+	assessments: Assessment[],
+	model: string,
+	usage: AiUsage,
 };
 
 export type SetLibraryCompletionArtistDecisionRequest = {
@@ -1243,6 +1366,19 @@ export type StartLibraryCompletionVerificationRequest = {
 export type TextFilter = {
 	operator?: string,
 	value?: string,
+};
+
+export type UpdateInfo = {
+	currentVersion: string,
+	version: string,
+	date: string | null,
+	notes: string | null,
+};
+
+export type UpdateSnapshot = {
+	checkedAt: string | null,
+	info: UpdateInfo | null,
+	error: string | null,
 };
 
 export type Weights = {

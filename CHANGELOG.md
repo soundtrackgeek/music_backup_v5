@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.167.0] - 2026-10-06
+
+### Changed
+- Migrate eight more commands to generated TypeScript bindings: app update status and check, artist biography, album review, Music Doctor status, Jev mixtape scoring, and saved outside-library discoveries (list and save). `app/updater.ts` and `backend.ts` call `commands.*` for them, and the updater test mocks the generated bindings.
+
 ## [0.166.0] - 2026-10-06
 
 ### Changed

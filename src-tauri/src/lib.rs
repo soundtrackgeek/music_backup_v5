@@ -426,6 +426,7 @@ async fn get_lastfm_artist_constellation_branch(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_artist_biography(
     app: AppHandle,
     artist_id: String,
@@ -441,6 +442,7 @@ async fn get_artist_biography(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_album_review(
     app: AppHandle,
     album_id: String,
@@ -678,6 +680,7 @@ async fn test_jev_connection() -> Result<ai::AiConnectionTest, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn score_mixtape_candidates(input: jev::ScoreRequest) -> Result<jev::ScoreResult, String> {
     tauri::async_runtime::spawn_blocking(move || jev::score_candidates(input)).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
 }
@@ -772,6 +775,7 @@ async fn discover_outside_library(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_saved_external_discoveries(
     app: AppHandle,
 ) -> Result<Vec<external_discovery::SavedExternalDiscovery>, String> {
@@ -783,6 +787,7 @@ async fn list_saved_external_discoveries(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn save_external_discovery(
     app: AppHandle,
     input: external_discovery::SaveExternalDiscoveryRequest,
@@ -1287,12 +1292,14 @@ async fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSetti
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_app_update_status(app: AppHandle) -> updater::UpdateSnapshot {
     updater::snapshot(&app).await
 }
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn check_app_update(app: AppHandle) -> Result<updater::UpdateSnapshot, String> {
     updater::check(&app).await
 }
@@ -1305,6 +1312,7 @@ async fn install_app_update(app: AppHandle, version: String) -> Result<(), Strin
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_music_doctor_status(
     app: AppHandle,
 ) -> Result<music_doctor::MusicDoctorStatus, String> {
@@ -2193,9 +2201,7 @@ pub fn run() {
             acknowledge_catalog_revision,
             list_database_backups,
             restore_database_backup,
-            get_settings,
-            get_artist_biography,
-            get_album_review,
+            get_settings,
             soulseek::connection_bootstrap,
             soulseek::connection_save_profile,
             soulseek::connection_connect,
@@ -2229,10 +2235,7 @@ pub fn run() {
             usenet::usenet_search,
             usenet::usenet_transfers_snapshot,
             usenet::usenet_enqueue_download,
-            usenet::usenet_clear_completed,
-            score_mixtape_candidates,
-            list_saved_external_discoveries,
-            save_external_discovery,
+            usenet::usenet_clear_completed,
             delete_saved_external_discovery,
             get_musicbrainz_cache_status,
             get_musicbrainz_origin_country_status,
@@ -2251,11 +2254,8 @@ pub fn run() {
             sync_musicbrainz_overlay,
             list_musicbrainz_overlay_sync_log,
             export_musicbrainz_artist_releases,
-            save_settings,
-            get_app_update_status,
-            check_app_update,
-            install_app_update,
-            get_music_doctor_status,
+            save_settings,
+            install_app_update,
             sync_music_doctor,
             get_statistics,
             list_library_updates,

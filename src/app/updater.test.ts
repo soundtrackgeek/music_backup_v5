@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { checkForAppUpdate, getAppUpdateStatus, installAppUpdate, listenToAppUpdateChecks } from "./updater";
 
-const mocks = vi.hoisted(() => ({ invoke: vi.fn(), listen: vi.fn(), relaunch: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  listen: vi.fn(),
+  relaunch: vi.fn(),
+  getAppUpdateStatus: vi.fn(),
+  checkAppUpdate: vi.fn(),
+}));
 vi.mock("../backend/tauriClient", () => ({ invoke: mocks.invoke, listen: mocks.listen }));
+vi.mock("../bindings", () => ({
+  commands: { getAppUpdateStatus: mocks.getAppUpdateStatus, checkAppUpdate: mocks.checkAppUpdate },
+}));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: mocks.relaunch }));
 
 const info = { currentVersion: "1.0.0", version: "1.1.0", date: null, notes: "Changes" };
@@ -12,9 +21,9 @@ describe("Rust updater bridge", () => {
 
   it("reads the startup snapshot and receives scheduled checks without another provider call", async () => {
     const snapshot = { checkedAt: "now", info, error: null };
-    mocks.invoke.mockResolvedValue(snapshot);
+    mocks.getAppUpdateStatus.mockResolvedValue(snapshot);
     expect(await getAppUpdateStatus()).toEqual(snapshot);
-    expect(mocks.invoke).toHaveBeenCalledWith("get_app_update_status");
+    expect(mocks.getAppUpdateStatus).toHaveBeenCalledTimes(1);
     const receive = vi.fn();
     await listenToAppUpdateChecks(receive);
     mocks.listen.mock.calls[0][1]({ payload: snapshot });
@@ -22,12 +31,12 @@ describe("Rust updater bridge", () => {
   });
 
   it("manual checks use the shared backend update and report failures", async () => {
-    mocks.invoke.mockResolvedValue({ info, error: null });
+    mocks.checkAppUpdate.mockResolvedValue({ info, error: null });
     expect(await checkForAppUpdate()).toEqual({ info, update: "1.1.0" });
-    expect(mocks.invoke).toHaveBeenCalledWith("check_app_update");
-    mocks.invoke.mockResolvedValue({ info: null, error: null });
+    expect(mocks.checkAppUpdate).toHaveBeenCalledTimes(1);
+    mocks.checkAppUpdate.mockResolvedValue({ info: null, error: null });
     expect(await checkForAppUpdate()).toBeNull();
-    mocks.invoke.mockResolvedValue({ info, error: "offline" });
+    mocks.checkAppUpdate.mockResolvedValue({ info, error: "offline" });
     await expect(checkForAppUpdate()).rejects.toThrow("offline");
   });
 

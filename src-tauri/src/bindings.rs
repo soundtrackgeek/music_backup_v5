@@ -12,6 +12,14 @@ use tauri::Wry;
 use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
+    get_artist_biography,
+    get_album_review,
+    score_mixtape_candidates,
+    list_saved_external_discoveries,
+    save_external_discovery,
+    get_app_update_status,
+    check_app_update,
+    get_music_doctor_status,
     get_deemix_credential_status,
     save_deemix_arl,
     delete_deemix_arl,
@@ -95,6 +103,14 @@ macro_rules! specta_commands {
 
 fn builder() -> (Builder<Wry>, &'static [&'static str]) {
     let (commands, names) = specta_commands![
+        get_artist_biography,
+        get_album_review,
+        score_mixtape_candidates,
+        list_saved_external_discoveries,
+        save_external_discovery,
+        get_app_update_status,
+        check_app_update,
+        get_music_doctor_status,
         get_deemix_credential_status,
         save_deemix_arl,
         delete_deemix_arl,
