@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.168.1] - 2026-10-06
+
+### Removed
+- Remove 60 unreachable Soulseek `#[tauri::command]` functions (rooms, messages, people, radar, wanted lists, folder and share browsing, extra transfer controls, and diagnostics). They were added with the first Soulseek release but never registered with Tauri, and nothing in the frontend, README, or SPEC uses them. The 26 registered commands are unchanged. The backing Soulseek modules keep their `allow(dead_code)`, and the code they orphaned can be removed separately.
+
 ## [0.168.0] - 2026-10-06
 
 ### Changed
