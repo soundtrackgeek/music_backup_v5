@@ -313,8 +313,10 @@ Core files:
 - `src-tauri/src/lib.rs`: Tauri command registration and desktop runtime glue.
 - `src-tauri/src/main.rs`: app entrypoint.
 - `src-tauri/src/models.rs`: Rust payload models shared by commands, database logic, and import logic.
-- `src-tauri/src/db.rs`: remaining SQLite search, charts, statistics, discovery, Billboard imports, Music Tools, saved objects, and exports.
-- `src-tauri/src/db/migrations.rs`: current schema version and focused data migrations.
+- `src-tauri/src/db.rs`: connection opening, pragmas, and the migration lock, plus re-exports of the feature modules below.
+- `src-tauri/src/db/*.rs`: feature modules for search, statistics, timelines, artists and genres, chart imports and reconciliation, discovery, Music Tools, playlists, saved views, Luna snapshots, provider caches, inspection, exports, and diagnostics, each with its own tests (see `docs/backend-architecture.md`).
+- `src-tauri/src/db/migrations.rs`: the ordered, versioned migration list and its runner, current schema version, and focused data migrations.
+- `src-tauri/src/db/schema.rs`: the idempotent schema steps the migration list runs.
 - `src-tauri/src/db/settings.rs`: settings persistence, defaults, and normalization.
 - `src-tauri/src/db/backups.rs`: backup inventory, validation, creation, and restore behavior.
 - `src-tauri/src/musicbrainz.rs`: Read-only MusicBrainz cache validation, status reporting, selected-artist discography comparison, explicit selected-artist refresh, and app-owned artist/release review decisions against the optional local `musicbrainz_cache.db`.
@@ -380,7 +382,7 @@ Important test boundary:
 
 Expected next backend modularization:
 
-- Continue splitting `db.rs` into focused modules for browse queries, saved objects, exports, statistics, discovery, Billboard, and Music Tools.
+- Done in 0.162.0: `db.rs` is split into feature modules and migrations are a declarative ordered list.
 - Keep schema migrations and SQL helpers boring and explicit.
 - Add regression tests before or alongside each split.
 

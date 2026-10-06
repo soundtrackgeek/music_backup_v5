@@ -544,8 +544,8 @@ npm run security:check
 - `src-tauri/src/usenet.rs` owns secure Prowlarr/Newsgroup Ninja configuration, Audio NZB search, TLS NNTP sessions, parallel article retrieval, yEnc validation, persistent transfers, staging, and UnRAR extraction; the frontend never receives either provider secret.
 - `src-tauri/src/external_discovery.rs` owns MusicBrainz artist/release-group/recording search, local ownership exclusion, source evidence, and exact saved Discovery list persistence.
 - `src-tauri/src/wishlist.rs` owns persistent artist/album wishes, MusicBrainz references, duplicate prevention, and local-library reconciliation.
-- Rust database migrations, settings, and backup/restore behavior live under `src-tauri/src/db/`.
-- Remaining large modules include `src/backend.ts`, `src/backend/webPreview.ts`, `src/types.ts`, `src/workspaces/WishListWorkspace.tsx`, `src-tauri/src/db.rs`, and `src-tauri/src/musicbrainz.rs`. Backend SQL decomposition and measured subscription/render optimization remain separate follow-up work.
+- `src-tauri/src/db.rs` is a small facade over feature modules in `src-tauri/src/db/` (search, statistics, charts, discovery, Music Tools, playlists, exports, provider caches, settings, backups). Schema changes are one ordered, versioned list in `db/migrations.rs`; see [Backend database architecture](docs/backend-architecture.md).
+- Remaining large modules include `src/backend.ts`, `src/backend/webPreview.ts`, `src/types.ts`, `src/workspaces/WishListWorkspace.tsx`, and `src-tauri/src/musicbrainz.rs`. Measured subscription/render optimization remains separate follow-up work.
 
 ## Roadmap and Spec
 

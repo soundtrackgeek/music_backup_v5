@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.162.0] - 2026-10-06
+
+### Changed
+- Split the 32,000-line `db.rs` into feature modules under `src-tauri/src/db/` (charts, statistics, discovery, search, Music Tools, playlists, exports, provider caches, and more). Existing `db::` paths are re-exported, so command call sites are unchanged, and the database tests now live beside the code they cover.
+- Replace the branching schema upgrade code with one ordered migration list. Each step runs once in its own transaction, the runner owns `PRAGMA user_version`, and a database whose recorded version is not backed by its tables replays only the missing steps.
+
+### Fixed
+- Upgrading a schema 43 database no longer skips the schema 45-57 steps, which the old branching code could do when it jumped straight to schema 59.
+
 ## [0.161.1] - 2026-10-06
 
 ### Fixed

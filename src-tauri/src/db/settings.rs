@@ -342,3 +342,140 @@ fn normalize_musicbrainz_overlay_sync_path(value: &str) -> String {
         trimmed.to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::test_support::*;
+    use crate::db::*;
+
+    #[test]
+    fn saves_and_clamps_app_settings() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("migrate database");
+
+        let saved = save_settings_for_connection(
+            &conn,
+            AppSettings {
+                backup_retention: 500,
+                dark_mode: true,
+                country_flag_display: "flag".to_string(),
+                left_sidebar_default: "iconOnly".to_string(),
+                right_sidebar_default: "hidden".to_string(),
+                import_source_path: r"D:\Exports\musicbee-library.tsv".to_string(),
+                cover_source_path: "C:\\_code\\music_backup_v5\\AlbumCovers\\".to_string(),
+                billboard_source_path: r"D:\Charts\Albums".to_string(),
+                billboard_singles_source_path: r"D:\Charts\Singles".to_string(),
+                vg_lista_album_source_path: r"D:\Charts\Norway\Albums".to_string(),
+                vg_lista_singles_source_path: r"D:\Charts\Norway\Singles".to_string(),
+                official_uk_album_source_path: r"D:\Charts\UK\Albums".to_string(),
+                official_uk_singles_source_path: r"D:\Charts\UK\Singles".to_string(),
+                ti_i_skuddet_source_path: r"D:\Charts\Norway\Ti i Skuddet".to_string(),
+                norsktoppen_source_path: r"D:\Charts\Norway\Norsktoppen".to_string(),
+                deemix_download_path: r"D:\Music\Incoming".to_string(),
+                deemix_download_quality: "mp3_128".to_string(),
+                deemix_download_fallback: false,
+                deemix_download_organization: "artist_album_year_folders".to_string(),
+                musicbrainz_cache_path: "MusicBrainz/custom-cache.db".to_string(),
+                musicbrainz_overlay_sync_path: r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
+                    .to_string(),
+                musicbrainz_overlay_auto_sync_minutes: 2_000,
+                music_doctor_database_path: r"D:\Apps\Music Doctor\music-doctor.db".to_string(),
+                music_doctor_auto_sync: false,
+                update_auto_check_minutes: 2_000,
+                updated_at: None,
+            },
+        )
+        .expect("save settings");
+
+        assert_eq!(saved.backup_retention, MAX_BACKUP_RETENTION);
+        assert!(saved.dark_mode);
+        assert_eq!(saved.country_flag_display, "flag");
+        assert_eq!(saved.left_sidebar_default, "iconOnly");
+        assert_eq!(saved.right_sidebar_default, "hidden");
+        assert_eq!(saved.import_source_path, r"D:\Exports\musicbee-library.tsv");
+        assert_eq!(
+            saved.cover_source_path,
+            "C:\\_code\\music_backup_v5\\AlbumCovers\\"
+        );
+        assert_eq!(saved.billboard_source_path, r"D:\Charts\Albums");
+        assert_eq!(saved.billboard_singles_source_path, r"D:\Charts\Singles");
+        assert_eq!(saved.vg_lista_album_source_path, r"D:\Charts\Norway\Albums");
+        assert_eq!(
+            saved.vg_lista_singles_source_path,
+            r"D:\Charts\Norway\Singles"
+        );
+        assert_eq!(saved.official_uk_album_source_path, r"D:\Charts\UK\Albums");
+        assert_eq!(
+            saved.official_uk_singles_source_path,
+            r"D:\Charts\UK\Singles"
+        );
+        assert_eq!(
+            saved.ti_i_skuddet_source_path,
+            r"D:\Charts\Norway\Ti i Skuddet"
+        );
+        assert_eq!(
+            saved.norsktoppen_source_path,
+            r"D:\Charts\Norway\Norsktoppen"
+        );
+        assert_eq!(saved.deemix_download_path, r"D:\Music\Incoming");
+        assert_eq!(saved.deemix_download_quality, "mp3_128");
+        assert!(!saved.deemix_download_fallback);
+        assert_eq!(
+            saved.deemix_download_organization,
+            "artist_album_year_folders"
+        );
+        assert_eq!(saved.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
+        assert_eq!(
+            saved.musicbrainz_overlay_sync_path,
+            r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
+        );
+        assert_eq!(
+            saved.musicbrainz_overlay_auto_sync_minutes,
+            MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES
+        );
+        assert_eq!(
+            saved.update_auto_check_minutes,
+            MAX_UPDATE_AUTO_CHECK_MINUTES
+        );
+
+        let loaded = settings_for_connection(&conn).expect("load settings");
+        assert_eq!(loaded.backup_retention, MAX_BACKUP_RETENTION);
+        assert!(loaded.dark_mode);
+        assert_eq!(loaded.country_flag_display, "flag");
+        assert_eq!(loaded.left_sidebar_default, "iconOnly");
+        assert_eq!(loaded.right_sidebar_default, "hidden");
+        assert_eq!(
+            loaded.import_source_path,
+            r"D:\Exports\musicbee-library.tsv"
+        );
+        assert_eq!(
+            loaded.cover_source_path,
+            "C:\\_code\\music_backup_v5\\AlbumCovers\\"
+        );
+        assert_eq!(loaded.billboard_source_path, r"D:\Charts\Albums");
+        assert_eq!(loaded.billboard_singles_source_path, r"D:\Charts\Singles");
+        assert_eq!(loaded.deemix_download_path, r"D:\Music\Incoming");
+        assert_eq!(loaded.deemix_download_quality, "mp3_128");
+        assert!(!loaded.deemix_download_fallback);
+        assert_eq!(
+            loaded.deemix_download_organization,
+            "artist_album_year_folders"
+        );
+        assert_eq!(loaded.musicbrainz_cache_path, "MusicBrainz/custom-cache.db");
+        assert_eq!(
+            loaded.musicbrainz_overlay_sync_path,
+            r"C:\Sync\musicbrainz-overlay-sync.sqlite3"
+        );
+        assert_eq!(
+            loaded.musicbrainz_overlay_auto_sync_minutes,
+            MAX_MUSICBRAINZ_OVERLAY_AUTO_SYNC_MINUTES
+        );
+        assert_eq!(
+            loaded.update_auto_check_minutes,
+            MAX_UPDATE_AUTO_CHECK_MINUTES
+        );
+        assert!(loaded.updated_at.is_some());
+    }
+}

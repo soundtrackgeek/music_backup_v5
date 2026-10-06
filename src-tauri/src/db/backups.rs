@@ -375,3 +375,126 @@ fn sqlite_sidecar_path(db_path: &Path, suffix: &str) -> PathBuf {
     path.push(suffix);
     PathBuf::from(path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::test_support::*;
+    use crate::db::*;
+
+    #[test]
+    fn lists_database_backups_with_metadata_and_schema() {
+        let temp_dir = temp_test_dir("backup-list");
+        let db_path = temp_dir.join("music-library.sqlite3");
+        let conn = seeded_file_database(&db_path, "active", "Active Album");
+        let backup_dir = backup_directory_for_db_path(&db_path).expect("backup directory");
+        fs::create_dir_all(&backup_dir).expect("create backup directory");
+        let backup_path = backup_dir.join("music-library-test-before-import.sqlite3");
+        drop(seeded_file_database(&backup_path, "backup", "Backup Album"));
+        let backup_path_text = backup_path.display().to_string();
+
+        conn.execute(
+            "
+            INSERT INTO database_backups (
+                created_at, operation, source_path, source_size_bytes, backup_path
+            )
+            VALUES (
+                '2026-07-04T10:00:00Z', 'import', 'library.tsv', 456, ?1
+            )
+            ",
+            params![backup_path_text],
+        )
+        .expect("insert backup metadata");
+        conn.execute(
+            "
+            INSERT INTO import_runs (
+                source_path, source_size_bytes, started_at, completed_at,
+                status, track_rows, album_count, duration_ms, backup_path
+            )
+            VALUES (
+                'library.tsv', 456, '2026-07-04T10:00:00Z',
+                '2026-07-04T10:00:01Z', 'completed', 42, 7, 1, ?1
+            )
+            ",
+            params![backup_path.display().to_string()],
+        )
+        .expect("insert import run backup link");
+
+        let backups = list_database_backups(&conn, &db_path).expect("list database backups");
+
+        assert_eq!(backups.len(), 1);
+        assert_eq!(backups[0].operation, "import");
+        assert_eq!(backups[0].track_rows, Some(42));
+        assert_eq!(backups[0].album_count, Some(7));
+        assert_eq!(backups[0].schema_version, Some(LATEST_SCHEMA_VERSION));
+        assert!(backups[0].can_restore);
+
+        drop(conn);
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn rejects_restore_paths_outside_backup_directory() {
+        let temp_dir = temp_test_dir("backup-escape");
+        let db_path = temp_dir.join("music-library.sqlite3");
+        drop(seeded_file_database(&db_path, "active", "Active Album"));
+        let outside_path = temp_dir.join("outside.sqlite3");
+        drop(seeded_file_database(
+            &outside_path,
+            "outside",
+            "Outside Album",
+        ));
+
+        let error = restore_database_backup(&db_path, &outside_path.display().to_string())
+            .expect_err("reject outside backup path");
+
+        assert!(error
+            .to_string()
+            .contains("inside the app backup directory"));
+
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn restores_database_backup_and_creates_pre_restore_backup() {
+        let temp_dir = temp_test_dir("backup-restore");
+        let db_path = temp_dir.join("music-library.sqlite3");
+        drop(seeded_file_database(&db_path, "active", "Active Album"));
+        let backup_dir = backup_directory_for_db_path(&db_path).expect("backup directory");
+        fs::create_dir_all(&backup_dir).expect("create backup directory");
+        let backup_path = backup_dir.join("music-library-test-before-import.sqlite3");
+        drop(seeded_file_database(
+            &backup_path,
+            "restored",
+            "Restored Album",
+        ));
+
+        let summary = restore_database_backup(&db_path, &backup_path.display().to_string())
+            .expect("restore database backup");
+
+        assert_eq!(summary.track_count, 1);
+        assert_eq!(summary.album_count, 1);
+        assert_eq!(summary.schema_version, LATEST_SCHEMA_VERSION);
+        assert!(summary.restored_backup.can_restore);
+        let pre_restore_backup_path = summary
+            .pre_restore_backup_path
+            .expect("pre-restore backup path");
+        assert!(PathBuf::from(&pre_restore_backup_path).exists());
+
+        let restored_conn = Connection::open(&db_path).expect("open restored database");
+        let album: String = restored_conn
+            .query_row("SELECT album FROM albums", [], |row| row.get(0))
+            .expect("read restored album");
+        assert_eq!(album, "Restored Album");
+
+        let backups =
+            list_database_backups(&restored_conn, &db_path).expect("list backups after restore");
+        assert!(backups
+            .iter()
+            .any(|backup| backup.operation == "restore"
+                && backup.backup_path == pre_restore_backup_path));
+
+        drop(restored_conn);
+        fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+}

@@ -202,9 +202,11 @@ Then add a global **Activity Center**: a top-bar icon with a count badge and a d
 
 ---
 
-### 8. Break up `db.rs` and make migrations declarative
+### 8. Break up `db.rs` and make migrations declarative - DONE
 
-**Current state:** `db.rs` is 32,758 lines and contains migration code, browse SQL, statistics, Music Tools, exports, and charts. The migration ladder has many branches that each write `PRAGMA user_version = 57` ([`db.rs:699-956`](../src-tauri/src/db.rs#L699)), which is hard to reason about.
+**Implemented in 0.162.0 (2026-10-06):** `db.rs` is a ~400-line facade over 21 feature modules in `src-tauri/src/db/` (`search`, `stats`, `timelines`, `artists_genres`, `chart_imports`, `chart_reconcile`, `discovery*`, `tools*`, `playlists`, `saved_views`, `ai_snapshots`, `provider_cache`, `inspection`, `exports`, `diagnostics`, `schema`), re-exported so command call sites are unchanged. Tests moved next to the code they cover, with shared fixtures in `db/test_support.rs`. Migrations are one ordered `MIGRATIONS` list of `(version, up, verify)` steps in `db/migrations.rs`; the runner owns `user_version`, applies each step once in its own transaction, and replays only unverified steps. The old branching also skipped schema 45–57 when upgrading a schema 43 database; that is fixed and tested. New tests cover ladder ordering, a schema 20 upgrade, repair of missing tables, a newer database, and the 43 upgrade. See [Backend database architecture](backend-architecture.md). Splitting `search` and `tools` SQL further, and a `rusqlite_migration` dependency, were not needed.
+
+**Original state:** `db.rs` is 32,758 lines and contains migration code, browse SQL, statistics, Music Tools, exports, and charts. The migration ladder has many branches that each write `PRAGMA user_version = 57` ([`db.rs:699-956`](../src-tauri/src/db.rs#L699)), which is hard to reason about.
 
 **How to improve**
 1. Split by feature (`db/browse.rs`, `db/stats.rs`, `db/tools.rs`, `db/exports.rs`, `db/discovery.rs`, `db/charts.rs`), following the existing `db/settings.rs` and `db/backups.rs` precedent. Re-export the public API so command call sites don't change.
