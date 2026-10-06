@@ -2,6 +2,9 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LibraryCompletionWorkspace } from "./LibraryCompletionWorkspace";
+import { mockVirtualLayout } from "../test/virtualLayout";
+import { patchCompletionCandidates } from "../app/completionProgress";
+import type { LibraryCompletionCandidate, LibraryCompletionVerificationStatus } from "../types";
 
 const getLibraryCompletion = vi.fn();
 const listenToLibraryCompletionVerification = vi.fn();
@@ -195,6 +198,18 @@ const completedVerificationStatus = {
 } as const;
 
 describe("LibraryCompletionWorkspace", () => {
+  it("patches only affected candidates and preserves row identities on repeated progress events", () => {
+    const candidate: LibraryCompletionCandidate = { ...response.candidates[0], evidence: [...response.candidates[0].evidence] };
+    const candidates = [candidate, { ...candidate, id: "unaffected" }];
+    const progress = runningVerificationStatus.recentItems as unknown as LibraryCompletionVerificationStatus["recentItems"];
+    const updated = patchCompletionCandidates(candidates, progress);
+    expect(updated).not.toBe(candidates);
+    expect(updated[0]).not.toBe(candidates[0]);
+    expect(updated[0].verificationStatus).toBe(progress[0].state);
+    expect(updated[1]).toBe(candidates[1]);
+    expect(patchCompletionCandidates(updated, progress)).toBe(updated);
+    expect(patchCompletionCandidates(updated, [])).toBe(updated);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     listenToLibraryCompletionVerification.mockResolvedValue(() => undefined);
@@ -258,6 +273,28 @@ describe("LibraryCompletionWorkspace", () => {
       candidates: [],
     });
     getLibraryCompletionArtistVerificationStatus.mockResolvedValue({ batch: null, recentItems: [] });
+  });
+
+  it("virtualizes 5000 candidates while batch verification still includes offscreen selections", async () => {
+    const restoreLayout = mockVirtualLayout(67);
+    getLibraryCompletion.mockResolvedValue({ ...response,
+      returnedCandidates: 5000,
+      candidates: Array.from({ length: 5000 }, (_, index) => ({ ...response.candidates[0],
+        id: `candidate-${index}`, title: `Album ${index}`, artist: `Artist ${index}`,
+      })),
+    });
+    try {
+      const { container } = render(<LibraryCompletionWorkspace onOpenWishList={vi.fn()} />);
+      await screen.findByRole("heading", { name: "Album 0" });
+      expect(container.querySelectorAll(".completion-candidate-row").length).toBeLessThan(30);
+      fireEvent.click(screen.getByRole("button", { name: "Select shown" }));
+      fireEvent.click(screen.getByRole("button", { name: "Verify selected (5000)" }));
+      await waitFor(() => expect(startLibraryCompletionVerification).toHaveBeenCalledOnce());
+      const queuedIds = startLibraryCompletionVerification.mock.calls[0][0].candidateIds;
+      expect(queuedIds).toHaveLength(5000);
+      expect(queuedIds[4999]).toBe("candidate-4999");
+      expect(container.querySelectorAll(".completion-candidate-row").length).toBeLessThan(30);
+    } finally { restoreLayout(); }
   });
 
   it("renders pushed queue completion and cleans up its listener", async () => {

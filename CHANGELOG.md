@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.157.8] - 2026-10-06
+
+### Changed
+- Virtualize Library Completion album and artist queues, Playlist Builder track reviews, Updates activity/artist lists, and all shared resizable tables with TanStack React Virtual 3.14.13. Lists above 40 items mount the viewport and a small overscan buffer; dynamically measured heights support wrapped text and column resizing.
+- Render shared table rows on demand, keep sticky headers and saved widths, and replace playlist review's 500-track reveal batches with continuous scrolling over the complete draft. Selection, verification, exports, playlist saves, and track edits still use all loaded items.
+- Memoize Workbench candidate rows and preserve unchanged candidate objects when verification progress arrives, avoiding repeated updates to unrelated rows.
+
+### Fixed
+- Keep focused rows mounted and make Tab/Shift+Tab traverse virtual boundaries. Reveal verified selections by their data identity even when the row has never mounted, reset filtered views to a reachable row, and retain the artist queue position during verification refreshes.
+- Schedule virtual-list resize measurements after the current observer delivery so wrapped rows can reflow without recursive ResizeObserver notifications.
+
 ## [0.157.7] - 2026-10-04
 
 ### Changed

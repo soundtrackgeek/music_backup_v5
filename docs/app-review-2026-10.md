@@ -127,7 +127,9 @@ On an up-to-date database, `migrate()` still enters `migrate_through_57`. That p
 
 ---
 
-### 4. Virtualize large lists
+### 4. Virtualize large lists - DONE
+
+**Implemented in 0.157.8 (2026-10-06):** `VirtualList` uses TanStack React Virtual 3.14.13 for lists over 40 items, with six overscan rows in each direction and measured heights for wrapped/responsive content. `ResizableTable` enables it automatically and accepts data plus a row renderer; all nine app table renderers now create only mounted row JSX. Sticky headers, column widths, horizontal scrolling, and logical row indexes remain available. Album and artist Completion queues, Playlist Builder review, and Updates activity/artist lists use the shared virtualizer. Playlist review scrolls across the full draft instead of revealing 500-track batches. Workbench rows are memoized by candidate identity and duplicate progress events preserve unchanged candidate objects. Focused rows stay mounted; Tab/Shift+Tab cross virtual boundaries, and review jumps use data keys. Existing data limits, backend paging, exports, batch selection, playlist saves, and edits retain the complete loaded arrays.
 
 **Current state:** no virtualization is used anywhere in `src/`.
 - The Library Completion Workbench returns up to `MAX_RETURNED_CANDIDATES = 5_000` rows ([`library_completion.rs:16`](../src-tauri/src/library_completion.rs#L16)) and renders all of them with `.map` ([`LibraryCompletionWorkspace.tsx:1069`](../src/workspaces/LibraryCompletionWorkspace.tsx#L1069)).

@@ -1,0 +1,27 @@
+.virtual-list.is-virtualized,
+.resizable-table.is-virtualized {
+  display: block;
+  max-height: min(696px, 70vh);
+  overflow: auto;
+  overflow-anchor: none;
+  scrollbar-gutter: stable;
+}
+
+.virtual-list-item {
+  display: flow-root;
+}
+
+.virtual-list-spacer {
+  width: 1px;
+  pointer-events: none;
+}
+
+.virtual-list-item > .updates-artist-row {
+  width: 100%;
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
+.updates-activity-list.virtual-list.is-virtualized {
+  max-height: min(780px, 75vh);
+}

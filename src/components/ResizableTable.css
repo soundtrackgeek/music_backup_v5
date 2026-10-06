@@ -1,5 +1,6 @@
 .result-table.resizable-table > .result-table-head,
-.result-table.resizable-table > .result-table-row {
+.result-table.resizable-table > .result-table-row,
+.result-table.resizable-table > .virtual-list-item > .result-table-row {
   grid-template-columns: var(--result-table-columns) !important;
   min-width: var(--result-table-min-width) !important;
 }
@@ -14,10 +15,14 @@
   overflow: visible;
 }
 
-.result-table.resizable-table > .result-table-row > [role="cell"] {
+.result-table.resizable-table .result-table-row > [role="cell"] {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.resizable-table.is-virtualized > .result-table-head {
+  margin-bottom: 1px;
 }
 
 .column-resize-handle {

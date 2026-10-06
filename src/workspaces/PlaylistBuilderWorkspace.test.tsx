@@ -1,12 +1,41 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PlaylistBuilderWorkspace } from "./PlaylistBuilderWorkspace";
 import { createRequest } from "../app/requests";
 import { localSearchPlaylistFromResponse } from "../app/searchPlaylist";
 import type { BrowseResponse, BrowseRow } from "../types";
+import { mockVirtualLayout } from "../test/virtualLayout";
 
 describe("playlist builder workspace", () => {
+  it("edits the final track in a large draft and keeps focus on a reordered track", async () => {
+    const restoreLayout = mockVirtualLayout();
+    const request = createRequest("tracks");
+    const response: BrowseResponse = { view: "tracks", total: 1200, limit: 1200, offset: 0,
+      rows: Array.from({ length: 1200 }, (_, index) => ({
+        id: `track-${index + 1}`, trackId: index + 1, albumId: "album", title: `Track ${index}`,
+        album: "Album", displayArtist: "Artist", albumArtistDisplay: "Artist", trackSeconds: 180,
+      } as BrowseRow)),
+    };
+    const draft = localSearchPlaylistFromResponse("Large draft", request, response);
+    try {
+      const { container } = render(<PlaylistBuilderWorkspace isAvailable launch={{ id: 99,
+        cohortTitle: "Large draft", prompt: draft.prompt, request, draft }} />);
+      const list = screen.getByRole("list", { name: "Playlist tracks" });
+      expect(container.querySelectorAll(".playlist-track").length).toBeLessThan(30);
+      fireEvent.scroll(list, { target: { scrollTop: 1190 * 64 } });
+      const move = await screen.findByRole("button", { name: "Move Track 1199 up" });
+      act(() => move.focus());
+      fireEvent.click(move);
+      expect(screen.getByRole("button", { name: "Move Track 1199 up" })).toBe(move);
+      expect(move).toHaveFocus();
+      expect(move.closest("article")?.querySelector(".playlist-track-number")).toHaveTextContent("1199");
+      fireEvent.click(screen.getByRole("button", { name: "Remove Track 1199" }));
+      expect(screen.queryByText("Track 1199")).not.toBeInTheDocument();
+      expect(list).toHaveAttribute("data-item-count", "1199");
+      expect(container.querySelectorAll(".playlist-track").length).toBeLessThan(30);
+    } finally { restoreLayout(); }
+  });
   it("opens a Search handoff as a populated local draft without Luna planning", () => {
     const request = createRequest("tracks");
     request.limit = 500;

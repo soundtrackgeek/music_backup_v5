@@ -21,6 +21,7 @@ import {
 } from "react";
 
 import { listLibraryUpdateArtists, listLibraryUpdates } from "../backend";
+import { VirtualList } from "../components/VirtualList";
 import type {
   LibraryUpdate,
   LibraryUpdateArtistResponse,
@@ -39,6 +40,9 @@ type UpdatesWorkspaceProps = {
 
 type UpdateDateRange = "all" | "today" | "7d" | "30d" | "365d";
 type UpdatesView = "activity" | "artists";
+type LedgerEntry = { key: string; updates: LibraryUpdate[] } | { key: string; update: LibraryUpdate };
+const ledgerKey = (entry: LedgerEntry) => entry.key;
+const artistKey = (artist: LibraryUpdateArtistSummary) => artist.artistKey;
 
 const PAGE_SIZE = 50;
 
@@ -318,8 +322,8 @@ function ArtistUpdateList({
         </span>
         <span>Largest impact first</span>
       </header>
-      <div className="updates-artist-list">
-        {artists.map((artist) => {
+      <VirtualList className="updates-artist-list" items={artists} getKey={artistKey} estimateSize={64}
+        renderItem={(artist) => {
           const albumLabels = albumImpactLabels(artist);
           return (
             <button
@@ -344,8 +348,7 @@ function ArtistUpdateList({
               <ChevronRight size={17} aria-hidden="true" />
             </button>
           );
-        })}
-      </div>
+        }} />
     </section>
   );
 }
@@ -446,6 +449,10 @@ export function UpdatesWorkspace({
     }
     return [...grouped.values()];
   }, [response.rows]);
+  const ledgerEntries = useMemo<LedgerEntry[]>(() => groups.flatMap((updates) => [
+    { key: `group-${updateGroupKey(updates[0])}`, updates },
+    ...updates.map((update) => ({ key: `update-${update.id}`, update })),
+  ]), [groups]);
 
   const activeResponse = view === "artists" ? artistResponse : response;
   const pageStart = activeResponse.total === 0 ? 0 : activeResponse.offset + 1;
@@ -646,14 +653,13 @@ export function UpdatesWorkspace({
               </span>
             </div>
           ) : (
-            groups.map((updates) => {
-              const first = updates[0];
-              return (
-                <section
-                  className="updates-group"
-                  key={updateGroupKey(first)}
-                  aria-label={`${formatUpdateDate(first.createdAt)} — ${first.sourceLabel}`}
-                >
+            <VirtualList className="updates-activity-list" items={ledgerEntries} getKey={ledgerKey}
+              estimateSize={56} resetKey={`${offset}|${deferredQuery}|${changeKind}|${dateRange}`}
+              renderItem={(entry) => {
+                if ("updates" in entry) {
+                  const updates = entry.updates;
+                  const first = updates[0];
+                  return (
                   <header className="updates-group-heading">
                     <span>
                       <strong>{formatUpdateDate(first.createdAt)}</strong>
@@ -666,8 +672,10 @@ export function UpdatesWorkspace({
                       {first.sourceLabel}
                     </span>
                   </header>
-                  <div className="updates-list">
-                    {updates.map((update) => (
+                  );
+                }
+                const update = entry.update;
+                return (
                       <div
                         className={`update-row${selectedUpdateId === update.id ? " selected" : ""}`}
                         key={update.id}
@@ -695,11 +703,8 @@ export function UpdatesWorkspace({
                         </span>
                         <UpdateDescription update={update} />
                       </div>
-                    ))}
-                  </div>
-                </section>
-              );
-            })
+                );
+              }} />
           )}
         </section>
       )}

@@ -1,3 +1,4 @@
+import { VirtualList } from "../components/VirtualList";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
@@ -202,7 +203,6 @@ export function ArtistCompletionWorkspace({
   const [error, setError] = useState<string | null>(null);
   const completedBatchReloadRef = useRef<number | null>(null);
   const candidateListRef = useRef<HTMLDivElement>(null);
-  const candidateRowsRef = useRef(new Map<string, HTMLDivElement>());
   const candidateListScrollTopRef = useRef(0);
 
   const load = useCallback(async (
@@ -303,18 +303,8 @@ export function ArtistCompletionWorkspace({
   );
 
   useLayoutEffect(() => {
-    const list = candidateListRef.current;
-    if (!list || !data) return;
-    list.scrollTop = candidateListScrollTopRef.current;
-
-    const selectedRow = selectedId ? candidateRowsRef.current.get(selectedId) : null;
-    if (!selectedRow) return;
-    const listBounds = list.getBoundingClientRect();
-    const rowBounds = selectedRow.getBoundingClientRect();
-    if (rowBounds.top < listBounds.top || rowBounds.bottom > listBounds.bottom) {
-      selectedRow.scrollIntoView({ block: "nearest" });
-    }
-  }, [data, selectedId]);
+    if (candidateListRef.current && data) candidateListRef.current.scrollTop = candidateListScrollTopRef.current;
+  }, [data]);
 
   const currentItem = verificationStatus?.recentItems.find((item) => item.state === "checking") ?? null;
   const hasActiveBatch = batch?.state === "running" || batch?.state === "paused";
@@ -675,25 +665,19 @@ export function ArtistCompletionWorkspace({
               <span>{data?.truncated ? `Top ${data.returnedCandidates.toLocaleString()} loaded` : "All loaded"}</span>
             </div>
           </header>
-          <div
-            ref={candidateListRef}
-            className="completion-candidate-list"
-            aria-label="Artist discovery candidates"
-            onScroll={(event) => {
-              candidateListScrollTopRef.current = event.currentTarget.scrollTop;
-            }}
-          >
-            {candidates.map((candidate) => {
+          <VirtualList className="completion-candidate-list" aria-label="Artist discovery candidates"
+            items={candidates} getKey={(candidate) => candidate.id} estimateSize={67}
+            viewportRef={candidateListRef}
+            onScroll={(event) => { candidateListScrollTopRef.current = event.currentTarget.scrollTop; }}
+            resetKey={`${query}|${filter}|${JSON.stringify(activeRequest)}`}
+            scrollToKey={selectedId}
+            renderItem={(candidate) => {
               const eligible = candidate.status === "candidate" &&
                 (candidate.verificationStatus === "unverified" || candidate.verificationStatus === "failed");
               return (
                 <div
                   className="completion-candidate-row"
                   key={candidate.id}
-                  ref={(node) => {
-                    if (node) candidateRowsRef.current.set(candidate.id, node);
-                    else candidateRowsRef.current.delete(candidate.id);
-                  }}
                 >
                   <label className="completion-candidate-select">
                     <input
@@ -725,7 +709,7 @@ export function ArtistCompletionWorkspace({
                   </button>
                 </div>
               );
-            })}
+            }}>
             {!isLoading && candidates.length === 0 ? (
               <div className="completion-empty">
                 <UsersRound size={25} />
@@ -733,7 +717,7 @@ export function ArtistCompletionWorkspace({
                 <span>Try another source filter or search.</span>
               </div>
             ) : null}
-          </div>
+          </VirtualList>
         </section>
 
         <section className="completion-dossier" aria-label="Artist candidate dossier">

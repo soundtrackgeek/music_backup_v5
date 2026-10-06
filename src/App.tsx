@@ -2264,6 +2264,115 @@ function ResultTable({
       tableId="search-tracks"
       columns={trackTableColumns}
       className={`result-table track-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showBillboardSingleColumn ? " with-billboard-single" : ""}${showSingleDebutColumn ? " with-single-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}${showTiISkuddetColumn ? " with-ti-i-skuddet" : ""}${showTiISkuddetDebutColumn ? " with-ti-i-skuddet-debut" : ""}${showNorsktoppenColumn ? " with-norsktoppen" : ""}${showNorsktoppenDebutColumn ? " with-norsktoppen-debut" : ""}`}
+      items={response.rows}
+      getRowKey={(row) => row.id}
+      renderRow={(row) => {
+        const singleLabel = formatBillboardSingleRank(row);
+        const artistName = row.displayArtist ?? row.albumArtistDisplay ?? "";
+        return (
+          <div className="result-table-row" role="row" key={row.id}>
+            <span role="cell">
+              <strong>
+                <span>{row.title ?? "Untitled"}</span>
+                {singleLabel ? (
+                  <span className="billboard-badge">{singleLabel}</span>
+                ) : null}
+              </strong>
+              <small>
+                {[row.discNumber, row.trackNumber]
+                  .filter((value) => value != null)
+                  .join(".")}
+                {row.love === "L" ? "  Loved" : ""}
+              </small>
+            </span>
+            <span className="album-title-cell" role="cell">
+              {onOpenAlbum ? (
+                <TableEntityButton
+                  label={`Open album ${row.album ?? "Untitled"}`}
+                  onClick={() => onOpenAlbum(row.albumId)}
+                >
+                  <AlbumTitleContents
+                    row={row}
+                    subtitle={
+                      row.albumArtistDisplay ?? row.year?.toString() ?? null
+                    }
+                    showBillboardBadge={!showBillboardColumn}
+                  />
+                </TableEntityButton>
+              ) : (
+                <AlbumTitleContents
+                  row={row}
+                  subtitle={
+                    row.albumArtistDisplay ?? row.year?.toString() ?? null
+                  }
+                  showBillboardBadge={!showBillboardColumn}
+                />
+              )}
+            </span>
+            <span role="cell">
+              {artistName && onOpenArtist ? (
+                <TableEntityButton
+                  label={`Open artist ${artistName}`}
+                  onClick={() =>
+                    onOpenArtist(normalizeArtistKey(artistName), artistName)
+                  }
+                >
+                  {artistName}
+                </TableEntityButton>
+              ) : (
+                artistName
+              )}
+            </span>
+            <span role="cell">
+              <CountryDisplay value={row} mode={countryFlagDisplay} />
+            </span>
+            <span role="cell">{row.year ?? ""}</span>
+            {showBillboardColumn ? (
+              <span role="cell">{formatBillboardRank(row)}</span>
+            ) : null}
+            {showDebutColumn ? (
+              <span role="cell">{formatBillboardDebutWeek(row)}</span>
+            ) : null}
+            {showBillboardSingleColumn ? (
+              <span role="cell">{singleLabel}</span>
+            ) : null}
+            {showSingleDebutColumn ? (
+              <span role="cell">{formatBillboardSingleDebut(row)}</span>
+            ) : null}
+            {showVgListaColumn ? (
+              <span role="cell">{formatVgListaRank(row)}</span>
+            ) : null}
+            {showVgListaDebutColumn ? (
+              <span role="cell">{formatVgListaDebutWeek(row)}</span>
+            ) : null}
+            {showOfficialUkColumn ? (
+              <span role="cell">{formatOfficialUkRank(row)}</span>
+            ) : null}
+            {showOfficialUkDebutColumn ? (
+              <span role="cell">{formatOfficialUkDebutWeek(row)}</span>
+            ) : null}
+            {showTiISkuddetColumn ? (
+              <span role="cell">{formatTiISkuddetRank(row)}</span>
+            ) : null}
+            {showTiISkuddetDebutColumn ? (
+              <span role="cell">{formatTiISkuddetDebut(row)}</span>
+            ) : null}
+            {showNorsktoppenColumn ? (
+              <span role="cell">{formatNorsktoppenRank(row)}</span>
+            ) : null}
+            {showNorsktoppenDebutColumn ? (
+              <span role="cell">{formatNorsktoppenDebut(row)}</span>
+            ) : null}
+            {showQualityColumn ? (
+              <span role="cell">{formatAudioQuality(row)}</span>
+            ) : null}
+            <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
+            <span role="cell" title={row.filePath ?? ""}>
+              {row.filename ?? ""}
+            </span>
+          </div>
+        );
+      }}
     >
       <div className="result-table-head" role="row">
         <SortableColumnHeader
@@ -2408,25 +2517,20 @@ function ResultTable({
         />
         <ResizableColumnHeader columnId="File" label="File" />
       </div>
-      {response.rows.map((row) => {
-        const singleLabel = formatBillboardSingleRank(row);
-        const artistName = row.displayArtist ?? row.albumArtistDisplay ?? "";
+
+    </ResizableTable>
+  ) : (
+    <ResizableTable
+      tableId="search-albums"
+      columns={albumTableColumns}
+      className={`result-table album-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}`}
+      items={response.rows}
+      getRowKey={(row) => row.id}
+      renderRow={(row) => {
+        const artistName = row.albumArtistDisplay;
+        const genreName = row.canonicalGenre;
         return (
           <div className="result-table-row" role="row" key={row.id}>
-            <span role="cell">
-              <strong>
-                <span>{row.title ?? "Untitled"}</span>
-                {singleLabel ? (
-                  <span className="billboard-badge">{singleLabel}</span>
-                ) : null}
-              </strong>
-              <small>
-                {[row.discNumber, row.trackNumber]
-                  .filter((value) => value != null)
-                  .join(".")}
-                {row.love === "L" ? "  Loved" : ""}
-              </small>
-            </span>
             <span className="album-title-cell" role="cell">
               {onOpenAlbum ? (
                 <TableEntityButton
@@ -2435,18 +2539,12 @@ function ResultTable({
                 >
                   <AlbumTitleContents
                     row={row}
-                    subtitle={
-                      row.albumArtistDisplay ?? row.year?.toString() ?? null
-                    }
                     showBillboardBadge={!showBillboardColumn}
                   />
                 </TableEntityButton>
               ) : (
                 <AlbumTitleContents
                   row={row}
-                  subtitle={
-                    row.albumArtistDisplay ?? row.year?.toString() ?? null
-                  }
                   showBillboardBadge={!showBillboardColumn}
                 />
               )}
@@ -2462,24 +2560,32 @@ function ResultTable({
                   {artistName}
                 </TableEntityButton>
               ) : (
-                artistName
+                artistName ?? ""
               )}
             </span>
             <span role="cell">
               <CountryDisplay value={row} mode={countryFlagDisplay} />
             </span>
             <span role="cell">{row.year ?? ""}</span>
+            <span role="cell">
+              {genreName && onOpenGenre ? (
+                <TableEntityButton
+                  label={`Open genre ${genreName}`}
+                  onClick={() =>
+                    onOpenGenre(normalizeGenreKey(genreName), genreName)
+                  }
+                >
+                  {genreName}
+                </TableEntityButton>
+              ) : (
+                genreName ?? ""
+              )}
+            </span>
             {showBillboardColumn ? (
               <span role="cell">{formatBillboardRank(row)}</span>
             ) : null}
             {showDebutColumn ? (
               <span role="cell">{formatBillboardDebutWeek(row)}</span>
-            ) : null}
-            {showBillboardSingleColumn ? (
-              <span role="cell">{singleLabel}</span>
-            ) : null}
-            {showSingleDebutColumn ? (
-              <span role="cell">{formatBillboardSingleDebut(row)}</span>
             ) : null}
             {showVgListaColumn ? (
               <span role="cell">{formatVgListaRank(row)}</span>
@@ -2493,34 +2599,15 @@ function ResultTable({
             {showOfficialUkDebutColumn ? (
               <span role="cell">{formatOfficialUkDebutWeek(row)}</span>
             ) : null}
-            {showTiISkuddetColumn ? (
-              <span role="cell">{formatTiISkuddetRank(row)}</span>
-            ) : null}
-            {showTiISkuddetDebutColumn ? (
-              <span role="cell">{formatTiISkuddetDebut(row)}</span>
-            ) : null}
-            {showNorsktoppenColumn ? (
-              <span role="cell">{formatNorsktoppenRank(row)}</span>
-            ) : null}
-            {showNorsktoppenDebutColumn ? (
-              <span role="cell">{formatNorsktoppenDebut(row)}</span>
-            ) : null}
             {showQualityColumn ? (
-              <span role="cell">{formatAudioQuality(row)}</span>
+              <span role="cell">{formatAudioQuality(row, true)}</span>
             ) : null}
-            <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
-            <span role="cell" title={row.filePath ?? ""}>
-              {row.filename ?? ""}
-            </span>
+            <span role="cell">{row.totalTracks ?? ""}</span>
+            <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
+            <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
           </div>
         );
-      })}
-    </ResizableTable>
-  ) : (
-    <ResizableTable
-      tableId="search-albums"
-      columns={albumTableColumns}
-      className={`result-table album-results${showBillboardColumn ? " with-billboard" : ""}${showDebutColumn ? " with-debut" : ""}${showVgListaColumn ? " with-vg-lista" : ""}${showVgListaDebutColumn ? " with-vg-lista-debut" : ""}`}
+      }}
     >
       <div className="result-table-head" role="row">
         <SortableColumnHeader
@@ -2628,88 +2715,7 @@ function ResultTable({
           onSort={onSort}
         />
       </div>
-      {response.rows.map((row) => {
-        const artistName = row.albumArtistDisplay;
-        const genreName = row.canonicalGenre;
-        return (
-          <div className="result-table-row" role="row" key={row.id}>
-            <span className="album-title-cell" role="cell">
-              {onOpenAlbum ? (
-                <TableEntityButton
-                  label={`Open album ${row.album ?? "Untitled"}`}
-                  onClick={() => onOpenAlbum(row.albumId)}
-                >
-                  <AlbumTitleContents
-                    row={row}
-                    showBillboardBadge={!showBillboardColumn}
-                  />
-                </TableEntityButton>
-              ) : (
-                <AlbumTitleContents
-                  row={row}
-                  showBillboardBadge={!showBillboardColumn}
-                />
-              )}
-            </span>
-            <span role="cell">
-              {artistName && onOpenArtist ? (
-                <TableEntityButton
-                  label={`Open artist ${artistName}`}
-                  onClick={() =>
-                    onOpenArtist(normalizeArtistKey(artistName), artistName)
-                  }
-                >
-                  {artistName}
-                </TableEntityButton>
-              ) : (
-                artistName ?? ""
-              )}
-            </span>
-            <span role="cell">
-              <CountryDisplay value={row} mode={countryFlagDisplay} />
-            </span>
-            <span role="cell">{row.year ?? ""}</span>
-            <span role="cell">
-              {genreName && onOpenGenre ? (
-                <TableEntityButton
-                  label={`Open genre ${genreName}`}
-                  onClick={() =>
-                    onOpenGenre(normalizeGenreKey(genreName), genreName)
-                  }
-                >
-                  {genreName}
-                </TableEntityButton>
-              ) : (
-                genreName ?? ""
-              )}
-            </span>
-            {showBillboardColumn ? (
-              <span role="cell">{formatBillboardRank(row)}</span>
-            ) : null}
-            {showDebutColumn ? (
-              <span role="cell">{formatBillboardDebutWeek(row)}</span>
-            ) : null}
-            {showVgListaColumn ? (
-              <span role="cell">{formatVgListaRank(row)}</span>
-            ) : null}
-            {showVgListaDebutColumn ? (
-              <span role="cell">{formatVgListaDebutWeek(row)}</span>
-            ) : null}
-            {showOfficialUkColumn ? (
-              <span role="cell">{formatOfficialUkRank(row)}</span>
-            ) : null}
-            {showOfficialUkDebutColumn ? (
-              <span role="cell">{formatOfficialUkDebutWeek(row)}</span>
-            ) : null}
-            {showQualityColumn ? (
-              <span role="cell">{formatAudioQuality(row, true)}</span>
-            ) : null}
-            <span role="cell">{row.totalTracks ?? ""}</span>
-            <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
-            <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
-          </div>
-        );
-      })}
+
     </ResizableTable>
   );
 }
@@ -2829,6 +2835,43 @@ function AlbumIndexTable({
         "ratingCompleteness": "84px",
         "albumScore": "72px",
       }}
+      items={response.rows}
+      getRowKey={(row) => row.id}
+      renderRow={(row) => {
+        const isSelected = row.albumId === selectedAlbumId;
+        return (
+          <div
+            className={`result-table-row selectable${isSelected ? " selected" : ""}`}
+            role="row"
+            aria-selected={isSelected}
+            tabIndex={0}
+            key={row.id}
+            onClick={() => onSelect(row.albumId)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect(row.albumId);
+              }
+            }}
+          >
+            <span className="album-title-cell" role="cell">
+              <AlbumTitleContents row={row} />
+            </span>
+            <span role="cell">{row.albumArtistDisplay ?? ""}</span>
+            <span role="cell">
+              <CountryDisplay value={row} mode={countryFlagDisplay} />
+            </span>
+            <span role="cell">{row.year ?? ""}</span>
+            <span role="cell">{row.canonicalGenre ?? ""}</span>
+            <span role="cell">{row.totalTracks ?? ""}</span>
+            <span role="cell" title={formatAudioQuality(row, true)}>
+              {formatAudioQuality(row, true)}
+            </span>
+            <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
+            <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
+          </div>
+        );
+      }}
     >
       <div className="result-table-head" role="row">
         <SortableColumnHeader
@@ -2886,41 +2929,7 @@ function AlbumIndexTable({
           onSort={onSort}
         />
       </div>
-      {response.rows.map((row) => {
-        const isSelected = row.albumId === selectedAlbumId;
-        return (
-          <div
-            className={`result-table-row selectable${isSelected ? " selected" : ""}`}
-            role="row"
-            aria-selected={isSelected}
-            tabIndex={0}
-            key={row.id}
-            onClick={() => onSelect(row.albumId)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onSelect(row.albumId);
-              }
-            }}
-          >
-            <span className="album-title-cell" role="cell">
-              <AlbumTitleContents row={row} />
-            </span>
-            <span role="cell">{row.albumArtistDisplay ?? ""}</span>
-            <span role="cell">
-              <CountryDisplay value={row} mode={countryFlagDisplay} />
-            </span>
-            <span role="cell">{row.year ?? ""}</span>
-            <span role="cell">{row.canonicalGenre ?? ""}</span>
-            <span role="cell">{row.totalTracks ?? ""}</span>
-            <span role="cell" title={formatAudioQuality(row, true)}>
-              {formatAudioQuality(row, true)}
-            </span>
-            <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
-            <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
-          </div>
-        );
-      })}
+
     </ResizableTable>
   );
 }
@@ -2970,17 +2979,9 @@ function AlbumTrackTable({
         "Quality": "minmax(118px, 0.9fr)",
         "File": "minmax(170px, 1.2fr)",
       }}
-    >
-      <div className="result-table-head" role="row">
-        <ResizableColumnHeader columnId="#" label="#" />
-        <ResizableColumnHeader columnId="Track" label="Track" />
-        <ResizableColumnHeader columnId="Artist" label="Artist" />
-        <ResizableColumnHeader columnId="Time" label="Time" />
-        <ResizableColumnHeader columnId="Rating" label="Rating" />
-        <ResizableColumnHeader columnId="Quality" label="Quality" />
-        <ResizableColumnHeader columnId="File" label="File" />
-      </div>
-      {response.rows.map((row) => {
+      items={response.rows}
+      getRowKey={(row) => row.id}
+      renderRow={(row) => {
         const trackPopularity = row.trackId == null
           ? null
           : popularityByTrackId.get(row.trackId);
@@ -3007,7 +3008,18 @@ function AlbumTrackTable({
             </span>
           </div>
         );
-      })}
+      }}
+    >
+      <div className="result-table-head" role="row">
+        <ResizableColumnHeader columnId="#" label="#" />
+        <ResizableColumnHeader columnId="Track" label="Track" />
+        <ResizableColumnHeader columnId="Artist" label="Artist" />
+        <ResizableColumnHeader columnId="Time" label="Time" />
+        <ResizableColumnHeader columnId="Rating" label="Rating" />
+        <ResizableColumnHeader columnId="Quality" label="Quality" />
+        <ResizableColumnHeader columnId="File" label="File" />
+      </div>
+
     </ResizableTable>
   );
 }
@@ -3288,18 +3300,9 @@ function ArtistIndexTable({
         "Avg score": "88px",
         "Loved": "72px",
       }}
-    >
-      <div className="result-table-head" role="row">
-        <ResizableColumnHeader columnId="Artist" label="Artist" />
-        <ResizableColumnHeader columnId="Origin" label="Origin" />
-        <ResizableColumnHeader columnId="Albums" label="Albums" />
-        <ResizableColumnHeader columnId="Years" label="Years" />
-        <ResizableColumnHeader columnId="Top genre" label="Top genre" />
-        <ResizableColumnHeader columnId="Complete" label="Complete" />
-        <ResizableColumnHeader columnId="Avg score" label="Avg score" />
-        <ResizableColumnHeader columnId="Loved" label="Loved" />
-      </div>
-      {response.rows.map((artist) => {
+      items={response.rows}
+      getRowKey={(artist) => artist.id}
+      renderRow={(artist) => {
         const isSelected = artist.id === selectedArtistId;
         return (
           <div
@@ -3348,7 +3351,19 @@ function ArtistIndexTable({
             <span role="cell">{formatNumber(artist.lovedTracks)}</span>
           </div>
         );
-      })}
+      }}
+    >
+      <div className="result-table-head" role="row">
+        <ResizableColumnHeader columnId="Artist" label="Artist" />
+        <ResizableColumnHeader columnId="Origin" label="Origin" />
+        <ResizableColumnHeader columnId="Albums" label="Albums" />
+        <ResizableColumnHeader columnId="Years" label="Years" />
+        <ResizableColumnHeader columnId="Top genre" label="Top genre" />
+        <ResizableColumnHeader columnId="Complete" label="Complete" />
+        <ResizableColumnHeader columnId="Avg score" label="Avg score" />
+        <ResizableColumnHeader columnId="Loved" label="Loved" />
+      </div>
+
     </ResizableTable>
   );
 }
@@ -3393,17 +3408,9 @@ function ArtistAlbumTable({
         "Rating": "72px",
         "Score": "80px",
       }}
-    >
-      <div className="result-table-head" role="row">
-        <ResizableColumnHeader columnId="Album" label="Album" />
-        <ResizableColumnHeader columnId="Year" label="Year" />
-        <ResizableColumnHeader columnId="Genre" label="Genre" />
-        <ResizableColumnHeader columnId="Tracks" label="Tracks" />
-        <ResizableColumnHeader columnId="Complete" label="Complete" />
-        <ResizableColumnHeader columnId="Rating" label="Rating" />
-        <ResizableColumnHeader columnId="Score" label="Score" />
-      </div>
-      {response.rows.map((row) => {
+      items={response.rows}
+      getRowKey={(row) => row.id}
+      renderRow={(row) => {
         const isSelected = row.albumId === selectedAlbumId;
         return (
           <div
@@ -3431,7 +3438,18 @@ function ArtistAlbumTable({
             <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
           </div>
         );
-      })}
+      }}
+    >
+      <div className="result-table-head" role="row">
+        <ResizableColumnHeader columnId="Album" label="Album" />
+        <ResizableColumnHeader columnId="Year" label="Year" />
+        <ResizableColumnHeader columnId="Genre" label="Genre" />
+        <ResizableColumnHeader columnId="Tracks" label="Tracks" />
+        <ResizableColumnHeader columnId="Complete" label="Complete" />
+        <ResizableColumnHeader columnId="Rating" label="Rating" />
+        <ResizableColumnHeader columnId="Score" label="Score" />
+      </div>
+
     </ResizableTable>
   );
 }
@@ -4766,17 +4784,9 @@ function GenreIndexTable({
         "Avg score": "88px",
         "Loved": "72px",
       }}
-    >
-      <div className="result-table-head" role="row">
-        <ResizableColumnHeader columnId="Genre" label="Genre" />
-        <ResizableColumnHeader columnId="Albums" label="Albums" />
-        <ResizableColumnHeader columnId="Years" label="Years" />
-        <ResizableColumnHeader columnId="Top artist" label="Top artist" />
-        <ResizableColumnHeader columnId="Complete" label="Complete" />
-        <ResizableColumnHeader columnId="Avg score" label="Avg score" />
-        <ResizableColumnHeader columnId="Loved" label="Loved" />
-      </div>
-      {response.rows.map((genre) => {
+      items={response.rows}
+      getRowKey={(genre) => genre.id}
+      renderRow={(genre) => {
         const isSelected = genre.id === selectedGenreId;
         return (
           <div
@@ -4817,7 +4827,18 @@ function GenreIndexTable({
             <span role="cell">{formatNumber(genre.lovedTracks)}</span>
           </div>
         );
-      })}
+      }}
+    >
+      <div className="result-table-head" role="row">
+        <ResizableColumnHeader columnId="Genre" label="Genre" />
+        <ResizableColumnHeader columnId="Albums" label="Albums" />
+        <ResizableColumnHeader columnId="Years" label="Years" />
+        <ResizableColumnHeader columnId="Top artist" label="Top artist" />
+        <ResizableColumnHeader columnId="Complete" label="Complete" />
+        <ResizableColumnHeader columnId="Avg score" label="Avg score" />
+        <ResizableColumnHeader columnId="Loved" label="Loved" />
+      </div>
+
     </ResizableTable>
   );
 }
@@ -4854,17 +4875,9 @@ function GenreAlbumTable({ response }: { response: BrowseResponse | null }) {
         "Rating": "72px",
         "Score": "80px",
       }}
-    >
-      <div className="result-table-head" role="row">
-        <ResizableColumnHeader columnId="Album" label="Album" />
-        <ResizableColumnHeader columnId="Artist" label="Artist" />
-        <ResizableColumnHeader columnId="Year" label="Year" />
-        <ResizableColumnHeader columnId="Tracks" label="Tracks" />
-        <ResizableColumnHeader columnId="Complete" label="Complete" />
-        <ResizableColumnHeader columnId="Rating" label="Rating" />
-        <ResizableColumnHeader columnId="Score" label="Score" />
-      </div>
-      {response.rows.map((row) => (
+      items={response.rows}
+      getRowKey={(row) => row.id}
+      renderRow={(row) => (
         <div className="result-table-row" role="row" key={row.id}>
           <span className="album-title-cell" role="cell">
             <AlbumTitleContents row={row} />
@@ -4876,7 +4889,18 @@ function GenreAlbumTable({ response }: { response: BrowseResponse | null }) {
           <span role="cell">{row.effectiveAlbumRating ?? ""}</span>
           <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
         </div>
-      ))}
+      )}
+    >
+      <div className="result-table-head" role="row">
+        <ResizableColumnHeader columnId="Album" label="Album" />
+        <ResizableColumnHeader columnId="Artist" label="Artist" />
+        <ResizableColumnHeader columnId="Year" label="Year" />
+        <ResizableColumnHeader columnId="Tracks" label="Tracks" />
+        <ResizableColumnHeader columnId="Complete" label="Complete" />
+        <ResizableColumnHeader columnId="Rating" label="Rating" />
+        <ResizableColumnHeader columnId="Score" label="Score" />
+      </div>
+
     </ResizableTable>
   );
 }
@@ -5976,6 +6000,17 @@ function ChartResults({
           : column.key === "genre" ? "minmax(104px, 1fr)"
           : "minmax(88px, 0.8fr)",
       ]))}
+      items={displayRows}
+      getRowKey={({ row, rank }) => row.id}
+      renderRow={({ row, rank }) => (
+        <div className="result-table-row" role="row" key={row.id}>
+          {columns.map((column) => (
+            <span className={column.className} role="cell" key={column.key}>
+              {column.value(row, rank)}
+            </span>
+          ))}
+        </div>
+      )}
     >
       <div className="result-table-head" role="row">
         {columns.map((column) =>
@@ -5992,15 +6027,7 @@ function ChartResults({
           ),
         )}
       </div>
-      {displayRows.map(({ row, rank }) => (
-        <div className="result-table-row" role="row" key={row.id}>
-          {columns.map((column) => (
-            <span className={column.className} role="cell" key={column.key}>
-              {column.value(row, rank)}
-            </span>
-          ))}
-        </div>
-      ))}
+
     </ResizableTable>
   );
 }

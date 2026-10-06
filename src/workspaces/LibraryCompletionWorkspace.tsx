@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { VirtualList } from "../components/VirtualList";
 import { artworkUrl, useArtworkRevision } from "../backend/artwork";
 import {
   Album,
@@ -52,6 +53,7 @@ import type {
 } from "../types";
 
 import { subscribeWithSnapshot } from "../app/backendEvents";
+import { patchCompletionCandidates } from "../app/completionProgress";
 
 type CompletionView = "workbench" | "atlas" | "artists";
 type CompletionFilter =
@@ -158,6 +160,41 @@ function verificationEta(seconds: number) {
   return `About ${hours}h${remainder ? ` ${remainder}m` : ""} remaining`;
 }
 
+const CandidateRow = memo(function CandidateRow({
+  candidate, selected, checked, disabled, coverUrl, onSelect, onToggle, onCoverFailed,
+}: {
+  candidate: LibraryCompletionCandidate;
+  selected: boolean;
+  checked: boolean;
+  disabled: boolean;
+  coverUrl: string | null;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+  onCoverFailed: (id: string) => void;
+}) {
+  return <div className="completion-candidate-row">
+    <label className="completion-candidate-select">
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={() => onToggle(candidate.id)}
+        aria-label={`Select ${candidate.artist} — ${candidate.title} for verification`} />
+    </label>
+    <button className={selected ? "completion-candidate active" : "completion-candidate"} type="button"
+      onClick={() => onSelect(candidate.id)}>
+      {coverUrl ? <img src={coverUrl} alt="" loading="lazy" decoding="async" onError={() => onCoverFailed(candidate.id)} />
+        : <span className="completion-cover-fallback"><Album size={19} /></span>}
+      <span className="completion-candidate-copy">
+        <strong>{candidate.title}</strong>
+        <span>{candidate.artist} · {candidate.chartYear}</span>
+        <small>{candidate.evidence.map((evidence) => evidence.label).join(" + ")}</small>
+      </span>
+      <span className={`completion-status completion-status-${candidate.status === "candidate" ? candidate.verificationStatus : candidate.status}`}>
+        {verificationLabel(candidate)}
+      </span>
+    </button>
+  </div>;
+});
+
+const candidateKey = (candidate: LibraryCompletionCandidate) => candidate.id;
+
 export function LibraryCompletionWorkspace({
   onOpenWishList,
 }: {
@@ -199,12 +236,13 @@ export function LibraryCompletionWorkspace({
       ?? coverUrls.get(candidate.id) ?? candidate.coverUrl;
   }
 
-  function markCoverFailed(id: string) {
+  const markCoverFailed = useCallback((id: string) => {
     setFailedCovers((current) => new Set(current).add(id));
-  }
+  }, []);
   const completedBatchReloadRef = useRef<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const candidateRowsRef = useRef(new Map<string, HTMLDivElement>());
+  const [reviewCandidateId, setReviewCandidateId] = useState<string | null>(null);
+  const [reviewRequest, setReviewRequest] = useState(0);
 
   const load = useCallback(async (request: LibraryCompletionRequest | null = null) => {
     setError(null);
@@ -353,29 +391,11 @@ export function LibraryCompletionWorkspace({
   const applyVerificationStatus = useCallback((status: LibraryCompletionVerificationStatus) => {
     setVerificationStatus(status);
     if (status.recentItems.length === 0) return;
-    const recentById = new Map(status.recentItems.map((item) => [item.candidateId, item]));
-    setData((current) => current ? {
-      ...current,
-      candidates: current.candidates.map((candidate) => {
-        const item = recentById.get(candidate.id);
-        if (!item) return candidate;
-        return {
-          ...candidate,
-          verificationStatus: item.state,
-          verificationProvider: item.provider,
-          verificationMessage: item.message,
-          verificationCheckedAt: item.updatedAt,
-          musicbrainzId: item.musicbrainzId ?? candidate.musicbrainzId,
-          musicbrainzUrl: item.musicbrainzUrl ?? candidate.musicbrainzUrl,
-          musicbrainzVerificationStatus: item.musicbrainzVerificationStatus,
-          musicbrainzVerificationMessage: item.musicbrainzVerificationMessage,
-          discogsVerificationStatus: item.discogsVerificationStatus,
-          discogsVerificationMessage: item.discogsVerificationMessage,
-          discogsMasterId: item.discogsMasterId,
-          discogsUrl: item.discogsUrl,
-        };
-      }),
-    } : current);
+    setData((current) => {
+      if (!current) return current;
+      const candidates = patchCompletionCandidates(current.candidates, status.recentItems);
+      return candidates === current.candidates ? current : { ...current, candidates };
+    });
   }, []);
 
   useEffect(() => {
@@ -418,14 +438,14 @@ export function LibraryCompletionWorkspace({
     setDeemixResult(null);
   }, [selected?.id]);
 
-  function toggleVerificationCandidate(candidateId: string) {
+  const toggleVerificationCandidate = useCallback((candidateId: string) => {
     setSelectedForVerification((current) => {
       const next = new Set(current);
       if (next.has(candidateId)) next.delete(candidateId);
       else next.add(candidateId);
       return next;
     });
-  }
+  }, []);
 
   function toggleAllVisibleCandidates() {
     setSelectedForVerification((current) => {
@@ -449,9 +469,8 @@ export function LibraryCompletionWorkspace({
     setFilter("verified");
     if (!firstVerified) return;
     setSelectedId(firstVerified.id);
-    window.requestAnimationFrame(() => {
-      candidateRowsRef.current.get(firstVerified.id)?.scrollIntoView({ block: "nearest" });
-    });
+    setReviewCandidateId(firstVerified.id);
+    setReviewRequest((current) => current + 1);
   }
 
   async function startVerification(input: StartLibraryCompletionVerificationRequest) {
@@ -1055,46 +1074,15 @@ export function LibraryCompletionWorkspace({
                 <span>{data?.truncated ? `Top ${data.returnedCandidates.toLocaleString()} loaded` : "All loaded"}</span>
               </div>
             </header>
-            <div className="completion-candidate-list" aria-label="Completion candidates">
-              {candidates.map((candidate) => (
-                <div
-                  className="completion-candidate-row"
-                  key={candidate.id}
-                  ref={(node) => {
-                    if (node) candidateRowsRef.current.set(candidate.id, node);
-                    else candidateRowsRef.current.delete(candidate.id);
-                  }}
-                >
-                  <label className="completion-candidate-select">
-                    <input
-                      type="checkbox"
-                      checked={selectedForVerification.has(candidate.id)}
-                      disabled={!eligibleCandidateIds.has(candidate.id) || hasActiveVerification}
-                      onChange={() => toggleVerificationCandidate(candidate.id)}
-                      aria-label={`Select ${candidate.artist} — ${candidate.title} for verification`}
-                    />
-                  </label>
-                  <button
-                    className={candidate.id === selected?.id ? "completion-candidate active" : "completion-candidate"}
-                    type="button"
-                    onClick={() => setSelectedId(candidate.id)}
-                  >
-                    {candidateCoverUrl(candidate, 96) ? (
-                      <img src={candidateCoverUrl(candidate, 96)!} alt="" loading="lazy" decoding="async" onError={() => markCoverFailed(candidate.id)} />
-                    ) : (
-                      <span className="completion-cover-fallback"><Album size={19} /></span>
-                    )}
-                    <span className="completion-candidate-copy">
-                      <strong>{candidate.title}</strong>
-                      <span>{candidate.artist} · {candidate.chartYear}</span>
-                      <small>{candidate.evidence.map((evidence) => evidence.label).join(" + ")}</small>
-                    </span>
-                    <span className={`completion-status completion-status-${candidate.status === "candidate" ? candidate.verificationStatus : candidate.status}`}>
-                      {verificationLabel(candidate)}
-                    </span>
-                  </button>
-                </div>
-              ))}
+            <VirtualList className="completion-candidate-list" aria-label="Completion candidates"
+              items={candidates} getKey={candidateKey} estimateSize={67}
+              resetKey={`${query}|${filter}|${chartSource}|${yearFrom}|${yearTo}`}
+              scrollToKey={filter === "verified" ? reviewCandidateId : null} scrollRequestKey={reviewRequest}
+              renderItem={(candidate) => <CandidateRow key={candidate.id} candidate={candidate}
+                selected={candidate.id === selected?.id} checked={selectedForVerification.has(candidate.id)}
+                disabled={!eligibleCandidateIds.has(candidate.id) || hasActiveVerification}
+                coverUrl={candidateCoverUrl(candidate, 96)} onSelect={setSelectedId}
+                onToggle={toggleVerificationCandidate} onCoverFailed={markCoverFailed} />}>
               {!isLoading && candidates.length === 0 ? (
                 <div className="completion-empty">
                   <CheckCircle2 size={22} />
@@ -1102,7 +1090,7 @@ export function LibraryCompletionWorkspace({
                   <span>Clear the filters or choose another Atlas campaign.</span>
                 </div>
               ) : null}
-            </div>
+            </VirtualList>
           </section>
 
           <section className="completion-dossier" aria-label="Candidate dossier">

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ResizableColumnHeader, ResizableTable } from "./ResizableTable";
+import { mockVirtualLayout } from "../test/virtualLayout";
 
 const storageKey = "music-library.table-widths.v1.albums";
 const columns = { album: "minmax(220px, 2fr)", artist: "minmax(140px, 1fr)", year: "64px" };
@@ -135,5 +136,32 @@ describe("ResizableTable", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("Storage unavailable"); });
     dragBy(80);
     expect(handle()).toHaveAttribute("aria-valuenow", "380");
+  });
+
+  it("renders large table rows on demand and retains resize controls, row indexes and final-row selection", async () => {
+    const restoreLayout = mockVirtualLayout(42);
+    const onSelect = vi.fn();
+    const renderRow = vi.fn((id: number) => <div className="result-table-row" role="row">
+      <span role="cell"><button onClick={() => onSelect(id)}>Album {id}</button></span>
+    </div>);
+    try {
+      render(<ResizableTable tableId="large" columns={columns} className="result-table"
+        items={Array.from({ length: 5000 }, (_, id) => id)} getRowKey={(id) => id} renderRow={renderRow}>
+        <div className="result-table-head" role="row"><ResizableColumnHeader columnId="album" label="album" /></div>
+      </ResizableTable>);
+      const table = screen.getByRole("table");
+      expect(table).toHaveAttribute("aria-rowcount", "5001");
+      expect(renderRow.mock.calls.length).toBeLessThan(80);
+      expect(screen.getAllByRole("row").length).toBeLessThan(30);
+      fireEvent.keyDown(handle(), { key: "ArrowRight" });
+      expect(handle()).toHaveAttribute("aria-valuenow", "1010");
+      fireEvent.scroll(table, { target: { scrollTop: 4990 * 44 + 37 } });
+      const last = await screen.findByRole("button", { name: "Album 4999" });
+      fireEvent.click(last);
+      expect(onSelect).toHaveBeenCalledWith(4999);
+      expect(last.closest('[role="row"]')).toHaveAttribute("aria-rowindex", "5001");
+      expect(screen.getAllByRole("row").length).toBeLessThan(30);
+      expect(screen.getByRole("columnheader")).toBeInTheDocument();
+    } finally { restoreLayout(); }
   });
 });

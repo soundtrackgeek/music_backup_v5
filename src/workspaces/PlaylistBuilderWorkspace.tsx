@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { VirtualList } from "../components/VirtualList";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -60,8 +61,6 @@ const examplePrompts = [
   "Discover unrated deep cuts from highly rated albums",
 ];
 
-const playlistReviewBatchSize = 500;
-
 function durationLabel(seconds: number | null | undefined) {
   if (!seconds) return "—";
   const minutes = Math.floor(seconds / 60);
@@ -110,9 +109,6 @@ export function PlaylistBuilderWorkspace({
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [sourceCohortTitle, setSourceCohortTitle] = useState<string | null>(null);
   const [directSearchTitle, setDirectSearchTitle] = useState<string | null>(null);
-  const [visibleTrackCount, setVisibleTrackCount] = useState(
-    playlistReviewBatchSize,
-  );
   const [sourceRequest, setSourceRequest] =
     useState<BrowseRequest | null>(null);
 
@@ -129,7 +125,6 @@ export function PlaylistBuilderWorkspace({
     setAutomationMessage(null);
     setExportResult(null);
     setDirectSearchTitle(launch.draft ? launch.cohortTitle : null);
-    setVisibleTrackCount(playlistReviewBatchSize);
     setSourceCohortTitle(launch.draft ? null : launch.cohortTitle);
     setSourceRequest(launch.draft ? null : launch.request);
     onLaunchConsumed?.();
@@ -177,7 +172,6 @@ export function PlaylistBuilderWorkspace({
         sourceRequest,
       });
       setPlaylist(result);
-      setVisibleTrackCount(playlistReviewBatchSize);
       setName(result.name);
       setActiveSavedId(null);
       setAutomationMessage(null);
@@ -242,7 +236,6 @@ export function PlaylistBuilderWorkspace({
     setMode(saved.playlist.mixtape ? "mixtape" : "luna");
     setMixtapeRevision((revision) => revision + 1);
     setPlaylist(saved.playlist);
-    setVisibleTrackCount(playlistReviewBatchSize);
     setPrompt(saved.playlist.prompt);
     setName(saved.name);
     setActiveSavedId(saved.id);
@@ -281,7 +274,6 @@ export function PlaylistBuilderWorkspace({
     ]);
     if (activeSavedId === saved.id) {
       setPlaylist(saved.playlist);
-      setVisibleTrackCount(playlistReviewBatchSize);
       setName(saved.name);
     }
   }
@@ -354,7 +346,6 @@ export function PlaylistBuilderWorkspace({
       const active = refreshed.find((saved) => saved.id === activeSavedId);
       if (active) {
         setPlaylist(active.playlist);
-        setVisibleTrackCount(playlistReviewBatchSize);
         setName(active.name);
       }
       setAutomationMessage(result.message);
@@ -387,13 +378,14 @@ export function PlaylistBuilderWorkspace({
   const activeSavedPlaylist =
     savedPlaylists.find((saved) => saved.id === activeSavedId) ?? undefined;
   const isLocalSearchPlaylist = playlist?.model === "Local Search";
-  const visibleTracks = playlist?.tracks.slice(0, visibleTrackCount) ?? [];
-  const nextTrackBatchSize = playlist
-    ? Math.min(
-        playlistReviewBatchSize,
-        playlist.tracks.length - visibleTrackCount,
-      )
-    : 0;
+  const playlistTrackKeys = useMemo(() => {
+    const occurrences = new Map<number, number>();
+    return playlist?.tracks.map((track) => {
+      const occurrence = occurrences.get(track.trackId) ?? 0;
+      occurrences.set(track.trackId, occurrence + 1);
+      return `${track.trackId}-${occurrence}`;
+    }) ?? [];
+  }, [playlist?.tracks]);
 
   return (
     <section className="workspace playlist-workspace">
@@ -728,18 +720,13 @@ export function PlaylistBuilderWorkspace({
                 </section>
               ) : null}
 
-              {playlist.mixtape ? <MixtapeReview playlist={playlist} disabled={isBuilding || isSaving} onChange={(next) => { setPlaylist(next); setExportResult(null); }} /> : <div className="playlist-track-list">
-                {playlist.tracks.length === 0 ? (
-                  <div className="playlist-empty-state">
-                    <ListMusic size={24} />
-                    <strong>No tracks remain in this draft.</strong>
-                    <span>Build again or reopen a saved playlist.</span>
-                  </div>
-                ) : (
-                  visibleTracks.map((track, index) => (
+              {playlist.mixtape ? <MixtapeReview playlist={playlist} disabled={isBuilding || isSaving} onChange={(next) => { setPlaylist(next); setExportResult(null); }} /> : <VirtualList className="playlist-track-list" aria-label="Playlist tracks"
+                items={playlist.tracks} getKey={(_, index) => playlistTrackKeys[index]} estimateSize={64}
+                resetKey={`${activeSavedId}|${directSearchTitle}|${playlist.prompt}`}
+                renderItem={(track, index) => (
                     <article
                       className="playlist-track"
-                      key={`${track.trackId}-${index}`}
+                      key={playlistTrackKeys[index]}
                     >
                       <span className="playlist-track-number">
                         {String(index + 1).padStart(2, "0")}
@@ -808,33 +795,12 @@ export function PlaylistBuilderWorkspace({
                         </button>
                       </div>
                     </article>
-                  ))
-                )}
-              </div>}
-
-              {!playlist.mixtape && playlist.tracks.length > visibleTrackCount ? (
-                <div className="playlist-track-load-more">
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() =>
-                      setVisibleTrackCount((count) =>
-                        Math.min(
-                          playlist.tracks.length,
-                          count + playlistReviewBatchSize,
-                        ),
-                      )
-                    }
-                  >
-                    Show next {nextTrackBatchSize.toLocaleString()}{" "}
-                    {nextTrackBatchSize === 1 ? "track" : "tracks"}
-                  </button>
-                  <span>
-                    {visibleTrackCount.toLocaleString()} of{" "}
-                    {playlist.tracks.length.toLocaleString()} shown
-                  </span>
-                </div>
-              ) : null}
+                )}>
+                {playlist.tracks.length === 0 ? <div className="playlist-empty-state">
+                  <ListMusic size={24} /><strong>No tracks remain in this draft.</strong>
+                  <span>Build again or reopen a saved playlist.</span>
+                </div> : null}
+              </VirtualList>}
 
               <footer className="playlist-result-footer">
                 <span>

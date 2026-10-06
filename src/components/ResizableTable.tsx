@@ -1,13 +1,20 @@
 import {
   createContext,
+  Children,
+  cloneElement,
+  isValidElement,
   useContext,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
   type HTMLAttributes,
   type PointerEvent,
   type ReactNode,
+  type ReactElement,
+  type Key,
 } from "react";
+import { VirtualRows, virtualizationThreshold } from "./VirtualList";
 import "./ResizableTable.css";
 
 type Widths = Record<string, number>;
@@ -44,18 +51,39 @@ type ResizeContext = {
 };
 const ResizeContext = createContext<ResizeContext | null>(null);
 
-export function ResizableTable(props: {
+type TableProps<T = ReactNode> = {
   tableId: string;
   columns: Columns;
   className: string;
   children: ReactNode;
-}) {
+  items?: readonly T[];
+  getRowKey?: (item: T, index: number) => Key;
+  renderRow?: (item: T, index: number) => ReactNode;
+};
+
+export function ResizableTable<T = ReactNode>(props: TableProps<T>) {
   // A new layout gets its own saved widths even when React reuses this position.
   return <TableLayout key={props.tableId} {...props} />;
 }
 
-function TableLayout({ tableId, columns, className, children }: Parameters<typeof ResizableTable>[0]) {
+function TableLayout<T>({ tableId, columns, className, children, items, getRowKey, renderRow }: TableProps<T>) {
   const tableRef = useRef<HTMLDivElement>(null);
+  const elements = Children.toArray(children);
+  const header = elements[0];
+  const rows = elements.slice(1);
+  const rowCount = items?.length ?? rows.length;
+  const virtualized = rowCount > virtualizationThreshold;
+  const [headerHeight, setHeaderHeight] = useState(37);
+  useLayoutEffect(() => {
+    const head = tableRef.current?.querySelector<HTMLElement>(".result-table-head");
+    if (!head) return;
+    const measure = () => setHeaderHeight(head.getBoundingClientRect().height + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(head);
+    return () => observer.disconnect();
+  }, []);
   const [widths, setWidths] = useState<Widths>(() => readWidths(tableId));
   const [activeColumn, setActiveColumn] = useState<string | null>(null);
   const drag = useRef<{
@@ -152,14 +180,26 @@ function TableLayout({ tableId, columns, className, children }: Parameters<typeo
     <ResizeContext.Provider value={context}>
       <div
         ref={tableRef}
-        className={`${className} resizable-table${activeColumn ? " is-resizing" : ""}`}
+        className={`${className} resizable-table${virtualized ? " is-virtualized" : ""}${activeColumn ? " is-resizing" : ""}`}
         role="table"
+        aria-rowcount={rowCount + 1}
         style={{
           "--result-table-columns": templates.join(" "),
           "--result-table-min-width": `${minWidth}px`,
         } as CSSProperties}
       >
-        {children}
+        {header}
+        {items && renderRow ? <VirtualRows items={items} getKey={getRowKey ?? ((_, index) => index)}
+          renderItem={(item, index) => {
+            const row = renderRow(item, index);
+            return isValidElement(row)
+              ? cloneElement(row as ReactElement<HTMLAttributes<HTMLElement>>, { "aria-rowindex": index + 2 }) : row;
+          }}
+          scrollRef={tableRef} estimateSize={43} gap={1} scrollMargin={headerHeight} />
+          : <VirtualRows items={rows} getKey={(row, index) => isValidElement(row) ? row.key ?? index : index}
+            renderItem={(row, index) => isValidElement(row)
+              ? cloneElement(row as ReactElement<HTMLAttributes<HTMLElement>>, { "aria-rowindex": index + 2 }) : row}
+            scrollRef={tableRef} estimateSize={43} gap={1} scrollMargin={headerHeight} />}
       </div>
     </ResizeContext.Provider>
   );
