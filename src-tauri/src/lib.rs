@@ -289,6 +289,7 @@ async fn test_deemix_connection() -> Result<deemix::DeemixConnectionTest, String
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discogs_credential_status() -> Result<discogs::DiscogsCredentialStatus, String> {
     tauri::async_runtime::spawn_blocking(discogs::credential_status)
         .await
@@ -298,6 +299,7 @@ async fn get_discogs_credential_status() -> Result<discogs::DiscogsCredentialSta
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn save_discogs_credentials(
     input: discogs::SaveDiscogsCredentialsRequest,
 ) -> Result<discogs::DiscogsConnectionTest, String> {
@@ -309,6 +311,7 @@ async fn save_discogs_credentials(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn delete_discogs_credentials() -> Result<discogs::DiscogsCredentialStatus, String> {
     tauri::async_runtime::spawn_blocking(discogs::delete_credentials)
         .await
@@ -318,6 +321,7 @@ async fn delete_discogs_credentials() -> Result<discogs::DiscogsCredentialStatus
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn test_discogs_connection() -> Result<discogs::DiscogsConnectionTest, String> {
     tauri::async_runtime::spawn_blocking(discogs::test_connection)
         .await
@@ -327,6 +331,7 @@ async fn test_discogs_connection() -> Result<discogs::DiscogsConnectionTest, Str
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_lastfm_credential_status() -> Result<lastfm::LastFmCredentialStatus, String> {
     tauri::async_runtime::spawn_blocking(lastfm::credential_status)
         .await
@@ -336,6 +341,7 @@ async fn get_lastfm_credential_status() -> Result<lastfm::LastFmCredentialStatus
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn save_lastfm_api_key(
     input: lastfm::SaveLastFmApiKeyRequest,
 ) -> Result<lastfm::LastFmConnectionTest, String> {
@@ -347,6 +353,7 @@ async fn save_lastfm_api_key(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn delete_lastfm_api_key() -> Result<lastfm::LastFmCredentialStatus, String> {
     tauri::async_runtime::spawn_blocking(lastfm::delete_api_key)
         .await
@@ -356,6 +363,7 @@ async fn delete_lastfm_api_key() -> Result<lastfm::LastFmCredentialStatus, Strin
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn test_lastfm_connection() -> Result<lastfm::LastFmConnectionTest, String> {
     tauri::async_runtime::spawn_blocking(lastfm::test_connection)
         .await
@@ -365,6 +373,7 @@ async fn test_lastfm_connection() -> Result<lastfm::LastFmConnectionTest, String
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_lastfm_artist_popularity(
     app: AppHandle,
     artist_id: String,
@@ -380,6 +389,7 @@ async fn get_lastfm_artist_popularity(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_lastfm_artist_similarity(
     app: AppHandle,
     artist_id: String,
@@ -395,6 +405,7 @@ async fn get_lastfm_artist_similarity(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_lastfm_artist_constellation_branch(
     app: AppHandle,
     root_artist_id: String,
@@ -441,6 +452,7 @@ async fn get_album_review(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_lastfm_album_popularity(
     app: AppHandle,
     artist_id: String,
@@ -454,6 +466,7 @@ async fn get_lastfm_album_popularity(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_lastfm_related_albums(
     app: AppHandle,
     album_id: String,
@@ -784,6 +797,7 @@ async fn delete_saved_external_discovery(app: AppHandle, id: i64) -> Result<(), 
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_wish_list(app: AppHandle) -> Result<wishlist::WishListResponse, String> {
     tauri::async_runtime::spawn_blocking(move || wishlist::list_for_app(&app))
         .await
@@ -982,6 +996,7 @@ async fn set_library_completion_artist_decision(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn add_wish_list_item(
     app: AppHandle,
     input: wishlist::AddWishListItemRequest,
@@ -1012,6 +1027,7 @@ async fn add_wish_list_musicbrainz_candidate(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn remove_wish_list_item(app: AppHandle, id: i64) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || wishlist::remove_for_app(&app, id))
         .await
@@ -1048,6 +1064,7 @@ async fn get_musicbrainz_cache_status(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn discover_wish_list_artist_albums(
     app: AppHandle,
     input: wishlist::WishListArtistAlbumDiscoveryRequest,
@@ -1062,6 +1079,7 @@ async fn discover_wish_list_artist_albums(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn refresh_wish_list_artist_album_summary(
     app: AppHandle,
     input: wishlist::WishListArtistAlbumDiscoveryRequest,
@@ -2149,6 +2167,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(bindings::compose_invoke_handler(tauri::generate_handler![
+            add_wish_list_musicbrainz_candidate,
+            search_wish_list_musicbrainz,
+            refresh_lastfm_artist_images,
             list_activity_jobs,
             control_activity_job,
             get_library_status,
@@ -2162,23 +2183,9 @@ pub fn run() {
             get_deemix_credential_status,
             save_deemix_arl,
             delete_deemix_arl,
-            test_deemix_connection,
-            get_discogs_credential_status,
-            save_discogs_credentials,
-            delete_discogs_credentials,
-            test_discogs_connection,
-            get_lastfm_credential_status,
-            save_lastfm_api_key,
-            delete_lastfm_api_key,
-            test_lastfm_connection,
-            get_lastfm_artist_popularity,
-            get_lastfm_artist_similarity,
-            get_lastfm_artist_constellation_branch,
+            test_deemix_connection,
             get_artist_biography,
-            get_album_review,
-            get_lastfm_album_popularity,
-            get_lastfm_related_albums,
-            refresh_lastfm_artist_images,
+            get_album_review,
             search_deemix_albums,
             preflight_deemix_album_download,
             download_deemix_album,
@@ -2219,14 +2226,7 @@ pub fn run() {
             score_mixtape_candidates,
             list_saved_external_discoveries,
             save_external_discovery,
-            delete_saved_external_discovery,
-            list_wish_list,
-            discover_wish_list_artist_albums,
-            refresh_wish_list_artist_album_summary,
-            search_wish_list_musicbrainz,
-            add_wish_list_musicbrainz_candidate,
-            add_wish_list_item,
-            remove_wish_list_item,
+            delete_saved_external_discovery,
             get_musicbrainz_cache_status,
             get_musicbrainz_origin_country_status,
             preview_musicbrainz_origin_country_import,

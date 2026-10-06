@@ -4,6 +4,24 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	getDiscogsCredentialStatus: () => __TAURI_INVOKE<DiscogsCredentialStatus>("get_discogs_credential_status"),
+	saveDiscogsCredentials: (input: SaveDiscogsCredentialsRequest) => __TAURI_INVOKE<DiscogsConnectionTest>("save_discogs_credentials", { input }),
+	deleteDiscogsCredentials: () => __TAURI_INVOKE<DiscogsCredentialStatus>("delete_discogs_credentials"),
+	testDiscogsConnection: () => __TAURI_INVOKE<DiscogsConnectionTest>("test_discogs_connection"),
+	getLastfmCredentialStatus: () => __TAURI_INVOKE<LastFmCredentialStatus>("get_lastfm_credential_status"),
+	saveLastfmApiKey: (input: SaveLastFmApiKeyRequest) => __TAURI_INVOKE<LastFmConnectionTest>("save_lastfm_api_key", { input }),
+	deleteLastfmApiKey: () => __TAURI_INVOKE<LastFmCredentialStatus>("delete_lastfm_api_key"),
+	testLastfmConnection: () => __TAURI_INVOKE<LastFmConnectionTest>("test_lastfm_connection"),
+	getLastfmArtistPopularity: (artistId: string, forceRefresh: boolean | null) => __TAURI_INVOKE<LastFmArtistPopularity>("get_lastfm_artist_popularity", { artistId, forceRefresh }),
+	getLastfmArtistSimilarity: (artistId: string, forceRefresh: boolean | null) => __TAURI_INVOKE<LastFmArtistSimilarity>("get_lastfm_artist_similarity", { artistId, forceRefresh }),
+	getLastfmArtistConstellationBranch: (rootArtistId: string, branchName: string, branchMbid: string | null) => __TAURI_INVOKE<LastFmArtistSimilarity>("get_lastfm_artist_constellation_branch", { rootArtistId, branchName, branchMbid }),
+	getLastfmAlbumPopularity: (artistId: string, albumId: string) => __TAURI_INVOKE<LastFmAlbumPopularity>("get_lastfm_album_popularity", { artistId, albumId }),
+	getLastfmRelatedAlbums: (albumId: string, forceRefresh: boolean | null) => __TAURI_INVOKE<LastFmRelatedAlbums>("get_lastfm_related_albums", { albumId, forceRefresh }),
+	listWishList: () => __TAURI_INVOKE<WishListResponse>("list_wish_list"),
+	addWishListItem: (input: AddWishListItemRequest) => __TAURI_INVOKE<WishListItem>("add_wish_list_item", { input }),
+	removeWishListItem: (id: number) => __TAURI_INVOKE<null>("remove_wish_list_item", { id }),
+	discoverWishListArtistAlbums: (input: WishListArtistAlbumDiscoveryRequest) => __TAURI_INVOKE<WishListArtistAlbumDiscoveryResponse>("discover_wish_list_artist_albums", { input }),
+	refreshWishListArtistAlbumSummary: (input: WishListArtistAlbumDiscoveryRequest) => __TAURI_INVOKE<WishListArtistAlbumSummary>("refresh_wish_list_artist_album_summary", { input }),
 	getLibraryCompletion: (input: {
 	source?: string | null,
 	decade?: number | null,
@@ -55,6 +73,16 @@ export const commands = {
 };
 
 /* Types */
+export type AddWishListItemRequest = {
+	entity: string,
+	title: string,
+	artist?: string,
+	year: number | null,
+	musicbrainzId: string | null,
+	musicbrainzUrl: string | null,
+	source?: string,
+};
+
 export type AiCompileRequest = {
 	prompt: string,
 	target: string,
@@ -456,6 +484,33 @@ export type ConfirmLibraryCompletionArtistMatchRequest = {
 	candidate: WishListMusicBrainzCandidate,
 };
 
+export type DeemixAlbumMatch = {
+	id: string,
+	title: string,
+	artist: string,
+	year: number | null,
+	trackCount: number | null,
+	recordType: string | null,
+	explicit: boolean,
+	deezerUrl: string,
+	matchScore: number,
+	matchLevel: string,
+	downloadedAt: string | null,
+	downloadedPath: string | null,
+};
+
+export type DiscogsConnectionTest = {
+	authenticated: boolean,
+	rateLimit: number | null,
+	rateLimitRemaining: number | null,
+	message: string,
+};
+
+export type DiscogsCredentialStatus = {
+	configured: boolean,
+	source: string,
+};
+
 export type ExportPlaylistRequest = ExportPlaylistRequest_Serialize | ExportPlaylistRequest_Deserialize;
 
 export type ExportPlaylistRequest_Deserialize = {
@@ -500,6 +555,119 @@ export type ExternalDiscoveryResponse = {
 	catalogCandidateCount: number,
 	excludedOwnedCount: number,
 	limitations: string[],
+};
+
+export type LastFmAlbumPopularity = {
+	artistId: string,
+	albumId: string,
+	sourceUrl: string | null,
+	fetchedAt: string | null,
+	totalTracks: number,
+	resolvedTracks: number,
+	availableTracks: number,
+	stale: boolean,
+	tracks: LastFmAlbumTrackPopularity[],
+	message: string,
+};
+
+export type LastFmAlbumTrackPopularity = {
+	trackId: number,
+	title: string,
+	listeners: number,
+	playCount: number,
+	albumRank: number | null,
+	sourceUrl: string | null,
+};
+
+export type LastFmArtistPopularity = {
+	artistId: string,
+	artistName: string,
+	sourceUrl: string | null,
+	fetchedAt: string | null,
+	cached: boolean,
+	stale: boolean,
+	tracks: LastFmPopularTrack[],
+	message: string,
+};
+
+export type LastFmArtistSimilarity = {
+	artistId: string,
+	artistName: string,
+	sourceUrl: string | null,
+	fetchedAt: string | null,
+	cached: boolean,
+	stale: boolean,
+	artists: LastFmSimilarArtist[],
+	message: string,
+};
+
+export type LastFmConnectionTest = {
+	authenticated: boolean,
+	message: string,
+};
+
+export type LastFmCredentialStatus = {
+	configured: boolean,
+	source: string,
+};
+
+export type LastFmPopularTrack = {
+	rank: number,
+	trackId: number,
+	albumId: string,
+	album: string | null,
+	year: number | null,
+	title: string,
+	artist: string,
+	listeners: number,
+	playCount: number,
+	seconds: number | null,
+	sourceUrl: string | null,
+};
+
+export type LastFmRelatedAlbum = {
+	rank: number,
+	artistName: string,
+	artistMbid: string | null,
+	albumTitle: string,
+	albumMbid: string | null,
+	sourceUrl: string | null,
+	sharedTags: string[],
+	artistSimilarity: number | null,
+	localAlbumId: string | null,
+	localAlbumArtist: string | null,
+	localAlbumTitle: string | null,
+	localYear: number | null,
+	localCoverPath: string | null,
+	localCoverMimeType: string | null,
+};
+
+export type LastFmRelatedAlbums = {
+	albumId: string,
+	albumArtist: string,
+	albumTitle: string,
+	sourceUrl: string | null,
+	sourceTags: string[],
+	fetchedAt: string | null,
+	cached: boolean,
+	stale: boolean,
+	albums: LastFmRelatedAlbum[],
+	message: string,
+};
+
+export type LastFmSimilarArtist = {
+	rank: number,
+	name: string,
+	musicbrainzMbid: string | null,
+	matchScore: number | null,
+	sourceUrl: string | null,
+	localArtistId: string | null,
+	localArtistName: string | null,
+	localAlbumCount: number,
+	portraitAvailable: boolean,
+	representativeAlbumId: string | null,
+	representativeAlbum: string | null,
+	representativeCoverPath: string | null,
 };
 
 export type LibraryCompletionArtistCandidate = {
@@ -761,6 +929,15 @@ export type SaveAiSnapshotRequest_Serialize = {
 	content: AiSnapshotContent_Serialize,
 };
 
+export type SaveDiscogsCredentialsRequest = {
+	consumerKey: string,
+	consumerSecret: string,
+};
+
+export type SaveLastFmApiKeyRequest = {
+	apiKey: string,
+};
+
 export type SavePlaylistRequest = SavePlaylistRequest_Serialize | SavePlaylistRequest_Deserialize;
 
 export type SavePlaylistRequest_Deserialize = {
@@ -888,6 +1065,68 @@ export type Weights = {
 	rating: number | null,
 };
 
+export type WishListArtistAlbumDiscoveryRequest = {
+	wishListItemId: number,
+};
+
+export type WishListArtistAlbumDiscoveryResponse = {
+	wishListItemId: number,
+	artist: string,
+	musicbrainzId: string,
+	officialAlbumCount: number,
+	searchedAlbumCount: number,
+	matchedAlbumCount: number,
+	truncated: boolean,
+	albums: WishListArtistAlbumDiscoveryRow[],
+	albumSummary: WishListArtistAlbumSummary,
+	searchedAt: string,
+};
+
+export type WishListArtistAlbumDiscoveryRow = {
+	releaseGroupId: string,
+	title: string,
+	year: number | null,
+	secondaryTypes: string[],
+	musicbrainzUrl: string,
+	deemixMatches: DeemixAlbumMatch[],
+	deemixError: string | null,
+	downloadedDeezerAlbumId: string | null,
+	downloadedPath: string | null,
+	downloadedAt: string | null,
+	inLibrary: boolean,
+};
+
+export type WishListArtistAlbumSummary = {
+	officialAlbumCount: number,
+	ownedAlbumCount: number,
+	missingAlbumCount: number,
+	missingAlbums: WishListMissingAlbum[],
+	updatedAt: string,
+};
+
+export type WishListItem = {
+	id: number,
+	entity: string,
+	title: string,
+	artist: string,
+	year: number | null,
+	musicbrainzId: string | null,
+	musicbrainzUrl: string | null,
+	source: string,
+	createdAt: string,
+	downloadedDeezerAlbumId: string | null,
+	downloadedPath: string | null,
+	downloadedAt: string | null,
+	artistAlbumSummary: WishListArtistAlbumSummary | null,
+};
+
+export type WishListMissingAlbum = {
+	releaseGroupId: string,
+	title: string,
+	year: number | null,
+	musicbrainzUrl: string,
+};
+
 export type WishListMusicBrainzCandidate = {
 	entity: string,
 	title: string,
@@ -898,5 +1137,10 @@ export type WishListMusicBrainzCandidate = {
 	disambiguation: string | null,
 	country: string | null,
 	score: number,
+};
+
+export type WishListResponse = {
+	items: WishListItem[],
+	autoRemovedCount: number,
 };
 

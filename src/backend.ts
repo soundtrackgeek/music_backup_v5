@@ -2734,7 +2734,7 @@ export async function getDiscogsCredentialStatus() {
       source: "windowsCredentialManager",
     } satisfies DiscogsCredentialStatus;
   }
-  return invoke<DiscogsCredentialStatus>("get_discogs_credential_status");
+  return commands.getDiscogsCredentialStatus() as Promise<DiscogsCredentialStatus>;
 }
 
 export async function saveDiscogsCredentials(input: SaveDiscogsCredentialsRequest) {
@@ -2743,7 +2743,7 @@ export async function saveDiscogsCredentials(input: SaveDiscogsCredentialsReques
       "Discogs credentials can only be stored by the Tauri desktop app.",
     );
   }
-  return invoke<DiscogsConnectionTest>("save_discogs_credentials", { input });
+  return commands.saveDiscogsCredentials(input) as Promise<DiscogsConnectionTest>;
 }
 
 export async function deleteDiscogsCredentials() {
@@ -2752,42 +2752,42 @@ export async function deleteDiscogsCredentials() {
       "Discogs credentials can only be removed by the Tauri desktop app.",
     );
   }
-  return invoke<DiscogsCredentialStatus>("delete_discogs_credentials");
+  return commands.deleteDiscogsCredentials() as Promise<DiscogsCredentialStatus>;
 }
 
 export async function testDiscogsConnection() {
   if (!isTauriRuntime()) {
     throw new Error("Discogs connection tests require the Tauri desktop app.");
   }
-  return invoke<DiscogsConnectionTest>("test_discogs_connection");
+  return commands.testDiscogsConnection() as Promise<DiscogsConnectionTest>;
 }
 
 export async function getLastFmCredentialStatus() {
   if (!isTauriRuntime()) {
     return { configured: false, source: "none" } satisfies LastFmCredentialStatus;
   }
-  return invoke<LastFmCredentialStatus>("get_lastfm_credential_status");
+  return commands.getLastfmCredentialStatus() as Promise<LastFmCredentialStatus>;
 }
 
 export async function saveLastFmApiKey(input: SaveLastFmApiKeyRequest) {
   if (!isTauriRuntime()) {
     throw new Error("Last.fm API keys can only be stored by the Tauri desktop app.");
   }
-  return invoke<LastFmConnectionTest>("save_lastfm_api_key", { input });
+  return commands.saveLastfmApiKey(input) as Promise<LastFmConnectionTest>;
 }
 
 export async function deleteLastFmApiKey() {
   if (!isTauriRuntime()) {
     throw new Error("Last.fm API keys can only be removed by the Tauri desktop app.");
   }
-  return invoke<LastFmCredentialStatus>("delete_lastfm_api_key");
+  return commands.deleteLastfmApiKey() as Promise<LastFmCredentialStatus>;
 }
 
 export async function testLastFmConnection() {
   if (!isTauriRuntime()) {
     throw new Error("Last.fm connection tests require the Tauri desktop app.");
   }
-  return invoke<LastFmConnectionTest>("test_lastfm_connection");
+  return commands.testLastfmConnection() as Promise<LastFmConnectionTest>;
 }
 
 export async function refreshLastFmArtistImages(limit = 50) {
@@ -2801,9 +2801,7 @@ export async function refreshLastFmArtistImages(limit = 50) {
       message: "Portrait sync is available in the desktop app.",
     } satisfies LastFmArtistImageRefreshSummary;
   }
-  return invoke<LastFmArtistImageRefreshSummary>("refresh_lastfm_artist_images", {
-    limit,
-  }).then((summary) => { invalidateArtwork(); return summary; });
+  return invoke<LastFmArtistImageRefreshSummary>("refresh_lastfm_artist_images", { limit }).then((summary) => { invalidateArtwork(); return summary; });
 }
 
 export async function getLastFmArtistPopularity(
@@ -2855,10 +2853,8 @@ export async function getLastFmArtistPopularity(
         : "No Last.fm popular tracks matched this local library preview.",
     } satisfies LastFmArtistPopularity;
   }
-  return invoke<LastFmArtistPopularity>("get_lastfm_artist_popularity", {
-    artistId,
-    forceRefresh,
-  });
+  return commands.getLastfmArtistPopularity(artistId,
+    forceRefresh) as Promise<LastFmArtistPopularity>;
 }
 
 export async function getLastFmArtistSimilarity(
@@ -2917,10 +2913,8 @@ export async function getLastFmArtistSimilarity(
       message: `Showing ${artists.length} similar artists; ${localCandidates.length} are in this library.`,
     } satisfies LastFmArtistSimilarity;
   }
-  return invoke<LastFmArtistSimilarity>("get_lastfm_artist_similarity", {
-    artistId,
-    forceRefresh,
-  });
+  return commands.getLastfmArtistSimilarity(artistId,
+    forceRefresh) as Promise<LastFmArtistSimilarity>;
 }
 
 export async function getLastFmArtistConstellationBranch(
@@ -2989,14 +2983,9 @@ export async function getLastFmArtistConstellationBranch(
       message: `Showing ${artists.length} similar artists for ${branchArtistName}.`,
     } satisfies LastFmArtistSimilarity;
   }
-  return invoke<LastFmArtistSimilarity>(
-    "get_lastfm_artist_constellation_branch",
-    {
-      rootArtistId,
+  return commands.getLastfmArtistConstellationBranch(rootArtistId,
       branchName,
-      branchMbid,
-    },
-  );
+      branchMbid) as Promise<LastFmArtistSimilarity>;
 }
 
 export async function getArtistBiography(
@@ -3093,10 +3082,8 @@ export async function getLastFmAlbumPopularity(
         : "No local album tracks were available to match.",
     } satisfies LastFmAlbumPopularity;
   }
-  return invoke<LastFmAlbumPopularity>("get_lastfm_album_popularity", {
-    artistId,
-    albumId,
-  });
+  return commands.getLastfmAlbumPopularity(artistId,
+    albumId) as Promise<LastFmAlbumPopularity>;
 }
 
 export async function getLastFmRelatedAlbums(
@@ -3183,10 +3170,8 @@ export async function getLastFmRelatedAlbums(
       message: `Showing ${albums.length} related albums; ${localAlbums.length} are in this library.`,
     } satisfies LastFmRelatedAlbums;
   }
-  return invoke<LastFmRelatedAlbums>("get_lastfm_related_albums", {
-    albumId,
-    forceRefresh,
-  });
+  return commands.getLastfmRelatedAlbums(albumId,
+    forceRefresh) as Promise<LastFmRelatedAlbums>;
 }
 
 export async function getArtistImageUrl(artistId: string, size: ThumbnailSize = 300) {
@@ -4305,7 +4290,7 @@ export async function listWishList() {
       autoRemovedCount: 0,
     } satisfies WishListResponse;
   }
-  return invoke<WishListResponse>("list_wish_list");
+  return commands.listWishList() as Promise<WishListResponse>;
 }
 
 export async function getLibraryCompletion(input: LibraryCompletionRequest | null = null) {
@@ -5020,10 +5005,7 @@ export async function searchWishListMusicBrainz(
       searchedAt: new Date().toISOString(),
     } satisfies WishListMusicBrainzSearchResponse;
   }
-  return invoke<WishListMusicBrainzSearchResponse>(
-    "search_wish_list_musicbrainz",
-    { input },
-  );
+  return invoke<WishListMusicBrainzSearchResponse>("search_wish_list_musicbrainz", { input });
 }
 
 export async function addWishListMusicBrainzCandidate(
@@ -5097,10 +5079,9 @@ export async function addWishListMusicBrainzCandidate(
       artistAlbumSummary: null,
     } satisfies AddWishListMusicBrainzCandidateResponse;
   }
-  return invoke<AddWishListMusicBrainzCandidateResponse>(
-    "add_wish_list_musicbrainz_candidate",
-    { input: { candidate } },
-  );
+  return invoke<AddWishListMusicBrainzCandidateResponse>("add_wish_list_musicbrainz_candidate", {
+    input: { candidate },
+  });
 }
 
 export async function addWishListItem(input: AddWishListItemRequest) {
@@ -5125,7 +5106,7 @@ export async function addWishListItem(input: AddWishListItemRequest) {
     mockWishListItems = [item, ...mockWishListItems];
     return item;
   }
-  return invoke<WishListItem>("add_wish_list_item", { input });
+  return commands.addWishListItem(input) as Promise<WishListItem>;
 }
 
 export async function removeWishListItem(id: number) {
@@ -5133,7 +5114,7 @@ export async function removeWishListItem(id: number) {
     mockWishListItems = mockWishListItems.filter((item) => item.id !== id);
     return;
   }
-  return invoke<void>("remove_wish_list_item", { id });
+  await commands.removeWishListItem(id);
 }
 
 export async function searchDeemixAlbums(input: DeemixAlbumSearchRequest) {
@@ -5181,10 +5162,7 @@ export async function refreshWishListArtistAlbumSummary(wishListItemId: number) 
       updatedAt: new Date().toISOString(),
     } satisfies WishListArtistAlbumSummary;
   }
-  return invoke<WishListArtistAlbumSummary>(
-    "refresh_wish_list_artist_album_summary",
-    { input: { wishListItemId } },
-  );
+  return commands.refreshWishListArtistAlbumSummary({ wishListItemId }) as Promise<WishListArtistAlbumSummary>;
 }
 
 export async function discoverWishListArtistAlbums(wishListItemId: number) {
@@ -5257,10 +5235,7 @@ export async function discoverWishListArtistAlbums(wishListItemId: number) {
       searchedAt: new Date().toISOString(),
     } satisfies WishListArtistAlbumDiscoveryResponse;
   }
-  return invoke<WishListArtistAlbumDiscoveryResponse>(
-    "discover_wish_list_artist_albums",
-    { input: { wishListItemId } },
-  );
+  return commands.discoverWishListArtistAlbums({ wishListItemId }) as Promise<WishListArtistAlbumDiscoveryResponse>;
 }
 
 export async function preflightDeemixAlbumDownload(

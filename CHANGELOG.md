@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.165.0] - 2026-10-06
+
+### Changed
+- Migrate the Discogs (4), Last.fm (9), and Wish List (5) commands to generated TypeScript bindings: credential status/save/delete/test, artist and album popularity, similarity, constellation branches, related albums, and Wish List list/add/remove/discover/refresh. `backend.ts` calls `commands.*` for them.
+- Commands that return an untyped `serde_json::Value` (the job-backed `refresh_lastfm_artist_images`, `search_wish_list_musicbrainz`, and `add_wish_list_musicbrainz_candidate`) stay on `generate_handler!`, because specta rc.25 recurses forever on `Value` while exporting. They can migrate once they return typed results.
+
 ## [0.164.0] - 2026-10-06
 
 ### Changed
