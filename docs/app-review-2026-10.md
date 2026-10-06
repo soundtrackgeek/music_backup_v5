@@ -160,7 +160,7 @@ On an up-to-date database, `migrate()` still enters `migrate_through_57`. That p
 
 ---
 
-### 6. One job system and Activity Center
+### 6. One job system and Activity Center - DONE
 
 **Implemented in 0.158.0 (2026-10-06):** persistent local `jobs.sqlite3` registry, a two-worker Rust pool, shared rate-gated provider handlers, and a global Activity Center. Verification keeps its item checkpoints and pause/resume/retry controls; other operations expose controls only at supported safe boundaries. Doctor and overlay schedules share the pool, and interrupted non-checkpoint writes require explicit retry. Plex integration was subsequently removed in 0.159.0 (2026-10-06). See [Activity Center](../README.md#activity-center).
 
