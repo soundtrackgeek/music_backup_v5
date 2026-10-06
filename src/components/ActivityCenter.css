@@ -1,36 +1,74 @@
-.activity-trigger { position: fixed; top: 24px; right: 110px; z-index: 46; }
-.no-detail-content .activity-trigger { right: 62px; }
+.activity-trigger,
+.activity-layer {
+  --activity-surface: #faf9f5;
+  --activity-card: #fffefa;
+  --activity-ink: #243c38;
+  --activity-muted: #62776c;
+  --activity-border: #dfe6de;
+  --activity-accent: #087168;
+  --activity-accent-soft: #e0efea;
+  --activity-accent-border: #98c2b6;
+  --activity-progress-track: #e9eee7;
+  --activity-progress-fill: #218879;
+  --activity-warning: #8d4923;
+  --activity-warning-soft: #fbefe4;
+  --activity-warning-border: #ddbda0;
+  --activity-backdrop: rgb(24 38 36 / 26%);
+  --activity-shadow: rgb(20 38 34 / 15%);
+}
+
+:root[data-theme="dark"] .activity-trigger,
+:root[data-theme="dark"] .activity-layer {
+  --activity-surface: #121a17;
+  --activity-card: #17211d;
+  --activity-ink: #e7efeb;
+  --activity-muted: #a6b8b0;
+  --activity-border: #304139;
+  --activity-accent: #8ee4d8;
+  --activity-accent-soft: #1a2d28;
+  --activity-accent-border: #315a53;
+  --activity-progress-track: #293b33;
+  --activity-progress-fill: #55b8ab;
+  --activity-warning: #edb884;
+  --activity-warning-soft: #30251c;
+  --activity-warning-border: #785338;
+  --activity-backdrop: rgb(0 0 0 / 45%);
+  --activity-shadow: rgb(0 0 0 / 30%);
+}
+
+.activity-trigger { position: fixed; top: var(--global-control-top); right: calc(var(--global-control-right) + 2 * var(--global-control-step)); z-index: 46; }
+.no-detail-content .activity-trigger { right: calc(var(--global-control-right) + var(--global-control-step)); }
 .activity-badge { position: absolute; top: -7px; right: -8px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 10px; background: #087168; color: white; font-size: 10px; display: grid; place-items: center; }
-.activity-dot { position: absolute; top: 0; right: 0; width: 7px; height: 7px; border-radius: 50%; background: #bd751f; }
+.activity-dot { position: absolute; top: 0; right: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--activity-warning); }
 .activity-layer { position: fixed; inset: 0; z-index: 150; }
-.activity-backdrop { position: absolute; inset: 0; background: rgb(24 38 36 / 26%); }
-.activity-drawer { position: absolute; inset: 0 0 0 auto; width: min(510px, 100%); display: flex; flex-direction: column; background: #faf9f5; color: #243c38; box-shadow: -10px 0 40px rgb(20 38 34 / 15%); }
-.activity-header { display: flex; justify-content: space-between; gap: 12px; padding: 28px 26px 18px; border-bottom: 1px solid #e3e7e0; }
-.activity-eyebrow { text-transform: uppercase; font-size: 10px; letter-spacing: .14em; color: #6a7c75; }
+.activity-backdrop { position: absolute; inset: 0; background: var(--activity-backdrop); }
+.activity-drawer { position: absolute; inset: 0 0 0 auto; width: min(510px, 100%); display: flex; flex-direction: column; background: var(--activity-surface); color: var(--activity-ink); box-shadow: -10px 0 40px var(--activity-shadow); }
+.activity-header { display: flex; justify-content: space-between; gap: 12px; padding: 28px 26px 18px; border-bottom: 1px solid var(--activity-border); }
+.activity-eyebrow { text-transform: uppercase; font-size: 10px; letter-spacing: .14em; color: var(--activity-muted); }
 .activity-header h2 { margin: 6px 0; font-family: "Cormorant Garamond", serif; font-size: 32px; font-weight: 600; }
-.activity-header p { margin: 0; font-size: 12px; color: #697c75; }
+.activity-header p { margin: 0; font-size: 12px; color: var(--activity-muted); }
 .activity-filters { display: flex; flex-wrap: wrap; gap: 7px; padding: 16px 26px; }
-.activity-filters button { background: transparent; border: 1px solid #d8e1d9; border-radius: 18px; color: #506a62; padding: 7px 11px; font: inherit; font-size: 11px; cursor: pointer; }
-.activity-filters button[aria-pressed="true"] { background: #e0efea; color: #087168; border-color: #98c2b6; }
+.activity-filters button { background: transparent; border: 1px solid var(--activity-border); border-radius: 18px; color: var(--activity-muted); padding: 7px 11px; font: inherit; font-size: 11px; cursor: pointer; }
+.activity-filters button[aria-pressed="true"] { background: var(--activity-accent-soft); color: var(--activity-accent); border-color: var(--activity-accent-border); }
 .activity-list { overflow-y: auto; overscroll-behavior: contain; padding: 0 26px 26px; flex: 1; }
-.activity-job { border: 1px solid #dfe6de; background: #fffefa; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+.activity-job { border: 1px solid var(--activity-border); background: var(--activity-card); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
 .activity-job-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .activity-job h3 { margin: 0; font-size: 14px; font-weight: 700; }
-.activity-job-heading > span { flex-shrink: 0; max-width: 45%; text-align: right; font-size: 10px; color: #63776e; }
-.activity-job-failed { border-color: #ddbda0; }
-.activity-job-failed .activity-job-heading > span { color: #a65922; }
-.activity-progress { height: 4px; background: #e9eee7; border-radius: 4px; overflow: hidden; margin-top: 13px; }
-.activity-progress > span { display: block; height: 100%; background: #218879; transition: width .25s; }
-.activity-message, .activity-eta { font-size: 12px; color: #62776c; line-height: 1.5; margin: 10px 0 0; overflow-wrap: anywhere; }
+.activity-job-heading > span { flex-shrink: 0; max-width: 45%; text-align: right; font-size: 10px; color: var(--activity-muted); }
+.activity-job-failed { border-color: var(--activity-warning-border); }
+.activity-job-failed .activity-job-heading > span { color: var(--activity-warning); }
+.activity-progress { height: 4px; background: var(--activity-progress-track); border-radius: 4px; overflow: hidden; margin-top: 13px; }
+.activity-progress > span { display: block; height: 100%; background: var(--activity-progress-fill); transition: width .25s; }
+.activity-message, .activity-eta { font-size: 12px; color: var(--activity-muted); line-height: 1.5; margin: 10px 0 0; overflow-wrap: anywhere; }
 .activity-eta { display: flex; align-items: center; gap: 5px; font-size: 11px; }
-.activity-job-error { background: #fbefe4; color: #8d4923; font-size: 12px; line-height: 1.5; padding: 10px; border-radius: 6px; overflow-wrap: anywhere; }
+.activity-job-error { background: var(--activity-warning-soft); color: var(--activity-warning); font-size: 12px; line-height: 1.5; padding: 10px; border-radius: 6px; overflow-wrap: anywhere; }
 .activity-job-footer { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
-.activity-job-footer time, .activity-job small { font-size: 10px; color: #78877f; }
+.activity-job-footer time, .activity-job small { font-size: 10px; color: var(--activity-muted); }
 .activity-job-footer > div { display: flex; flex-wrap: wrap; gap: 6px; }
 .activity-job-footer .secondary-button { font-size: 11px; padding: 6px 9px; min-height: 28px; }
 .activity-job small { display: block; margin-top: 12px; }
-.activity-empty { text-align: center; padding: 72px 18px; color: #70877c; }
-.activity-empty h3 { color: #35584b; font-size: 17px; }
+.activity-empty { text-align: center; padding: 72px 18px; color: var(--activity-muted); }
+.activity-empty h3 { color: var(--activity-ink); font-size: 17px; }
 .activity-empty p { font-size: 13px; line-height: 1.7; max-width: 310px; margin: auto; }
-.activity-error { display: flex; gap: 8px; align-items: center; background: #fbefe4; padding: 12px 26px; font-size: 12px; overflow-wrap: anywhere; }
-@media(max-width: 760px) { .activity-trigger { top: 14px; right: 104px; } .no-detail-content .activity-trigger { right: 60px; } .activity-header { padding: 22px 18px 16px; } .activity-filters { padding: 14px 18px; } .activity-list { padding: 0 18px 18px; } }
+.activity-error { display: flex; gap: 8px; align-items: center; background: var(--activity-warning-soft); color: var(--activity-warning); padding: 12px 26px; font-size: 12px; overflow-wrap: anywhere; }
+@media(max-width: 760px) { .activity-header { padding: 22px 18px 16px; } .activity-filters { padding: 14px 18px; } .activity-list { padding: 0 18px 18px; } }

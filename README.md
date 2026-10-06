@@ -1,5 +1,7 @@
 # Music Library
 
+Music Library 0.158.1 fixes Activity Center toolbar spacing and follows your saved light/dark appearance throughout the drawer.
+
 Music Library 0.158.0 adds a persistent job system and global **Activity Center**. Open the Activity icon beside Luna to see running, queued, paused, failed, and finished work from every workspace. See [Activity Center](#activity-center).
 
 Music Library 0.157.8 virtualizes large lists with measured rows and a small overscan buffer. Library Completion album and artist queues, Playlist Builder track reviews, Updates activity/artist lists, and every shared resizable table mount only the visible rows once a list exceeds 40 items. Scroll the list to reach the complete loaded result set; playlist review no longer needs 500-track reveal buttons. Table headers remain sticky, saved column widths and horizontal scrolling still work, and selection, verification checkboxes, keyboard focus, reordering, exports, and playlist saves use the full data set. Verification events keep unchanged candidate rows intact.

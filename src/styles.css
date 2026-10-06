@@ -38,6 +38,9 @@ button {
 .app-shell {
   --left-sidebar-width: 232px;
   --right-sidebar-width: 336px;
+  --global-control-top: 24px;
+  --global-control-right: 18px;
+  --global-control-step: 48px;
   display: grid;
   position: relative;
   grid-template-columns: var(--left-sidebar-width) minmax(0, 1fr) var(
@@ -2306,19 +2309,19 @@ button {
 }
 
 .right-sidebar-toggle {
-  top: 24px;
-  right: 18px;
+  top: var(--global-control-top);
+  right: var(--global-control-right);
 }
 
 .music-research-trigger {
   position: fixed;
   z-index: 45;
-  top: 24px;
-  right: 66px;
+  top: var(--global-control-top);
+  right: calc(var(--global-control-right) + var(--global-control-step));
 }
 
 .no-detail-content .music-research-trigger {
-  right: 18px;
+  right: var(--global-control-right);
 }
 
 .music-research-trigger.active {
@@ -2406,20 +2409,25 @@ button {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .right-sidebar-hidden.has-detail-content .topbar,
 .details-drawer-layout.has-detail-content .topbar {
-  padding-right: 96px;
+  padding-right: calc(3 * var(--global-control-step));
 }
 
 .no-detail-content .topbar {
-  padding-right: 48px;
+  padding-right: calc(2 * var(--global-control-step));
 }
 
 .topbar-actions,
 .pager {
   gap: 8px;
+}
+
+.topbar-actions {
+  flex-wrap: wrap;
 }
 
 .panel-actions {
@@ -14892,19 +14900,9 @@ button {
 }
 
 @media (max-width: 640px) {
-  .music-research-trigger {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-  }
-
-  .has-detail-content .music-research-trigger {
-    right: 64px;
-  }
-
-  .right-sidebar-toggle {
-    top: 16px;
-    right: 16px;
+  .app-shell {
+    --global-control-top: 16px;
+    --global-control-right: 16px;
   }
 
   .music-research-panel {
@@ -21091,6 +21089,11 @@ button {
     padding: 14px 18px;
   }
 
+  .timelines-header h1 {
+    min-height: 48px;
+    padding-right: var(--global-control-step);
+  }
+
   .timelines-header > div:first-child {
     text-align: center;
   }
@@ -21176,7 +21179,8 @@ button {
   background: #23171b;
 }
 
-.albums-years-active .music-research-trigger {
+.albums-years-active .music-research-trigger,
+.albums-years-active .activity-trigger {
   border-color: #26303b;
   color: #9da7b1;
   background: #0e151e;
@@ -22677,6 +22681,10 @@ button {
 
   .albums-years-active .music-research-trigger {
     display: none;
+  }
+
+  .albums-years-active .activity-trigger {
+    right: var(--global-control-right);
   }
 
   .album-time-ribbon-page,

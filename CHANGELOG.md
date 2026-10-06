@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.158.1] - 2026-10-06
+
+### Fixed
+- Reserve toolbar space for the Activity Center alongside Luna and the details toggle, preventing overlap with workspace buttons when the sidebar is hidden. Align controls at desktop and narrow widths, wrap crowded toolbars, and keep the narrow Timelines tabs below the Activity button.
+- Follow the saved light/dark appearance in the Activity Center, including drawer and card surfaces, text, filters, progress, and error messages.
+
 ## [0.158.0] - 2026-10-06
 
 ### Added
