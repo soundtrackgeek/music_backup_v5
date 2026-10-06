@@ -1,6 +1,6 @@
 [package]
 name = "music-library"
-version = "0.162.0"
+version = "0.163.0"
 description = "Local-first MusicBee TSV library app"
 authors = ["jtill"]
 edition = "2021"
@@ -55,6 +55,9 @@ url = "2"
 thiserror = "2"
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
 zeroize = "1.8"
+specta = { version = "=2.0.0-rc.25", features = ["derive", "serde_json", "chrono"] }
+specta-typescript = "=0.0.12"
+tauri-specta = { version = "=2.0.0-rc.25", features = ["typescript"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.163.0] - 2026-10-06
+
+### Added
+- Generate TypeScript bindings from Rust with `specta` and `tauri-specta` (pinned `2.0.0-rc.25`). The Luna/AI, Jev, saved-playlist, and outside-library discovery commands (24 of them) are now annotated with `#[specta::specta]` and exported to `src/bindings.ts`, so their argument and result types come from the Rust structs instead of hand-written mirrors.
+- `npm run bindings` regenerates `src/bindings.ts`, and `npm run check:bindings` (part of `npm run check`) fails when the committed file differs from the Rust commands.
+
+### Changed
+- Migrated commands are dispatched by tauri-specta while all other commands keep using `tauri::generate_handler!`; a name-based router in `src-tauri/src/bindings.rs` lets the remaining domains migrate one at a time.
+- `models.rs`, `ai.rs`, `jev.rs`, and `external_discovery.rs` derive `specta::Type` on their public serializable types.
+
 ## [0.162.0] - 2026-10-06
 
 ### Changed

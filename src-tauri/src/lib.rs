@@ -44,6 +44,23 @@ pub fn run_cli_from_args() -> bool {
     let Some(first) = args.get(1).and_then(|value| value.to_str()) else {
         return false;
     };
+    #[cfg(not(test))]
+    if first == "--export-bindings" {
+        let path = args
+            .get(2)
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from("src/bindings.ts"));
+        match bindings::export(&path) {
+            Ok(()) => {
+                println!("Wrote TypeScript bindings to {}", path.display());
+                std::process::exit(0);
+            }
+            Err(error) => {
+                eprintln!("Could not export TypeScript bindings: {error}");
+                std::process::exit(1);
+            }
+        }
+    }
     if first == "--checkpoint" || first == "--wal-checkpoint" {
         let target_path = args.get(2).map(std::path::PathBuf::from);
         let db_path = match target_path {
@@ -196,6 +213,7 @@ async fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_ai_key_status() -> Result<ai::AiKeyStatus, String> {
     tauri::async_runtime::spawn_blocking(ai::key_status)
         .await
@@ -205,6 +223,7 @@ async fn get_ai_key_status() -> Result<ai::AiKeyStatus, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn save_openai_api_key(api_key: String) -> Result<ai::AiKeyStatus, String> {
     tauri::async_runtime::spawn_blocking(move || ai::save_api_key(api_key))
         .await
@@ -214,6 +233,7 @@ async fn save_openai_api_key(api_key: String) -> Result<ai::AiKeyStatus, String>
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn delete_openai_api_key() -> Result<ai::AiKeyStatus, String> {
     tauri::async_runtime::spawn_blocking(ai::delete_api_key)
         .await
@@ -223,6 +243,7 @@ async fn delete_openai_api_key() -> Result<ai::AiKeyStatus, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn test_openai_connection() -> Result<ai::AiConnectionTest, String> {
     tauri::async_runtime::spawn_blocking(ai::test_connection)
         .await
@@ -496,6 +517,7 @@ async fn preflight_deemix_album_download(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn compile_natural_language_query(
     input: ai::AiCompileRequest,
 ) -> Result<ai::AiCompiledQuery, String> {
@@ -507,6 +529,7 @@ async fn compile_natural_language_query(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn ask_current_view(
     app: AppHandle,
     input: ai::AiCurrentViewQuestion,
@@ -523,6 +546,7 @@ async fn ask_current_view(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn research_music(
     app: AppHandle,
     input: ai::AiMusicResearchRequest,
@@ -539,6 +563,7 @@ async fn research_music(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn analyze_library(
     app: AppHandle,
     input: ai::AiLibraryAnalysisRequest,
@@ -553,6 +578,7 @@ async fn analyze_library(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_ai_snapshots(
     app: AppHandle,
     kind: Option<String>,
@@ -565,6 +591,7 @@ async fn list_ai_snapshots(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn save_ai_snapshot(
     app: AppHandle,
     input: ai::SaveAiSnapshotRequest,
@@ -577,6 +604,7 @@ async fn save_ai_snapshot(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn delete_ai_snapshot(app: AppHandle, id: i64) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || db::delete_ai_snapshot_for_app(&app, id))
         .await
@@ -586,6 +614,7 @@ async fn delete_ai_snapshot(app: AppHandle, id: i64) -> Result<(), String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn build_playlist(
     app: AppHandle,
     input: ai::AiPlaylistBuildRequest,
@@ -601,24 +630,28 @@ async fn build_playlist(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_jev_key_status() -> Result<ai::AiKeyStatus, String> {
     tauri::async_runtime::spawn_blocking(jev::key_status).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
 }
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn save_openrouter_api_key(api_key: String) -> Result<ai::AiKeyStatus, String> {
     tauri::async_runtime::spawn_blocking(move || jev::save_api_key(api_key)).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
 }
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn delete_openrouter_api_key() -> Result<ai::AiKeyStatus, String> {
     tauri::async_runtime::spawn_blocking(jev::delete_api_key).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
 }
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn test_jev_connection() -> Result<ai::AiConnectionTest, String> {
     tauri::async_runtime::spawn_blocking(jev::test_connection).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
 }
@@ -631,6 +664,7 @@ async fn score_mixtape_candidates(input: jev::ScoreRequest) -> Result<jev::Score
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn export_ai_markdown(
     app: AppHandle,
     input: ai::AiMarkdownExportRequest,
@@ -643,6 +677,7 @@ async fn export_ai_markdown(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_saved_playlists(app: AppHandle) -> Result<Vec<ai::SavedPlaylist>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_saved_playlists_for_app(&app))
         .await
@@ -652,6 +687,7 @@ async fn list_saved_playlists(app: AppHandle) -> Result<Vec<ai::SavedPlaylist>, 
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn save_playlist(
     app: AppHandle,
     input: ai::SavePlaylistRequest,
@@ -664,6 +700,7 @@ async fn save_playlist(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn delete_saved_playlist(app: AppHandle, id: i64) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || db::delete_saved_playlist_for_app(&app, id))
         .await
@@ -673,6 +710,7 @@ async fn delete_saved_playlist(app: AppHandle, id: i64) -> Result<(), String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn set_playlist_automation(
     app: AppHandle,
     input: ai::SetPlaylistAutomationRequest,
@@ -685,6 +723,7 @@ async fn set_playlist_automation(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn refresh_smart_playlist(
     app: AppHandle,
     id: i64,
@@ -697,6 +736,7 @@ async fn refresh_smart_playlist(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn discover_outside_library(
     app: AppHandle,
     input: ai::AiExternalDiscoveryRequest,
@@ -968,6 +1008,7 @@ async fn remove_wish_list_item(app: AppHandle, id: i64) -> Result<(), String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn export_playlist(
     app: AppHandle,
     input: ai::ExportPlaylistRequest,
@@ -2093,7 +2134,7 @@ pub fn run() {
             background::start(app.handle())?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(bindings::compose_invoke_handler(tauri::generate_handler![
             list_activity_jobs,
             control_activity_job,
             get_library_status,
@@ -2103,11 +2144,7 @@ pub fn run() {
             acknowledge_catalog_revision,
             list_database_backups,
             restore_database_backup,
-            get_settings,
-            get_ai_key_status,
-            save_openai_api_key,
-            delete_openai_api_key,
-            test_openai_connection,
+            get_settings,
             get_deemix_credential_status,
             save_deemix_arl,
             delete_deemix_arl,
@@ -2164,28 +2201,8 @@ pub fn run() {
             usenet::usenet_search,
             usenet::usenet_transfers_snapshot,
             usenet::usenet_enqueue_download,
-            usenet::usenet_clear_completed,
-            compile_natural_language_query,
-            ask_current_view,
-            research_music,
-            analyze_library,
-            list_ai_snapshots,
-            save_ai_snapshot,
-            delete_ai_snapshot,
-            export_ai_markdown,
-            build_playlist,
-            get_jev_key_status,
-            save_openrouter_api_key,
-            delete_openrouter_api_key,
-            test_jev_connection,
-            score_mixtape_candidates,
-            list_saved_playlists,
-            save_playlist,
-            delete_saved_playlist,
-            set_playlist_automation,
-            refresh_smart_playlist,
-            export_playlist,
-            discover_outside_library,
+            usenet::usenet_clear_completed,
+            score_mixtape_candidates,
             list_saved_external_discoveries,
             save_external_discovery,
             delete_saved_external_discovery,
@@ -2296,7 +2313,7 @@ pub fn run() {
             delete_saved_chart,
             export_search,
             export_music_tool_issues
-        ])
+        ]))
         .build(tauri::generate_context!())
         .expect("failed to build Music Library app")
         .run(|app_handle, event| {
@@ -2325,3 +2342,7 @@ async fn control_activity_job(app: AppHandle, id: i64, action: String) -> Result
     tauri::async_runtime::spawn_blocking(move || jobs::control_for_app(&app,id,&action)).await
         .map_err(|e|e.to_string())?.map_err(|e|e.to_string())
 }
+
+// Declared last: tauri-specta command macros are textually scoped.
+#[cfg(not(test))]
+mod bindings;

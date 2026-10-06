@@ -1,5 +1,6 @@
 import { previewActivity, registerPreviewControl } from "./backend/activity";
 import { artworkUrl, invalidateArtwork, type ThumbnailSize } from "./backend/artwork";
+import { commands } from "./bindings";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 import {
@@ -2660,7 +2661,7 @@ export async function getAiKeyStatus() {
     } satisfies AiKeyStatus;
   }
 
-  return invoke<AiKeyStatus>("get_ai_key_status");
+  return commands.getAiKeyStatus() as Promise<AiKeyStatus>;
 }
 
 export async function saveOpenAiApiKey(apiKey: string) {
@@ -2670,7 +2671,7 @@ export async function saveOpenAiApiKey(apiKey: string) {
     );
   }
 
-  return invoke<AiKeyStatus>("save_openai_api_key", { apiKey });
+  return commands.saveOpenaiApiKey(apiKey) as Promise<AiKeyStatus>;
 }
 
 export async function deleteOpenAiApiKey() {
@@ -2680,7 +2681,7 @@ export async function deleteOpenAiApiKey() {
     );
   }
 
-  return invoke<AiKeyStatus>("delete_openai_api_key");
+  return commands.deleteOpenaiApiKey() as Promise<AiKeyStatus>;
 }
 
 export async function testOpenAiConnection() {
@@ -2688,7 +2689,7 @@ export async function testOpenAiConnection() {
     throw new Error("OpenAI connection tests require the Tauri desktop app.");
   }
 
-  return invoke<AiConnectionTest>("test_openai_connection");
+  return commands.testOpenaiConnection() as Promise<AiConnectionTest>;
 }
 
 export async function getDeemixCredentialStatus() {
@@ -3728,7 +3729,7 @@ export async function compileNaturalLanguageQuery(input: AiCompileRequest) {
     throw new Error("Natural-language queries require the Tauri desktop app.");
   }
 
-  return invoke<AiCompiledQuery>("compile_natural_language_query", { input });
+  return commands.compileNaturalLanguageQuery(input) as Promise<AiCompiledQuery>;
 }
 
 export async function askCurrentView(input: AiCurrentViewQuestion) {
@@ -3768,7 +3769,7 @@ export async function askCurrentView(input: AiCurrentViewQuestion) {
     } satisfies AiCurrentViewAnswer;
   }
 
-  return invoke<AiCurrentViewAnswer>("ask_current_view", { input });
+  return commands.askCurrentView(input) as Promise<AiCurrentViewAnswer>;
 }
 
 export async function researchMusic(input: AiMusicResearchRequest) {
@@ -3805,7 +3806,7 @@ export async function researchMusic(input: AiMusicResearchRequest) {
     } satisfies AiMusicResearchAnswer;
   }
 
-  return invoke<AiMusicResearchAnswer>("research_music", { input });
+  return commands.researchMusic(input) as Promise<AiMusicResearchAnswer>;
 }
 
 export async function analyzeLibrary(input: AiLibraryAnalysisRequest) {
@@ -3854,7 +3855,7 @@ export async function analyzeLibrary(input: AiLibraryAnalysisRequest) {
     } satisfies AiLibraryAnalysis;
   }
 
-  return invoke<AiLibraryAnalysis>("analyze_library", { input });
+  return commands.analyzeLibrary(input) as Promise<AiLibraryAnalysis>;
 }
 
 export async function listAiSnapshots(kind?: AiSnapshotKind) {
@@ -3864,7 +3865,7 @@ export async function listAiSnapshots(kind?: AiSnapshotKind) {
     ) satisfies AiSnapshot[];
   }
 
-  return invoke<AiSnapshot[]>("list_ai_snapshots", { kind: kind ?? null });
+  return commands.listAiSnapshots(kind ?? null) as Promise<AiSnapshot[]>;
 }
 
 export async function saveAiSnapshot(input: SaveAiSnapshotRequest) {
@@ -3888,7 +3889,7 @@ export async function saveAiSnapshot(input: SaveAiSnapshotRequest) {
     return saved;
   }
 
-  return invoke<AiSnapshot>("save_ai_snapshot", { input });
+  return commands.saveAiSnapshot(input) as Promise<AiSnapshot>;
 }
 
 export async function deleteAiSnapshot(id: number) {
@@ -3899,7 +3900,7 @@ export async function deleteAiSnapshot(id: number) {
     return;
   }
 
-  return invoke<void>("delete_ai_snapshot", { id });
+  await commands.deleteAiSnapshot(id);
 }
 
 export async function exportAiMarkdown(input: AiMarkdownExportRequest) {
@@ -3916,7 +3917,7 @@ export async function exportAiMarkdown(input: AiMarkdownExportRequest) {
   }
 
   return finalizeExport(
-    await invoke<RawExportResult>("export_ai_markdown", { input }),
+    (await commands.exportAiMarkdown(input)) as RawExportResult,
   );
 }
 
@@ -3982,14 +3983,14 @@ export async function buildPlaylist(input: AiPlaylistBuildRequest) {
     } satisfies AiPlaylist;
   }
 
-  return invoke<AiPlaylist>("build_playlist", { input });
+  return commands.buildPlaylist(input) as Promise<AiPlaylist>;
 }
 
 export async function listSavedPlaylists() {
   if (!isTauriRuntime()) {
     return mockSavedPlaylists;
   }
-  return invoke<SavedPlaylist[]>("list_saved_playlists");
+  return commands.listSavedPlaylists() as Promise<SavedPlaylist[]>;
 }
 
 export async function savePlaylist(input: SavePlaylistRequest) {
@@ -4021,7 +4022,7 @@ export async function savePlaylist(input: SavePlaylistRequest) {
     ];
     return saved;
   }
-  return invoke<SavedPlaylist>("save_playlist", { input });
+  return commands.savePlaylist(input) as Promise<SavedPlaylist>;
 }
 
 export async function deleteSavedPlaylist(id: number) {
@@ -4031,27 +4032,27 @@ export async function deleteSavedPlaylist(id: number) {
     );
     return;
   }
-  return invoke<void>("delete_saved_playlist", { id });
+  await commands.deleteSavedPlaylist(id);
 }
 
 export async function getJevKeyStatus(): Promise<AiKeyStatus> {
   if (!isTauriRuntime()) return { configured: false, source: "none", model: "typesafe/jev-1.13" };
-  return invoke<AiKeyStatus>("get_jev_key_status");
+  return commands.getJevKeyStatus() as Promise<AiKeyStatus>;
 }
 
 export async function saveOpenRouterApiKey(apiKey: string) {
   if (!isTauriRuntime()) throw new Error("Secure key storage requires the desktop app.");
-  return invoke<AiKeyStatus>("save_openrouter_api_key", { apiKey });
+  return commands.saveOpenrouterApiKey(apiKey) as Promise<AiKeyStatus>;
 }
 
 export async function deleteOpenRouterApiKey() {
   if (!isTauriRuntime()) throw new Error("Secure key storage requires the desktop app.");
-  return invoke<AiKeyStatus>("delete_openrouter_api_key");
+  return commands.deleteOpenrouterApiKey() as Promise<AiKeyStatus>;
 }
 
 export async function testJevConnection() {
   if (!isTauriRuntime()) throw new Error("Jev connection testing requires the desktop app.");
-  return invoke<AiConnectionTest>("test_jev_connection");
+  return commands.testJevConnection() as Promise<AiConnectionTest>;
 }
 
 export async function scoreMixtapeCandidates(input: {
@@ -4089,7 +4090,7 @@ export async function setPlaylistAutomation(
     );
     return updated;
   }
-  return invoke<SavedPlaylist>("set_playlist_automation", { input });
+  return commands.setPlaylistAutomation(input) as Promise<SavedPlaylist>;
 }
 
 export async function refreshSmartPlaylist(id: number) {
@@ -4118,7 +4119,7 @@ export async function refreshSmartPlaylist(id: number) {
       refreshedAt,
     } satisfies SmartPlaylistRefreshResult;
   }
-  return invoke<SmartPlaylistRefreshResult>("refresh_smart_playlist", { id });
+  return commands.refreshSmartPlaylist(id) as Promise<SmartPlaylistRefreshResult>;
 }
 
 const previewExternalCatalog: Record<
@@ -4250,7 +4251,7 @@ export async function discoverOutsideLibrary(input: { prompt: string }) {
         : [],
     } satisfies ExternalDiscoveryResponse;
   }
-  return invoke<ExternalDiscoveryResponse>("discover_outside_library", { input });
+  return commands.discoverOutsideLibrary(input) as Promise<ExternalDiscoveryResponse>;
 }
 
 export async function listSavedExternalDiscoveries() {
@@ -5416,7 +5417,7 @@ export async function exportPlaylist(input: ExportPlaylistRequest) {
     } satisfies RawExportResult);
   }
   return finalizeExport(
-    await invoke<RawExportResult>("export_playlist", { input }),
+    (await commands.exportPlaylist(input)) as RawExportResult,
   );
 }
 

@@ -89,13 +89,13 @@ fn send_request(key: &str, body: Value) -> Result<Value> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Score {
     pub score: f64,
     pub confidence: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Assessment {
     pub track_id: i64,
@@ -107,7 +107,7 @@ pub struct Assessment {
     pub closer: Score,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ScoreRequest {
     pub tracks: Vec<AiPlaylistTrack>,
@@ -115,7 +115,7 @@ pub struct ScoreRequest {
     pub notes: HashMap<String, String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ScoreResult {
     pub assessments: Vec<Assessment>,
@@ -316,7 +316,7 @@ pub fn test_connection() -> Result<AiConnectionTest> {
     })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MixtapeConfig {
     pub briefs: [String; 2],
@@ -325,13 +325,13 @@ pub struct MixtapeConfig {
     pub max_album: u32,
     pub weights: Weights,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Weights {
     pub atmosphere: f64,
     pub role: f64,
     pub rating: f64,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Slot {
     pub track_id: i64,
@@ -339,7 +339,7 @@ pub struct Slot {
     pub locked: bool,
     pub transition_to_next: bool,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MixtapeDraft {
     pub version: u32,

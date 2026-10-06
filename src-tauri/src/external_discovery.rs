@@ -17,7 +17,7 @@ const MUSICBRAINZ_RECORDING_SEARCH_URL: &str = "https://musicbrainz.org/ws/2/rec
 const MAX_CATALOG_CANDIDATES: usize = 100;
 const MAX_SAVED_RESPONSE_BYTES: usize = 1_000_000;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalDiscoveryItem {
     pub id: String,
@@ -34,7 +34,7 @@ pub struct ExternalDiscoveryItem {
     pub url: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalDiscoveryResponse {
     pub prompt: String,
@@ -49,7 +49,7 @@ pub struct ExternalDiscoveryResponse {
     pub limitations: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveExternalDiscoveryRequest {
     pub id: Option<i64>,
@@ -57,7 +57,7 @@ pub struct SaveExternalDiscoveryRequest {
     pub response: ExternalDiscoveryResponse,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedExternalDiscovery {
     pub id: i64,

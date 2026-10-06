@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportRun {
     pub id: i64,
@@ -23,7 +23,7 @@ pub struct ImportRun {
     pub rating_events_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryStatus {
     pub db_path: String,
@@ -35,7 +35,7 @@ pub struct LibraryStatus {
     pub last_import: Option<ImportRun>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PerformanceProbeOperation {
     pub id: String,
@@ -49,7 +49,7 @@ pub struct PerformanceProbeOperation {
     pub error_message: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PerformanceProbeResponse {
     pub generated_at: String,
@@ -61,7 +61,7 @@ pub struct PerformanceProbeResponse {
     pub operations: Vec<PerformanceProbeOperation>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseBackup {
     pub id: Option<i64>,
@@ -78,7 +78,7 @@ pub struct DatabaseBackup {
     pub can_restore: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseRestoreSummary {
     pub restored_backup: DatabaseBackup,
@@ -88,7 +88,7 @@ pub struct DatabaseRestoreSummary {
     pub schema_version: i32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportProgress {
     pub status: String,
@@ -100,7 +100,7 @@ pub struct ImportProgress {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportSuspiciousAlbum {
     pub album_id: String,
@@ -112,7 +112,7 @@ pub struct ImportSuspiciousAlbum {
     pub current_track_count: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportPreview {
     pub session_id: i64,
@@ -141,7 +141,7 @@ pub struct ImportPreview {
     pub source_changed: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportSummary {
     pub import_run: ImportRun,
@@ -151,7 +151,7 @@ pub struct ImportSummary {
     pub backup_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryUpdateRequest {
     #[serde(default)]
@@ -164,7 +164,7 @@ pub struct LibraryUpdateRequest {
     pub offset: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryUpdate {
     pub id: i64,
@@ -187,7 +187,7 @@ pub struct LibraryUpdate {
     pub source_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryUpdateSummary {
     pub all: i64,
@@ -196,7 +196,7 @@ pub struct LibraryUpdateSummary {
     pub removed: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryUpdateResponse {
     pub rows: Vec<LibraryUpdate>,
@@ -206,7 +206,7 @@ pub struct LibraryUpdateResponse {
     pub offset: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryUpdateArtistSummary {
     pub artist_key: String,
@@ -220,7 +220,7 @@ pub struct LibraryUpdateArtistSummary {
     pub last_updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct NewLibraryArtist {
     pub artist_key: String,
@@ -228,7 +228,7 @@ pub struct NewLibraryArtist {
     pub added_at: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryUpdateArtistResponse {
     pub rows: Vec<LibraryUpdateArtistSummary>,
@@ -243,7 +243,7 @@ fn default_library_update_limit() -> u32 {
     50
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CoverImportRequest {
     pub source_path: String,
@@ -253,7 +253,7 @@ pub struct CoverImportRequest {
     pub replace_existing: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CoverImportProgress {
     pub status: String,
@@ -268,7 +268,7 @@ pub struct CoverImportProgress {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CoverImportSummary {
     pub total_albums: u64,
@@ -281,7 +281,7 @@ pub struct CoverImportSummary {
     pub duration_ms: u128,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BillboardImportSummary {
     pub source_path: String,
@@ -292,7 +292,7 @@ pub struct BillboardImportSummary {
     pub duration_ms: u128,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BillboardSinglesImportSummary {
     pub source_path: String,
@@ -307,7 +307,7 @@ pub struct BillboardSinglesImportSummary {
     pub duration_ms: u128,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct VgListaImportSummary {
     pub source_path: String,
@@ -318,7 +318,7 @@ pub struct VgListaImportSummary {
     pub duration_ms: u128,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct OfficialUkImportSummary {
     pub source_path: String,
@@ -329,7 +329,7 @@ pub struct OfficialUkImportSummary {
     pub duration_ms: u128,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TiISkuddetImportSummary {
     pub source_path: String,
@@ -341,7 +341,7 @@ pub struct TiISkuddetImportSummary {
     pub duration_ms: u128,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct NorsktoppenImportSummary {
     pub source_path: String,
@@ -353,7 +353,7 @@ pub struct NorsktoppenImportSummary {
     pub duration_ms: u128,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     #[serde(default = "default_backup_retention")]
@@ -428,7 +428,7 @@ pub struct AppSettings {
     pub updated_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzOverlaySyncResult {
     pub sync_path: String,
@@ -451,7 +451,7 @@ pub struct MusicBrainzOverlaySyncResult {
     pub release_groups_exported: usize,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzOverlaySyncLogEntry {
     pub id: i64,
@@ -475,7 +475,7 @@ pub struct MusicBrainzOverlaySyncLogEntry {
     pub release_groups_exported: usize,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzOriginCountryOption {
     pub code: String,
@@ -483,7 +483,7 @@ pub struct MusicBrainzOriginCountryOption {
     pub artist_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistOriginImportRun {
     pub id: i64,
@@ -501,7 +501,7 @@ pub struct MusicBrainzArtistOriginImportRun {
     pub error_summary: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzOriginCountryStatus {
     pub total_album_artists: i64,
@@ -514,7 +514,7 @@ pub struct MusicBrainzOriginCountryStatus {
     pub countries: Vec<MusicBrainzOriginCountryOption>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzOriginCountryPreviewRow {
     pub local_artist_key: String,
@@ -532,7 +532,7 @@ pub struct MusicBrainzOriginCountryPreviewRow {
     pub skipped_reason: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzOriginCountryPreview {
     pub total_album_artists: i64,
@@ -544,7 +544,7 @@ pub struct MusicBrainzOriginCountryPreview {
     pub rows: Vec<MusicBrainzOriginCountryPreviewRow>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzOriginCountryImportRequest {
     #[serde(default)]
@@ -555,7 +555,7 @@ pub struct MusicBrainzOriginCountryImportRequest {
     pub limit: Option<u32>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzOriginCountryImportSummary {
     pub run: MusicBrainzArtistOriginImportRun,
@@ -570,7 +570,7 @@ pub struct MusicBrainzOriginCountryImportSummary {
     pub rows: Vec<MusicBrainzOriginCountryPreviewRow>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzOriginCountryImportProgress {
     pub status: String,
@@ -590,7 +590,7 @@ pub struct MusicBrainzOriginCountryImportProgress {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistInfoImportRun {
     pub id: i64,
@@ -608,7 +608,7 @@ pub struct MusicBrainzArtistInfoImportRun {
     pub error_summary: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistInfoStatus {
     pub total_album_artists: i64,
@@ -624,7 +624,7 @@ pub struct MusicBrainzArtistInfoStatus {
     pub last_run: Option<MusicBrainzArtistInfoImportRun>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistInfoPreviewRow {
     pub local_artist_key: String,
@@ -650,7 +650,7 @@ pub struct MusicBrainzArtistInfoPreviewRow {
     pub skipped_reason: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistInfoPreview {
     pub total_album_artists: i64,
@@ -662,7 +662,7 @@ pub struct MusicBrainzArtistInfoPreview {
     pub rows: Vec<MusicBrainzArtistInfoPreviewRow>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistInfoImportRequest {
     #[serde(default)]
@@ -673,7 +673,7 @@ pub struct MusicBrainzArtistInfoImportRequest {
     pub limit: Option<u32>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistInfoImportSummary {
     pub run: MusicBrainzArtistInfoImportRun,
@@ -688,7 +688,7 @@ pub struct MusicBrainzArtistInfoImportSummary {
     pub rows: Vec<MusicBrainzArtistInfoPreviewRow>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistInfoImportProgress {
     pub status: String,
@@ -708,7 +708,7 @@ pub struct MusicBrainzArtistInfoImportProgress {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzCacheWarningExample {
     pub mbid: String,
@@ -717,7 +717,7 @@ pub struct MusicBrainzCacheWarningExample {
     pub cached_names: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzCacheStatus {
     pub cache_path: String,
@@ -741,7 +741,7 @@ pub struct MusicBrainzCacheStatus {
     pub warning_examples: Vec<MusicBrainzCacheWarningExample>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistDiscographyRequest {
     #[serde(default)]
@@ -750,7 +750,7 @@ pub struct MusicBrainzArtistDiscographyRequest {
     pub artist_name: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzReleaseDecisionRequest {
     #[serde(default)]
@@ -767,7 +767,7 @@ pub struct MusicBrainzReleaseDecisionRequest {
     pub local_album_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistLinkRequest {
     #[serde(default)]
@@ -782,7 +782,7 @@ pub struct MusicBrainzArtistLinkRequest {
     pub canonical_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistRefreshRequest {
     #[serde(default)]
@@ -793,7 +793,7 @@ pub struct MusicBrainzArtistRefreshRequest {
     pub musicbrainz_mbid: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistOriginCountryRequest {
     #[serde(default)]
@@ -808,7 +808,7 @@ pub struct MusicBrainzArtistOriginCountryRequest {
     pub country_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistOriginCountryUpdate {
     pub artist_key: String,
@@ -820,7 +820,7 @@ pub struct MusicBrainzArtistOriginCountryUpdate {
     pub origin_country_review_state: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistRefreshResult {
     pub artist_key: String,
@@ -832,7 +832,7 @@ pub struct MusicBrainzArtistRefreshResult {
     pub origin: Option<MusicBrainzArtistOriginCountryUpdate>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistReleaseRow {
     pub release_mbid: String,
@@ -848,7 +848,7 @@ pub struct MusicBrainzArtistReleaseRow {
     pub decision: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistExportRow {
     #[serde(default)]
@@ -867,7 +867,7 @@ pub struct MusicBrainzArtistExportRow {
     pub confidence: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistExportRequest {
     #[serde(default)]
@@ -890,7 +890,7 @@ pub struct MusicBrainzArtistExportRequest {
     pub format: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistCandidateRow {
     pub name: String,
@@ -902,7 +902,7 @@ pub struct MusicBrainzArtistCandidateRow {
     pub suspect_mapping: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicBrainzArtistDiscographyResponse {
     pub artist_key: String,
@@ -931,7 +931,7 @@ pub struct MusicBrainzArtistDiscographyResponse {
     pub candidates: Vec<MusicBrainzArtistCandidateRow>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TextFilter {
     #[serde(default = "default_text_operator")]
@@ -949,7 +949,7 @@ impl Default for TextFilter {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowseFilters {
     #[serde(default)]
@@ -1104,7 +1104,7 @@ pub struct BrowseFilters {
     pub artist_dissolved_year_to: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowseSort {
     #[serde(default = "default_sort_field")]
@@ -1122,7 +1122,7 @@ impl Default for BrowseSort {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistListRequest {
     #[serde(default)]
@@ -1149,7 +1149,7 @@ impl Default for ArtistListRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistSummary {
     pub id: String,
@@ -1191,7 +1191,7 @@ pub struct ArtistSummary {
     pub representative_cover_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistListResponse {
     pub rows: Vec<ArtistSummary>,
@@ -1200,7 +1200,7 @@ pub struct ArtistListResponse {
     pub offset: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistLovedTrack {
     pub track_id: i64,
@@ -1212,7 +1212,7 @@ pub struct ArtistLovedTrack {
     pub rating: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistTrackChartHistory {
     pub chart: String,
@@ -1222,7 +1222,7 @@ pub struct ArtistTrackChartHistory {
     pub peak: i32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistChartTrack {
     pub track_id: i64,
@@ -1233,7 +1233,7 @@ pub struct ArtistChartTrack {
     pub charts: Vec<ArtistTrackChartHistory>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistTrackHighlights {
     pub artist_id: String,
@@ -1242,7 +1242,7 @@ pub struct ArtistTrackHighlights {
     pub chart_tracks: Vec<ArtistChartTrack>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreListRequest {
     #[serde(default)]
@@ -1269,7 +1269,7 @@ impl Default for GenreListRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreSummary {
     pub id: String,
@@ -1290,7 +1290,7 @@ pub struct GenreSummary {
     pub top_artist: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreListResponse {
     pub rows: Vec<GenreSummary>,
@@ -1299,7 +1299,7 @@ pub struct GenreListResponse {
     pub offset: u32,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreTimelineRequest {
     #[serde(default)]
@@ -1337,7 +1337,7 @@ fn default_genre_timeline_album_point_limit() -> u32 {
     3600
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreTimelineGenre {
     pub id: String,
@@ -1349,7 +1349,7 @@ pub struct GenreTimelineGenre {
     pub peak_album_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreTimelineYearCount {
     pub genre_id: String,
@@ -1357,7 +1357,7 @@ pub struct GenreTimelineYearCount {
     pub album_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreTimelineAlbumPoint {
     pub album_id: String,
@@ -1368,7 +1368,7 @@ pub struct GenreTimelineAlbumPoint {
     pub year: i32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreTimelineResponse {
     pub genres: Vec<GenreTimelineGenre>,
@@ -1381,7 +1381,7 @@ pub struct GenreTimelineResponse {
     pub available_year_to: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistTimelineRequest {
     #[serde(default)]
@@ -1422,7 +1422,7 @@ impl Default for ArtistTimelineRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistTimelineArtist {
     pub id: String,
@@ -1439,7 +1439,7 @@ pub struct ArtistTimelineArtist {
     pub representative_cover_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistTimelineAlbum {
     pub album_id: String,
@@ -1456,7 +1456,7 @@ pub struct ArtistTimelineAlbum {
     pub cover_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistTimelineResponse {
     pub artists: Vec<ArtistTimelineArtist>,
@@ -1468,7 +1468,7 @@ pub struct ArtistTimelineResponse {
     pub available_year_to: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryResponse {
     pub daily_edition: DiscoveryDailyEdition,
@@ -1482,7 +1482,7 @@ pub struct DiscoveryResponse {
     pub generated_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDailyEdition {
     pub date: String,
@@ -1496,7 +1496,7 @@ pub struct DiscoveryDailyEdition {
     pub listening_evidence_note: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDailyEditionArchive {
     pub available_dates: Vec<String>,
@@ -1506,14 +1506,14 @@ pub struct DiscoveryDailyEditionArchive {
     pub today: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDailyEditionSnapshotResponse {
     pub daily_edition: DiscoveryDailyEdition,
     pub archive: DiscoveryDailyEditionArchive,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoverySourceHealthResponse {
     pub checked_at: String,
@@ -1525,7 +1525,7 @@ pub struct DiscoverySourceHealthResponse {
     pub sources: Vec<DiscoverySourceHealthItem>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoverySourceHealthItem {
     pub id: String,
@@ -1544,7 +1544,7 @@ pub struct DiscoverySourceHealthItem {
     pub action_label: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryShelfExplorerRequest {
     pub shelf: String,
@@ -1565,7 +1565,7 @@ pub struct DiscoveryShelfExplorerRequest {
     pub offset: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryShelfExplorerResponse {
     pub shelf: String,
@@ -1600,13 +1600,13 @@ pub struct DiscoveryShelfExplorerResponse {
     pub anchors: Vec<DiscoveryRecommendationAnchor>,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRecommendationSnapshotRequest {
     pub mode: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRecommendationSnapshot {
     pub mode: String,
@@ -1617,7 +1617,7 @@ pub struct DiscoveryRecommendationSnapshot {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryCompletionSnapshotRequest {
     pub mode: Option<String>,
@@ -1626,7 +1626,7 @@ pub struct DiscoveryCompletionSnapshotRequest {
     pub genre: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryCompletionSnapshot {
     pub mode: String,
@@ -1640,7 +1640,7 @@ pub struct DiscoveryCompletionSnapshot {
     pub album_stories: Vec<DiscoveryAlbumCompletionStory>,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDeepCutSnapshotRequest {
     pub year: Option<i32>,
@@ -1648,7 +1648,7 @@ pub struct DiscoveryDeepCutSnapshotRequest {
     pub genre: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDeepCutSnapshot {
     pub year: Option<i32>,
@@ -1660,14 +1660,14 @@ pub struct DiscoveryDeepCutSnapshot {
     pub stories: Vec<DiscoveryDeepCutStory>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDeepCutGenre {
     pub id: String,
     pub label: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryChartSnapshotRequest {
     pub source: Option<String>,
@@ -1677,7 +1677,7 @@ pub struct DiscoveryChartSnapshotRequest {
     pub random: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryChartSnapshot {
     pub source: String,
@@ -1689,7 +1689,7 @@ pub struct DiscoveryChartSnapshot {
     pub stories: Vec<DiscoveryChartStory>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryAnniversaryStory {
     pub album_id: String,
@@ -1703,7 +1703,7 @@ pub struct DiscoveryAnniversaryStory {
     pub selection_reason: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryLifeEventStory {
     pub artist_id: String,
@@ -1721,7 +1721,7 @@ pub struct DiscoveryLifeEventStory {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryChartStory {
     pub entity: String,
@@ -1739,7 +1739,7 @@ pub struct DiscoveryChartStory {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDeepCutStory {
     pub track_id: i64,
@@ -1756,7 +1756,7 @@ pub struct DiscoveryDeepCutStory {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryArtistCompletionStory {
     pub artist_id: String,
@@ -1776,7 +1776,7 @@ pub struct DiscoveryArtistCompletionStory {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryAlbumCompletionStory {
     pub album_id: String,
@@ -1792,7 +1792,7 @@ pub struct DiscoveryAlbumCompletionStory {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRecommendationAnchor {
     pub album_id: String,
@@ -1803,7 +1803,7 @@ pub struct DiscoveryRecommendationAnchor {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRecommendationStory {
     pub album_id: String,
@@ -1822,7 +1822,7 @@ pub struct DiscoveryRecommendationStory {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryMixerSeedOption {
     pub kind: String,
@@ -1833,7 +1833,7 @@ pub struct DiscoveryMixerSeedOption {
     pub cover_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryMixerSeedSearchRequest {
     pub query: Option<String>,
@@ -1841,14 +1841,14 @@ pub struct DiscoveryMixerSeedSearchRequest {
     pub limit: Option<i64>,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryMixerSeedInput {
     pub kind: String,
     pub id: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryMixerRequest {
     pub seeds: Vec<DiscoveryMixerSeedInput>,
@@ -1856,7 +1856,7 @@ pub struct DiscoveryMixerRequest {
     pub limit: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryMixerRecommendation {
     pub album_id: String,
@@ -1872,7 +1872,7 @@ pub struct DiscoveryMixerRecommendation {
     pub ranking_score: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryMixerResponse {
     pub seeds: Vec<DiscoveryMixerSeedOption>,
@@ -1883,7 +1883,7 @@ pub struct DiscoveryMixerResponse {
     pub evidence: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryHeatmapCell {
     pub genre_id: String,
@@ -1899,7 +1899,7 @@ pub struct DiscoveryHeatmapCell {
     pub average_album_score: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryMission {
     pub id: String,
@@ -1926,7 +1926,7 @@ pub struct DiscoveryMission {
     pub limit: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryAlbumPoint {
     pub album_id: String,
@@ -1942,7 +1942,7 @@ pub struct DiscoveryAlbumPoint {
     pub total_seconds: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryGenrePoint {
     pub genre_id: String,
@@ -1957,7 +1957,7 @@ pub struct DiscoveryGenrePoint {
     pub average_album_score: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryArtistPoint {
     pub artist_id: String,
@@ -1973,7 +1973,7 @@ pub struct DiscoveryArtistPoint {
     pub top_genre: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolSummary {
     pub id: String,
@@ -1986,7 +1986,7 @@ pub struct MusicToolSummary {
     pub track_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolIssueRequest {
     #[serde(default = "default_music_tool_id")]
@@ -2019,7 +2019,7 @@ impl Default for MusicToolIssueRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolProgress {
     pub tool_id: String,
@@ -2029,7 +2029,7 @@ pub struct MusicToolProgress {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolIssueRow {
     pub id: String,
@@ -2054,7 +2054,7 @@ pub struct MusicToolIssueRow {
     pub norsktoppen: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolIssueResponse {
     pub tool: MusicToolSummary,
@@ -2064,7 +2064,7 @@ pub struct MusicToolIssueResponse {
     pub offset: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolFixRequest {
     pub tool_id: String,
@@ -2074,7 +2074,7 @@ pub struct MusicToolFixRequest {
     pub apply: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolFieldDiff {
     pub field: String,
@@ -2083,7 +2083,7 @@ pub struct MusicToolFieldDiff {
     pub after: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolFixDiff {
     pub id: String,
@@ -2098,7 +2098,7 @@ pub struct MusicToolFixDiff {
     pub changes: Vec<MusicToolFieldDiff>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolFixSummary {
     pub repair_id: Option<i64>,
@@ -2119,7 +2119,7 @@ pub struct MusicToolFixSummary {
     pub diffs: Vec<MusicToolFixDiff>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolFixHistoryEntry {
     pub id: i64,
@@ -2144,7 +2144,7 @@ pub struct MusicToolFixHistoryEntry {
     pub can_undo: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolUndoSummary {
     pub run: MusicToolFixHistoryEntry,
@@ -2154,7 +2154,7 @@ pub struct MusicToolUndoSummary {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowseRequest {
     #[serde(default = "default_browse_view")]
@@ -2184,7 +2184,7 @@ impl Default for BrowseRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowseRow {
     pub id: String,
@@ -2271,7 +2271,7 @@ pub struct BrowseRow {
     pub mixed_audio_quality: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowseResponse {
     pub view: String,
@@ -2281,7 +2281,7 @@ pub struct BrowseResponse {
     pub offset: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumDebutTimelineAlbum {
     pub id: String,
@@ -2301,7 +2301,7 @@ pub struct AlbumDebutTimelineAlbum {
     pub cover_mime_type: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumDebutTimelineYear {
     pub year: i32,
@@ -2309,7 +2309,7 @@ pub struct AlbumDebutTimelineYear {
     pub representative_album: Option<AlbumDebutTimelineAlbum>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumDebutTimelineResponse {
     pub years: Vec<AlbumDebutTimelineYear>,
@@ -2319,7 +2319,7 @@ pub struct AlbumDebutTimelineResponse {
     pub undated_album_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackDebutTimelineTrack {
     pub id: String,
@@ -2344,7 +2344,7 @@ pub struct TrackDebutTimelineTrack {
     pub cover_mime_type: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackDebutTimelineYear {
     pub year: i32,
@@ -2352,7 +2352,7 @@ pub struct TrackDebutTimelineYear {
     pub representative_track: Option<TrackDebutTimelineTrack>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackDebutTimelineResponse {
     pub years: Vec<TrackDebutTimelineYear>,
@@ -2362,7 +2362,7 @@ pub struct TrackDebutTimelineResponse {
     pub undated_track_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedSearch {
     pub id: i64,
@@ -2373,7 +2373,7 @@ pub struct SavedSearch {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveSearchRequest {
     pub name: String,
@@ -2384,7 +2384,7 @@ fn default_chart_grid_cover_size() -> u32 {
     144
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ChartConfig {
     pub request: BrowseRequest,
@@ -2406,7 +2406,7 @@ pub struct ChartConfig {
     pub grid_cover_size: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedChart {
     pub id: i64,
@@ -2416,14 +2416,14 @@ pub struct SavedChart {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveChartRequest {
     pub name: String,
     pub config: ChartConfig,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportSearchRequest {
     pub request: BrowseRequest,
@@ -2434,14 +2434,14 @@ pub struct ExportSearchRequest {
     pub export_columns: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportMusicToolRequest {
     pub request: MusicToolIssueRequest,
     pub format: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportResult {
     pub path: String,
@@ -2449,7 +2449,7 @@ pub struct ExportResult {
     pub row_count: usize,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct StatisticsResponse {
     pub overview: LibraryOverviewStats,
@@ -2474,7 +2474,7 @@ pub struct StatisticsResponse {
     pub last_updated: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CountryCatalogStats {
     pub country_code: String,
@@ -2483,7 +2483,7 @@ pub struct CountryCatalogStats {
     pub album_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryShapeStats {
     pub median_year: Option<i32>,
@@ -2493,7 +2493,7 @@ pub struct LibraryShapeStats {
     pub peak_year_albums: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryHealthScore {
     pub score: f64,
@@ -2504,7 +2504,7 @@ pub struct LibraryHealthScore {
     pub score_coverage: f64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryOverviewStats {
     pub track_count: i64,
@@ -2516,7 +2516,7 @@ pub struct LibraryOverviewStats {
     pub average_album_score: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingProgressStats {
     pub fully_rated_albums: i64,
@@ -2529,7 +2529,7 @@ pub struct RatingProgressStats {
     pub average_album_rating: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DecadeProgressStats {
     pub decade: i32,
@@ -2543,7 +2543,7 @@ pub struct DecadeProgressStats {
     pub average_album_score: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct YearProgressStats {
     pub year: i32,
@@ -2557,7 +2557,7 @@ pub struct YearProgressStats {
     pub average_album_score: Option<f64>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct YearProgressRequest {
     #[serde(default)]
@@ -2566,7 +2566,7 @@ pub struct YearProgressRequest {
     pub excluded_genres: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreProgressRequest {
     #[serde(default)]
@@ -2579,7 +2579,7 @@ pub struct GenreProgressRequest {
     pub excluded_genres: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreProgressStats {
     pub genre: String,
@@ -2593,14 +2593,14 @@ pub struct GenreProgressStats {
     pub average_album_score: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingBucket {
     pub label: String,
     pub count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LovedDensityStat {
     pub scope: String,
@@ -2611,7 +2611,7 @@ pub struct LovedDensityStat {
     pub loved_per_100_tracks: f64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CatalogConcentrationStats {
     pub artist_points: Vec<ConcentrationPoint>,
@@ -2622,7 +2622,7 @@ pub struct CatalogConcentrationStats {
     pub top_genre_album_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ConcentrationPoint {
     pub top_n: i64,
@@ -2630,7 +2630,7 @@ pub struct ConcentrationPoint {
     pub share: f64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DurationAnalyticsStats {
     pub average_album_seconds: Option<f64>,
@@ -2640,7 +2640,7 @@ pub struct DurationAnalyticsStats {
     pub track_count_buckets: Vec<RatingBucket>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DurationAlbumStat {
     pub album_id: String,
@@ -2653,7 +2653,7 @@ pub struct DurationAlbumStat {
     pub album_score: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct OutlierStat {
     pub id: String,
@@ -2662,7 +2662,7 @@ pub struct OutlierStat {
     pub detail: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MetadataCoverageMetric {
     pub id: String,
@@ -2672,7 +2672,7 @@ pub struct MetadataCoverageMetric {
     pub total_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LovedTrackStats {
     pub loved_tracks: i64,
@@ -2682,7 +2682,7 @@ pub struct LovedTrackStats {
     pub top_loved_year: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingHistoryPoint {
     pub import_run_id: i64,
@@ -2700,7 +2700,7 @@ pub struct RatingHistoryPoint {
     pub rating_events_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingEvent {
     pub id: i64,
@@ -2743,7 +2743,7 @@ fn default_backup_retention() -> u32 {
     3
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicMapSummary {
     pub total_artists: i64,
@@ -2758,7 +2758,7 @@ pub struct MusicMapSummary {
     pub needs_refresh: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicMapPoint {
     pub id: String,
@@ -2775,7 +2775,7 @@ pub struct MusicMapPoint {
     pub top_genre: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicMapResponse {
     pub summary: MusicMapSummary,
@@ -2784,7 +2784,7 @@ pub struct MusicMapResponse {
     pub generated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicMapGenreStat {
     pub genre: String,
@@ -2793,7 +2793,7 @@ pub struct MusicMapGenreStat {
     pub percentage: f64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicMapArtist {
     pub artist_key: String,
@@ -2807,7 +2807,7 @@ pub struct MusicMapArtist {
     pub cover_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicMapLocationDetails {
     pub point: MusicMapPoint,
@@ -2816,7 +2816,7 @@ pub struct MusicMapLocationDetails {
     pub artist_keys: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MusicMapRefreshSummary {
     pub candidate_areas: usize,

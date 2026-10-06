@@ -475,6 +475,16 @@ npm run build
 npm run tauri:build
 ```
 
+### TypeScript bindings
+
+Tauri command types are generated from Rust with `tauri-specta`. Commands annotated with `#[specta::specta]` and listed in `src-tauri/src/bindings.rs` are exported to `src/bindings.ts`. After changing one of those commands or the types it uses, run:
+
+```powershell
+npm run bindings
+```
+
+`npm run check` runs `npm run check:bindings`, which fails when the committed file is out of date. To migrate another command, add `#[specta::specta]`, derive `specta::Type` on its types, add it to `specta_commands!` in `bindings.rs`, remove it from `generate_handler!`, and call `commands.<name>()` from `backend.ts`.
+
 Run the full release gate, including security checks, frontend build, Rust tests, and Tauri packaging:
 
 ```powershell

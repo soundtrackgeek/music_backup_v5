@@ -1,7 +1,7 @@
 {
   "name": "music-library-app",
   "private": true,
-  "version": "0.162.0",
+  "version": "0.163.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -12,9 +12,11 @@
     "test:billboard-singles": "python -B -m unittest discover -s scripts -p test_rebuild_billboard_singles.py -v",
     "build": "tsc && vite build",
     "check:version": "node scripts/check-version.mjs",
+    "check:bindings": "node scripts/check-bindings.mjs",
+    "bindings": "cd src-tauri && cargo run --quiet -- --export-bindings ../src/bindings.ts",
     "check:charts-bundle": "python -B scripts/build_published_charts_bundle.py --check",
     "security:check": "node scripts/security-check.mjs",
-    "check": "npm run check:version && npm run lint && npm run check:charts-bundle && npm run test:release && npm run test:run && npm run test:tools && npm run test:database-sync && npm run test:billboard-singles && npm run security:check && npm run build && cd src-tauri && cargo test -- --test-threads=1 && cargo check",
+    "check": "npm run check:version && npm run lint && npm run check:charts-bundle && npm run test:release && npm run test:run && npm run test:tools && npm run test:database-sync && npm run test:billboard-singles && npm run security:check && npm run build && cd src-tauri && cargo test -- --test-threads=1 && cargo check && cd .. && npm run check:bindings",
     "preview": "vite preview --host 127.0.0.1",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
