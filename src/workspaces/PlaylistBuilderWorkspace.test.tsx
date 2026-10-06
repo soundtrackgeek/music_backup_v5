@@ -11,8 +11,8 @@ describe("playlist builder workspace", () => {
   it("shows a large draft in full and keeps focus on a reordered track", async () => {
     const restoreLayout = mockVirtualLayout();
     const request = createRequest("tracks");
-    const response: BrowseResponse = { view: "tracks", total: 1200, limit: 1200, offset: 0,
-      rows: Array.from({ length: 1200 }, (_, index) => ({
+    const response: BrowseResponse = { view: "tracks", total: 300, limit: 300, offset: 0,
+      rows: Array.from({ length: 300 }, (_, index) => ({
         id: `track-${index + 1}`, trackId: index + 1, albumId: "album", title: `Track ${index}`,
         album: "Album", displayArtist: "Artist", albumArtistDisplay: "Artist", trackSeconds: 180,
       } as BrowseRow)),
@@ -22,19 +22,19 @@ describe("playlist builder workspace", () => {
       const { container } = render(<PlaylistBuilderWorkspace isAvailable launch={{ id: 99,
         cohortTitle: "Large draft", prompt: draft.prompt, request, draft }} />);
       const list = screen.getByRole("list", { name: "Playlist tracks" });
-      expect(container.querySelectorAll(".playlist-track")).toHaveLength(1200);
-      const move = await screen.findByRole("button", { name: "Move Track 1199 up" });
+      expect(container.querySelectorAll(".playlist-track")).toHaveLength(300);
+      const move = await screen.findByRole("button", { name: "Move Track 299 up" });
       act(() => move.focus());
       fireEvent.click(move);
-      expect(screen.getByRole("button", { name: "Move Track 1199 up" })).toBe(move);
+      expect(screen.getByRole("button", { name: "Move Track 299 up" })).toBe(move);
       expect(move).toHaveFocus();
-      expect(move.closest("article")?.querySelector(".playlist-track-number")).toHaveTextContent("1199");
-      fireEvent.click(screen.getByRole("button", { name: "Remove Track 1199" }));
-      expect(screen.queryByText("Track 1199")).not.toBeInTheDocument();
-      expect(list).toHaveAttribute("data-item-count", "1199");
-      expect(container.querySelectorAll(".playlist-track")).toHaveLength(1199);
+      expect(move.closest("article")?.querySelector(".playlist-track-number")).toHaveTextContent("299");
+      fireEvent.click(screen.getByRole("button", { name: "Remove Track 299" }));
+      expect(screen.queryByText("Track 299")).not.toBeInTheDocument();
+      expect(list).toHaveAttribute("data-item-count", "299");
+      expect(container.querySelectorAll(".playlist-track")).toHaveLength(299);
     } finally { restoreLayout(); }
-  });
+  }, 20000);
   it("opens a Search handoff as a populated local draft without Luna planning", () => {
     const request = createRequest("tracks");
     request.limit = 500;

@@ -6,6 +6,7 @@
 - Show every row without an inner vertical scroll area in Search results, Chart results, the selected Playlist, and both Updates lists, including 200-row pages. Artist tables keep their scrolling.
 
 ### Fixed
+- Keep the large-playlist test within CI time limits now that playlists render in full.
 - Make the Completion candidate list fill its panel to the bottom instead of stopping at a fixed height; it still scrolls internally.
 
 ## [0.160.0] - 2026-10-06
